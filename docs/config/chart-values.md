@@ -69,6 +69,8 @@ See [Configuration File](./config-file) for the full config file format, usage e
 | `config.clusters`       | Inline cluster configurations (when no existingSecret)                         | `[]`    |
 | `config.oauth`          | Inline OAuth provider configurations                                           | `[]`    |
 | `config.ldap`           | Inline LDAP configuration                                                      | `{}`    |
+
+`config.ldap` accepts `enabled`, `serverUrl`, `useStartTLS`, `bindDn`, `bindPassword`, `userBaseDn`, `userFilter`, `usernameAttribute`, `displayNameAttribute`, `groupBaseDn`, `groupFilter`, `groupNameAttribute`, `autoSync` and `syncIntervalMinutes`. `autoSync` / `syncIntervalMinutes` (defaults `true` / `10` minutes) control the periodic directory sync, see [config file](./config-file.md).
 | `config.rbac.roles`     | Inline RBAC role definitions                                                   | `[]`    |
 | `config.rbac.roleMapping` | Inline RBAC role mappings                                                    | `[]`    |
 

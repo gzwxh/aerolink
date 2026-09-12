@@ -72,6 +72,8 @@ Kite 支持从 YAML 配置文件加载集群、OAuth/LDAP 与 RBAC 配置。启�
 | `config.rbac.roles`       | 内联 RBAC 角色定义                                            | `[]`    |
 | `config.rbac.roleMapping` | 内联 RBAC 角色映射                                            | `[]`    |
 
+`config.ldap` 支持 `enabled`、`serverUrl`、`useStartTLS`、`bindDn`、`bindPassword`、`userBaseDn`、`userFilter`、`usernameAttribute`、`displayNameAttribute`、`groupBaseDn`、`groupFilter`、`groupNameAttribute`、`autoSync`、`syncIntervalMinutes`。其中 `autoSync`/`syncIntervalMinutes`（默认 `true` / `10` 分钟）控制目录用户的定期同步，字段说明见[配置文件](./config-file.md)。
+
 ## 服务账户配置
 
 | 参数                         | 描述                        | 默认值 |

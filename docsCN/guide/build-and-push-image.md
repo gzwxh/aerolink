@@ -159,6 +159,31 @@ helm upgrade --install kite charts/kite -n kite-system \
   --set imagePullSecrets[0].name=kite-regcred
 ```
 
+### 仓库内现成的 values 文件
+
+仓库里已经放了两份按镜像仓库写好的 values，直接 `-f` 引用即可：
+
+```bash
+# 个人仓库
+helm upgrade --install kite charts/kite -n kite-system --create-namespace \
+  -f charts/kite/values-gzwxh.yaml
+
+# 公司组织仓库（私有，需先创建拉取凭据）
+helm upgrade --install kite charts/kite -n kite-system --create-namespace \
+  -f charts/kite/values-dsy.yaml
+```
+
+### 发布 chart（可选）
+
+```bash
+helm package charts/kite -d dist
+helm push dist/kite-0.15.0.tgz oci://<registry>/<namespace>
+```
+
+::: warning 华为云 SWR 个人版不接受 Helm OCI 制品
+向 SWR 推送 chart 会报 `manifest invalid: Invalid image, fail to parse 'manifest.json'`（SWR 只解析容器镜像清单）。这种情况下直接从仓库目录安装即可：`helm install kite charts/kite`，或把 `helm package` 生成的 tgz 通过其它渠道分发。
+:::
+
 ::: warning 生产环境务必设置加密密钥
 `KITE_ENCRYPT_KEY` 用于加密用户密码、OAuth clientSecret、kubeconfig 等敏感数据，不设置会使用不安全的默认密钥。可通过 `--set env.KITE_ENCRYPT_KEY=...`（或 chart 对应的 values 字段）注入，详见[环境变量](../config/env.md)。
 :::

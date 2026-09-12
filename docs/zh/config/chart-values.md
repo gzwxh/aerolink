@@ -53,6 +53,27 @@
 | ----------- | ------------------ | ------ |
 | `extraEnvs` | 额外的环境变量列表 | `[]`   |
 
+## 应用配置
+
+Kite 支持从 YAML 配置文件加载集群、OAuth/LDAP 与 RBAC 配置。启用后，对应的受管配置区块在界面上将变为只读。
+
+该功能适用于 Kite `v0.10.0` 及以上版本。
+
+完整的配置文件格式、使用示例与字段说明请参见[配置文件](./config-file.md)。
+
+| 参数                      | 描述                                                            | 默认值  |
+| ------------------------- | --------------------------------------------------------------- | ------- |
+| `config.enabled`          | 是否启用配置文件模式                                            | `false` |
+| `config.existingSecret`   | 已存在的 Secret 名称（其中包含 `config.yaml` 键），推荐使用此方式 | `""`    |
+| `config.superUser`        | 内联超级用户配置（仅首次启动时创建）                             | `{}`    |
+| `config.clusters`         | 内联集群配置（未使用 `existingSecret` 时）                       | `[]`    |
+| `config.oauth`            | 内联 OAuth 提供商配置                                           | `[]`    |
+| `config.ldap`             | 内联 LDAP 配置                                                  | `{}`    |
+| `config.rbac.roles`       | 内联 RBAC 角色定义                                              | `[]`    |
+| `config.rbac.roleMapping` | 内联 RBAC 角色映射                                              | `[]`    |
+
+`config.ldap` 支持 `enabled`、`serverUrl`、`useStartTLS`、`bindDn`、`bindPassword`、`userBaseDn`、`userFilter`、`usernameAttribute`、`displayNameAttribute`、`groupBaseDn`、`groupFilter`、`groupNameAttribute`、`autoSync`、`syncIntervalMinutes`。其中 `autoSync`/`syncIntervalMinutes`（默认 `true` / `10` 分钟）控制目录用户的定期同步。
+
 ## 服务账户配置
 
 | 参数                         | 描述                        | 默认值 |
