@@ -309,28 +309,27 @@ async function configureCustomGroupClaimOAuthViaUI(page: Page) {
 }
 
 async function assignViewerRoleViaUI(page: Page, groupName: string) {
-  await page.goto('/settings?tab=rbac')
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  await page.goto('/rbac')
+  await expect(
+    page.getByRole('heading', { name: 'RBAC Management' })
+  ).toBeVisible()
 
-  const viewerRow = page.getByRole('row').filter({ hasText: 'viewer' })
-  await expect(viewerRow).toBeVisible()
+  await page
+    .getByTestId('rbac-role-list')
+    .getByRole('button', { name: 'viewer' })
+    .click()
 
-  await viewerRow.getByRole('button', { name: 'Actions' }).click()
-  await page.getByRole('menuitem', { name: 'Assign' }).click()
-
-  const dialog = page.getByRole('dialog', { name: 'Assign Role - viewer' })
-  await expect(dialog).toBeVisible()
-
-  if (!(await dialog.getByText(groupName).count())) {
-    await dialog.getByRole('combobox').filter({ hasText: /^User$/ }).click()
+  if (!(await page.getByText(groupName).count())) {
+    await page.getByRole('combobox', { name: /^User$/ }).click()
     await page.getByRole('option', { name: 'OIDC Group' }).click()
-    await dialog.getByPlaceholder('username or group name').fill(groupName)
-    await dialog.getByRole('button', { name: 'Assign' }).click()
-    await expect(dialog.getByText(groupName)).toBeVisible()
+
+    await page.getByRole('combobox', { name: /Select groups.../ }).click()
+    await page.getByPlaceholder('Search...').last().fill(groupName)
+    await page.getByRole('option', { name: groupName }).click()
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
   }
 
-  await dialog.getByRole('button', { name: 'Cancel' }).click()
-  await expect(dialog).toBeHidden()
+  await expect(page.getByText(groupName).first()).toBeVisible()
 }
 
 test.describe('external auth', () => {
@@ -365,8 +364,6 @@ test.describe('external auth', () => {
     try {
       await page.goto('/login')
 
-      await expect(page.getByRole('tab', { name: 'LDAP' })).toBeVisible()
-      await page.getByRole('tab', { name: 'LDAP' }).click()
       await page.getByLabel('Username').fill(ldapUser.username)
       await page.getByLabel('Password', { exact: true }).fill(ldapUser.password)
       await page.getByRole('button', { name: 'Sign In with LDAP' }).click()
@@ -449,8 +446,6 @@ test.describe('external auth', () => {
     try {
       await page.goto('/login')
 
-      await expect(page.getByRole('tab', { name: 'LDAP' })).toBeVisible()
-      await page.getByRole('tab', { name: 'LDAP' }).click()
       await page.getByLabel('Username').fill(ldapUser.username)
       await page.getByLabel('Password', { exact: true }).fill('wrong-password')
       await page.getByRole('button', { name: 'Sign In with LDAP' }).click()

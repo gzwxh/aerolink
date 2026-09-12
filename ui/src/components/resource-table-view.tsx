@@ -42,6 +42,8 @@ interface ResourceTableViewProps<T> {
   shrinkFirstColumn?: boolean
   showAllPageSize?: boolean
   pageSizeOptions?: number[]
+  /** Optional full-width details rendered in an extra row below each data row. */
+  renderRowDetails?: (row: T) => React.ReactNode
 }
 
 export function ResourceTableView<T>({
@@ -63,6 +65,7 @@ export function ResourceTableView<T>({
   shrinkFirstColumn = true,
   showAllPageSize = true,
   pageSizeOptions = [10, 20, 50, 100],
+  renderRowDetails,
 }: ResourceTableViewProps<T>) {
   const renderRows = () => {
     const rows = table.getRowModel().rows
@@ -77,20 +80,39 @@ export function ResourceTableView<T>({
       )
     }
 
-    return rows.map((row) => (
-      <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
-        {row.getVisibleCells().map((cell, index) => (
-          <TableCell
-            key={cell.id}
-            className={`align-middle ${index <= 1 ? 'text-left' : 'text-center'}`}
+    return rows.map((row) => {
+      const details = renderRowDetails?.(row.original)
+      return (
+        <React.Fragment key={row.id}>
+          <TableRow
+            data-state={row.getIsSelected() && 'selected'}
+            className={details ? 'border-b-0' : undefined}
           >
-            {cell.column.columnDef.cell
-              ? flexRender(cell.column.columnDef.cell, cell.getContext())
-              : String(cell.getValue() || '-')}
-          </TableCell>
-        ))}
-      </TableRow>
-    ))
+            {row.getVisibleCells().map((cell, index) => (
+              <TableCell
+                key={cell.id}
+                className={`align-middle ${index <= 1 ? 'text-left' : 'text-center'}`}
+              >
+                {cell.column.columnDef.cell
+                  ? flexRender(cell.column.columnDef.cell, cell.getContext())
+                  : String(cell.getValue() || '-')}
+              </TableCell>
+            ))}
+          </TableRow>
+          {details ? (
+            <TableRow className="bg-muted/20 hover:bg-muted/20">
+              {/* Raw td so the table-cell first-column shrink rule does not apply. */}
+              <td
+                colSpan={columnCount}
+                className="whitespace-normal px-4 py-2 text-left align-top"
+              >
+                {details}
+              </td>
+            </TableRow>
+          ) : null}
+        </React.Fragment>
+      )
+    })
   }
 
   const dataLength = data?.length ?? 0

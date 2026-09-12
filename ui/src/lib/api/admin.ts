@@ -203,6 +203,31 @@ export const unassignRole = async (
   )
 }
 
+export const fetchNodePortRange = async (
+  clusterName: string
+): Promise<{ min: number; max: number; source: string }> => {
+  return await apiClient.get(
+    `/admin/clusters/${encodeURIComponent(clusterName)}/nodeport-range`
+  )
+}
+
+export const createGroup = async (name: string) => {
+  return await apiClient.post<{ name: string }>('/admin/groups', { name })
+}
+
+export const renameGroup = async (oldName: string, newName: string) => {
+  return await apiClient.put<{ name: string }>(
+    `/admin/groups/${encodeURIComponent(oldName)}`,
+    { name: newName }
+  )
+}
+
+export const deleteGroup = async (name: string) => {
+  return await apiClient.delete<{ success: boolean }>(
+    `/admin/groups/${encodeURIComponent(name)}`
+  )
+}
+
 export const fetchUserList = async (
   page = 1,
   size = 20,
@@ -235,7 +260,9 @@ export const updateUser = async (id: number, data: Partial<UserItem>) => {
 }
 
 export const deleteUser = async (id: number) => {
-  return apiClient.delete<{ success: boolean }>(`/admin/users/${id}`)
+  return apiClient.delete<{ success: boolean; deferredDeletion?: boolean }>(
+    `/admin/users/${id}`
+  )
 }
 
 export const createPasswordUser = async (data: {
@@ -410,6 +437,8 @@ export interface LDAPSetting {
   groupBaseDn: string
   groupFilter: string
   groupNameAttribute: string
+  autoSync: boolean
+  syncIntervalMinutes: number
 }
 
 export interface LDAPSettingUpdateRequest {
@@ -425,6 +454,8 @@ export interface LDAPSettingUpdateRequest {
   groupBaseDn: string
   groupFilter: string
   groupNameAttribute: string
+  autoSync: boolean
+  syncIntervalMinutes: number
 }
 
 export const fetchGeneralSetting = async (): Promise<GeneralSetting> => {
@@ -484,6 +515,88 @@ export const updateLDAPSetting = async (
   data: LDAPSettingUpdateRequest
 ): Promise<LDAPSetting> => {
   return await apiClient.put<LDAPSetting>('/admin/ldap-setting/', data)
+}
+
+export interface LDAPSyncResult {
+  startedAt: string
+  finishedAt?: string
+  totalUsers: number
+  created: number
+  updated: number
+  failed: number
+  purged: number
+  enableImported: boolean
+  error?: string
+}
+
+export interface LDAPSyncStatus {
+  running: boolean
+  enabled: boolean
+  autoSync: boolean
+  syncIntervalMinutes: number
+  lastSyncAt?: string
+  lastResult?: LDAPSyncResult
+}
+
+export const fetchLDAPSyncStatus = async (): Promise<LDAPSyncStatus> => {
+  return fetchAPI<LDAPSyncStatus>('/admin/ldap-setting/sync')
+}
+
+export const triggerLDAPSync = async (
+  enableImported?: boolean
+): Promise<LDAPSyncStatus> => {
+  return await apiClient.post<LDAPSyncStatus>('/admin/ldap-setting/sync', {
+    enableImported: enableImported ?? false,
+  })
+}
+
+export interface LDAPImportCandidate {
+  username: string
+  displayName?: string
+  imported: boolean
+  conflict: boolean
+}
+
+export interface LDAPImportResult {
+  created: number
+  updated: number
+  notFound: number
+  conflicted: number
+  failed: number
+  failedUsers?: string[]
+}
+
+export const fetchLDAPImportCandidates = async (): Promise<
+  LDAPImportCandidate[]
+> => {
+  const res = await fetchAPI<{ users: LDAPImportCandidate[]; total: number }>(
+    '/admin/ldap-setting/users'
+  )
+  return res.users
+}
+
+export const importLDAPUsers = async (
+  usernames: string[],
+  enableImported: boolean
+): Promise<LDAPImportResult> => {
+  return await apiClient.post<LDAPImportResult>('/admin/ldap-setting/users/import', {
+    usernames,
+    enableImported,
+  })
+}
+
+export const fetchClusterNamespaces = async (
+  clusterName: string
+): Promise<string[]> => {
+  const res = await apiClient.get<{ namespaces: string[] }>(
+    `/admin/clusters/${encodeURIComponent(clusterName)}/namespaces`
+  )
+  return res.namespaces || []
+}
+
+export const fetchKnownGroups = async (): Promise<string[]> => {
+  const res = await apiClient.get<{ groups: string[] }>('/admin/groups')
+  return res.groups || []
 }
 
 export const fetchAPIKeyList = async (): Promise<APIKey[]> => {

@@ -57,6 +57,13 @@ vi.mock('@/hooks/use-cluster', () => ({
   useCluster: () => ({ currentCluster: 'test-cluster' }),
 }))
 
+// The table gates its actions with these hooks; the tests below only exercise
+// the delete progress, so every permission is granted.
+vi.mock('@/hooks/use-can', () => ({
+  useCan: () => () => true,
+  useCanAnyNamespace: () => () => true,
+}))
+
 // fakeRows is defined inside the factory via vi.hoisted so it is available
 // when vi.mock is hoisted before variable declarations
 const { fakeRows } = vi.hoisted(() => {

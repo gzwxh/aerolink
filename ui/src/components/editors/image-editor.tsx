@@ -1,27 +1,27 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useId, useRef, useState } from 'react'
 import { Container } from 'kubernetes-types/core/v1'
+import { useTranslation } from 'react-i18next'
 
 import { formatDate } from '@/lib/utils'
 
 import { useImageTags } from '../../lib/api'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select'
 
 interface ImageEditorProps {
   container: Container
   onUpdate: (updates: Partial<Container>) => void
 }
 
-export function ImageEditor({ container, onUpdate }: ImageEditorProps) {
+export function ImageEditor({
+  container,
+  onUpdate,
+}: ImageEditorProps) {
+  const { t } = useTranslation()
   const [showTagDropdown, setShowTagDropdown] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Unique per instance: several containers render an ImageEditor at once.
+  const inputId = useId()
 
   const getImagePrefix = useCallback((image: string) => {
     if (!image) return ''
@@ -42,13 +42,6 @@ export function ImageEditor({ container, onUpdate }: ImageEditorProps) {
     [getImagePrefix, onUpdate]
   )
 
-  const updateImagePullPolicy = (imagePullPolicy: string) => {
-    onUpdate({
-      imagePullPolicy:
-        imagePullPolicy === 'default' ? undefined : imagePullPolicy,
-    })
-  }
-
   const { data: tagOptions, isLoading: tagLoading } = useImageTags(
     imagePrefix || '',
     { enabled: !!imagePrefix && showTagDropdown }
@@ -68,9 +61,11 @@ export function ImageEditor({ container, onUpdate }: ImageEditorProps) {
   return (
     <div className="space-y-4">
       <div className="space-y-2 relative">
-        <Label htmlFor="container-image">Container Image</Label>
+        <Label htmlFor={inputId}>
+          {t('workloadWizard.imageLabel', '容器镜像')}
+        </Label>
         <Input
-          id="container-image"
+          id={inputId}
           ref={inputRef}
           value={container.image || ''}
           onFocus={handleInputFocus}
@@ -83,7 +78,7 @@ export function ImageEditor({ container, onUpdate }: ImageEditorProps) {
           <div className="absolute z-10 mt-1 w-full bg-popover border rounded shadow max-h-60 overflow-auto">
             {tagLoading && (
               <div className="px-3 py-2 text-sm text-muted-foreground">
-                Loading...
+                {t('common.messages.loading', '加载中...')}
               </div>
             )}
             {tagOptions?.map((tag) => (
@@ -102,34 +97,11 @@ export function ImageEditor({ container, onUpdate }: ImageEditorProps) {
             ))}
           </div>
         )}
-        <p className="text-sm text-muted-foreground">
-          Specify the container image including tag (e.g., nginx:1.21,
-          node:16-alpine)
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="image-pull-policy">Image Pull Policy</Label>
-        <Select
-          value={container.imagePullPolicy || 'default'}
-          onValueChange={updateImagePullPolicy}
-        >
-          <SelectTrigger id="image-pull-policy" className="w-full">
-            <SelectValue placeholder="Select pull policy" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Default</SelectItem>
-            <SelectItem value="IfNotPresent">IfNotPresent</SelectItem>
-            <SelectItem value="Always">Always</SelectItem>
-            <SelectItem value="Never">Never</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-sm text-muted-foreground">
-          <strong>IfNotPresent:</strong> Pull image only if not present locally
-          <br />
-          <strong>Always:</strong> Always pull the latest image
-          <br />
-          <strong>Never:</strong> Never pull, use local image only
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'workloadWizard.imageHint',
+            'Specify the container image including tag (e.g., nginx:1.21, node:16-alpine)'
+          )}
         </p>
       </div>
     </div>

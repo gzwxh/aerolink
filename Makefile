@@ -50,7 +50,8 @@ deps: ## Install frontend and backend dependencies
 	@echo "📦 Installing frontend dependencies..."
 	cd $(UI_DIR) && pnpm install
 	@echo "📦 Installing backend dependencies..."
-	go mod download
+	go mod tidy
+	go mod vendor
 
 # Build targets
 build: frontend backend ## Build both frontend and backend
@@ -94,13 +95,29 @@ package-binaries: ## Package each kite binary file separately
 
 frontend: static ## Build frontend only
 
-static: ui/src/**/*.tsx ui/src/**/*.ts ui/index.html ui/**/*.css ui/package.json ui/vite.config.ts
+# GNU make globs like `ui/src/**/*.tsx` do NOT recurse into subdirectories
+# (they behave like a single `*`), so deep file changes never triggered a
+# rebuild. Collect the real file lists with find instead.
+UI_SOURCES := $(shell find $(UI_DIR)/src -type f 2>/dev/null) \
+	$(UI_DIR)/index.html \
+	$(UI_DIR)/package.json \
+	$(UI_DIR)/vite.config.ts
+
+GO_SOURCES := $(shell find . -type f -name '*.go' \
+	-not -path './vendor/*' \
+	-not -path './ui/*' \
+	-not -path './static/*' \
+	-not -path './bin/*' \
+	-not -path './e2e/*' \
+	-not -path './.git/*' 2>/dev/null)
+
+static: $(UI_SOURCES)
 	@echo "📦 Ensuring static files are built..."
 	cd $(UI_DIR) && pnpm run build
 
 backend: ${BINARY_NAME} ## Build backend only
 
-$(BINARY_NAME): main.go pkg/**/*.go go.mod static *.go **/*.go
+$(BINARY_NAME): go.mod $(GO_SOURCES) static
 	@echo "🏗️ Building backend..."
 	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 

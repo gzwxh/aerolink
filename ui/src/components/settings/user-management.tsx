@@ -66,6 +66,18 @@ function userSubjectName(user: UserItem): string {
   return user.username || user.name || user.sub || String(user.id)
 }
 
+// Native password users keep their group memberships in Kite; external users
+// (LDAP / OIDC) have theirs managed by the directory.
+function isNativeUser(user?: UserItem | null): boolean {
+  return !user?.provider || user.provider === 'password'
+}
+
+// Only native and LDAP-provisioned users can be deleted from Kite (LDAP
+// deletion removes the local record without touching the directory).
+function isDeletableUser(user?: UserItem | null): boolean {
+  return isNativeUser(user) || user?.provider === 'ldap'
+}
+
 export function UserManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -158,6 +170,7 @@ export function UserManagement() {
             {t('common.actions.delete', 'Delete')}
           </div>
         ),
+        shouldDisable: (item) => !isDeletableUser(item),
         onClick: (item) => setDeletingUser(item),
       },
       {
@@ -302,6 +315,27 @@ export function UserManagement() {
             {String(getValue() || '-')}
           </div>
         ),
+      },
+      {
+        id: 'groups',
+        header: t('common.fields.oidcGroups', 'LDAP / OIDC Groups'),
+        accessorFn: (row) => (row.oidc_groups || []).join(', '),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const groups = row.original.oidc_groups || []
+          if (groups.length === 0) {
+            return <span className="text-sm text-muted-foreground">-</span>
+          }
+          return (
+            <div className="flex flex-wrap gap-1">
+              {groups.map((group) => (
+                <Badge key={group} variant="outline" className="text-xs">
+                  {group}
+                </Badge>
+              ))}
+            </div>
+          )
+        },
       },
     ],
     [getStatusBadge, t]
@@ -473,9 +507,16 @@ export function UserManagement() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingUser) return
+    const data: Partial<UserItem> = {
+      avatar_url: editingUser.avatar_url,
+    }
+    if (isNativeUser(editingUser)) {
+      data.name = editingUser.name
+      data.oidc_groups = editingUser.oidc_groups ?? []
+    }
     updateMutation.mutate({
       id: editingUser.id,
-      data: { name: editingUser.name, avatar_url: editingUser.avatar_url },
+      data,
     })
   }
 
@@ -633,20 +674,55 @@ export function UserManagement() {
                 }
               />
             </div>
-            <div>
-              <label className="block text-sm">
-                {t('common.fields.name', 'Name')}
-              </label>
-              <Input
-                value={editingUser?.name || ''}
-                onChange={(e) =>
-                  setEditingUser({
-                    ...(editingUser as UserItem),
-                    name: e.target.value,
-                  })
-                }
-              />
-            </div>
+            {isNativeUser(editingUser) && (
+              <div>
+                <label className="block text-sm">
+                  {t('common.fields.name', 'Name')}
+                </label>
+                <Input
+                  value={editingUser?.name || ''}
+                  onChange={(e) =>
+                    setEditingUser({
+                      ...(editingUser as UserItem),
+                      name: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            )}
+            {!isNativeUser(editingUser) && (
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'userManagement.messages.externalEditHint',
+                  'This user is managed by an external source. Only the avatar can be edited here.'
+                )}
+              </p>
+            )}
+            {isNativeUser(editingUser) && (
+              <div>
+                <label className="block text-sm">
+                  {t('userManagement.fields.groups', 'Groups')}
+                </label>
+                <Input
+                  value={(editingUser?.oidc_groups ?? []).join(', ')}
+                  onChange={(e) =>
+                    setEditingUser({
+                      ...(editingUser as UserItem),
+                      oidc_groups: e.target.value
+                        .split(',')
+                        .map((g) => g.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t(
+                    'userManagement.fields.groupsHint',
+                    'Comma-separated group names. Users inherit the roles assigned to these groups.'
+                  )}
+                </p>
+              </div>
+            )}
             <DialogFooter>
               <Button type="submit">{t('common.actions.save', 'Save')}</Button>
             </DialogFooter>
@@ -767,6 +843,14 @@ export function UserManagement() {
         onConfirm={handleDelete}
         resourceName={deletingUser?.username || ''}
         resourceType="user"
+        additionalNote={
+          deletingUser?.provider === 'ldap'
+            ? t(
+                'userManagement.messages.ldapDeleteNote',
+                'This only removes the account from Kite. The user remains in the LDAP directory and can be imported again later.'
+              )
+            : undefined
+        }
       />
     </div>
   )

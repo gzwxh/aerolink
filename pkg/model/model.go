@@ -99,6 +99,8 @@ func InitDB() {
 		OAuthProvider{},
 		Role{},
 		RoleAssignment{},
+		LocalGroup{},
+		GroupMember{},
 		ResourceHistory{},
 		ResourceTemplate{},
 		PendingSession{},

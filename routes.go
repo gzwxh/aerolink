@@ -86,6 +86,12 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	adminAPI := r.Group("/api/v1/admin")
 	adminAPI.Use(authHandler.RequireAuth(), authHandler.RequireAdmin())
 
+	adminAPI.GET("/groups", rbac.ListGroups)
+	adminAPI.POST("/groups", rbac.CreateGroup)
+	adminAPI.GET("/groups/:name/members", rbac.ListGroupMembers)
+	adminAPI.PUT("/groups/:name", rbac.RenameGroup)
+	adminAPI.DELETE("/groups/:name", rbac.DeleteGroup)
+
 	adminAPI.GET("/audit-logs", audit.ListAuditLogs)
 
 	oauthProviderAPI := adminAPI.Group("/oauth-providers")
@@ -98,9 +104,15 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	ldapSettingAPI := adminAPI.Group("/ldap-setting")
 	ldapSettingAPI.GET("/", authHandler.GetLDAPSetting)
 	ldapSettingAPI.PUT("/", authHandler.UpdateLDAPSetting)
+	ldapSettingAPI.POST("/sync", authHandler.SyncLDAPUsers)
+	ldapSettingAPI.GET("/sync", authHandler.GetLDAPSyncStatus)
+	ldapSettingAPI.GET("/users", authHandler.ListLDAPImportCandidates)
+	ldapSettingAPI.POST("/users/import", authHandler.ImportLDAPUsers)
 
 	clusterAPI := adminAPI.Group("/clusters")
 	clusterAPI.GET("/", cm.GetClusterList)
+	clusterAPI.GET("/:name/namespaces", cm.ListClusterNamespaces)
+	clusterAPI.GET("/:name/nodeport-range", cm.GetNodePortRange)
 	clusterAPI.POST("/", cm.CreateCluster)
 	clusterAPI.POST("/import", cm.ImportClustersFromKubeconfig)
 	clusterAPI.PUT("/:id", cm.UpdateCluster)

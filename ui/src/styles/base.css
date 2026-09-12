@@ -120,6 +120,19 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  /* Console text should be copyable. Browsers (Safari in particular) disable
+     selection inside buttons by default, which also affects tabs, dropdown
+     triggers, badges and menu rows. Explicit `select-none` utilities still win
+     because they live in the utilities layer. */
+  button,
+  [role='button'],
+  [role='tab'],
+  [role='combobox'],
+  [role='menuitem'],
+  kbd {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }
 
 @layer components {

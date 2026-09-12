@@ -6,8 +6,8 @@ import { AuditLog } from './audit-log'
 import { AuthenticationManagement } from './authentication-management'
 import { ClusterManagement } from './cluster-management'
 import { GeneralManagement } from './general-management'
-import { RBACManagement } from './rbac-management'
 import { TemplateManagement } from './template-management'
+import { UserGroupsTab } from './user-groups-tab'
 import { UserManagement } from './user-management'
 
 export interface SettingsSectionDefinition {
@@ -51,16 +51,16 @@ export const settingsSectionRegistry: SettingsSectionDefinition[] = [
     AuthenticationManagement
   ),
   createSettingsSectionDefinition(
-    'rbac',
-    'settings.tabs.rbac',
-    'RBAC',
-    RBACManagement
-  ),
-  createSettingsSectionDefinition(
     'users',
     'settings.tabs.users',
     'User',
     UserManagement
+  ),
+  createSettingsSectionDefinition(
+    'group',
+    'settings.tabs.group',
+    'User Groups',
+    UserGroupsTab
   ),
   createSettingsSectionDefinition(
     'apikeys',

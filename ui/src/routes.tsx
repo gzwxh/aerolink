@@ -4,15 +4,26 @@ import App, { StandaloneAIChatApp } from './App'
 import { InitCheckRoute } from './components/init-check-route'
 import { ProtectedRoute } from './components/protected-route'
 import { getSubPath } from './lib/subpath'
+import { ConfigMapCreatePage } from './pages/configmap-create-page'
 import { CRListPage } from './pages/cr-list-page'
+import { CronJobListPage } from './pages/cronjob-list-page'
+import { DaemonSetListPage } from './pages/daemonset-list-page'
+import { DeploymentCreatePage } from './pages/deployment-create-page'
+import { DeploymentListPage } from './pages/deployment-list-page'
 import { HelmChartDetailPage } from './pages/helm-chart-detail-page'
 import { HelmChartListPage } from './pages/helm-chart-list-page'
 import { InitializationPage } from './pages/initialization'
+import { JobListPage } from './pages/job-list-page'
 import { LoginPage } from './pages/login'
 import { Overview } from './pages/overview'
+import { PodListPage } from './pages/pod-list-page'
+import { RBACPage } from './pages/rbac'
 import { ResourceDetail } from './pages/resource-detail'
 import { ResourceList } from './pages/resource-list'
+import { ServiceCreatePage } from './pages/service-create-page'
+import { ServiceListPage } from './pages/service-list-page'
 import { SettingsPage } from './pages/settings'
+import { StatefulSetListPage } from './pages/statefulset-list-page'
 
 const subPath = getSubPath()
 
@@ -61,6 +72,102 @@ export const router = createBrowserRouter(
         {
           path: 'settings',
           element: <SettingsPage />,
+        },
+        {
+          path: 'rbac',
+          element: <RBACPage />,
+        },
+        {
+          path: 'deployments/create',
+          element: <DeploymentCreatePage />,
+        },
+        {
+          path: 'deployments/:namespace/create',
+          element: <DeploymentCreatePage />,
+        },
+        {
+          path: 'deployments/:namespace',
+          element: <DeploymentListPage />,
+        },
+        {
+          path: 'services/create',
+          element: <ServiceCreatePage />,
+        },
+        {
+          path: 'services/:namespace/create',
+          element: <ServiceCreatePage />,
+        },
+        {
+          path: 'services/:namespace',
+          element: <ServiceListPage />,
+        },
+        {
+          path: 'cronjobs/create',
+          element: <DeploymentCreatePage resourceType="cronjobs" />,
+        },
+        {
+          path: 'cronjobs/:namespace/create',
+          element: <DeploymentCreatePage resourceType="cronjobs" />,
+        },
+        {
+          path: 'cronjobs/:namespace',
+          element: <CronJobListPage />,
+        },
+        {
+          path: 'jobs/create',
+          element: <DeploymentCreatePage resourceType="jobs" />,
+        },
+        {
+          path: 'jobs/:namespace/create',
+          element: <DeploymentCreatePage resourceType="jobs" />,
+        },
+        {
+          path: 'jobs/:namespace',
+          element: <JobListPage />,
+        },
+        {
+          path: 'pods/create',
+          element: <DeploymentCreatePage resourceType="pods" />,
+        },
+        {
+          path: 'pods/:namespace/create',
+          element: <DeploymentCreatePage resourceType="pods" />,
+        },
+        {
+          path: 'pods/:namespace',
+          element: <PodListPage />,
+        },
+        {
+          path: 'daemonsets/create',
+          element: <DeploymentCreatePage resourceType="daemonsets" />,
+        },
+        {
+          path: 'daemonsets/:namespace/create',
+          element: <DeploymentCreatePage resourceType="daemonsets" />,
+        },
+        {
+          path: 'daemonsets/:namespace',
+          element: <DaemonSetListPage />,
+        },
+        {
+          path: 'statefulsets/create',
+          element: <DeploymentCreatePage resourceType="statefulsets" />,
+        },
+        {
+          path: 'statefulsets/:namespace/create',
+          element: <DeploymentCreatePage resourceType="statefulsets" />,
+        },
+        {
+          path: 'statefulsets/:namespace',
+          element: <StatefulSetListPage />,
+        },
+        {
+          path: 'configmaps/create',
+          element: <ConfigMapCreatePage />,
+        },
+        {
+          path: 'configmaps/:namespace/create',
+          element: <ConfigMapCreatePage />,
         },
         {
           path: 'crds/:crd',

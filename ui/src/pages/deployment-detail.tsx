@@ -11,10 +11,12 @@ import {
   updateResource,
   useRelatedResources,
   useResource,
+  useResources,
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
 import { getDeploymentStatus, toSimpleContainer } from '@/lib/k8s'
+import { WorkloadServiceYamlTab } from '@/components/workload-service-yaml-tab'
 import { translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -86,6 +88,9 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
         .join(',')
     : undefined
 
+  const { data: relatedServices } = useResources('services', namespace, {
+    staleTime: 30_000,
+  })
   const { data: relatedPods, isLoading: isLoadingPods } = useResourcesWatch(
     'pods',
     namespace,
@@ -98,6 +103,19 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     useResourcesEvents('deployments', name, namespace)
   const { data: relatedResources, refetch: refetchRelatedResources } =
     useRelatedResources('deployments', name, namespace)
+
+  // Services associated with this workload (name match or selector match) —
+  // used by the Endpoints card; unrelated services in the same namespace are
+  // not the concern of this deployment's overview.
+  const associatedServices = useMemo(() => {
+    const matchLabels = deployment?.spec?.selector?.matchLabels || {}
+    return (relatedServices || []).filter((svc) => {
+      const svcName = svc.metadata?.name || ''
+      if (svcName === name || svcName.startsWith(`${name}-`)) return true
+      const selector = (svc.spec?.selector || {}) as Record<string, string>
+      return Object.entries(matchLabels).every(([k, v]) => selector[k] === v)
+    })
+  }, [relatedServices, name, deployment])
 
   const hasRelatedService = useMemo(
     () => relatedResources?.some((resource) => resource.type === 'services'),
@@ -284,9 +302,29 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
 
   const extraTabs = useMemo<ResourceDetailShellTab<Deployment>[]>(() => {
     const tabs: ResourceDetailShellTab<Deployment>[] = []
+    const relatedServiceList = associatedServices || []
     const pods = relatedPods || []
     const containers = deployment?.spec?.template.spec?.containers || []
     const initContainers = deployment?.spec?.template.spec?.initContainers || []
+
+    if (relatedServiceList.length > 0) {
+      tabs.push({
+        value: 'service-yaml',
+        label: (
+          <>
+            {t('common.tabs.serviceYaml', '关联 Service')}
+            <Badge variant="secondary">{relatedServiceList.length}</Badge>
+          </>
+        ),
+        content: (
+          <WorkloadServiceYamlTab
+            deployment={deployment!}
+            namespace={namespace!}
+            services={associatedServices}
+          />
+        ),
+      })
+    }
 
     tabs.push(
       {
@@ -458,6 +496,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     isLoading,
     isLoadingPods,
     labelSelector,
+    associatedServices,
     handleContainerUpdate,
     name,
     namespace,
@@ -487,6 +526,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
             isPodsLoading={isLoadingPods}
             events={deploymentEvents}
             isEventsLoading={isEventsLoading}
+            services={associatedServices}
           />
         ) : null
       }

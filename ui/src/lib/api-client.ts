@@ -6,6 +6,23 @@ export interface ApiRequestOptions extends RequestInit {
   retryOnUnauthorized?: boolean
 }
 
+/**
+ * Error thrown for non-2xx API responses. Keeps the HTTP status and the
+ * optional machine-readable `code` so callers can react to specific failures
+ * (e.g. 409 + role_name_conflict) instead of matching on the message text.
+ */
+export class ApiError extends Error {
+  readonly status: number
+  readonly code?: string
+
+  constructor(message: string, status: number, code?: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
 class ApiClient {
   private baseUrl: string = ''
   private isRefreshing = false
@@ -90,8 +107,10 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(
-        errorData.error || `HTTP error! status: ${response.status}`
+      throw new ApiError(
+        errorData.error || `HTTP error! status: ${response.status}`,
+        response.status,
+        errorData.code
       )
     }
 

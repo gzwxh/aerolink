@@ -68,6 +68,8 @@ type LDAPConfig struct {
 	GroupBaseDN          string `yaml:"groupBaseDn"`
 	GroupFilter          string `yaml:"groupFilter"`
 	GroupNameAttribute   string `yaml:"groupNameAttribute"`
+	AutoSync             *bool  `yaml:"autoSync"`
+	SyncIntervalMinutes  int    `yaml:"syncIntervalMinutes"`
 }
 
 type RBACConfig struct {
@@ -306,6 +308,11 @@ func applyLDAP(cfg *LDAPConfig) error {
 		GroupBaseDN:          cfg.GroupBaseDN,
 		GroupFilter:          cfg.GroupFilter,
 		GroupNameAttribute:   cfg.GroupNameAttribute,
+		SyncIntervalMinutes:  cfg.SyncIntervalMinutes,
+	}
+	setting.AutoSync = true
+	if cfg.AutoSync != nil {
+		setting.AutoSync = *cfg.AutoSync
 	}
 
 	_, err := model.UpdateLDAPSetting(setting)

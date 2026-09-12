@@ -98,21 +98,29 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 	var credentialProviders []string
 	loginPrompt := ""
 
-	if setting == nil || !setting.PasswordLoginDisabled {
+	ldapEnabled := false
+	ldapSetting, err := model.GetLDAPSetting()
+	if err != nil {
+		klog.Warningf("Failed to load ldap setting for providers: %v", err)
+	} else {
+		ldapEnabled = ldapSetting.Enabled
+	}
+
+	// LDAP is the primary credential method when enabled. Local password
+	// sign-in stays available as a secondary escape hatch so a built-in admin
+	// can always sign in and manage grants (directory users may lack admin
+	// rights). Passkey stays hidden in LDAP mode.
+	if setting != nil && !setting.PasswordLoginDisabled {
 		credentialProviders = append(credentialProviders, model.AuthProviderPassword)
+	}
+	if ldapEnabled {
+		credentialProviders = append(credentialProviders, model.AuthProviderLDAP)
 	}
 	if setting != nil {
 		loginPrompt = setting.LoginPrompt
 	}
 
 	oauthProviders := uniqueStrings(h.manager.GetAvailableProviders())
-
-	ldapSetting, err := model.GetLDAPSetting()
-	if err != nil {
-		klog.Warningf("Failed to load ldap setting for providers: %v", err)
-	} else if ldapSetting.Enabled {
-		credentialProviders = append(credentialProviders, model.AuthProviderLDAP)
-	}
 
 	credentialProviders = uniqueStrings(credentialProviders)
 	providers := append(append([]string{}, credentialProviders...), oauthProviders...)
@@ -123,7 +131,7 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 		OAuthProviders:      oauthProviders,
 		LoginPrompt:         loginPrompt,
 		MFAEnabled:          setting == nil || setting.EnableMFA,
-		PasskeyLoginEnabled: setting != nil && setting.EnablePasskeyLogin,
+		PasskeyLoginEnabled: !ldapEnabled && setting != nil && setting.EnablePasskeyLogin,
 	}
 }
 

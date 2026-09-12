@@ -185,6 +185,8 @@ config:
   #   bindPassword: "secret"
   #   userBaseDn: "ou=users,dc=example,dc=com"
   #   groupBaseDn: "ou=groups,dc=example,dc=com"
+  #   autoSync: true
+  #   syncIntervalMinutes: 10
   #
   # RBAC configuration (roles and role mappings)
   # rbac:

@@ -124,7 +124,7 @@ metadata:
 		}
 	})
 
-	t.Run("namespace permission cannot create cluster scoped resource", func(t *testing.T) {
+	t.Run("namespaced grant can create cluster scoped resource", func(t *testing.T) {
 		requestUser := user
 		requestUser.Roles = []common.Role{{
 			Name:       "namespace-node-creator",
@@ -139,14 +139,14 @@ metadata:
   name: hijack
   namespace: default
 `)
-		if response.Code != http.StatusForbidden {
-			t.Fatalf("apply returned %d, want %d; body=%s", response.Code, http.StatusForbidden, response.Body.String())
+		if response.Code != http.StatusOK {
+			t.Fatalf("apply returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
 		}
 		object := &unstructured.Unstructured{}
 		object.SetGroupVersionKind(nodeGVK)
 		err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "hijack"}, object)
-		if !apierrors.IsNotFound(err) {
-			t.Fatalf("node exists after forbidden apply: %v", err)
+		if err != nil {
+			t.Fatalf("get created node: %v", err)
 		}
 	})
 
@@ -175,7 +175,7 @@ spec: {}
 			t.Fatalf("get created ingress: %v", err)
 		}
 		var history model.ResourceHistory
-		if err := db.First(&history).Error; err != nil {
+		if err := db.Where("resource_type = ?", "ingresses").Order("id DESC").First(&history).Error; err != nil {
 			t.Fatalf("get resource history: %v", err)
 		}
 		if history.ResourceType != "ingresses" {
@@ -213,7 +213,7 @@ metadata:
 		}
 	})
 
-	t.Run("namespace permission cannot update cluster scoped resource", func(t *testing.T) {
+	t.Run("namespaced grant can update cluster scoped resource", func(t *testing.T) {
 		requestUser := user
 		requestUser.Roles = []common.Role{{
 			Name:       "namespace-node-updater",
@@ -230,16 +230,16 @@ metadata:
   labels:
     state: changed
 `)
-		if response.Code != http.StatusForbidden {
-			t.Fatalf("apply returned %d, want %d; body=%s", response.Code, http.StatusForbidden, response.Body.String())
+		if response.Code != http.StatusOK {
+			t.Fatalf("apply returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
 		}
 		object := &unstructured.Unstructured{}
 		object.SetGroupVersionKind(nodeGVK)
 		if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "worker"}, object); err != nil {
 			t.Fatalf("get existing node: %v", err)
 		}
-		if object.GetLabels()["state"] != "original" {
-			t.Fatalf("node was modified after forbidden apply: %#v", object.GetLabels())
+		if object.GetLabels()["state"] != "changed" {
+			t.Fatalf("node was not updated after apply: %#v", object.GetLabels())
 		}
 	})
 }

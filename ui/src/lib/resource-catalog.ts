@@ -34,6 +34,7 @@ type SidebarGroupKey =
   | 'sidebar.groups.security'
   | 'sidebar.groups.other'
   | 'sidebar.groups.application'
+  | 'sidebar.groups.infrastructure'
 
 export const resourceIconMap = {
   IconBox,
@@ -88,6 +89,7 @@ export const sidebarGroupOrder = [
   'sidebar.groups.traffic',
   'sidebar.groups.storage',
   'sidebar.groups.config',
+  'sidebar.groups.infrastructure',
   'sidebar.groups.security',
   'sidebar.groups.other',
 ] as const satisfies readonly SidebarGroupKey[]
@@ -235,7 +237,7 @@ export const resourceCatalog = [
     clusterScope: true,
     titleKey: 'nav.namespaces',
     icon: 'IconBoxMultiple',
-    sidebar: { groupKey: 'sidebar.groups.other', order: 0 },
+    sidebar: { groupKey: 'sidebar.groups.infrastructure', order: 0 },
   },
   {
     type: 'crds',
@@ -245,7 +247,7 @@ export const resourceCatalog = [
     clusterScope: true,
     titleKey: 'nav.crds',
     icon: 'IconCode',
-    sidebar: { groupKey: 'sidebar.groups.other', order: 3 },
+    sidebar: { groupKey: 'sidebar.groups.infrastructure', order: 4 },
   },
   {
     type: 'crs',
@@ -840,7 +842,7 @@ export const resourceCatalog = [
     clusterScope: true,
     titleKey: 'nav.nodes',
     icon: 'IconServer2',
-    sidebar: { groupKey: 'sidebar.groups.other', order: 1 },
+    sidebar: { groupKey: 'sidebar.groups.infrastructure', order: 1 },
   },
   {
     type: 'events',
@@ -862,8 +864,8 @@ export const resourceCatalog = [
     titleKey: 'nav.persistentvolumes',
     icon: 'IconDatabase',
     sidebar: {
-      groupKey: 'sidebar.groups.storage',
-      order: 1,
+      groupKey: 'sidebar.groups.infrastructure',
+      order: 2,
       titleKey: 'sidebar.short.pvs',
     },
   },
@@ -890,7 +892,7 @@ export const resourceCatalog = [
     clusterScope: true,
     titleKey: 'nav.storageclasses',
     icon: 'IconFileDatabase',
-    sidebar: { groupKey: 'sidebar.groups.storage', order: 2 },
+    sidebar: { groupKey: 'sidebar.groups.infrastructure', order: 3 },
   },
   {
     type: 'podmetrics',
@@ -1068,6 +1070,34 @@ export function getResourceShortLabel(resource?: string | null) {
 
 export function isClusterScopedResource(resource?: string | null) {
   return getResourceMetadata(resource)?.clusterScope ?? false
+}
+
+export interface ResourceScopeSplit {
+  namespaced: string[]
+  clusterScoped: string[]
+  hasWildcard: boolean
+}
+
+// splitResourcesByScope separates granted resource patterns into namespaced and
+// cluster-scoped groups so UI surfaces (namespace grants, role editor) can draw
+// the boundary that the backend applies: only namespaced resources are limited
+// by a role's namespace list.
+export function splitResourcesByScope(resources: string[]): ResourceScopeSplit {
+  const namespaced: string[] = []
+  const clusterScoped: string[] = []
+  let hasWildcard = false
+  for (const resource of resources) {
+    if (resource === '*') {
+      hasWildcard = true
+      continue
+    }
+    if (isClusterScopedResource(resource)) {
+      clusterScoped.push(resource)
+    } else {
+      namespaced.push(resource)
+    }
+  }
+  return { namespaced, clusterScoped, hasWildcard }
 }
 
 export function getResourceListPath(resource: string) {

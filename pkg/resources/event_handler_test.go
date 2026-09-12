@@ -181,7 +181,7 @@ func TestListResourceEventsRBAC(t *testing.T) {
 			wantCalls:  1,
 		},
 		{
-			name: "known cluster scoped target cannot forge namespace",
+			name: "cluster scoped target ignores namespace restriction",
 			path: "/api/v1/events/resources?resource=nodes&name=worker&namespace=default",
 			roles: []common.Role{
 				eventsAll,
@@ -190,7 +190,8 @@ func TestListResourceEventsRBAC(t *testing.T) {
 					Resources: []string{string(common.Nodes)}, Verbs: []string{string(common.VerbGet)},
 				},
 			},
-			wantStatus: http.StatusForbidden,
+			wantStatus: http.StatusOK,
+			wantCalls:  1,
 		},
 		{
 			name: "cluster scoped custom target cannot forge namespace",

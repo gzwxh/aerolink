@@ -7,6 +7,10 @@ type Role struct {
 	Description string `json:"description" gorm:"type:text"`
 	IsSystem    bool   `json:"isSystem" gorm:"type:boolean;not null;default:false"`
 
+	// RoleType distinguishes roles meant for individual users ('user') from
+	// roles meant for LDAP/OIDC groups ('group'). Empty is treated as 'user'.
+	RoleType string `json:"roleType" gorm:"type:varchar(10);not null;default:'user'"`
+
 	// Rules
 	Clusters   SliceString `json:"clusters" gorm:"type:text"`
 	Resources  SliceString `json:"resources" gorm:"type:text"`

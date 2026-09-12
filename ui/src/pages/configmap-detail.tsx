@@ -17,6 +17,9 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
 
+  // The detail shell gates the clone / delete / YAML actions with the current
+  // user's permissions for `resourceType` (configmaps).
+
   const { data, isLoading, isError, error, refetch } = useResource(
     'configmaps',
     name,
@@ -74,6 +77,8 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
     [binaryDataCount, data, dataCount, totalCount]
   )
 
+  // The shell only renders the YAML tab when a save handler is present, so it
+  // is always passed; `yamlEditable` decides whether saving is allowed.
   return (
     <ResourceDetailShell
       resourceType="configmaps"

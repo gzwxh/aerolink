@@ -80,9 +80,9 @@ export function ClusterSelector() {
                     ? 'text-red-500'
                     : 'text-muted-foreground font-mono'
                 )}
-                title={cluster.error}
+                title={cluster.error || cluster.description || cluster.version}
               >
-                {cluster.error || cluster.version}
+                {cluster.error || cluster.description || cluster.version}
               </span>
             </div>
             {currentCluster === cluster.name && (

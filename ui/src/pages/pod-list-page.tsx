@@ -2,10 +2,15 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { PodWithMetrics } from '@/types/api'
-import { createSearchFilter, getPodStatus } from '@/lib/k8s'
+import { getClusterScopedStorageKey } from '@/lib/current-cluster'
+import {
+  createSearchFilter,
+  getPodStatus,
+  resolveCreateNamespace,
+} from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -14,6 +19,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { MetricCell } from '@/components/metrics-cell'
+import { NodeLink } from '@/components/node-link'
 import { PodStatusIcon } from '@/components/pod-status-icon'
 import { ResourceTable } from '@/components/resource-table'
 
@@ -27,6 +33,8 @@ const columnHelper = createColumnHelper<PodWithMetrics>()
 
 export function PodListPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { namespace: namespaceParam } = useParams()
 
   // Define columns for the pod table - moved outside render cycle for better performance
   const columns = useMemo(
@@ -50,6 +58,7 @@ export function PodListPage() {
         header: t('common.fields.ready'),
         cell: ({ row }) => {
           const status = getPodStatus(row.original)
+
           return (
             <div>
               {status.readyContainers} / {status.totalContainers}
@@ -112,18 +121,11 @@ export function PodListPage() {
         id: 'nodeName',
         header: t('common.fields.node'),
         enableColumnFilter: true,
-        cell: ({ row }) => {
-          if (row.original.spec?.nodeName) {
-            return (
-              <div className="font-medium app-link">
-                <Link to={`/nodes/${row.original.spec?.nodeName}`}>
-                  {row.original.spec?.nodeName}
-                </Link>
-              </div>
-            )
-          }
-          return '-'
-        },
+        cell: ({ row }) => (
+          <div className="font-medium">
+            <NodeLink name={row.original.spec?.nodeName} />
+          </div>
+        ),
       }),
       columnHelper.accessor((row) => row.metadata?.creationTimestamp, {
         id: 'creationTimestamp',
@@ -146,12 +148,34 @@ export function PodListPage() {
     [t]
   )
 
+  const handleCreateClick = () => {
+    // The URL wins, then the table's persisted selection; a multi or
+    // "all namespaces" selection cannot host a new object.
+    const ns = resolveCreateNamespace(
+      namespaceParam,
+      sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace'))
+    )
+    navigate(`/pods/${encodeURIComponent(ns)}/create?tab=container-0`)
+  }
+
   return (
-    <ResourceTable<Pod>
-      resourceName="Pods"
-      columns={columns}
-      clusterScope={false}
-      searchQueryFilter={podSearchFilter}
-    />
+    <>
+      <ResourceTable<Pod>
+        resourceName="Pods"
+        columns={columns}
+        clusterScope={false}
+        searchQueryFilter={podSearchFilter}
+        initialNamespace={namespaceParam}
+        onNamespaceChange={(ns) => {
+          navigate(
+            ns && ns !== '_all' ? `/pods/${encodeURIComponent(ns)}` : '/pods',
+            { replace: true }
+          )
+        }}
+        showCreateButton={true}
+        onCreateClick={handleCreateClick}
+      />
+    </>
   )
 }

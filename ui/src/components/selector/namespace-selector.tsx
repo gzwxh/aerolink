@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Namespace } from 'kubernetes-types/core/v1'
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { Check, ChevronDown, Loader2 } from 'lucide-react'
 
 import { useResources } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -98,12 +98,12 @@ export function NamespaceSelector({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            'w-full min-w-0 justify-between sm:w-auto sm:min-w-[9rem] sm:max-w-[14rem]',
+            'h-9 w-full min-w-0 justify-between gap-2 rounded-md border-input bg-transparent px-3 py-2 text-sm font-normal shadow-xs hover:bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50 sm:w-auto sm:min-w-[9rem] sm:max-w-[14rem]',
             triggerClassName
           )}
         >
           <span className="truncate">{triggerLabel}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
 

@@ -450,6 +450,8 @@ export const drainNode = async (
     gracePeriod: number
     deleteLocalData: boolean
     ignoreDaemonsets: boolean
+    /** Abort the drain after this many seconds (0 = no timeout). */
+    timeout?: number
   }
 ): Promise<{
   message: string
@@ -582,7 +584,7 @@ export const patchResource = async <T extends ResourceType>(
 }
 
 export const restartWorkload = async (
-  resource: 'deployments' | 'statefulsets',
+  resource: 'deployments' | 'statefulsets' | 'daemonsets',
   name: string,
   namespace: string
 ): Promise<void> => {

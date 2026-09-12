@@ -8,6 +8,7 @@ import { getPodStatus } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 
 import { MetricCell } from './metrics-cell'
+import { NodeLink } from './node-link'
 import { PodStatusIcon } from './pod-status-icon'
 import { Column, SimpleTable } from './simple-table'
 import { Badge } from './ui/badge'
@@ -106,11 +107,9 @@ export function PodTable(props: {
         : [
             {
               header: 'Node',
-              accessor: (pod: Pod) => pod.spec?.nodeName || '-',
+              accessor: (pod: Pod) => pod.spec?.nodeName || '',
               cell: (value: unknown) => (
-                <Link to={`/nodes/${value}`} className="app-link">
-                  {value as string}
-                </Link>
+                <NodeLink name={(value as string) || undefined} />
               ),
             },
           ]),

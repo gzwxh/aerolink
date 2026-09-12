@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import yaml from 'js-yaml'
-import { Deployment } from 'kubernetes-types/apps/v1'
 import { Plus, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -33,22 +32,36 @@ import { NamespaceSelector } from '../selector/namespace-selector'
 import { PVCSelector } from '../selector/pvc-selector'
 import { SecretSelector } from '../selector/secret-selector'
 import { SimpleYamlEditor } from '../simple-yaml-editor'
+import { NodeSchedulingSection } from '../node-scheduling-section'
+import { parseSchedulingFromYaml } from '../node-scheduling-section'
 import {
   ContainerConfig,
   createDefaultContainer,
   DeploymentFormData,
-  generateDeploymentYaml,
+  generateWorkloadYaml,
   initialFormData,
   validateStep,
   VolumeForm,
+  WorkloadResourceType,
 } from './deployment-form'
 import { EnvironmentEditor } from './environment-editor'
 import { ImageEditor } from './image-editor'
 
+const KIND_LABELS: Record<WorkloadResourceType, string> = {
+  deployments: 'Deployment',
+  pods: 'Pod',
+  daemonsets: 'DaemonSet',
+  statefulsets: 'StatefulSet',
+  jobs: 'Job',
+  cronjobs: 'CronJob',
+}
+
 interface DeploymentCreateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: (deployment: Deployment, namespace: string) => void
+  /** Defaults to 'deployments'; the wizard adapts its fields per kind. */
+  resourceType?: WorkloadResourceType
+  onSuccess: (resource: unknown, namespace: string) => void
   defaultNamespace?: string
 }
 
@@ -57,7 +70,10 @@ export function DeploymentCreateDialog({
   onOpenChange,
   onSuccess,
   defaultNamespace,
+  resourceType = 'deployments',
 }: DeploymentCreateDialogProps) {
+  const kindLabel = KIND_LABELS[resourceType]
+  const showReplicas = resourceType === 'deployments' || resourceType === 'statefulsets'
   const [formData, setFormData] = useState<DeploymentFormData>({
     ...initialFormData,
     namespace: defaultNamespace || 'default',
@@ -171,7 +187,7 @@ export function DeploymentCreateDialog({
 
   const removeContainer = (index: number) => {
     if (formData.containers.length <= 1) {
-      toast.error('At least one container is required')
+      toast.error(t('workloadWizard.atLeastOneContainer'))
       return
     }
     setFormData((prev) => ({
@@ -209,34 +225,47 @@ export function DeploymentCreateDialog({
 
     setIsCreating(true)
     try {
-      let deployment: Deployment
+      let manifest: Record<string, unknown>
       try {
-        const yamlContent = editedYaml || generateDeploymentYaml(formData)
-        deployment = yaml.load(yamlContent) as Deployment
+        const yamlContent = editedYaml || generateWorkloadYaml(formData, resourceType)
+        manifest = yaml.load(yamlContent) as Record<string, unknown>
       } catch (yamlError) {
         console.error('Failed to parse YAML:', yamlError)
         toast.error(
-          `Invalid YAML format: ${
-            yamlError instanceof Error ? yamlError.message : 'Unknown error'
-          }`
+          t('workloadWizard.invalidYaml', {
+            message:
+              yamlError instanceof Error
+                ? yamlError.message
+                : 'Unknown error',
+          })
         )
         return
       }
 
+      const metadata = manifest.metadata as
+        | { name?: string; namespace?: string }
+        | undefined
+
       // Validate required fields
-      if (!deployment.metadata?.name || !deployment.metadata?.namespace) {
-        toast.error('Deployment must have a name and namespace')
+      if (!metadata?.name || !metadata?.namespace) {
+        toast.error(
+          t('workloadWizard.mustHaveNameNamespace', { kind: kindLabel })
+        )
         return
       }
 
-      const createdDeployment = await createResource(
-        'deployments',
-        deployment.metadata.namespace,
-        deployment
+      const created = await createResource(
+        resourceType,
+        metadata.namespace,
+        manifest as never
       )
 
       toast.success(
-        `Deployment "${deployment.metadata.name}" created successfully in namespace "${deployment.metadata.namespace}"`
+        t('workloadWizard.created', {
+          kind: kindLabel,
+          name: metadata.name,
+          namespace: metadata.namespace,
+        })
       )
 
       // Reset form and close dialog
@@ -248,10 +277,10 @@ export function DeploymentCreateDialog({
       setEditedYaml('')
       onOpenChange(false)
 
-      // Call success callback with created deployment
-      onSuccess(createdDeployment, deployment.metadata.namespace)
+      // Call success callback with created resource
+      onSuccess(created, metadata.namespace)
     } catch (error) {
-      console.error('Failed to create deployment:', error)
+      console.error('Failed to create workload:', error)
       toast.error(translateError(error, t))
     } finally {
       setIsCreating(false)
@@ -277,7 +306,7 @@ export function DeploymentCreateDialog({
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Deployment Name *</Label>
+              <Label htmlFor="name">{t('workloadWizard.name', { kind: kindLabel })}</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -299,7 +328,7 @@ export function DeploymentCreateDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="namespace">Namespace *</Label>
+              <Label htmlFor="namespace">{t('workloadWizard.namespace')}</Label>
               <NamespaceSelector
                 selectedNamespace={formData.namespace}
                 handleNamespaceChange={(namespace) =>
@@ -309,7 +338,7 @@ export function DeploymentCreateDialog({
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Labels *</Label>
+                <Label>{t('workloadWizard.labels')}</Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -317,7 +346,7 @@ export function DeploymentCreateDialog({
                   onClick={addLabel}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Label
+                  {t('workloadWizard.addLabel')}
                 </Button>
               </div>
               <div className="space-y-2">
@@ -351,26 +380,40 @@ export function DeploymentCreateDialog({
                 ))}
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="replicas">Replicas *</Label>
-              <Input
-                id="replicas"
-                type="number"
-                min="1"
-                value={formData.replicas}
-                onChange={(e) =>
-                  updateFormData({ replicas: parseInt(e.target.value) || 1 })
-                }
-                required
-              />
-            </div>
+            {showReplicas && (
+              <div className="space-y-2">
+                <Label htmlFor="replicas">{t('workloadWizard.replicas')}</Label>
+                <Input
+                  id="replicas"
+                  type="number"
+                  min="1"
+                  value={formData.replicas}
+                  onChange={(e) =>
+                    updateFormData({ replicas: parseInt(e.target.value) || 1 })
+                  }
+                  required
+                />
+              </div>
+            )}
+            {resourceType === 'cronjobs' && (
+              <div className="space-y-2">
+                <Label htmlFor="schedule">{t('workloadWizard.schedule')}</Label>
+                <Input
+                  id="schedule"
+                  value={formData.schedule || '*/5 * * * *'}
+                  onChange={(e) => updateFormData({ schedule: e.target.value })}
+                  placeholder="*/5 * * * *"
+                  required
+                />
+              </div>
+            )}
           </div>
         )
       case 2:
         return (
           <div className="space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Label>Volume</Label>
+              <Label>{t('workloadWizard.volume')}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -378,7 +421,7 @@ export function DeploymentCreateDialog({
                 onClick={addVolume}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Volume
+                {t('workloadWizard.addVolume')}
               </Button>
             </div>
             <div className="space-y-2">
@@ -386,7 +429,7 @@ export function DeploymentCreateDialog({
                 <div key={index} className="flex gap-2 items-center">
                   <Input
                     className="flex-1"
-                    placeholder="name"
+                    placeholder={t('workloadWizard.volumeNamePlaceholder')}
                     value={volume.name}
                     onChange={(e) =>
                       updateVolume(index, 'name', e.target.value)
@@ -399,7 +442,7 @@ export function DeploymentCreateDialog({
                     }
                   >
                     <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Select Volume Type" />
+                      <SelectValue placeholder={t('workloadWizard.selectVolumeType')} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="emptyDir">emptyDir</SelectItem>
@@ -420,7 +463,7 @@ export function DeploymentCreateDialog({
                   {volume.sourceType === 'hostPath' && (
                     <Input
                       className="flex-1"
-                      placeholder="host path"
+                      placeholder={t('workloadWizard.hostPathPlaceholder')}
                       value={volume.options?.path || ''}
                       onChange={(e) =>
                         updateVolume(index, 'path', e.target.value)
@@ -483,7 +526,7 @@ export function DeploymentCreateDialog({
         return (
           <div className="space-y-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Label className="text-lg font-medium">Containers</Label>
+              <Label className="text-lg font-medium">{t('workloadWizard.containersTitle')}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -491,7 +534,7 @@ export function DeploymentCreateDialog({
                 onClick={addContainer}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Container
+                {t('workloadWizard.addContainer')}
               </Button>
             </div>
             {formData.containers.map((containerConfig, containerIndex) => (
@@ -499,7 +542,7 @@ export function DeploymentCreateDialog({
                 <CardHeader className="pb-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <CardTitle className="text-base">
-                      Container {containerIndex + 1}
+                      {t('workloadWizard.containerTitle', { index: containerIndex + 1 })}
                     </CardTitle>
                     {formData.containers.length > 1 && (
                       <Button
@@ -507,7 +550,7 @@ export function DeploymentCreateDialog({
                         variant="outline"
                         size="sm"
                         onClick={() => removeContainer(containerIndex)}
-                        aria-label={`Remove container ${containerIndex + 1}`}
+                        aria-label={t('workloadWizard.removeContainer', { index: containerIndex + 1 })}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -532,7 +575,7 @@ export function DeploymentCreateDialog({
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`name-${containerIndex}`}>
-                        Container Name *
+                        {t('workloadWizard.containerName')}
                       </Label>
                       <Input
                         id={`name-${containerIndex}`}
@@ -546,22 +589,22 @@ export function DeploymentCreateDialog({
                             },
                           })
                         }
-                        placeholder="container-name"
+                        placeholder={t('workloadWizard.containerNamePlaceholder')}
                         required
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Resources (optional)</Label>
+                    <Label>{t('workloadWizard.resources')}</Label>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label className="text-sm text-muted-foreground">
-                          Requests
+                          {t('workloadWizard.requests')}
                         </Label>
                         <div className="space-y-1">
                           <Input
-                            placeholder="CPU (e.g., 100m)"
+                            placeholder={t('workloadWizard.cpuRequestsPlaceholder')}
                             value={containerConfig.resources.requests.cpu}
                             onChange={(e) =>
                               updateContainer(containerIndex, {
@@ -576,7 +619,7 @@ export function DeploymentCreateDialog({
                             }
                           />
                           <Input
-                            placeholder="Memory (e.g., 128Mi)"
+                            placeholder={t('workloadWizard.memoryRequestsPlaceholder')}
                             value={containerConfig.resources.requests.memory}
                             onChange={(e) =>
                               updateContainer(containerIndex, {
@@ -594,11 +637,11 @@ export function DeploymentCreateDialog({
                       </div>
                       <div className="space-y-2">
                         <Label className="text-sm text-muted-foreground">
-                          Limits
+                          {t('workloadWizard.limits')}
                         </Label>
                         <div className="space-y-1">
                           <Input
-                            placeholder="CPU (e.g., 500m)"
+                            placeholder={t('workloadWizard.cpuLimitsPlaceholder')}
                             value={containerConfig.resources.limits.cpu}
                             onChange={(e) =>
                               updateContainer(containerIndex, {
@@ -613,7 +656,7 @@ export function DeploymentCreateDialog({
                             }
                           />
                           <Input
-                            placeholder="Memory (e.g., 256Mi)"
+                            placeholder={t('workloadWizard.memoryLimitsPlaceholder')}
                             value={containerConfig.resources.limits.memory}
                             onChange={(e) =>
                               updateContainer(containerIndex, {
@@ -650,7 +693,7 @@ export function DeploymentCreateDialog({
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor={`port-${containerIndex}`}>
-                        Container Port (optional)
+                        {t('workloadWizard.port')}
                       </Label>
                       <Input
                         id={`port-${containerIndex}`}
@@ -670,7 +713,7 @@ export function DeploymentCreateDialog({
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`pullPolicy-${containerIndex}`}>
-                        Image Pull Policy
+                        {t('workloadWizard.pullPolicy')}
                       </Label>
                       <Select
                         value={containerConfig.pullPolicy}
@@ -697,7 +740,7 @@ export function DeploymentCreateDialog({
                   {(formData.podSpec?.volumes?.length || 0) > 0 && (
                     <div className="space-y-2">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Label>Volume Mounts</Label>
+                        <Label>{t('workloadWizard.volumeMounts')}</Label>
                         <Button
                           type="button"
                           variant="outline"
@@ -723,7 +766,7 @@ export function DeploymentCreateDialog({
                           }}
                         >
                           <Plus className="w-4 h-4 mr-2" />
-                          Add Volume Mount
+                          {t('workloadWizard.addVolumeMount')}
                         </Button>
                       </div>
 
@@ -764,7 +807,7 @@ export function DeploymentCreateDialog({
 
                             <Input
                               className="flex-1"
-                              placeholder="/mount/path"
+                              placeholder={t('workloadWizard.mountPathPlaceholder')}
                               value={mount.mountPath}
                               onChange={(e) => {
                                 const updatedMounts = [
@@ -781,7 +824,7 @@ export function DeploymentCreateDialog({
                             />
                             <Input
                               className="flex-1"
-                              placeholder="subpath"
+                              placeholder={t('workloadWizard.subPathPlaceholder')}
                               value={mount.subPath || ''}
                               onChange={(e) => {
                                 const updatedMounts = [
@@ -816,8 +859,8 @@ export function DeploymentCreateDialog({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="true">ReadOnly</SelectItem>
-                                <SelectItem value="false">Writable</SelectItem>
+                                <SelectItem value="true">{t('workloadWizard.readOnly')}</SelectItem>
+                                <SelectItem value="false">{t('workloadWizard.writable')}</SelectItem>
                               </SelectContent>
                             </Select>
 
@@ -826,7 +869,7 @@ export function DeploymentCreateDialog({
                               variant="outline"
                               size="icon"
                               className="w-7 h-7"
-                              aria-label={`Remove volume mount ${mountIndex + 1}`}
+                              aria-label={t('workloadWizard.removeMount', { index: mountIndex + 1 })}
                               onClick={() => {
                                 const updatedMounts =
                                   containerConfig.volumeMounts?.filter(
@@ -853,23 +896,46 @@ export function DeploymentCreateDialog({
           </div>
         )
 
-      case 4:
+      case 4: {
+        const currentYaml =
+          editedYaml || generateWorkloadYaml(formData, resourceType)
+        const supportsScheduling = [
+          'deployments',
+          'statefulsets',
+          'daemonsets',
+          'jobs',
+        ].includes(resourceType)
         return (
           <div className="space-y-4">
-            <h3 className="text-lg font-medium">Review & Edit Configuration</h3>
+            <h3 className="text-lg font-medium">{t('workloadWizard.reviewTitle')}</h3>
             <p className="text-sm text-muted-foreground">
-              Review and edit the generated YAML configuration before creating
-              the deployment. You can modify any part of the configuration
-              directly in the editor below.
+              {t('workloadWizard.reviewDescription', {
+                kind: kindLabel.toLowerCase(),
+              })}
             </p>
+            {supportsScheduling && (
+              <NodeSchedulingSection
+                value={
+                  formData.podSpec.scheduling ||
+                  parseSchedulingFromYaml(currentYaml)
+                }
+                onChange={(scheduling) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    podSpec: { ...prev.podSpec, scheduling },
+                  }))
+                }
+              />
+            )}
             <SimpleYamlEditor
-              value={generateDeploymentYaml(formData)}
+              value={currentYaml}
               onChange={(value) => setEditedYaml(value || '')}
               disabled={false}
               height="500px"
             />
           </div>
         )
+      }
 
       default:
         return null
@@ -879,13 +945,13 @@ export function DeploymentCreateDialog({
   const getStepTitle = () => {
     switch (step) {
       case 1:
-        return 'Basic Configuration'
+        return t('workloadWizard.stepBasic')
       case 2:
-        return 'Pod Configuration'
+        return t('workloadWizard.stepPod')
       case 3:
-        return 'Containers & Resources'
+        return t('workloadWizard.stepContainers')
       case 4:
-        return 'Edit YAML & Create'
+        return t('workloadWizard.stepYaml')
       default:
         return ''
     }
@@ -903,7 +969,7 @@ export function DeploymentCreateDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Create Deployment</DialogTitle>
+          <DialogTitle>Create {kindLabel}</DialogTitle>
           <DialogDescription>
             Step {step} of {totalSteps}: {getStepTitle()}
           </DialogDescription>
@@ -949,7 +1015,7 @@ export function DeploymentCreateDialog({
             <div>
               {step > 1 && (
                 <Button variant="outline" onClick={handlePrevious}>
-                  Previous
+                  {t('workloadWizard.previous')}
                 </Button>
               )}
             </div>
@@ -958,18 +1024,20 @@ export function DeploymentCreateDialog({
                 variant="outline"
                 onClick={() => handleDialogChange(false)}
               >
-                Cancel
+                {t('common.actions.cancel')}
               </Button>
               {step < totalSteps ? (
                 <Button onClick={handleNext} disabled={!isStepValid(step)}>
-                  Next
+                  {t('workloadWizard.next')}
                 </Button>
               ) : (
                 <Button
                   onClick={handleCreate}
                   disabled={!isStepValid(step) || isCreating}
                 >
-                  {isCreating ? 'Creating...' : 'Create Deployment'}
+                  {isCreating
+                    ? t('workloadWizard.creating')
+                    : t('workloadWizard.createButton', { kind: kindLabel })}
                 </Button>
               )}
             </div>

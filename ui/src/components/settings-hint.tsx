@@ -84,7 +84,7 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
       ),
       icon: IconShieldCheck,
       completed: hasRoles,
-      href: '/settings?tab=rbac',
+      href: '/rbac',
     },
   ]
 

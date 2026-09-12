@@ -6,6 +6,15 @@ import { toast } from 'sonner'
 
 import { applyResource, useTemplates } from '@/lib/api'
 import { translateError } from '@/lib/utils'
+import {
+  NodeSchedulingSection,
+  applySchedulingToYaml,
+  parseSchedulingFromYaml,
+} from '@/components/node-scheduling-section'
+import {
+  defaultSchedulingConfig,
+  type SchedulingConfig,
+} from '@/components/editors/deployment-form'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -53,6 +62,27 @@ function CreateResourceDialogContent({
   const [selectedNamespace, setSelectedNamespace] = useState<string>()
   const [yamlContent, setYamlContent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [scheduling, setScheduling] = useState<SchedulingConfig>(
+    defaultSchedulingConfig()
+  )
+  const isWorkloadYaml = useMemo(() => {
+    if (!yamlContent.trim()) return false
+    try {
+      const doc = yaml.load(yamlContent) as
+        | { kind?: string; spec?: { template?: { spec?: unknown } } }
+        | undefined
+        | null
+      const kind = doc?.kind || ''
+      return (
+        ['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet'].includes(
+          kind
+        ) && !!doc?.spec?.template?.spec
+      )
+    } catch {
+      return false
+    }
+  }, [yamlContent])
+
   const hasNamespaceConflict = useMemo(() => {
     if (!selectedNamespace) return false
 
@@ -77,6 +107,7 @@ function CreateResourceDialogContent({
     if (templateName === 'empty') {
       setYamlContent('')
       setSelectedTemplateId('')
+      setScheduling(defaultSchedulingConfig())
       return
     }
 
@@ -84,6 +115,7 @@ function CreateResourceDialogContent({
     if (template) {
       setYamlContent(template.yaml)
       setSelectedTemplateId(template.name)
+      setScheduling(parseSchedulingFromYaml(template.yaml))
     }
   }
 
@@ -166,6 +198,15 @@ function CreateResourceDialogContent({
             ) : null}
           </div>
         </div>
+        {isWorkloadYaml && (
+          <NodeSchedulingSection
+            value={scheduling}
+            onChange={(next) => {
+              setScheduling(next)
+              setYamlContent(applySchedulingToYaml(yamlContent, next))
+            }}
+          />
+        )}
         <div className="space-y-2">
           <Label htmlFor="yaml">
             {t('common.fields.yamlConfiguration', 'YAML Configuration')}

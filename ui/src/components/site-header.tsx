@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 
 import { CreateResourceDialog } from './create-resource-dialog'
+import { CurrentClusterBadge } from './current-cluster-badge'
 import { DynamicBreadcrumb } from './dynamic-breadcrumb'
 import { LanguageToggle } from './language-toggle'
 import { ModeToggle } from './mode-toggle'
@@ -36,6 +37,7 @@ export function SiteHeader() {
           />
           <DynamicBreadcrumb />
           <div className="ml-auto flex items-center gap-2">
+            <CurrentClusterBadge />
             <Search />
             <Plus
               className="h-5 w-5 cursor-pointer text-muted-foreground hover:text-foreground"

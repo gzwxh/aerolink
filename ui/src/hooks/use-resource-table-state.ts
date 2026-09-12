@@ -12,6 +12,8 @@ interface UseResourceTableStateOptions {
   resourceName: string
   clusterScope: boolean
   defaultHiddenColumns: string[]
+  /** Optional namespace that wins over stored preferences (e.g. URL param). */
+  initialNamespace?: string
 }
 
 function readStoredJSON<T>(storage: Storage, key: string, fallback: T): T {
@@ -31,6 +33,7 @@ export function useResourceTableState({
   resourceName,
   clusterScope,
   defaultHiddenColumns,
+  initialNamespace,
 }: UseResourceTableStateOptions) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() =>
@@ -82,6 +85,9 @@ export function useResourceTableState({
   const [selectedNamespace, setSelectedNamespace] = useState<
     string | undefined
   >(() => {
+    if (initialNamespace && !clusterScope) {
+      return initialNamespace
+    }
     // Prefer tab-scoped sessionStorage to isolate namespace selection across tabs
     const tabNamespace = sessionStorage.getItem(
       getClusterScopedStorageKey('selectedNamespace')

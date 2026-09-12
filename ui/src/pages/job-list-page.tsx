@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Job } from 'kubernetes-types/batch/v1'
-import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { createSearchFilter } from '@/lib/k8s'
+import { getClusterScopedStorageKey } from '@/lib/current-cluster'
+import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResourceTable } from '@/components/resource-table'
@@ -16,11 +18,15 @@ const jobSearchFilter = createSearchFilter<Job>(
 const columnHelper = createColumnHelper<Job>()
 
 export function JobListPage() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { namespace: namespaceParam } = useParams()
+
   // Define columns for the job table
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
-        header: 'Name',
+        header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <Link
@@ -56,7 +62,7 @@ export function JobListPage() {
         },
         {
           id: 'status_conditions',
-          header: 'Status',
+          header: t('common.fields.status'),
           cell: ({ getValue }) => {
             const status = getValue()
             const variant =
@@ -72,7 +78,7 @@ export function JobListPage() {
       ),
       columnHelper.accessor((row) => row.status?.succeeded || 0, {
         id: 'completions',
-        header: 'Completions',
+        header: t('jobList.completions', 'Completions'),
         cell: ({ row }) => {
           const status = row.original.status
           const succeeded = status?.succeeded || 0
@@ -81,7 +87,7 @@ export function JobListPage() {
         },
       }),
       columnHelper.accessor('status.startTime', {
-        header: 'Started',
+        header: t('jobList.started', 'Started'),
         cell: ({ getValue }) => {
           const startTime = getValue()
           if (!startTime) return '-'
@@ -94,7 +100,7 @@ export function JobListPage() {
         },
       }),
       columnHelper.accessor('status.completionTime', {
-        header: 'Completed',
+        header: t('jobList.completed', 'Completed'),
         cell: ({ getValue }) => {
           const completionTime = getValue()
           if (!completionTime) return '-'
@@ -107,7 +113,7 @@ export function JobListPage() {
         },
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
-        header: 'Created',
+        header: t('common.fields.created'),
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
 
@@ -117,14 +123,36 @@ export function JobListPage() {
         },
       }),
     ],
-    []
+    [t]
   )
 
+  const handleCreateClick = () => {
+    // The URL wins, then the table's persisted selection; a multi or
+    // "all namespaces" selection cannot host a new object.
+    const ns = resolveCreateNamespace(
+      namespaceParam,
+      sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace'))
+    )
+    navigate(`/jobs/${encodeURIComponent(ns)}/create?tab=container-0`)
+  }
+
   return (
-    <ResourceTable
-      resourceName="Jobs"
-      columns={columns}
-      searchQueryFilter={jobSearchFilter}
-    />
+    <>
+      <ResourceTable
+        resourceName="Jobs"
+        columns={columns}
+        searchQueryFilter={jobSearchFilter}
+        initialNamespace={namespaceParam}
+        onNamespaceChange={(ns) => {
+          navigate(
+            ns && ns !== '_all' ? `/jobs/${encodeURIComponent(ns)}` : '/jobs',
+            { replace: true }
+          )
+        }}
+        showCreateButton={true}
+        onCreateClick={handleCreateClick}
+      />
+    </>
   )
 }

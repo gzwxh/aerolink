@@ -71,7 +71,7 @@ defaultMenus['sidebar.groups.application'].push({
   icon: getResourceIconComponent('IconPackage'),
 })
 
-export const SIDEBAR_CONFIG_VERSION = 4
+export const SIDEBAR_CONFIG_VERSION = 5
 
 function getIconName(iconComponent: ComponentType<{ className?: string }>) {
   const entry = Object.entries(sidebarIconMap).find(

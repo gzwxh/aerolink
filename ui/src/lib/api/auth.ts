@@ -8,6 +8,14 @@ import type {
 
 export type CredentialProvider = 'password' | 'ldap'
 
+export interface AuthRole {
+  name: string
+  clusters?: string[]
+  resources?: string[]
+  namespaces?: string[]
+  verbs?: string[]
+}
+
 export interface AuthUser {
   id: string
   username: string
@@ -15,7 +23,7 @@ export interface AuthUser {
   avatar_url: string
   provider: string
   mfa_enabled?: boolean
-  roles?: { name: string }[]
+  roles?: AuthRole[]
   sidebar_preference?: string
 }
 

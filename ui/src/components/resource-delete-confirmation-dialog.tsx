@@ -47,6 +47,15 @@ export function ResourceDeleteConfirmationDialog({
       navigate(getResourceListPath(resourceType))
     } catch (error) {
       toast.error(translateError(error, t))
+      // The resource may already be gone (deleted concurrently or force
+      // deleted): don't leave the user on a broken detail page.
+      const message = String(
+        (error as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error ?? error
+      ).toLowerCase()
+      if (message.includes('not found') || message.includes('404')) {
+        navigate(getResourceListPath(resourceType))
+      }
     } finally {
       setIsDeleting(false)
       onOpenChange(false)

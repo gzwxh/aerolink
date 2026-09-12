@@ -1,9 +1,10 @@
 import * as React from 'react'
 import { useCallback, useMemo, useState } from 'react'
 import Icon from '@/assets/icon.svg'
+import { useAuth } from '@/contexts/auth-context'
 import { useSidebarConfig } from '@/contexts/sidebar-config-context'
 import { CollapsibleContent } from '@radix-ui/react-collapsible'
-import { IconLayoutDashboard } from '@tabler/icons-react'
+import { IconLayoutDashboard, IconShieldCheck } from '@tabler/icons-react'
 import { CustomResourceDefinition } from 'kubernetes-types/apiextensions/v1'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -14,7 +15,6 @@ import { useResources, useVersionInfo } from '@/lib/api'
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -34,6 +34,8 @@ import { VersionInfo } from './version-info'
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
+  const { user } = useAuth()
+  const isAdmin = user ? user.isAdmin() : false
   const location = useLocation()
   const { isMobile, setOpenMobile } = useSidebar()
   const { config, isLoading, getIconComponent } = useSidebarConfig()
@@ -284,6 +286,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <div className="flex items-center gap-2 rounded-md border border-border/60 bg-gradient-to-r from-muted/40 to-muted/20 px-1.5 py-1 backdrop-blur-sm">
+                  <ClusterSelector />
+                </div>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -298,6 +312,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            {isAdmin && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip={t('nav.rbac', 'RBAC')}
+                  asChild
+                  isActive={isActive('/rbac')}
+                  className="transition-all duration-200 hover:bg-accent/60 active:scale-95 data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm"
+                >
+                  <Link to="/rbac" onClick={handleMenuItemClick}>
+                    <IconShieldCheck className="text-sidebar-primary" />
+                    <span className="font-medium">{t('nav.rbac', 'RBAC')}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
           </SidebarMenu>
         </SidebarGroup>
 
@@ -340,12 +369,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </Collapsible>
         ))}
       </SidebarContent>
-
-      <SidebarFooter>
-        <div className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-gradient-to-r from-muted/40 to-muted/20 border border-border/60 backdrop-blur-sm">
-          <ClusterSelector />
-        </div>
-      </SidebarFooter>
     </Sidebar>
   )
 }

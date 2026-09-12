@@ -1,385 +1,119 @@
-import { useMemo, useState } from 'react'
-import { useAuth } from '@/contexts/auth-context'
-import {
-  IconEdit,
-  IconPlus,
-  IconShieldCheck,
-  IconTrash,
-} from '@tabler/icons-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ColumnDef } from '@tanstack/react-table'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { IconPlus, IconShieldCheck } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { useSearchParams } from 'react-router-dom'
 
 import { Role } from '@/types/api'
-import {
-  assignRole,
-  createRole,
-  deleteRole,
-  unassignRole,
-  updateRole,
-  useRoleList,
-} from '@/lib/api'
+import { useRoleList } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 
-import { Action, ActionTable } from '../action-table'
-import { Badge } from '../ui/badge'
-import { RBACAssignmentDialog } from './rbac-assignment-dialog'
-import { RBACDialog } from './rbac-dialog'
+import { RBACRoleDetail, type PermissionPreset } from './rbac-role-detail'
 
-export function RBACManagement() {
+export function RBACManagement({
+  resourceFilter,
+  defaultResources,
+  lockedResources,
+  hideNamespacePanel,
+  permissionHint,
+  permissionPresets,
+  permissionPanelTitle,
+  namePrefix,
+  startInViewMode,
+}: {
+  /** When set, only roles granting this resource are listed. */
+  resourceFilter?: string
+  /** Resources preselected when creating a new role. */
+  defaultResources?: string[]
+  /** Resources fixed (picker hidden) in the role editor. */
+  lockedResources?: string[]
+  /** Hide the namespace picker in the role editor. */
+  hideNamespacePanel?: boolean
+  /** Hint rendered with the locked resource list. */
+  permissionHint?: ReactNode
+  /** Action-oriented permission items replacing the raw verb list. */
+  permissionPresets?: PermissionPreset[]
+  /** Title for the permissions panel when presets are used. */
+  permissionPanelTitle?: string
+  /** Prefix enforced on role names, e.g. "node-" for the node permission tab. */
+  namePrefix?: string
+  /** Open existing roles read-only; the edit form is revealed by the Edit button. */
+  startInViewMode?: boolean
+} = {}) {
   const { t } = useTranslation()
-  const { user } = useAuth()
-  const queryClient = useQueryClient()
-
   const { data: roles = [], isLoading, error } = useRoleList()
 
-  const [showDialog, setShowDialog] = useState(false)
-  const [editingRole, setEditingRole] = useState<Role | null>(null)
-  const [deletingRole, setDeletingRole] = useState<Role | null>(null)
-  const [showAssignDialog, setShowAssignDialog] = useState(false)
-  const [assigningRole, setAssigningRole] = useState<Role | null>(null)
-  const [isAssigning, setIsAssigning] = useState(false)
-  const [isUnassigning, setIsUnassigning] = useState(false)
+  // Deep-link support: /rbac?cluster=X&namespace=Y preselects the cluster and
+  // filters the namespace list (used by the namespace list "Permissions" action).
+  const [searchParams] = useSearchParams()
+  const initialCluster = searchParams.get('cluster') || undefined
+  const initialNamespace = searchParams.get('namespace') || undefined
 
-  const columns = useMemo<ColumnDef<Role>[]>(
-    () => [
-      {
-        id: 'name',
-        header: t('common.fields.name', 'Name'),
-        cell: ({ row: { original: r } }) => (
-          <div className="max-w-56">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-medium" title={r.name}>
-                {r.name}
-              </span>
-              {r.isSystem && <Badge variant="secondary">System</Badge>}
-            </div>
-            {r.description && (
-              <div
-                className="truncate text-sm text-muted-foreground"
-                title={r.description}
-              >
-                {r.description}
-              </div>
-            )}
-          </div>
-        ),
-      },
-      {
-        id: 'clusters',
-        header: 'Clusters',
-        cell: ({ row: { original: r } }) => (
-          <div
-            className="max-w-44 truncate text-sm text-muted-foreground"
-            title={r.clusters.join(', ')}
-          >
-            {r.clusters.length > 0 ? (
-              r.clusters.join(', ')
-            ) : (
-              <span className="text-xs text-muted-foreground">-</span>
-            )}
-          </div>
-        ),
-      },
-      {
-        id: 'namespaces',
-        header: 'Namespaces',
-        cell: ({ row: { original: r } }) => (
-          <div
-            className="max-w-44 truncate text-sm text-muted-foreground"
-            title={r.namespaces.join(', ')}
-          >
-            {r.namespaces.length > 0 ? (
-              r.namespaces.join(', ')
-            ) : (
-              <span className="text-xs text-muted-foreground">-</span>
-            )}
-          </div>
-        ),
-      },
+  // Selected entry: role id as string, or 'new' for the create form.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [pendingRole, setPendingRole] = useState<Role | null>(null)
 
-      {
-        id: 'Resources',
-        header: 'Resources',
-        cell: ({ row: { original: r } }) => (
-          <div
-            className="max-w-44 truncate text-sm text-muted-foreground"
-            title={r.resources.join(', ')}
-          >
-            {r.resources.length > 0 ? (
-              r.resources.join(', ')
-            ) : (
-              <span className="text-xs text-muted-foreground">-</span>
-            )}
-          </div>
-        ),
-      },
-      {
-        id: 'verbs',
-        header: 'Verbs',
-        cell: ({ row: { original: r } }) => (
-          <div
-            className="max-w-44 truncate text-sm text-muted-foreground"
-            title={r.verbs.join(', ')}
-          >
-            {r.verbs.length > 0 ? (
-              r.verbs.join(', ')
-            ) : (
-              <span className="text-xs text-muted-foreground">-</span>
-            )}
-          </div>
-        ),
-      },
-      {
-        id: 'assignments',
-        header: 'Assignments',
-        cell: ({ row: { original: r } }) => {
-          const users =
-            r.assignments?.filter((a) => a.subjectType === 'user') || []
-          const groups =
-            r.assignments?.filter((a) => a.subjectType === 'group') || []
-          const maxShow = 2
-          return (
-            <div className="flex max-w-56 flex-wrap gap-1 overflow-hidden text-xs">
-              {users.slice(0, maxShow).map((a) => (
-                <Badge
-                  key={a.id}
-                  variant="secondary"
-                  className="max-w-52 truncate text-xs"
-                  title={`user: ${a.subject}`}
-                >
-                  user: {a.subject}
-                </Badge>
-              ))}
-              {users.length > maxShow && (
-                <Badge variant="outline" className="text-xs">
-                  +{users.length - maxShow}
-                </Badge>
-              )}
-              {groups.slice(0, maxShow).map((a) => (
-                <Badge
-                  key={a.id}
-                  variant="secondary"
-                  className="max-w-52 truncate text-xs"
-                  title={`group: ${a.subject}`}
-                >
-                  group: {a.subject}
-                </Badge>
-              ))}
-              {groups.length > maxShow && (
-                <Badge variant="outline" className="text-xs">
-                  +{groups.length - maxShow}
-                </Badge>
-              )}
-              {users.length === 0 && groups.length === 0 && (
-                <span className="text-xs text-muted-foreground">-</span>
-              )}
-            </div>
+  const visibleRoles = useMemo(
+    () =>
+      resourceFilter
+        ? roles.filter((role) =>
+            (role.resources || []).includes(resourceFilter)
           )
-        },
-      },
-    ],
-    [t]
+        : roles,
+    [resourceFilter, roles]
   )
 
-  const actions = useMemo<Action<Role>[]>(
-    () => [
-      {
-        label: (
-          <>
-            <IconShieldCheck className="h-4 w-4" />
-            {t('common.actions.assign', 'Assign')}
-          </>
-        ),
-        onClick: (r) => {
-          setAssigningRole(r)
-          setShowAssignDialog(true)
-        },
-      },
-      {
-        label: (
-          <>
-            <IconEdit className="h-4 w-4" />
-            {t('common.actions.edit', 'Edit')}
-          </>
-        ),
-        shouldDisable: (role) => !!role.isSystem,
-        onClick: (role) => {
-          setEditingRole(role)
-          setShowDialog(true)
-        },
-      },
-      {
-        label: (
-          <div className="inline-flex items-center gap-2 text-destructive">
-            <IconTrash className="h-4 w-4" />
-            {t('common.actions.delete', 'Delete')}
-          </div>
-        ),
-        shouldDisable: (role) => !!role.isSystem,
-        onClick: (role) => {
-          setDeletingRole(role)
-        },
-      },
-    ],
-    [t]
+  // Auto-select the first role once the list is loaded.
+  useEffect(() => {
+    if (selectedKey === null && visibleRoles.length > 0) {
+      setSelectedKey(String(visibleRoles[0].id))
+    }
+  }, [visibleRoles, selectedKey])
+
+  // Remembers the role that was open before entering the create form, so
+  // cancelling can restore it.
+  const lastRoleKeyRef = useRef<string | null>(null)
+
+  const selectRole = (key: string) => {
+    if (key !== 'new') lastRoleKeyRef.current = key
+    setSelectedKey(key)
+    setPendingRole(null)
+  }
+
+  const handleCancelForm = () => {
+    setPendingRole(null)
+    setSelectedKey(
+      lastRoleKeyRef.current ??
+        (visibleRoles.length > 0 ? String(visibleRoles[0].id) : null)
+    )
+  }
+
+  const selectedRole = useMemo(
+    () =>
+      selectedKey && selectedKey !== 'new'
+        ? (visibleRoles.find((r) => String(r.id) === selectedKey) ?? null)
+        : null,
+    [visibleRoles, selectedKey]
   )
 
-  const createMutation = useMutation({
-    mutationFn: (data: Partial<Role>) => createRole(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['role-list'] })
-      toast.success(
-        t('common.messages.created', {
-          resource: t('common.fields.role', 'Role'),
-          defaultValue: 'Role created',
-        })
-      )
-      setShowDialog(false)
-    },
-    onError: (err: Error) =>
-      toast.error(
-        err.message ||
-          t('common.messages.failedToCreate', {
-            resource: t('common.fields.role', 'role'),
-            defaultValue: 'Failed to create role',
-          })
-      ),
-  })
+  // While the role list refetches after create, fall back to the saved role
+  // so the detail pane does not flash an empty state.
+  const detailRole =
+    selectedRole ??
+    (pendingRole && selectedKey === String(pendingRole.id) ? pendingRole : null)
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Role> }) =>
-      updateRole(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['role-list'] })
-      toast.success(
-        t('common.messages.updated', {
-          resource: t('common.fields.role', 'Role'),
-          defaultValue: 'Role updated',
-        })
-      )
-      setShowDialog(false)
-      setEditingRole(null)
-    },
-    onError: (err: Error) =>
-      toast.error(
-        err.message ||
-          t('common.messages.failedToUpdate', {
-            resource: t('common.fields.role', 'role'),
-            defaultValue: 'Failed to update role',
-          })
-      ),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => deleteRole(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['role-list'] })
-      toast.success(
-        t('common.messages.deleted', {
-          resource: t('common.fields.role', 'Role'),
-          defaultValue: 'Role deleted',
-        })
-      )
-      setDeletingRole(null)
-    },
-    onError: (err: Error) =>
-      toast.error(
-        err.message ||
-          t('common.messages.failedToDelete', {
-            resource: t('common.fields.role', 'role'),
-            defaultValue: 'Failed to delete role',
-          })
-      ),
-  })
-
-  const handleSubmitRole = (data: Partial<Role>) => {
-    if (createMutation.isPending || updateMutation.isPending) return
-    if (editingRole) {
-      updateMutation.mutate({ id: editingRole.id, data })
-    } else {
-      createMutation.mutate(data)
-    }
+  const handleSaved = (saved: Role) => {
+    setPendingRole(saved)
+    setSelectedKey(String(saved.id))
   }
 
-  const handleDeleteRole = () => {
-    if (!deletingRole || deleteMutation.isPending) return
-    deleteMutation.mutate(deletingRole.id)
+  const handleDeleted = () => {
+    lastRoleKeyRef.current = null
+    setPendingRole(null)
+    setSelectedKey(null)
   }
-
-  const handleAssign = async (
-    roleId: number,
-    subjectType: 'user' | 'group',
-    subject: string
-  ) => {
-    if (isAssigning) return
-    setIsAssigning(true)
-    try {
-      await assignRole(roleId, { subjectType, subject })
-      await queryClient.invalidateQueries({ queryKey: ['role-list'] })
-
-      // Update assigningRole with fresh data to show the new assignment immediately
-      if (assigningRole?.id === roleId) {
-        const updatedRoles = queryClient.getQueryData<Role[]>(['role-list'])
-        const updatedRole = updatedRoles?.find((r) => r.id === roleId)
-        if (updatedRole) {
-          setAssigningRole(updatedRole)
-        }
-      }
-
-      toast.success(t('common.messages.assigned', 'Assigned'))
-    } catch (err: unknown) {
-      toast.error(
-        (err as Error).message ||
-          t('common.messages.failedToAssign', 'Failed to assign')
-      )
-    } finally {
-      setIsAssigning(false)
-    }
-  }
-
-  const handleUnassign = async (
-    roleId: number,
-    subjectType: 'user' | 'group',
-    subject: string
-  ) => {
-    if (isUnassigning) return
-    setIsUnassigning(true)
-    try {
-      await unassignRole(roleId, subjectType, subject)
-      await queryClient.invalidateQueries({ queryKey: ['role-list'] })
-
-      if (assigningRole?.id === roleId) {
-        const updatedRoles = queryClient.getQueryData<Role[]>(['role-list'])
-        const updatedRole = updatedRoles?.find((r) => r.id === roleId)
-        if (updatedRole) {
-          setAssigningRole(updatedRole)
-        }
-      }
-
-      toast.success(t('common.messages.unassigned', 'Unassigned'))
-    } catch (err: unknown) {
-      toast.error(
-        (err as Error).message ||
-          t('common.messages.failedToUnassign', 'Failed to unassign')
-      )
-    } finally {
-      setIsUnassigning(false)
-    }
-  }
-
-  const deleteRoleAdditionalNote = deletingRole?.assignments?.some(
-    (assignment) =>
-      assignment.subjectType === 'user' && assignment.subject === user?.username
-  )
-    ? t(
-        'rbac.deleteOwnRoleWarning',
-        'This role is assigned to your current user. Deleting it may affect your permissions.'
-      )
-    : undefined
 
   if (isLoading) {
     return (
@@ -405,83 +139,103 @@ export function RBACManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <Card className="shrink-0 lg:w-64">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <IconShieldCheck className="h-5 w-5" />
-                {t('common.fields.roles', 'Role Management')}
-              </CardTitle>
-            </div>
-            <Button
-              onClick={() => {
-                setEditingRole(null)
-                setShowDialog(true)
-              }}
-              className="gap-2"
-            >
-              <IconPlus className="h-4 w-4" />
-              {t('common.actions.add', 'Add')} {t('common.fields.role', 'Role')}
-            </Button>
-          </div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <IconShieldCheck className="h-4 w-4" />
+            {t('rbac.rolesTitle', 'Roles')}
+            <Badge variant="secondary" className="ml-auto">
+              {visibleRoles.length}
+            </Badge>
+          </CardTitle>
+          <Button
+            onClick={() => selectRole('new')}
+            variant={selectedKey === 'new' ? 'default' : 'outline'}
+            className="w-full gap-2"
+          >
+            <IconPlus className="h-4 w-4" />
+            {t('rbac.addRole', 'Add Role')}
+          </Button>
         </CardHeader>
-        <CardContent>
-          <ActionTable actions={actions} data={roles} columns={columns} />
-          {roles.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <IconShieldCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>
+        <CardContent className="p-2 pt-0">
+          <nav className="space-y-1" data-testid="rbac-role-list">
+            {visibleRoles.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => selectRole(String(r.id))}
+                className={cn(
+                  'w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
+                  selectedKey === String(r.id) && 'bg-accent'
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate font-medium" title={r.name}>
+                    {r.name}
+                  </span>
+                  {r.isSystem ? (
+                    <Badge variant="secondary" className="shrink-0">
+                      System
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="shrink-0 text-xs">
+                      {r.roleType === 'group'
+                        ? t('rbac.roleTypeGroup', 'Group Role')
+                        : t('rbac.roleTypeUser', 'User Role')}
+                    </Badge>
+                  )}
+                </div>
+                {r.description && (
+                  <div
+                    className="truncate text-xs text-muted-foreground"
+                    title={r.description}
+                  >
+                    {r.description}
+                  </div>
+                )}
+              </button>
+            ))}
+            {visibleRoles.length === 0 && (
+              <div className="px-3 py-4 text-sm text-muted-foreground">
                 {t('common.messages.noItemsConfigured', {
                   resource: t('common.fields.roles', 'roles'),
                   defaultValue: 'No roles configured',
                 })}
-              </p>
-              <p className="text-sm mt-1">
-                {t('common.messages.createFirstItem', {
-                  resource: t('common.fields.role', 'role'),
-                  defaultValue: 'Create roles to grant permissions',
-                })}
-              </p>
-            </div>
-          )}
+              </div>
+            )}
+          </nav>
         </CardContent>
       </Card>
 
-      <RBACDialog
-        open={showDialog}
-        onOpenChange={(open) => {
-          setShowDialog(open)
-          if (!open) setEditingRole(null)
-        }}
-        role={editingRole}
-        onSubmit={handleSubmitRole}
-        isSubmitting={createMutation.isPending || updateMutation.isPending}
-      />
-
-      <RBACAssignmentDialog
-        open={showAssignDialog}
-        onOpenChange={(open) => {
-          setShowAssignDialog(open)
-          if (!open) setAssigningRole(null)
-        }}
-        role={assigningRole}
-        onAssign={handleAssign}
-        onUnassign={handleUnassign}
-        isAssigning={isAssigning}
-        isUnassigning={isUnassigning}
-      />
-
-      <DeleteConfirmationDialog
-        open={!!deletingRole}
-        onOpenChange={() => setDeletingRole(null)}
-        onConfirm={handleDeleteRole}
-        resourceName={deletingRole?.name || ''}
-        resourceType="role"
-        isDeleting={deleteMutation.isPending}
-        additionalNote={deleteRoleAdditionalNote}
-      />
+      <div className="min-w-0 flex-1">
+        {selectedKey === 'new' || detailRole ? (
+          <RBACRoleDetail
+            key={detailRole ? detailRole.id : 'new'}
+            role={detailRole}
+            onSaved={handleSaved}
+            onDeleted={handleDeleted}
+            initialCluster={initialCluster}
+            initialNamespace={initialNamespace}
+            defaultResources={defaultResources}
+            lockedResources={lockedResources}
+            hideNamespacePanel={hideNamespacePanel}
+            permissionHint={permissionHint}
+            permissionPresets={permissionPresets}
+            permissionPanelTitle={permissionPanelTitle}
+            namePrefix={namePrefix}
+            startInViewMode={startInViewMode}
+            onCancelForm={handleCancelForm}
+          />
+        ) : (
+          <div className="flex items-center justify-center rounded-md border border-dashed py-16 text-muted-foreground">
+            {t(
+              'rbac.selectRoleHint',
+              'Select a role from the list on the left, or create a new role.'
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

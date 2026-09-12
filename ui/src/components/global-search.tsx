@@ -195,7 +195,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
             {
               id: 'rbac',
               title: t('settings.tabs.rbac', 'RBAC'),
-              url: '/settings?tab=rbac',
+              url: '/rbac',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:

@@ -5,6 +5,7 @@ import {
   IconDroplet,
   IconExclamationCircle,
   IconLock,
+  IconPencil,
   IconReload,
 } from '@tabler/icons-react'
 import { Node } from 'kubernetes-types/core/v1'
@@ -32,6 +33,7 @@ import {
   formatMemory,
   translateError,
 } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,6 +52,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { EventTable } from '@/components/event-table'
+import { NodeEditDialog } from '@/components/node-edit-dialog'
 import { NodeMonitoring } from '@/components/node-monitoring'
 import {
   CompactEventsCard,
@@ -72,10 +75,17 @@ import {
 export function NodeDetail(props: { name: string }) {
   const { name } = props
   const { t } = useTranslation()
+  const can = useCan()
+
+  const canReadNode = can('nodes', 'get')
+  const canCreateNode = can('nodes', 'create')
+  const canUpdateNode = can('nodes', 'update')
+  const canExecNode = can('nodes', 'exec')
 
   const [isDrainPopoverOpen, setIsDrainPopoverOpen] = useState(false)
   const [isCordonPopoverOpen, setIsCordonPopoverOpen] = useState(false)
   const [isTaintPopoverOpen, setIsTaintPopoverOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
 
   const [drainOptions, setDrainOptions] = useState({
     force: false,
@@ -213,11 +223,15 @@ export function NodeDetail(props: { name: string }) {
       label: t('common.tabs.monitor'),
       content: <NodeMonitoring name={name} />,
     },
-    {
-      value: 'terminal',
-      label: t('common.tabs.terminal'),
-      content: <Terminal type="node" nodeName={name} />,
-    },
+    ...(canExecNode
+      ? [
+          {
+            value: 'terminal',
+            label: t('common.tabs.terminal'),
+            content: <Terminal type="node" nodeName={name} />,
+          },
+        ]
+      : []),
     {
       value: 'events',
       label: t('common.tabs.events'),
@@ -228,278 +242,320 @@ export function NodeDetail(props: { name: string }) {
   ]
 
   return (
-    <ResourceDetailShell
-      resourceType="nodes"
-      resourceLabel={t('common.fields.node')}
-      name={name}
-      data={data}
-      isLoading={isLoading}
-      error={isError ? error : null}
-      onRefresh={handleRefresh}
-      onSaveYaml={handleSaveYaml}
-      showDelete={false}
-      overview={
-        data ? (
-          <NodeOverview
-            node={data}
-            podCount={relatedPods?.length || 0}
-            onUntaint={handleUntaint}
-          />
-        ) : null
-      }
-      headerActions={
-        <>
-          <Popover
-            open={isDrainPopoverOpen}
-            onOpenChange={setIsDrainPopoverOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <IconDroplet className="w-4 h-4" />
-                {t('common.actions.drain')}
+    <>
+      <ResourceDetailShell
+        resourceType="nodes"
+        resourceLabel={t('common.fields.node')}
+        name={name}
+        data={data}
+        isLoading={isLoading}
+        error={isError ? error : null}
+        onRefresh={handleRefresh}
+        onSaveYaml={handleSaveYaml}
+        yamlEditable={canUpdateNode}
+        showDescribe={canReadNode}
+        showClone={canCreateNode}
+        showDelete={false}
+        overview={
+          data ? (
+            <NodeOverview
+              node={data}
+              podCount={relatedPods?.length || 0}
+              canUpdate={canUpdateNode}
+              onUntaint={handleUntaint}
+            />
+          ) : null
+        }
+        headerActions={
+          canUpdateNode ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditOpen(true)}
+              >
+                <IconPencil className="w-4 h-4" />
+                {t('common.actions.edit', 'Edit')}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80">
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-medium">
-                    {t('detail.dialogs.drainNode.title')}
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    {t('detail.dialogs.drainNode.description')}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="force"
-                      checked={drainOptions.force}
-                      onChange={(e) =>
-                        setDrainOptions({
-                          ...drainOptions,
-                          force: e.target.checked,
-                        })
-                      }
-                    />
-                    <Label htmlFor="force" className="text-sm">
-                      {t('detail.dialogs.drainNode.forceDrain')}
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="deleteLocalData"
-                      checked={drainOptions.deleteLocalData}
-                      onChange={(e) =>
-                        setDrainOptions({
-                          ...drainOptions,
-                          deleteLocalData: e.target.checked,
-                        })
-                      }
-                    />
-                    <Label htmlFor="deleteLocalData" className="text-sm">
-                      {t('detail.dialogs.drainNode.deleteLocalData')}
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="ignoreDaemonsets"
-                      checked={drainOptions.ignoreDaemonsets}
-                      onChange={(e) =>
-                        setDrainOptions({
-                          ...drainOptions,
-                          ignoreDaemonsets: e.target.checked,
-                        })
-                      }
-                    />
-                    <Label htmlFor="ignoreDaemonsets" className="text-sm">
-                      {t('detail.dialogs.drainNode.ignoreDaemonSets')}
-                    </Label>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="gracePeriod" className="text-sm">
-                      {t('detail.dialogs.drainNode.gracePeriod')}
-                    </Label>
-                    <Input
-                      id="gracePeriod"
-                      type="number"
-                      value={drainOptions.gracePeriod}
-                      onChange={(e) =>
-                        setDrainOptions({
-                          ...drainOptions,
-                          gracePeriod: parseInt(e.target.value) || 30,
-                        })
-                      }
-                      min={0}
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleDrain} size="sm" variant="destructive">
-                    {t('detail.dialogs.drainNode.drainButton')}
+              <Popover
+                open={isDrainPopoverOpen}
+                onOpenChange={setIsDrainPopoverOpen}
+              >
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <IconDroplet className="w-4 h-4" />
+                    {t('common.actions.drain')}
                   </Button>
-                  <Button
-                    onClick={() => setIsDrainPopoverOpen(false)}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {t('common.actions.cancel')}
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium">
+                        {t('detail.dialogs.drainNode.title')}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        {t('detail.dialogs.drainNode.description')}
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="force"
+                          checked={drainOptions.force}
+                          onChange={(e) =>
+                            setDrainOptions({
+                              ...drainOptions,
+                              force: e.target.checked,
+                            })
+                          }
+                        />
+                        <Label htmlFor="force" className="text-sm">
+                          {t('detail.dialogs.drainNode.forceDrain')}
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="deleteLocalData"
+                          checked={drainOptions.deleteLocalData}
+                          onChange={(e) =>
+                            setDrainOptions({
+                              ...drainOptions,
+                              deleteLocalData: e.target.checked,
+                            })
+                          }
+                        />
+                        <Label htmlFor="deleteLocalData" className="text-sm">
+                          {t('detail.dialogs.drainNode.deleteLocalData')}
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="ignoreDaemonsets"
+                          checked={drainOptions.ignoreDaemonsets}
+                          onChange={(e) =>
+                            setDrainOptions({
+                              ...drainOptions,
+                              ignoreDaemonsets: e.target.checked,
+                            })
+                          }
+                        />
+                        <Label htmlFor="ignoreDaemonsets" className="text-sm">
+                          {t('detail.dialogs.drainNode.ignoreDaemonSets')}
+                        </Label>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="gracePeriod" className="text-sm">
+                          {t('detail.dialogs.drainNode.gracePeriod')}
+                        </Label>
+                        <Input
+                          id="gracePeriod"
+                          type="number"
+                          value={drainOptions.gracePeriod}
+                          onChange={(e) =>
+                            setDrainOptions({
+                              ...drainOptions,
+                              gracePeriod: parseInt(e.target.value) || 30,
+                            })
+                          }
+                          min={0}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleDrain}
+                        size="sm"
+                        variant="destructive"
+                      >
+                        {t('detail.dialogs.drainNode.drainButton')}
+                      </Button>
+                      <Button
+                        onClick={() => setIsDrainPopoverOpen(false)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        {t('common.actions.cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
-          {data?.spec?.unschedulable ? (
-            <Button onClick={handleUncordon} variant="outline" size="sm">
-              <IconReload className="w-4 h-4" />
-              {t('common.actions.uncordon')}
-            </Button>
-          ) : (
-            <Popover
-              open={isCordonPopoverOpen}
-              onOpenChange={setIsCordonPopoverOpen}
-            >
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <IconBan className="w-4 h-4" />
-                  {t('common.actions.cordon')}
+              {data?.spec?.unschedulable ? (
+                <Button onClick={handleUncordon} variant="outline" size="sm">
+                  <IconReload className="w-4 h-4" />
+                  {t('common.actions.uncordon')}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium">
-                      {t('detail.dialogs.cordonNode.title')}
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      {t('detail.dialogs.cordonNode.description')}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleCordon}
-                      size="sm"
-                      variant="destructive"
-                    >
-                      {t('detail.dialogs.cordonNode.cordonButton')}
+              ) : (
+                <Popover
+                  open={isCordonPopoverOpen}
+                  onOpenChange={setIsCordonPopoverOpen}
+                >
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <IconBan className="w-4 h-4" />
+                      {t('common.actions.cordon')}
                     </Button>
-                    <Button
-                      onClick={() => setIsCordonPopoverOpen(false)}
-                      size="sm"
-                      variant="outline"
-                    >
-                      {t('common.actions.cancel')}
-                    </Button>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64">
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium">
+                          {t('detail.dialogs.cordonNode.title')}
+                        </h4>
+                        <p className="text-sm text-muted-foreground">
+                          {t('detail.dialogs.cordonNode.description')}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleCordon}
+                          size="sm"
+                          variant="destructive"
+                        >
+                          {t('detail.dialogs.cordonNode.cordonButton')}
+                        </Button>
+                        <Button
+                          onClick={() => setIsCordonPopoverOpen(false)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {t('common.actions.cancel')}
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
 
-          <Popover
-            open={isTaintPopoverOpen}
-            onOpenChange={setIsTaintPopoverOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <IconLock className="w-4 h-4" />
-                {t('common.actions.taint')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80">
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-medium">
-                    {t('detail.dialogs.taintNode.title')}
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    {t('detail.dialogs.taintNode.description')}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="taintKey" className="text-sm">
-                      {t('detail.dialogs.taintNode.key')}
-                    </Label>
-                    <Input
-                      id="taintKey"
-                      value={taintData.key}
-                      onChange={(e) =>
-                        setTaintData({ ...taintData, key: e.target.value })
-                      }
-                      placeholder={t('detail.dialogs.taintNode.keyPlaceholder')}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="taintValue" className="text-sm">
-                      {t('detail.dialogs.taintNode.value')}
-                    </Label>
-                    <Input
-                      id="taintValue"
-                      value={taintData.value}
-                      onChange={(e) =>
-                        setTaintData({ ...taintData, value: e.target.value })
-                      }
-                      placeholder={t(
-                        'detail.dialogs.taintNode.valuePlaceholder'
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="taintEffect" className="text-sm">
-                      {t('detail.dialogs.taintNode.effect')}
-                    </Label>
-                    <Select
-                      value={taintData.effect}
-                      onValueChange={(
-                        value: 'NoSchedule' | 'PreferNoSchedule' | 'NoExecute'
-                      ) => setTaintData({ ...taintData, effect: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="NoSchedule">NoSchedule</SelectItem>
-                        <SelectItem value="PreferNoSchedule">
-                          PreferNoSchedule
-                        </SelectItem>
-                        <SelectItem value="NoExecute">NoExecute</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleTaint} size="sm" variant="destructive">
-                    {t('detail.dialogs.taintNode.addTaintButton')}
+              <Popover
+                open={isTaintPopoverOpen}
+                onOpenChange={setIsTaintPopoverOpen}
+              >
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <IconLock className="w-4 h-4" />
+                    {t('common.actions.taint')}
                   </Button>
-                  <Button
-                    onClick={() => setIsTaintPopoverOpen(false)}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {t('common.actions.cancel')}
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </>
-      }
-      extraTabs={extraTabs}
-    />
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium">
+                        {t('detail.dialogs.taintNode.title')}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        {t('detail.dialogs.taintNode.description')}
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="taintKey" className="text-sm">
+                          {t('detail.dialogs.taintNode.key')}
+                        </Label>
+                        <Input
+                          id="taintKey"
+                          value={taintData.key}
+                          onChange={(e) =>
+                            setTaintData({ ...taintData, key: e.target.value })
+                          }
+                          placeholder={t(
+                            'detail.dialogs.taintNode.keyPlaceholder'
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="taintValue" className="text-sm">
+                          {t('detail.dialogs.taintNode.value')}
+                        </Label>
+                        <Input
+                          id="taintValue"
+                          value={taintData.value}
+                          onChange={(e) =>
+                            setTaintData({
+                              ...taintData,
+                              value: e.target.value,
+                            })
+                          }
+                          placeholder={t(
+                            'detail.dialogs.taintNode.valuePlaceholder'
+                          )}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="taintEffect" className="text-sm">
+                          {t('detail.dialogs.taintNode.effect')}
+                        </Label>
+                        <Select
+                          value={taintData.effect}
+                          onValueChange={(
+                            value:
+                              'NoSchedule' | 'PreferNoSchedule' | 'NoExecute'
+                          ) => setTaintData({ ...taintData, effect: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="NoSchedule">
+                              NoSchedule
+                            </SelectItem>
+                            <SelectItem value="PreferNoSchedule">
+                              PreferNoSchedule
+                            </SelectItem>
+                            <SelectItem value="NoExecute">NoExecute</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleTaint}
+                        size="sm"
+                        variant="destructive"
+                      >
+                        {t('detail.dialogs.taintNode.addTaintButton')}
+                      </Button>
+                      <Button
+                        onClick={() => setIsTaintPopoverOpen(false)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        {t('common.actions.cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </>
+          ) : null
+        }
+        extraTabs={extraTabs}
+      />
+      {data && (
+        <NodeEditDialog
+          node={data}
+          open={isEditOpen}
+          onOpenChange={setIsEditOpen}
+        />
+      )}
+    </>
   )
 }
 
 function NodeOverview({
   node,
   podCount,
+  canUpdate,
   onUntaint,
 }: {
   node: Node
   podCount: number
+  /** Whether the current user may modify the node (taints, cordon, ...). */
+  canUpdate: boolean
   onUntaint: (key?: string) => void
 }) {
   const { t } = useTranslation()
@@ -723,13 +779,15 @@ function NodeOverview({
                         {formatDate(taint.timeAdded)}
                       </span>
                     ) : null}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onUntaint(taint.key)}
-                    >
-                      {t('common.actions.remove')}
-                    </Button>
+                    {canUpdate ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onUntaint(taint.key)}
+                      >
+                        {t('common.actions.remove')}
+                      </Button>
+                    ) : null}
                   </div>
                 ))}
               </CardContent>

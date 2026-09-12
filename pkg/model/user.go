@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -10,21 +11,23 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/utils"
 	"gorm.io/gorm"
+	"k8s.io/klog/v2"
 )
 
 type User struct {
 	Model
-	Username    string       `json:"username" gorm:"type:varchar(50);uniqueIndex;not null"`
-	Password    string       `json:"-" gorm:"type:varchar(255)"`
-	Name        string       `json:"name,omitempty" gorm:"type:varchar(100);index"`
-	AvatarURL   string       `json:"avatar_url,omitempty" gorm:"type:text"`
-	Provider    string       `json:"provider,omitempty" gorm:"type:varchar(50);default:password;index"`
-	OIDCGroups  SliceString  `json:"oidc_groups,omitempty" gorm:"type:text"`
-	LastLoginAt *time.Time   `json:"lastLoginAt,omitempty" gorm:"type:timestamp;index"`
-	Enabled     bool         `json:"enabled" gorm:"type:boolean;default:true"`
-	Sub         string       `json:"sub,omitempty" gorm:"type:varchar(255);index"`
-	MFAEnabled  bool         `json:"mfa_enabled" gorm:"column:mfa_enabled;type:boolean;not null;default:false"`
-	MFASecret   SecretString `json:"-" gorm:"column:mfa_secret;type:text"`
+	Username        string       `json:"username" gorm:"type:varchar(50);uniqueIndex;not null"`
+	Password        string       `json:"-" gorm:"type:varchar(255)"`
+	Name            string       `json:"name,omitempty" gorm:"type:varchar(100);index"`
+	AvatarURL       string       `json:"avatar_url,omitempty" gorm:"type:text"`
+	Provider        string       `json:"provider,omitempty" gorm:"type:varchar(50);default:password;index"`
+	OIDCGroups      SliceString  `json:"oidc_groups,omitempty" gorm:"type:text"`
+	LastLoginAt     *time.Time   `json:"lastLoginAt,omitempty" gorm:"type:timestamp;index"`
+	Enabled         bool         `json:"enabled" gorm:"type:boolean;default:true"`
+	PendingDeletion bool         `json:"pendingDeletion,omitempty" gorm:"type:boolean;not null;default:false;index"`
+	Sub             string       `json:"sub,omitempty" gorm:"type:varchar(255);index"`
+	MFAEnabled      bool         `json:"mfa_enabled" gorm:"column:mfa_enabled;type:boolean;not null;default:false"`
+	MFASecret       SecretString `json:"-" gorm:"column:mfa_secret;type:text"`
 
 	APIKey SecretString  `json:"apiKey,omitempty" gorm:"type:text"`
 	Roles  []common.Role `json:"roles,omitempty" gorm:"-"`
@@ -119,7 +122,17 @@ func FindWithSubOrUpsertUser(user *User) error {
 	user.LastLoginAt = &now
 	if err := DB.Where("sub = ?", user.Sub).First(&existingUser).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return DB.Create(user).Error
+			if err := DB.Create(user).Error; err != nil {
+				if !isUniqueConstraintError(err) {
+					return err
+				}
+				// The username is already taken by a record from another source
+				// (native password, LDAP or a different OIDC provider). The local
+				// record's configured source stays authoritative — never hijack it.
+				return ErrUserProviderConflict
+			}
+			syncGroupsAfterUserWrite(user.ID, user.OIDCGroups, groupSourceForProvider(user.Provider))
+			return nil
 		}
 		return err
 	}
@@ -129,8 +142,28 @@ func FindWithSubOrUpsertUser(user *User) error {
 	user.CreatedAt = existingUser.CreatedAt
 	user.SidebarPreference = existingUser.SidebarPreference
 	err := DB.Save(user).Error
+	if err == nil {
+		syncGroupsAfterUserWrite(user.ID, user.OIDCGroups, groupSourceForProvider(user.Provider))
+	}
 	InvalidateUserCache(uint64(user.ID))
 	return err
+}
+
+// groupSourceForProvider maps a login provider to the group source recorded
+// on group / group_member rows.
+func groupSourceForProvider(provider string) string {
+	if provider == AuthProviderLDAP {
+		return GroupSourceLDAP
+	}
+	return GroupSourceOIDC
+}
+
+// syncGroupsAfterUserWrite mirrors a user's group list into the normalized
+// group_members table (best-effort: never blocks the login/sync flow).
+func syncGroupsAfterUserWrite(userID uint, groups SliceString, source string) {
+	if err := SyncUserGroupMembership(userID, groups, source); err != nil {
+		klog.Warningf("failed to sync group membership for user %d: %v", userID, err)
+	}
 }
 
 func GetUserByUsername(username string) (*User, error) {
@@ -213,6 +246,13 @@ func LoginUser(u *User) error {
 
 // DeleteUserByID removes a user by ID
 func DeleteUserByID(id uint) error {
+	var user User
+	if err := DB.First(&user, id).Error; err != nil {
+		return err
+	}
+	if err := ensureNotLastEnabledDirectAdmin(user.ID, user.Username); err != nil {
+		return err
+	}
 	_ = DB.Where("operator_id = ?", id).Delete(&ResourceHistory{}).Error
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var user User
@@ -228,9 +268,43 @@ func DeleteUserByID(id uint) error {
 	return err
 }
 
+// ensureNotLastEnabledDirectAdmin prevents disabling/deleting the last enabled
+// account that holds the admin role through a direct user assignment, so a
+// misconfiguration cannot lock everyone out of the console. Group-mapped admins
+// (typically external users) are not counted because disabling their only admin
+// already protects itself through this same check on direct assignments.
+func ensureNotLastEnabledDirectAdmin(id uint, username string) error {
+	var adminRole Role
+	if err := DB.Where("name = ?", DefaultAdminRole.Name).First(&adminRole).Error; err != nil {
+		// No admin role is configured yet — nothing to protect.
+		return nil
+	}
+	var directAssignments int64
+	DB.Model(&RoleAssignment{}).
+		Where("role_id = ? AND subject_type = ? AND subject = ?",
+			adminRole.ID, SubjectTypeUser, username).
+		Count(&directAssignments)
+	if directAssignments == 0 {
+		return nil
+	}
+	var otherEnabledAdmins int64
+	DB.Model(&RoleAssignment{}).
+		Where("role_id = ? AND subject_type = ? AND subject <> ? AND subject IN (?)",
+			adminRole.ID, SubjectTypeUser, username,
+			DB.Model(&User{}).Select("username").Where("enabled = ? AND id <> ?", true, id)).
+		Count(&otherEnabledAdmins)
+	if otherEnabledAdmins == 0 {
+		return errors.New("cannot disable or delete the last enabled admin account; keep at least one enabled user assigned the admin role before continuing")
+	}
+	return nil
+}
+
 // UpdateUser saves provided user (expects ID set)
 func UpdateUser(user *User) error {
 	err := DB.Save(user).Error
+	if err == nil {
+		syncGroupsAfterUserWrite(user.ID, user.OIDCGroups, groupSourceForProvider(user.Provider))
+	}
 	InvalidateUserCache(uint64(user.ID))
 	return err
 }
@@ -251,9 +325,24 @@ func ResetPasswordByID(id uint, plainPassword string) error {
 	return err
 }
 
-// SetUserEnabled sets enabled flag for a user
+// SetUserEnabled updates the enabled flag. Re-enabling an LDAP user cancels a
+// pending deferred deletion (the admin changed their mind before the LDAP sync
+// physically removed the record).
 func SetUserEnabled(id uint, enabled bool) error {
-	err := DB.Model(&User{}).Where("id = ?", id).Update("enabled", enabled).Error
+	var user User
+	if err := DB.First(&user, id).Error; err != nil {
+		return err
+	}
+	if !enabled {
+		if err := ensureNotLastEnabledDirectAdmin(user.ID, user.Username); err != nil {
+			return err
+		}
+	}
+	updates := map[string]any{"enabled": enabled}
+	if enabled && user.Provider == AuthProviderLDAP {
+		updates["pending_deletion"] = false
+	}
+	err := DB.Model(&User{}).Where("id = ?", id).Updates(updates).Error
 	InvalidateUserCache(uint64(id))
 	return err
 }
@@ -296,65 +385,231 @@ func CheckPassword(hashedPassword, plainPassword string) bool {
 	return utils.CheckPasswordHash(plainPassword, hashedPassword)
 }
 
-func UpsertLDAPUser(user *User) (*User, error) {
+// SyncLDAPUser creates or updates a user from a directory sync. It never
+// touches LastLoginAt. Newly discovered users are created with the requested
+// enabled state (batch-import option); existing records keep their current
+// Enabled/PendingDeletion state so an admin's decision is never overridden.
+func SyncLDAPUser(user *User, createEnabled bool) (created bool, err error) {
 	if user == nil {
-		return nil, errors.New("user is nil")
+		return false, errors.New("user is nil")
 	}
-
-	user.Username = strings.TrimSpace(user.Username)
-	if user.Username == "" {
-		return nil, errors.New("username is empty")
+	username := strings.TrimSpace(user.Username)
+	if username == "" {
+		return false, errors.New("username is empty")
 	}
-
-	now := time.Now()
+	user.Username = username
 	user.Provider = AuthProviderLDAP
 	user.Password = ""
-	user.LastLoginAt = &now
 
 	var existingUser User
-	if err := DB.Where("username = ?", user.Username).First(&existingUser).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			user.Enabled = true
-			if strings.TrimSpace(user.Name) == "" {
-				user.Name = user.Username
-			}
-			err = DB.Create(user).Error
-			if err == nil {
-				InvalidateUserCache(uint64(user.ID))
-				return user, nil
-			}
+	if err := DB.Where("username = ?", username).First(&existingUser).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, err
+		}
+		name := strings.TrimSpace(user.Name)
+		if name == "" {
+			name = username
+		}
+		newUser := &User{
+			Username:        username,
+			Name:            name,
+			Provider:        AuthProviderLDAP,
+			OIDCGroups:      user.OIDCGroups,
+			Enabled:         createEnabled,
+			PendingDeletion: false,
+		}
+		if err := DB.Create(newUser).Error; err != nil {
 			if !isUniqueConstraintError(err) {
-				return nil, err
+				return false, err
 			}
-			if err := DB.Where("username = ?", user.Username).First(&existingUser).Error; err != nil {
-				return nil, err
+			// Lost a race with another writer; fall through to update below.
+			if err := DB.Where("username = ?", username).First(&existingUser).Error; err != nil {
+				return false, err
 			}
 		} else {
-			return nil, err
+			InvalidateUserCache(uint64(newUser.ID))
+			syncGroupsAfterUserWrite(newUser.ID, newUser.OIDCGroups, GroupSourceLDAP)
+			return true, nil
 		}
 	}
 
 	if existingUser.Provider != AuthProviderLDAP {
-		return nil, ErrUserProviderConflict
+		return false, ErrUserProviderConflict
+	}
+	if name := strings.TrimSpace(user.Name); name != "" {
+		existingUser.Name = name
+	}
+	existingUser.OIDCGroups = user.OIDCGroups
+	if err := DB.Save(&existingUser).Error; err != nil {
+		return false, err
+	}
+	InvalidateUserCache(uint64(existingUser.ID))
+	syncGroupsAfterUserWrite(existingUser.ID, existingUser.OIDCGroups, GroupSourceLDAP)
+	return false, nil
+}
+
+// GetLDAPUserByUsername returns the local record for a directory (LDAP) user.
+func GetLDAPUserByUsername(username string) (*User, error) {
+	var user User
+	err := DB.Where("username = ? AND provider = ?",
+		strings.TrimSpace(username), AuthProviderLDAP).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// ListLDAPUsers returns all locally provisioned directory (LDAP) users.
+func ListLDAPUsers() (users []User, err error) {
+	err = DB.Where("provider = ?", AuthProviderLDAP).Order("username asc").Find(&users).Error
+	return users, err
+}
+
+// ListDisabledLDAPUsers returns LDAP users that are disabled locally. The
+// periodic directory sync physically removes such accounts once they no longer
+// exist in the source directory.
+func ListDisabledLDAPUsers() (users []User, err error) {
+	err = DB.Where("provider = ? AND enabled = ?",
+		AuthProviderLDAP, false).Order("id asc").Find(&users).Error
+	return users, err
+}
+
+// ListKnownGroups returns every group name known to the console, sorted and
+// de-duplicated. It reads the group column of the users table directly
+// (comma-separated, one row per account) — LDAP/OIDC synced groups and groups
+// manually assigned to native users — plus group subjects already used in role
+// assignments and explicitly persisted local groups.
+func ListKnownGroups() ([]string, error) {
+	set := make(map[string]struct{})
+
+	column, err := userGroupsColumn()
+	if err != nil {
+		return nil, err
 	}
 
-	user.ID = existingUser.ID
-	user.CreatedAt = existingUser.CreatedAt
-	user.Enabled = existingUser.Enabled
-	user.SidebarPreference = existingUser.SidebarPreference
-	user.Sub = existingUser.Sub
-	if strings.TrimSpace(user.Name) == "" {
-		user.Name = existingUser.Name
+	var raws []string
+	err = DB.Model(&User{}).
+		Where(column+" IS NOT NULL AND "+column+" <> ''").
+		Pluck(column, &raws).Error
+	if err != nil {
+		return nil, err
 	}
-	if strings.TrimSpace(user.AvatarURL) == "" {
-		user.AvatarURL = existingUser.AvatarURL
+	for _, raw := range raws {
+		for _, g := range strings.Split(raw, ",") {
+			if name := strings.TrimSpace(g); name != "" {
+				set[name] = struct{}{}
+			}
+		}
 	}
 
-	err := DB.Save(user).Error
-	if err == nil {
-		InvalidateUserCache(uint64(user.ID))
+	var assigned []string
+	if err := DB.Model(&RoleAssignment{}).
+		Where("subject_type = ? AND subject <> ''", SubjectTypeGroup).
+		Distinct().Pluck("subject", &assigned).Error; err != nil {
+		return nil, err
 	}
-	return user, err
+	for _, g := range assigned {
+		if name := strings.TrimSpace(g); name != "" {
+			set[name] = struct{}{}
+		}
+	}
+
+	// Explicitly persisted groups (possibly empty, no members or grants yet).
+	var local []string
+	if err := DB.Model(&LocalGroup{}).Pluck("name", &local).Error; err != nil {
+		return nil, err
+	}
+	for _, g := range local {
+		if name := strings.TrimSpace(g); name != "" {
+			set[name] = struct{}{}
+		}
+	}
+
+	groups := make([]string, 0, len(set))
+	for name := range set {
+		groups = append(groups, name)
+	}
+	sort.Strings(groups)
+	return groups, nil
+}
+
+// userGroupsColumn discovers the physical column of the users table that holds
+// the comma-separated group names. GORM derives a column name from the
+// OIDCGroups field, but pre-existing databases may have been created with a
+// different literal name, so the real column is resolved from the database
+// catalog instead of being hard-coded.
+func userGroupsColumn() (string, error) {
+	candidates := []string{}
+
+	stmt := &gorm.Statement{DB: DB}
+	if err := stmt.Parse(&User{}); err == nil {
+		if field := stmt.Schema.LookUpField("OIDCGroups"); field != nil && field.DBName != "" {
+			candidates = append(candidates, field.DBName)
+		}
+	}
+	// Historical / observed alternatives kept as fallbacks.
+	candidates = append(candidates,
+		"oidc_groups",
+		"oid_c_groups",
+		"o_id_c_groups",
+		"o_i_d_c_groups",
+	)
+
+	existing := make(map[string]struct{})
+	switch common.DBType {
+	case "mysql":
+		var cols []struct {
+			ColumnName string `gorm:"column:column_name"`
+		}
+		if err := DB.Raw("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users'").Scan(&cols).Error; err != nil {
+			return "", err
+		}
+		for _, c := range cols {
+			existing[strings.ToLower(c.ColumnName)] = struct{}{}
+		}
+	case "postgres":
+		var cols []struct {
+			ColumnName string `gorm:"column:column_name"`
+		}
+		if err := DB.Raw("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'").Scan(&cols).Error; err != nil {
+			return "", err
+		}
+		for _, c := range cols {
+			existing[strings.ToLower(c.ColumnName)] = struct{}{}
+		}
+	default: // sqlite
+		var cols []struct {
+			Name string `gorm:"column:name"`
+		}
+		if err := DB.Raw("PRAGMA table_info(users)").Scan(&cols).Error; err != nil {
+			return "", err
+		}
+		for _, c := range cols {
+			existing[strings.ToLower(c.Name)] = struct{}{}
+		}
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	for _, column := range candidates {
+		lower := strings.ToLower(strings.TrimSpace(column))
+		if lower == "" {
+			continue
+		}
+		if _, ok := seen[lower]; ok {
+			continue
+		}
+		seen[lower] = struct{}{}
+		if _, ok := existing[lower]; ok {
+			return column, nil
+		}
+	}
+
+	named := make([]string, 0, len(existing))
+	for name := range existing {
+		named = append(named, name)
+	}
+	sort.Strings(named)
+	return "", fmt.Errorf("unable to locate the group column on the users table (columns: %s)", strings.Join(named, ", "))
 }
 
 func isUniqueConstraintError(err error) bool {
@@ -368,6 +623,12 @@ func isUniqueConstraintError(err error) bool {
 	return strings.Contains(message, "unique constraint failed") ||
 		strings.Contains(message, "duplicate key value") ||
 		strings.Contains(message, "duplicate entry")
+}
+
+// IsUniqueConstraintError reports whether err is a duplicate/unique violation,
+// so callers can answer with a conflict instead of leaking a raw SQL error.
+func IsUniqueConstraintError(err error) bool {
+	return isUniqueConstraintError(err)
 }
 
 func AddSuperUser(user *User) error {

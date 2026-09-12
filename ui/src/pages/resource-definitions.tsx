@@ -28,6 +28,7 @@ import { HTTPRouteListPage } from './httproute-list-page'
 import { IngressListPage } from './ingress-list-page'
 import { JobDetail } from './job-detail'
 import { JobListPage } from './job-list-page'
+import { NamespaceDetailPage } from './namespace-detail-page'
 import { NamespaceListPage } from './namespace-list-page'
 import { NodeDetail } from './node-detail'
 import { NodeListPage } from './node-list-page'
@@ -129,6 +130,9 @@ function getResourceViews(resourceType: ResourceType): ResourceViewDefinition {
     case 'namespaces':
       return {
         listPage: () => <NamespaceListPage />,
+        detailPage: ({ name }: ResourceDetailProps) => (
+          <NamespaceDetailPage name={name} />
+        ),
       }
     case 'crds':
       return {

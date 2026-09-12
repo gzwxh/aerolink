@@ -1,25 +1,29 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   IconBan,
   IconCircleCheckFilled,
+  IconDownload,
   IconDroplet,
+  IconTrash,
 } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
+import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { NodeWithMetrics } from '@/types/api'
-import { cordonNode, drainNode, uncordonNode } from '@/lib/api'
+import { cordonNode, uncordonNode } from '@/lib/api'
 import { createSearchFilter } from '@/lib/k8s'
-import { formatDate } from '@/lib/utils'
+import { formatDate, translateError } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { MetricCell } from '@/components/metrics-cell'
+import { NodeDeleteDialog } from '@/components/node-delete-dialog'
+import { NodeDrainDialog } from '@/components/node-drain-dialog'
+import { NodeRowActions } from '@/components/node-row-actions'
 import { NodeStatusIcon } from '@/components/node-status-icon'
-import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
 import {
   ResourceTable,
   type ResourceTableBatchAction,
@@ -127,6 +131,88 @@ function getNodeIP(node: NodeWithMetrics): string {
   return 'N/A'
 }
 
+const NODE_LABEL_DISPLAY_LIMIT = 6
+
+function formatNodeTaint(taint: {
+  key: string
+  value?: string
+  effect?: string
+}): string {
+  const value = taint.value ? `=${taint.value}` : ''
+  return `${taint.key}${value}:${taint.effect ?? ''}`
+}
+
+// NodeLabelsAndTaints renders the node's taints and labels in a full-width
+// details row. Labels beyond the display limit collapse behind "Show more".
+function NodeLabelsAndTaints({ node }: { node: NodeWithMetrics }) {
+  const { t } = useTranslation()
+  const [expanded, setExpanded] = useState(false)
+
+  // System-managed keys (kubernetes.io/...) are created automatically and are
+  // noise for operators, so they are hidden from this summary.
+  const isSystemKey = (key: string) => key.includes('kubernetes.io')
+
+  const taints = (node.spec?.taints ?? []).filter(
+    (taint) => !isSystemKey(taint.key)
+  )
+  const labels = Object.entries(node.metadata?.labels ?? {})
+    .filter(([key]) => !isSystemKey(key))
+    .sort(([a], [b]) => a.localeCompare(b))
+
+  if (taints.length === 0 && labels.length === 0) {
+    return null
+  }
+
+  const visibleLabels = expanded
+    ? labels
+    : labels.slice(0, NODE_LABEL_DISPLAY_LIMIT)
+  const hasHiddenLabels = labels.length > NODE_LABEL_DISPLAY_LIMIT
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      {taints.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="shrink-0">
+            {t('common.fields.taints', 'Taints')}:
+          </span>
+          {taints.map((taint) => (
+            <Badge
+              key={`${taint.key}-${taint.effect}`}
+              variant="outline"
+              className="font-normal"
+            >
+              {formatNodeTaint(taint)}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {labels.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="shrink-0">
+            {t('common.fields.labels', 'Labels')}:
+          </span>
+          {visibleLabels.map(([key, value]) => (
+            <Badge key={key} variant="outline" className="font-normal">
+              {key}={value}
+            </Badge>
+          ))}
+          {hasHiddenLabels && (
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={() => setExpanded((prev) => !prev)}
+            >
+              {expanded
+                ? t('common.actions.showLess', 'Show less')
+                : t('common.actions.showMore', 'Show more')}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const nodeSearchFilter = createSearchFilter<NodeWithMetrics>(
   (n) => n.metadata?.name,
   (n) => n.status?.nodeInfo?.kubeletVersion,
@@ -137,19 +223,69 @@ const nodeSearchFilter = createSearchFilter<NodeWithMetrics>(
 
 const columnHelper = createColumnHelper<NodeWithMetrics>()
 
+function downloadNodeYaml(node: NodeWithMetrics) {
+  const content = yaml.dump(node, { indent: 2, noRefs: true })
+  const blob = new Blob([content], { type: 'application/x-yaml' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${node.metadata?.name || 'node'}.yaml`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 export function NodeListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [activeBatchAction, setActiveBatchAction] = useState<
-    'cordon' | 'uncordon' | 'drain' | null
-  >(null)
-  const [batchNodes, setBatchNodes] = useState<NodeWithMetrics[]>([])
-  const [drainOptions, setDrainOptions] = useState({
-    force: false,
-    gracePeriod: 30,
-    deleteLocalData: false,
-    ignoreDaemonsets: true,
-  })
+  const can = useCan()
+  const canUpdateNodes = can('nodes', 'update')
+  const canDeleteNodes = can('nodes', 'delete')
+
+  const [selectedNodes, setSelectedNodes] = useState<NodeWithMetrics[]>([])
+  const [drainTargets, setDrainTargets] = useState<NodeWithMetrics[]>([])
+  const [deleteTargets, setDeleteTargets] = useState<NodeWithMetrics[]>([])
+  const [showDrainDialog, setShowDrainDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
+  const hasSelection = selectedNodes.length > 0
+  const hasSchedulableSelection = selectedNodes.some(
+    (node) => !node.spec?.unschedulable
+  )
+  const hasCordonedSelection = selectedNodes.some(
+    (node) => !!node.spec?.unschedulable
+  )
+
+  const runNodeAction = useCallback(
+    async (
+      nodes: NodeWithMetrics[],
+      action: (name: string) => Promise<unknown>,
+      successKey: string
+    ) => {
+      const errors: string[] = []
+      let done = 0
+      for (const node of nodes) {
+        const name = node.metadata?.name || ''
+        try {
+          await action(name)
+          done += 1
+        } catch (err) {
+          errors.push(`${name}: ${translateError(err, t)}`)
+        }
+      }
+      await queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      if (errors.length > 0) {
+        toast.error(errors.join('; '))
+      } else {
+        toast.success(
+          t(successKey, {
+            count: done,
+            defaultValue: '{{count}} node(s) updated',
+          })
+        )
+      }
+    },
+    [queryClient, t]
+  )
 
   const batchActions = useMemo<ResourceTableBatchAction<NodeWithMetrics>[]>(
     () => [
@@ -157,32 +293,66 @@ export function NodeListPage() {
         id: 'cordon',
         label: t('common.actions.cordon'),
         icon: <IconBan className="size-4" />,
-        onSelect: (nodes) => {
-          setBatchNodes(nodes)
-          setActiveBatchAction('cordon')
-        },
+        hidden: !canUpdateNodes,
+        disabled: !hasSelection || !hasSchedulableSelection,
+        onSelect: (nodes) =>
+          void runNodeAction(nodes, cordonNode, 'nodes.cordonedCount'),
       },
       {
         id: 'uncordon',
         label: t('common.actions.uncordon'),
         icon: <IconCircleCheckFilled className="size-4" />,
-        onSelect: (nodes) => {
-          setBatchNodes(nodes)
-          setActiveBatchAction('uncordon')
-        },
+        hidden: !canUpdateNodes || !hasCordonedSelection,
+        disabled: !hasSelection,
+        onSelect: (nodes) =>
+          void runNodeAction(nodes, uncordonNode, 'nodes.uncordonedCount'),
       },
       {
         id: 'drain',
         label: t('common.actions.drain'),
         icon: <IconDroplet className="size-4" />,
+        hidden: !canUpdateNodes,
+        disabled: !hasSelection,
         onSelect: (nodes) => {
-          setBatchNodes(nodes)
-          setActiveBatchAction('drain')
+          setDrainTargets(nodes)
+          setShowDrainDialog(true)
+        },
+      },
+      {
+        id: 'download',
+        label: t('common.actions.downloadYaml'),
+        icon: <IconDownload className="size-4" />,
+        disabled: !hasSelection,
+        onSelect: (nodes) => nodes.forEach(downloadNodeYaml),
+      },
+      {
+        id: 'delete',
+        label: t('common.actions.delete'),
+        icon: <IconTrash className="size-4" />,
+        hidden: !canDeleteNodes,
+        disabled: !hasSelection,
+        onSelect: (nodes) => {
+          setDeleteTargets(nodes)
+          setShowDeleteDialog(true)
         },
       },
     ],
-    [t]
+    [
+      t,
+      canUpdateNodes,
+      canDeleteNodes,
+      hasSelection,
+      hasSchedulableSelection,
+      hasCordonedSelection,
+      runNodeAction,
+    ]
   )
+
+  // Row-level drain opens the same options dialog as the toolbar action.
+  const handleRowDrain = useCallback((node: NodeWithMetrics) => {
+    setDrainTargets([node])
+    setShowDrainDialog(true)
+  }, [])
 
   // Define columns for the node table
   const columns = useMemo(
@@ -200,8 +370,15 @@ export function NodeListPage() {
       columnHelper.accessor((row) => getNodeStatus(row), {
         id: 'status',
         header: t('common.fields.status'),
-        cell: ({ getValue }) => {
-          const status = getValue()
+        cell: ({ row }) => {
+          if (row.original.spec?.unschedulable) {
+            return (
+              <Badge variant="destructive" className="text-xs">
+                {t('nodes.cordoned', 'Cordoned')}
+              </Badge>
+            )
+          }
+          const status = getNodeStatus(row.original)
           return (
             <Badge variant="outline" className="text-muted-foreground px-1.5">
               <NodeStatusIcon status={status} />
@@ -252,6 +429,7 @@ export function NodeListPage() {
             type="cpu"
             limitLabel="Allocatable"
             showPercentage={true}
+            showRequest={false}
           />
         ),
       }),
@@ -264,6 +442,7 @@ export function NodeListPage() {
             type="memory"
             limitLabel="Allocatable"
             showPercentage={true}
+            showRequest={false}
           />
         ),
       }),
@@ -321,20 +500,16 @@ export function NodeListPage() {
           )
         },
       }),
+      columnHelper.display({
+        id: 'actions',
+        header: t('common.fields.actions', 'Actions'),
+        cell: ({ row }) => (
+          <NodeRowActions node={row.original} onDrain={handleRowDrain} />
+        ),
+      }),
     ],
-    [t]
+    [t, handleRowDrain]
   )
-
-  const executeBatchAction = async (node: NodeWithMetrics) => {
-    const name = node.metadata!.name!
-    if (activeBatchAction === 'cordon') return cordonNode(name)
-    if (activeBatchAction === 'uncordon') return uncordonNode(name)
-    return drainNode(name, drainOptions)
-  }
-
-  const activeActionLabel = activeBatchAction
-    ? t(`common.actions.${activeBatchAction}`)
-    : ''
 
   return (
     <>
@@ -346,111 +521,29 @@ export function NodeListPage() {
         searchQueryFilter={nodeSearchFilter}
         showCreateButton={false}
         batchActions={batchActions}
+        alwaysShowBatchActions
+        showBatchDelete={false}
+        onRowSelectionChange={setSelectedNodes}
         defaultHiddenColumns={[
           'status_nodeInfo_kernelVersion',
           'status_nodeInfo_osImage',
         ]}
+        renderRowDetails={(node) => <NodeLabelsAndTaints node={node} />}
       />
 
-      {activeBatchAction && (
-        <ResourceBatchActionDialog
-          open={true}
-          onOpenChange={(open) => {
-            if (!open) setActiveBatchAction(null)
-          }}
-          resources={batchNodes}
-          title={t(
-            `resourceTable.batchActions.${activeBatchAction}NodesTitle`,
-            { count: batchNodes.length }
-          )}
-          description={t(
-            `resourceTable.batchActions.${activeBatchAction}NodesDescription`,
-            { count: batchNodes.length }
-          )}
-          actionLabel={activeActionLabel}
-          onExecute={executeBatchAction}
-          onComplete={() =>
-            queryClient.invalidateQueries({ queryKey: ['nodes'] })
-          }
-          sequential={activeBatchAction === 'drain'}
-          destructive={activeBatchAction === 'drain'}
-          options={
-            activeBatchAction === 'drain'
-              ? (disabled) => (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="batch-drain-force"
-                        checked={drainOptions.force}
-                        onCheckedChange={(checked) =>
-                          setDrainOptions((current) => ({
-                            ...current,
-                            force: checked === true,
-                          }))
-                        }
-                        disabled={disabled}
-                      />
-                      <Label htmlFor="batch-drain-force">
-                        {t('detail.dialogs.drainNode.forceDrain')}
-                      </Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="batch-drain-local-data"
-                        checked={drainOptions.deleteLocalData}
-                        onCheckedChange={(checked) =>
-                          setDrainOptions((current) => ({
-                            ...current,
-                            deleteLocalData: checked === true,
-                          }))
-                        }
-                        disabled={disabled}
-                      />
-                      <Label htmlFor="batch-drain-local-data">
-                        {t('detail.dialogs.drainNode.deleteLocalData')}
-                      </Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="batch-drain-daemonsets"
-                        checked={drainOptions.ignoreDaemonsets}
-                        onCheckedChange={(checked) =>
-                          setDrainOptions((current) => ({
-                            ...current,
-                            ignoreDaemonsets: checked === true,
-                          }))
-                        }
-                        disabled={disabled}
-                      />
-                      <Label htmlFor="batch-drain-daemonsets">
-                        {t('detail.dialogs.drainNode.ignoreDaemonSets')}
-                      </Label>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <Label htmlFor="batch-drain-grace-period">
-                        {t('detail.dialogs.drainNode.gracePeriod')}
-                      </Label>
-                      <Input
-                        id="batch-drain-grace-period"
-                        type="number"
-                        min={0}
-                        value={drainOptions.gracePeriod}
-                        onChange={(event) =>
-                          setDrainOptions((current) => ({
-                            ...current,
-                            gracePeriod: Number(event.target.value),
-                          }))
-                        }
-                        disabled={disabled}
-                        className="w-28 tabular-nums"
-                      />
-                    </div>
-                  </div>
-                )
-              : undefined
-          }
-        />
-      )}
+      <NodeDrainDialog
+        open={showDrainDialog}
+        onOpenChange={setShowDrainDialog}
+        nodes={drainTargets}
+        onDrained={() => queryClient.invalidateQueries({ queryKey: ['nodes'] })}
+      />
+
+      <NodeDeleteDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        nodes={deleteTargets}
+        onDeleted={() => queryClient.invalidateQueries({ queryKey: ['nodes'] })}
+      />
     </>
   )
 }

@@ -8,11 +8,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { StatefulSet } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { restartWorkload } from '@/lib/api'
-import { createSearchFilter } from '@/lib/k8s'
+import { getClusterScopedStorageKey } from '@/lib/current-cluster'
+import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
+import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
 import {
@@ -31,22 +33,27 @@ const columnHelper = createColumnHelper<StatefulSet>()
 export function StatefulSetListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const { namespace: namespaceParam } = useParams()
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
   const [batchStatefulSets, setBatchStatefulSets] = useState<StatefulSet[]>([])
 
+  // Restarting patches the pod template, so it needs update permission.
+  const canUpdate = useCanAnyNamespace()('statefulsets', 'update')
   const batchActions = useMemo<ResourceTableBatchAction<StatefulSet>[]>(
     () => [
       {
         id: 'restart',
         label: t('common.actions.restart'),
         icon: <IconReload className="size-4" />,
+        hidden: !canUpdate,
         onSelect: (statefulSets) => {
           setBatchStatefulSets(statefulSets)
           setIsRestartDialogOpen(true)
         },
       },
     ],
-    [t]
+    [t, canUpdate]
   )
 
   // Define columns for the statefulset table
@@ -73,6 +80,7 @@ export function StatefulSetListPage() {
           const status = row.original.status
           const ready = status?.readyReplicas || 0
           const desired = status?.replicas || 0
+
           return (
             <div>
               {ready} / {desired}
@@ -139,6 +147,17 @@ export function StatefulSetListPage() {
     [t]
   )
 
+  const handleCreateClick = () => {
+    // The URL wins, then the table's persisted selection; a multi or
+    // "all namespaces" selection cannot host a new object.
+    const ns = resolveCreateNamespace(
+      namespaceParam,
+      sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace'))
+    )
+    navigate(`/statefulsets/${encodeURIComponent(ns)}/create?tab=container-0`)
+  }
+
   return (
     <>
       <ResourceTable
@@ -146,6 +165,17 @@ export function StatefulSetListPage() {
         resourceType="statefulsets"
         columns={columns}
         searchQueryFilter={statefulSetSearchFilter}
+        initialNamespace={namespaceParam}
+        onNamespaceChange={(ns) => {
+          navigate(
+            ns && ns !== '_all'
+              ? `/statefulsets/${encodeURIComponent(ns)}`
+              : '/statefulsets',
+            { replace: true }
+          )
+        }}
+        showCreateButton={true}
+        onCreateClick={handleCreateClick}
         batchActions={batchActions}
       />
 
