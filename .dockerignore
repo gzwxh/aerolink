@@ -1,0 +1,25 @@
+# Keep the build context small: everything below is either generated inside the
+# image (static/, ui/dist/) or irrelevant for the build.
+.git
+.github
+.gitignore
+.dockerignore
+
+# Local runtime state and binaries
+dev.db
+*.db
+kite
+
+# Frontend build artefacts and dependencies
+ui/node_modules
+ui/dist
+ui/.vite
+
+# Docs and test tooling
+docs
+docsCN
+e2e
+charts
+AGENTS.md
+CLAUDE.md
+*.log

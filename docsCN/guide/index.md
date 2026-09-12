@@ -24,6 +24,7 @@ Kite 是面向平台团队的轻量、开源 Kubernetes 工作空间，将多集
 - **审查资源变更：** [资源历史](./resource-history.md)
 - **使用 AI Agent 辅助排障：** [AI 助手](./ai-assistant.md)
 - **连接私有或远程集群：** [Kite Cluster Agent](./kite-cluster-agent.md)
+- **打包自己的镜像并推送：** [构建并推送 Kite 镜像](./build-and-push-image.md)
 
 ## 平台能力概览
 

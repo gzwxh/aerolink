@@ -46,6 +46,18 @@ helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system -f values.ya
 helm install kite kite/kite -n kite-system -f values.yaml
 ```
 
+#### 使用自建镜像安装
+
+如果你已经把源码打包成自己的镜像（见[构建并推送 Kite 镜像](./build-and-push-image.md)），用仓库内的 chart 安装并覆盖镜像地址：
+
+```bash
+helm install kite charts/kite -n kite-system --create-namespace \
+  --set image.repository=<registry>/<namespace>/kite \
+  --set image.tag=<版本>
+```
+
+私有仓库还需要配置拉取凭据（`--set imagePullSecrets[0].name=kite-regcred`）。
+
 ### 方式二：YAML 清单
 
 如需快速部署，可直接应用官方安装 YAML：
