@@ -166,11 +166,11 @@ helm upgrade --install kite charts/kite -n kite-system \
 ```bash
 # 个人仓库
 helm upgrade --install kite charts/kite -n kite-system --create-namespace \
-  -f charts/kite/values-gzwxh.yaml
+  -f charts/kite/examples/swr-gzwxh.yaml
 
 # 公司组织仓库（私有，需先创建拉取凭据）
 helm upgrade --install kite charts/kite -n kite-system --create-namespace \
-  -f charts/kite/values-dsy.yaml
+  -f charts/kite/examples/swr-dsy.yaml
 ```
 
 ### 发布 chart（可选）
