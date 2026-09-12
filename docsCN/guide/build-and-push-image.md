@@ -27,6 +27,15 @@ docker build \
   -t kite:local .
 ```
 
+::: tip 推送到不完全支持 OCI 的仓库时（华为云 SWR 等）
+BuildKit 默认会给镜像附加 provenance / SBOM 清单，形成 manifest index，部分仓库会拒绝并报
+`Invalid image, fail to parse 'manifest.json'`。此时用下面两个参数重新构建即可：
+
+```bash
+docker build --provenance=false --sbom=false --platform linux/amd64 -t kite:local .
+```
+:::
+
 ### 国内网络：替换基础镜像与依赖源
 
 Docker Hub（`node` / `golang`）与 gcr.io（`distroless`）在部分网络下不可达，可用构建参数替换：
@@ -91,6 +100,26 @@ docker push <registry>/<namespace>/kite:$VERSION
 # 需要 latest 时再推一个
 docker tag kite:local <registry>/<namespace>/kite:latest
 docker push <registry>/<namespace>/kite:latest
+```
+
+### 华为云 SWR 示例
+
+```bash
+# 用户名格式为「区域@AK」，密码为对应的 SK（是临时登录指令，不是账号密码）
+docker login -u cn-south-1@<你的AK> -p <你的SK> swr.cn-south-1.myhuaweicloud.com
+
+VERSION=$(bash scripts/get-version.sh)
+docker tag kite:local swr.cn-south-1.myhuaweicloud.com/<组织或用户名>/kite:$VERSION
+docker push swr.cn-south-1.myhuaweicloud.com/<组织或用户名>/kite:$VERSION
+```
+
+同一个 SWR 域名下如果有多个账号（例如个人仓库与组织仓库），由于 Docker 的凭据是按域名保存的，后登录会覆盖前一个账号。这时用独立的配置目录分别登录/推送：
+
+```bash
+docker --config ~/.docker-personal login -u cn-south-1@<AK1> -p <SK1> swr.cn-south-1.myhuaweicloud.com
+docker --config ~/.docker-org      login -u cn-south-1@<AK2> -p <SK2> swr.cn-south-1.myhuaweicloud.com
+
+docker --config ~/.docker-org push swr.cn-south-1.myhuaweicloud.com/<组织>/kite:$VERSION
 ```
 
 需要多架构（amd64 + arm64）时用 buildx：
@@ -166,6 +195,14 @@ sudo systemctl restart docker
 **pnpm 报 `ERR_PNPM_IGNORED_BUILDS: esbuild`**
 
 Dockerfile 中已写入 `pnpm-workspace.yaml` 明确声明该依赖不需要执行构建脚本（esbuild 自带预编译二进制）。若 pnpm 后续版本改变行为，可临时改用 `pnpm install --frozen-lockfile --dangerously-allow-all-builds`。
+
+**推送报 `Invalid image, fail to parse 'manifest.json'`（华为云 SWR）**
+
+仓库不接受带 attestation 的 manifest index，构建时加上 `--provenance=false --sbom=false`（见「一、构建镜像」的提示）。
+
+**登录报 `denied: Authenticate Error`**
+
+SWR 的用户名是「区域@AK」、密码是 SK，且 AK/SK 可能已轮换；确认用的不是账号密码，并检查该 AK 是否有 SWR 权限。
 
 **界面“关于”里的版本显示 `dev`**
 
