@@ -70,6 +70,11 @@ func CreatePasswordUser(c *gin.Context) {
 		return
 	}
 
+	if err := model.ValidatePassword(userreq.Password, false); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := model.AddUser(user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 		return
@@ -237,6 +242,17 @@ func ChangeCurrentUserPassword(c *gin.Context) {
 	}
 	if !model.CheckPassword(user.Password, req.CurrentPassword) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+		return
+	}
+	isAdmin := rbac.UserHasRole(user, model.DefaultAdminRole.Name)
+	if err := model.ValidatePassword(req.NewPassword, isAdmin); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if limit := model.PasswordHistoryLimit(); limit > 0 && model.PasswordReused(user.ID, req.NewPassword, limit) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("password cannot repeat any of the last %d passwords", limit),
+		})
 		return
 	}
 	if err := model.ResetPasswordByID(user.ID, req.NewPassword); err != nil {
@@ -627,6 +643,21 @@ func ResetPassword(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	target, err := model.GetUserByID(uint64(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	if err := model.ValidatePassword(req.Password, rbac.UserHasRole(*target, model.DefaultAdminRole.Name)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if limit := model.PasswordHistoryLimit(); limit > 0 && model.PasswordReused(target.ID, req.Password, limit) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("password cannot repeat any of the last %d passwords", limit),
+		})
 		return
 	}
 	if err := model.ResetPasswordByID(id, req.Password); err != nil {

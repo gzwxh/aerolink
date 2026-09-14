@@ -77,6 +77,12 @@ func (h *AuthHandler) CreateSuperUser(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "super user already exists"})
 		return
 	}
+	// The first account is an administrator, so the stricter admin password rule
+	// applies.
+	if err := model.ValidatePassword(userreq.Password, true); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	user := &model.User{
 		Username: userreq.Username,
 		Password: userreq.Password,
