@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 
 import App, { StandaloneAIChatApp } from './App'
 import { InitCheckRoute } from './components/init-check-route'
@@ -23,6 +23,7 @@ import { ResourceList } from './pages/resource-list'
 import { ServiceCreatePage } from './pages/service-create-page'
 import { ServiceListPage } from './pages/service-list-page'
 import { SettingsPage, SettingsRedirect } from './pages/settings'
+import { UserCreatePage } from './pages/user-create'
 import { StatefulSetListPage } from './pages/statefulset-list-page'
 
 const subPath = getSubPath()
@@ -72,6 +73,20 @@ export const router = createBrowserRouter(
         {
           path: 'settings',
           element: <SettingsRedirect />,
+        },
+        {
+          path: 'settings/users/create',
+          element: <UserCreatePage />,
+        },
+        {
+          // 兼容旧链接：/settings/users → /settings/user?tab=users
+          path: 'settings/users',
+          element: <Navigate to="/settings/user?tab=users" replace />,
+        },
+        {
+          // 兼容旧链接：/settings/group → /settings/user?tab=group
+          path: 'settings/group',
+          element: <Navigate to="/settings/user?tab=group" replace />,
         },
         {
           path: 'settings/:section',

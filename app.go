@@ -11,6 +11,7 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/middleware"
 	"github.com/zxh326/kite/pkg/model"
+	"github.com/zxh326/kite/pkg/notification"
 	"github.com/zxh326/kite/pkg/rbac"
 	"github.com/zxh326/kite/pkg/scheduler"
 	"github.com/zxh326/kite/pkg/templates"
@@ -32,6 +33,10 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 
 	rbac.InitRBAC()
 	templates.InitTemplates()
+	// 问候模板必须在后台任务前播种，否则定时通知会因缺少模板被跳过。
+	if _, err := model.EnsureNotificationTemplates(); err != nil {
+		klog.Warningf("Failed to seed notification templates: %v", err)
+	}
 	internal.LoadConfigFromFile(common.ConfigFilePath)
 	if common.ConfigFilePath == "" {
 		internal.LoadConfigFromEnv()
@@ -46,6 +51,7 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 	}
 	scheduler.Start(ctx, cm)
 	auth.StartLDAPSync(ctx)
+	notification.StartDailyChecker(ctx)
 	return cm, nil
 }
 

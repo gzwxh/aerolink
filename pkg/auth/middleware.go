@@ -111,6 +111,15 @@ func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		if activeSessions.expired(uint64(user.ID)) {
+			activeSessions.forget(uint64(user.ID))
+			setCookieSecure(c, "auth_token", "", -1)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "session expired, please sign in again"})
+			c.Abort()
+			return
+		}
+		activeSessions.touch(uint64(user.ID))
+
 		user.Roles = rbac.GetUserRoles(*user)
 		c.Set("user", *user)
 		if blockForMFAEnrollment(c, user) {

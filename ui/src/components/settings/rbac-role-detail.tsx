@@ -140,6 +140,9 @@ const VERB_SUGGESTIONS = [
   'delete',
   'log',
   'exec',
+  'view-file',
+  'download-file',
+  'upload-file',
 ]
 
 const RESOURCE_SUGGESTIONS = [

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import {
@@ -35,6 +36,7 @@ const DISPLAY_SCALE_MAX = 120
 const DISPLAY_SCALE_STEP = 5
 
 export function UserMenu() {
+  const { t } = useTranslation()
   const { user, logout, hasGlobalSidebarPreference } = useAuth()
   const {
     colorTheme,
@@ -122,12 +124,12 @@ export function UserMenu() {
               <p className="text-xs text-muted-foreground">{user.username}</p>
               {user.provider && (
                 <p className="text-xs text-muted-foreground capitalize">
-                  via {user.provider}
+                  {t('userMenu.via', 'via')} {user.provider}
                 </p>
               )}
               {user.roles && user.roles.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Role: {user.roles.map((role) => role.name).join(', ')}
+                  {t('userMenu.role', 'Role')}: {user.roles.map((role) => role.name).join(', ')}
                 </p>
               )}
             </div>
@@ -144,7 +146,7 @@ export function UserMenu() {
                 className="cursor-pointer"
               >
                 <UserCog className="h-4 w-4" />
-                <span>Account Settings</span>
+                <span>{t('userMenu.accountSettings', 'Account Settings')}</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
@@ -153,7 +155,7 @@ export function UserMenu() {
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Palette className="mr-2 h-4 w-4" />
-              <span>Color Theme</span>
+              <span>{t('userMenu.colorTheme', 'Color Theme')}</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               {Object.entries(colorThemes).map(([key]) => {
@@ -182,7 +184,7 @@ export function UserMenu() {
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <CaseSensitive className="mr-2 h-4 w-4" />
-              <span>Font</span>
+              <span>{t('userMenu.font', 'Font')}</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem
@@ -193,7 +195,7 @@ export function UserMenu() {
                   font === 'system' ? 'font-medium text-foreground' : ''
                 }`}
               >
-                <span>System</span>
+                {t('userMenu.fonts.system', 'System')}
                 {font === 'system' && (
                   <Check className="h-4 w-4 text-primary" />
                 )}
@@ -206,7 +208,7 @@ export function UserMenu() {
                   font === 'maple' ? 'font-medium text-foreground' : ''
                 }`}
               >
-                <span>Maple</span>
+                {t('userMenu.fonts.maple', 'Maple')}
                 {font === 'maple' && <Check className="h-4 w-4 text-primary" />}
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -217,7 +219,7 @@ export function UserMenu() {
                   font === 'jetbrains' ? 'font-medium text-foreground' : ''
                 }`}
               >
-                <span>JetBrains Mono</span>
+                {t('userMenu.fonts.jetbrains', 'JetBrains Mono')}
                 {font === 'jetbrains' && (
                   <Check className="h-4 w-4 text-primary" />
                 )}
@@ -228,7 +230,7 @@ export function UserMenu() {
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <ZoomIn className="mr-2 h-4 w-4" />
-              <span>Display Scale</span>
+              <span>{t('userMenu.displayScale', 'Display Scale')}</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-56 p-3">
               <div
@@ -295,7 +297,7 @@ export function UserMenu() {
                 className="cursor-pointer text-red-600 focus:text-red-600"
               >
                 <LogOut className="h-4 w-4" />
-                <span>Log out</span>
+                <span>{t('userMenu.logout', 'Log out')}</span>
               </DropdownMenuItem>
             </>
           )}

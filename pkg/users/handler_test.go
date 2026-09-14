@@ -224,7 +224,7 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.GeneralSetting{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.GeneralSetting{}, &model.PasswordHistory{}); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
 	model.DB = db

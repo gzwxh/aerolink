@@ -147,6 +147,12 @@ func (om *OAuthManager) RefreshJWT(c *gin.Context, tokenString string) (string, 
 		return "", fmt.Errorf("invalid token signature")
 	}
 
+	// A session that exceeded the idle or lifetime limit must not be refreshed.
+	if activeSessions.expired(uint64(claims.UserID)) {
+		activeSessions.forget(uint64(claims.UserID))
+		return "", fmt.Errorf("session expired")
+	}
+
 	if !time.Now().After(claims.ExpiresAt.Time) {
 		user := &model.User{
 			Model: model.Model{

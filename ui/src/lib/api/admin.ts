@@ -5,7 +5,9 @@ import {
   AuditLogResponse,
   Cluster,
   FetchUserListResponse,
+  LoginLogResponse,
   OAuthProvider,
+  PasswordChangeLogResponse,
   Role,
   UserItem,
 } from '@/types/api'
@@ -379,6 +381,73 @@ export const useAuditLogs = (
     staleTime: 20000,
   })
 }
+
+export const fetchLoginLogs = async (
+  page = 1,
+  size = 20,
+  userId?: number,
+  search?: string
+): Promise<LoginLogResponse> => {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  })
+  if (userId) {
+    params.set('userId', String(userId))
+  }
+  if (search) {
+    params.set('search', search)
+  }
+  return fetchAPI<LoginLogResponse>(`/admin/login-logs?${params.toString()}`)
+}
+
+export const useLoginLogs = (
+  page = 1,
+  size = 20,
+  userId?: number,
+  search?: string
+) => {
+  return useQuery<LoginLogResponse, Error>({
+    queryKey: ['login-logs', page, size, userId, search],
+    queryFn: () => fetchLoginLogs(page, size, userId, search),
+    staleTime: 20000,
+  })
+}
+
+export const fetchPasswordChangeLogs = async (
+  page = 1,
+  size = 20,
+  userId?: number,
+  search?: string
+): Promise<PasswordChangeLogResponse> => {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  })
+  if (userId) {
+    params.set('userId', String(userId))
+  }
+  if (search) {
+    params.set('search', search)
+  }
+  return fetchAPI<PasswordChangeLogResponse>(
+    `/admin/password-change-logs?${params.toString()}`
+  )
+}
+
+export const usePasswordChangeLogs = (
+  page = 1,
+  size = 20,
+  userId?: number,
+  search?: string
+) => {
+  return useQuery<PasswordChangeLogResponse, Error>({
+    queryKey: ['password-change-logs', page, size, userId, search],
+    queryFn: () => fetchPasswordChangeLogs(page, size, userId, search),
+    staleTime: 20000,
+  })
+}
+
 // API Key Management
 export interface APIKeyCreateRequest {
   name: string

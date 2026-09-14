@@ -205,7 +205,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
             {
               id: 'users',
               title: t('settings.tabs.users', 'User'),
-              url: '/settings/users',
+              url: '/settings/user?tab=users',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:

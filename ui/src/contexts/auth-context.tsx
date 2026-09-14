@@ -10,7 +10,11 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import type { BootstrapCapabilities, CredentialProvider } from '@/lib/api'
+import type {
+  BootstrapCapabilities,
+  CredentialProvider,
+  LoginCaptchaAnswer,
+} from '@/lib/api'
 import {
   loginWithCredentials as authenticateWithCredentials,
   initiateOAuthLogin,
@@ -41,13 +45,15 @@ interface AuthContextType {
   loginPrompt: string
   mfaEnabled: boolean
   passkeyLoginEnabled: boolean
+  loginCaptchaEnabled: boolean
   capabilities: BootstrapCapabilities
   login: (provider?: string) => Promise<void>
   loginWithCredentials: (
     provider: CredentialProvider,
     username: string,
     password: string,
-    mfaCode?: string
+    mfaCode?: string,
+    captcha?: LoginCaptchaAnswer
   ) => Promise<void>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
@@ -124,9 +130,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       provider: CredentialProvider,
       username: string,
       password: string,
-      mfaCode?: string
+      mfaCode?: string,
+      captcha?: LoginCaptchaAnswer
     ) => {
-      await authenticateWithCredentials(provider, username, password, mfaCode)
+      await authenticateWithCredentials(
+        provider,
+        username,
+        password,
+        mfaCode,
+        captcha
+      )
       markLoginSucceeded()
       await checkAuth()
     },
@@ -199,6 +212,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loginPrompt = bootstrap?.auth.loginPrompt || ''
   const mfaEnabled = bootstrap?.auth.mfaEnabled ?? true
   const passkeyLoginEnabled = bootstrap?.auth.passkeyLoginEnabled ?? false
+  const loginCaptchaEnabled = bootstrap?.auth.loginCaptchaEnabled ?? false
   const capabilities = bootstrap?.capabilities ?? defaultCapabilities
 
   const value = useMemo(() => {
@@ -215,6 +229,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       loginPrompt,
       mfaEnabled,
       passkeyLoginEnabled,
+      loginCaptchaEnabled,
       capabilities,
       login,
       loginWithCredentials,
@@ -232,6 +247,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loginPrompt,
     mfaEnabled,
     passkeyLoginEnabled,
+    loginCaptchaEnabled,
     capabilities,
     login,
     loginWithCredentials,

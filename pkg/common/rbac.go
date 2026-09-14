@@ -9,6 +9,10 @@ const (
 	VerbDelete Verb = "delete"
 	VerbLog    Verb = "log"
 	VerbExec   Verb = "exec"
+	// 容器文件权限：与 exec 分离，可在角色中单独勾选。
+	VerbViewFile     Verb = "view-file"
+	VerbDownloadFile Verb = "download-file"
+	VerbUploadFile   Verb = "upload-file"
 )
 
 type Role struct {

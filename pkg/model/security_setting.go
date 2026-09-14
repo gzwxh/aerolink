@@ -27,6 +27,10 @@ type SecuritySettingData struct {
 	OTPIssuerName            string `json:"otpIssuerName"`
 	OTPVerifyWindow          int    `json:"otpVerifyWindow"`
 
+	// New user defaults（新建用户的默认状态）
+	DefaultUserEnabled    bool `json:"defaultUserEnabled"`
+	DefaultUserExpireDays int  `json:"defaultUserExpireDays"`
+
 	// Login limits
 	UserLoginFailLimit    int      `json:"userLoginFailLimit"`
 	UserLoginBlockMinutes int      `json:"userLoginBlockMinutes"`
@@ -61,14 +65,19 @@ type SecuritySetting struct {
 
 func DefaultSecuritySettingData() SecuritySettingData {
 	return SecuritySettingData{
-		LoginCaptchaEnabled:      true,
+		// Off by default: turning it on requires every client to solve a captcha,
+		// which would break API/automation sign-in until they are updated.
+		LoginCaptchaEnabled:      false,
 		InactiveUserDisableDays:  999,
 		RemoteLoginNoticeEnabled: true,
 		MFAPolicy:                MFAPolicyDisabled,
 		MFAThirdPartyEnabled:     true,
 		MFAVerifyTTLSeconds:      60,
 		OTPIssuerName:            "Kite",
-		OTPVerifyWindow:          2,
+		// 新建用户默认「激活」，默认不过期。
+		DefaultUserEnabled:    true,
+		DefaultUserExpireDays: 0,
+		OTPVerifyWindow:       2,
 
 		UserLoginFailLimit:    7,
 		UserLoginBlockMinutes: 30,
@@ -112,6 +121,10 @@ func (d *SecuritySettingData) MFARequiredFor(user *User) bool {
 	if d == nil || user == nil {
 		return false
 	}
+	// 创建用户时显式选择「MFA 级别：禁用」的账号不受策略强制。
+	if user.MFADisabled {
+		return false
+	}
 	switch d.MFAPolicy {
 	case MFAPolicyAll:
 		return true
@@ -136,6 +149,7 @@ func (d *SecuritySettingData) Normalize() {
 	clampInt(&d.IPLoginBlockMinutes, 0, 1440)
 	clampInt(&d.PasswordExpireDays, 0, 3650)
 	clampInt(&d.PasswordHistoryCount, 0, 100)
+	clampInt(&d.DefaultUserExpireDays, 0, 3650)
 	clampInt(&d.PasswordMinLength, 1, 64)
 	clampInt(&d.AdminPasswordMinLength, 1, 64)
 	clampInt(&d.SessionMaxIdleMinutes, 1, 43200)

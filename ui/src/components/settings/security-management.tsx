@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { IconShieldLock, IconX } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -24,7 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -33,7 +34,7 @@ import {
 type SecurityTab = 'authentication' | 'loginPolicy' | 'password' | 'session'
 
 const DEFAULT_SECURITY_SETTING: SecuritySetting = {
-  loginCaptchaEnabled: true,
+  loginCaptchaEnabled: false,
   inactiveUserDisableDays: 999,
   remoteLoginNoticeEnabled: true,
   mfaPolicy: 'disabled',
@@ -159,7 +160,17 @@ export function SecurityManagement() {
     queryFn: fetchLockedLoginIPs,
     refetchInterval: 15000,
   })
-  const [tab, setTab] = useState<SecurityTab>('authentication')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const securityTabs = [
+    'authentication',
+    'loginPolicy',
+    'password',
+    'session',
+  ] as const
+  const tabParam = searchParams.get('tab') ?? 'authentication'
+  const tab = (securityTabs.includes(tabParam as SecurityTab)
+    ? tabParam
+    : 'authentication') as SecurityTab
   const [formData, setFormData] = useState<SecuritySetting>(
     DEFAULT_SECURITY_SETTING
   )
@@ -217,21 +228,8 @@ export function SecurityManagement() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <Tabs value={tab} onValueChange={(value) => setTab(value as SecurityTab)}>
-          <TabsList className="gap-1">
-            <TabsTrigger value="authentication">
-              {t('securitySettings.tabs.authentication', 'Authentication')}
-            </TabsTrigger>
-            <TabsTrigger value="loginPolicy">
-              {t('securitySettings.tabs.loginPolicy', 'Login Policy')}
-            </TabsTrigger>
-            <TabsTrigger value="password">
-              {t('securitySettings.tabs.password', 'Password')}
-            </TabsTrigger>
-            <TabsTrigger value="session">
-              {t('securitySettings.tabs.session', 'Session')}
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={tab} onValueChange={(value) => setSearchParams({ tab: value })}>
+
 
           <TabsContent value="authentication" className="space-y-4">
             <SettingGroup

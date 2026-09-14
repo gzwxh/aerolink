@@ -23,6 +23,7 @@ type bootstrapAuthOptions struct {
 	LoginPrompt         string   `json:"loginPrompt"`
 	MFAEnabled          bool     `json:"mfaEnabled"`
 	PasskeyLoginEnabled bool     `json:"passkeyLoginEnabled"`
+	LoginCaptchaEnabled bool     `json:"loginCaptchaEnabled"`
 }
 
 type bootstrapCapabilities struct {
@@ -125,6 +126,11 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 	credentialProviders = uniqueStrings(credentialProviders)
 	providers := append(append([]string{}, credentialProviders...), oauthProviders...)
 
+	loginCaptchaEnabled := false
+	if securitySetting, err := model.GetSecuritySetting(); err == nil && securitySetting != nil {
+		loginCaptchaEnabled = securitySetting.LoginCaptchaEnabled
+	}
+
 	return bootstrapAuthOptions{
 		Providers:           providers,
 		CredentialProviders: credentialProviders,
@@ -132,6 +138,7 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 		LoginPrompt:         loginPrompt,
 		MFAEnabled:          setting == nil || setting.EnableMFA,
 		PasskeyLoginEnabled: !ldapEnabled && setting != nil && setting.EnablePasskeyLogin,
+		LoginCaptchaEnabled: loginCaptchaEnabled,
 	}
 }
 

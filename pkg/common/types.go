@@ -35,6 +35,10 @@ type PasswordLoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 	MFACode  string `json:"mfa_code"`
+	// CaptchaToken / CaptchaCode carry the login captcha when the security
+	// policy enables it.
+	CaptchaToken string `json:"captcha_token"`
+	CaptchaCode  string `json:"captcha_code"`
 }
 
 type ImportClustersRequest struct {

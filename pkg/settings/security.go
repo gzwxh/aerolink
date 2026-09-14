@@ -44,5 +44,8 @@ func HandleUpdateSecuritySetting(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to update security setting: %v", err)})
 		return
 	}
+	// Session limits are cached for a few seconds; drop the cache so the new
+	// policy applies to the next request.
+	auth.ResetSessionPolicyCache()
 	c.JSON(http.StatusOK, updated)
 }

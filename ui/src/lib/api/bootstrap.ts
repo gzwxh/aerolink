@@ -20,6 +20,7 @@ export interface AuthProviderCatalog {
   loginPrompt: string
   mfaEnabled: boolean
   passkeyLoginEnabled: boolean
+  loginCaptchaEnabled: boolean
 }
 
 export interface BootstrapResponse {

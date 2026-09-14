@@ -7,6 +7,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 
 import { ResourceHistory } from '@/types/api'
 import { useAuditLogs, useClusterList, useUserList } from '@/lib/api'
@@ -28,10 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { ResourceTableView } from '@/components/resource-table-view'
 import { YamlDiffViewer } from '@/components/yaml-diff-viewer'
 
-export function AuditLog() {
+import { LoginLog } from './login-log'
+import { PasswordChangeLog } from './password-change-log'
+
+export function OperationLog() {
   const { t } = useTranslation()
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -119,6 +124,12 @@ export function AuditLog() {
           return t('common.actions.delete')
         case 'apply':
           return t('common.actions.apply')
+        case 'view-file':
+          return t('audit.operations.viewFile', '查看文件')
+        case 'download-file':
+          return t('audit.operations.downloadFile', '下载文件')
+        case 'upload-file':
+          return t('audit.operations.uploadFile', '上传文件')
         default:
           return operationType
       }
@@ -457,5 +468,33 @@ export function AuditLog() {
         </DialogContent>
       </Dialog>
     </Card>
+  )
+}
+
+/**
+ * 日志审计容器：/settings/audit?tab=login | ?tab=operation | ?tab=password
+ * 子导航在左侧侧边栏的「日志审计」下，内容区只渲染当前页签。
+ */
+export function AuditLog() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const tab =
+    tabParam === 'operation' || tabParam === 'password' ? tabParam : 'login'
+
+  return (
+    <Tabs
+      value={tab}
+      onValueChange={(value) => setSearchParams({ tab: value })}
+    >
+      <TabsContent value="login">
+        <LoginLog />
+      </TabsContent>
+      <TabsContent value="operation">
+        <OperationLog />
+      </TabsContent>
+      <TabsContent value="password">
+        <PasswordChangeLog />
+      </TabsContent>
+    </Tabs>
   )
 }

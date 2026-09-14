@@ -252,6 +252,19 @@ export function translateError(error: Error | unknown, t: TFunction): string {
     })
   }
 
+  // Backend password policy failures carry a machine readable code (plus
+  // parameters such as the minimum length) so they can be localized.
+  const policyError = error as {
+    code?: string
+    params?: Record<string, unknown>
+  }
+  if (policyError.code?.startsWith('password_')) {
+    return t(`passwordPolicy.errors.${policyError.code}`, {
+      ...policyError.params,
+      defaultValue: error.message,
+    })
+  }
+
   const crdMatch = CRD_NOT_INSTALLED_RE.exec(error.message)
   if (crdMatch) {
     return t('errors.crdNotInstalled', {

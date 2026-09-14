@@ -90,7 +90,7 @@ function AppContent() {
         <AIChatbox />
       </ErrorBoundary>
       <MFAPromptDialog />
-      <Toaster />
+      <Toaster position="top-right" richColors closeButton />
     </>
   )
 }

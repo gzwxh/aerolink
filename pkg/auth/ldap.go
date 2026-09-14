@@ -87,9 +87,16 @@ func (a *LDAPAuthenticator) Authenticate(setting *model.LDAPSetting, username, p
 		displayName = canonicalUsername
 	}
 
+	// 目录里的 mail 属性直接作为通知收件邮箱。
+	email := strings.TrimSpace(entry.GetAttributeValue("mail"))
+	if email == "" {
+		email = strings.TrimSpace(entry.GetAttributeValue("email"))
+	}
+
 	return &model.User{
 		Username:   canonicalUsername,
 		Name:       displayName,
+		Email:      email,
 		Provider:   model.AuthProviderLDAP,
 		Password:   "",
 		OIDCGroups: groups,

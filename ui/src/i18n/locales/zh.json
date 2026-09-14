@@ -228,6 +228,10 @@
       "volume": "卷",
       "volumeMounts": "卷挂载",
       "volumes": "卷",
+      "ip": "IP 地址",
+      "userAgent": "客户端",
+      "loginLogs": "登录日志",
+      "passwordChangeLogs": "改密日志",
       "yamlConfiguration": "YAML 配置",
       "yamlContent": "YAML 内容",
       "yamlDiff": "YAML Diff"
@@ -239,6 +243,8 @@
       "applying": "应用中...",
       "assigned": "已分配",
       "auditLogsDescription": "追踪资源变更操作并查看 YAML 差异",
+      "loginLogsDescription": "查看每一次成功登录及其来源 IP",
+      "passwordChangeLogsDescription": "查看密码修改人与修改时间",
       "confirmRemoveOwnRole": "你正在移除自己的角色分配，这可能会影响你的权限。确定继续吗？",
       "copied": "已复制到剪贴板",
       "createApiKeyDescription": "创建新的 API 密钥用于程序化访问。",
@@ -325,6 +331,8 @@
       "allOperations": "所有操作",
       "allRoles": "所有角色",
       "allUsers": "所有用户",
+      "passwordChangeSelf": "本人修改",
+      "passwordChangeAdmin": "管理员重置",
       "all": "全部",
       "selectedCount": "已选择 {{count}} 个",
       "emptyTemplate": "空模板",
@@ -342,6 +350,7 @@
       "issuer": "https://provider.com（自动发现）",
       "scopes": "openid,profile,email",
       "searchResourceName": "搜索资源名称...",
+      "searchUsernameOrIP": "搜索用户名或 IP...",
       "searchUsers": "搜索用户...",
       "searchGroups": "搜索用户组...",
       "selectTemplate": "选择模板",
@@ -774,6 +783,9 @@
     "signIn": "登录",
     "enterUsername": "请输入用户名",
     "enterPassword": "请输入密码",
+    "captchaLabel": "验证码",
+    "captchaPlaceholder": "请输入 4 位验证码",
+    "refreshCaptcha": "刷新验证码",
     "signingIn": "登录中...",
     "signInWithPassword": "密码登录",
     "signInWithLdap": "LDAP 登录",
@@ -815,6 +827,8 @@
       "contactSupport": "请重试，如问题持续请联系管理员。",
       "invalidCredentials": "用户名或密码错误",
       "invalidMfaCode": "MFA 验证码错误",
+      "invalid_captcha": "验证码错误，请重新输入",
+      "captcha_required": "请输入验证码",
       "unknownError": "未知错误",
       "userDisabled": "账号已禁用",
       "userDisabledMessage": "你的账号已被禁用，请联系管理员。",
@@ -1306,7 +1320,57 @@
       "update": "更新",
       "delete": "删除",
       "log": "查看日志",
-      "exec": "执行"
+      "exec": "执行",
+      "view-file": "容器文件浏览",
+      "download-file": "容器文件下载",
+      "upload-file": "容器文件上传"
+    },
+    "verbs": {
+      "viewFile": "容器文件浏览",
+      "downloadFile": "容器文件下载",
+      "uploadFile": "容器文件上传"
+    }
+  },
+  "notifications": {
+    "tabs": {
+      "email": "邮件设置",
+      "templates": "消息模板",
+      "subscriptions": "消息订阅"
+    },
+    "channels": {
+      "inapp": "站内信",
+      "email": "邮件"
+    },
+    "receiverTypes": {
+      "user": "用户",
+      "email": "邮箱地址"
+    },
+    "events": {
+      "remote_login": "异地登录提醒",
+      "password_expiring": "密码即将过期提醒",
+      "password_expired": "密码已过期提醒",
+      "inactive_user_disabled": "不活跃账号禁用提醒",
+      "test": "测试邮件"
+    },
+    "inbox": {
+      "title": "通知",
+      "empty": "暂无通知",
+      "markAllRead": "全部已读",
+      "unread": "未读"
+    },
+    "actions": {
+      "save": "保存",
+      "saving": "保存中...",
+      "add": "添加",
+      "delete": "删除",
+      "sendTest": "发送测试邮件",
+      "sending": "发送中..."
+    },
+    "messages": {
+      "saved": "已保存",
+      "saveFailed": "保存失败",
+      "testSent": "测试邮件已发送",
+      "testFailed": "测试邮件发送失败"
     }
   },
   "settings": {
@@ -1317,12 +1381,21 @@
       "general": "通用",
       "oauth": "认证",
       "rbac": "RBAC",
+      "user": "用户与用户组",
       "users": "用户",
       "group": "用户组",
       "apikeys": "API 密钥",
       "templates": "模板",
-      "audit": "审计",
-      "security": "安全设置"
+      "audit": "日志审计",
+      "security": "安全设置",
+      "notification": "通知设置"
+    },
+    "subTabs": {
+      "rbacRoles": "角色管理",
+      "rbacUsers": "用户",
+      "rbacGroups": "用户组",
+      "rbacNamespaces": "命名空间授权",
+      "rbacNodes": "节点权限"
     }
   },
   "generalManagement": {
@@ -2181,6 +2254,17 @@
     "copied": "已复制",
     "copy": "复制"
   },
+  "passwordPolicy": {
+    "errors": {
+      "password_too_short": "密码长度不足，至少需要 {{min}} 位",
+      "password_too_long": "密码长度超出限制，最多 {{max}} 位",
+      "password_missing_uppercase": "密码必须包含大写字母",
+      "password_missing_lowercase": "密码必须包含小写字母",
+      "password_missing_digit": "密码必须包含数字",
+      "password_missing_special": "密码必须包含特殊字符",
+      "password_reused": "密码不能与前 {{count}} 次使用过的密码重复"
+    }
+  },
   "mfaPrompt": {
     "title": "需要 MFA 二次校验",
     "description": "该操作为高危敏感操作，请输入身份验证器中的动态码后继续。",
@@ -2289,6 +2373,97 @@
     },
     "messages": {
       "updated": "安全设置已更新"
+    }
+  },
+  "accountSettings": {
+    "title": "账号设置",
+    "profile": {
+      "nickname": "昵称",
+      "saveButton": "保存",
+      "saved": "已保存",
+      "error": "保存失败"
+    },
+    "password": {
+      "currentPassword": "当前密码",
+      "newPassword": "新密码",
+      "confirmNewPassword": "确认新密码",
+      "changeButton": "修改密码",
+      "changed": "密码已修改",
+      "mismatch": "两次输入的密码不一致",
+      "error": "修改失败"
+    },
+    "security": {
+      "confirmPassword": {
+        "title": "确认密码",
+        "description": "输入当前密码以确认身份"
+      },
+      "mfa": {
+        "authCode": "认证码",
+        "setupButton": "绑定 MFA",
+        "setupError": "绑定失败",
+        "enableButton": "启用 MFA",
+        "enabled": "已启用",
+        "enableError": "启用失败",
+        "disableButton": "停用 MFA",
+        "disabled": "已停用",
+        "disableError": "停用失败",
+        "qrCodeAlt": "MFA 二维码",
+        "otpauthUrl": "otpauth 链接"
+      },
+      "passkeys": {
+        "title": "Passkeys",
+        "addButton": "添加 Passkey",
+        "added": "Passkey 已添加",
+        "addedOn": "添加于",
+        "addError": "添加失败",
+        "deleteAriaLabel": "删除 Passkey",
+        "deleted": "Passkey 已删除",
+        "deleteError": "删除失败",
+        "empty": "暂无 Passkey",
+        "lastUsed": "最近使用",
+        "loadError": "加载失败",
+        "namePlaceholder": "Passkey 名称"
+      }
+    },
+    "mfa": "MFA",
+    "authenticationCode": "认证码",
+    "enabled": "已启用",
+    "disableMfa": "停用 MFA",
+    "enableMfa": "启用 MFA",
+    "passkeys": "Passkeys",
+    "addPasskey": "添加 Passkey",
+    "passkeyName": "Passkey 名称",
+    "noPasskeys": "暂无 Passkey",
+    "tabs": {
+      "profile": "个人资料",
+      "password": "修改密码",
+      "security": "安全"
+    }
+  },
+  "userMenu": {
+    "accountSettings": "账号设置",
+    "colorTheme": "主题",
+    "font": "字体",
+    "displayScale": "显示缩放",
+    "logout": "退出登录",
+    "via": "通过",
+    "role": "角色",
+    "fonts": {
+      "system": "系统",
+      "maple": "Maple",
+      "jetbrains": "JetBrains Mono"
+    }
+  },
+  "audit": {
+    "operations": {
+      "viewFile": "查看文件",
+      "downloadFile": "下载文件",
+      "uploadFile": "上传文件"
+    },
+    "tabs": {
+      "login": "登录日志",
+      "operation": "操作日志",
+      "password": "改密日志"
     }
   }
 }

@@ -1,14 +1,22 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useState } from 'react'
 import Logo from '@/assets/icon.svg'
 import { useAuth } from '@/contexts/auth-context'
-import { IconEye, IconEyeOff, IconLock, IconUser } from '@tabler/icons-react'
+import {
+  IconEye,
+  IconEyeOff,
+  IconLock,
+  IconRefresh,
+  IconUser,
+} from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useSearchParams } from 'react-router-dom'
 
 import {
   beginPasskeyLogin,
+  fetchLoginCaptcha,
   finishPasskeyLogin,
   type CredentialProvider,
+  type LoginCaptchaChallenge,
 } from '@/lib/api'
 import { withSubPath } from '@/lib/subpath'
 import { getPasskeyCredential } from '@/lib/webauthn'
@@ -39,6 +47,7 @@ export function LoginPage() {
     oauthProviders,
     loginPrompt,
     passkeyLoginEnabled,
+    loginCaptchaEnabled,
     isLoading,
   } = useAuth()
   const [searchParams] = useSearchParams()
@@ -48,6 +57,9 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [mfaCode, setMfaCode] = useState('')
   const [mfaRequired, setMfaRequired] = useState(false)
+  const [captcha, setCaptcha] = useState<LoginCaptchaChallenge | null>(null)
+  const [captchaCode, setCaptchaCode] = useState('')
+  const [captchaLoading, setCaptchaLoading] = useState(false)
   const [credentialError, setCredentialError] = useState<string | null>(null)
   // LDAP is the primary credential method when enabled; the effect below falls
   // back to the first available provider when it is not.
@@ -77,7 +89,22 @@ export function LoginPage() {
     .map((line) => line.trim())
     .filter(Boolean)
   const credentialSubmitDisabled =
-    loginLoading !== null || (mfaRequired && mfaCode.length !== 6)
+    loginLoading !== null ||
+    (mfaRequired && mfaCode.length !== 6) ||
+    (loginCaptchaEnabled && captchaCode.length !== 4)
+
+  const refreshCaptcha = useCallback(async () => {
+    setCaptchaLoading(true)
+    try {
+      setCaptcha(await fetchLoginCaptcha())
+      setCaptchaCode('')
+    } catch (err) {
+      console.error('Failed to load captcha:', err)
+      setCaptcha(null)
+    } finally {
+      setCaptchaLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (
@@ -87,6 +114,16 @@ export function LoginPage() {
       setCredentialsProvider(credentialProviders[0])
     }
   }, [credentialProviders, credentialsProvider])
+
+  // The challenge is only requested when the security policy asks for it.
+  useEffect(() => {
+    if (!loginCaptchaEnabled) {
+      setCaptcha(null)
+      setCaptchaCode('')
+      return
+    }
+    void refreshCaptcha()
+  }, [loginCaptchaEnabled, refreshCaptcha])
 
   if (user && !isLoading) {
     const storedHref = sessionStorage.getItem('loginRedirectHref')
@@ -120,7 +157,10 @@ export function LoginPage() {
         credentialsProvider,
         username,
         password,
-        mfaRequired ? mfaCode : undefined
+        mfaRequired ? mfaCode : undefined,
+        loginCaptchaEnabled && captcha
+          ? { idKey: captcha.idKey, code: captchaCode }
+          : undefined
       )
     } catch (err) {
       if (err instanceof Error) {
@@ -135,6 +175,23 @@ export function LoginPage() {
           setCredentialError(
             t('login.errors.invalidMfaCode', 'Invalid MFA code')
           )
+          return
+        }
+
+        // A stale or mistyped code is replaced by a fresh challenge.
+        if (
+          err.message === 'invalid_captcha' ||
+          err.message === 'captcha_required'
+        ) {
+          setCredentialError(
+            t(
+              `login.errors.${err.message}`,
+              err.message === 'captcha_required'
+                ? 'Please enter the verification code'
+                : 'Incorrect verification code'
+            )
+          )
+          void refreshCaptcha()
           return
         }
         setCredentialError(
@@ -428,6 +485,60 @@ export function LoginPage() {
                             </button>
                           </div>
                         </div>
+                        {loginCaptchaEnabled && (
+                          <div className="space-y-2">
+                            <Label htmlFor="captchaCode">
+                              {t('login.captchaLabel', 'Verification code')}
+                            </Label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                id="captchaCode"
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                maxLength={4}
+                                placeholder={t(
+                                  'login.captchaPlaceholder',
+                                  'Enter the 4-digit code'
+                                )}
+                                value={captchaCode}
+                                onChange={(e) =>
+                                  setCaptchaCode(
+                                    e.target.value.replace(/\D/g, '').slice(0, 4)
+                                  )
+                                }
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void refreshCaptcha()}
+                                aria-label={t(
+                                  'login.refreshCaptcha',
+                                  'Refresh code'
+                                )}
+                                title={t('login.refreshCaptcha', 'Refresh code')}
+                                className="flex h-[44px] w-[120px] shrink-0 items-center justify-center overflow-hidden rounded-md border bg-white"
+                              >
+                                {captcha ? (
+                                  <img
+                                    src={captcha.image}
+                                    alt={t(
+                                      'login.captchaLabel',
+                                      'Verification code'
+                                    )}
+                                    className="h-[44px] w-[120px]"
+                                  />
+                                ) : (
+                                  <IconRefresh
+                                    className={`h-4 w-4 text-muted-foreground ${
+                                      captchaLoading ? 'animate-spin' : ''
+                                    }`}
+                                  />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         {mfaRequired && (
                           <div className="space-y-2">
                             <Label htmlFor="mfaCode">MFA Code</Label>

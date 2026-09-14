@@ -44,11 +44,30 @@ export const initiateOAuthLogin = async (
   )
 }
 
+export interface LoginCaptchaChallenge {
+  /** Signed id of the challenge, sent back together with the answer. */
+  idKey: string
+  /** PNG data URL rendered by the server. */
+  image: string
+}
+
+export const fetchLoginCaptcha = async (): Promise<LoginCaptchaChallenge> => {
+  return authApiClient.get<LoginCaptchaChallenge>('/auth/captcha', {
+    retryOnUnauthorized: false,
+  })
+}
+
+export interface LoginCaptchaAnswer {
+  idKey: string
+  code: string
+}
+
 export const loginWithCredentials = async (
   provider: CredentialProvider,
   username: string,
   password: string,
-  mfaCode?: string
+  mfaCode?: string,
+  captcha?: LoginCaptchaAnswer
 ): Promise<void> => {
   await authApiClient.post<void>(
     `/auth/login/${provider}`,
@@ -56,6 +75,9 @@ export const loginWithCredentials = async (
       username,
       password,
       ...(mfaCode ? { mfa_code: mfaCode } : {}),
+      ...(captcha
+        ? { captcha_token: captcha.idKey, captcha_code: captcha.code }
+        : {}),
     },
     { retryOnUnauthorized: false }
   )

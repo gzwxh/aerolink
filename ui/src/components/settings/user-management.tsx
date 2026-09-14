@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import * as Avatar from '@radix-ui/react-avatar'
 import {
   IconEdit,
@@ -10,7 +11,7 @@ import {
   IconTrash,
   IconUser,
 } from '@tabler/icons-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ColumnDef,
   getCoreRowModel,
@@ -31,6 +32,9 @@ import {
   useRoleList,
   useUserList,
 } from '@/lib/api'
+import { Switch } from '@/components/ui/switch'
+import { fetchSecuritySetting } from '@/lib/api'
+import { fetchAPI } from '@/lib/api/shared'
 import { formatDate } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -81,6 +85,7 @@ function isDeletableUser(user?: UserItem | null): boolean {
 export function UserManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 20,
@@ -89,6 +94,32 @@ export function UserManagement() {
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const { data: roles = [] } = useRoleList()
+  // 创建用户表单所需的可选用户组与全局 MFA 策略。
+  const { data: knownGroups = [] } = useQuery({
+    queryKey: ['known-groups'],
+    queryFn: async () => {
+      const result = await fetchAPI<unknown>('/admin/groups')
+      const list = Array.isArray(result)
+        ? result
+        : ((result as { groups?: unknown[] }).groups ?? [])
+      return list
+        .map((item) =>
+          typeof item === 'string'
+            ? item
+            : ((item as { name?: string }).name ?? '')
+        )
+        .filter(Boolean)
+    },
+    staleTime: 60000,
+  })
+  const { data: createSecuritySetting } = useQuery({
+    queryKey: ['security-setting'],
+    queryFn: fetchSecuritySetting,
+    staleTime: 60000,
+  })
+  const securityMfaPolicy =
+    (createSecuritySetting as { mfaPolicy?: string } | undefined)?.mfaPolicy ??
+    'disabled'
 
   const sortParams = useMemo(() => {
     if (sorting.length === 0) {
@@ -110,16 +141,52 @@ export function UserManagement() {
     roleFilter
   )
 
+  const [togglingUserId, setTogglingUserId] = useState<number | null>(null)
+
+  // 列表「状态」列可直接启用/禁用。
+  const handleToggleStatus = useCallback(
+    async (user: UserItem) => {
+      setTogglingUserId(user.id)
+      try {
+        await setUserEnabled(user.id, !user.enabled)
+        await queryClient.invalidateQueries({ queryKey: ['user-list'] })
+        toast.success(
+          user.enabled
+            ? t('common.messages.disabled', '已禁用')
+            : t('common.messages.enabled', '已启用')
+        )
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t('common.messages.operationFailed', '操作失败')
+        )
+      } finally {
+        setTogglingUserId(null)
+      }
+    },
+    [queryClient, t]
+  )
+
   const getStatusBadge = useCallback(
     (user: UserItem) => {
-      if (!user.enabled) {
-        return (
-          <Badge variant="secondary">{t('status.disabled', 'Disabled')}</Badge>
-        )
-      }
-      return <Badge variant="default">{t('status.enabled', 'Enabled')}</Badge>
+      return (
+        <button
+          type="button"
+          disabled={togglingUserId === user.id}
+          onClick={() => void handleToggleStatus(user)}
+          title={t('common.fields.status', 'Status')}
+          className="cursor-pointer disabled:cursor-wait disabled:opacity-60"
+        >
+          {user.enabled ? (
+            <Badge variant="default">{t('status.enabled', 'Enabled')}</Badge>
+          ) : (
+            <Badge variant="secondary">{t('status.disabled', 'Disabled')}</Badge>
+          )}
+        </button>
+      )
     },
-    [t]
+    [handleToggleStatus, t, togglingUserId]
   )
 
   const handleToggleEnable = useCallback(
@@ -396,7 +463,30 @@ export function UserManagement() {
     username: '',
     name: '',
     password: '',
+    email: '',
+    phone: '',
+    wechat: '',
+    remark: '',
+    // 激活状态：默认按「安全设置 → 新建用户默认状态」由后端决定，这里显式传开关值。
+    enabled: true,
+    // 失效日期（ISO 字符串，空表示不过期）。
+    expiresAt: '',
+    // 本地用户组（创建时一并加入）。
+    groups: [] as string[],
+    // 系统角色（创建后立即分配）。
+    roles: [] as string[],
   })
+
+  // 生成一个满足复杂度要求（大小写+数字+符号）的随机密码。
+  const randomPassword = () => {
+    const charset =
+      'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*'
+    const values = new Uint32Array(16)
+    crypto.getRandomValues(values)
+    return Array.from(values, (value) => charset[value % charset.length]).join(
+      ''
+    )
+  }
   const [showResetDialog, setShowResetDialog] = useState<UserItem | null>(null)
   const [resetPasswordValue, setResetPasswordValue] = useState('')
 
@@ -424,8 +514,19 @@ export function UserManagement() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: { username: string; name?: string; password: string }) =>
-      createPasswordUser(data),
+    mutationFn: (data: {
+      username: string
+      name?: string
+      password: string
+      email?: string
+      phone?: string
+      wechat?: string
+      remark?: string
+      enabled?: boolean
+      expiresAt?: string
+      groups?: string[]
+      roles?: string[]
+    }) => createPasswordUser(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-list'] })
       toast.success(
@@ -617,7 +718,7 @@ export function UserManagement() {
                   className="pl-9 w-64"
                 />
               </div>
-              <Button onClick={() => setShowAddDialog(true)} className="gap-2">
+              <Button onClick={() => navigate('/settings/users/create')} className="gap-2">
                 <IconPlus className="h-4 w-4" />
                 {t('common.actions.add', 'Add')}{' '}
                 {t('common.fields.passwordUser', 'Password User')}
@@ -753,6 +854,9 @@ export function UserManagement() {
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('createUser.sections.account', '账户')}
+            </div>
             <div>
               <label className="block text-sm">
                 {t('common.fields.username', 'Username')}
@@ -775,17 +879,213 @@ export function UserManagement() {
                 }
               />
             </div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('createUser.sections.authentication', '认证')}
+            </div>
             <div>
-              <label className="block text-sm">
-                {t('common.fields.password', 'Password')}
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-sm">
+                  {t('common.fields.password', 'Password')}
+                </label>
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() =>
+                    setNewUser({ ...newUser, password: randomPassword() })
+                  }
+                >
+                  {t('createUser.randomPassword', '随机生成')}
+                </button>
+              </div>
               <Input
-                type="password"
+                type="text"
                 value={newUser.password}
                 onChange={(e) =>
                   setNewUser({ ...newUser, password: e.target.value })
                 }
               />
+            </div>
+            <div>
+              <label className="block text-sm">
+                {t('createUser.fields.mfaLevel', 'MFA 级别')}
+              </label>
+              <Input
+                value={t(
+                  `createUser.mfaLevels.${securityMfaPolicy}`,
+                  securityMfaPolicy === 'required'
+                    ? '强制'
+                    : securityMfaPolicy === 'optional'
+                      ? '启用（可选）'
+                      : '禁用'
+                )}
+                disabled
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t(
+                  'createUser.mfaLevelHint',
+                  '由「安全设置 → 认证策略」统一控制，用户首次登录时按策略引导绑定'
+                )}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm">
+                {t('userManagement.fields.groups', '用户组')}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {knownGroups.length === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {t('createUser.noGroups', '暂无可选用户组')}
+                  </span>
+                )}
+                {knownGroups.map((group) => {
+                  const selected = newUser.groups.includes(group)
+                  return (
+                    <button
+                      key={group}
+                      type="button"
+                      onClick={() =>
+                        setNewUser({
+                          ...newUser,
+                          groups: selected
+                            ? newUser.groups.filter((item) => item !== group)
+                            : [...newUser.groups, group],
+                        })
+                      }
+                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                        selected
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {group}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm">
+                {t('common.fields.email', 'Email')}
+              </label>
+              <Input
+                type="email"
+                value={newUser.email}
+                placeholder="user@example.com"
+                onChange={(e) =>
+                  setNewUser({ ...newUser, email: e.target.value })
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm">
+                  {t('common.fields.phone', 'Phone')}
+                </label>
+                <Input
+                  value={newUser.phone}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, phone: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm">
+                  {t('common.fields.wechat', 'WeChat')}
+                </label>
+                <Input
+                  value={newUser.wechat}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, wechat: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm">
+                {t('common.fields.remark', 'Remark')}
+              </label>
+              <Input
+                value={newUser.remark}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, remark: e.target.value })
+                }
+              />
+            </div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('createUser.sections.security', '安全')}
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm">
+                {t('common.fields.enabled', 'Active')}
+              </label>
+              <Switch
+                checked={newUser.enabled}
+                onCheckedChange={(checked) =>
+                  setNewUser({ ...newUser, enabled: checked })
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-sm">
+                {t('createUser.fields.expiresAt', '失效日期')}
+              </label>
+              <Input
+                type="date"
+                value={newUser.expiresAt ? newUser.expiresAt.slice(0, 10) : ''}
+                onChange={(e) =>
+                  setNewUser({
+                    ...newUser,
+                    expiresAt: e.target.value
+                      ? new Date(`${e.target.value}T23:59:59`).toISOString()
+                      : '',
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-sm">
+                {t('common.fields.roles', '系统角色')}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {roles.length === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {t('createUser.noRoles', '暂无可选角色')}
+                  </span>
+                )}
+                {roles.map((role) => {
+                  const selected = newUser.roles.includes(role.name)
+                  return (
+                    <button
+                      key={role.name}
+                      type="button"
+                      onClick={() =>
+                        setNewUser({
+                          ...newUser,
+                          roles: selected
+                            ? newUser.roles.filter((item) => item !== role.name)
+                            : [...newUser.roles, role.name],
+                        })
+                      }
+                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                        selected
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {role.name}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t(
+                  'createUser.securityHint',
+                  '用户组与系统角色可在这里直接设置，也可在创建后通过列表的「分配」操作调整。'
+                )}
+              </p>
+            </div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('createUser.sections.other', '其它')}
             </div>
             <DialogFooter>
               <Button type="submit">
@@ -828,6 +1128,62 @@ export function UserManagement() {
                 value={resetPasswordValue}
                 onChange={(e) => setResetPasswordValue(e.target.value)}
               />
+              {(() => {
+                const value = resetPasswordValue
+                const checks = [
+                  {
+                    label: t('passwordPolicy.length', '长度至少 12 位'),
+                    ok: value.length >= 12,
+                  },
+                  {
+                    label: t('passwordPolicy.lowercase', '包含小写字母'),
+                    ok: /[a-z]/.test(value),
+                  },
+                  {
+                    label: t('passwordPolicy.uppercase', '包含大写字母'),
+                    ok: /[A-Z]/.test(value),
+                  },
+                  {
+                    label: t('passwordPolicy.number', '包含数字'),
+                    ok: /\d/.test(value),
+                  },
+                  {
+                    label: t('passwordPolicy.special', '包含特殊字符'),
+                    ok: /[^A-Za-z0-9]/.test(value),
+                  },
+                ]
+                const passed = checks.filter((c) => c.ok).length
+                return (
+                  <div className="mt-2 space-y-1">
+                    <div className="flex gap-1">
+                      {checks.map((check) => (
+                        <div
+                          key={check.label}
+                          className={`h-1 flex-1 rounded-full ${
+                            check.ok ? 'bg-green-500' : 'bg-muted'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <ul className="space-y-0.5 text-xs">
+                      {checks.map((check) => (
+                        <li
+                          key={check.label}
+                          className={
+                            check.ok ? 'text-green-600' : 'text-muted-foreground'
+                          }
+                        >
+                          {check.ok ? '✓' : '○'} {check.label}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-muted-foreground">
+                      {t('passwordPolicy.strength', '强度')}：{passed}/
+                      {checks.length}
+                    </p>
+                  </div>
+                )
+              })()}
             </div>
             <DialogFooter>
               <Button type="submit">{t('common.actions.save', 'Save')}</Button>

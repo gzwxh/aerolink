@@ -97,6 +97,7 @@ func InitDB() {
 		GeneralSetting{},
 		SecuritySetting{},
 		PasswordHistory{},
+		PasswordChangeLog{},
 		LDAPSetting{},
 		OAuthProvider{},
 		Role{},
@@ -108,6 +109,11 @@ func InitDB() {
 		PendingSession{},
 		HelmRepository{},
 		ScheduledTask{},
+		NotificationSetting{},
+		NotificationTemplate{},
+		NotificationSubscription{},
+		Notification{},
+		LoginRecord{},
 	}
 	for _, model := range models {
 		err = DB.AutoMigrate(model)

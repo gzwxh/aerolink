@@ -15,6 +15,7 @@ import (
 	"github.com/zxh326/kite/pkg/images"
 	"github.com/zxh326/kite/pkg/metrics"
 	"github.com/zxh326/kite/pkg/middleware"
+	"github.com/zxh326/kite/pkg/notification"
 	"github.com/zxh326/kite/pkg/proxy"
 	"github.com/zxh326/kite/pkg/rbac"
 	"github.com/zxh326/kite/pkg/resources"
@@ -58,6 +59,7 @@ func registerAuthRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler) {
 	authGroup := r.Group("/api/auth")
 	authGroup.POST("/setup/create_super_user", authHandler.CreateSuperUser)
 	authGroup.POST("/login/password", authHandler.PasswordLogin)
+	authGroup.GET("/captcha", authHandler.Captcha)
 	authGroup.POST("/login/ldap", authHandler.LDAPLogin)
 	authGroup.POST("/passkey/login/begin", authHandler.PasskeyLoginBegin)
 	authGroup.POST("/passkey/login/finish", authHandler.PasskeyLoginFinish)
@@ -94,6 +96,8 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	adminAPI.DELETE("/groups/:name", rbac.DeleteGroup)
 
 	adminAPI.GET("/audit-logs", audit.ListAuditLogs)
+	adminAPI.GET("/login-logs", audit.ListLoginLogs)
+	adminAPI.GET("/password-change-logs", audit.ListPasswordChangeLogs)
 
 	oauthProviderAPI := adminAPI.Group("/oauth-providers")
 	oauthProviderAPI.GET("/", authHandler.ListOAuthProviders)
@@ -152,6 +156,23 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	securitySettingAPI.PUT("/", settings.HandleUpdateSecuritySetting)
 	securitySettingAPI.GET("/locked-ips", settings.HandleGetLockedLoginIPs)
 
+	notificationSettingAPI := adminAPI.Group("/notification-setting")
+	notificationSettingAPI.GET("/", notification.HandleGetNotificationSetting)
+	notificationSettingAPI.PUT("/", notification.HandleUpdateNotificationSetting)
+	notificationSettingAPI.POST("/test-mail", notification.HandleSendTestNotification)
+	notificationSettingAPI.POST("/run-daily-checks", notification.HandleRunDailyChecks)
+	notificationSettingAPI.GET("/disabled-users", notification.HandleListAutoDisabledUsers)
+
+	notificationTemplateAPI := adminAPI.Group("/notification-templates")
+	notificationTemplateAPI.GET("/", notification.HandleListNotificationTemplates)
+	notificationTemplateAPI.PUT("/:event", notification.HandleUpdateNotificationTemplate)
+
+	notificationSubscriptionAPI := adminAPI.Group("/notification-subscriptions")
+	notificationSubscriptionAPI.GET("/", notification.HandleListNotificationSubscriptions)
+	notificationSubscriptionAPI.POST("/", notification.HandleCreateNotificationSubscription)
+	notificationSubscriptionAPI.PUT("/:id", notification.HandleUpdateNotificationSubscription)
+	notificationSubscriptionAPI.DELETE("/:id", notification.HandleDeleteNotificationSubscription)
+
 	templateAPI := adminAPI.Group("/templates")
 	templateAPI.POST("/", templates.CreateTemplate)
 	templateAPI.PUT("/:id", templates.UpdateTemplate)
@@ -163,6 +184,9 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 func registerProtectedRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *cluster.ClusterManager, helmChartsHandler *helm.HelmChartHandler) {
 	api := r.Group("/api/v1")
 	api.GET("/clusters", authHandler.RequireAuth(), cm.GetClusters)
+	api.GET("/notifications", authHandler.RequireAuth(), notification.HandleListNotifications)
+	api.GET("/notifications/unread-count", authHandler.RequireAuth(), notification.HandleNotificationUnreadCount)
+	api.POST("/notifications/read", authHandler.RequireAuth(), notification.HandleMarkNotificationsRead)
 	defaultAPI := api.Group("")
 	defaultAPI.Use(authHandler.RequireAuth(), middleware.ClusterMiddleware(cm))
 	registerClusterProtectedRoutes(defaultAPI, helmChartsHandler)

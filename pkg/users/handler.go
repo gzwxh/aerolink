@@ -22,6 +22,8 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
+	"time"
+
 	"github.com/zxh326/kite/pkg/passkey"
 	"github.com/zxh326/kite/pkg/rbac"
 	"k8s.io/klog/v2"
@@ -36,6 +38,22 @@ type createPasswordUser struct {
 	Password string `json:"password" binding:"required"`
 	// Name 为可选的展示昵称。
 	Name string `json:"name"`
+	// Email 用于接收通知，LDAP/OIDC 用户由同步逻辑自动填充。
+	Email string `json:"email"`
+	// Phone / Wechat / Remark 为可选的联系信息。
+	Phone  string `json:"phone"`
+	Wechat string `json:"wechat"`
+	Remark string `json:"remark"`
+	// ExpiresAt 为账号失效时间，留空表示永不过期。
+	ExpiresAt *time.Time `json:"expiresAt"`
+	// Enabled 为激活状态，缺省（nil）时按激活处理。
+	Enabled *bool `json:"enabled"`
+	// Groups 为本地（Kite）用户组名列表，创建时一并建立成员关系。
+	Groups []string `json:"groups"`
+	// Roles 为系统角色名列表，创建后立即分配。
+	Roles []string `json:"roles"`
+	// MFADisabled 为「MFA 级别：禁用」，true 表示该账号不受全局 MFA 策略强制。
+	MFADisabled *bool `json:"mfaDisabled"`
 }
 
 // CreatePasswordUser 创建一个本地（密码）用户。
@@ -56,11 +74,71 @@ func CreatePasswordUser(c *gin.Context) {
 		return
 	}
 	// check only admin or users count is zero
+	// 默认状态取自「安全设置 → 新建用户默认状态」。
+	enabled := true
+	expiresAt := userreq.ExpiresAt
+	if settings, err := model.GetSecuritySetting(); err == nil && settings != nil {
+		enabled = settings.DefaultUserEnabled
+		if expiresAt == nil && settings.DefaultUserExpireDays > 0 {
+			value := time.Now().AddDate(0, 0, settings.DefaultUserExpireDays)
+			expiresAt = &value
+		}
+	}
+	if userreq.Enabled != nil {
+		enabled = *userreq.Enabled
+	}
+
 	user := &model.User{
-		Username: userreq.Username,
-		Password: userreq.Password,
-		Name:     userreq.Name,
-		Provider: "password",
+		Username:  userreq.Username,
+		Password:  userreq.Password,
+		Name:      userreq.Name,
+		Email:     userreq.Email,
+		Phone:     userreq.Phone,
+		Wechat:    userreq.Wechat,
+		Remark:    userreq.Remark,
+		ExpiresAt: expiresAt,
+		Enabled:   enabled,
+		// 未传时默认「启用（跟随全局策略）」。
+		MFADisabled: userreq.MFADisabled != nil && *userreq.MFADisabled,
+		Provider:    "password",
+	}
+	// 本地用户的用户组直接落在 OIDCGroups 字段（与编辑弹窗保持一致）。
+	if len(userreq.Groups) > 0 {
+		user.OIDCGroups = model.SliceString(userreq.Groups)
+	}
+
+	// 分配系统角色（与「分配」操作同一套 RoleAssignment 模型）。
+	if len(userreq.Roles) > 0 {
+		assigned := false
+		for _, roleName := range userreq.Roles {
+			name := strings.TrimSpace(roleName)
+			if name == "" {
+				continue
+			}
+			var role model.Role
+			if err := model.DB.Where("name = ?", name).First(&role).Error; err != nil {
+				klog.Warningf("skip unknown role %q for user %s", name, user.Username)
+				continue
+			}
+			var existing model.RoleAssignment
+			if err := model.DB.Where("role_id = ? AND subject_type = ? AND subject = ?",
+				role.ID, model.SubjectTypeUser, user.Username).First(&existing).Error; err == nil {
+				continue
+			}
+			assignment := model.RoleAssignment{
+				RoleID:      role.ID,
+				SubjectType: model.SubjectTypeUser,
+				Subject:     user.Username,
+			}
+			if err := model.DB.Create(&assignment).Error; err != nil {
+				klog.Warningf("failed to assign role %q to %s: %v", name, user.Username, err)
+				continue
+			}
+			assigned = true
+		}
+		if assigned {
+			rbac.TriggerSync()
+		}
 	}
 
 	// 先做一次友好判重，避免依赖唯一索引报错（数据库层仍有 uniqueIndex 兜底）。
@@ -71,13 +149,23 @@ func CreatePasswordUser(c *gin.Context) {
 	}
 
 	if err := model.ValidatePassword(userreq.Password, false); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(err))
 		return
 	}
 
 	if err := model.AddUser(user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 		return
+	}
+
+	// gorm 的 `default:true` 会忽略零值 false，需要显式关闭。
+	// 注意：AddUser 会按数据库默认值回读 Enabled，这里必须用计算出的值判断。
+	if !enabled {
+		if err := model.SetUserEnabled(user.ID, false); err != nil {
+			klog.Warningf("failed to disable user %s on create: %v", user.Username, err)
+		} else {
+			user.Enabled = false
+		}
 	}
 	c.JSON(http.StatusCreated, user)
 }
@@ -246,16 +334,14 @@ func ChangeCurrentUserPassword(c *gin.Context) {
 	}
 	isAdmin := rbac.UserHasRole(user, model.DefaultAdminRole.Name)
 	if err := model.ValidatePassword(req.NewPassword, isAdmin); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(err))
 		return
 	}
 	if limit := model.PasswordHistoryLimit(); limit > 0 && model.PasswordReused(user.ID, req.NewPassword, limit) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("password cannot repeat any of the last %d passwords", limit),
-		})
+		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(model.PasswordReuseError(limit)))
 		return
 	}
-	if err := model.ResetPasswordByID(user.ID, req.NewPassword); err != nil {
+	if err := model.ResetPasswordByID(user.ID, req.NewPassword, user.ID, user.Username, model.PasswordChangeSourceSelf); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})
 		return
 	}
@@ -651,16 +737,15 @@ func ResetPassword(c *gin.Context) {
 		return
 	}
 	if err := model.ValidatePassword(req.Password, rbac.UserHasRole(*target, model.DefaultAdminRole.Name)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(err))
 		return
 	}
 	if limit := model.PasswordHistoryLimit(); limit > 0 && model.PasswordReused(target.ID, req.Password, limit) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("password cannot repeat any of the last %d passwords", limit),
-		})
+		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(model.PasswordReuseError(limit)))
 		return
 	}
-	if err := model.ResetPasswordByID(id, req.Password); err != nil {
+	operator := c.MustGet("user").(model.User)
+	if err := model.ResetPasswordByID(id, req.Password, operator.ID, operator.Username, model.PasswordChangeSourceAdmin); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password"})
 		return
 	}

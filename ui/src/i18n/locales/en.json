@@ -228,6 +228,10 @@
       "volume": "Volume",
       "volumeMounts": "Volume Mounts",
       "volumes": "Volumes",
+      "ip": "IP",
+      "userAgent": "Client",
+      "loginLogs": "Login Logs",
+      "passwordChangeLogs": "Password Change Logs",
       "yamlConfiguration": "YAML Configuration",
       "yamlContent": "YAML Content",
       "yamlDiff": "YAML Diff"
@@ -239,6 +243,8 @@
       "applying": "Applying...",
       "assigned": "Assigned",
       "auditLogsDescription": "Track who changed resources and review YAML diffs",
+      "loginLogsDescription": "Review every successful sign-in and its source IP",
+      "passwordChangeLogsDescription": "Review who changed a password and when",
       "confirmRemoveOwnRole": "You are removing your own role assignment. This may affect your permissions. Are you sure?",
       "copied": "Copied to clipboard",
       "createApiKeyDescription": "Create a new API key for programmatic access.",
@@ -325,6 +331,8 @@
       "allOperations": "All operations",
       "allRoles": "All roles",
       "allUsers": "All users",
+      "passwordChangeSelf": "Self",
+      "passwordChangeAdmin": "Admin reset",
       "all": "All",
       "selectedCount": "{{count}} selected",
       "emptyTemplate": "Empty Template",
@@ -342,6 +350,7 @@
       "issuer": "https://provider.com (auto discovery)",
       "scopes": "openid,profile,email",
       "searchResourceName": "Search resource name...",
+      "searchUsernameOrIP": "Search username or IP...",
       "searchUsers": "Search users...",
       "searchGroups": "Search groups...",
       "selectTemplate": "Select a template",
@@ -774,6 +783,9 @@
     "signIn": "Sign In",
     "enterUsername": "Enter your username",
     "enterPassword": "Enter your password",
+    "captchaLabel": "Verification code",
+    "captchaPlaceholder": "Enter the 4-digit code",
+    "refreshCaptcha": "Refresh code",
     "signingIn": "Signing in...",
     "signInWithPassword": "Sign In with Password",
     "signInWithLdap": "Sign In with LDAP",
@@ -815,6 +827,8 @@
       "contactSupport": "Please try again or contact support if the issue persists.",
       "invalidCredentials": "Invalid username or password",
       "invalidMfaCode": "Invalid MFA code",
+      "invalid_captcha": "Incorrect verification code",
+      "captcha_required": "Please enter the verification code",
       "unknownError": "An unknown error occurred",
       "userDisabled": "User Disabled",
       "userDisabledMessage": "Your user account has been disabled. Please contact your administrator for more information.",
@@ -1302,11 +1316,61 @@
       "update": "Update",
       "delete": "Delete",
       "log": "View Logs",
-      "exec": "Execute"
+      "exec": "Execute",
+      "view-file": "View pod files",
+      "download-file": "Download pod files",
+      "upload-file": "Upload pod files"
     },
     "get": "View",
     "actions": {
       "add": "Add Role"
+    },
+    "verbs": {
+      "viewFile": "View files",
+      "downloadFile": "Download files",
+      "uploadFile": "Upload files"
+    }
+  },
+  "notifications": {
+    "tabs": {
+      "email": "Mail",
+      "templates": "Templates",
+      "subscriptions": "Subscriptions"
+    },
+    "channels": {
+      "inapp": "In-app",
+      "email": "Email"
+    },
+    "receiverTypes": {
+      "user": "User",
+      "email": "Email address"
+    },
+    "events": {
+      "remote_login": "Remote login notice",
+      "password_expiring": "Password expiring soon",
+      "password_expired": "Password expired",
+      "inactive_user_disabled": "Inactive account disabled",
+      "test": "Test mail"
+    },
+    "inbox": {
+      "title": "Notifications",
+      "empty": "No notifications",
+      "markAllRead": "Mark all read",
+      "unread": "Unread"
+    },
+    "actions": {
+      "save": "Save",
+      "saving": "Saving...",
+      "add": "Add",
+      "delete": "Delete",
+      "sendTest": "Send test mail",
+      "sending": "Sending..."
+    },
+    "messages": {
+      "saved": "Saved",
+      "saveFailed": "Failed to save",
+      "testSent": "Test mail sent",
+      "testFailed": "Failed to send test mail"
     }
   },
   "settings": {
@@ -1317,12 +1381,21 @@
       "general": "General",
       "oauth": "Authentication",
       "rbac": "RBAC",
+      "user": "Users & Groups",
       "users": "User",
       "group": "User Groups",
       "apikeys": "API Keys",
       "templates": "Templates",
-      "audit": "Audit",
-      "security": "Security"
+      "audit": "Log Audit",
+      "security": "Security",
+      "notification": "Notification"
+    },
+    "subTabs": {
+      "rbacRoles": "Roles",
+      "rbacUsers": "Users",
+      "rbacGroups": "User Groups",
+      "rbacNamespaces": "Namespace Grants",
+      "rbacNodes": "Node Permissions"
     }
   },
   "generalManagement": {
@@ -2181,6 +2254,17 @@
   "log": {
     "jumpToBottom": "Jump to bottom"
   },
+  "passwordPolicy": {
+    "errors": {
+      "password_too_short": "Password must be at least {{min}} characters",
+      "password_too_long": "Password must be at most {{max}} characters",
+      "password_missing_uppercase": "Password must contain an uppercase letter",
+      "password_missing_lowercase": "Password must contain a lowercase letter",
+      "password_missing_digit": "Password must contain a digit",
+      "password_missing_special": "Password must contain a special character",
+      "password_reused": "Password cannot repeat any of the last {{count}} passwords"
+    }
+  },
   "mfaPrompt": {
     "title": "MFA verification required",
     "description": "This operation is sensitive. Enter the code from your authenticator app to continue.",
@@ -2289,6 +2373,18 @@
     },
     "messages": {
       "updated": "Security settings updated"
+    }
+  },
+  "audit": {
+    "operations": {
+      "viewFile": "View file",
+      "downloadFile": "Download file",
+      "uploadFile": "Upload file"
+    },
+    "tabs": {
+      "login": "Login Logs",
+      "operation": "Operation Logs",
+      "password": "Password Change Logs"
     }
   }
 }

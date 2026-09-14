@@ -54,7 +54,10 @@ deps: ## Install frontend and backend dependencies
 	go mod vendor
 
 # Build targets
-build: frontend backend ## Build both frontend and backend
+.PHONY: build
+build: ## Build both frontend and backend (always rebuilds both)
+	cd $(UI_DIR) && pnpm run build
+	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 	@echo "✅ Build completed successfully!"
 	@echo "🚀 Run './$(BINARY_NAME)' to start the server"
 
@@ -93,7 +96,9 @@ package-binaries: ## Package each kite binary file separately
 	done
 	@echo "✅ All kite binaries packaged successfully!"
 
-frontend: static ## Build frontend only
+.PHONY: frontend
+frontend: ## Build frontend only (always rebuilds)
+	cd $(UI_DIR) && pnpm run build
 
 # GNU make globs like `ui/src/**/*.tsx` do NOT recurse into subdirectories
 # (they behave like a single `*`), so deep file changes never triggered a
@@ -111,13 +116,7 @@ GO_SOURCES := $(shell find . -type f -name '*.go' \
 	-not -path './e2e/*' \
 	-not -path './.git/*' 2>/dev/null)
 
-static: $(UI_SOURCES)
-	@echo "📦 Ensuring static files are built..."
-	cd $(UI_DIR) && pnpm run build
-
-backend: ${BINARY_NAME} ## Build backend only
-
-$(BINARY_NAME): go.mod $(GO_SOURCES) static
+backend: ## Build backend only (always rebuilds)
 	@echo "🏗️ Building backend..."
 	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 

@@ -262,8 +262,22 @@ func (h *PodHandler) registerCustomRoutes(group *gin.RouterGroup) {
 		user := c.MustGet("user").(model.User)
 		cs := c.MustGet("cluster").(*cluster.ClientSet)
 		namespace := c.Param("namespace")
-		if !rbac.CanAccess(user, string(common.Pods), string(common.VerbExec), cs.Name, namespace) {
-			c.JSON(http.StatusForbidden, gin.H{"error": rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Pods), namespace, cs.Name)})
+
+		// 每类文件操作对应独立动词（view-file / download-file / upload-file），
+		// 拥有 exec 的角色视为全部具备，保证既有角色不受影响。
+		var verb common.Verb
+		switch {
+		case c.Request.Method == http.MethodPut:
+			verb = common.VerbUploadFile
+		case strings.HasSuffix(c.Request.URL.Path, "/download"):
+			verb = common.VerbDownloadFile
+		default:
+			verb = common.VerbViewFile
+		}
+
+		if !rbac.CanAccess(user, string(common.Pods), string(common.VerbExec), cs.Name, namespace) &&
+			!rbac.CanAccess(user, string(common.Pods), string(verb), cs.Name, namespace) {
+			c.JSON(http.StatusForbidden, gin.H{"error": rbac.NoAccess(user.Key(), string(verb), string(common.Pods), namespace, cs.Name)})
 			c.Abort()
 			return
 		}
@@ -396,6 +410,7 @@ func (h *PodHandler) PreviewFile(c *gin.Context) {
 	if err != nil {
 		klog.Errorf("Failed to preview file: %v", err)
 	}
+	h.recordFileAudit(c, cs, namespace, podName, "view-file", path, container, err == nil, err)
 }
 
 func (h *PodHandler) DownloadFile(c *gin.Context) {
@@ -440,6 +455,7 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 	if err != nil {
 		klog.Errorf("Failed to download file: %v", err)
 	}
+	h.recordFileAudit(c, cs, namespace, podName, "download-file", path, container, err == nil, err)
 }
 
 func (h *PodHandler) UploadFile(c *gin.Context) {
@@ -486,10 +502,40 @@ func (h *PodHandler) UploadFile(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to upload file: %v", err)})
+		h.recordFileAudit(c, cs, namespace, podName, "upload-file", destPath, container, false, err)
 		return
 	}
 
+	h.recordFileAudit(c, cs, namespace, podName, "upload-file", destPath, container, true, nil)
 	c.JSON(http.StatusOK, gin.H{"message": "file uploaded successfully"})
+}
+
+// recordFileAudit 将容器文件的查看/下载/上传动作写入审计日志。
+// operation 为 view-file / download-file / upload-file；文件路径与容器名
+// 记录在 resourceYAML 字段中，便于在审计日志中检索。
+func (h *PodHandler) recordFileAudit(c *gin.Context, cs *cluster.ClientSet, namespace, podName, operation, path, container string, success bool, opErr error) {
+	user, ok := c.MustGet("user").(model.User)
+	if !ok {
+		return
+	}
+	var errorMessage string
+	if opErr != nil {
+		errorMessage = opErr.Error()
+	}
+	if err := model.DB.Create(&model.ResourceHistory{
+		ClusterName:     cs.Name,
+		ResourceType:    string(common.Pods),
+		ResourceName:    podName,
+		Namespace:       namespace,
+		OperationType:   operation,
+		OperationSource: "manual",
+		ResourceYAML:    fmt.Sprintf("container: %s\npath: %s", container, path),
+		Success:         success,
+		ErrorMessage:    errorMessage,
+		OperatorID:      user.ID,
+	}).Error; err != nil {
+		klog.Errorf("failed to record file audit: %v", err)
+	}
 }
 
 func writeSSE(c *gin.Context, event string, payload any) error {

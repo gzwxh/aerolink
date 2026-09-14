@@ -15,12 +15,19 @@ export interface ApiRequestOptions extends RequestInit {
 export class ApiError extends Error {
   readonly status: number
   readonly code?: string
+  readonly params?: Record<string, unknown>
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    params?: Record<string, unknown>
+  ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.params = params
   }
 }
 
@@ -126,7 +133,8 @@ class ApiClient {
       throw new ApiError(
         errorData.error || `HTTP error! status: ${response.status}`,
         response.status,
-        errorData.code
+        errorData.code,
+        errorData.params
       )
     }
 

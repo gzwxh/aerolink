@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -17,17 +18,45 @@ const (
 	passwordErrNoLowercase = "password_missing_lowercase"
 	passwordErrNoDigit     = "password_missing_digit"
 	passwordErrNoSpecial   = "password_missing_special"
+	passwordErrReused      = "password_reused"
 )
 
 const maxPasswordLength = 128
 
 // PasswordPolicyError is returned when a password violates the security policy.
+// Code and Params let clients render a localized message instead of the English
+// fallback kept in Message.
 type PasswordPolicyError struct {
 	Code    string
 	Message string
+	Params  map[string]any
 }
 
 func (e *PasswordPolicyError) Error() string { return e.Message }
+
+// PasswordReuseError reports that the password was used recently.
+func PasswordReuseError(limit int) *PasswordPolicyError {
+	return &PasswordPolicyError{
+		Code:    passwordErrReused,
+		Message: fmt.Sprintf("password cannot repeat any of the last %d passwords", limit),
+		Params:  map[string]any{"count": limit},
+	}
+}
+
+// PasswordErrorPayload builds the JSON body of a password policy failure: the
+// English message for reference plus the machine readable code and parameters
+// used by the UI for localization.
+func PasswordErrorPayload(err error) map[string]any {
+	var policyErr *PasswordPolicyError
+	if errors.As(err, &policyErr) {
+		payload := map[string]any{"error": policyErr.Message, "code": policyErr.Code}
+		if len(policyErr.Params) > 0 {
+			payload["params"] = policyErr.Params
+		}
+		return payload
+	}
+	return map[string]any{"error": err.Error()}
+}
 
 // PasswordHistory keeps the hashes of recently used passwords so they cannot be
 // reused ("不能重复前几次密码").
@@ -56,12 +85,14 @@ func ValidatePassword(plainPassword string, isAdmin bool) error {
 		return &PasswordPolicyError{
 			Code:    passwordErrTooShort,
 			Message: fmt.Sprintf("password must be at least %d characters", minLength),
+			Params:  map[string]any{"min": minLength},
 		}
 	}
 	if length > maxPasswordLength {
 		return &PasswordPolicyError{
 			Code:    passwordErrTooLong,
 			Message: fmt.Sprintf("password must be at most %d characters", maxPasswordLength),
+			Params:  map[string]any{"max": maxPasswordLength},
 		}
 	}
 	if setting.PasswordRequireUppercase && !strings.ContainsFunc(plainPassword, unicode.IsUpper) {

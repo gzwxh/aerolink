@@ -9,7 +9,8 @@ import {
   IconShieldLock,
   IconTemplate,
   IconUser,
-  IconUsers,
+
+  IconBell,
 } from '@tabler/icons-react'
 import type { TFunction } from 'i18next'
 
@@ -20,9 +21,11 @@ import { ClusterManagement } from './cluster-management'
 import { GeneralManagement } from './general-management'
 import { RBACView } from './rbac-view'
 import { SecurityManagement } from './security-management'
+import { UserStatusPanel } from './user-status-panel'
+import { NewUserDefaultsPanel } from './new-user-defaults-panel'
+import { NotificationManagement } from './notification-management'
 import { TemplateManagement } from './template-management'
-import { UserGroupsTab } from './user-groups-tab'
-import { UserManagement } from './user-management'
+import { UserManagementTabs } from './user-management-tabs'
 
 export interface SettingsSectionDefinition {
   /** URL slug: /settings/<value> */
@@ -56,27 +59,6 @@ export const settingsSectionRegistry: SettingsSectionDefinition[] = [
     render: () => <AuthenticationManagement />,
   },
   {
-    value: 'users',
-    labelKey: 'settings.tabs.users',
-    defaultLabel: 'User',
-    icon: IconUser,
-    render: () => <UserManagement />,
-  },
-  {
-    value: 'group',
-    labelKey: 'settings.tabs.group',
-    defaultLabel: 'User Groups',
-    icon: IconUsers,
-    render: () => <UserGroupsTab />,
-  },
-  {
-    value: 'rbac',
-    labelKey: 'nav.rbac',
-    defaultLabel: 'RBAC',
-    icon: IconShieldCheck,
-    render: () => <RBACView />,
-  },
-  {
     value: 'apikeys',
     labelKey: 'settings.tabs.apikeys',
     defaultLabel: 'API Keys',
@@ -91,6 +73,20 @@ export const settingsSectionRegistry: SettingsSectionDefinition[] = [
     render: () => <TemplateManagement />,
   },
   {
+    value: 'user',
+    labelKey: 'settings.tabs.user',
+    defaultLabel: 'Users & Groups',
+    icon: IconUser,
+    render: () => <UserManagementTabs />,
+  },
+  {
+    value: 'rbac',
+    labelKey: 'nav.rbac',
+    defaultLabel: 'RBAC',
+    icon: IconShieldCheck,
+    render: () => <RBACView />,
+  },
+  {
     value: 'audit',
     labelKey: 'settings.tabs.audit',
     defaultLabel: 'Audit',
@@ -102,7 +98,20 @@ export const settingsSectionRegistry: SettingsSectionDefinition[] = [
     labelKey: 'settings.tabs.security',
     defaultLabel: 'Security',
     icon: IconShieldLock,
-    render: () => <SecurityManagement />,
+    render: () => (
+      <div className="space-y-4">
+        <SecurityManagement />
+        <NewUserDefaultsPanel />
+        <UserStatusPanel />
+      </div>
+    ),
+  },
+  {
+    value: 'notification',
+    labelKey: 'settings.tabs.notification',
+    defaultLabel: 'Notification',
+    icon: IconBell,
+    render: () => <NotificationManagement />,
   },
 ]
 

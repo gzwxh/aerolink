@@ -21,6 +21,8 @@ import {
   usePodFiles,
 } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
+import { roleCanAccessAnyNamespace } from '@/lib/rbac-permissions'
+import { useAuth } from '@/contexts/auth-context'
 import { translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,6 +61,23 @@ export function PodFileBrowser({
   )
   const [currentPath, setCurrentPath] = useState<string>('/')
   const [isUploading, setIsUploading] = useState(false)
+  const { user } = useAuth()
+  // 容器文件权限：与 exec 分离，可在角色中单独勾选。
+  const canViewFiles = roleCanAccessAnyNamespace(
+    user?.roles,
+    'pods',
+    'view-file'
+  )
+  const canDownloadFiles = roleCanAccessAnyNamespace(
+    user?.roles,
+    'pods',
+    'download-file'
+  )
+  const canUploadFiles = roleCanAccessAnyNamespace(
+    user?.roles,
+    'pods',
+    'upload-file'
+  )
   const { t } = useTranslation()
 
   const {
@@ -102,6 +121,10 @@ export function PodFileBrowser({
   }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canUploadFiles) {
+      toast.error(t('podFiles.uploadDenied', '无容器文件上传权限'))
+      return
+    }
     const file = e.target.files?.[0]
     if (!file) return
     setIsUploading(true)
@@ -280,6 +303,7 @@ export function PodFileBrowser({
                             size="sm"
                             title="Preview file"
                             aria-label="Preview file"
+                            disabled={!canViewFiles}
                             onClick={() => handlePreview(file.name)}
                           >
                             <IconEye className="w-4 h-4" />
@@ -288,6 +312,7 @@ export function PodFileBrowser({
                         <Button
                           variant="ghost"
                           size="sm"
+                          disabled={!canDownloadFiles}
                           title={
                             file.isDir
                               ? 'Download directory as .tar archive'

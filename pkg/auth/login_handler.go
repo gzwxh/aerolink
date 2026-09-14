@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/captcha"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
+	"github.com/zxh326/kite/pkg/notification"
 	"github.com/zxh326/kite/pkg/passkey"
 	"github.com/zxh326/kite/pkg/rbac"
 	"gorm.io/gorm"
@@ -80,7 +82,7 @@ func (h *AuthHandler) CreateSuperUser(c *gin.Context) {
 	// The first account is an administrator, so the stricter admin password rule
 	// applies.
 	if err := model.ValidatePassword(userreq.Password, true); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(err))
 		return
 	}
 	user := &model.User{
@@ -106,6 +108,21 @@ func (h *AuthHandler) CreateSuperUser(c *gin.Context) {
 
 func (h *AuthHandler) LDAPLogin(c *gin.Context) {
 	h.handleCredentialLogin(c, model.AuthProviderLDAP, h.authenticateLDAPUser)
+}
+
+// Captcha hands out a fresh login captcha: a signed id plus the rendered image.
+// Nothing is stored server side; the id is only valid for a few minutes and can
+// be verified without keeping the answer.
+//
+// 路由：GET /api/auth/captcha（无需登录）。
+func (h *AuthHandler) Captcha(c *gin.Context) {
+	idKey, image, err := captcha.Make()
+	if err != nil {
+		klog.Errorf("failed to generate captcha: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate captcha"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"idKey": idKey, "image": image})
 }
 
 func (h *AuthHandler) PasskeyLoginBegin(c *gin.Context) {
@@ -168,6 +185,24 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 		return
 	}
 
+	securitySetting, settingErr := model.GetSecuritySetting()
+	if settingErr != nil {
+		klog.Warningf("Failed to load security setting for MFA policy: %v", settingErr)
+	}
+
+	// The captcha is checked before the credentials so a wrong answer never
+	// counts as a failed password attempt.
+	if securitySetting != nil && securitySetting.LoginCaptchaEnabled {
+		switch {
+		case strings.TrimSpace(req.CaptchaToken) == "" || strings.TrimSpace(req.CaptchaCode) == "":
+			c.JSON(http.StatusBadRequest, gin.H{"error": "captcha_required"})
+			return
+		case !captcha.Verify(req.CaptchaToken, req.CaptchaCode):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_captcha"})
+			return
+		}
+	}
+
 	user, err := authenticate(username, req.Password)
 	if err != nil {
 		errMsg := fmt.Sprintf("%s login failed for %s: %v", strings.ToUpper(provider), username, err)
@@ -191,10 +226,6 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 	// Password logins always challenge enrolled users. Third-party logins (LDAP)
 	// only do so when the policy enables MFA for third-party admins; the switch
 	// covers admin sign-in and sensitive operations, not every directory user.
-	securitySetting, err := model.GetSecuritySetting()
-	if err != nil {
-		klog.Warningf("Failed to load security setting for MFA policy: %v", err)
-	}
 	thirdPartyMFARequired := provider == model.AuthProviderLDAP &&
 		securitySetting != nil &&
 		securitySetting.MFAThirdPartyEnabled &&
@@ -249,10 +280,16 @@ func (h *AuthHandler) completePasswordLikeLogin(c *gin.Context, user *model.User
 		return
 	}
 
+	// Track the session so the idle / absolute lifetime limits apply.
+	activeSessions.start(uint64(user.ID))
+
 	if err := model.LoginUser(user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed login"})
 		return
 	}
+
+	// Records the sign-in and warns the account when the IP is new to it.
+	notification.NotifyRemoteLogin(c, user)
 
 	jwtToken, err := h.manager.GenerateJWT(user, "")
 	if err != nil {
@@ -474,6 +511,15 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 func setCookieSecure(c *gin.Context, name, value string, maxAge int) {
 	secure := strings.HasPrefix(common.Host, "https://") || (c.Request != nil && (c.Request.TLS != nil || strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https")))
 
+	// The session policy decides how long the auth cookie lives; a zero max age
+	// turns it into a session cookie that the browser drops on close.
+	if name == "auth_token" && maxAge > 0 {
+		maxAge = authCookieMaxAge()
+	}
+	if maxAge > 0 {
+		maxAge += 60 * 60
+	}
+
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(name, value, maxAge+60*60, "/", "", secure, true)
+	c.SetCookie(name, value, maxAge, "/", "", secure, true)
 }

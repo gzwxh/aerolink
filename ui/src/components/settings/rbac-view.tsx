@@ -7,7 +7,13 @@ import {
   nodePermissionPresets,
 } from '@/lib/node-permissions'
 import { RequireAdmin } from '@/components/require-admin'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 
 import { GroupGrantsView } from './group-grants-view'
 import { NamespaceGrantsView } from './namespace-grants-view'
@@ -60,34 +66,19 @@ export function RBACView() {
 
   return (
     <RequireAdmin>
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold">
-            {t('rbac.title', 'RBAC Management')}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            {t('rbac.description', 'Manage roles, permissions and members')}
-          </p>
-        </div>
-
-        <Tabs value={tab} onValueChange={handleTabChange}>
-          <TabsList>
-            <TabsTrigger value="roles">
-              {t('rbac.rolesViewTab', 'Roles')}
-            </TabsTrigger>
-            <TabsTrigger value="user">
-              {t('rbac.usersViewTab', 'Users')}
-            </TabsTrigger>
-            <TabsTrigger value="group">
-              {t('rbac.groupsViewTab', 'Groups')}
-            </TabsTrigger>
-            <TabsTrigger value="namespace">
-              {t('rbac.namespaceViewTab', 'Namespace Grants')}
-            </TabsTrigger>
-            <TabsTrigger value="node">
-              {t('rbac.nodeViewTab', 'Node Permissions')}
-            </TabsTrigger>
-          </TabsList>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {t('rbac.title', 'RBAC 管理')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs
+            value={tab}
+            onValueChange={handleTabChange}
+            className="flex flex-row gap-4 space-y-0 [&>[role=tabpanel]]:min-w-0 [&>[role=tabpanel]]:flex-1"
+          >
+            
           <TabsContent value="roles">
             <RBACManagement />
           </TabsContent>
@@ -127,8 +118,9 @@ export function RBACView() {
               permissionPresets={nodePermissionPresets(t)}
             />
           </TabsContent>
-        </Tabs>
-      </div>
+          </Tabs>
+        </CardContent>
+      </Card>
     </RequireAdmin>
   )
 }

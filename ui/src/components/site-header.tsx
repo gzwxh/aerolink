@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { useTerminal } from '@/contexts/terminal-context'
-import { Plus, TerminalSquare } from 'lucide-react'
+import { ArrowLeft, Plus, Settings, TerminalSquare } from 'lucide-react'
 
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useNavigate } from 'react-router-dom'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 
@@ -11,12 +12,14 @@ import { CreateResourceDialog } from './create-resource-dialog'
 import { CurrentClusterBadge } from './current-cluster-badge'
 import { DynamicBreadcrumb } from './dynamic-breadcrumb'
 import { LanguageToggle } from './language-toggle'
+import { NotificationBell } from './notification-bell'
 import { ModeToggle } from './mode-toggle'
 import { Search } from './search'
 import { UserMenu } from './user-menu'
 
 export function SiteHeader() {
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
   const { user, capabilities } = useAuth()
   const { toggleTerminal, isOpen } = useTerminal()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -32,6 +35,17 @@ export function SiteHeader() {
             orientation="vertical"
             className="mx-2 data-[orientation=vertical]:h-4"
           />
+          {location.pathname.startsWith('/settings') && (
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              aria-label="返回概览"
+              title="返回概览"
+              className="flex items-center justify-center rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
           <DynamicBreadcrumb />
           <div className="ml-auto flex items-center gap-2">
             <CurrentClusterBadge />
@@ -61,6 +75,18 @@ export function SiteHeader() {
                   orientation="vertical"
                   className="mx-2 data-[orientation=vertical]:h-4"
                 />
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/settings')}
+                    aria-label="系统设置"
+                    title="系统设置"
+                    className="flex items-center justify-center rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Settings className="h-5 w-5" />
+                  </button>
+                )}
+                <NotificationBell />
                 <LanguageToggle />
                 <ModeToggle />
               </>

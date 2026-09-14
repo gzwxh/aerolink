@@ -16,9 +16,24 @@ import (
 
 type User struct {
 	Model
-	Username        string       `json:"username" gorm:"type:varchar(50);uniqueIndex;not null"`
-	Password        string       `json:"-" gorm:"type:varchar(255)"`
-	Name            string       `json:"name,omitempty" gorm:"type:varchar(100);index"`
+	Username string `json:"username" gorm:"type:varchar(50);uniqueIndex;not null"`
+	Password string `json:"-" gorm:"type:varchar(255)"`
+	Name     string `json:"name,omitempty" gorm:"type:varchar(100);index"`
+	// Email receives notifications. It is filled from OIDC claims when the
+	// provider exposes one, or set by an administrator.
+	Email string `json:"email,omitempty" gorm:"type:varchar(255);index"`
+	// Phone / Wechat / Remark are optional contact details.
+	Phone  string `json:"phone,omitempty" gorm:"type:varchar(50)"`
+	Wechat string `json:"wechat,omitempty" gorm:"type:varchar(100)"`
+	Remark string `json:"remark,omitempty" gorm:"type:text"`
+	// ExpiresAt disables the account automatically once it is passed (nil = never).
+	ExpiresAt *time.Time `json:"expiresAt,omitempty" gorm:"type:timestamp;index"`
+	// DisabledReason / DisabledAt describe why the account was disabled.
+	// 值为 "inactive" 表示由「不活跃用户自动禁用」任务关闭；手动禁用时为空。
+	DisabledReason string     `json:"disabledReason,omitempty" gorm:"type:varchar(50)"`
+	DisabledAt     *time.Time `json:"disabledAt,omitempty" gorm:"type:timestamp"`
+	// MFADisabled 为创建时选择的「MFA 级别：禁用」，true 表示不受全局策略强制。
+	MFADisabled     bool         `json:"mfaDisabled,omitempty" gorm:"type:boolean;default:false"`
 	AvatarURL       string       `json:"avatar_url,omitempty" gorm:"type:text"`
 	Provider        string       `json:"provider,omitempty" gorm:"type:varchar(50);default:password;index"`
 	OIDCGroups      SliceString  `json:"oidc_groups,omitempty" gorm:"type:text"`
@@ -319,8 +334,11 @@ func UpdateUser(user *User) error {
 	return err
 }
 
-// ResetPasswordByID sets a new password (hashed) for user with given id
-func ResetPasswordByID(id uint, plainPassword string) error {
+// ResetPasswordByID sets a new password (hashed) for user with given id.
+// operatorID/operatorName identify who performed the change (the user
+// themselves or an administrator); source is PasswordChangeSourceSelf or
+// PasswordChangeSourceAdmin.
+func ResetPasswordByID(id uint, plainPassword string, operatorID uint, operatorName, source string) error {
 	var u User
 	if err := DB.First(&u, id).Error; err != nil {
 		return err
@@ -336,7 +354,11 @@ func ResetPasswordByID(id uint, plainPassword string) error {
 		return err
 	}
 	InvalidateUserCache(uint64(id))
-	return RecordPasswordHistory(id, hash)
+	if err := RecordPasswordHistory(id, hash); err != nil {
+		return err
+	}
+	RecordPasswordChange(id, u.Username, operatorID, operatorName, source)
+	return nil
 }
 
 // SetUserEnabled updates the enabled flag. Re-enabling an LDAP user cancels a
@@ -427,6 +449,7 @@ func SyncLDAPUser(user *User, createEnabled bool) (created bool, err error) {
 		newUser := &User{
 			Username:        username,
 			Name:            name,
+			Email:           strings.TrimSpace(user.Email),
 			Provider:        AuthProviderLDAP,
 			OIDCGroups:      user.OIDCGroups,
 			Enabled:         createEnabled,
@@ -452,6 +475,10 @@ func SyncLDAPUser(user *User, createEnabled bool) (created bool, err error) {
 	}
 	if name := strings.TrimSpace(user.Name); name != "" {
 		existingUser.Name = name
+	}
+	// 目录提供了邮箱才覆盖，避免清掉本地手工填写的邮箱。
+	if email := strings.TrimSpace(user.Email); email != "" {
+		existingUser.Email = email
 	}
 	existingUser.OIDCGroups = user.OIDCGroups
 	if err := DB.Save(&existingUser).Error; err != nil {

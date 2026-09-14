@@ -775,6 +775,40 @@ export interface AuditLogResponse {
   page: number
   size: number
 }
+
+export interface LoginRecord {
+  id: number
+  userId: number
+  username: string
+  provider: string
+  ip: string
+  userAgent: string
+  createdAt: string
+}
+
+export interface LoginLogResponse {
+  data: LoginRecord[]
+  total: number
+  page: number
+  size: number
+}
+
+export interface PasswordChangeLog {
+  id: number
+  userId: number
+  username: string
+  operatorId: number
+  operator: string
+  source: string
+  createdAt: string
+}
+
+export interface PasswordChangeLogResponse {
+  data: PasswordChangeLog[]
+  total: number
+  page: number
+  size: number
+}
 export interface ResourceTemplate {
   id: number
   name: string
