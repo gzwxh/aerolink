@@ -7,8 +7,8 @@
 #     --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
 #     --build-arg GOPROXY=https://goproxy.cn,direct \
 #     -t kite:local .
-ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.26-alpine
+ARG NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/node:24-alpine
+ARG GOLANG_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/golang:1.26-alpine
 ARG RUNTIME_IMAGE=gcr.io/distroless/static
 
 FROM ${NODE_IMAGE} AS frontend-builder
