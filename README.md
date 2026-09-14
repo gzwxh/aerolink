@@ -1,155 +1,79 @@
 <div align="center">
 
-<img src="./docs/assets/logo.svg" alt="Kite logo" width="128" height="128">
+<img src="./docs/assets/logo.svg" alt="Kite Logo" width="128" height="128">
 
-# Kite
+# Kite（内部二开版）
 
-**All your clusters. One workspace.**
+**所有集群，一个工作空间。**
 
-Kite is a lightweight, open-source Kubernetes workspace for multi-cluster operations, observability, access control, and AI-assisted troubleshooting.
+Kite 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维、可观测性、访问控制与 AI 辅助排障。
+本仓库为基于上游项目的**公司内部二开版本**，当前版本 `v1.0.0`。
 
-[![Release](https://img.shields.io/github/v/release/kite-org/kite?style=flat-square&logo=github&label=Release)](https://github.com/kite-org/kite/releases)
-[![Stars](https://img.shields.io/github/stars/kite-org/kite?style=flat-square&logo=github&label=Stars)](https://github.com/kite-org/kite/stargazers)
-[![Downloads](https://img.shields.io/github/downloads/kite-org/kite/total?style=flat-square&logo=github&label=Downloads)](https://github.com/kite-org/kite/releases)
-[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg?style=flat-square)](LICENSE)
-
-[**Documentation**](https://kite.zzde.me) · [**Releases**](https://github.com/kite-org/kite/releases) · [**Community**](https://join.slack.com/t/kite-dashboard/shared_invite/zt-3cl9mccs7-eQZ1_t6IoTPHZkxXED1ceg)
-
-**English** · [中文](./README_zh.md)
+[English](./README_en.md) · **中文**
 
 </div>
 
-<img width="1586" height="1167" alt="image" src="https://github.com/user-attachments/assets/5710204d-5d34-44af-85dc-3b436e205c12" />
+## 关于本仓库
 
-> **Note**: this repository is a fork of [kite-org/kite](https://github.com/kite-org/kite) mirrored at
-> [gitee.com/gzwxh/kite](https://gitee.com/gzwxh/kite) with additional local changes. See
-> [Build and push your own image](./docsCN/guide/build-and-push-image.md) (Chinese) for building the image behind a
-> restricted network, pushing it to a private registry and deploying it with the bundled Helm chart.
+本仓库是 [kite-org/kite](https://github.com/kite-org/kite) 的定制分支（上游镜像：[gitee.com/gzwxh/kite](https://gitee.com/gzwxh/kite)），在内网 GitLab 维护，仅限公司内部使用。
 
-## Why Kite
+- 上游项目：<https://github.com/kite-org/kite>（文档：<https://kite.zzde.me>）
+- 上游镜像：<https://gitee.com/gzwxh/kite>
+- 内网仓库：`ssh://git@10.10.11.151:20222/teg/support-department/operation_rd_dept/kite.git`（开发分支 `release/v1.0.0`）
+- 中文文档：见 [`docsCN/`](./docsCN/index.md)
+- 许可证：Apache-2.0（沿用上游）
 
-### Observe
+## 二开新增与增强
 
-- Monitor CPU, memory, and network usage with per-cluster Prometheus integrations.
-- Stream and filter pod logs, then inspect events, conditions, and related resources in context.
+- **RBAC 细粒度权限**：新增 `容器文件浏览 / 容器文件下载 / 容器文件上传` 独立权限动词，可在角色中单独勾选（与 `exec` 权限分离，既有角色不受影响）。
+- **容器文件审计**：Pod 文件的查看 / 下载 / 上传全量写入审计日志（含文件路径、容器名、操作人、成功与否），可在「审计日志」按资源与操作类型检索。
+- **通知模块**：SMTP 邮件 / 消息模板 / 消息订阅 / 站内信（顶栏铃铛）；支持不活跃用户自动禁用提醒、异地登录提醒、密码过期提醒，全局提示统一为右上角。
+- **登录验证码**：可按策略启用图形验证码，并支持按用户/全局策略的 MFA 管理。
+- **系统设置重构**：设置项重组为通用 / 集群 / 认证 / 用户与用户组 / 权限管理 / API 密钥 / 模板 / 日志审计 / 安全设置 / 通知设置，全部中文界面。
+- **构建与发布**：`make build` 强制重建前后端；`make image / make push` 一键构建并推送 Docker 镜像到公司 SWR。
 
-### Operate
-
-- Manage core Kubernetes resources, CRDs, and Helm releases across multiple clusters.
-- Edit live YAML, scale or restart workloads, and use browser-based pod, node, and kubectl terminals.
-- Find resources with global search and access pods or services through the built-in Kube Proxy.
-
-### Govern
-
-- Support OAuth, LDAP, local accounts, MFA, and passkey login.
-- Control access with RBAC and per-cluster permissions, backed by audit logs for resource changes.
-
-### Work with AI
-
-- Inspect resources, logs, and Prometheus metrics with the built-in AI assistant.
-- Review and confirm write operations before execution; the assistant respects the current user's RBAC permissions.
-
-## Quick Start
-
-### Helm
-
-For a quick evaluation, install Kite from the OCI registry into a dedicated namespace:
+## 构建
 
 ```bash
-helm install kite oci://ghcr.io/kite-org/charts/kite \
-  --namespace kite-system \
-  --create-namespace
+make deps      # 安装前后端依赖
+make build     # 构建前端(嵌入 static/) 与后端二进制 ./kite
+./kite         # 启动，默认端口 8080
 ```
 
-Forward the service to your local machine:
+受限网络下 `make build` 直接可用（前端依赖走 pnpm lockfile，后端使用 `vendor/`）。
+
+## Docker 镜像
 
 ```bash
-kubectl port-forward --namespace kite-system svc/kite 8080:8080
+make image     # 构建镜像（默认 tag 见 Makefile 的 IMAGE 变量）
+make push      # 构建并推送到公司 SWR
+# 等价于：
+# docker build --build-arg ... -t swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.0 .
+# docker push  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.0
 ```
 
-Open [http://localhost:8080](http://localhost:8080), create the first administrator, and follow the setup flow to connect a cluster. When Kite runs inside the cluster it manages, choose the `in-cluster` connection type for the simplest setup.
+受限网络下 `make image/push` 已内置国内镜像源参数（daocloud 基础镜像 + npmmirror + goproxy.cn），直连环境可用 `make image DOCKER_BUILD_ARGS=` 置空。
 
-> [!IMPORTANT]
-> The default chart values are intended for evaluation. Before using Kite in production, enable persistent storage or configure an external database, replace the default encryption key, and review the chart's cluster-wide RBAC permissions. See the [installation guide](https://kite.zzde.me/guide/installation) and [chart values](https://kite.zzde.me/config/chart-values).
+## 运行配置
 
-## Other Installation Options
-
-### Docker
-
-```bash
-mkdir -p data
-docker run -d --name kite \
-  -p 8080:8080 \
-  -v "$(pwd)/data:/data" \
-  -e DB_DSN=/data/db.sqlite \
-  ghcr.io/kite-org/kite:latest
-```
-
-### Kubernetes Manifest
-
-The standalone manifest is intended for evaluation and stores application data inside the container unless you add persistent storage.
-
-```bash
-kubectl apply -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/install.yaml
-kubectl port-forward --namespace kube-system svc/kite 8080:8080
-```
-
-The manifest grants its service account `cluster-admin`. Review and restrict these permissions before using it outside a test environment.
-
-### Build from Source
-
-Building Kite requires Go 1.26, Node.js `^20.19.0` or `>=22.12.0`, pnpm, and Make.
-
-```bash
-git clone https://github.com/kite-org/kite.git
-cd kite
-make deps
-make build
-./kite
-```
-
-## Documentation
-
-| Topic | Guide |
+| 环境变量 | 说明 |
 | --- | --- |
-| Installation and exposure | [Installation](https://kite.zzde.me/guide/installation) |
-| Users, authentication, and permissions | [User management](https://kite.zzde.me/config/user-management) · [RBAC](https://kite.zzde.me/config/rbac-config) |
-| Monitoring | [Prometheus setup](https://kite.zzde.me/config/prometheus-setup) |
-| Operations | [Helm management](https://kite.zzde.me/guide/helm-management) · [Kite Cluster Agent](https://kite.zzde.me/guide/kite-cluster-agent) |
-| AI | [AI assistant](https://kite.zzde.me/guide/ai-assistant) |
-| API | [API documentation](https://kite.zzde.me/api/authentication) |
+| `KITE_ENCRYPT_KEY` | 数据加密密钥，**生产必须显式设置**，且需与历史数据一致 |
+| `PORT` | 服务端口，默认 `8080` |
+| `DB_DSN` | 数据库连接（默认 SQLite） |
 
-## Community
+更多配置见 [`docsCN/`](./docsCN/index.md)。
 
-- Read the [contributing guidelines](./CONTRIBUTING.md) before opening a pull request.
-- Report vulnerabilities according to the [security policy](./SECURITY.md).
-- Ask questions and meet other users in the [Kite Slack community](https://join.slack.com/t/kite-dashboard/shared_invite/zt-3cl9mccs7-eQZ1_t6IoTPHZkxXED1ceg).
+## 与上游同步
 
-## Support This Project
+上游持续更新，合并建议：
 
-If you find Kite helpful, please consider supporting its development. Your donations help maintain and improve the project.
-
-<table>
-  <tr>
-    <td align="center">
-      <b>Alipay</b><br>
-      <img src="./docs/donate/alipay.jpeg" alt="Alipay QR Code" width="200">
-    </td>
-    <td align="center">
-      <b>WeChat Pay</b><br>
-      <img src="./docs/donate/wechat.jpeg" alt="WeChat Pay QR Code" width="200">
-    </td>
-    <td align="center">
-      <b>PayPal</b><br>
-      <a href="https://www.paypal.me/zxh326">
-        <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_111x69.jpg" alt="PayPal" width="150">
-      </a>
-    </td>
-  </tr>
-</table>
-
-Thank you for your support! ❤️
+```bash
+git remote add upstream https://github.com/kite-org/kite
+git fetch upstream
+git merge upstream/main   # 在内网开发分支上解决冲突后合入
+```
 
 ## License
 
-Kite is licensed under the [Apache License 2.0](LICENSE).
+[Apache-2.0](./LICENSE)（沿用上游许可证；对上游代码的修改同样以 Apache-2.0 回馈社区，如需开源可按此协议提交）。
