@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/cluster"
@@ -42,9 +43,11 @@ func (h *NodeHandler) DrainNode(c *gin.Context) {
 	// Parse the request body for drain options
 	var drainRequest struct {
 		Force            bool `json:"force"`
-		GracePeriod      int  `json:"gracePeriod" binding:"min=0"`
+		GracePeriod      int  `json:"gracePeriod"`
 		DeleteLocal      bool `json:"deleteLocalData"`
 		IgnoreDaemonsets bool `json:"ignoreDaemonsets"`
+		// Timeout aborts the drain after this many seconds when > 0.
+		Timeout int `json:"timeout"`
 	}
 
 	if err := c.ShouldBindJSON(&drainRequest); err != nil {
@@ -72,6 +75,9 @@ func (h *NodeHandler) DrainNode(c *gin.Context) {
 		DeleteEmptyDirData:  drainRequest.DeleteLocal,
 		Out:                 io.Discard,
 		ErrOut:              io.Discard,
+	}
+	if drainRequest.Timeout > 0 {
+		drainer.Timeout = time.Duration(drainRequest.Timeout) * time.Second
 	}
 
 	podDeleteList, errs := drainer.GetPodsForDeletion(nodeName)

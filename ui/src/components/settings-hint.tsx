@@ -62,7 +62,7 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
       description: t('settingsHint.p8s.description', 'Configure Prometheus'),
       icon: IconServer,
       completed: hasP8S,
-      href: '/settings?tab=clusters',
+      href: '/settings/clusters',
     },
     {
       key: 'oauth',
@@ -73,7 +73,7 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
       ),
       icon: IconKey,
       completed: hasOAuthProviders,
-      href: '/settings?tab=oauth',
+      href: '/settings/oauth',
     },
     {
       key: 'rbac',
@@ -84,7 +84,7 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
       ),
       icon: IconShieldCheck,
       completed: hasRoles,
-      href: '/settings?tab=rbac',
+      href: '/settings/rbac',
     },
   ]
 
@@ -153,7 +153,7 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
           )}
         </div>
         <div className="mt-3 flex justify-end">
-          <Link to="/settings">
+          <Link to="/settings/general">
             <Button
               variant="outline"
               size="sm"

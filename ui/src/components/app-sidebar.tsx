@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useCallback, useMemo, useState } from 'react'
 import Icon from '@/assets/icon.svg'
+import { useAuth } from '@/contexts/auth-context'
 import { useSidebarConfig } from '@/contexts/sidebar-config-context'
 import { CollapsibleContent } from '@radix-ui/react-collapsible'
 import { IconLayoutDashboard } from '@tabler/icons-react'
@@ -11,10 +12,10 @@ import { Link, useLocation } from 'react-router-dom'
 
 import { SidebarCustomResourceItem, SidebarItem } from '@/types/sidebar'
 import { useResources, useVersionInfo } from '@/lib/api'
+import { getSettingsSections } from '@/components/settings/settings-sections'
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -34,6 +35,8 @@ import { VersionInfo } from './version-info'
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
+  const { user } = useAuth()
+  const isAdmin = user ? user.isAdmin() : false
   const location = useLocation()
   const { isMobile, setOpenMobile } = useSidebar()
   const { config, isLoading, getIconComponent } = useSidebarConfig()
@@ -120,6 +123,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }))
       .filter((group) => group.items.length > 0)
   }, [config, isCRDItemAvailable])
+
+  const settingsSections = useMemo(() => getSettingsSections(t), [t])
 
   const isActive = (url: string) => {
     if (url === '/') {
@@ -284,6 +289,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <div className="flex items-center gap-2 rounded-md border border-border/60 bg-gradient-to-r from-muted/40 to-muted/20 px-1.5 py-1 backdrop-blur-sm">
+                  <ClusterSelector />
+                </div>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -339,13 +356,52 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroup>
           </Collapsible>
         ))}
-      </SidebarContent>
 
-      <SidebarFooter>
-        <div className="flex items-center gap-2 rounded-md px-2 py-1.5 bg-gradient-to-r from-muted/40 to-muted/20 border border-border/60 backdrop-blur-sm">
-          <ClusterSelector />
-        </div>
-      </SidebarFooter>
+        {isAdmin && (
+          <Collapsible
+            defaultOpen={location.pathname.startsWith('/settings')}
+            className="group/collapsible"
+          >
+            <SidebarGroup>
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group-data-[state=open]:text-foreground">
+                  <span className="uppercase tracking-wide text-xs font-bold">
+                    {t('nav.settings', 'System Settings')}
+                  </span>
+                  <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent className="flex flex-col gap-2">
+                  <SidebarMenu>
+                    {settingsSections.map((section) => {
+                      const SectionIcon = section.icon
+
+                      return (
+                        <SidebarMenuItem key={section.value}>
+                          <SidebarMenuButton
+                            tooltip={section.label}
+                            asChild
+                            isActive={isActive(`/settings/${section.value}`)}
+                          >
+                            <Link
+                              to={`/settings/${section.value}`}
+                              onClick={handleMenuItemClick}
+                            >
+                              <SectionIcon className="text-sidebar-primary" />
+                              <span>{section.label}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </SidebarGroup>
+          </Collapsible>
+        )}
+      </SidebarContent>
     </Sidebar>
   )
 }

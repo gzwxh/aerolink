@@ -69,6 +69,8 @@ ldap:
   groupBaseDn: "ou=groups,dc=example,dc=com"
   groupFilter: "(member=%s)"
   groupNameAttribute: "cn"
+  autoSync: true
+  syncIntervalMinutes: 10
 
 rbac:
   roles:
@@ -267,9 +269,11 @@ config:
 | `userFilter`           | string  | 用户搜索过滤器      | `(uid=%s)`     |
 | `usernameAttribute`    | string  | 用户名属性          | `uid`          |
 | `displayNameAttribute` | string  | 显示名属性          | `cn`           |
-| `groupBaseDn`          | string  | 组搜索 Base DN      |                |
-| `groupFilter`          | string  | 组成员过滤器        | `(member=%s)`  |
-| `groupNameAttribute`   | string  | 组名属性            | `cn`           |
+| `groupBaseDn`          | string  | 组搜索 Base DN（可选）      |                |
+| `groupFilter`          | string  | 组成员过滤器（可选）        | `(member=%s)`  |
+| `groupNameAttribute`   | string  | 组名属性（可选）            | `cn`           |
+| `autoSync`             | boolean | 启用定期目录同步    | `true`         |
+| `syncIntervalMinutes`  | integer | 定期同步间隔（分钟） | `10`           |
 
 ### RBAC 配置
 

@@ -19,10 +19,7 @@ test('admin can open global search and jump to the cluster settings tab', async 
 
   await clusterResult.click()
 
-  await page.waitForURL(
-    (url) =>
-      url.pathname === '/settings' && url.searchParams.get('tab') === 'clusters'
-  )
+  await page.waitForURL((url) => url.pathname === '/settings/clusters')
 
   await expect(page.getByRole('button', { name: 'Add Cluster' })).toBeVisible()
 })

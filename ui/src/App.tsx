@@ -13,6 +13,8 @@ import {
   GlobalSearchProvider,
   useGlobalSearch,
 } from './components/global-search-provider'
+import { MFAEnrollmentGate } from './components/mfa-enrollment-gate'
+import { MFAPromptDialog } from './components/mfa-prompt-dialog'
 import { SiteHeader } from './components/site-header'
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar'
 import { Toaster } from './components/ui/sonner'
@@ -87,6 +89,7 @@ function AppContent() {
       <ErrorBoundary fallback={null}>
         <AIChatbox />
       </ErrorBoundary>
+      <MFAPromptDialog />
       <Toaster />
     </>
   )
@@ -107,9 +110,11 @@ function AppProviders({ children }: { children: ReactNode }) {
 function App() {
   return (
     <AppProviders>
-      <ClusterGate>
-        <AppContent />
-      </ClusterGate>
+      <MFAEnrollmentGate>
+        <ClusterGate>
+          <AppContent />
+        </ClusterGate>
+      </MFAEnrollmentGate>
     </AppProviders>
   )
 }
@@ -117,9 +122,11 @@ function App() {
 export function StandaloneAIChatApp() {
   return (
     <AppProviders>
-      <ClusterGate>
-        <StandaloneAIChatbox />
-      </ClusterGate>
+      <MFAEnrollmentGate>
+        <ClusterGate>
+          <StandaloneAIChatbox />
+        </ClusterGate>
+      </MFAEnrollmentGate>
     </AppProviders>
   )
 }

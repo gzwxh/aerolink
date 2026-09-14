@@ -38,6 +38,7 @@ interface ResponsiveTabsProps {
   contentClassName?: string
   tabsListClassName?: string
   customizationKey?: string
+  defaultTab?: string
 }
 
 const LONG_PRESS_MS = 1400
@@ -55,6 +56,7 @@ export function ResponsiveTabs({
   contentClassName,
   tabsListClassName,
   customizationKey,
+  defaultTab,
 }: ResponsiveTabsProps) {
   const { t } = useTranslation()
   const isMobile = useIsMobile()
@@ -125,9 +127,13 @@ export function ResponsiveTabs({
   }, [hiddenValues, orderedTabs])
 
   const tabParam = searchParams.get('tab')
+  const fallbackTabValue =
+    defaultTab && visibleTabs.some((tab) => tab.value === defaultTab)
+      ? defaultTab
+      : visibleTabs[0]?.value || ''
   const value = visibleTabs.some((tab) => tab.value === tabParam)
     ? tabParam!
-    : visibleTabs[0]?.value || ''
+    : fallbackTabValue
 
   const handleValueChange = (nextValue: string) => {
     setSearchParams(

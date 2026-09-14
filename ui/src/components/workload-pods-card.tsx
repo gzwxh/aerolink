@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { NodeLink } from '@/components/node-link'
 import { ResourceIframeDialogContent } from '@/components/resource-iframe-dialog-content'
 
 type TranslationFn = ReturnType<typeof useTranslation>['t']
@@ -182,17 +183,10 @@ function WorkloadPodRow({ pod }: { pod: Pod }) {
       </TableCell>
       <TableCell className="px-1 py-1.5">
         <div className="flex min-w-0 justify-center text-center">
-          {pod.spec?.nodeName ? (
-            <Link
-              to={`/nodes/${pod.spec.nodeName}`}
-              className="app-link block max-w-full truncate"
-              title={pod.spec.nodeName}
-            >
-              {pod.spec.nodeName}
-            </Link>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          )}
+          <NodeLink
+            name={pod.spec?.nodeName}
+            className="block max-w-full truncate"
+          />
         </div>
       </TableCell>
       <TableCell

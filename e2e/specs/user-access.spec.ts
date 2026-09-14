@@ -193,7 +193,7 @@ test('password user lifecycle and built-in roles', async ({
     viewerSession.page.getByRole('link', { name: 'kube-system' })
   ).toBeVisible()
   await expect(
-    viewerSession.page.getByRole('button', { name: 'Settings', exact: true })
+    viewerSession.page.getByRole('link', { name: 'System Settings' })
   ).toHaveCount(0)
   await expect(
     viewerSession.page.getByRole('button', { name: 'Toggle Kubectl Terminal' })
@@ -207,7 +207,7 @@ test('password user lifecycle and built-in roles', async ({
     managedAdminUser.password
   )
   await expect(
-    adminSession.page.getByRole('button', { name: 'Settings', exact: true })
+    adminSession.page.getByRole('link', { name: 'System Settings' })
   ).toBeVisible()
   await expect(
     adminSession.page.getByRole('button', { name: 'Toggle Kubectl Terminal' })

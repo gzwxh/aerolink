@@ -675,6 +675,8 @@ export interface Role {
   name: string
   description?: string
   isSystem?: boolean
+  /** 'user' or 'group'; legacy roles without a type behave as 'user'. */
+  roleType?: 'user' | 'group' | ''
   clusters: string[]
   namespaces: string[]
   resources: string[]
@@ -692,8 +694,10 @@ export interface UserItem {
   createdAt: string
   lastLoginAt?: string
   enabled?: boolean
+  pendingDeletion?: boolean
   avatar_url?: string
   name?: string
+  oidc_groups?: string[]
   roles?: Role[]
 }
 

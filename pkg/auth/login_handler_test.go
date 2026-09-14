@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
@@ -14,18 +15,36 @@ func TestCredentialLoginLimiterBlocksLoopbackClientIP(t *testing.T) {
 	limiter := &credentialLoginAttemptLimiter{
 		attempts: map[string]credentialLoginAttemptState{},
 	}
+	limits := loginLimits{
+		ipFailLimit:   3,
+		ipBlock:       time.Minute,
+		userFailLimit: 5,
+		userBlock:     time.Minute,
+	}
 
 	clientIP := "127.0.0.1"
-	for i := 0; i < credentialLoginMaxFailures; i++ {
-		if limiter.recordFailure(clientIP) {
-			t.Fatalf("recordFailure() blocked after %d failures, want not blocked yet", i+1)
+	username := "alice"
+	// The attempt that reaches the configured limit is the one that blocks.
+	for i := 1; i < limits.ipFailLimit; i++ {
+		if limiter.recordFailure(clientIP, username, limits) {
+			t.Fatalf("recordFailure() blocked after %d failures, want not blocked yet", i)
 		}
 	}
-	if !limiter.recordFailure(clientIP) {
+	if !limiter.recordFailure(clientIP, username, limits) {
 		t.Fatalf("recordFailure() did not block loopback client IP")
 	}
-	if !limiter.isBlocked(clientIP) {
-		t.Fatalf("isBlocked() = false, want true for loopback client IP")
+	if _, blocked := limiter.blockedUntil(clientIP, username, limits); !blocked {
+		t.Fatalf("blockedUntil() = false, want true for loopback client IP")
+	}
+
+	// Whitelisted IPs are exempt from the failed attempt lockout.
+	exempt := loginLimits{
+		ipFailLimit: 1,
+		ipBlock:     time.Minute,
+		ipWhitelist: []string{"127.0.0.0/8"},
+	}
+	if limiter.recordFailure(clientIP, username, exempt) {
+		t.Fatalf("recordFailure() blocked a whitelisted client IP")
 	}
 }
 

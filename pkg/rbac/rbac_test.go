@@ -422,3 +422,152 @@ func TestHasResourcePermission(t *testing.T) {
 		})
 	}
 }
+
+// TestClusterScopedWildcardRequiresExplicitGrant locks in the rule that a
+// namespace-restricted role cannot reach cluster-scoped resources through a
+// wildcard resource grant. "All resources in namespace dev" must not grant
+// read (or write) access to every node in the cluster.
+func TestClusterScopedWildcardRequiresExplicitGrant(t *testing.T) {
+	originalConfig := RBACConfig
+	t.Cleanup(func() {
+		RBACConfig = originalConfig
+	})
+
+	namespaceScopedWildcard := common.Role{
+		Name:       "ns-scoped-wildcard",
+		Clusters:   []string{"*"},
+		Namespaces: []string{"dev"},
+		Resources:  []string{"*"},
+		Verbs:      []string{"*"},
+	}
+	namespaceScopedExplicitNodes := common.Role{
+		Name:       "ns-scoped-explicit-nodes",
+		Clusters:   []string{"*"},
+		Namespaces: []string{"dev"},
+		Resources:  []string{"nodes"},
+		Verbs:      []string{"get"},
+	}
+	clusterWideWildcard := common.Role{
+		Name:       "cluster-wide-wildcard",
+		Clusters:   []string{"*"},
+		Namespaces: []string{"*"},
+		Resources:  []string{"*"},
+		Verbs:      []string{"get"},
+	}
+	allButKubeSystem := common.Role{
+		Name:       "all-but-kube-system",
+		Clusters:   []string{"*"},
+		Namespaces: []string{"!kube-system", "*"},
+		Resources:  []string{"*"},
+		Verbs:      []string{"get"},
+	}
+
+	tests := []struct {
+		name      string
+		role      common.Role
+		resource  string
+		verb      string
+		namespace string
+		expected  bool
+	}{
+		{
+			name: "wildcard does not grant node reads to a namespace-scoped role",
+			role: namespaceScopedWildcard, resource: "nodes", verb: "get",
+			namespace: common.AllNamespaces, expected: false,
+		},
+		{
+			name: "wildcard does not grant node writes to a namespace-scoped role",
+			role: namespaceScopedWildcard, resource: "nodes", verb: "delete",
+			namespace: common.AllNamespaces, expected: false,
+		},
+		{
+			name: "wildcard does not grant other cluster-scoped resources either",
+			role: namespaceScopedWildcard, resource: "persistentvolumes", verb: "get",
+			namespace: common.AllNamespaces, expected: false,
+		},
+		{
+			name: "wildcard still grants namespaced resources in the granted namespace",
+			role: namespaceScopedWildcard, resource: "pods", verb: "get",
+			namespace: "dev", expected: true,
+		},
+		{
+			name: "explicit cluster-scoped grant still works for a namespace-scoped role",
+			role: namespaceScopedExplicitNodes, resource: "nodes", verb: "get",
+			namespace: common.AllNamespaces, expected: true,
+		},
+		{
+			name: "explicit grant is still limited to the granted verbs",
+			role: namespaceScopedExplicitNodes, resource: "nodes", verb: "delete",
+			namespace: common.AllNamespaces, expected: false,
+		},
+		{
+			name: "cluster-wide roles keep wildcard access to cluster-scoped resources",
+			role: clusterWideWildcard, resource: "nodes", verb: "get",
+			namespace: common.AllNamespaces, expected: true,
+		},
+		{
+			name: "a namespace list carrying the wildcard is not restricted",
+			role: allButKubeSystem, resource: "nodes", verb: "get",
+			namespace: common.AllNamespaces, expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			RBACConfig = &common.RolesConfig{
+				Roles:       []common.Role{tc.role},
+				RoleMapping: []common.RoleMapping{{Name: tc.role.Name, Users: []string{"tester"}}},
+			}
+			got := CanAccess(model.User{Username: "tester"}, tc.resource, tc.verb, "cluster-a", tc.namespace)
+			if got != tc.expected {
+				t.Errorf("CanAccess(%s, %s, ns=%s) = %v, want %v",
+					tc.resource, tc.verb, tc.namespace, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestNamespaceRestricted(t *testing.T) {
+	tests := []struct {
+		name       string
+		namespaces []string
+		expected   bool
+	}{
+		{"empty list is not restricted", nil, false},
+		{"wildcard is not restricted", []string{"*"}, false},
+		{"internal all-namespaces marker is not restricted", []string{common.AllNamespaces}, false},
+		{"negation plus wildcard is not restricted", []string{"!kube-system", "*"}, false},
+		{"a single namespace is restricted", []string{"dev"}, true},
+		{"several namespaces are restricted", []string{"dev", "test"}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := namespaceRestricted(tc.namespaces); got != tc.expected {
+				t.Errorf("namespaceRestricted(%v) = %v, want %v", tc.namespaces, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestMatchExplicit(t *testing.T) {
+	tests := []struct {
+		name     string
+		list     []string
+		val      string
+		expected bool
+	}{
+		{"wildcard alone does not match", []string{"*"}, "nodes", false},
+		{"explicit entry matches", []string{"nodes"}, "nodes", true},
+		{"explicit entry mixed with wildcard matches", []string{"*", "nodes"}, "nodes", true},
+		{"unrelated entries do not match", []string{"*", "pods"}, "nodes", false},
+		{"negation still wins", []string{"*", "!nodes"}, "nodes", false},
+		{"no wildcard keeps plain matching", []string{"nodes"}, "nodes", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := matchExplicit(tc.list, tc.val); got != tc.expected {
+				t.Errorf("matchExplicit(%v, %s) = %v, want %v", tc.list, tc.val, got, tc.expected)
+			}
+		})
+	}
+}

@@ -1,6 +1,8 @@
 package rbac
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -8,21 +10,31 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
+	"gorm.io/gorm"
 )
 
 type roleReq struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
+	RoleType    string   `json:"roleType"`
 	Clusters    []string `json:"clusters"`
 	Namespaces  []string `json:"namespaces"`
 	Resources   []string `json:"resources"`
 	Verbs       []string `json:"verbs"`
 }
 
+func normalizeRoleType(roleType string) string {
+	if strings.EqualFold(strings.TrimSpace(roleType), "group") {
+		return "group"
+	}
+	return "user"
+}
+
 func (req roleReq) toRole() model.Role {
 	return model.Role{
 		Name:        strings.TrimSpace(req.Name),
 		Description: req.Description,
+		RoleType:    normalizeRoleType(req.RoleType),
 		Clusters:    model.SliceString(req.Clusters),
 		Namespaces:  model.SliceString(req.Namespaces),
 		Resources:   model.SliceString(req.Resources),
@@ -38,6 +50,106 @@ func ListRoles(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"roles": roles})
+}
+
+// ListGroups returns every group name currently known (LDAP/OIDC synced,
+// manually assigned, or explicitly persisted) for the role-assignment picker.
+func ListGroups(c *gin.Context) {
+	groups, err := model.ListKnownGroups()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list groups: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"groups": groups})
+}
+
+// ListGroupMembers returns the members of a group from the normalized
+// group_members table.
+func ListGroupMembers(c *gin.Context) {
+	name := c.Param("name")
+	members, err := model.ListGroupMembers(name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list group members: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"members": members})
+}
+
+// CreateGroup persists a user group as an entity so it stays visible even
+// before it gains members or role grants.
+func CreateGroup(c *gin.Context) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "group name is required"})
+		return
+	}
+	exists, err := model.LocalGroupExists(name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create group: " + err.Error()})
+		return
+	}
+	if exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "group already exists"})
+		return
+	}
+	if err := model.CreateLocalGroup(name); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create group: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"name": name})
+}
+
+// RenameGroup renames a persisted group and every reference to it (user
+// profiles and role assignments) atomically.
+func RenameGroup(c *gin.Context) {
+	name := c.Param("name")
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	newName := strings.TrimSpace(req.Name)
+	if newName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "group name is required"})
+		return
+	}
+	if newName == name {
+		c.JSON(http.StatusOK, gin.H{"name": newName})
+		return
+	}
+	if err := model.RenameLocalGroup(name, newName); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "group not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rename group: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"name": newName})
+}
+
+// DeleteGroup removes a persisted group along with all its references
+// (memberships on user profiles and group-subject role assignments).
+func DeleteGroup(c *gin.Context) {
+	name := c.Param("name")
+	if err := model.DeleteLocalGroup(name); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "group not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete group: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // GetRole returns a single role by id
@@ -74,6 +186,13 @@ func CreateRole(c *gin.Context) {
 		return
 	}
 	if err := model.DB.Create(&role).Error; err != nil {
+		if model.IsUniqueConstraintError(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": fmt.Sprintf("a role named %q already exists", role.Name),
+				"code":  "role_name_conflict",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create role: " + err.Error()})
 		return
 	}
@@ -117,12 +236,20 @@ func UpdateRole(c *gin.Context) {
 	// update fields
 	role.Name = roleData.Name
 	role.Description = roleData.Description
+	role.RoleType = roleData.RoleType
 	role.Clusters = roleData.Clusters
 	role.Namespaces = roleData.Namespaces
 	role.Resources = roleData.Resources
 	role.Verbs = roleData.Verbs
 
 	if err := model.DB.Save(&role).Error; err != nil {
+		if model.IsUniqueConstraintError(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": fmt.Sprintf("a role named %q already exists", role.Name),
+				"code":  "role_name_conflict",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update role: " + err.Error()})
 		return
 	}

@@ -7,11 +7,14 @@ import {
 } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { type ResourceType } from '@/types/api'
+import { getResourceListPath } from '@/lib/resource-catalog'
+import { getResourceMetadata } from '@/lib/resource-metadata'
 import { cn, translateError } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -59,6 +62,18 @@ interface ResourceDetailShellProps<T> {
   showDescribe?: boolean
   showDelete?: boolean
   showClone?: boolean
+  /**
+   * Whether the YAML tab offers editing and saving. Read-only users still get
+   * the tab so they can inspect the manifest.
+   */
+  yamlEditable?: boolean
+  defaultTab?: string
+  /**
+   * Resource used for the permission checks; defaults to `resourceType`.
+   * Actions are gated automatically for resources Kite knows about, pass a
+   * value to force gating for others (e.g. CRDs).
+   */
+  permissionResource?: string
 }
 
 export function ResourceDetailShell<T>({
@@ -82,6 +97,9 @@ export function ResourceDetailShell<T>({
   showDescribe = true,
   showDelete = true,
   showClone = true,
+  yamlEditable = true,
+  defaultTab,
+  permissionResource,
 }: ResourceDetailShellProps<T>) {
   const { t } = useTranslation()
   const [yamlContent, setYamlContent] = useState('')
@@ -92,6 +110,28 @@ export function ResourceDetailShell<T>({
   const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false)
   const [searchParams] = useSearchParams()
   const isIframe = searchParams.get('iframe') === 'true'
+  const navigate = useNavigate()
+  const listPath = getResourceListPath(resourceType)
+
+  // Every action used to default to visible, which left read-only users with
+  // buttons the backend rejects. They are gated by default for the resources
+  // Kite knows about; unknown CRs keep the previous behaviour.
+  const can = useCan()
+  const permissionTarget = permissionResource ?? resourceType
+  const gatePermissions =
+    permissionResource !== undefined || !!getResourceMetadata(resourceType)
+  const canRead =
+    !gatePermissions || can(permissionTarget, 'get', { namespace })
+  const canUpdate =
+    !gatePermissions || can(permissionTarget, 'update', { namespace })
+  const canDelete =
+    !gatePermissions || can(permissionTarget, 'delete', { namespace })
+  const canCreate =
+    !gatePermissions || can(permissionTarget, 'create', { namespace })
+  const effectiveYamlEditable = yamlEditable && canUpdate
+  const effectiveShowDescribe = showDescribe && canRead
+  const effectiveShowClone = showClone && canCreate
+  const effectiveShowDelete = showDelete && canDelete
 
   usePageTitle(name ? `${name} (${resourceLabel})` : resourceLabel)
 
@@ -169,9 +209,15 @@ export function ResourceDetailShell<T>({
               key={refreshKey}
               value={yamlContent}
               title={t('common.fields.yamlConfiguration')}
-              onSave={(value) => {
-                void handleSaveYaml(value as T)
-              }}
+              readOnly={!effectiveYamlEditable}
+              showControls={effectiveYamlEditable}
+              onSave={
+                effectiveYamlEditable
+                  ? (value) => {
+                      void handleSaveYaml(value as T)
+                    }
+                  : undefined
+              }
               onChange={setYamlContent}
               isSaving={isSavingYaml}
               fillHeight
@@ -193,6 +239,7 @@ export function ResourceDetailShell<T>({
     t,
     refreshKey,
     yamlContent,
+    effectiveYamlEditable,
     yamlTabLabel,
     yamlToolbar,
   ])
@@ -226,6 +273,34 @@ export function ResourceDetailShell<T>({
                   resource: resourceLabel,
                 })}
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    // Resource deleted (or never existed): offer a way back to the list
+    // instead of a dead "retry" screen.
+    const errorMessage = String(
+      (error as { response?: { data?: { error?: string } } })?.response?.data
+        ?.error ??
+        (error as Error)?.message ??
+        error ??
+        ''
+    ).toLowerCase()
+    if (errorMessage.includes('not found') || errorMessage.includes('404')) {
+      return (
+        <div className="p-6">
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 pt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                {t('common.messages.resourceNotFound', {
+                  resource: resourceLabel,
+                })}
+              </p>
+              <Button variant="outline" onClick={() => navigate(listPath)}>
+                {t('common.actions.backToList', '返回列表')}
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -275,14 +350,14 @@ export function ResourceDetailShell<T>({
                 <IconRefresh className="w-4 h-4" />
                 {t('common.actions.refresh')}
               </Button>
-              {showDescribe ? (
+              {effectiveShowDescribe ? (
                 <DescribeDialog
                   resourceType={resourceType}
                   namespace={namespace}
                   name={name}
                 />
               ) : null}
-              {showClone ? (
+              {effectiveShowClone ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -293,7 +368,7 @@ export function ResourceDetailShell<T>({
                 </Button>
               ) : null}
               {headerActions}
-              {showDelete && (
+              {effectiveShowDelete && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -321,9 +396,10 @@ export function ResourceDetailShell<T>({
               : tab.content,
         }))}
         customizationKey={`resource-detail:${resourceType}`}
+        defaultTab={defaultTab}
       />
 
-      {showDelete && (
+      {effectiveShowDelete && (
         <ResourceDeleteConfirmationDialog
           open={isDeleteDialogOpen}
           onOpenChange={setIsDeleteDialogOpen}
@@ -333,7 +409,7 @@ export function ResourceDetailShell<T>({
         />
       )}
 
-      {showClone ? (
+      {effectiveShowClone ? (
         <CloneResourceDialog
           open={isCloneDialogOpen}
           onOpenChange={setIsCloneDialogOpen}

@@ -1,14 +1,26 @@
-import { useMemo } from 'react'
-import { IconCircleCheckFilled, IconLoader } from '@tabler/icons-react'
+import { useMemo, useState } from 'react'
+import {
+  IconCircleCheckFilled,
+  IconLoader,
+  IconReload,
+} from '@tabler/icons-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DaemonSet } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { createSearchFilter } from '@/lib/k8s'
+import { restartWorkload } from '@/lib/api'
+import { getClusterScopedStorageKey } from '@/lib/current-cluster'
+import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
+import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
-import { ResourceTable } from '@/components/resource-table'
+import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
+import {
+  ResourceTable,
+  type ResourceTableBatchAction,
+} from '@/components/resource-table'
 
 const daemonSetSearchFilter = createSearchFilter<DaemonSet>(
   (d) => d.metadata?.name,
@@ -19,6 +31,9 @@ const columnHelper = createColumnHelper<DaemonSet>()
 
 export function DaemonSetListPage() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const { namespace: namespaceParam } = useParams()
 
   // Define columns for the daemonset table
   const columns = useMemo(
@@ -109,11 +124,86 @@ export function DaemonSetListPage() {
     [t]
   )
 
+  const [batchDaemonSets, setBatchDaemonSets] = useState<DaemonSet[]>([])
+  const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
+
+  // Restarting patches the pod template, so it needs update permission.
+  const canUpdate = useCanAnyNamespace()('daemonsets', 'update')
+  const batchActions = useMemo<ResourceTableBatchAction<DaemonSet>[]>(
+    () => [
+      {
+        id: 'restart',
+        label: t('common.actions.restart'),
+        icon: <IconReload className="size-4" />,
+        hidden: !canUpdate,
+        onSelect: (daemonSets) => {
+          setBatchDaemonSets(daemonSets)
+          setIsRestartDialogOpen(true)
+        },
+      },
+    ],
+    [t, canUpdate]
+  )
+
+  const handleCreateClick = () => {
+    // The URL wins, then the table's persisted selection; a multi or
+    // "all namespaces" selection cannot host a new object.
+    const ns = resolveCreateNamespace(
+      namespaceParam,
+      sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace'))
+    )
+    navigate(`/daemonsets/${encodeURIComponent(ns)}/create?tab=container-0`)
+  }
+
   return (
-    <ResourceTable
-      resourceName={'DaemonSets'}
-      columns={columns}
-      searchQueryFilter={daemonSetSearchFilter}
-    />
+    <>
+      <ResourceTable
+        resourceName={'DaemonSets'}
+        resourceType="daemonsets"
+        columns={columns}
+        searchQueryFilter={daemonSetSearchFilter}
+        initialNamespace={namespaceParam}
+        onNamespaceChange={(ns) => {
+          navigate(
+            ns && ns !== '_all'
+              ? `/daemonsets/${encodeURIComponent(ns)}`
+              : '/daemonsets',
+            { replace: true }
+          )
+        }}
+        showCreateButton={true}
+        onCreateClick={handleCreateClick}
+        batchActions={batchActions}
+      />
+
+      <ResourceBatchActionDialog
+        open={isRestartDialogOpen}
+        onOpenChange={setIsRestartDialogOpen}
+        resources={batchDaemonSets}
+        title={t('resourceTable.batchActions.restartResourcesTitle', {
+          count: batchDaemonSets.length,
+          resource: t('nav.daemonsets'),
+        })}
+        description={t(
+          'resourceTable.batchActions.restartResourcesDescription',
+          {
+            resource: t('nav.daemonsets'),
+          }
+        )}
+        actionLabel={t('common.actions.restart')}
+        onExecute={(daemonSet) =>
+          restartWorkload(
+            'daemonsets',
+            daemonSet.metadata!.name!,
+            daemonSet.metadata!.namespace!
+          )
+        }
+        onComplete={() =>
+          queryClient.invalidateQueries({ queryKey: ['daemonsets'] })
+        }
+        destructive={true}
+      />
+    </>
   )
 }

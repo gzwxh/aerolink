@@ -14,11 +14,25 @@ import (
 // CanAccess checks if user/oidcGroup can access resource with verb in cluster/namespace
 func CanAccess(user model.User, resource, verb, cluster, namespace string) bool {
 	roles := GetUserRoles(user)
+	clusterScoped := namespaceUnconstrained(resource)
 	for _, role := range roles {
-		if match(role.Clusters, cluster) &&
-			match(role.Namespaces, namespace) &&
-			match(role.Resources, resource) &&
-			match(role.Verbs, verb) {
+		if !match(role.Clusters, cluster) {
+			continue
+		}
+		if clusterScoped {
+			// Cluster-scoped objects have no namespace, so the role's namespace
+			// list cannot constrain them. A namespace-restricted role must name
+			// such a resource explicitly: otherwise a wildcard resource grant
+			// would silently widen it to cluster-wide access, e.g. "all
+			// resources in namespace dev" would also grant read/write on every
+			// node in the cluster.
+			if namespaceRestricted(role.Namespaces) && !matchExplicit(role.Resources, resource) {
+				continue
+			}
+		} else if !match(role.Namespaces, namespace) {
+			continue
+		}
+		if match(role.Resources, resource) && match(role.Verbs, verb) {
 			klog.V(2).Infof("RBAC Check - User: %s, OIDC Groups: %v, Resource: %s, Verb: %s, Cluster: %s, Namespace: %s, Hit Role: %v",
 				user.Key(), user.OIDCGroups, resource, verb, cluster, namespace, role.Name)
 			return true
@@ -27,6 +41,46 @@ func CanAccess(user model.User, resource, verb, cluster, namespace string) bool 
 	klog.V(2).Infof("RBAC Check - User: %s, OIDC Groups: %v, Resource: %s, Verb: %s, Cluster: %s, Namespace: %s, No Access",
 		user.Key(), user.OIDCGroups, resource, verb, cluster, namespace)
 	return false
+}
+
+// namespaceRestricted reports whether a role limits access to specific
+// namespaces, i.e. it lists namespaces without granting every namespace.
+func namespaceRestricted(namespaces []string) bool {
+	if len(namespaces) == 0 {
+		return false
+	}
+	return !contains(namespaces, "*") && !contains(namespaces, common.AllNamespaces)
+}
+
+// matchExplicit is match() with the bare "*" wildcard removed, so a wildcard
+// resource grant cannot stand in for an explicit cluster-scoped grant.
+func matchExplicit(list []string, val string) bool {
+	if !contains(list, "*") {
+		return match(list, val)
+	}
+	filtered := make([]string, 0, len(list))
+	for _, pattern := range list {
+		if pattern != "*" {
+			filtered = append(filtered, pattern)
+		}
+	}
+	return match(filtered, val)
+}
+
+// namespaceUnconstrained reports whether a resource is cluster-scoped and its
+// authorization must therefore ignore the role's namespace scope. Cluster-scoped
+// objects (nodes, persistent volumes, storage classes, CRDs, ...) have no
+// namespace, so limiting a role to a few namespaces must not block them — only
+// the cluster and resource/verb patterns apply, and for namespace-restricted
+// roles only an explicit resource entry counts (see CanAccess). The
+// "namespaces" resource is excluded: its name IS the authorization namespace
+// and stays governed by the role's namespace list (see CanAccessNamespace).
+func namespaceUnconstrained(resource string) bool {
+	meta := common.LookupResource(resource)
+	if meta == nil || !meta.ClusterScoped {
+		return false
+	}
+	return resource != string(common.Namespaces)
 }
 
 // CanAccessCurrent checks the latest role configuration instead of the role

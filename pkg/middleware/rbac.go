@@ -81,7 +81,8 @@ func RBACMiddleware() gin.HandlerFunc {
 		//     /files, /related still requires an explicit _all/* grant);
 		//   - known resources are namespace-scoped; dynamic CR LIST requests
 		//     defer the scope check to the CR handler (known cluster-scoped
-		//     resources keep requiring an _all/* namespace grant);
+		//     resources skip the namespace scope in rbac.CanAccess, so they
+		//     pass the normal check below);
 		//   - the user holds at least one role granting `verb` on this resource
 		//     in this cluster (zero-permission users are still rejected).
 		if verbs == "get" && ns == common.AllNamespaces {

@@ -2,9 +2,10 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { CronJob } from 'kubernetes-types/batch/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { createSearchFilter } from '@/lib/k8s'
+import { getClusterScopedStorageKey } from '@/lib/current-cluster'
+import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResourceTable } from '@/components/resource-table'
@@ -26,6 +27,8 @@ const columnHelper = createColumnHelper<CronJob>()
 
 export function CronJobListPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { namespace: namespaceParam } = useParams()
 
   const columns = useMemo(
     () => [
@@ -45,7 +48,7 @@ export function CronJobListPage() {
       }),
       columnHelper.display({
         id: 'schedule',
-        header: 'Schedule',
+        header: t('cronJobList.schedule', 'Schedule'),
         cell: ({ row }) => (
           <span className="text-sm text-muted-foreground">
             {row.original.spec?.schedule || '-'}
@@ -54,7 +57,7 @@ export function CronJobListPage() {
       }),
       columnHelper.display({
         id: 'suspend',
-        header: 'State',
+        header: t('cronJobList.state', 'State'),
         cell: ({ row }) => {
           const badge = getSuspendBadge(row.original)
           return <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -62,7 +65,7 @@ export function CronJobListPage() {
       }),
       columnHelper.display({
         id: 'active',
-        header: 'Active Jobs',
+        header: t('cronJobList.activeJobs', 'Active Jobs'),
         cell: ({ row }) => (
           <span className="text-sm">
             {row.original.status?.active?.length || 0}
@@ -71,12 +74,13 @@ export function CronJobListPage() {
       }),
       columnHelper.display({
         id: 'lastSchedule',
-        header: 'Last Schedule',
+        header: t('cronJobList.lastSchedule', 'Last Schedule'),
         cell: ({ row }) => {
           const lastSchedule = row.original.status?.lastScheduleTime
           if (!lastSchedule) {
             return <span className="text-sm text-muted-foreground">-</span>
           }
+
           return (
             <span className="text-sm text-muted-foreground">
               {formatDate(lastSchedule)}
@@ -86,7 +90,7 @@ export function CronJobListPage() {
       }),
       columnHelper.display({
         id: 'lastSuccess',
-        header: 'Last Success',
+        header: t('cronJobList.lastSuccess', 'Last Success'),
         cell: ({ row }) => {
           const lastSuccess = row.original.status?.lastSuccessfulTime
           if (!lastSuccess) {
@@ -103,12 +107,36 @@ export function CronJobListPage() {
     [t]
   )
 
+  const handleCreateClick = () => {
+    // The URL wins, then the table's persisted selection; a multi or
+    // "all namespaces" selection cannot host a new object.
+    const ns = resolveCreateNamespace(
+      namespaceParam,
+      sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace'))
+    )
+    navigate(`/cronjobs/${encodeURIComponent(ns)}/create?tab=container-0`)
+  }
+
   return (
-    <ResourceTable
-      resourceName="CronJobs"
-      resourceType="cronjobs"
-      columns={columns}
-      searchQueryFilter={cronJobSearchFilter}
-    />
+    <>
+      <ResourceTable
+        resourceName="CronJobs"
+        resourceType="cronjobs"
+        columns={columns}
+        searchQueryFilter={cronJobSearchFilter}
+        initialNamespace={namespaceParam}
+        onNamespaceChange={(ns) => {
+          navigate(
+            ns && ns !== '_all'
+              ? `/cronjobs/${encodeURIComponent(ns)}`
+              : '/cronjobs',
+            { replace: true }
+          )
+        }}
+        showCreateButton={true}
+        onCreateClick={handleCreateClick}
+      />
+    </>
   )
 }

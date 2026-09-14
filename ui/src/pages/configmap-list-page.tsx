@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { ConfigMap } from 'kubernetes-types/core/v1'
-import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { createSearchFilter } from '@/lib/k8s'
+import { getClusterScopedStorageKey } from '@/lib/current-cluster'
+import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import {
   Tooltip,
@@ -22,11 +24,26 @@ const configMapSearchFilter = createSearchFilter<ConfigMap>(
 const columnHelper = createColumnHelper<ConfigMap>()
 
 export function ConfigMapListPage() {
+  const navigate = useNavigate()
+  const { namespace: namespaceParam } = useParams()
+  const { t } = useTranslation()
+
+  // New ConfigMaps are created in the namespace currently in view: the URL
+  // wins, then the namespace picker's persisted selection.
+  const handleCreateClick = () => {
+    const ns = resolveCreateNamespace(
+      namespaceParam,
+      sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace'))
+    )
+    navigate(`/configmaps/${encodeURIComponent(ns)}/create`)
+  }
+
   // Define columns for the configmap table
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
-        header: 'Name',
+        header: t('common.fields.name', 'Name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <Link
@@ -41,7 +58,7 @@ export function ConfigMapListPage() {
       }),
       columnHelper.accessor((row) => Object.keys(row.data || {}).join(', '), {
         id: 'data',
-        header: 'Data Keys',
+        header: t('common.fields.keys', 'Data Keys'),
         cell: ({ row }) => {
           const data = row.original.data || {}
           const keys = Object.keys(data)
@@ -64,7 +81,7 @@ export function ConfigMapListPage() {
         },
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
-        header: 'Created',
+        header: t('common.fields.created', 'Created'),
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
 
@@ -74,14 +91,17 @@ export function ConfigMapListPage() {
         },
       }),
     ],
-    []
+    [t]
   )
 
+  // Create and bulk delete are gated by ResourceTable itself.
   return (
     <ResourceTable
       resourceName="ConfigMaps"
       columns={columns}
       searchQueryFilter={configMapSearchFilter}
+      showCreateButton
+      onCreateClick={handleCreateClick}
     />
   )
 }

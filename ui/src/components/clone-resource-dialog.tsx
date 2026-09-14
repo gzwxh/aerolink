@@ -3,6 +3,7 @@ import { IconCopy, IconLoader2 } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { ResourceType, ResourceTypeMap } from '@/types/api'
 import { applyResource, createResource, fetchResource } from '@/lib/api'
@@ -31,6 +32,8 @@ interface CloneResourceDialogProps {
   sourceName: string
   namespace?: string
   resource: unknown
+  /** Called with the cloned resource name after a successful create. */
+  onCloned?: (targetName: string) => Promise<void> | void
 }
 
 type MutableResource = Record<string, unknown> & {
@@ -224,6 +227,7 @@ export function CloneResourceDialog({
   sourceName,
   namespace,
   resource,
+  onCloned,
 }: CloneResourceDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -235,6 +239,7 @@ export function CloneResourceDialog({
           sourceName={sourceName}
           namespace={namespace}
           resource={resource}
+          onCloned={onCloned}
         />
       ) : null}
     </Dialog>
@@ -248,6 +253,7 @@ function CloneResourceDialogContent({
   sourceName,
   namespace,
   resource,
+  onCloned,
 }: Omit<CloneResourceDialogProps, 'open'>) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -331,6 +337,13 @@ function CloneResourceDialogContent({
       }
 
       onOpenChange(false)
+      if (onCloned) {
+        try {
+          await onCloned(targetName)
+        } catch (syncError) {
+          toast.error(translateError(syncError, t))
+        }
+      }
       navigate(
         catalogEntry
           ? getResourceDetailPath(resourceType, targetName, resolvedNamespace)

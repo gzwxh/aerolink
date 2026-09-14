@@ -21,6 +21,9 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// TestChangeCurrentUserPasswordVerifiesCurrentPassword 覆盖自助改密的核心约束：
+// 原密码错误时返回 400，且数据库里已存的哈希保持不变；
+// 原密码正确时才把密码替换为新值。
 func TestChangeCurrentUserPasswordVerifiesCurrentPassword(t *testing.T) {
 	user := setupUserHandlerTestDB(t)
 	router := gin.New()
@@ -54,6 +57,9 @@ func TestChangeCurrentUserPasswordVerifiesCurrentPassword(t *testing.T) {
 	}
 }
 
+// TestCurrentUserMFALifecycle 走完整条 TOTP 生命周期：
+// setup 只写入「待确认」密钥且 MFA 仍未启用 → enable 校验动态码后正式启用 →
+// disable 再校验一次动态码，随后连同密钥一起清除。
 func TestCurrentUserMFALifecycle(t *testing.T) {
 	user := setupUserHandlerTestDB(t)
 	router := gin.New()
@@ -134,6 +140,8 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 	}
 }
 
+// TestSetupCurrentUserMFAHonorsGlobalSetting 验证全局关闭 MFA 时，
+// setup 会被 403 挡下，不会生成或保存任何密钥。
 func TestSetupCurrentUserMFAHonorsGlobalSetting(t *testing.T) {
 	user := setupUserHandlerTestDB(t)
 	if err := model.DB.Model(&model.GeneralSetting{}).Where("id = ?", 1).Update("enable_mfa", false).Error; err != nil {
@@ -151,6 +159,9 @@ func TestSetupCurrentUserMFAHonorsGlobalSetting(t *testing.T) {
 	}
 }
 
+// TestUpdateSidebarPreferenceHonorsGlobalPolicy 验证全局侧边栏策略的边界：
+// 已设置全局布局时，非管理员写入被 403 拒绝且不落库；
+// 管理员不受全局策略限制，可以保存自己的偏好。
 func TestUpdateSidebarPreferenceHonorsGlobalPolicy(t *testing.T) {
 	user := setupUserHandlerTestDB(t)
 	if _, err := model.UpdateGeneralSetting(map[string]interface{}{
@@ -197,6 +208,10 @@ func TestUpdateSidebarPreferenceHonorsGlobalPolicy(t *testing.T) {
 	}
 }
 
+// setupUserHandlerTestDB 为每个用例准备一套隔离的测试环境：
+// 打开内存 SQLite 并迁移 User / GeneralSetting 表，写入默认全局设置
+// （打开 MFA 与 Passkey）和本地密码用户 alice，最后用 t.Cleanup 还原
+// 被替换的全局状态（model.DB、加密密钥、JWT 密钥）并关闭连接。
 func setupUserHandlerTestDB(t *testing.T) *model.User {
 	t.Helper()
 	originalDB := model.DB
@@ -247,6 +262,8 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 	return user
 }
 
+// performUserRequest 构造一次 application/json 请求并同步执行，
+// 返回录制的响应，方便断言状态码与响应体。
 func performUserRequest(router *gin.Engine, method string, path string, body string) *httptest.ResponseRecorder {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -255,6 +272,8 @@ func performUserRequest(router *gin.Engine, method string, path string, body str
 	return recorder
 }
 
+// currentTOTPCode 按 RFC 6238（SHA-1、30 秒步长、6 位数字）在本地算出当前动态码，
+// 使测试无需依赖真实认证器 App。
 func currentTOTPCode(t *testing.T, secret string) string {
 	t.Helper()
 	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)

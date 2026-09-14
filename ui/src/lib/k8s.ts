@@ -568,3 +568,28 @@ export function createSearchFilter<T>(
     })
   }
 }
+
+/**
+ * Annotation Kite writes when a create form captures a free-text description.
+ * It is kept in annotations (never labels) so the description stays out of
+ * label selectors while remaining readable from the object itself.
+ */
+export const DESCRIPTION_ANNOTATION = 'kite.io/description'
+
+/**
+ * Picks the namespace a create form should open in. The table stores its
+ * selection in sessionStorage (tab scoped) and localStorage (global), and a
+ * multi selection ("a,b") or the "_all" sentinel cannot host a new object, so
+ * those candidates degrade to the first concrete namespace, or "default".
+ */
+export function resolveCreateNamespace(
+  ...candidates: Array<string | null | undefined>
+): string {
+  for (const candidate of candidates) {
+    const value = (candidate || '').trim()
+    if (!value) continue
+    const first = value.split(',')[0]?.trim()
+    if (first && first !== '_all') return first
+  }
+  return 'default'
+}

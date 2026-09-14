@@ -29,57 +29,50 @@ test('custom role grants namespaces and denies nodes', async ({
 
   await expect(page.getByRole('row').filter({ hasText: username })).toBeVisible()
 
-  await page.goto('/settings?tab=rbac')
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  await page.goto('/rbac')
+  await expect(
+    page.getByRole('heading', { name: 'RBAC Management' })
+  ).toBeVisible()
 
   await page.getByRole('button', { name: 'Add Role' }).click()
 
-  const roleDialog = page.getByRole('dialog', { name: 'Add Role' })
-  await expect(roleDialog).toBeVisible()
+  await page.getByLabel(/^Name \*$/).fill(roleName)
+  await page.getByLabel('Description').fill('Namespaces read only')
 
-  await roleDialog.getByLabel(/^Role \*$/).fill(roleName)
-  await roleDialog.getByLabel('Description').fill('Namespaces read only')
+  // Grant all clusters and all namespaces via the wildcard rows.
+  await page.getByRole('button', { name: 'All clusters (*)' }).click()
+  await page.getByRole('button', { name: 'All namespaces (*)' }).click()
 
-  await roleDialog
-    .getByPlaceholder('* or cluster-name')
-    .fill('*')
-  await roleDialog
-    .getByPlaceholder('* or cluster-name')
-    .press('Enter')
+  // Resources: pick "namespaces" from the suggestions popover.
+  await page.getByRole('combobox', { name: /Select resources.../ }).click()
+  await page.getByPlaceholder('Search...').last().fill('namespaces')
+  await page.getByRole('option', { name: 'namespaces', exact: true }).click()
+  await page.keyboard.press('Escape')
 
-  await roleDialog.getByPlaceholder('* or namespace').fill('*')
-  await roleDialog.getByPlaceholder('* or namespace').press('Enter')
+  // Verbs: pick get + list.
+  await page.getByRole('combobox', { name: /Select verbs.../ }).click()
+  await page.getByPlaceholder('Search...').last().fill('get')
+  await page.getByRole('option', { name: 'get', exact: true }).click()
+  await page.getByPlaceholder('Search...').last().fill('list')
+  await page.getByRole('option', { name: 'list', exact: true }).click()
+  await page.keyboard.press('Escape')
 
-  await roleDialog
-    .getByPlaceholder('* or pods,deployments')
-    .fill('namespaces')
-  await roleDialog
-    .getByPlaceholder('* or pods,deployments')
-    .press('Enter')
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
 
-  const verbsInput = roleDialog.getByPlaceholder(/get.*create/)
-  await verbsInput.fill('get')
-  await verbsInput.press('Enter')
-  await verbsInput.fill('list')
-  await verbsInput.press('Enter')
+  // After creation the role appears in the left-hand list and is selected.
+  await expect(
+    page.getByTestId('rbac-role-list').getByRole('button', {
+      name: roleName,
+    })
+  ).toBeVisible()
 
-  await roleDialog.getByRole('button', { name: 'Create', exact: true }).click()
-
-  const roleRow = page.getByRole('row').filter({ hasText: roleName })
-  await expect(roleRow).toBeVisible()
-
-  await roleRow.getByRole('button').click()
-  await page.getByRole('menuitem', { name: 'Assign' }).click()
-
-  const assignDialog = page.getByRole('dialog', { name: `Assign Role - ${roleName}` })
-  await expect(assignDialog).toBeVisible()
-
-  await assignDialog.getByRole('combobox').filter({ hasText: 'Select user' }).click()
-  await page.getByPlaceholder('Search users...').fill(username)
+  // Assign the new role to the user via the members panel.
+  await page.getByRole('combobox', { name: /Select users.../ }).click()
+  await page.getByPlaceholder('Search...').last().fill(username)
   await page.getByRole('option', { name: username }).click()
-  await assignDialog.getByRole('button', { name: 'Assign' }).click()
-  await assignDialog.getByRole('button', { name: 'Cancel' }).click()
-  await expect(assignDialog).toBeHidden()
+  await page.getByRole('button', { name: 'Add', exact: true }).click()
+
+  await expect(page.getByText(username).first()).toBeVisible()
 
   const userContext = await browser.newContext({
     baseURL,

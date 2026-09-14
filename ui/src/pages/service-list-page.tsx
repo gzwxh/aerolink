@@ -2,12 +2,14 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Service } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
   createSearchFilter,
   getServiceExternalIP,
   getServicePortSearchValues,
+  resolveCreateNamespace,
 } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +25,19 @@ const serviceSearchFilter = createSearchFilter<Service>(
 const columnHelper = createColumnHelper<Service>()
 
 export function ServiceListPage() {
+  const navigate = useNavigate()
+  const { namespace: namespaceParam } = useParams()
+
+  const handleCreateClick = () => {
+    // The URL wins, then the table's persisted selection; a multi or
+    // "all namespaces" selection cannot host a new object.
+    const ns = resolveCreateNamespace(
+      namespaceParam,
+      sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace'))
+    )
+    navigate(`/services/${encodeURIComponent(ns)}/create`)
+  }
   const { t } = useTranslation()
 
   // Define columns for the service table
@@ -119,6 +134,17 @@ export function ServiceListPage() {
       columns={columns}
       clusterScope={false} // Services are namespace-scoped
       searchQueryFilter={serviceSearchFilter}
+      showCreateButton={true}
+      onCreateClick={handleCreateClick}
+      initialNamespace={namespaceParam}
+      onNamespaceChange={(ns) => {
+        navigate(
+          ns && ns !== '_all'
+            ? `/services/${encodeURIComponent(ns)}`
+            : '/services',
+          { replace: true }
+        )
+      }}
     />
   )
 }

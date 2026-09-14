@@ -1,25 +1,213 @@
-import { useState } from 'react'
-import {
-  Container,
-  EnvFromSource,
-  EnvVar,
-  EnvVarSource,
-} from 'kubernetes-types/core/v1'
-import { Plus, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import type { Container, EnvFromSource, EnvVar } from 'kubernetes-types/core/v1'
+import { useTranslation } from 'react-i18next'
 
-import { ConfigMapSelector } from '../selector/configmap-selector'
-import { SecretSelector } from '../selector/secret-selector'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { Label } from '../ui/label'
+import { useResources } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../ui/select'
-import { Separator } from '../ui/separator'
+} from '@/components/ui/select'
+
+/**
+ * Environment variable row types, mirroring the console picker:
+ * Key/Value Pair, Resource, ConfigMap Key, Secret key, Pod Field, Secret and
+ * ConfigMap (the last two inject the whole object via envFrom).
+ */
+type EnvRowType =
+  | 'value'
+  | 'resource'
+  | 'configMapKey'
+  | 'secretKey'
+  | 'podField'
+  | 'secret'
+  | 'configMap'
+
+interface EnvRow {
+  id: string
+  type: EnvRowType
+  /** Variable name (not used by the envFrom types). */
+  name: string
+  /** Direct value for the Key/Value Pair type. */
+  value: string
+  /** ConfigMap / Secret name for the reference types. */
+  refName: string
+  /** ConfigMap / Secret key. */
+  key: string
+  /** resourceFieldRef.resource. */
+  resource: string
+  /** fieldRef.fieldPath. */
+  fieldPath: string
+  /** envFrom prefix. */
+  prefix: string
+}
+
+const RESOURCE_FIELDS = [
+  'requests.cpu',
+  'requests.memory',
+  'requests.ephemeral-storage',
+  'limits.cpu',
+  'limits.memory',
+  'limits.ephemeral-storage',
+]
+
+const POD_FIELDS = [
+  'metadata.name',
+  'metadata.namespace',
+  'metadata.uid',
+  'metadata.labels',
+  'metadata.annotations',
+  'spec.nodeName',
+  'spec.serviceAccountName',
+  'status.hostIP',
+  'status.podIP',
+  'status.podIPs',
+]
+
+let rowSeq = 0
+const nextRowId = () => `env-row-${++rowSeq}`
+
+const emptyRow = (type: EnvRowType): EnvRow => ({
+  id: nextRowId(),
+  type,
+  name: '',
+  value: '',
+  refName: '',
+  key: '',
+  resource: type === 'resource' ? RESOURCE_FIELDS[0] : '',
+  fieldPath: type === 'podField' ? POD_FIELDS[0] : '',
+  prefix: '',
+})
+
+/** Parse a stored env entry into an editable row. */
+const rowFromEnv = (env: EnvVar): EnvRow => {
+  const row = emptyRow('value')
+  row.name = env.name || ''
+  if (env.valueFrom?.secretKeyRef) {
+    row.type = 'secretKey'
+    row.refName = env.valueFrom.secretKeyRef.name || ''
+    row.key = env.valueFrom.secretKeyRef.key || ''
+  } else if (env.valueFrom?.configMapKeyRef) {
+    row.type = 'configMapKey'
+    row.refName = env.valueFrom.configMapKeyRef.name || ''
+    row.key = env.valueFrom.configMapKeyRef.key || ''
+  } else if (env.valueFrom?.fieldRef) {
+    row.type = 'podField'
+    row.fieldPath = env.valueFrom.fieldRef.fieldPath || POD_FIELDS[0]
+  } else if (env.valueFrom?.resourceFieldRef) {
+    row.type = 'resource'
+    row.resource = env.valueFrom.resourceFieldRef.resource || RESOURCE_FIELDS[0]
+  } else {
+    row.value = env.value || ''
+  }
+  return row
+}
+
+/** Parse a stored envFrom entry into an editable row. */
+const rowFromEnvFrom = (source: EnvFromSource): EnvRow => {
+  const row = emptyRow('configMap')
+  row.prefix = source.prefix || ''
+  if (source.secretRef) {
+    row.type = 'secret'
+    row.refName = source.secretRef.name || ''
+  } else {
+    row.type = 'configMap'
+    row.refName = source.configMapRef?.name || ''
+  }
+  return row
+}
+
+/** Convert rows back into the container's env / envFrom fields. */
+const serializeRows = (
+  rows: EnvRow[]
+): { env: EnvVar[]; envFrom: EnvFromSource[] } => {
+  const env: EnvVar[] = []
+  const envFrom: EnvFromSource[] = []
+  for (const row of rows) {
+    switch (row.type) {
+      case 'value':
+        if (row.name.trim()) env.push({ name: row.name, value: row.value })
+        break
+      case 'resource':
+        if (row.name.trim())
+          env.push({
+            name: row.name,
+            valueFrom: {
+              resourceFieldRef: {
+                resource: row.resource || RESOURCE_FIELDS[0],
+              },
+            },
+          })
+        break
+      case 'configMapKey':
+        if (row.name.trim())
+          env.push({
+            name: row.name,
+            valueFrom: {
+              configMapKeyRef: { name: row.refName, key: row.key },
+            },
+          })
+        break
+      case 'secretKey':
+        if (row.name.trim())
+          env.push({
+            name: row.name,
+            valueFrom: { secretKeyRef: { name: row.refName, key: row.key } },
+          })
+        break
+      case 'podField':
+        if (row.name.trim())
+          env.push({
+            name: row.name,
+            valueFrom: {
+              fieldRef: { fieldPath: row.fieldPath || POD_FIELDS[0] },
+            },
+          })
+        break
+      case 'configMap':
+        if (row.refName.trim())
+          envFrom.push({
+            ...(row.prefix ? { prefix: row.prefix } : {}),
+            configMapRef: { name: row.refName },
+          })
+        break
+      case 'secret':
+        if (row.refName.trim())
+          envFrom.push({
+            ...(row.prefix ? { prefix: row.prefix } : {}),
+            secretRef: { name: row.refName },
+          })
+        break
+    }
+  }
+  return { env, envFrom }
+}
+
+function Field({
+  label,
+  children,
+  className,
+}: {
+  label: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('min-w-0 space-y-1.5', className)}>
+      <Label className="text-xs font-normal text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
+  )
+}
 
 interface EnvironmentEditorProps {
   container: Container
@@ -32,665 +220,350 @@ export function EnvironmentEditor({
   namespace,
   onUpdate,
 }: EnvironmentEditorProps) {
-  const [envVars, setEnvVars] = useState<EnvVar[]>(() => container.env || [])
-  const [envFromSources, setEnvFromSources] = useState<EnvFromSource[]>(
-    () => container.envFrom || []
+  const { t } = useTranslation()
+  const [rows, setRows] = useState<EnvRow[]>(() => [
+    ...(container.env || []).map(rowFromEnv),
+    ...(container.envFrom || []).map(rowFromEnvFrom),
+  ])
+
+  // Cluster resources: names plus their keys are offered as pickers.
+  const { data: configMaps } = useResources('configmaps', namespace)
+  const { data: secrets } = useResources('secrets', namespace)
+
+  const configMapNames = useMemo(
+    () =>
+      (configMaps || [])
+        .map((cm) => cm.metadata?.name)
+        .filter((name): name is string => !!name)
+        .sort(),
+    [configMaps]
+  )
+  const secretNames = useMemo(
+    () =>
+      (secrets || [])
+        .filter((s) => s.type !== 'helm.sh/release.v1')
+        .map((s) => s.metadata?.name)
+        .filter((name): name is string => !!name)
+        .sort(),
+    [secrets]
   )
 
-  const addEnvVar = () => {
-    const newEnvVars = [...envVars, { name: '', value: '' }]
-    setEnvVars(newEnvVars)
-    // Don't filter out empty names immediately, let user fill them in
-    onUpdate({ env: newEnvVars })
+  const configMapKeys = (name: string) =>
+    Object.keys(configMaps?.find((cm) => cm.metadata?.name === name)?.data || {})
+  const secretKeys = (name: string) =>
+    Object.keys(secrets?.find((s) => s.metadata?.name === name)?.data || {})
+
+  const commit = (next: EnvRow[]) => {
+    setRows(next)
+    const { env, envFrom } = serializeRows(next)
+    onUpdate({ env, envFrom })
   }
 
-  const removeEnvVar = (index: number) => {
-    const newEnvVars = envVars.filter((_, i) => i !== index)
-    setEnvVars(newEnvVars)
-    onUpdate({
-      env: newEnvVars.filter(
-        (env) =>
-          env.name.trim() !== '' || env.value?.trim() !== '' || env.valueFrom
-      ),
-    })
+  const updateRow = (index: number, updates: Partial<EnvRow>) =>
+    commit(rows.map((row, i) => (i === index ? { ...row, ...updates } : row)))
+
+  const changeType = (index: number, type: EnvRowType) => {
+    const current = rows[index]
+    const next = emptyRow(type)
+    // Keep whatever still applies to the new type.
+    next.name = current.name
+    commit(rows.map((row, i) => (i === index ? next : row)))
   }
 
-  const updateEnvVar = (
+  const renderResourcePicker = (
+    row: EnvRow,
     index: number,
-    field: 'name' | 'value',
-    value: string
+    names: string[],
+    kind: string
+  ) => (
+    <Select
+      value={row.refName}
+      onValueChange={(value) => updateRow(index, { refName: value, key: '' })}
+    >
+      <SelectTrigger className="h-9 w-full">
+        <SelectValue placeholder={t('workloadWizard.envSelectResource', { kind, defaultValue: `选择 ${kind}` })} />
+      </SelectTrigger>
+      <SelectContent>
+        {row.refName && !names.includes(row.refName) && (
+          <SelectItem value={row.refName}>{row.refName}</SelectItem>
+        )}
+        {names.length === 0 && (
+          <SelectItem disabled value="_empty">
+            {t('workloadWizard.envNoResources', { kind, defaultValue: `暂无 ${kind}` })}
+          </SelectItem>
+        )}
+        {names.map((name) => (
+          <SelectItem key={name} value={name}>
+            {name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+
+  const renderKeyPicker = (
+    row: EnvRow,
+    index: number,
+    keys: string[]
   ) => {
-    const newEnvVars = envVars.map((env, i) =>
-      i === index ? { ...env, [field]: value } : env
+    const disabled = !row.refName
+    return (
+      <Select
+        value={row.key}
+        onValueChange={(value) => updateRow(index, { key: value })}
+        disabled={disabled}
+      >
+        <SelectTrigger className="h-9 w-full">
+          <SelectValue
+            placeholder={
+              disabled
+                ? t('workloadWizard.envSelectResourceFirst', '请先选择资源')
+                : t('workloadWizard.envSelectKey', '选择键')
+            }
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {row.key && !keys.includes(row.key) && (
+            <SelectItem value={row.key}>{row.key}</SelectItem>
+          )}
+          {keys.length === 0 && (
+            <SelectItem disabled value="_empty">
+              {t('workloadWizard.envNoKeys', '暂无可选键')}
+            </SelectItem>
+          )}
+          {keys.map((key) => (
+            <SelectItem key={key} value={key}>
+              {key}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     )
-    setEnvVars(newEnvVars)
-    // Only filter out completely empty entries (both name and value empty)
-    onUpdate({
-      env: newEnvVars.filter(
-        (env) =>
-          env.name.trim() !== '' || env.value?.trim() !== '' || env.valueFrom
-      ),
-    })
   }
 
-  const updateEnvVarType = (index: number, type: 'value' | 'valueFrom') => {
-    const newEnvVars = envVars.map((env, i) => {
-      if (i === index) {
-        if (type === 'value') {
-          // Remove valueFrom and ensure value is set
-          const newEnv: EnvVar = {
-            name: env.name,
-            value: env.value || '',
-          }
-          return newEnv
-        } else {
-          // Remove value and set default valueFrom
-          const newEnv: EnvVar = {
-            name: env.name,
-            valueFrom: env.valueFrom || {
-              secretKeyRef: { name: '', key: '' },
-            },
-          }
-          return newEnv
-        }
-      }
-      return env
-    })
-    setEnvVars(newEnvVars)
-    onUpdate({
-      env: newEnvVars.filter(
-        (env) =>
-          env.name.trim() !== '' || env.value?.trim() !== '' || env.valueFrom
-      ),
-    })
+  const renderFields = (row: EnvRow, index: number) => {
+    const nameInput = (
+      <Field label={t('workloadWizard.envName', '变量名')}>
+        <Input
+          value={row.name}
+          onChange={(e) => updateRow(index, { name: e.target.value })}
+          placeholder={t('workloadWizard.envNamePlaceholder', '例如: FOO')}
+          className="h-9"
+        />
+      </Field>
+    )
+
+    switch (row.type) {
+      case 'value':
+        return (
+          <>
+            {nameInput}
+            <Field
+              label={t('workloadWizard.envValue', '值')}
+              className="col-span-2"
+            >
+              <Input
+                value={row.value}
+                onChange={(e) => updateRow(index, { value: e.target.value })}
+                placeholder={t('workloadWizard.envValuePlaceholder', '例如: bar')}
+                className="h-9"
+              />
+            </Field>
+          </>
+        )
+      case 'resource':
+        return (
+          <>
+            {nameInput}
+            <Field
+              label={t('workloadWizard.envResource', '资源')}
+              className="col-span-2"
+            >
+              <Select
+                value={row.resource || RESOURCE_FIELDS[0]}
+                onValueChange={(value) => updateRow(index, { resource: value })}
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RESOURCE_FIELDS.map((field) => (
+                    <SelectItem key={field} value={field}>
+                      {field}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </>
+        )
+      case 'podField':
+        return (
+          <>
+            {nameInput}
+            <Field
+              label={t('workloadWizard.envFieldPath', '字段路径')}
+              className="col-span-2"
+            >
+              <Select
+                value={row.fieldPath || POD_FIELDS[0]}
+                onValueChange={(value) => updateRow(index, { fieldPath: value })}
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {POD_FIELDS.map((field) => (
+                    <SelectItem key={field} value={field}>
+                      {field}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </>
+        )
+      case 'configMapKey':
+        return (
+          <>
+            {nameInput}
+            <Field label={t('workloadWizard.envConfigMap', 'ConfigMap')}>
+              {renderResourcePicker(row, index, configMapNames, 'ConfigMap')}
+            </Field>
+            <Field label={t('workloadWizard.envKey', '键')}>
+              {renderKeyPicker(row, index, configMapKeys(row.refName))}
+            </Field>
+          </>
+        )
+      case 'secretKey':
+        return (
+          <>
+            {nameInput}
+            <Field label={t('workloadWizard.envSecret', '密文')}>
+              {renderResourcePicker(row, index, secretNames, 'Secret')}
+            </Field>
+            <Field label={t('workloadWizard.envKey', '键')}>
+              {renderKeyPicker(row, index, secretKeys(row.refName))}
+            </Field>
+          </>
+        )
+      case 'configMap':
+        return (
+          <>
+            <Field label={t('workloadWizard.envPrefix', '前缀')}>
+              <Input
+                value={row.prefix}
+                onChange={(e) => updateRow(index, { prefix: e.target.value })}
+                placeholder={t('workloadWizard.envPrefixPlaceholder', '例如: FOO_')}
+                className="h-9"
+              />
+            </Field>
+            <Field
+              label={t('workloadWizard.envConfigMap', 'ConfigMap')}
+              className="col-span-2"
+            >
+              {renderResourcePicker(row, index, configMapNames, 'ConfigMap')}
+            </Field>
+          </>
+        )
+      case 'secret':
+        return (
+          <>
+            <Field label={t('workloadWizard.envPrefix', '前缀')}>
+              <Input
+                value={row.prefix}
+                onChange={(e) => updateRow(index, { prefix: e.target.value })}
+                placeholder={t('workloadWizard.envPrefixPlaceholder', '例如: FOO_')}
+                className="h-9"
+              />
+            </Field>
+            <Field
+              label={t('workloadWizard.envSecret', '密文')}
+              className="col-span-2"
+            >
+              {renderResourcePicker(row, index, secretNames, 'Secret')}
+            </Field>
+          </>
+        )
+    }
   }
 
-  const updateValueFrom = (
-    index: number,
-    type: 'secretKeyRef' | 'configMapKeyRef' | 'fieldRef' | 'resourceFieldRef',
-    field: string,
-    value: string
-  ) => {
-    const newEnvVars = envVars.map((env, i) => {
-      if (i === index && env.valueFrom) {
-        const newValueFrom = { ...env.valueFrom }
-
-        // Clear other types when switching
-        if (type === 'secretKeyRef') {
-          delete newValueFrom.configMapKeyRef
-          delete newValueFrom.fieldRef
-          delete newValueFrom.resourceFieldRef
-          newValueFrom.secretKeyRef = {
-            name: newValueFrom.secretKeyRef?.name || '',
-            key: newValueFrom.secretKeyRef?.key || '',
-            [field]: value,
-          }
-        } else if (type === 'configMapKeyRef') {
-          delete newValueFrom.secretKeyRef
-          delete newValueFrom.fieldRef
-          delete newValueFrom.resourceFieldRef
-          newValueFrom.configMapKeyRef = {
-            name: newValueFrom.configMapKeyRef?.name || '',
-            key: newValueFrom.configMapKeyRef?.key || '',
-            [field]: value,
-          }
-        } else if (type === 'fieldRef') {
-          delete newValueFrom.secretKeyRef
-          delete newValueFrom.configMapKeyRef
-          delete newValueFrom.resourceFieldRef
-          newValueFrom.fieldRef = {
-            fieldPath: newValueFrom.fieldRef?.fieldPath || '',
-            [field]: value,
-          }
-        } else if (type === 'resourceFieldRef') {
-          delete newValueFrom.secretKeyRef
-          delete newValueFrom.configMapKeyRef
-          delete newValueFrom.fieldRef
-          newValueFrom.resourceFieldRef = {
-            resource: newValueFrom.resourceFieldRef?.resource || '',
-            containerName: newValueFrom.resourceFieldRef?.containerName,
-            [field]: value,
-          }
-        }
-
-        return { ...env, valueFrom: newValueFrom }
-      }
-      return env
-    })
-    setEnvVars(newEnvVars)
-    onUpdate({
-      env: newEnvVars.filter(
-        (env) =>
-          env.name.trim() !== '' || env.value?.trim() !== '' || env.valueFrom
-      ),
-    })
-  }
-
-  const updateValueFromType = (
-    index: number,
-    type: 'secretKeyRef' | 'configMapKeyRef' | 'fieldRef' | 'resourceFieldRef'
-  ) => {
-    const newEnvVars = envVars.map((env, i) => {
-      if (i === index && env.valueFrom) {
-        const newValueFrom: EnvVarSource = {}
-
-        if (type === 'secretKeyRef') {
-          newValueFrom.secretKeyRef = { name: '', key: '' }
-        } else if (type === 'configMapKeyRef') {
-          newValueFrom.configMapKeyRef = { name: '', key: '' }
-        } else if (type === 'fieldRef') {
-          newValueFrom.fieldRef = { fieldPath: '' }
-        } else if (type === 'resourceFieldRef') {
-          newValueFrom.resourceFieldRef = { resource: '' }
-        }
-
-        return { ...env, valueFrom: newValueFrom }
-      }
-      return env
-    })
-    setEnvVars(newEnvVars)
-    onUpdate({
-      env: newEnvVars.filter(
-        (env) =>
-          env.name.trim() !== '' || env.value?.trim() !== '' || env.valueFrom
-      ),
-    })
-  }
-
-  // EnvFrom management functions
-  const addEnvFromSource = () => {
-    const newEnvFromSources = [
-      ...envFromSources,
-      { configMapRef: { name: '' } },
-    ]
-    setEnvFromSources(newEnvFromSources)
-    onUpdate({
-      envFrom: newEnvFromSources.filter(
-        (source) =>
-          source.configMapRef?.name?.trim() !== '' ||
-          source.secretRef?.name?.trim() !== ''
-      ),
-    })
-  }
-
-  const removeEnvFromSource = (index: number) => {
-    const newEnvFromSources = envFromSources.filter((_, i) => i !== index)
-    setEnvFromSources(newEnvFromSources)
-    onUpdate({
-      envFrom: newEnvFromSources.filter(
-        (source) =>
-          source.configMapRef?.name?.trim() !== '' ||
-          source.secretRef?.name?.trim() !== ''
-      ),
-    })
-  }
-
-  const updateEnvFromSource = (
-    index: number,
-    type: 'configMapRef' | 'secretRef',
-    field: string,
-    value: string
-  ) => {
-    const newEnvFromSources = envFromSources.map((source, i) => {
-      if (i === index) {
-        if (field === 'prefix') {
-          return {
-            ...source,
-            prefix: value || undefined,
-          }
-        }
-
-        if (type === 'configMapRef') {
-          return {
-            ...source,
-            secretRef: undefined,
-            configMapRef: {
-              ...source.configMapRef,
-              [field]: value,
-            },
-          }
-        } else {
-          return {
-            ...source,
-            configMapRef: undefined,
-            secretRef: {
-              ...source.secretRef,
-              [field]: value,
-            },
-          }
-        }
-      }
-      return source
-    })
-    setEnvFromSources(newEnvFromSources)
-    onUpdate({
-      envFrom: newEnvFromSources.filter(
-        (source) =>
-          source.configMapRef?.name?.trim() !== '' ||
-          source.secretRef?.name?.trim() !== ''
-      ),
-    })
-  }
-
-  const updateEnvFromSourceType = (
-    index: number,
-    type: 'configMapRef' | 'secretRef'
-  ) => {
-    const newEnvFromSources = envFromSources.map((source, i) => {
-      if (i === index) {
-        if (type === 'configMapRef') {
-          return { configMapRef: { name: '' } }
-        } else {
-          return { secretRef: { name: '' } }
-        }
-      }
-      return source
-    })
-    setEnvFromSources(newEnvFromSources)
-    onUpdate({
-      envFrom: newEnvFromSources.filter(
-        (source) =>
-          source.configMapRef?.name?.trim() !== '' ||
-          source.secretRef?.name?.trim() !== ''
-      ),
-    })
-  }
+  const typeOptions: Array<{ value: EnvRowType; label: string }> = [
+    {
+      value: 'value',
+      label: t('workloadWizard.envTypeValue', 'Key/Value Pair'),
+    },
+    { value: 'resource', label: t('workloadWizard.envTypeResource', 'Resource') },
+    {
+      value: 'configMapKey',
+      label: t('workloadWizard.envTypeConfigMapKey', 'ConfigMap Key'),
+    },
+    {
+      value: 'secretKey',
+      label: t('workloadWizard.envTypeSecretKey', 'Secret key'),
+    },
+    { value: 'podField', label: t('workloadWizard.envTypePodField', 'Pod Field') },
+    { value: 'secret', label: t('workloadWizard.envTypeSecret', 'Secret') },
+    { value: 'configMap', label: t('workloadWizard.envTypeConfigMap', 'ConfigMap') },
+  ]
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Label className="text-sm font-medium">Environment Variables</Label>
-        <Button onClick={addEnvVar} size="sm" variant="outline">
-          <Plus className="h-4 w-4 mr-1" />
-          Add Variable
-        </Button>
-      </div>
-
-      <div className="space-y-3 max-h-[500px] overflow-y-auto">
-        {envVars.map((env, index) => (
+      <h4 className="text-base font-medium">
+        {t('workloadWizard.envTitle', '环境变量')}
+      </h4>
+      <div className="space-y-3">
+        {rows.map((row, index) => (
           <div
-            key={index}
-            className="flex items-start gap-2 p-3 border rounded-lg"
+            key={row.id}
+            className="grid grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-start gap-3"
           >
-            <div className="flex-1 space-y-2">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
-                <div className="lg:col-span-1">
-                  <Label className="text-xs text-muted-foreground">Name</Label>
-                  <Input
-                    placeholder="Variable name"
-                    value={env.name}
-                    onChange={(e) =>
-                      updateEnvVar(index, 'name', e.target.value)
-                    }
-                    className="text-sm"
-                  />
-                </div>
-                <div className="lg:col-span-1">
-                  <Label className="text-xs text-muted-foreground">Type</Label>
-                  <Select
-                    value={env.valueFrom ? 'valueFrom' : 'value'}
-                    onValueChange={(value) =>
-                      updateEnvVarType(index, value as 'value' | 'valueFrom')
-                    }
-                  >
-                    <SelectTrigger className="text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="value">Direct Value</SelectItem>
-                      <SelectItem value="valueFrom">Value From</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="lg:col-span-2">
-                  {env.valueFrom ? (
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">
-                        Source
-                      </Label>
-                      <Select
-                        value={
-                          env.valueFrom.secretKeyRef
-                            ? 'secretKeyRef'
-                            : env.valueFrom.configMapKeyRef
-                              ? 'configMapKeyRef'
-                              : env.valueFrom.fieldRef
-                                ? 'fieldRef'
-                                : env.valueFrom.resourceFieldRef
-                                  ? 'resourceFieldRef'
-                                  : ''
-                        }
-                        onValueChange={(value) =>
-                          updateValueFromType(
-                            index,
-                            value as
-                              | 'secretKeyRef'
-                              | 'configMapKeyRef'
-                              | 'fieldRef'
-                              | 'resourceFieldRef'
-                          )
-                        }
-                      >
-                        <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="Select source type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="secretKeyRef">Secret</SelectItem>
-                          <SelectItem value="configMapKeyRef">
-                            ConfigMap
-                          </SelectItem>
-                          <SelectItem value="fieldRef">
-                            Field Reference
-                          </SelectItem>
-                          <SelectItem value="resourceFieldRef">
-                            Resource Field
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      {env.valueFrom.secretKeyRef && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div className="min-w-0">
-                            <Label className="text-xs text-muted-foreground">
-                              Secret Name
-                            </Label>
-                            <SecretSelector
-                              selectedSecret={
-                                env.valueFrom.secretKeyRef.name || ''
-                              }
-                              onSecretChange={(value) =>
-                                updateValueFrom(
-                                  index,
-                                  'secretKeyRef',
-                                  'name',
-                                  value
-                                )
-                              }
-                              namespace={namespace}
-                              placeholder="Select secret"
-                              className="text-sm w-full"
-                              avoidHelmSecrets
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <Label className="text-xs text-muted-foreground">
-                              Key
-                            </Label>
-                            <Input
-                              placeholder="key"
-                              value={env.valueFrom.secretKeyRef.key}
-                              onChange={(e) =>
-                                updateValueFrom(
-                                  index,
-                                  'secretKeyRef',
-                                  'key',
-                                  e.target.value
-                                )
-                              }
-                              className="text-sm w-full"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {env.valueFrom.configMapKeyRef && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div className="min-w-0">
-                            <Label className="text-xs text-muted-foreground">
-                              ConfigMap Name
-                            </Label>
-                            <ConfigMapSelector
-                              selectedConfigMap={
-                                env.valueFrom.configMapKeyRef.name || ''
-                              }
-                              onConfigMapChange={(value) =>
-                                updateValueFrom(
-                                  index,
-                                  'configMapKeyRef',
-                                  'name',
-                                  value
-                                )
-                              }
-                              namespace={namespace}
-                              placeholder="Select configmap"
-                              className="text-sm w-full"
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <Label className="text-xs text-muted-foreground">
-                              Key
-                            </Label>
-                            <Input
-                              placeholder="key"
-                              value={env.valueFrom.configMapKeyRef.key}
-                              onChange={(e) =>
-                                updateValueFrom(
-                                  index,
-                                  'configMapKeyRef',
-                                  'key',
-                                  e.target.value
-                                )
-                              }
-                              className="text-sm w-full"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {env.valueFrom.fieldRef && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Field Path
-                          </Label>
-                          <Input
-                            placeholder="metadata.name"
-                            value={env.valueFrom.fieldRef.fieldPath}
-                            onChange={(e) =>
-                              updateValueFrom(
-                                index,
-                                'fieldRef',
-                                'fieldPath',
-                                e.target.value
-                              )
-                            }
-                            className="text-sm"
-                          />
-                        </div>
-                      )}
-
-                      {env.valueFrom.resourceFieldRef && (
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <div>
-                            <Label className="text-xs text-muted-foreground">
-                              Resource
-                            </Label>
-                            <Input
-                              placeholder="requests.cpu"
-                              value={env.valueFrom.resourceFieldRef.resource}
-                              onChange={(e) =>
-                                updateValueFrom(
-                                  index,
-                                  'resourceFieldRef',
-                                  'resource',
-                                  e.target.value
-                                )
-                              }
-                              className="text-sm"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">
-                              Container Name
-                            </Label>
-                            <Input
-                              placeholder="container-name"
-                              value={
-                                env.valueFrom.resourceFieldRef.containerName ||
-                                ''
-                              }
-                              onChange={(e) =>
-                                updateValueFrom(
-                                  index,
-                                  'resourceFieldRef',
-                                  'containerName',
-                                  e.target.value
-                                )
-                              }
-                              className="text-sm"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Value
-                      </Label>
-                      <Input
-                        placeholder="Variable value"
-                        value={env.value || ''}
-                        onChange={(e) =>
-                          updateEnvVar(index, 'value', e.target.value)
-                        }
-                        className="text-sm"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-              {env.value && env.value.length > 50 && (
-                <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded border">
-                  <span className="font-medium">Full value:</span>
-                  <div className="mt-1  break-all">{env.value}</div>
-                </div>
-              )}
+            <Field label={t('workloadWizard.envType', '类型')}>
+              <Select
+                value={row.type}
+                onValueChange={(value) => changeType(index, value as EnvRowType)}
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {typeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {renderFields(row, index)}
+            <div className="space-y-1.5">
+              <Label
+                aria-hidden
+                className="select-none text-xs font-normal text-transparent"
+              >
+                .
+              </Label>
+              <button
+                type="button"
+                className="flex h-9 items-center text-sm text-primary transition-colors hover:underline"
+                onClick={() => commit(rows.filter((_, i) => i !== index))}
+              >
+                {t('workloadWizard.remove', '移除')}
+              </button>
             </div>
-            <Button
-              onClick={() => removeEnvVar(index)}
-              size="sm"
-              variant="ghost"
-              className="text-red-500 hover:text-red-700 mt-5"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
           </div>
         ))}
-
-        {envVars.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            No environment variables configured
-          </div>
-        )}
       </div>
 
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <Label className="text-sm font-medium">Environment From</Label>
-        <Button onClick={addEnvFromSource} size="sm" variant="outline">
-          <Plus className="h-4 w-4 mr-1" />
-          Add Source
-        </Button>
-      </div>
-
-      <div className="space-y-3 max-h-[500px] overflow-y-auto">
-        {envFromSources.map((source, index) => (
-          <div
-            key={index}
-            className="flex items-start gap-2 p-3 border rounded-lg"
-          >
-            <div className="flex-1 space-y-2">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
-                <div className="lg:col-span-1">
-                  <Label className="text-xs text-muted-foreground">Type</Label>
-                  <Select
-                    value={source.configMapRef ? 'configMapRef' : 'secretRef'}
-                    onValueChange={(value) =>
-                      updateEnvFromSourceType(
-                        index,
-                        value as 'configMapRef' | 'secretRef'
-                      )
-                    }
-                  >
-                    <SelectTrigger className="text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="configMapRef">ConfigMap</SelectItem>
-                      <SelectItem value="secretRef">Secret</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="lg:col-span-2 min-w-0">
-                  <Label className="text-xs text-muted-foreground">
-                    {source.configMapRef ? 'ConfigMap' : 'Secret'} Name
-                  </Label>
-                  {source.configMapRef ? (
-                    <ConfigMapSelector
-                      selectedConfigMap={source.configMapRef.name || ''}
-                      onConfigMapChange={(value) =>
-                        updateEnvFromSource(
-                          index,
-                          'configMapRef',
-                          'name',
-                          value
-                        )
-                      }
-                      namespace={namespace}
-                      placeholder="Select configmap"
-                      className="text-sm w-full"
-                    />
-                  ) : (
-                    <SecretSelector
-                      selectedSecret={source.secretRef?.name || ''}
-                      onSecretChange={(value) =>
-                        updateEnvFromSource(index, 'secretRef', 'name', value)
-                      }
-                      namespace={namespace}
-                      placeholder="Select secret"
-                      className="text-sm w-full"
-                      avoidHelmSecrets
-                    />
-                  )}
-                </div>
-                <div className="lg:col-span-1 min-w-0">
-                  <Label className="text-xs text-muted-foreground">
-                    Prefix (Optional)
-                  </Label>
-                  <Input
-                    placeholder="PREFIX_"
-                    value={source.prefix || ''}
-                    onChange={(e) =>
-                      updateEnvFromSource(
-                        index,
-                        source.configMapRef ? 'configMapRef' : 'secretRef',
-                        'prefix',
-                        e.target.value
-                      )
-                    }
-                    className="text-sm w-full"
-                  />
-                </div>
-              </div>
-            </div>
-            <Button
-              onClick={() => removeEnvFromSource(index)}
-              size="sm"
-              variant="ghost"
-              className="text-red-500 hover:text-red-700 mt-5"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-
-        {envFromSources.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            No environment sources configured
-          </div>
-        )}
-      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 border-primary/40 bg-primary/5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
+        onClick={() => commit([...rows, emptyRow('value')])}
+      >
+        {t('workloadWizard.addVariable', '添加变量')}
+      </Button>
     </div>
   )
 }

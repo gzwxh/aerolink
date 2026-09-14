@@ -5,8 +5,11 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import {
+  fetchLDAPSyncStatus,
   LDAPSetting,
   LDAPSettingUpdateRequest,
+  LDAPSyncResult,
+  triggerLDAPSync,
   updateGeneralSetting,
   updateLDAPSetting,
   useGeneralSetting,
@@ -20,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 
 import { OAuthProviderManagement } from './oauth-provider-management'
+import { LDAPImportDialog } from './ldap-import-dialog'
 
 type AuthenticationFormData = LDAPSetting
 
@@ -38,6 +42,8 @@ function createDefaultSettings(): AuthenticationFormData {
     groupBaseDn: '',
     groupFilter: '',
     groupNameAttribute: '',
+    autoSync: true,
+    syncIntervalMinutes: 10,
   }
 }
 
@@ -60,6 +66,8 @@ function toFormData(data?: LDAPSetting): AuthenticationFormData {
     groupBaseDn: data.groupBaseDn || '',
     groupFilter: data.groupFilter || '',
     groupNameAttribute: data.groupNameAttribute || '',
+    autoSync: data.autoSync ?? true,
+    syncIntervalMinutes: data.syncIntervalMinutes || 10,
   }
 }
 
@@ -147,6 +155,8 @@ export function AuthenticationManagement() {
       groupBaseDn: formData.groupBaseDn.trim(),
       groupFilter: formData.groupFilter.trim(),
       groupNameAttribute: formData.groupNameAttribute.trim(),
+      autoSync: formData.autoSync,
+      syncIntervalMinutes: formData.syncIntervalMinutes,
     }
     if (formData.bindPassword !== '') {
       payload.bindPassword = formData.bindPassword
@@ -158,6 +168,77 @@ export function AuthenticationManagement() {
       enableMFA: mfaEnabled,
       enablePasskeyLogin: passkeyLoginEnabled,
     })
+  }
+
+  const [ldapSyncRunning, setLdapSyncRunning] = useState(false)
+  const [ldapSyncResult, setLdapSyncResult] = useState<LDAPSyncResult | null>(
+    null
+  )
+  const [ldapSyncAt, setLdapSyncAt] = useState<string | undefined>(undefined)
+  const [ldapImportOpen, setLdapImportOpen] = useState(false)
+
+  useEffect(() => {
+    if (!data?.enabled) return
+    let cancelled = false
+    fetchLDAPSyncStatus()
+      .then((status) => {
+        if (cancelled) return
+        setLdapSyncResult(status.lastResult ?? null)
+        setLdapSyncAt(status.lastSyncAt)
+        if (status.running) setLdapSyncRunning(true)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [data?.enabled])
+
+  useEffect(() => {
+    if (!ldapSyncRunning) return
+    let stopped = false
+    const poll = async () => {
+      try {
+        const status = await fetchLDAPSyncStatus()
+        if (stopped) return
+        setLdapSyncResult(status.lastResult ?? null)
+        setLdapSyncAt(status.lastSyncAt)
+        if (!status.running) setLdapSyncRunning(false)
+      } catch {
+        if (!stopped) setLdapSyncRunning(false)
+      }
+    }
+    void poll()
+    const timer = window.setInterval(poll, 2000)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [ldapSyncRunning])
+
+  const handleSyncNow = async () => {
+    if (!formData.enabled) {
+      toast.error(
+        t(
+          'authenticationManagement.ldap.sync.notEnabled',
+          'LDAP is not enabled'
+        )
+      )
+      return
+    }
+    try {
+      const status = await triggerLDAPSync()
+      setLdapSyncRunning(true)
+      setLdapSyncResult(status.lastResult ?? null)
+      setLdapSyncAt(status.lastSyncAt)
+      toast.success(
+        t(
+          'authenticationManagement.ldap.sync.started',
+          'LDAP sync started'
+        )
+      )
+    } catch (err) {
+      toast.error(translateError(err as Error, t))
+    }
   }
 
   if (isLoading && !data) {
@@ -565,6 +646,110 @@ export function AuthenticationManagement() {
                     />
                   </div>
                 </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                      <div>
+                        <Label htmlFor="ldap-auto-sync" className="text-sm">
+                          {t(
+                            'authenticationManagement.ldap.autoSync',
+                            'Enable periodic sync'
+                          )}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          {t(
+                            'authenticationManagement.ldap.autoSyncHint',
+                            'Periodically pull users and group memberships from LDAP.'
+                          )}
+                        </p>
+                      </div>
+                      <Switch
+                        id="ldap-auto-sync"
+                        checked={formData.autoSync}
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({ ...prev, autoSync: checked }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ldap-sync-interval">
+                      {t(
+                        'authenticationManagement.ldap.syncIntervalMinutes',
+                        'Sync interval (minutes)'
+                      )}
+                    </Label>
+                    <Input
+                      id="ldap-sync-interval"
+                      type="number"
+                      min={1}
+                      value={formData.syncIntervalMinutes}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          syncIntervalMinutes: Number(e.target.value) || 1,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 md:col-span-2">
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <p>
+                        {t('authenticationManagement.ldap.sync.lastSyncAt', {
+                          at: ldapSyncAt
+                            ? new Date(ldapSyncAt).toLocaleString()
+                            : t(
+                                'authenticationManagement.ldap.sync.never',
+                                'never'
+                              ),
+                          defaultValue: 'Last sync: {{at}}',
+                        })}
+                      </p>
+                      {ldapSyncResult && !ldapSyncResult.error && (
+                        <p>
+                          {t('authenticationManagement.ldap.sync.summary', {
+                            created: ldapSyncResult.created,
+                            updated: ldapSyncResult.updated,
+                            failed: ldapSyncResult.failed,
+                            purged: ldapSyncResult.purged,
+                            defaultValue:
+                              '{{created}} created, {{updated}} updated, {{failed}} failed, {{purged}} removed',
+                          })}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setLdapImportOpen(true)}
+                        disabled={mutation.isPending}
+                      >
+                        {t(
+                          'authenticationManagement.ldap.sync.importUsers',
+                          'Import Users'
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleSyncNow}
+                        disabled={ldapSyncRunning || mutation.isPending}
+                      >
+                        {ldapSyncRunning
+                          ? t(
+                              'authenticationManagement.ldap.sync.running',
+                              'Syncing...'
+                            )
+                          : t(
+                              'authenticationManagement.ldap.sync.now',
+                              'Sync Now'
+                            )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -579,6 +764,11 @@ export function AuthenticationManagement() {
           </div>
         </CardContent>
       </Card>
+
+      <LDAPImportDialog
+        open={ldapImportOpen}
+        onOpenChange={setLdapImportOpen}
+      />
     </div>
   )
 }

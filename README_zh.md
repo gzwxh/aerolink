@@ -21,6 +21,15 @@ Kite 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维
 
 <img width="1586" height="1167" alt="image" src="https://github.com/user-attachments/assets/a88a63b7-5b71-444d-8d98-66f147a68ef7" />
 
+## 关于本仓库
+
+本仓库是 [kite-org/kite](https://github.com/kite-org/kite) 的定制分支，镜像地址为 [gitee.com/gzwxh/kite](https://gitee.com/gzwxh/kite)，在上游代码基础上包含本团队的定制改动（资源创建与权限门禁、命名空间/节点权限、AI 与界面细节等）。
+
+- 上游代码：`origin` → `https://github.com/kite-org/kite`
+- 本仓库副本：`gitee` → `https://gitee.com/gzwxh/kite`
+- 自建镜像：参考[构建并推送 Kite 镜像](./docsCN/guide/build-and-push-image.md)（含国内网络下的镜像源参数、推送到私有仓库、用 Helm 部署自建镜像）
+- 中文文档：见 [`docsCN/`](./docsCN/index.md)
+
 ## 为什么选择 Kite
 
 ### 可观测

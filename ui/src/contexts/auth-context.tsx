@@ -7,6 +7,8 @@ import {
   useEffect,
   useMemo,
 } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import type { BootstrapCapabilities, CredentialProvider } from '@/lib/api'
 import {
@@ -17,10 +19,14 @@ import {
   useBootstrap,
   type AuthUser,
 } from '@/lib/api'
+import { roleCanAccess, type CanAccessOptions } from '@/lib/rbac-permissions'
 import { withSubPath } from '@/lib/subpath'
+
+export type { CanAccessOptions }
 
 interface User extends AuthUser {
   isAdmin(): boolean
+  can(resource: string, verb: string, options?: CanAccessOptions): boolean
 
   Key(): string
 }
@@ -50,6 +56,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const loginSucceededFlag = 'kite_just_logged_in'
+
+// markLoginSucceeded remembers (in the same tab) that a login just succeeded so
+// the auth provider can show a short confirmation toast once the user object is
+// available — including after the OAuth provider round-trip redirect.
+export function markLoginSucceeded() {
+  try {
+    sessionStorage.setItem(loginSucceededFlag, '1')
+  } catch {
+    // ignore storage failures
+  }
+}
+
 const defaultCapabilities: BootstrapCapabilities = {
   aiEnabled: false,
   kubectlEnabled: true,
@@ -71,10 +90,10 @@ function normalizeUser(user: AuthUser): User {
   return {
     ...user,
     isAdmin() {
-      return (
-        this.roles?.some((role: { name: string }) => role.name === 'admin') ||
-        false
-      )
+      return this.roles?.some((role) => role.name === 'admin') || false
+    },
+    can(resource, verb, options) {
+      return roleCanAccess(this.roles, resource, verb, options)
     },
     Key() {
       return this.username || this.id
@@ -83,6 +102,7 @@ function normalizeUser(user: AuthUser): User {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const { t } = useTranslation()
   const {
     data: bootstrap,
     isLoading,
@@ -94,6 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [refetchBootstrap])
 
   const login = useCallback(async (provider: string = 'github') => {
+    markLoginSucceeded()
     const { auth_url } = await initiateOAuthLogin(provider)
     window.location.href = auth_url
   }, [])
@@ -106,6 +127,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       mfaCode?: string
     ) => {
       await authenticateWithCredentials(provider, username, password, mfaCode)
+      markLoginSucceeded()
       await checkAuth()
     },
     [checkAuth]
@@ -131,6 +153,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     () => (bootstrap?.user ? normalizeUser(bootstrap.user) : null),
     [bootstrap?.user]
   )
+
+  useEffect(() => {
+    if (isLoading || !user || typeof window === 'undefined') return
+    let justLoggedIn = false
+    try {
+      justLoggedIn = sessionStorage.getItem(loginSucceededFlag) === '1'
+      if (justLoggedIn) sessionStorage.removeItem(loginSucceededFlag)
+    } catch {
+      // ignore storage failures
+    }
+    if (justLoggedIn) {
+      toast.success(t('login.success', 'Login successful'), { duration: 2000 })
+    }
+  }, [user, isLoading, t])
 
   useEffect(() => {
     if (!user) return

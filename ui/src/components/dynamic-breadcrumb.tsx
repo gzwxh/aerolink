@@ -37,6 +37,10 @@ export function DynamicBreadcrumb() {
         return { label: t('sidebar.short.pvcs'), href }
       }
 
+      if (label === 'settings') {
+        return { label: t('settings.title', 'System Settings'), href }
+      }
+
       const resource = getResourceCatalogEntry(label)
       if (!resource) {
         return { label, href }

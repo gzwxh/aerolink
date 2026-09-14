@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import { ResourceType } from '@/types/api'
 import { deleteResource } from '@/lib/api'
 import { getResourceMetadata } from '@/lib/resource-catalog'
+import { useCanAnyNamespace } from '@/hooks/use-can'
 import { useCluster } from '@/hooks/use-cluster'
 import { useResourceTableData } from '@/hooks/use-resource-table-data'
 import { useResourceTableState } from '@/hooks/use-resource-table-state'
@@ -46,12 +47,24 @@ export interface ResourceTableProps<T> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   columns: ColumnDef<T, any>[]
   clusterScope?: boolean // If true, don't show namespace selector
+  initialNamespace?: string // Optional namespace preset (e.g. from the URL)
+  onNamespaceChange?: (namespace: string) => void // Notified when the user changes the namespace filter
   searchQueryFilter?: (item: T, query: string) => boolean // Custom filter function
   showCreateButton?: boolean // If true, show create button
   onCreateClick?: () => void // Callback for create button click
   extraToolbars?: React.ReactNode[] // Additional toolbar components
   batchActions?: ResourceTableBatchAction<T>[]
   defaultHiddenColumns?: string[] // Columns to hide by default
+  renderRowDetails?: (row: T) => React.ReactNode // Optional full-width details row per item
+  alwaysShowBatchActions?: boolean // Keep batch buttons visible (disabled) without a selection
+  showBatchDelete?: boolean // Render the built-in batch delete button
+  onRowSelectionChange?: (rows: T[]) => void // Notified when the row selection changes
+  /**
+   * Resource used for the permission checks (defaults to the resolved resource
+   * type). Create and bulk delete are hidden unless some namespace grants the
+   * verb; pass an empty string to skip gating entirely.
+   */
+  permissionResource?: string
 }
 
 export function ResourceTable<T>(props: ResourceTableProps<T>) {
@@ -65,6 +78,8 @@ export function ResourceTable<T>(props: ResourceTableProps<T>) {
 function ResourceTableContent<T>({
   resourceName,
   resourceType,
+  initialNamespace,
+  onNamespaceChange,
   columns,
   clusterScope = false,
   searchQueryFilter,
@@ -73,6 +88,11 @@ function ResourceTableContent<T>({
   extraToolbars = [],
   batchActions = [],
   defaultHiddenColumns = [],
+  renderRowDetails,
+  alwaysShowBatchActions = false,
+  showBatchDelete = true,
+  onRowSelectionChange,
+  permissionResource,
 }: ResourceTableProps<T>) {
   const { t } = useTranslation()
   const {
@@ -103,7 +123,17 @@ function ResourceTableContent<T>({
     resourceName,
     clusterScope,
     defaultHiddenColumns,
+    initialNamespace,
   })
+
+  // Notify the parent (e.g. to sync the URL) after the built-in handler runs.
+  const handleNamespaceChangeWrapper = useCallback(
+    (value: string) => {
+      handleNamespaceChange(value)
+      onNamespaceChange?.(value)
+    },
+    [handleNamespaceChange, onNamespaceChange]
+  )
 
   // When the query looks like a label selector, route it to the backend API
   // instead of the client-side name filter.
@@ -142,6 +172,19 @@ function ResourceTableContent<T>({
     refreshInterval,
     labelSelector: effectiveLabelSelector,
   })
+  // The Create button and the bulk delete are not bound to one namespace, so
+  // they follow the "granted somewhere" rule. Resources Kite has no metadata
+  // for (pages passing a display name, e.g. "Helm Releases") are left alone.
+  const canAnyNamespace = useCanAnyNamespace()
+  const permissionTarget =
+    permissionResource ??
+    (getResourceMetadata(resolvedResourceType)
+      ? resolvedResourceType
+      : undefined)
+  const canCreate =
+    !permissionTarget || canAnyNamespace(permissionTarget, 'create')
+  const canDelete =
+    !permissionTarget || canAnyNamespace(permissionTarget, 'delete')
   const displayResourceName = (() => {
     const resource = getResourceMetadata(resolvedResourceType)
     if (!resource) {
@@ -310,6 +353,14 @@ function ResourceTableContent<T>({
     enableRowSelection: true,
   })
 
+  // Surface the current selection to the parent (used to drive toolbar state).
+  useEffect(() => {
+    onRowSelectionChange?.(
+      table.getSelectedRowModel().rows.map((row) => row.original)
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSelection])
+
   // Handle batch delete - must be after table is defined
   const handleBatchDelete = useCallback(async () => {
     setIsDeleting(true)
@@ -467,12 +518,12 @@ function ResourceTableContent<T>({
         resourceType={resolvedResourceType}
         clusterScope={clusterScope}
         extraToolbars={extraToolbars}
-        showCreateButton={showCreateButton}
+        showCreateButton={showCreateButton && canCreate}
         onCreateClick={onCreateClick}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         selectedNamespace={selectedNamespace}
-        handleNamespaceChange={handleNamespaceChange}
+        handleNamespaceChange={handleNamespaceChangeWrapper}
         useSSE={useSSE}
         isConnected={isConnected}
         refreshInterval={refreshInterval}
@@ -481,6 +532,8 @@ function ResourceTableContent<T>({
         selectedRowCount={table.getSelectedRowModel().rows.length}
         onOpenDeleteDialog={() => setDeleteDialogOpen(true)}
         batchActions={batchActions}
+        alwaysShowBatchActions={alwaysShowBatchActions}
+        showBatchDelete={showBatchDelete && canDelete}
       />
 
       <ResourceTableView
@@ -496,6 +549,7 @@ function ResourceTableContent<T>({
         searchQuery={searchQuery}
         pagination={pagination}
         setPagination={setPagination}
+        renderRowDetails={renderRowDetails}
       />
 
       {/* Delete Confirmation Dialog */}

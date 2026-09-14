@@ -177,14 +177,23 @@ config:
   #     scopes: "openid,profile,email"
   #     enabled: true
   #
-  # LDAP configuration
+  # LDAP configuration (full field list: docs/config/config-file.md)
   # ldap:
   #   enabled: true
-  #   serverUrl: "ldap://ldap.example.com:389"
-  #   bindDn: "cn=admin,dc=example,dc=com"
-  #   bindPassword: "secret"
+  #   serverUrl: "ldaps://ldap.example.com:636"
+  #   useStartTLS: false
+  #   bindDn: "cn=svc-kite,ou=services,dc=example,dc=com"
+  #   bindPassword: "bind-password"
   #   userBaseDn: "ou=users,dc=example,dc=com"
+  #   userFilter: "(uid=%s)"
+  #   usernameAttribute: "uid"
+  #   displayNameAttribute: "cn"
   #   groupBaseDn: "ou=groups,dc=example,dc=com"
+  #   groupFilter: "(member=%s)"
+  #   groupNameAttribute: "cn"
+  #   # Periodically sync directory users (enabled by default, every 10 minutes)
+  #   autoSync: true
+  #   syncIntervalMinutes: 10
   #
   # RBAC configuration (roles and role mappings)
   # rbac:

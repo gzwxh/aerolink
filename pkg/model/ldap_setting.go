@@ -14,6 +14,9 @@ const DefaultLDAPDisplayNameAttribute = "cn"
 const DefaultLDAPGroupFilter = "(member=%s)"
 const DefaultLDAPGroupNameAttribute = "cn"
 
+const DefaultLDAPAutoSync = true
+const DefaultLDAPSyncIntervalMinutes = 10
+
 type LDAPSetting struct {
 	Model
 	Enabled              bool         `json:"enabled" gorm:"column:enabled;type:boolean;not null;default:false"`
@@ -28,6 +31,8 @@ type LDAPSetting struct {
 	GroupBaseDN          string       `json:"groupBaseDn" gorm:"column:group_base_dn;type:varchar(500)"`
 	GroupFilter          string       `json:"groupFilter" gorm:"column:group_filter;type:varchar(500);default:'(member=%s)'"`
 	GroupNameAttribute   string       `json:"groupNameAttribute" gorm:"column:group_name_attribute;type:varchar(100);default:'cn'"`
+	AutoSync             bool         `json:"autoSync" gorm:"column:auto_sync;type:boolean;not null;default:true"`
+	SyncIntervalMinutes  int          `json:"syncIntervalMinutes" gorm:"column:sync_interval_minutes;type:integer;not null;default:10"`
 }
 
 func DefaultLDAPSetting() LDAPSetting {
@@ -40,6 +45,8 @@ func DefaultLDAPSetting() LDAPSetting {
 		DisplayNameAttribute: DefaultLDAPDisplayNameAttribute,
 		GroupFilter:          DefaultLDAPGroupFilter,
 		GroupNameAttribute:   DefaultLDAPGroupNameAttribute,
+		AutoSync:             DefaultLDAPAutoSync,
+		SyncIntervalMinutes:  DefaultLDAPSyncIntervalMinutes,
 	}
 }
 
@@ -62,6 +69,11 @@ func (s LDAPSetting) Normalized() LDAPSetting {
 	normalized.GroupBaseDN = strings.TrimSpace(s.GroupBaseDN)
 	normalized.GroupFilter = normalizeLDAPTextWithDefault(s.GroupFilter, DefaultLDAPGroupFilter)
 	normalized.GroupNameAttribute = normalizeLDAPTextWithDefault(s.GroupNameAttribute, DefaultLDAPGroupNameAttribute)
+	normalized.AutoSync = s.AutoSync
+	normalized.SyncIntervalMinutes = s.SyncIntervalMinutes
+	if normalized.SyncIntervalMinutes < 1 {
+		normalized.SyncIntervalMinutes = DefaultLDAPSyncIntervalMinutes
+	}
 	return normalized
 }
 
@@ -88,10 +100,10 @@ func (s LDAPSetting) Validate() error {
 	if !HasExactlyOneLDAPPlaceholder(normalized.UserFilter) {
 		return errors.New("userFilter must contain exactly one %s")
 	}
-	if normalized.GroupBaseDN == "" {
-		return errors.New("groupBaseDn is required when enabled is true")
-	}
-	if !HasExactlyOneLDAPPlaceholder(normalized.GroupFilter) {
+	// Group settings are optional — LDAP can be used purely for authentication
+	// when group-based RBAC is not needed. The group filter is only validated
+	// when a group base DN is configured.
+	if normalized.GroupBaseDN != "" && !HasExactlyOneLDAPPlaceholder(normalized.GroupFilter) {
 		return errors.New("groupFilter must contain exactly one %s")
 	}
 	return nil
@@ -127,6 +139,8 @@ func UpdateLDAPSetting(setting *LDAPSetting) (*LDAPSetting, error) {
 	current.GroupBaseDN = normalized.GroupBaseDN
 	current.GroupFilter = normalized.GroupFilter
 	current.GroupNameAttribute = normalized.GroupNameAttribute
+	current.AutoSync = normalized.AutoSync
+	current.SyncIntervalMinutes = normalized.SyncIntervalMinutes
 	if err := DB.Save(current).Error; err != nil {
 		return nil, err
 	}

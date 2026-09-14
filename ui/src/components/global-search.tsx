@@ -164,18 +164,18 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
         ? [
             {
               id: 'settings',
-              title: t('settings.title', 'Settings'),
-              url: '/settings',
+              title: t('settings.title', 'System Settings'),
+              url: '/settings/general',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:
-                `${t('settings.title', 'Settings')} admin`.toLowerCase(),
+                `${t('settings.title', 'System Settings')} admin`.toLowerCase(),
               isPinned: false,
             },
             {
               id: 'clusters',
               title: t('settings.tabs.clusters', 'Cluster'),
-              url: '/settings?tab=clusters',
+              url: '/settings/clusters',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:
@@ -185,7 +185,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
             {
               id: 'oauth',
               title: t('settings.tabs.oauth', 'Authentication'),
-              url: '/settings?tab=oauth',
+              url: '/settings/oauth',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:
@@ -195,7 +195,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
             {
               id: 'rbac',
               title: t('settings.tabs.rbac', 'RBAC'),
-              url: '/settings?tab=rbac',
+              url: '/settings/rbac',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:
@@ -205,7 +205,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
             {
               id: 'users',
               title: t('settings.tabs.users', 'User'),
-              url: '/settings?tab=users',
+              url: '/settings/users',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:

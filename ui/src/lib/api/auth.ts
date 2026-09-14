@@ -8,6 +8,14 @@ import type {
 
 export type CredentialProvider = 'password' | 'ldap'
 
+export interface AuthRole {
+  name: string
+  clusters?: string[]
+  resources?: string[]
+  namespaces?: string[]
+  verbs?: string[]
+}
+
 export interface AuthUser {
   id: string
   username: string
@@ -15,7 +23,8 @@ export interface AuthUser {
   avatar_url: string
   provider: string
   mfa_enabled?: boolean
-  roles?: { name: string }[]
+  mfa_required?: boolean
+  roles?: AuthRole[]
   sidebar_preference?: string
 }
 
@@ -104,6 +113,10 @@ export const setupCurrentUserMFA = async (
 
 export const enableCurrentUserMFA = async (code: string): Promise<AuthUser> => {
   return authApiClient.post<AuthUser>('/users/me/mfa/enable', { code })
+}
+
+export const verifyCurrentUserMFA = async (code: string): Promise<void> => {
+  await authApiClient.post<void>('/users/me/mfa/verify', { code })
 }
 
 export const disableCurrentUserMFA = async (

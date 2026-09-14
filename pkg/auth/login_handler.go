@@ -99,7 +99,7 @@ func (h *AuthHandler) CreateSuperUser(c *gin.Context) {
 }
 
 func (h *AuthHandler) LDAPLogin(c *gin.Context) {
-	h.handleCredentialLogin(c, model.AuthProviderLDAP, h.authenticateAndSyncLDAPUser)
+	h.handleCredentialLogin(c, model.AuthProviderLDAP, h.authenticateLDAPUser)
 }
 
 func (h *AuthHandler) PasskeyLoginBegin(c *gin.Context) {
@@ -151,7 +151,13 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 		return
 	}
 	clientIP := c.ClientIP()
-	if credentialLoginAttempts.isBlocked(clientIP) {
+	limits := loadLoginLimits()
+	if limits.ipBlacklisted(clientIP) {
+		klog.V(1).Infof("login denied for %s: IP is not allowed", clientIP)
+		c.JSON(http.StatusForbidden, gin.H{"error": "login from this IP is not allowed"})
+		return
+	}
+	if _, blocked := credentialLoginAttempts.blockedUntil(clientIP, username, limits); blocked {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError})
 		return
 	}
@@ -159,8 +165,13 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 	user, err := authenticate(username, req.Password)
 	if err != nil {
 		errMsg := fmt.Sprintf("%s login failed for %s: %v", strings.ToUpper(provider), username, err)
+		if errors.Is(err, errLDAPUserNotProvisioned) {
+			klog.V(1).Infof("LDAP login denied for %s: user not provisioned locally", username)
+			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+			return
+		}
 		if isCredentialFailure(err) {
-			if shouldRecordCredentialLoginFailure(provider, err) && credentialLoginAttempts.recordFailure(clientIP) {
+			if shouldRecordCredentialLoginFailure(provider, err) && credentialLoginAttempts.recordFailure(clientIP, username, limits) {
 				c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError})
 				return
 			}
@@ -171,21 +182,41 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 		return
 	}
 
-	if provider == model.AuthProviderPassword && user.MFAEnabled {
-		if strings.TrimSpace(req.MFACode) == "" {
+	// Password logins always challenge enrolled users. Third-party logins (LDAP)
+	// only do so when the policy enables MFA for third-party admins; the switch
+	// covers admin sign-in and sensitive operations, not every directory user.
+	securitySetting, err := model.GetSecuritySetting()
+	if err != nil {
+		klog.Warningf("Failed to load security setting for MFA policy: %v", err)
+	}
+	thirdPartyMFARequired := provider == model.AuthProviderLDAP &&
+		securitySetting != nil &&
+		securitySetting.MFAThirdPartyEnabled &&
+		rbac.UserHasRole(*user, model.DefaultAdminRole.Name)
+	mfaChallengeRequired := user.MFAEnabled &&
+		(provider == model.AuthProviderPassword || thirdPartyMFARequired)
+
+	// A browser that verified a code within the validity window is not asked
+	// again.
+	if mfaChallengeRequired && !mfa.IsTrusted(c, user.ID) {
+		code := strings.TrimSpace(req.MFACode)
+		switch {
+		case code == "":
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "mfa_required"})
 			return
-		}
-		if !mfa.Verify(string(user.MFASecret), req.MFACode) {
-			if credentialLoginAttempts.recordFailure(clientIP) {
+		case !mfa.Verify(string(user.MFASecret), code):
+			if credentialLoginAttempts.recordFailure(clientIP, username, limits) {
 				c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError})
 				return
 			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_mfa_code"})
 			return
+		default:
+			mfa.MarkTrusted(c, user.ID)
 		}
 	}
 
+	credentialLoginAttempts.clear(clientIP, username)
 	h.completePasswordLikeLogin(c, user)
 }
 
@@ -228,7 +259,10 @@ func (h *AuthHandler) completePasswordLikeLogin(c *gin.Context, user *model.User
 	c.Status(http.StatusNoContent)
 }
 
-func (h *AuthHandler) authenticateAndSyncLDAPUser(username, password string) (*model.User, error) {
+// authenticateLDAPUser verifies LDAP credentials and authorizes against the
+// existing local record. Directory users are provisioned by the batch/periodic
+// sync, not by logins, so no user record is created or updated here.
+func (h *AuthHandler) authenticateLDAPUser(username, password string) (*model.User, error) {
 	setting, err := model.GetLDAPSetting()
 	if err != nil {
 		return nil, err
@@ -239,15 +273,14 @@ func (h *AuthHandler) authenticateAndSyncLDAPUser(username, password string) (*m
 		return nil, err
 	}
 
-	syncedUser, err := model.UpsertLDAPUser(ldapUser)
+	localUser, err := model.GetLDAPUserByUsername(ldapUser.Username)
 	if err != nil {
-		if errors.Is(err, model.ErrUserProviderConflict) {
-			return nil, ErrLDAPInvalidCredentials
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errLDAPUserNotProvisioned
 		}
 		return nil, err
 	}
-
-	return syncedUser, nil
+	return localUser, nil
 }
 
 func (h *AuthHandler) authenticatePasswordUser(username, password string) (*model.User, error) {
@@ -333,6 +366,12 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 	}
 
 	if err := model.FindWithSubOrUpsertUser(user); err != nil {
+		if errors.Is(err, model.ErrUserProviderConflict) {
+			klog.Warningf("OAuth Callback - Provider conflict for user: %s (provider: %s), username already used by another auth source",
+				user.Key(), provider)
+			c.Redirect(http.StatusFound, base+"/login?error=user_provider_conflict&reason=user_provider_conflict&user="+user.Key()+"&provider="+provider)
+			return
+		}
 		c.Redirect(http.StatusFound, base+"/login?error=user_upsert_failed&reason=user_upsert_failed&provider="+provider)
 		return
 	}

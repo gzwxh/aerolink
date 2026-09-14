@@ -15,6 +15,7 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
 	"gorm.io/gorm"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -42,14 +43,27 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 	clusters, errors, defaultContext := cm.snapshotState()
 	result := make([]common.ClusterInfo, 0, len(clusters))
 	user := c.MustGet("user").(model.User)
+
+	// Custom display info (description) lives in the DB, not in the in-memory
+	// cluster snapshot. Tolerate a missing DB (unit tests) gracefully.
+	descriptions := map[string]string{}
+	if model.DB != nil {
+		if stored, err := model.ListClusters(); err == nil {
+			for _, sc := range stored {
+				descriptions[sc.Name] = sc.Description
+			}
+		}
+	}
+
 	for name, cluster := range clusters {
 		if !rbac.CanAccessCluster(user, name) {
 			continue
 		}
 		result = append(result, common.ClusterInfo{
-			Name:      name,
-			Version:   cluster.Version,
-			IsDefault: name == defaultContext,
+			Name:        name,
+			Description: descriptions[name],
+			Version:     cluster.Version,
+			IsDefault:   name == defaultContext,
 		})
 	}
 	for name, errMsg := range errors {
@@ -57,10 +71,11 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 			continue
 		}
 		result = append(result, common.ClusterInfo{
-			Name:      name,
-			Version:   "",
-			IsDefault: false,
-			Error:     errMsg,
+			Name:        name,
+			Description: descriptions[name],
+			Version:     "",
+			IsDefault:   false,
+			Error:       errMsg,
 		})
 	}
 	sort.Slice(result, func(i, j int) bool {
@@ -106,6 +121,33 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// ListClusterNamespaces returns the namespace names of one cluster, used by the
+// RBAC editor to suggest existing namespaces (admin only).
+func (cm *ClusterManager) ListClusterNamespaces(c *gin.Context) {
+	clusterName := strings.TrimSpace(c.Param("name"))
+	if clusterName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster name is required"})
+		return
+	}
+	cs, err := cm.GetClientSet(clusterName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ctx := c.Request.Context()
+	nsList, err := cs.K8sClient.ClientSet.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("failed to list namespaces: %v", err)})
+		return
+	}
+	names := make([]string, 0, len(nsList.Items))
+	for _, ns := range nsList.Items {
+		names = append(names, ns.Name)
+	}
+	sort.Strings(names)
+	c.JSON(http.StatusOK, gin.H{"namespaces": names})
 }
 
 func (cm *ClusterManager) CreateCluster(c *gin.Context) {

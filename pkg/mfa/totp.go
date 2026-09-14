@@ -14,13 +14,17 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
+	"github.com/zxh326/kite/pkg/model"
 )
 
 const (
-	issuer     = "Kite"
-	secretSize = 20
-	step       = 30
-	digits     = 6
+	defaultIssuer = "Kite"
+	secretSize    = 20
+	step          = 30
+	digits        = 6
+
+	// defaultWindow is used when the security policy cannot be read.
+	defaultWindow = 1
 )
 
 var base32NoPadding = base32.StdEncoding.WithPadding(base32.NoPadding)
@@ -33,7 +37,37 @@ func GenerateSecret() (string, error) {
 	return base32NoPadding.EncodeToString(buf), nil
 }
 
+// Issuer is the label shown in authenticator apps, configurable in the security
+// settings ("OTP issuer name").
+func Issuer() string {
+	if model.DB == nil {
+		return defaultIssuer
+	}
+	setting, err := model.GetSecuritySetting()
+	if err != nil || setting == nil {
+		return defaultIssuer
+	}
+	if name := strings.TrimSpace(setting.OTPIssuerName); name != "" {
+		return name
+	}
+	return defaultIssuer
+}
+
+// VerifyWindow is the number of 30s steps accepted on each side of the current
+// step, configured in the security settings ("OTP verification window").
+func VerifyWindow() int {
+	if model.DB == nil {
+		return defaultWindow
+	}
+	setting, err := model.GetSecuritySetting()
+	if err != nil || setting == nil {
+		return defaultWindow
+	}
+	return setting.OTPVerifyWindow
+}
+
 func URL(username string, secret string) string {
+	issuer := Issuer()
 	label := issuer
 	if username != "" {
 		label += ":" + username
@@ -62,7 +96,8 @@ func Verify(secret string, code string) bool {
 	}
 
 	counter := time.Now().Unix() / step
-	for offset := int64(-1); offset <= 1; offset++ {
+	window := int64(VerifyWindow())
+	for offset := -window; offset <= window; offset++ {
 		if generateCode(secret, uint64(counter+offset)) == code {
 			return true
 		}

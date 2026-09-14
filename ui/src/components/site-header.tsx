@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { useTerminal } from '@/contexts/terminal-context'
-import { Plus, Settings, TerminalSquare } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Plus, TerminalSquare } from 'lucide-react'
 
 import { useIsMobile } from '@/hooks/use-mobile'
-import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 
 import { CreateResourceDialog } from './create-resource-dialog'
+import { CurrentClusterBadge } from './current-cluster-badge'
 import { DynamicBreadcrumb } from './dynamic-breadcrumb'
 import { LanguageToggle } from './language-toggle'
 import { ModeToggle } from './mode-toggle'
@@ -18,7 +17,6 @@ import { UserMenu } from './user-menu'
 
 export function SiteHeader() {
   const isMobile = useIsMobile()
-  const navigate = useNavigate()
   const { user, capabilities } = useAuth()
   const { toggleTerminal, isOpen } = useTerminal()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -36,6 +34,7 @@ export function SiteHeader() {
           />
           <DynamicBreadcrumb />
           <div className="ml-auto flex items-center gap-2">
+            <CurrentClusterBadge />
             <Search />
             <Plus
               className="h-5 w-5 cursor-pointer text-muted-foreground hover:text-foreground"
@@ -62,17 +61,6 @@ export function SiteHeader() {
                   orientation="vertical"
                   className="mx-2 data-[orientation=vertical]:h-4"
                 />
-                {isAdmin && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => navigate('/settings')}
-                    className="hidden sm:flex"
-                  >
-                    <Settings className="h-5 w-5" />
-                    <span className="sr-only">Settings</span>
-                  </Button>
-                )}
                 <LanguageToggle />
                 <ModeToggle />
               </>

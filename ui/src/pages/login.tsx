@@ -12,6 +12,7 @@ import {
 } from '@/lib/api'
 import { withSubPath } from '@/lib/subpath'
 import { getPasskeyCredential } from '@/lib/webauthn'
+import { markLoginSucceeded } from '@/contexts/auth-context'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -48,8 +49,10 @@ export function LoginPage() {
   const [mfaCode, setMfaCode] = useState('')
   const [mfaRequired, setMfaRequired] = useState(false)
   const [credentialError, setCredentialError] = useState<string | null>(null)
+  // LDAP is the primary credential method when enabled; the effect below falls
+  // back to the first available provider when it is not.
   const [credentialsProvider, setCredentialsProvider] =
-    useState<CredentialProvider>('password')
+    useState<CredentialProvider>('ldap')
 
   const error = searchParams.get('error')
   const redirectHref = searchParams.get('href') || ''
@@ -62,6 +65,12 @@ export function LoginPage() {
     oauthProviders.length +
     (passkeySupported ? 1 : 0)
   const hasAlternativeLogin = oauthProviders.length > 0 || passkeySupported
+  // LDAP + local password coexist: LDAP is the primary form, the local
+  // account is reachable through a small link below the form (admin escape
+  // hatch) instead of a prominent tab.
+  const localEscapeMode =
+    credentialProviders.includes('ldap') &&
+    credentialProviders.includes('password')
   const loginPromptContent = loginPrompt.trim()
   const loginPromptLines = loginPromptContent
     .split('\n')
@@ -148,6 +157,7 @@ export function LoginPage() {
       const options = await beginPasskeyLogin()
       const credential = await getPasskeyCredential(options)
       await finishPasskeyLogin(credential)
+      markLoginSucceeded()
       await checkAuth()
     } catch (error) {
       setCredentialError(
@@ -328,7 +338,7 @@ export function LoginPage() {
                 <div className="space-y-4">
                   {credentialProviders.length > 0 && (
                     <div className="space-y-4">
-                      {credentialProviders.length > 1 && (
+                      {credentialProviders.length > 1 && !localEscapeMode && (
                         <Tabs
                           value={credentialsProvider}
                           onValueChange={(value) => {
@@ -418,7 +428,7 @@ export function LoginPage() {
                             </button>
                           </div>
                         </div>
-                        {credentialsProvider === 'password' && mfaRequired && (
+                        {mfaRequired && (
                           <div className="space-y-2">
                             <Label htmlFor="mfaCode">MFA Code</Label>
                             <Input
@@ -462,6 +472,30 @@ export function LoginPage() {
                           )}
                         </Button>
                       </form>
+
+                      {localEscapeMode && (
+                        <button
+                          type="button"
+                          className="mx-auto block text-xs text-muted-foreground transition-colors hover:text-primary"
+                          onClick={() => {
+                            setCredentialsProvider(
+                              credentialsProvider === 'ldap'
+                                ? 'password'
+                                : 'ldap'
+                            )
+                            setCredentialError(null)
+                            setMfaRequired(false)
+                            setMfaCode('')
+                          }}
+                        >
+                          {credentialsProvider === 'ldap'
+                            ? t(
+                                'login.useLocalAccount',
+                                'Sign in with a local account'
+                              )
+                            : t('login.useLdapAccount', 'Sign in with LDAP')}
+                        </button>
+                      )}
                     </div>
                   )}
 

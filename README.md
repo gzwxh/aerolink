@@ -21,6 +21,11 @@ Kite is a lightweight, open-source Kubernetes workspace for multi-cluster operat
 
 <img width="1586" height="1167" alt="image" src="https://github.com/user-attachments/assets/5710204d-5d34-44af-85dc-3b436e205c12" />
 
+> **Note**: this repository is a fork of [kite-org/kite](https://github.com/kite-org/kite) mirrored at
+> [gitee.com/gzwxh/kite](https://gitee.com/gzwxh/kite) with additional local changes. See
+> [Build and push your own image](./docsCN/guide/build-and-push-image.md) (Chinese) for building the image behind a
+> restricted network, pushing it to a private registry and deploying it with the bundled Helm chart.
+
 ## Why Kite
 
 ### Observe

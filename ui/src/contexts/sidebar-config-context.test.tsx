@@ -216,6 +216,7 @@ describe('SidebarConfigProvider', () => {
         trafficGroupId,
         'sidebar-groups-storage',
         'sidebar-groups-config',
+        'sidebar-groups-infrastructure',
         'sidebar-groups-security',
         'sidebar-groups-other',
       ].join(',')
@@ -230,6 +231,7 @@ describe('SidebarConfigProvider', () => {
           trafficGroupId,
           'sidebar-groups-storage',
           'sidebar-groups-config',
+          'sidebar-groups-infrastructure',
           'sidebar-groups-security',
           'sidebar-groups-other',
         ].join(',')
@@ -245,6 +247,7 @@ describe('SidebarConfigProvider', () => {
           trafficGroupId,
           'sidebar-groups-storage',
           'sidebar-groups-config',
+          'sidebar-groups-infrastructure',
           'sidebar-groups-security',
           'sidebar-groups-other',
         ].join(',')
@@ -260,6 +263,7 @@ describe('SidebarConfigProvider', () => {
           workloadsGroupId,
           'sidebar-groups-storage',
           'sidebar-groups-config',
+          'sidebar-groups-infrastructure',
           'sidebar-groups-security',
           'sidebar-groups-other',
         ].join(',')

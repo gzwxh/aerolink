@@ -40,8 +40,8 @@ func TestURL(t *testing.T) {
 	if got := parsed.Query().Get("secret"); got != "SECRET" {
 		t.Fatalf("secret query = %q, want %q", got, "SECRET")
 	}
-	if got := parsed.Query().Get("issuer"); got != issuer {
-		t.Fatalf("issuer query = %q, want %q", got, issuer)
+	if got := parsed.Query().Get("issuer"); got != defaultIssuer {
+		t.Fatalf("issuer query = %q, want %q", got, defaultIssuer)
 	}
 }
 

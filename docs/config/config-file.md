@@ -69,6 +69,8 @@ ldap:
   groupBaseDn: "ou=groups,dc=example,dc=com"
   groupFilter: "(member=%s)"
   groupNameAttribute: "cn"
+  autoSync: true
+  syncIntervalMinutes: 10
 
 rbac:
   roles:
@@ -267,9 +269,11 @@ The super user is created on first startup if it doesn't exist. On subsequent st
 | `userFilter`           | string  | User search filter                   | `(uid=%s)`     |
 | `usernameAttribute`    | string  | Username attribute                   | `uid`          |
 | `displayNameAttribute` | string  | Display name attribute               | `cn`           |
-| `groupBaseDn`          | string  | Base DN for group searches           |                |
-| `groupFilter`          | string  | Group membership filter              | `(member=%s)`  |
-| `groupNameAttribute`   | string  | Group name attribute                 | `cn`           |
+| `groupBaseDn`          | string  | Base DN for group searches (optional)     |                |
+| `groupFilter`          | string  | Group membership filter (optional)        | `(member=%s)`  |
+| `groupNameAttribute`   | string  | Group name attribute (optional)           | `cn`           |
+| `autoSync`             | boolean | Enable periodic directory sync       | `true`         |
+| `syncIntervalMinutes`  | integer | Periodic sync interval in minutes    | `10`           |
 
 ### RBAC Configuration
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
+	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
 )
@@ -112,8 +113,83 @@ func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
 		}
 		user.Roles = rbac.GetUserRoles(*user)
 		c.Set("user", *user)
+		if blockForMFAEnrollment(c, user) {
+			return
+		}
+		if h.blockSensitiveOperation(c, user) {
+			return
+		}
 		c.Next()
 	}
+}
+
+// isSensitiveOperation reports whether a request needs a recent MFA verification:
+// destructive calls and interactive shells.
+func isSensitiveOperation(method string, path string) bool {
+	if method == http.MethodDelete {
+		return true
+	}
+	if !strings.HasSuffix(path, "/ws") {
+		return false
+	}
+	return strings.Contains(path, "/terminal/") ||
+		strings.Contains(path, "/node-terminal/") ||
+		strings.Contains(path, "/kubectl-terminal/")
+}
+
+// blockSensitiveOperation enforces the step-up verification for sensitive
+// operations when the security policy enables MFA for them.
+func (h *AuthHandler) blockSensitiveOperation(c *gin.Context, user *model.User) bool {
+	if user == nil || !user.MFAEnabled {
+		return false
+	}
+	if !isSensitiveOperation(c.Request.Method, c.Request.URL.Path) {
+		return false
+	}
+	setting, err := model.GetSecuritySetting()
+	if err != nil || !setting.MFAThirdPartyEnabled {
+		return false
+	}
+	if mfa.IsTrusted(c, user.ID) {
+		return false
+	}
+
+	c.JSON(http.StatusForbidden, gin.H{"error": "mfa_verification_required"})
+	c.Abort()
+	return true
+}
+
+// mfaEnrollmentPaths stay reachable while the security policy forces the user to
+// enroll in MFA, so the account is not locked out of the setup flow. Exact
+// matches only: widening these to prefixes would also expose endpoints such as
+// /api/users/me/password.
+var mfaEnrollmentPaths = map[string]struct{}{
+	"/api/users/me/mfa/setup":  {},
+	"/api/users/me/mfa/enable": {},
+	"/api/auth/logout":         {},
+	"/api/auth/refresh":        {},
+	"/api/auth/user":           {},
+}
+
+// blockForMFAEnrollment rejects API calls from users the policy requires to have
+// MFA enabled before they finished the enrollment.
+func blockForMFAEnrollment(c *gin.Context, user *model.User) bool {
+	if user == nil || user.MFAEnabled {
+		return false
+	}
+	setting, err := model.GetSecuritySetting()
+	if err != nil || !setting.MFARequiredFor(user) {
+		return false
+	}
+
+	path := strings.TrimPrefix(c.Request.URL.Path, strings.TrimSuffix(common.Base, "/"))
+	if _, allowed := mfaEnrollmentPaths[strings.TrimSuffix(path, "/")]; allowed {
+		return false
+	}
+
+	c.JSON(http.StatusForbidden, gin.H{"error": "mfa_setup_required"})
+	c.Abort()
+	return true
 }
 
 func (h *AuthHandler) RequireAdmin() gin.HandlerFunc {

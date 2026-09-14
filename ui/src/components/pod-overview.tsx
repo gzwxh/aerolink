@@ -11,6 +11,7 @@ import {
 } from '@/lib/k8s'
 import { cn, formatDate, getAge } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { NodeLink } from '@/components/node-link'
 import { PodStatusIcon } from '@/components/pod-status-icon'
 
 import { ContainerDetailDialog } from './pod-container-detail-dialog'
@@ -190,17 +191,10 @@ function PodSummaryGrid({
         label={t('common.fields.node')}
         truncateValue={false}
         value={
-          pod.spec?.nodeName ? (
-            <Link
-              to={`/nodes/${pod.spec.nodeName}`}
-              className="app-link line-clamp-2 max-w-full break-all leading-snug"
-              title={pod.spec.nodeName}
-            >
-              {pod.spec.nodeName}
-            </Link>
-          ) : (
-            '-'
-          )
+          <NodeLink
+            name={pod.spec?.nodeName}
+            className="line-clamp-2 max-w-full break-all leading-snug"
+          />
         }
         detail={pod.status?.hostIP || '-'}
       />

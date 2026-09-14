@@ -1,4 +1,8 @@
 import { useMemo } from 'react'
+import { IconCopy, IconNetwork } from '@tabler/icons-react'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
+import type { Service } from 'kubernetes-types/core/v1'
 import { Deployment } from 'kubernetes-types/apps/v1'
 import { Event as KubernetesEvent, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
@@ -34,6 +38,7 @@ export function DeploymentOverview({
   isPodsLoading,
   events,
   isEventsLoading,
+  services,
 }: {
   deployment: Deployment
   namespace: string
@@ -42,6 +47,7 @@ export function DeploymentOverview({
   isPodsLoading: boolean
   events?: KubernetesEvent[]
   isEventsLoading: boolean
+  services?: Service[]
 }) {
   const { t } = useTranslation()
   const sortedEvents = useMemo(() => {
@@ -87,6 +93,9 @@ export function DeploymentOverview({
             resources={relatedResources || []}
             isLoading={isRelatedLoading}
           />
+          {(services || []).length > 0 ? (
+            <ServiceEndpointsCard services={services!} />
+          ) : null}
           {Object.keys(labels).length > 0 ? (
             <MetadataListCard title="common.fields.labels" entries={labels} />
           ) : null}
@@ -99,6 +108,105 @@ export function DeploymentOverview({
         </div>
       </div>
     </div>
+  )
+}
+
+
+/** 网络入口: how to reach the workload from outside/inside the cluster. */
+function ServiceEndpointsCard({ services }: { services: Service[] }) {
+  const { t } = useTranslation()
+
+  const entries = useMemo(() => {
+    const result: Array<{
+      key: string
+      service: string
+      protocol: string
+      port: number
+      access: string
+    }> = []
+    for (const svc of services) {
+      const svcName = svc.metadata?.name || ''
+      const type = svc.spec?.type || 'ClusterIP'
+      const clusterIP = svc.spec?.clusterIP
+      const lbIngress = svc.status?.loadBalancer?.ingress || []
+      for (const p of svc.spec?.ports || []) {
+        const port = p.port
+        if (!port) continue
+        const protocol = p.protocol || 'TCP'
+        let access: string
+        if (type === 'NodePort' && p.nodePort) {
+          access = `任意节点:${p.nodePort}`
+        } else if (type === 'LoadBalancer') {
+          if (lbIngress.length > 0) {
+            access = lbIngress
+              .map((ing) => `${ing.ip || ing.hostname || ''}:${p.port}`)
+              .join(', ')
+          } else {
+            access = t('deploymentOverview.lbPending', '外部 IP 待分配')
+          }
+        } else if (clusterIP === 'None') {
+          access = `Headless (${svcName})`
+        } else {
+          access = `${clusterIP || svcName}:${port}`
+        }
+        result.push({
+          key: `${svcName}-${protocol}-${port}-${access}`,
+          service: `${svcName}/${protocol}:${port}`,
+          protocol,
+          port,
+          access,
+        })
+      }
+    }
+    return result
+  }, [services, t])
+
+  if (entries.length === 0) return null
+
+  const copy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success(t('deploymentOverview.copied', '已复制'))
+    } catch {
+      // clipboard unavailable
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-1.5 pt-4">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <IconNetwork className="size-4 text-muted-foreground" />
+          {t('deploymentOverview.endpointsTitle', 'Endpoints')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-1.5 pb-3">
+        {entries.map((entry) => (
+          <div
+            key={entry.key}
+            className="group flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-2.5 py-1"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-xs text-muted-foreground">
+                {entry.service}
+              </p>
+              <p className="truncate font-mono text-sm font-medium">
+                {entry.access}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+              aria-label={t('deploymentOverview.copy', '复制')}
+              onClick={() => void copy(entry.access)}
+            >
+              <IconCopy className="size-3.5" />
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 

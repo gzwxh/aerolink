@@ -20,36 +20,212 @@ export interface VolumeMountForm {
   readOnly?: boolean
 }
 
+export type PortServiceType = 'none' | 'ClusterIP' | 'NodePort' | 'LoadBalancer'
+
+export interface PortForm {
+  name?: string
+  containerPort: number
+  protocol: 'TCP' | 'UDP'
+  serviceType: PortServiceType
+  servicePort?: number
+  nodePort?: number
+  /** Static ClusterIP (must be inside the service CIDR). */
+  clusterIP?: string
+}
+
 export interface ContainerConfig {
   name: string
   image: string
+  /** Init containers run before app containers. */
+  isInit?: boolean
   port?: number
-  pullPolicy: 'Always' | 'IfNotPresent' | 'Never'
+  ports: PortForm[]
+  pullPolicy: 'Default' | 'Always' | 'IfNotPresent' | 'Never'
   resources: {
     requests: { cpu: string; memory: string }
     limits: { cpu: string; memory: string }
   }
   volumeMounts?: VolumeMountForm[]
+  /** NVIDIA GPU limit (nvidia.com/gpu). */
+  gpu?: string
   container: Container
 }
 
+/** Node scheduling panel state (Tencent-cloud style). */
+export interface SchedulingRule {
+  id: number
+  key: string
+  operator: 'In' | 'NotIn' | 'Exists' | 'DoesNotExist' | 'Gt' | 'Lt'
+  values: string // comma-separated for In/NotIn/Gt/Lt
+}
+
+export interface SchedulingTerm {
+  id: number
+  expressions: SchedulingRule[]
+}
+
+export interface TolerationForm {
+  id: number
+  key: string
+  operator: 'Equal' | 'Exists'
+  value: string
+  effect: '' | 'NoSchedule' | 'PreferNoSchedule' | 'NoExecute'
+  tolerationSeconds: string
+}
+
+export interface SchedulingConfig {
+  mode: 'any' | 'specific' | 'rules'
+  nodeName: string
+  terms: SchedulingTerm[]
+  tolerations: TolerationForm[]
+  priorityClassName: string
+}
+
+export const defaultSchedulingConfig = (): SchedulingConfig => ({
+  mode: 'any',
+  nodeName: '',
+  terms: [],
+  tolerations: [],
+  priorityClassName: '',
+})
+
+/** Row ids for scheduling entries rebuilt by the YAML parser. */
+let schedulingFormIdSeq = 0
+const nextSchedulingFormId = () => ++schedulingFormIdSeq
+
+let nextSchedulingId = 1
+export const genSchedulingId = () => nextSchedulingId++
+
+export const emptySchedulingTerm = (): SchedulingTerm => ({
+  id: genSchedulingId(),
+  expressions: [{ id: genSchedulingId(), key: '', operator: 'In', values: '' }],
+})
+
+export const emptyToleration = (): TolerationForm => ({
+  id: genSchedulingId(),
+  key: '',
+  operator: 'Equal',
+  value: '',
+  effect: '',
+  tolerationSeconds: '',
+})
+
+export type SchedulingOperator =
+  | 'In'
+  | 'NotIn'
+  | 'Exists'
+  | 'DoesNotExist'
+  | 'Gt'
+  | 'Lt'
+
+export const SCHEDULING_OPERATORS: Array<{
+  value: SchedulingOperator
+  label: string
+}> = [
+  { value: 'In', label: '在列表中' },
+  { value: 'NotIn', label: '不在列表中' },
+  { value: 'Exists', label: '存在' },
+  { value: 'DoesNotExist', label: '不存在' },
+  { value: 'Gt', label: '大于' },
+  { value: 'Lt', label: '小于' },
+]
+
+export interface StrategyForm {
+  /** Deployment: RollingUpdate | Recreate; StatefulSet: RollingUpdate | OnDelete (mapped to Recreate). */
+  type: 'RollingUpdate' | 'Recreate'
+  maxSurge: string
+  maxSurgeUnit: 'count' | 'percent'
+  maxUnavailable: string
+  maxUnavailableUnit: 'count' | 'percent'
+  minReadySeconds: string
+  revisionHistoryLimit: string
+  progressDeadlineSeconds: string
+  /** StatefulSet rolling update partition. */
+  partition: string
+}
+
+export const defaultStrategy = (): StrategyForm => ({
+  type: 'RollingUpdate',
+  maxSurge: '25',
+  maxSurgeUnit: 'percent',
+  maxUnavailable: '25',
+  maxUnavailableUnit: 'percent',
+  minReadySeconds: '',
+  revisionHistoryLimit: '',
+  progressDeadlineSeconds: '',
+  partition: '',
+})
+
+export interface NetworkForm {
+  dnsPolicy: string
+  hostname: string
+  subdomain: string
+  /** podSpec.hostNetwork — "host network" mode. */
+  hostNetwork: boolean
+  /** podSpec.dnsConfig */
+  dnsConfig: {
+    nameservers: string[]
+    searches: string[]
+    options: Array<{ name: string; value: string }>
+  }
+  /** podSpec.hostAliases (hostnames kept as a comma-separated string). */
+  hostAliases: Array<{ ip: string; hostnames: string }>
+}
+
+export const defaultNetwork = (): NetworkForm => ({
+  dnsPolicy: '',
+  hostname: '',
+  subdomain: '',
+  hostNetwork: false,
+  dnsConfig: { nameservers: [], searches: [], options: [] },
+  hostAliases: [],
+})
+
 export interface PodSpecForm {
   volumes?: Array<VolumeForm>
+  scheduling: SchedulingConfig
+  network: NetworkForm
+  /** Simple nodeSelector key/value pairs (Pod 调度). */
+  nodeSelectorPairs: Array<{ key: string; value: string }>
+  terminationGracePeriodSeconds: string
+  /** securityContext.fsGroup */
+  fsGroup: string
+  /** podSpec.imagePullSecrets (secret names). */
+  imagePullSecrets?: string[]
 }
 
 export interface DeploymentFormData {
   name: string
   namespace: string
+  description: string
   replicas: number
+  /** Headless service name, required by StatefulSet. */
+  serviceName?: string
+
   labels: Array<{ key: string; value: string }>
+  annotations: Array<{ key: string; value: string }>
+  podLabels: Array<{ key: string; value: string }>
+  podAnnotations: Array<{ key: string; value: string }>
+  strategy: StrategyForm
   podSpec: PodSpecForm
   containers: ContainerConfig[]
+  /** Cron expression, only used when generating a CronJob. */
+  schedule?: string
 }
+
+export type WorkloadResourceType =
+  | 'deployments'
+  | 'pods'
+  | 'daemonsets'
+  | 'statefulsets'
+  | 'jobs'
+  | 'cronjobs'
 
 export const createDefaultContainer = (index: number): ContainerConfig => ({
   name: `container-${index + 1}`,
   image: '',
-  pullPolicy: 'IfNotPresent',
+  ports: [],
+  pullPolicy: 'Always',
   resources: {
     requests: { cpu: '', memory: '' },
     limits: { cpu: '', memory: '' },
@@ -63,9 +239,21 @@ export const createDefaultContainer = (index: number): ContainerConfig => ({
 export const initialFormData: DeploymentFormData = {
   name: '',
   namespace: 'default',
+  description: '',
   replicas: 1,
-  labels: [{ key: 'app', value: '' }],
-  podSpec: {},
+  labels: [],
+  annotations: [],
+  podLabels: [],
+  podAnnotations: [],
+  strategy: defaultStrategy(),
+  podSpec: {
+    scheduling: defaultSchedulingConfig(),
+    network: defaultNetwork(),
+    nodeSelectorPairs: [],
+    terminationGracePeriodSeconds: '30',
+    fsGroup: '',
+    imagePullSecrets: [],
+  },
   containers: [createDefaultContainer(0)],
 }
 
@@ -140,10 +328,26 @@ function buildContainers(configs: ContainerConfig[]): Container[] {
       cfg.resources.requests.cpu || cfg.resources.requests.memory
     const hasLimits = cfg.resources.limits.cpu || cfg.resources.limits.memory
 
+    const extra = cfg.container
+    const hasGpu = !!cfg.gpu?.trim()
+    const limitEntries: Record<string, string> = {}
+    if (hasGpu) limitEntries['nvidia.com/gpu'] = cfg.gpu!.trim()
+
     return {
       name: cfg.name,
       image: cfg.image,
-      imagePullPolicy: cfg.pullPolicy,
+      ...(cfg.pullPolicy !== 'Default' && { imagePullPolicy: cfg.pullPolicy }),
+      ...(extra.command?.length && { command: extra.command }),
+      ...(extra.args?.length && { args: extra.args }),
+      ...(extra.workingDir && { workingDir: extra.workingDir }),
+      ...(extra.stdin && { stdin: true }),
+      ...(extra.tty && { tty: true }),
+      ...(extra.ports?.length && { ports: extra.ports }),
+      ...(extra.lifecycle && { lifecycle: extra.lifecycle }),
+      ...(extra.readinessProbe && { readinessProbe: extra.readinessProbe }),
+      ...(extra.livenessProbe && { livenessProbe: extra.livenessProbe }),
+      ...(extra.startupProbe && { startupProbe: extra.startupProbe }),
+      ...(extra.securityContext && { securityContext: extra.securityContext }),
       ...(cfg.container.env &&
         cfg.container.env.length > 0 && {
           env: cfg.container.env.filter(
@@ -156,8 +360,14 @@ function buildContainers(configs: ContainerConfig[]): Container[] {
             (source) => source.configMapRef?.name || source.secretRef?.name
           ),
         }),
-      ...(cfg.port && { ports: [{ containerPort: cfg.port }] }),
-      ...((hasRequests || hasLimits) && {
+      ...(cfg.ports.length > 0 && {
+        ports: cfg.ports.map((p) => ({
+          ...(p.name && { name: p.name }),
+          containerPort: p.containerPort,
+          ...(p.protocol !== 'TCP' && { protocol: p.protocol }),
+        })),
+      }),
+      ...((hasRequests || hasLimits || hasGpu) && {
         resources: {
           ...(hasRequests && {
             requests: {
@@ -169,7 +379,7 @@ function buildContainers(configs: ContainerConfig[]): Container[] {
               }),
             },
           }),
-          ...(hasLimits && {
+          ...((hasLimits || hasGpu) && {
             limits: {
               ...(cfg.resources.limits.cpu && {
                 cpu: cfg.resources.limits.cpu,
@@ -177,6 +387,7 @@ function buildContainers(configs: ContainerConfig[]): Container[] {
               ...(cfg.resources.limits.memory && {
                 memory: cfg.resources.limits.memory,
               }),
+              ...limitEntries,
             },
           }),
         },
@@ -194,7 +405,171 @@ function buildContainers(configs: ContainerConfig[]): Container[] {
   })
 }
 
+const pairsToRecord = (
+  pairs: Array<{ key: string; value: string }>
+): Record<string, string> => {
+  const result: Record<string, string> = {}
+  for (const { key, value } of pairs) {
+    if (key.trim() && value.trim()) result[key.trim()] = value.trim()
+  }
+  return result
+}
+
+const parseValues = (raw: string): string[] =>
+  raw
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+
+/** Build the pod-spec scheduling fields from the panel state. */
+export function buildSchedulingPodSpec(
+  scheduling: SchedulingConfig
+): Record<string, unknown> {
+  const podSpec: Record<string, unknown> = {}
+  if (scheduling.mode === 'specific' && scheduling.nodeName.trim()) {
+    podSpec.nodeName = scheduling.nodeName.trim()
+  }
+  if (scheduling.mode === 'rules') {
+    const terms = scheduling.terms
+      .map((term) => ({
+        matchExpressions: term.expressions
+          .filter((expr) => expr.key.trim())
+          .map((expr) => ({
+            key: expr.key.trim(),
+            operator: expr.operator,
+            ...(expr.operator !== 'Exists' && expr.operator !== 'DoesNotExist'
+              ? { values: parseValues(expr.values) }
+              : {}),
+          })),
+      }))
+      .filter((term) => term.matchExpressions.length > 0)
+    if (terms.length > 0) {
+      podSpec.affinity = {
+        nodeAffinity: {
+          requiredDuringSchedulingIgnoredDuringExecution: {
+            nodeSelectorTerms: terms,
+          },
+        },
+      }
+    }
+  }
+  if (scheduling.tolerations.length > 0) {
+    podSpec.tolerations = scheduling.tolerations.map((t) => {
+      const toleration: Record<string, unknown> = {
+        key: t.key.trim(),
+        operator: t.operator,
+      }
+      if (t.operator === 'Equal') toleration.value = t.value.trim()
+      if (t.effect) toleration.effect = t.effect
+      const seconds = Number(t.tolerationSeconds)
+      if (
+        t.effect === 'NoExecute' &&
+        t.tolerationSeconds &&
+        !Number.isNaN(seconds)
+      ) {
+        toleration.tolerationSeconds = seconds
+      }
+      return toleration
+    })
+  }
+  if (scheduling.priorityClassName.trim()) {
+    podSpec.priorityClassName = scheduling.priorityClassName.trim()
+  }
+  return podSpec
+}
+
+const formatQuantity = (value: string, unit: 'count' | 'percent') => {
+  if (!value.trim()) return undefined
+  const num = Number(value)
+  if (Number.isNaN(num)) return undefined
+  return unit === 'percent' ? `${num}%` : num
+}
+
+/** Build Service document(s) from port rows that requested a Service. */
+export function buildServiceDocuments(
+  formData: DeploymentFormData
+): Array<Record<string, unknown>> {
+  const labelsObj = formData.labels.reduce(
+    (acc, label) => {
+      if (label.key && label.value) acc[label.key] = label.value
+      return acc
+    },
+    {} as Record<string, string>
+  )
+  if (!labelsObj.app && formData.name) labelsObj.app = formData.name
+
+  // Group service-exposing port rows by their service type.
+  const groups = new Map<
+    Exclude<PortServiceType, 'none'>,
+    Array<Record<string, unknown>>
+  >()
+  for (const c of formData.containers) {
+    for (const p of c.ports) {
+      if (p.serviceType === 'none' || !p.containerPort) continue
+      const group = groups.get(p.serviceType) || []
+      const exists = group.some(
+        (gp) => gp.containerPort === p.containerPort
+      )
+      if (exists) continue
+      group.push({
+        ...(p.name && { name: p.name }),
+        port: p.servicePort || p.containerPort,
+        targetPort: p.containerPort,
+        ...(p.nodePort && p.serviceType === 'NodePort'
+          ? { nodePort: p.nodePort }
+          : {}),
+        ...(p.protocol !== 'TCP' ? { protocol: p.protocol } : {}),
+      })
+      group[group.length - 1].containerPort = p.containerPort
+      groups.set(p.serviceType, group)
+    }
+  }
+
+  const docs: Array<Record<string, unknown>> = []
+  for (const [type, ports] of groups) {
+    const portsOut = ports.map((p) => {
+      const rest: Record<string, unknown> = { ...p }
+      delete rest.containerPort
+      return rest
+    })
+    const spec: Record<string, unknown> = {
+      type,
+      selector: labelsObj,
+      ports: portsOut,
+    }
+    // Static ClusterIP allocation (kubernetes.io cluster-ip-allocation):
+    // users may pin a specific IP inside the service CIDR.
+    if (type === 'ClusterIP') {
+      const staticIP = ports.find(
+        (p) => typeof p.clusterIP === 'string' && p.clusterIP.trim()
+      )?.clusterIP as string | undefined
+      if (staticIP) spec.clusterIP = staticIP
+    }
+    docs.push({
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: {
+        name:
+          type === 'ClusterIP'
+            ? formData.name
+            : `${formData.name}-${type.toLowerCase()}`,
+        namespace: formData.namespace,
+        labels: labelsObj,
+      },
+      spec,
+    })
+  }
+  return docs
+}
+
 export function generateDeploymentYaml(formData: DeploymentFormData): string {
+  return generateWorkloadYaml(formData, 'deployments')
+}
+
+export function generateWorkloadYaml(
+  formData: DeploymentFormData,
+  resourceType: WorkloadResourceType
+): string {
   const labelsObj = formData.labels.reduce(
     (acc, label) => {
       if (label.key && label.value) acc[label.key] = label.value
@@ -207,26 +582,551 @@ export function generateDeploymentYaml(formData: DeploymentFormData): string {
     labelsObj.app = formData.name
   }
 
-  const deployment: Deployment = {
-    apiVersion: 'apps/v1',
-    kind: 'Deployment',
-    metadata: {
-      name: formData.name,
-      namespace: formData.namespace,
-      labels: labelsObj,
-    },
-    spec: {
-      replicas: formData.replicas,
-      selector: { matchLabels: labelsObj },
-      template: {
-        metadata: { labels: labelsObj },
-        spec: {
-          volumes: buildVolumes(formData.podSpec?.volumes || []),
-          containers: buildContainers(formData.containers),
-        },
-      },
-    },
+  const annotations = pairsToRecord(formData.annotations || [])
+  if (formData.description.trim()) {
+    annotations['kubernetes.io/description'] = formData.description.trim()
   }
 
-  return yaml.dump(deployment, { indent: 2, noRefs: true })
+  const metadata: Record<string, unknown> = {
+    name: formData.name,
+    namespace: formData.namespace,
+    labels: labelsObj,
+  }
+  if (Object.keys(annotations).length > 0) {
+    metadata.annotations = annotations
+  }
+
+  const podMeta: Record<string, unknown> = {
+    labels: pairsToRecord(formData.podLabels || []).app
+      ? pairsToRecord(formData.podLabels || [])
+      : { ...pairsToRecord(formData.podLabels || []), app: formData.name },
+  }
+  const podAnnotations = pairsToRecord(formData.podAnnotations || [])
+  if (Object.keys(podAnnotations).length > 0) {
+    podMeta.annotations = podAnnotations
+  }
+
+  const scheduling = formData.podSpec?.scheduling
+  const network = formData.podSpec?.network
+  const schedulingFields = scheduling ? buildSchedulingPodSpec(scheduling) : {}
+  const nodeSelectorObj = pairsToRecord(formData.podSpec?.nodeSelectorPairs || [])
+  const gracePeriod = Number(formData.podSpec?.terminationGracePeriodSeconds)
+  const fsGroup = Number(formData.podSpec?.fsGroup)
+  const initContainerConfigs = formData.containers.filter((c) => c.isInit)
+  const appContainerConfigs = formData.containers.filter((c) => !c.isInit)
+  const pullSecrets = (formData.podSpec?.imagePullSecrets || []).filter(Boolean)
+
+  const podSpec: Record<string, unknown> = {
+    ...(pullSecrets.length > 0 && {
+      imagePullSecrets: pullSecrets.map((name) => ({ name })),
+    }),
+    ...(network?.hostNetwork && { hostNetwork: true }),
+    ...(network?.dnsPolicy && { dnsPolicy: network.dnsPolicy }),
+    ...(network?.hostname?.trim() && { hostname: network.hostname.trim() }),
+    ...(network?.subdomain?.trim() && { subdomain: network.subdomain.trim() }),
+    ...((network?.dnsConfig?.nameservers?.length ?? 0) > 0 ||
+    (network?.dnsConfig?.searches?.length ?? 0) > 0 ||
+    (network?.dnsConfig?.options?.length ?? 0) > 0
+      ? {
+          dnsConfig: {
+            ...((network?.dnsConfig?.nameservers?.length ?? 0) > 0 && {
+              nameservers: network!.dnsConfig.nameservers,
+            }),
+            ...((network?.dnsConfig?.searches?.length ?? 0) > 0 && {
+              searches: network!.dnsConfig.searches,
+            }),
+            ...((network?.dnsConfig?.options?.length ?? 0) > 0 && {
+              options: network!.dnsConfig.options.filter((o) => o.name),
+            }),
+          },
+        }
+      : {}),
+    ...((network?.hostAliases?.length ?? 0) > 0 && {
+      hostAliases: network!.hostAliases
+        .filter((a) => a.ip || a.hostnames)
+        .map((a) => ({
+          ip: a.ip,
+          hostnames: a.hostnames
+            .split(',')
+            .map((h) => h.trim())
+            .filter(Boolean),
+        })),
+    }),
+    ...schedulingFields,
+    ...(Object.keys(nodeSelectorObj).length > 0 && {
+      nodeSelector: nodeSelectorObj,
+    }),
+    ...(!Number.isNaN(gracePeriod) &&
+      formData.podSpec?.terminationGracePeriodSeconds && {
+        terminationGracePeriodSeconds: gracePeriod,
+      }),
+    ...(!Number.isNaN(fsGroup) && formData.podSpec?.fsGroup
+      ? { securityContext: { fsGroup } }
+      : {}),
+    volumes: buildVolumes(formData.podSpec?.volumes || []),
+    ...(initContainerConfigs.length > 0 && {
+      initContainers: buildContainers(initContainerConfigs),
+    }),
+    containers: buildContainers(appContainerConfigs),
+  }
+  const podTemplate = {
+    metadata: podMeta,
+    spec: podSpec,
+  }
+
+  let manifest: Record<string, unknown>
+  switch (resourceType) {
+    case 'pods':
+      manifest = {
+        apiVersion: 'v1',
+        kind: 'Pod',
+        // A bare Pod has no pod template, so the Pod-level labels/annotations
+        // configured in the panel apply to the Pod metadata itself.
+        metadata: {
+          ...metadata,
+          labels: {
+            ...labelsObj,
+            ...pairsToRecord(formData.podLabels || []),
+          },
+          ...(Object.keys(podAnnotations).length > 0 && {
+            annotations: {
+              ...annotations,
+              ...podAnnotations,
+            },
+          }),
+        },
+        spec: podSpec,
+      }
+      break
+    case 'daemonsets':
+      manifest = {
+        apiVersion: 'apps/v1',
+        kind: 'DaemonSet',
+        metadata,
+        spec: {
+          selector: { matchLabels: labelsObj },
+          template: podTemplate,
+        },
+      }
+      break
+    case 'statefulsets': {
+      const ssStrategy = formData.strategy
+      const partition = Number(ssStrategy?.partition)
+      // The panel reuses `Recreate` for StatefulSet's OnDelete.
+      const updateType =
+        ssStrategy?.type === 'Recreate' ? 'OnDelete' : 'RollingUpdate'
+      manifest = {
+        apiVersion: 'apps/v1',
+        kind: 'StatefulSet',
+        metadata,
+        spec: {
+          serviceName: formData.serviceName?.trim() || formData.name,
+          replicas: formData.replicas,
+          selector: { matchLabels: labelsObj },
+          template: podTemplate,
+          updateStrategy: {
+            type: updateType,
+            ...(updateType === 'RollingUpdate' &&
+              ssStrategy?.partition &&
+              !Number.isNaN(partition) && {
+                rollingUpdate: { partition },
+              }),
+          },
+        },
+      }
+      break
+    }
+    case 'jobs':
+      manifest = {
+        apiVersion: 'batch/v1',
+        kind: 'Job',
+        metadata,
+        spec: { template: podTemplate },
+      }
+      break
+    case 'cronjobs':
+      manifest = {
+        apiVersion: 'batch/v1',
+        kind: 'CronJob',
+        metadata,
+        spec: {
+          schedule: formData.schedule || '*/5 * * * *',
+          jobTemplate: { spec: { template: podTemplate } },
+        },
+      }
+      break
+    default: {
+      const strategy = formData.strategy
+      const spec: Record<string, unknown> = {
+        replicas: formData.replicas,
+        selector: { matchLabels: labelsObj },
+        template: podTemplate,
+      }
+      if (strategy) {
+        if (strategy.type === 'Recreate') {
+          spec.strategy = { type: 'Recreate' }
+        } else {
+          const maxSurge = formatQuantity(strategy.maxSurge, strategy.maxSurgeUnit)
+          const maxUnavailable = formatQuantity(
+            strategy.maxUnavailable,
+            strategy.maxUnavailableUnit
+          )
+          if (maxSurge !== undefined || maxUnavailable !== undefined) {
+            spec.strategy = {
+              type: 'RollingUpdate',
+              ...(maxSurge !== undefined && {
+                rollingUpdate: {
+                  ...(maxSurge !== undefined && { maxSurge }),
+                  ...(maxUnavailable !== undefined && { maxUnavailable }),
+                },
+              }),
+            }
+          }
+        }
+        const minReadySeconds = Number(strategy.minReadySeconds)
+        if (strategy.minReadySeconds && !Number.isNaN(minReadySeconds)) {
+          spec.minReadySeconds = minReadySeconds
+        }
+        const revisionHistoryLimit = Number(strategy.revisionHistoryLimit)
+        if (
+          strategy.revisionHistoryLimit &&
+          !Number.isNaN(revisionHistoryLimit)
+        ) {
+          spec.revisionHistoryLimit = revisionHistoryLimit
+        }
+        const progressDeadlineSeconds = Number(strategy.progressDeadlineSeconds)
+        if (
+          strategy.progressDeadlineSeconds &&
+          !Number.isNaN(progressDeadlineSeconds)
+        ) {
+          spec.progressDeadlineSeconds = progressDeadlineSeconds
+        }
+      }
+      const deployment: Deployment = {
+        apiVersion: 'apps/v1',
+        kind: 'Deployment',
+        metadata,
+        spec: spec as unknown as Deployment['spec'],
+      }
+      manifest = deployment as unknown as Record<string, unknown>
+    }
+  }
+
+  // When a Service is requested, emit a multi-document YAML:
+  // the Service first, then the workload, applied in one shot.
+  const serviceDocs = buildServiceDocuments(formData)
+  if (serviceDocs.length > 0) {
+    const dumpOpts = { indent: 2, noRefs: true, lineWidth: -1 }
+    const parts = serviceDocs.map((d) => yaml.dump(d, dumpOpts))
+    parts.push(yaml.dump(manifest, dumpOpts))
+    return parts.join('---\n')
+  }
+
+  return yaml.dump(manifest, { indent: 2, noRefs: true })
+}
+/** Best-effort reverse parse: workload YAML (+ Service docs) -> form state. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function parseYamlToFormData(
+  content: string,
+  resourceType: WorkloadResourceType,
+  fallback: DeploymentFormData
+): DeploymentFormData {
+  try {
+    const docs = (yaml.loadAll(content) as Array<Record<string, unknown>>) || []
+    const kinds: Record<string, string> = {
+      deployments: 'Deployment',
+      statefulsets: 'StatefulSet',
+      daemonsets: 'DaemonSet',
+      jobs: 'Job',
+      cronjobs: 'CronJob',
+      pods: 'Pod',
+    }
+    const wanted = kinds[resourceType]
+    const workload = docs.find((d) => d && d.kind === wanted) || docs[0]
+    if (!workload) return fallback
+
+    const metadata = (workload.metadata || {}) as Record<string, unknown>
+    const labelsObj = (metadata.labels || {}) as Record<string, string>
+    const annotationsObj = (metadata.annotations || {}) as Record<string, string>
+    const toPairs = (obj: Record<string, string>) =>
+      Object.entries(obj).map(([key, value]) => ({ key, value }))
+
+    const spec = (workload.spec || {}) as Record<string, any>
+    let podSpecDoc = (spec.template?.spec || spec) as Record<string, any>
+    if (resourceType === 'cronjobs') {
+      podSpecDoc = spec.jobTemplate?.spec?.template?.spec || podSpecDoc
+    }
+    const podMeta = (spec.template?.metadata || {}) as Record<string, any>
+
+    const mapContainer = (c: any, i: number, isInit: boolean) => {
+      const res = c.resources || {}
+      return {
+        name: c.name || `container-${i + 1}`,
+        image: c.image || '',
+        isInit,
+        ports: ((c.ports as Array<any>) || []).map((p) => ({
+          name: p.name,
+          containerPort: Number(p.containerPort) || 0,
+          protocol: p.protocol === 'UDP' ? ('UDP' as const) : ('TCP' as const),
+          serviceType: 'none' as const,
+        })),
+        pullPolicy: c.imagePullPolicy || 'IfNotPresent',
+        resources: {
+          requests: { cpu: res.requests?.cpu || '', memory: res.requests?.memory || '' },
+          limits: { cpu: res.limits?.cpu || '', memory: res.limits?.memory || '' },
+        },
+        gpu:
+          res.limits?.['nvidia.com/gpu'] === undefined ||
+          res.limits?.['nvidia.com/gpu'] === null
+            ? undefined
+            : String(res.limits['nvidia.com/gpu']),
+        volumeMounts: ((c.volumeMounts as Array<any>) || []).map((vm) => ({
+          name: vm.name || '',
+          mountPath: vm.mountPath || '',
+          subPath: vm.subPath,
+          readOnly: !!vm.readOnly,
+        })),
+        container: {
+          name: c.name || `container-${i + 1}`,
+          image: c.image || '',
+          env: c.env || [],
+          envFrom: c.envFrom || [],
+          command: c.command || [],
+          args: c.args || [],
+          workingDir: c.workingDir,
+          stdin: !!c.stdin,
+          tty: !!c.tty,
+          lifecycle: c.lifecycle,
+          readinessProbe: c.readinessProbe,
+          livenessProbe: c.livenessProbe,
+          startupProbe: c.startupProbe,
+          securityContext: c.securityContext,
+        },
+      }
+    }
+
+    const containers = [
+      ...((podSpecDoc.initContainers as Array<any>) || []).map((c, i) =>
+        mapContainer(c, i, true)
+      ),
+      ...((podSpecDoc.containers as Array<any>) || []).map((c, i) =>
+        mapContainer(c, i, false)
+      ),
+    ]
+
+    // Deployment.spec.strategy / StatefulSet.spec.updateStrategy -> panel.
+    const rawStrategy = (spec.strategy || spec.updateStrategy) as
+      | {
+          type?: string
+          rollingUpdate?: {
+            maxSurge?: string | number
+            maxUnavailable?: string | number
+            partition?: number
+          }
+        }
+      | undefined
+    const parsedStrategy: StrategyForm = { ...defaultStrategy() }
+    if (rawStrategy) {
+      parsedStrategy.type =
+        rawStrategy.type === 'Recreate' || rawStrategy.type === 'OnDelete'
+          ? 'Recreate'
+          : 'RollingUpdate'
+      const splitQuantity = (value: string | number | undefined) => {
+        if (value === undefined || value === null) return null
+        const text = String(value).trim()
+        if (!text) return null
+        return text.endsWith('%')
+          ? { value: text.slice(0, -1), unit: 'percent' as const }
+          : { value: text, unit: 'count' as const }
+      }
+      const surge = splitQuantity(rawStrategy.rollingUpdate?.maxSurge)
+      if (surge) {
+        parsedStrategy.maxSurge = surge.value
+        parsedStrategy.maxSurgeUnit = surge.unit
+      }
+      const unavailable = splitQuantity(
+        rawStrategy.rollingUpdate?.maxUnavailable
+      )
+      if (unavailable) {
+        parsedStrategy.maxUnavailable = unavailable.value
+        parsedStrategy.maxUnavailableUnit = unavailable.unit
+      }
+      const partition = rawStrategy.rollingUpdate?.partition
+      if (partition !== undefined && partition !== null) {
+        parsedStrategy.partition = String(partition)
+      }
+    }
+    const readSeconds = (value: unknown) =>
+      value === undefined || value === null ? '' : String(value)
+    parsedStrategy.minReadySeconds = readSeconds(spec.minReadySeconds)
+    parsedStrategy.revisionHistoryLimit = readSeconds(spec.revisionHistoryLimit)
+    parsedStrategy.progressDeadlineSeconds = readSeconds(
+      spec.progressDeadlineSeconds
+    )
+
+    const scheduling = defaultSchedulingConfig()
+    if (podSpecDoc.nodeName) {
+      scheduling.mode = 'specific'
+      scheduling.nodeName = String(podSpecDoc.nodeName)
+    } else {
+      // Node scheduling rules (nodeAffinity) -> panel terms.
+      const nodeAffinity = podSpecDoc.affinity?.nodeAffinity as
+        | {
+            requiredDuringSchedulingIgnoredDuringExecution?: {
+              nodeSelectorTerms?: Array<{
+                matchExpressions?: Array<{
+                  key?: string
+                  operator?: string
+                  values?: string[]
+                }>
+              }>
+            }
+          }
+        | undefined
+      const terms = (
+        nodeAffinity?.requiredDuringSchedulingIgnoredDuringExecution
+          ?.nodeSelectorTerms || []
+      )
+        .map((term) => ({
+          id: nextSchedulingFormId(),
+          expressions: (term.matchExpressions || []).map((expr) => ({
+            id: nextSchedulingFormId(),
+            key: expr.key || '',
+            operator: (expr.operator || 'In') as SchedulingRule['operator'],
+            values: (expr.values || []).join(', '),
+          })),
+        }))
+        .filter((term) => term.expressions.length > 0)
+      if (terms.length > 0) {
+        scheduling.mode = 'rules'
+        scheduling.terms = terms
+      }
+    }
+    // Tolerations + priority apply to every scheduling mode.
+    scheduling.tolerations = ((podSpecDoc.tolerations as Array<any>) || []).map(
+      (tol) => ({
+        id: nextSchedulingFormId(),
+        key: tol.key || '',
+        operator: tol.operator === 'Exists' ? ('Exists' as const) : ('Equal' as const),
+        value: tol.value || '',
+        effect: (tol.effect || '') as TolerationForm['effect'],
+        tolerationSeconds:
+          tol.tolerationSeconds === undefined ||
+          tol.tolerationSeconds === null ||
+          typeof tol.tolerationSeconds === 'object'
+            ? ''
+            : String(tol.tolerationSeconds),
+      })
+    )
+    scheduling.priorityClassName = (podSpecDoc.priorityClassName as string) || ''
+
+    const base: DeploymentFormData = {
+      ...fallback,
+      name: (metadata.name as string) || fallback.name,
+      namespace: (metadata.namespace as string) || fallback.namespace,
+      description:
+        annotationsObj['kubernetes.io/description'] || fallback.description,
+      replicas:
+        resourceType === 'deployments' || resourceType === 'statefulsets'
+          ? Number(spec.replicas) || 1
+          : fallback.replicas,
+      labels: toPairs(labelsObj).length ? toPairs(labelsObj) : fallback.labels,
+      annotations: toPairs(annotationsObj),
+      strategy: parsedStrategy,
+      podLabels: toPairs(podMeta.labels || {}),
+      podAnnotations: toPairs(podMeta.annotations || {}),
+      podSpec: {
+        volumes: ((podSpecDoc.volumes as Array<any>) || []).map((v) => {
+          let sourceType: VolumeForm['sourceType'] = 'emptyDir'
+          let options: VolumeForm['options'] = {}
+          if (v.hostPath) {
+            sourceType = 'hostPath'
+            options = { path: v.hostPath.path }
+          } else if (v.configMap) {
+            sourceType = 'configMap'
+            options = { configMapName: v.configMap.name }
+          } else if (v.secret) {
+            sourceType = 'secret'
+            options = { secretName: v.secret.secretName }
+          } else if (v.persistentVolumeClaim) {
+            sourceType = 'pvc'
+            options = { claimName: v.persistentVolumeClaim.claimName }
+          }
+          return { name: v.name || '', sourceType, options }
+        }),
+        scheduling,
+        network: {
+          dnsPolicy: podSpecDoc.dnsPolicy || '',
+          hostname: podSpecDoc.hostname || '',
+          subdomain: podSpecDoc.subdomain || '',
+          hostNetwork: podSpecDoc.hostNetwork === true,
+          dnsConfig: {
+            nameservers: (podSpecDoc.dnsConfig?.nameservers || []).filter(
+              Boolean
+            ),
+            searches: (podSpecDoc.dnsConfig?.searches || []).filter(Boolean),
+            options: (
+              (podSpecDoc.dnsConfig?.options || []) as Array<{
+                name?: string
+                value?: string
+              }>
+            ).map((o) => ({
+              name: o.name || '',
+              value: o.value || '',
+            })),
+          },
+          hostAliases: (
+            (podSpecDoc.hostAliases || []) as Array<{
+              ip?: string
+              hostnames?: string[]
+            }>
+          ).map((a) => ({
+            ip: a.ip || '',
+            hostnames: (a.hostnames || []).join(', '),
+          })),
+        },
+        nodeSelectorPairs: toPairs(
+          (podSpecDoc.nodeSelector || {}) as Record<string, string>
+        ),
+        terminationGracePeriodSeconds: podSpecDoc.terminationGracePeriodSeconds
+          ? String(podSpecDoc.terminationGracePeriodSeconds)
+          : '30',
+        fsGroup: podSpecDoc.securityContext?.fsGroup
+          ? String(podSpecDoc.securityContext.fsGroup)
+          : '',
+        imagePullSecrets: ((podSpecDoc.imagePullSecrets as Array<any>) || [])
+          .map((s) => s?.name)
+          .filter((n): n is string => !!n),
+      },
+      containers: containers.length > 0 ? containers : fallback.containers,
+    }
+
+    if (resourceType === 'statefulsets' && spec.serviceName)
+      base.serviceName = String(spec.serviceName)
+    if (resourceType === 'cronjobs' && spec.schedule)
+      base.schedule = String(spec.schedule)
+
+    // Map Service docs back onto port rows.
+    for (const svc of docs.filter((d) => d.kind === 'Service')) {
+      const svcSpec = (svc.spec || {}) as Record<string, any>
+      const svcType = (svcSpec.type as PortServiceType) || 'ClusterIP'
+      for (const sp of (svcSpec.ports as Array<any>) || []) {
+        const target = Number(sp.targetPort)
+        for (const c of base.containers) {
+          for (const p of c.ports) {
+            if (p.containerPort === target) {
+              p.serviceType = svcType
+              if (sp.port !== undefined && Number(sp.port) !== target)
+                p.servicePort = Number(sp.port)
+              if (sp.nodePort !== undefined) p.nodePort = Number(sp.nodePort)
+            }
+          }
+        }
+      }
+    }
+
+    return base
+  } catch {
+    return fallback
+  }
 }

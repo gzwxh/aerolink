@@ -23,6 +23,8 @@ type UpdateLDAPSettingRequest struct {
 	GroupBaseDN          *string `json:"groupBaseDn"`
 	GroupFilter          *string `json:"groupFilter"`
 	GroupNameAttribute   *string `json:"groupNameAttribute"`
+	AutoSync             *bool   `json:"autoSync"`
+	SyncIntervalMinutes  *int    `json:"syncIntervalMinutes"`
 }
 
 func (h *AuthHandler) GetLDAPSetting(c *gin.Context) {
@@ -65,6 +67,10 @@ func (h *AuthHandler) UpdateLDAPSetting(c *gin.Context) {
 		return
 	}
 
+	// Re-sync promptly after the settings are saved so fixes to the directory
+	// configuration (or newly enabled LDAP) are reflected quickly.
+	TriggerLDAPSync()
+
 	c.JSON(http.StatusOK, ldapSettingResponse(updated))
 }
 
@@ -83,7 +89,85 @@ func ldapSettingResponse(setting *model.LDAPSetting) gin.H {
 		"groupBaseDn":            setting.GroupBaseDN,
 		"groupFilter":            setting.GroupFilter,
 		"groupNameAttribute":     setting.GroupNameAttribute,
+		"autoSync":               setting.AutoSync,
+		"syncIntervalMinutes":    setting.SyncIntervalMinutes,
 	}
+}
+
+// SyncLDAPUsers triggers an immediate alignment sync. It never provisions new
+// users — new accounts are created through ImportLDAPUsers after the admin
+// picks them interactively.
+func (h *AuthHandler) SyncLDAPUsers(c *gin.Context) {
+	setting, err := model.GetLDAPSetting()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load ldap setting: %v", err)})
+		return
+	}
+	if !setting.Enabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "LDAP is not enabled"})
+		return
+	}
+	if !StartManualLDAPSync() {
+		c.JSON(http.StatusConflict, gin.H{"error": "an LDAP sync is already running or queued"})
+		return
+	}
+	c.JSON(http.StatusAccepted, GetLDAPSyncStatus())
+}
+
+func (h *AuthHandler) GetLDAPSyncStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, GetLDAPSyncStatus())
+}
+
+// ListLDAPImportCandidates exposes directory users for the interactive import
+// picker (username, display name, already-imported / conflict flags).
+func (h *AuthHandler) ListLDAPImportCandidates(c *gin.Context) {
+	setting, err := model.GetLDAPSetting()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load ldap setting: %v", err)})
+		return
+	}
+	if !setting.Enabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "LDAP is not enabled"})
+		return
+	}
+	candidates, err := ListLDAPImportCandidates(setting)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to list ldap users: %v", err)})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"users": candidates, "total": len(candidates)})
+}
+
+// ImportLDAPUsers imports the directory users the admin selected in the picker.
+func (h *AuthHandler) ImportLDAPUsers(c *gin.Context) {
+	var req struct {
+		Usernames      []string `json:"usernames"`
+		EnableImported bool     `json:"enableImported"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request: %v", err)})
+		return
+	}
+	if len(req.Usernames) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no users selected"})
+		return
+	}
+	setting, err := model.GetLDAPSetting()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load ldap setting: %v", err)})
+		return
+	}
+	if !setting.Enabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "LDAP is not enabled"})
+		return
+	}
+	result, err := ImportLDAPUsers(setting, req.Usernames, req.EnableImported)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to import ldap users: %v", err)})
+		return
+	}
+	TriggerLDAPSync()
+	c.JSON(http.StatusOK, result)
 }
 
 func mergeLDAPSetting(current *model.LDAPSetting, req UpdateLDAPSettingRequest) model.LDAPSetting {
@@ -123,6 +207,12 @@ func mergeLDAPSetting(current *model.LDAPSetting, req UpdateLDAPSettingRequest) 
 	}
 	if req.GroupNameAttribute != nil {
 		merged.GroupNameAttribute = strings.TrimSpace(*req.GroupNameAttribute)
+	}
+	if req.AutoSync != nil {
+		merged.AutoSync = *req.AutoSync
+	}
+	if req.SyncIntervalMinutes != nil {
+		merged.SyncIntervalMinutes = *req.SyncIntervalMinutes
 	}
 	return merged.Normalized()
 }

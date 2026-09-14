@@ -18,6 +18,8 @@ var (
 	ErrLDAPDisabled           = errors.New("ldap authentication is disabled")
 	ErrLDAPInvalidCredentials = errors.New("invalid ldap credentials")
 	ErrLDAPNotConfigured      = errors.New("ldap authentication is not configured")
+
+	errLDAPUserNotProvisioned = errors.New("ldap user is not provisioned locally")
 )
 
 type ldapConfig struct {
@@ -49,26 +51,13 @@ func (a *LDAPAuthenticator) Authenticate(setting *model.LDAPSetting, username, p
 		return nil, ErrLDAPInvalidCredentials
 	}
 
-	conn, parsedURL, err := dialLDAP(cfg)
+	conn, err := bindLDAPServiceConnection(cfg)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		_ = conn.Close()
 	}()
-
-	if cfg.UseStartTLS && parsedURL.Scheme == "ldap" {
-		if err := conn.StartTLS(&tls.Config{
-			MinVersion: tls.VersionTLS12,
-			ServerName: parsedURL.Hostname(),
-		}); err != nil {
-			return nil, fmt.Errorf("failed to start ldap tls: %w", err)
-		}
-	}
-
-	if err := conn.Bind(cfg.BindDN, cfg.BindPassword); err != nil {
-		return nil, fmt.Errorf("failed to bind ldap service account: %w", err)
-	}
 
 	entry, err := findLDAPUser(conn, cfg, username)
 	if err != nil {
@@ -185,6 +174,11 @@ func findLDAPUser(conn *ldap.Conn, cfg ldapConfig, username string) (*ldap.Entry
 }
 
 func findLDAPGroups(conn *ldap.Conn, cfg ldapConfig, userDN string) (model.SliceString, error) {
+	// Groups are optional: without a group base DN the directory is only used
+	// for authentication and users carry no group memberships.
+	if strings.TrimSpace(cfg.GroupBaseDN) == "" {
+		return nil, nil
+	}
 	filter, err := formatLDAPFilter(cfg.GroupFilter, ldap.EscapeFilter(strings.TrimSpace(userDN)))
 	if err != nil {
 		return nil, err
@@ -229,4 +223,27 @@ func formatLDAPFilter(template, value string) (string, error) {
 		return "", ErrLDAPNotConfigured
 	}
 	return fmt.Sprintf(template, value), nil
+}
+
+// bindLDAPServiceConnection dials the LDAP server, optionally upgrades to
+// StartTLS, and binds with the configured service account. Callers own conn.
+func bindLDAPServiceConnection(cfg ldapConfig) (*ldap.Conn, error) {
+	conn, parsedURL, err := dialLDAP(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.UseStartTLS && parsedURL.Scheme == "ldap" {
+		if err := conn.StartTLS(&tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ServerName: parsedURL.Hostname(),
+		}); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("failed to start ldap tls: %w", err)
+		}
+	}
+	if err := conn.Bind(cfg.BindDN, cfg.BindPassword); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("failed to bind ldap service account: %w", err)
+	}
+	return conn, nil
 }
