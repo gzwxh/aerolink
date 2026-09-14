@@ -146,3 +146,33 @@ helm package charts/kite -d dist
 - [配置文件（config.yaml）](../../docsCN/config/config-file.md)
 - [环境变量](../../docsCN/config/env.md)
 - [常见问题](../../docsCN/faq.md)
+
+## 版本分发（当前：压缩包形式）
+
+公司尚未搭建 Helm 仓库，当前版本以 **`.tgz` 压缩包** 形式分发，随仓库一起维护：
+
+- 压缩包：`charts/kite-1.0.0.tgz`（由 `helm package charts/kite -d charts/` 生成）
+- 镜像：`swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:dsy-v1.0.0`（chart 默认值已指向公司 SWR）
+
+### 安装
+
+```bash
+helm install kite charts/kite-1.0.0.tgz \
+  --namespace kite-system --create-namespace
+```
+
+如需覆盖镜像或配置：
+
+```bash
+helm install kite charts/kite-1.0.0.tgz \
+  --namespace kite-system --create-namespace \
+  -f my-values.yaml
+```
+
+### 后续切换到仓库托管
+
+公司确定搭建 Helm 仓库（ChartMuseum / Harbor / SWR 的 OCI 能力）后：
+
+1. `helm repo add <名称> <仓库地址> && helm repo update`；
+2. `helm push charts/kite-1.0.0.tgz <名称>`（OCI 仓库用 `helm push charts/kite-1.0.0.tgz oci://<地址>/<命名空间>`）；
+3. 安装方式改为 `helm install kite <名称>/kite --version 1.0.0`，并更新本文档。

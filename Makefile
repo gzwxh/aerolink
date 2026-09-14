@@ -18,7 +18,8 @@ E2E_OAUTH_PORT ?= 5556
 SPEC ?=
 
 # Version information
-VERSION=$(shell scripts/get-version.sh)
+# 发布版本号（前端展示与镜像构建共用）；发新版时修改这里。
+VERSION ?= dsy-v1.0.0
 BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
