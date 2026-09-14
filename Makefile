@@ -253,3 +253,19 @@ docs-dev: ## Start documentation server in development mode
 docs-build: ## Build documentation
 	@echo "📚 Building documentation..."
 	cd docs && pnpm run docs:build
+
+# ----- Docker 镜像 -----
+IMAGE ?= swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.0
+# 受限网络下的基础镜像与代理，直连环境可置空：make image DOCKER_BUILD_ARGS=
+DOCKER_BUILD_ARGS ?= --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:24-alpine \
+	--build-arg GOLANG_IMAGE=docker.m.daocloud.io/library/golang:1.26-alpine \
+	--build-arg RUNTIME_IMAGE=docker.m.daocloud.io/library/alpine:3.20 \
+	--build-arg NPM_REGISTRY=https://registry.npmmirror.com \
+	--build-arg GOPROXY=https://goproxy.cn,direct
+
+.PHONY: image push
+image: ## Build the Docker image (IMAGE=registry/repo:tag)
+	docker build $(DOCKER_BUILD_ARGS) -t $(IMAGE) .
+
+push: image ## Build and push the Docker image
+	docker push $(IMAGE)
