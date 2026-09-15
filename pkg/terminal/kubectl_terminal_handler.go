@@ -3,6 +3,7 @@ package terminal
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -37,27 +38,28 @@ func (h *KubectlTerminalHandler) HandleKubectlTerminalWebSocket(c *gin.Context) 
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	user := c.MustGet("user").(model.User)
 
+	// Only admin users can use the kubectl terminal; authorise before the
+	// WebSocket upgrade (same for the feature switch below).
+	if !rbac.UserHasRole(user, model.DefaultAdminRole.Name) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "kubectl terminal is only available to admin users"})
+		return
+	}
+
+	setting, err := model.GetGeneralSetting()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load settings: %v", err)})
+		return
+	}
+	if !setting.KubectlEnabled {
+		c.JSON(http.StatusForbidden, gin.H{"error": "kubectl terminal is disabled"})
+		return
+	}
+	kubectlImage := strings.TrimSpace(setting.KubectlImage)
+	if kubectlImage == "" {
+		kubectlImage = common.KubectlTerminalImage
+	}
+
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
-		// Only admin users can use the kubectl terminal
-		if !rbac.UserHasRole(user, model.DefaultAdminRole.Name) {
-			ws.SendErrorMessage("kubectl terminal is only available to admin users")
-			return
-		}
-
-		setting, err := model.GetGeneralSetting()
-		if err != nil {
-			ws.SendErrorMessage(fmt.Sprintf("Failed to load settings: %v", err))
-			return
-		}
-		if !setting.KubectlEnabled {
-			ws.SendErrorMessage("kubectl terminal is disabled")
-			return
-		}
-		kubectlImage := strings.TrimSpace(setting.KubectlImage)
-		if kubectlImage == "" {
-			kubectlImage = common.KubectlTerminalImage
-		}
-
 		ctx := ws.Context
 
 		// Ensure the shared admin ServiceAccount + ClusterRoleBinding exist

@@ -4,7 +4,10 @@ import "testing"
 
 func TestEncryptDecryptString(t *testing.T) {
 	original := "Hello, World!asdas"
-	encrypted := EncryptString(original)
+	encrypted, err := EncryptString(original)
+	if err != nil {
+		t.Fatalf("EncryptString() failed: %v", err)
+	}
 	decrypted, err := DecryptString(encrypted)
 	t.Log("Encrypted:", encrypted)
 	t.Log("Decrypted:", decrypted)

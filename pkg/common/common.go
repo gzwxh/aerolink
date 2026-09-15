@@ -2,6 +2,7 @@ package common
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,27 +18,39 @@ const (
 	KubectlTerminalPodName = "kite-kubectl-agent"
 
 	KubectlAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
-
-	// db connection max idle time
-	DBMaxIdleTime  = 10 * time.Minute
-	DBMaxOpenConns = 100
-	DBMaxIdleConns = 10
 )
 
 var (
+	// Database connection pool; overridable through KITE_DB_* environment
+	// variables for MySQL/PostgreSQL deployments with different concurrency.
+	DBConnMaxLifetime = 10 * time.Minute
+	DBMaxOpenConns    = 100
+	DBMaxIdleConns    = 10
+
 	Port            = "8080"
 	JwtSecret       = DefaultJWTSecret
 	EnableAnalytics = false
-	Host            = ""
-	Base            = ""
+	// AllowInsecureSecrets permits the built-in keys; development only.
+	AllowInsecureSecrets = false
+	Host                 = ""
+	Base                 = ""
 
-	NodeTerminalImage    = "busybox:latest"
-	KubectlTerminalImage = "zzde/kubectl:latest"
-	ClusterAgentImage    = "ghcr.io/kite-org/kite:latest"
+	// Images Kite pulls when it spawns pod/terminal/agent workloads. They are
+	// mirrored in the company registry (SWR, org "dsy") so an air-gapped
+	// cluster can pull them; each remains overridable via the environment or
+	// the settings UI.
+	NodeTerminalImage    = "swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest"
+	KubectlTerminalImage = "swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest"
+	ClusterAgentImage    = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest"
 	DBType               = "sqlite"
 	DBDSN                = "dev.db"
 
-	KiteEncryptKey = "kite-default-encryption-key-change-in-production"
+	// DefaultKiteEncryptKey is only a bootstrap value for development. Secrets
+	// encrypted with it are readable by anyone who has the database, so
+	// production deployments must set KITE_ENCRYPT_KEY (or
+	// KITE_REQUIRE_ENCRYPT_KEY=true to make that mandatory).
+	DefaultKiteEncryptKey = "kite-default-encryption-key-change-in-production"
+	KiteEncryptKey        = DefaultKiteEncryptKey
 
 	AllNamespaces = "_all"
 
@@ -99,8 +112,22 @@ func SetManagedSections(sections map[string]bool) {
 }
 
 func LoadEnvs() {
+	// KITE_ALLOW_INSECURE_SECRETS is the single, explicit escape hatch for local
+	// development; without it the built-in keys are refused outright.
+	if v := os.Getenv("KITE_ALLOW_INSECURE_SECRETS"); v != "" {
+		AllowInsecureSecrets = strings.EqualFold(strings.TrimSpace(v), "true")
+	}
+
 	if secret := os.Getenv("JWT_SECRET"); secret != "" {
 		JwtSecret = secret
+		// The general-setting layer prefers this value, so reject a weak one
+		// early instead of signing sessions with it.
+		if len(secret) < 32 {
+			if !AllowInsecureSecrets {
+				klog.Fatalf("JWT_SECRET is shorter than 32 bytes: refusing to start (use openssl rand -base64 32, or KITE_ALLOW_INSECURE_SECRETS=true for local development)")
+			}
+			klog.Warningf("JWT_SECRET is shorter than 32 bytes; use a longer random secret in production")
+		}
 	}
 
 	if port := os.Getenv("PORT"); port != "" {
@@ -137,10 +164,41 @@ func LoadEnvs() {
 		DBType = dbType
 	}
 
+	requireEncryptKey := strings.EqualFold(strings.TrimSpace(os.Getenv("KITE_REQUIRE_ENCRYPT_KEY")), "true")
+
 	if key := os.Getenv("KITE_ENCRYPT_KEY"); key != "" {
 		KiteEncryptKey = key
+		if len(key) < 32 {
+			klog.Warningf("KITE_ENCRYPT_KEY is shorter than 32 bytes; use a longer random value (openssl rand -base64 32)")
+		}
+	} else if !AllowInsecureSecrets || requireEncryptKey {
+		klog.Fatalf("KITE_ENCRYPT_KEY is not set: refusing to start. Stored credentials (cluster kubeconfigs, LDAP/SMTP/OAuth passwords, AI keys) " +
+			"would be encrypted with the built-in public key. Set KITE_ENCRYPT_KEY=\"$(openssl rand -base64 32)\", or for local development run " +
+			"`make run` / `make dev` (they load dev.env) or set KITE_ALLOW_INSECURE_SECRETS=true.")
 	} else {
-		klog.Warningf("KITE_ENCRYPT_KEY is not set, using default key, this is not secure for production!")
+		klog.Warningf("KITE_ENCRYPT_KEY is not set, using the built-in key because KITE_ALLOW_INSECURE_SECRETS=true. Never do this in production.")
+	}
+
+	if v := os.Getenv("KITE_DB_MAX_OPEN_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			DBMaxOpenConns = n
+		} else {
+			klog.Warningf("Invalid KITE_DB_MAX_OPEN_CONNS %q, keeping %d", v, DBMaxOpenConns)
+		}
+	}
+	if v := os.Getenv("KITE_DB_MAX_IDLE_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			DBMaxIdleConns = n
+		} else {
+			klog.Warningf("Invalid KITE_DB_MAX_IDLE_CONNS %q, keeping %d", v, DBMaxIdleConns)
+		}
+	}
+	if v := os.Getenv("KITE_DB_CONN_MAX_LIFETIME_MINUTES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			DBConnMaxLifetime = time.Duration(n) * time.Minute
+		} else {
+			klog.Warningf("Invalid KITE_DB_CONN_MAX_LIFETIME_MINUTES %q, keeping %s", v, DBConnMaxLifetime)
+		}
 	}
 
 	if v := os.Getenv("ANONYMOUS_USER_ENABLED"); v == "true" {

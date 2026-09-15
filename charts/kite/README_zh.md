@@ -66,7 +66,7 @@ helm uninstall kite -n kube-system
 
 | 参数                                                       | 说明                                                     | 默认值                        |
 | ---------------------------------------------------------- | -------------------------------------------------------- | ----------------------------- |
-| `image.repository`                                         | 镜像仓库                                                 | `ghcr.io/kite-org/kite`       |
+| `image.repository`                                         | 镜像仓库                                                 | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite`       |
 | `image.tag`                                                | 镜像标签，留空时使用 chart 的 `appVersion`               | `""`                          |
 | `imagePullSecrets`                                         | 私有镜像仓库的拉取凭据                                   | `[]`                          |
 | `replicaCount`                                             | 副本数（使用 SQLite 时请保持 1）                         | `1`                           |

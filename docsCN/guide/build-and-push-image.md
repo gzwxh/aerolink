@@ -43,9 +43,9 @@ Docker Hub（`node` / `golang`）与 gcr.io（`distroless`）在部分网络下�
 ```bash
 VERSION=$(bash scripts/get-version.sh)
 docker build \
-  --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:24-alpine \
-  --build-arg GOLANG_IMAGE=docker.m.daocloud.io/library/golang:1.26-alpine \
-  --build-arg RUNTIME_IMAGE=gcr.m.daocloud.io/distroless/static \
+  --build-arg NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/node:24-alpine \
+  --build-arg GOLANG_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/golang:1.26-alpine \
+  --build-arg RUNTIME_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.20 \
   --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
   --build-arg GOPROXY=https://goproxy.cn,direct \
   --build-arg VERSION="$VERSION" \
@@ -60,9 +60,9 @@ docker build \
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `NODE_IMAGE` | `node:24-alpine` | 前端构建基础镜像 |
-| `GOLANG_IMAGE` | `golang:1.26-alpine` | 后端构建基础镜像 |
-| `RUNTIME_IMAGE` | `gcr.io/distroless/static` | 运行时基础镜像（自带 CA 证书与时区数据） |
+| `NODE_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/node:24-alpine` | 前端构建基础镜像（公司 SWR） |
+| `GOLANG_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/golang:1.26-alpine` | 后端构建基础镜像（公司 SWR） |
+| `RUNTIME_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.20` | 运行时基础镜像（公司 SWR） |
 | `NPM_REGISTRY` | `https://registry.npmjs.org` | 前端依赖源 |
 | `GOPROXY` | `https://proxy.golang.org,direct` | Go 模块代理 |
 | `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `dev` / `unknown` / `unknown` | 注入 `pkg/version`，展示在界面上 |
@@ -70,13 +70,20 @@ docker build \
 ## 二、验证镜像
 
 ```bash
-docker run -d --name kite -p 8080:8080 kite:local
+docker run -d --name kite -p 8080:8080 \
+  -v kite-data:/app/data \
+  -e DB_DSN=/app/data/kite.db \
+  -e KITE_ENCRYPT_KEY="$(openssl rand -base64 32)" \
+  -e JWT_SECRET="$(openssl rand -base64 32)" \
+  kite:local
 
 curl -I http://127.0.0.1:8080/        # 期望 HTTP 200
 docker logs kite | head              # 期望看到 Kite server started on port 8080
 
 docker rm -f kite
 ```
+
+> 缺少 `KITE_ENCRYPT_KEY` 时服务会拒绝启动（生产安全检查）；请妥善保存生成的密钥，更换 `KITE_ENCRYPT_KEY` 会使已保存的凭据无法解密。
 
 ## 三、推送到镜像仓库
 
@@ -209,9 +216,10 @@ EOF
 sudo systemctl restart docker
 ```
 
-**`gcr.io/distroless/static` 拉不下来**
+**运行时基础镜像拉不下来**
 
-用 `--build-arg RUNTIME_IMAGE=gcr.m.daocloud.io/distroless/static`（或其它 gcr 代理）。也可以用 `alpine` 加 `ca-certificates` 自建等效运行时，但需要自行安装 `ca-certificates` 与 `tzdata`。
+默认取自公司 SWR（`swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.20`）。若构建机不在公司网络内，可换成公共镜像：
+`--build-arg RUNTIME_IMAGE=alpine:3.20`（如需要 CA 证书/时区数据请自行在镜像中安装 `ca-certificates`、`tzdata`）。
 
 **`go mod download` 超时**
 

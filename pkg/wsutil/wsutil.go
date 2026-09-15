@@ -2,7 +2,10 @@ package wsutil
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,9 +37,31 @@ type Session struct {
 }
 
 var upgrader = websocket.Upgrader{
+	// Browsers send the page origin on the upgrade request. SameSite=Lax
+	// cookies already keep cross-site sockets unauthenticated; matching the
+	// origin host on top of it stops replaying a stolen cookie from a page on
+	// another origin. Non-browser clients usually send no Origin at all and
+	// stay allowed.
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		parsed, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		// Compare host names only: a reverse proxy may rewrite the Host
+		// port (or drop it) relative to the public origin.
+		return strings.EqualFold(parsed.Hostname(), requestHostname(r.Host))
 	},
+}
+
+func requestHostname(host string) string {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
 }
 
 func Serve(w http.ResponseWriter, r *http.Request, handle func(*Session)) {

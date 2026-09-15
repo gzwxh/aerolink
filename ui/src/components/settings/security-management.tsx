@@ -39,6 +39,7 @@ const DEFAULT_SECURITY_SETTING: SecuritySetting = {
   remoteLoginNoticeEnabled: true,
   mfaPolicy: 'disabled',
   mfaThirdPartyEnabled: true,
+  mfaStepUpEnabled: true,
   mfaVerifyTtlSeconds: 60,
   otpIssuerName: 'Kite',
   otpVerifyWindow: 2,
@@ -354,6 +355,25 @@ export function SecurityManagement() {
                   checked={formData.mfaThirdPartyEnabled}
                   onCheckedChange={(checked) =>
                     patch('mfaThirdPartyEnabled', checked)
+                  }
+                />
+              </SettingRow>
+
+              <SettingRow
+                label={t(
+                  'securitySettings.fields.mfaStepUpEnabled',
+                  'Require MFA for sensitive operations'
+                )}
+                hint={t(
+                  'securitySettings.fields.mfaStepUpEnabledHint',
+                  'Ask MFA-enrolled users to re-verify before deletes and interactive shells.'
+                )}
+              >
+                <Switch
+                  id="security-mfa-step-up"
+                  checked={formData.mfaStepUpEnabled}
+                  onCheckedChange={(checked) =>
+                    patch('mfaStepUpEnabled', checked)
                   }
                 />
               </SettingRow>

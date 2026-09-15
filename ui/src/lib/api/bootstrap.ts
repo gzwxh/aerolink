@@ -19,6 +19,8 @@ export interface AuthProviderCatalog {
   oauthProviders: string[]
   loginPrompt: string
   mfaEnabled: boolean
+  /** Global MFA policy from security settings: disabled / all / admin. */
+  mfaPolicy: 'disabled' | 'all' | 'admin'
   passkeyLoginEnabled: boolean
   loginCaptchaEnabled: boolean
 }

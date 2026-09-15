@@ -1,6 +1,8 @@
 package resources
 
 import (
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -41,10 +43,13 @@ func TestLogsWebSocketEnforcesRBACAndValidatesOptions(t *testing.T) {
 	tests := []struct {
 		path        string
 		wantMessage string
+		// beforeUpgrade marks the cases the handler must refuse with an HTTP
+		// status instead of establishing a session and sending an error frame.
+		beforeUpgrade bool
 	}{
-		{"/unauthorized/default/web", "does not have permission to log pods"},
-		{"/authorized/default/web?tailLines=invalid", "invalid tailLines parameter"},
-		{"/authorized/default/web?sinceSeconds=invalid", "invalid sinceSeconds parameter"},
+		{"/unauthorized/default/web", "does not have permission to log pods", true},
+		{"/authorized/default/web?tailLines=invalid", "invalid tailLines parameter", false},
+		{"/authorized/default/web?sinceSeconds=invalid", "invalid sinceSeconds parameter", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
@@ -55,10 +60,27 @@ func TestLogsWebSocketEnforcesRBACAndValidatesOptions(t *testing.T) {
 					_ = response.Body.Close()
 				}()
 			}
-			if err != nil {
-				if response != nil {
-					t.Fatalf("dialing WebSocket: %v, status=%d", err, response.StatusCode)
+			if tt.beforeUpgrade {
+				if conn != nil {
+					_ = conn.Close()
+					t.Fatal("unauthorized client must not get an established WebSocket session")
 				}
+				if err == nil || response == nil {
+					t.Fatalf("dialing WebSocket: err=%v, response=%v; want an upgrade rejection", err, response)
+				}
+				if response.StatusCode != http.StatusForbidden {
+					t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusForbidden)
+				}
+				body, readErr := io.ReadAll(response.Body)
+				if readErr != nil {
+					t.Fatalf("reading rejection body: %v", readErr)
+				}
+				if !strings.Contains(string(body), tt.wantMessage) {
+					t.Fatalf("rejection body = %q, want it to contain %q", body, tt.wantMessage)
+				}
+				return
+			}
+			if err != nil {
 				t.Fatalf("dialing WebSocket: %v", err)
 			}
 			defer func() {

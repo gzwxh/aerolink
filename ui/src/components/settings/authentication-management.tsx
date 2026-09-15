@@ -80,7 +80,6 @@ export function AuthenticationManagement() {
     createDefaultSettings
   )
   const [passwordLoginEnabled, setPasswordLoginEnabled] = useState(true)
-  const [mfaEnabled, setMFAEnabled] = useState(true)
   const [passkeyLoginEnabled, setPasskeyLoginEnabled] = useState(true)
 
   useEffect(() => {
@@ -90,7 +89,6 @@ export function AuthenticationManagement() {
   useEffect(() => {
     if (generalSetting) {
       setPasswordLoginEnabled(!generalSetting.passwordLoginDisabled)
-      setMFAEnabled(generalSetting.enableMFA ?? true)
       setPasskeyLoginEnabled(generalSetting.enablePasskeyLogin ?? true)
     }
   }, [generalSetting])
@@ -99,13 +97,11 @@ export function AuthenticationManagement() {
     mutationFn: (params: {
       ldap: LDAPSettingUpdateRequest
       passwordLoginDisabled: boolean
-      enableMFA: boolean
       enablePasskeyLogin: boolean
     }) => {
       const promises: Promise<unknown>[] = [
         updateGeneralSetting({
           passwordLoginDisabled: params.passwordLoginDisabled,
-          enableMFA: params.enableMFA,
           enablePasskeyLogin: params.enablePasskeyLogin,
         }),
         updateLDAPSetting(params.ldap),
@@ -165,7 +161,6 @@ export function AuthenticationManagement() {
     mutation.mutate({
       ldap: payload,
       passwordLoginDisabled: !passwordLoginEnabled,
-      enableMFA: mfaEnabled,
       enablePasskeyLogin: passkeyLoginEnabled,
     })
   }
@@ -335,15 +330,10 @@ export function AuthenticationManagement() {
                 <p className="text-xs text-muted-foreground">
                   {t(
                     'authenticationManagement.mfa.description',
-                    'Allow users to configure authenticator app MFA.'
+                    'Managed by the global MFA policy in Security settings.'
                   )}
                 </p>
               </div>
-              <Switch
-                checked={mfaEnabled}
-                onCheckedChange={setMFAEnabled}
-                disabled={!generalSetting}
-              />
             </div>
           </div>
 

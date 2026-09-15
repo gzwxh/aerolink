@@ -6,11 +6,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/cluster"
+	"github.com/zxh326/kite/pkg/common"
+	"github.com/zxh326/kite/pkg/model"
 )
 
 func TestGetRegistry(t *testing.T) {
@@ -55,11 +59,24 @@ func TestGetRegistry(t *testing.T) {
 	}
 }
 
-func TestGetImageTagsRequiresImage(t *testing.T) {
+func imageTagCtx(image string, clusters []string) (*gin.Context, *httptest.ResponseRecorder) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
-	ctx.Request = httptest.NewRequest(http.MethodGet, "/image-tags", nil)
+	target := "/image-tags"
+	if image != "" {
+		target += "?image=" + url.QueryEscape(image)
+	}
+	ctx.Request = httptest.NewRequest(http.MethodGet, target, nil)
+	if clusters != nil {
+		ctx.Set("user", model.User{Roles: []common.Role{{Name: "admin", Clusters: clusters}}})
+		ctx.Set("cluster", &cluster.ClientSet{Name: "test"})
+	}
+	return ctx, rec
+}
+
+func TestGetImageTagsRequiresImage(t *testing.T) {
+	ctx, rec := imageTagCtx("", []string{"*"})
 
 	GetImageTags(ctx)
 
@@ -68,9 +85,36 @@ func TestGetImageTagsRequiresImage(t *testing.T) {
 	}
 }
 
+func TestGetImageTagsRequiresClusterAccess(t *testing.T) {
+	// Signed in but without any cluster permission.
+	ctx, rec := imageTagCtx("nginx:latest", []string{"other-cluster"})
+
+	GetImageTags(ctx)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestGetImageTagsRejectsInternalHosts(t *testing.T) {
+	cases := []string{
+		"127.0.0.1:5000/app:1.0",
+		"169.254.169.254/latest/meta-data:1.0",
+		"10.0.0.5:5000/app:1.0",
+		"localhost:5000/app:1.0",
+	}
+	for _, image := range cases {
+		ctx, rec := imageTagCtx(image, []string{"*"})
+		GetImageTags(ctx)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("image %q: status code = %d, want %d", image, rec.Code, http.StatusBadRequest)
+		}
+	}
+}
+
 func TestDockerRegistryGetTags(t *testing.T) {
-	origTransport := http.DefaultTransport
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	origTransport := registryHTTPClient.Transport
+	registryHTTPClient.Transport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		wantURL := "https://hub.docker.com/v2/repositories/library/nginx/tags?page_size=10&ordering=last_updated"
 		if req.URL.String() != wantURL {
 			return nil, fmt.Errorf("unexpected URL %q", req.URL.String())
@@ -84,7 +128,7 @@ func TestDockerRegistryGetTags(t *testing.T) {
 		}, nil
 	})
 	t.Cleanup(func() {
-		http.DefaultTransport = origTransport
+		registryHTTPClient.Transport = origTransport
 	})
 
 	tags, err := dockerRegistry{repo: "library/nginx"}.GetTags(context.Background())
@@ -103,8 +147,8 @@ func TestDockerRegistryGetTags(t *testing.T) {
 }
 
 func TestContainerRegistryV2GetTags(t *testing.T) {
-	origTransport := http.DefaultTransport
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	origTransport := registryHTTPClient.Transport
+	registryHTTPClient.Transport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		wantURL := "https://ghcr.io/v2/org/image/tags/list"
 		if req.URL.String() != wantURL {
 			return nil, fmt.Errorf("unexpected URL %q", req.URL.String())
@@ -118,7 +162,7 @@ func TestContainerRegistryV2GetTags(t *testing.T) {
 		}, nil
 	})
 	t.Cleanup(func() {
-		http.DefaultTransport = origTransport
+		registryHTTPClient.Transport = origTransport
 	})
 
 	tags, err := containerRegistryV2{baseURL: "ghcr.io", repo: "org/image"}.GetTags(context.Background())

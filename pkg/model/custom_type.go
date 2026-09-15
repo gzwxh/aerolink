@@ -46,9 +46,10 @@ func (s SecretString) Value() (driver.Value, error) {
 	if s == "" {
 		return "", nil
 	}
-	encrypted := utils.EncryptString(string(s))
-	if len(encrypted) > 17 && encrypted[:17] == "encryption_error:" {
-		return nil, fmt.Errorf("encryption failed: %s", encrypted[17:])
+	utils.WarnOnDefaultEncryptKey()
+	encrypted, err := utils.EncryptString(string(s))
+	if err != nil {
+		return nil, fmt.Errorf("encryption failed: %w", err)
 	}
 	return encrypted, nil
 }

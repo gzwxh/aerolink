@@ -306,9 +306,12 @@ func (h *PodHandler) ListFiles(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
 		path = "/"
+	} else if err := validateContainerPath(path); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
-	cmd := []string{"ls", "-lah", "--full-time", path}
+	cmd := []string{"ls", "-lah", "--full-time", safeExecPath(path)}
 	stdout, stderr, err := cs.K8sClient.ExecCommandBuffered(c.Request.Context(), namespace, podName, container, cmd)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(stderr, "not found") {
@@ -387,8 +390,12 @@ func (h *PodHandler) PreviewFile(c *gin.Context) {
 	if strings.Contains(path, "->") {
 		path = strings.TrimSpace(strings.SplitN(path, "->", 2)[0])
 	}
+	if err := validateContainerPath(path); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	cmd := []string{"cat", path}
+	cmd := []string{"cat", safeExecPath(path)}
 
 	contentType := mime.TypeByExtension(filepath.Ext(path))
 	if contentType == "" {
@@ -428,6 +435,10 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 	if strings.Contains(path, "->") {
 		path = strings.TrimSpace(strings.SplitN(path, "->", 2)[0])
 	}
+	if err := validateContainerPath(path); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	_, _, err := cs.K8sClient.ExecCommandBuffered(c.Request.Context(), namespace, podName, container, []string{"test", "-d", path})
 	isDir := err == nil
 
@@ -435,11 +446,11 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 	if isDir {
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar\"", filepath.Base(path)))
 		c.Header("Content-Type", "application/x-tar")
-		cmd = []string{"tar", "cf", "-", path}
+		cmd = []string{"tar", "cf", "-", safeExecPath(path)}
 	} else {
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(path)))
 		c.Header("Content-Type", "application/octet-stream")
-		cmd = []string{"cat", path}
+		cmd = []string{"cat", safeExecPath(path)}
 	}
 
 	err = cs.K8sClient.ExecCommand(c.Request.Context(), kube.ExecOptions{
@@ -458,19 +469,61 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 	h.recordFileAudit(c, cs, namespace, podName, "download-file", path, container, err == nil, err)
 }
 
+// safeExecPath keeps a user supplied container path from being parsed as an
+// option by the commands run through exec (cat/tar/ls treat a leading "-"
+// argument as a flag). Prefixing "./" neutralises that for every
+// implementation, unlike the "--" separator which busybox tar lacks.
+func safeExecPath(p string) string {
+	if strings.HasPrefix(p, "-") {
+		return "./" + p
+	}
+	return p
+}
+
+// validateContainerPath rejects the shapes a client should never send: empty
+// values, NUL bytes and ".." segments. The file browser walks one container
+// path, so a traversal segment only shows up when a request tries to move
+// outside the directory the user asked for. The RBAC verb remains the real
+// boundary, this keeps the API honest about its own contract.
+func validateContainerPath(p string) error {
+	trimmed := strings.TrimSpace(p)
+	if trimmed == "" {
+		return errors.New("path is required")
+	}
+	if strings.ContainsRune(trimmed, 0) {
+		return errors.New("invalid path")
+	}
+	for _, segment := range strings.Split(trimmed, "/") {
+		if segment == ".." {
+			return errors.New("path must not contain '..'")
+		}
+	}
+	return nil
+}
+
+// maxUploadSize caps the body of pod file uploads so a permitted user cannot
+// fill a pod disk with an unbounded request.
+const maxUploadSize = 512 << 20 // 512 MiB
+
 func (h *PodHandler) UploadFile(c *gin.Context) {
 	namespace := c.Param("namespace")
 	podName := c.Param("name")
 	container := c.Query("container")
 	path := c.Query("path")
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
-	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path is required"})
+	if err := validateContainerPath(path); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadSize)
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
+		if strings.Contains(err.Error(), "request body too large") ||
+			strings.Contains(err.Error(), "http: request body too large") {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "uploaded file is too large"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to get file from request"})
 		return
 	}
@@ -486,7 +539,13 @@ func (h *PodHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	destPath := filepath.Join(path, header.Filename)
+	// Use the sanitised name, not the raw multipart value: the checks above
+	// apply to filename and the two must not drift apart.
+	destPath := filepath.Join(path, filename)
+	if filepath.Dir(destPath) != filepath.Clean(path) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid destination path"})
+		return
+	}
 	cmd := []string{"tee", destPath}
 
 	err = cs.K8sClient.ExecCommand(c.Request.Context(), kube.ExecOptions{

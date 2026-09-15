@@ -30,6 +30,19 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 	if _, err := model.GetGeneralSetting(); err != nil {
 		klog.Warningf("Failed to load general setting: %v", err)
 	}
+	// Reconcile the encryption key right after the settings row exists (the
+	// fingerprint is stored there): switching away from the built-in default
+	// key rewrites the stored ciphertext, and a mismatched key is reported
+	// instead of failing one secret at a time.
+	model.EnsureEncryptionKey()
+
+	// By now the session secret is the environment value, the stored one or a
+	// freshly generated random value. Reaching this point with the published
+	// sentinel means every path failed, and signing sessions with it would let
+	// anyone forge an admin token.
+	if common.JwtSecret == common.DefaultJWTSecret {
+		klog.Fatalf("refusing to start: no usable JWT secret (set JWT_SECRET, or KITE_ALLOW_INSECURE_SECRETS=true for local development)")
+	}
 
 	rbac.InitRBAC()
 	templates.InitTemplates()
@@ -65,6 +78,7 @@ func buildEngine(cm *cluster.ClusterManager) *gin.Engine {
 		r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/metrics"})))
 	}
 	r.Use(gin.Recovery())
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.Logger())
 	r.Use(middleware.DevCORS(common.CORSAllowedOrigins))
 

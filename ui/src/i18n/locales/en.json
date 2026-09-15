@@ -1463,7 +1463,7 @@
     "title": "Authentication",
     "mfa": {
       "title": "MFA",
-      "description": "Allow users to configure authenticator app MFA."
+      "description": "Managed by the global MFA policy in Security settings."
     },
     "passkey": {
       "title": "Passkey Login",
@@ -2321,6 +2321,8 @@
       "mfaPolicy": "Enable MFA globally",
       "mfaThirdPartyEnabled": "Enable MFA for third-party login",
       "mfaThirdPartyEnabledHint": "Applies to third-party login methods such as OIDC, CAS and SAML2.",
+      "mfaStepUpEnabled": "Require MFA for sensitive operations",
+      "mfaStepUpEnabledHint": "Ask MFA-enrolled users to re-verify before deletes and interactive shells.",
       "mfaVerifyTtlSeconds": "MFA verification validity",
       "mfaVerifyTtlSecondsHint": "In seconds. Currently only used when MFA is verified together with the account password.",
       "otpIssuerName": "OTP issuer name",

@@ -52,6 +52,9 @@ type Claims struct {
 	Username     string `json:"username"`
 	Provider     string `json:"provider"`
 	RefreshToken string `json:"refresh_token,omitempty"`
+	// SessionSeq is the sequence number of the sign-in that issued this token,
+	// used to invalidate older sessions when single-device login is enabled.
+	SessionSeq uint64 `json:"session_seq,omitempty"`
 	jwt.RegisteredClaims
 }
 

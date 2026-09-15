@@ -107,7 +107,24 @@ func CreatePasswordUser(c *gin.Context) {
 		user.OIDCGroups = model.SliceString(userreq.Groups)
 	}
 
+	// 校验与判重必须先于任何写入，否则失败时会留下指向不存在用户的角色分配。
+	if err := model.ValidatePassword(userreq.Password, false); err != nil {
+		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(err))
+		return
+	}
+	_, err := model.GetUserByUsername(user.Username)
+	if err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user already exists"})
+		return
+	}
+
+	if err := model.AddUser(user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		return
+	}
+
 	// 分配系统角色（与「分配」操作同一套 RoleAssignment 模型）。
+	// 放在用户创建成功之后，失败仅影响角色分配，不产生孤儿数据。
 	if len(userreq.Roles) > 0 {
 		assigned := false
 		for _, roleName := range userreq.Roles {
@@ -139,23 +156,6 @@ func CreatePasswordUser(c *gin.Context) {
 		if assigned {
 			rbac.TriggerSync()
 		}
-	}
-
-	// 先做一次友好判重，避免依赖唯一索引报错（数据库层仍有 uniqueIndex 兜底）。
-	_, err := model.GetUserByUsername(user.Username)
-	if err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user already exists"})
-		return
-	}
-
-	if err := model.ValidatePassword(userreq.Password, false); err != nil {
-		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(err))
-		return
-	}
-
-	if err := model.AddUser(user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
-		return
 	}
 
 	// gorm 的 `default:true` 会忽略零值 false，需要显式关闭。
@@ -660,7 +660,29 @@ func ensureMFAEnabled(c *gin.Context) bool {
 		return false
 	}
 	if !setting.EnableMFA {
+		// A security policy that forces this account to enrol must stay
+		// satisfiable even when the legacy general toggle is off — otherwise
+		// MFA could never be enabled and the account would be locked out.
+		if current, ok := c.Get("user"); ok {
+			if u, ok := current.(model.User); ok {
+				if security, err := model.GetSecuritySetting(); err == nil && security != nil && security.MFARequiredFor(&u) {
+					return true
+				}
+			}
+		}
 		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is disabled"})
+		return false
+	}
+	// 「安全设置 → 认证安全」的全局 MFA 策略同样约束绑定操作：未启用时
+	// 不允许配置/启停 MFA。策略加载失败时放行（与登录侧一致，避免存储
+	// 异常把用户锁死在 MFA 门外）。
+	security, err := model.GetSecuritySetting()
+	if err != nil {
+		klog.Warningf("failed to load security setting for MFA policy: %v", err)
+		return true
+	}
+	if security != nil && security.MFAPolicy == model.MFAPolicyDisabled {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is disabled by security policy"})
 		return false
 	}
 	return true

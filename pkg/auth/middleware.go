@@ -1,16 +1,33 @@
 package auth
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
+	"k8s.io/klog/v2"
 )
+
+// tokenIssuedBeforePasswordChange reports whether the presented token was
+// minted before the account's most recent password change. Such a token no
+// longer proves possession of the current credential, so it must neither grant
+// access nor be refreshed into a new session.
+func tokenIssuedBeforePasswordChange(user *model.User, claims *Claims) bool {
+	if user == nil || user.PasswordUpdatedAt == nil || claims == nil || claims.IssuedAt == nil {
+		return false
+	}
+	// NumericDate truncates to whole seconds while PasswordUpdatedAt keeps
+	// sub-second precision; without the grace period a token minted in the
+	// same second as the change would be wrongly revoked.
+	return claims.IssuedAt.Time.Before(user.PasswordUpdatedAt.Add(-time.Second))
+}
 
 func (h *AuthHandler) RequireAPIKeyAuth(c *gin.Context, token string) {
 	keyPart := strings.SplitN(token, "-", 2)
@@ -39,7 +56,8 @@ func (h *AuthHandler) RequireAPIKeyAuth(c *gin.Context, token string) {
 		c.Abort()
 		return
 	}
-	if !apikey.Enabled || apikey.Provider != common.APIKeyProvider || key == "" || string(apikey.APIKey) == "" || key != string(apikey.APIKey) {
+	if !apikey.Enabled || apikey.Provider != common.APIKeyProvider || key == "" || string(apikey.APIKey) == "" ||
+		subtle.ConstantTimeCompare([]byte(key), []byte(apikey.APIKey)) != 1 {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "Invalid API key",
 		})
@@ -49,6 +67,14 @@ func (h *AuthHandler) RequireAPIKeyAuth(c *gin.Context, token string) {
 	_ = model.LoginUser(apikey)
 	apikey.Roles = rbac.GetUserRoles(*apikey)
 	c.Set("user", *apikey)
+
+	// API keys are long-lived machine credentials: they must not be a way
+	// around the step-up verification the security policy requires for
+	// destructive calls and interactive shells.
+	if h.blockSensitiveOperation(c, apikey) {
+		return
+	}
+	c.Next()
 }
 
 func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
@@ -111,6 +137,21 @@ func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		// A token minted before the last password change no longer proves
+		// possession of the current credential.
+		if tokenIssuedBeforePasswordChange(user, claims) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "password changed, please sign in again"})
+			setCookieSecure(c, "auth_token", "", -1)
+			c.Abort()
+			return
+		}
+		// Single-device policy: a newer sign-in invalidates older tokens.
+		if activeSessions.superseded(uint64(user.ID), claims.SessionSeq) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "session was replaced by a newer sign-in"})
+			setCookieSecure(c, "auth_token", "", -1)
+			c.Abort()
+			return
+		}
 		if activeSessions.expired(uint64(user.ID)) {
 			activeSessions.forget(uint64(user.ID))
 			setCookieSecure(c, "auth_token", "", -1)
@@ -156,7 +197,11 @@ func (h *AuthHandler) blockSensitiveOperation(c *gin.Context, user *model.User) 
 		return false
 	}
 	setting, err := model.GetSecuritySetting()
-	if err != nil || !setting.MFAThirdPartyEnabled {
+	if err != nil {
+		klog.Warningf("step-up verification skipped: failed to load security setting: %v", err)
+		return false
+	}
+	if !setting.MFAStepUpEnabled {
 		return false
 	}
 	if mfa.IsTrusted(c, user.ID) {
@@ -187,7 +232,18 @@ func blockForMFAEnrollment(c *gin.Context, user *model.User) bool {
 		return false
 	}
 	setting, err := model.GetSecuritySetting()
-	if err != nil || !setting.MFARequiredFor(user) {
+	if err != nil {
+		klog.Warningf("MFA enrollment enforcement skipped: failed to load security setting: %v", err)
+		return false
+	}
+	if !setting.MFARequiredFor(user) {
+		return false
+	}
+
+	// A policy can only force enrolment while the enrolment endpoints actually
+	// accept requests. Blocking here with the feature switched off would lock
+	// the account out with no way back in short of editing the database.
+	if general, err := model.GetGeneralSetting(); err != nil || general == nil || !general.EnableMFA {
 		return false
 	}
 

@@ -43,16 +43,18 @@ func (h *TerminalHandler) HandleTerminalWebSocket(c *gin.Context) {
 
 	user := c.MustGet("user").(model.User)
 
+	// Authorise before the WebSocket upgrade: without permission the client
+	// must not get an established session at all.
+	if !rbac.CanAccess(user, string(common.Pods), "exec", cs.Name, namespace) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Pods), namespace, cs.Name),
+		})
+		return
+	}
+
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		session := kube.NewTerminalSession(cs.K8sClient, ws.Conn, namespace, podName, container)
 		defer session.Close()
-
-		if !rbac.CanAccess(user, string(common.Pods), "exec", cs.Name, namespace) {
-			ws.SendErrorMessage(
-				rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Pods), namespace, cs.Name),
-			)
-			return
-		}
 
 		subResource := "exec"
 		if c.Query("attach") == "true" {

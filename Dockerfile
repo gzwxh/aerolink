@@ -1,15 +1,15 @@
-# Base images / registries are overridable so the build also works behind a
-# restricted network, e.g.
+# All base images are pulled from the company registry (SWR, org "dsy"), so the
+# build works on the restricted network. Override them for an ad-hoc build, e.g.
 #   docker build \
-#     --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:24-alpine \
-#     --build-arg GOLANG_IMAGE=docker.m.daocloud.io/library/golang:1.26-alpine \
-#     --build-arg RUNTIME_IMAGE=gcr.m.daocloud.io/distroless/static \
-#     --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
-#     --build-arg GOPROXY=https://goproxy.cn,direct \
+#     --build-arg NODE_IMAGE=node:24-alpine \
+#     --build-arg GOLANG_IMAGE=golang:1.26-alpine \
+#     --build-arg RUNTIME_IMAGE=alpine:3.20 \
+#     --build-arg NPM_REGISTRY=https://registry.npmjs.org \
+#     --build-arg GOPROXY=https://proxy.golang.org,direct \
 #     -t kite:local .
 ARG NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/node:24-alpine
 ARG GOLANG_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/golang:1.26-alpine
-ARG RUNTIME_IMAGE=gcr.io/distroless/static
+ARG RUNTIME_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.20
 
 FROM ${NODE_IMAGE} AS frontend-builder
 

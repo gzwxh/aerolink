@@ -17,6 +17,10 @@ E2E_DEX_CONTAINER ?= kite-e2e-dex
 E2E_OAUTH_PORT ?= 5556
 SPEC ?=
 
+# 本地开发默认环境变量（存在时由 run/dev 目标自动加载，见 dev.env）
+DEV_ENV ?= dev.env
+LOAD_DEV_ENV = if [ -f "$(DEV_ENV)" ]; then set -a; . "$(DEV_ENV)"; set +a; fi;
+
 # Version information
 # 发布版本号（前端展示与镜像构建共用）；发新版时修改这里。
 VERSION ?= dsy-v1.0.0
@@ -122,15 +126,15 @@ backend: ## Build backend only (always rebuilds)
 	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 
 # Production targets
-run: backend ## Run the built application
+run: backend ## Run the built application (loads dev.env when present)
 	@echo "🚀 Starting $(BINARY_NAME) server..."
-	./$(BINARY_NAME)
+	@$(LOAD_DEV_ENV) ./$(BINARY_NAME)
 
-dev: ## Run in development mode
+dev: ## Run in development mode (loads dev.env when present)
 	@echo "🔄 Starting development mode..."
 	@echo "🚀 Starting $(BINARY_NAME) server..."
 	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
-	./$(BINARY_NAME) -v=5 & \
+	@$(LOAD_DEV_ENV) ./$(BINARY_NAME) -v=5 & \
 	BACKEND_PID=$$!; \
 	echo "Backend PID: $$BACKEND_PID"; \
 	trap 'echo "🛑 Stopping backend server..."; kill $$BACKEND_PID 2>/dev/null; exit' INT TERM; \
@@ -257,11 +261,10 @@ docs-build: ## Build documentation
 
 # ----- Docker 镜像 -----
 IMAGE ?= swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.0
-# 受限网络下的基础镜像与代理，直连环境可置空：make image DOCKER_BUILD_ARGS=
-DOCKER_BUILD_ARGS ?= --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:24-alpine \
-	--build-arg GOLANG_IMAGE=docker.m.daocloud.io/library/golang:1.26-alpine \
-	--build-arg RUNTIME_IMAGE=docker.m.daocloud.io/library/alpine:3.20 \
-	--build-arg NPM_REGISTRY=https://registry.npmmirror.com \
+# 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径），
+# 这里只保留依赖源镜像（npm/go 代理）；直连环境可置空：
+#   make image DOCKER_BUILD_ARGS=
+DOCKER_BUILD_ARGS ?= --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
 	--build-arg GOPROXY=https://goproxy.cn,direct
 
 .PHONY: image push

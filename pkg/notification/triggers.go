@@ -45,19 +45,35 @@ func NotifyRemoteLogin(c *gin.Context, user *model.User) {
 		return
 	}
 
-	SendEvent(model.NotificationEventRemoteLogin, map[string]string{
-		"username":  user.Username,
-		"ip":        ip,
-		"time":      time.Now().Format(timeLayout),
-		"provider":  user.Provider,
-		"userAgent": userAgent,
-	}, Recipient{UserID: user.ID, Email: user.Email})
+	// The mail is delivered in the background: the sign-in must not wait for
+	// an SMTP round trip.
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				klog.Errorf("panic in remote login notification: %v", r)
+			}
+		}()
+		SendEvent(model.NotificationEventRemoteLogin, map[string]string{
+			"username":  user.Username,
+			"ip":        ip,
+			"time":      time.Now().Format(timeLayout),
+			"provider":  user.Provider,
+			"userAgent": userAgent,
+		}, Recipient{UserID: user.ID, Email: user.Email})
+	}()
 }
 
 // StartDailyChecker runs the daily background checks: password expiry reminders
 // and automatic disabling of long inactive accounts.
 func StartDailyChecker(ctx context.Context) {
 	go func() {
+		// A panic in the background loop would take the whole process down —
+		// gin.Recovery only guards HTTP handlers.
+		defer func() {
+			if r := recover(); r != nil {
+				klog.Errorf("panic in daily notification checker: %v", r)
+			}
+		}()
 		ticker := time.NewTicker(dailyCheckInterval)
 		defer ticker.Stop()
 		lastRun := ""
@@ -71,10 +87,21 @@ func StartDailyChecker(ctx context.Context) {
 					continue
 				}
 				lastRun = today
-				RunDailyChecks()
+				runDailyChecksSafely()
 			}
 		}
 	}()
+}
+
+// runDailyChecksSafely isolates one check run so a failure cannot kill the
+// scheduler loop.
+func runDailyChecksSafely() {
+	defer func() {
+		if r := recover(); r != nil {
+			klog.Errorf("panic in daily checks: %v", r)
+		}
+	}()
+	RunDailyChecks()
 }
 
 // RunDailyChecks performs the daily notification tasks once.

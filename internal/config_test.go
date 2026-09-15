@@ -38,6 +38,8 @@ func setupTestDB(t *testing.T) {
 		model.User{},
 		model.Cluster{},
 		model.GeneralSetting{},
+		model.SecuritySetting{},
+		model.PasswordHistory{},
 		model.LDAPSetting{},
 		model.OAuthProvider{},
 		model.Role{},

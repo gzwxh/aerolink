@@ -1463,7 +1463,7 @@
     "title": "认证设置",
     "mfa": {
       "title": "MFA",
-      "description": "允许用户配置认证器 App MFA。"
+      "description": "由「安全设置 → 认证安全」中的全局 MFA 策略统一管理。"
     },
     "passkey": {
       "title": "Passkey 登录",
@@ -2321,6 +2321,8 @@
       "mfaPolicy": "全局启用 MFA 认证",
       "mfaThirdPartyEnabled": "第三方认证开启 MFA",
       "mfaThirdPartyEnabledHint": "第三方登录方式包括：OIDC、CAS、SAML2",
+      "mfaStepUpEnabled": "敏感操作要求 MFA 校验",
+      "mfaStepUpEnabledHint": "已启用 MFA 的用户在执行删除类操作或打开交互终端前需重新校验动态码",
       "mfaVerifyTtlSeconds": "MFA 校验有效期",
       "mfaVerifyTtlSecondsHint": "单位：秒，目前仅在需要账号密码校验 MFA 时生效",
       "otpIssuerName": "OTP 扫描后的名称",

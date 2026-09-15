@@ -32,9 +32,12 @@ import { Textarea } from '@/components/ui/textarea'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5'
-const DEFAULT_KUBECTL_IMAGE = 'zzde/kubectl:latest'
-const DEFAULT_NODE_TERMINAL_IMAGE = 'busybox:latest'
-const DEFAULT_CLUSTER_AGENT_IMAGE = 'ghcr.io/kite-org/kite:latest'
+const DEFAULT_KUBECTL_IMAGE =
+  'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'
+const DEFAULT_NODE_TERMINAL_IMAGE =
+  'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'
+const DEFAULT_CLUSTER_AGENT_IMAGE =
+  'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'
 
 interface GeneralSettingsFormData {
   aiAgentEnabled: boolean

@@ -557,6 +557,7 @@ export interface SecuritySetting {
   remoteLoginNoticeEnabled: boolean
   mfaPolicy: MFAPolicy
   mfaThirdPartyEnabled: boolean
+  mfaStepUpEnabled: boolean
   mfaVerifyTtlSeconds: number
   otpIssuerName: string
   otpVerifyWindow: number

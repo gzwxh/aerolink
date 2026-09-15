@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/captcha"
@@ -96,6 +98,9 @@ func (h *AuthHandler) CreateSuperUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create super user"})
 		return
 	}
+	// Register the session before signing so the token carries its sequence.
+	activeSessions.start(uint64(user.ID))
+
 	jwtToken, err := h.manager.GenerateJWT(user, "")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT"})
@@ -114,8 +119,15 @@ func (h *AuthHandler) LDAPLogin(c *gin.Context) {
 // Nothing is stored server side; the id is only valid for a few minutes and can
 // be verified without keeping the answer.
 //
+// Requests are rate limited per IP so the unauthenticated endpoint cannot be
+// hammered to burn CPU or to harvest tokens.
+//
 // 路由：GET /api/auth/captcha（无需登录）。
 func (h *AuthHandler) Captcha(c *gin.Context) {
+	if !captchaIssuer.allow(c.ClientIP()) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many captcha requests, try again later"})
+		return
+	}
 	idKey, image, err := captcha.Make()
 	if err != nil {
 		klog.Errorf("failed to generate captcha: %v", err)
@@ -123,6 +135,65 @@ func (h *AuthHandler) Captcha(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"idKey": idKey, "image": image})
+}
+
+// captchaRateLimiter is a small fixed-window limiter for captcha issuance,
+// following the same in-memory pattern as the login attempt tracking.
+type captchaRateLimiter struct {
+	mu     sync.Mutex
+	window time.Duration
+	limit  int
+	hits   map[string][]time.Time
+	lastGC time.Time
+}
+
+var captchaIssuer = newCaptchaRateLimiter(30, time.Minute)
+
+func newCaptchaRateLimiter(limit int, window time.Duration) *captchaRateLimiter {
+	return &captchaRateLimiter{
+		window: window,
+		limit:  limit,
+		hits:   make(map[string][]time.Time),
+	}
+}
+
+// allow reports whether the IP may request another captcha right now.
+func (r *captchaRateLimiter) allow(ip string) bool {
+	now := time.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Occasionally drop stale entries so the map cannot grow unbounded.
+	if now.Sub(r.lastGC) > r.window {
+		for key, times := range r.hits {
+			kept := times[:0]
+			for _, t := range times {
+				if now.Sub(t) <= r.window {
+					kept = append(kept, t)
+				}
+			}
+			if len(kept) == 0 {
+				delete(r.hits, key)
+			} else {
+				r.hits[key] = kept
+			}
+		}
+		r.lastGC = now
+	}
+
+	times := r.hits[ip]
+	fresh := times[:0]
+	for _, t := range times {
+		if now.Sub(t) <= r.window {
+			fresh = append(fresh, t)
+		}
+	}
+	if len(fresh) >= r.limit {
+		r.hits[ip] = fresh
+		return false
+	}
+	r.hits[ip] = append(fresh, now)
+	return true
 }
 
 func (h *AuthHandler) PasskeyLoginBegin(c *gin.Context) {
@@ -216,10 +287,14 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 				c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError})
 				return
 			}
-			c.JSON(http.StatusUnauthorized, gin.H{"error": errMsg})
+			// Do not echo internal error text back to the client; it is kept in
+			// the log for the operator.
+			klog.V(1).Infof("login failed for %s from %s: %s", username, clientIP, errMsg)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})
+		klog.Errorf("login error for %s from %s: %s", username, clientIP, errMsg)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
 		return
 	}
 
@@ -232,6 +307,11 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 		rbac.UserHasRole(*user, model.DefaultAdminRole.Name)
 	mfaChallengeRequired := user.MFAEnabled &&
 		(provider == model.AuthProviderPassword || thirdPartyMFARequired)
+	// 「安全设置 → 认证安全」的全局 MFA 策略是权威开关：未启用时登录一律
+	// 不挑战，已注册用户也不再弹出动态码输入。
+	if securitySetting != nil && securitySetting.MFAPolicy == model.MFAPolicyDisabled {
+		mfaChallengeRequired = false
+	}
 
 	// A browser that verified a code within the validity window is not asked
 	// again.
@@ -432,6 +512,11 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
+	// Track the session like the credential logins so the idle/lifetime limits
+	// and the single-device policy apply to third-party sign-ins too. It runs
+	// before signing because the token carries the new session sequence.
+	activeSessions.start(uint64(user.ID))
+
 	jwtToken, err := h.manager.GenerateJWT(user, tokenResp.RefreshToken)
 	if err != nil {
 		c.Redirect(http.StatusFound, base+"/login?error=jwt_generation_failed&reason=jwt_generation_failed&user="+user.Key()+"&provider="+provider)
@@ -445,6 +530,9 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 
 func (h *AuthHandler) Logout(c *gin.Context) {
 	setCookieSecure(c, "auth_token", "", -1)
+	// The step-up trust marker must not outlive the session, otherwise the
+	// next sign-in on the same browser would skip MFA re-verification.
+	mfa.ClearTrusted(c)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Logged out successfully",
@@ -512,12 +600,14 @@ func setCookieSecure(c *gin.Context, name, value string, maxAge int) {
 	secure := strings.HasPrefix(common.Host, "https://") || (c.Request != nil && (c.Request.TLS != nil || strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https")))
 
 	// The session policy decides how long the auth cookie lives; a zero max age
-	// turns it into a session cookie that the browser drops on close.
+	// turns it into a session cookie that the browser drops on close. The
+	// extra hour of headroom only applies to the auth cookie: transient values
+	// such as oauth_state must keep the TTL their caller asked for.
 	if name == "auth_token" && maxAge > 0 {
 		maxAge = authCookieMaxAge()
-	}
-	if maxAge > 0 {
-		maxAge += 60 * 60
+		if maxAge > 0 {
+			maxAge += 60 * 60
+		}
 	}
 
 	c.SetSameSite(http.SameSiteLaxMode)

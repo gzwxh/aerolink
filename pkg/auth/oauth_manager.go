@@ -84,6 +84,8 @@ func (om *OAuthManager) GenerateJWT(user *model.User, refreshToken string) (stri
 		Username:     user.Username,
 		Provider:     user.Provider,
 		RefreshToken: refreshToken,
+		// Stamp the newest sign-in so an older session can be invalidated.
+		SessionSeq: activeSessions.currentSeq(uint64(user.ID)),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -153,7 +155,22 @@ func (om *OAuthManager) RefreshJWT(c *gin.Context, tokenString string) (string, 
 		return "", fmt.Errorf("session expired")
 	}
 
-	if !time.Now().After(claims.ExpiresAt.Time) {
+	// Refreshing must not resurrect a token that a password change already
+	// revoked: the re-signed token would carry a fresh IssuedAt.
+	if user, err := model.GetUserByIDCached(uint64(claims.UserID)); err == nil {
+		if !user.Enabled || tokenIssuedBeforePasswordChange(user, &claims) {
+			return "", fmt.Errorf("session revoked")
+		}
+	}
+
+	// Neither may it revive a session that single-device login replaced.
+	if activeSessions.superseded(uint64(claims.UserID), claims.SessionSeq) {
+		return "", fmt.Errorf("session was replaced by a newer sign-in")
+	}
+
+	// ExpiresAt is optional in a JWT payload; a token without exp is treated
+	// as expired so the refresh path below takes over (or fails cleanly).
+	if claims.ExpiresAt != nil && !time.Now().After(claims.ExpiresAt.Time) {
 		user := &model.User{
 			Model: model.Model{
 				ID: claims.UserID,

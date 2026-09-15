@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/subtle"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	promclient "github.com/prometheus/client_golang/prometheus"
@@ -26,6 +29,7 @@ import (
 	"github.com/zxh326/kite/pkg/terminal"
 	"github.com/zxh326/kite/pkg/users"
 	"github.com/zxh326/kite/pkg/version"
+	"k8s.io/klog/v2"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -44,8 +48,31 @@ func setupAPIRouter(r *gin.RouterGroup, cm *cluster.ClusterManager) {
 	registerProtectedRoutes(r, authHandler, cm, helmChartsHandler)
 }
 
+// metricsAuth optionally protects /metrics with a bearer token.
+func metricsAuth(token string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if token == "" {
+			c.Next()
+			return
+		}
+		presented := strings.TrimSpace(strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer"))
+		if subtle.ConstantTimeCompare([]byte(presented), []byte(token)) != 1 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		c.Next()
+	}
+}
+
 func registerBaseRoutes(r *gin.RouterGroup) {
-	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(promclient.Gatherers{
+	// Metrics stay reachable for Prometheus, which cannot carry a session
+	// cookie. Set KITE_METRICS_TOKEN to require "Authorization: Bearer <token>"
+	// instead of leaving the endpoint fully open.
+	metricsToken := strings.TrimSpace(os.Getenv("KITE_METRICS_TOKEN"))
+	if metricsToken == "" {
+		klog.Warningf("KITE_METRICS_TOKEN is not set: /metrics is exposed without authentication")
+	}
+	r.GET("/metrics", metricsAuth(metricsToken), gin.WrapH(promhttp.HandlerFor(promclient.Gatherers{
 		promclient.DefaultGatherer,
 		ctrlmetrics.Registry,
 	}, promhttp.HandlerOpts{})))
@@ -221,10 +248,14 @@ func registerClusterProtectedRoutes(api *gin.RouterGroup, helmChartsHandler *hel
 	resourceApplyHandler := resources.NewResourceApplyHandler()
 	api.POST("/resources/apply", resourceApplyHandler.ApplyResource)
 
-	api.GET("/image/tags", images.GetImageTags)
-	api.GET("/templates", templates.ListTemplates)
-
-	helmChartsHandler.RegisterRoutes(api)
+	// These endpoints expose cluster wide information but have no single
+	// Kubernetes resource for RBACMiddleware to map onto, so they carry their
+	// own cluster level check instead of relying on the group middleware below.
+	clusterWideAPI := api.Group("")
+	clusterWideAPI.Use(middleware.RequireClusterAccess())
+	clusterWideAPI.GET("/image/tags", images.GetImageTags)
+	clusterWideAPI.GET("/templates", templates.ListTemplates)
+	helmChartsHandler.RegisterRoutes(clusterWideAPI)
 
 	proxyHandler := proxy.NewProxyHandler()
 	proxyHandler.RegisterRoutes(api)
@@ -232,6 +263,9 @@ func registerClusterProtectedRoutes(api *gin.RouterGroup, helmChartsHandler *hel
 	api.POST("/ai/chat", ai.HandleChat)
 	api.POST("/ai/continue", ai.HandleContinue)
 
+	// Gin freezes a route's handler chain when the route is registered, so this
+	// Use only covers the routes declared *after* it. Anything registered
+	// earlier must do its own authorization — keep new registrations below.
 	api.Use(middleware.RBACMiddleware())
 	resources.RegisterRoutes(api)
 }

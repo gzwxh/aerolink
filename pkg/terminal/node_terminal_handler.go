@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,8 +17,10 @@ import (
 	"github.com/zxh326/kite/pkg/utils"
 	"github.com/zxh326/kite/pkg/wsutil"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 )
 
@@ -40,21 +43,19 @@ func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 
 	user := c.MustGet("user").(model.User)
 
+	// Authorise before the WebSocket upgrade.
+	if !rbac.CanAccess(user, string(common.Nodes), "exec", cs.Name, "") {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Nodes), "", cs.Name),
+		})
+		return
+	}
+
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		ctx := ws.Context
-		if !rbac.CanAccess(user, string(common.Nodes), "exec", cs.Name, "") {
-			ws.SendErrorMessage(rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Nodes), "", cs.Name))
-			return
-		}
-		node, err := cs.K8sClient.ClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
+		if _, err := cs.K8sClient.ClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{}); err != nil {
 			klog.Errorf("Failed to get node %s: %v", nodeName, err)
 			ws.SendErrorMessage(fmt.Sprintf("Failed to get node %s: %v", nodeName, err))
-			return
-		}
-		if node == nil {
-			klog.Errorf("Node %s not found", nodeName)
-			ws.SendErrorMessage(fmt.Sprintf("Node %s not found", nodeName))
 			return
 		}
 		setting, err := model.GetGeneralSetting()
@@ -156,6 +157,21 @@ func (h *NodeTerminalHandler) createNodeAgent(ctx context.Context, cs *cluster.C
 		if utils.IsPodErrorOrSuccess(object) {
 			if err := cs.K8sClient.Delete(ctx, object); err != nil {
 				return "", fmt.Errorf("failed to delete existing kite node agent pod: %w", err)
+			}
+			// Deletion is asynchronous; the immediate Create below would fail
+			// with "object is being deleted" until the API server finishes it.
+			err := wait.PollUntilContextTimeout(ctx, 200*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+				getErr := cs.K8sClient.Get(ctx, namespacedName, &corev1.Pod{})
+				if getErr == nil {
+					return false, nil
+				}
+				if apierrors.IsNotFound(getErr) {
+					return true, nil
+				}
+				return false, getErr
+			})
+			if err != nil {
+				return "", fmt.Errorf("timed out waiting for the old kite node agent pod %s to be deleted: %w", podName, err)
 			}
 		} else {
 			return podName, nil

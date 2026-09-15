@@ -41,7 +41,9 @@ export function PodDebugDialog({
 }) {
   const { t } = useTranslation()
   const [mode, setMode] = useState(ephemeralAvailable ? 'ephemeral' : 'copy')
-  const [image, setImage] = useState('busybox:1.37')
+  const [image, setImage] = useState(
+    'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:1.37'
+  )
   const [copyImage, setCopyImage] = useState('')
   const [copyTo, setCopyTo] = useState(`${name}-debug`)
   const [program, setProgram] = useState('sh')

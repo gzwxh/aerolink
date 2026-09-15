@@ -13,9 +13,11 @@ import (
 
 const DefaultGeneralAIModel = "gpt-4o-mini"
 const DefaultGeneralAnthropicModel = "claude-sonnet-4-5"
-const DefaultGeneralKubectlImage = "zzde/kubectl:latest"
-const DefaultGeneralNodeTerminalImage = "busybox:latest"
-const DefaultGeneralClusterAgentImage = "ghcr.io/kite-org/kite:latest"
+
+// Default images come from the company registry (SWR, org "dsy").
+const DefaultGeneralKubectlImage = "swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest"
+const DefaultGeneralNodeTerminalImage = "swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest"
+const DefaultGeneralClusterAgentImage = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest"
 
 const GeneralAIProviderOpenAI = "openai"
 const GeneralAIProviderAnthropic = "anthropic"
@@ -47,24 +49,28 @@ func DefaultGeneralClusterAgentImageValue() string {
 
 type GeneralSetting struct {
 	Model
-	AIAgentEnabled          bool         `json:"aiAgentEnabled" gorm:"column:ai_agent_enabled;type:boolean;not null;default:false"`
-	AIProvider              string       `json:"aiProvider" gorm:"column:ai_provider;type:varchar(50);not null;default:'openai'"`
-	AIModel                 string       `json:"aiModel" gorm:"column:ai_model;type:varchar(255);not null;default:'gpt-4o-mini'"`
-	AIAPIKey                SecretString `json:"aiApiKey" gorm:"column:ai_api_key;type:text"`
-	AIBaseURL               string       `json:"aiBaseUrl" gorm:"column:ai_base_url;type:varchar(500)"`
-	AIMaxTokens             int          `json:"aiMaxTokens" gorm:"column:ai_max_tokens;type:integer;default:16384"`
-	KubectlEnabled          bool         `json:"kubectlEnabled" gorm:"column:kubectl_enabled;type:boolean;not null;default:true"`
-	KubectlImage            string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'zzde/kubectl:latest'"`
-	NodeTerminalImage       string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'busybox:latest'"`
-	ClusterAgentImage       string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'ghcr.io/kite-org/kite:latest'"`
-	EnableAnalytics         bool         `json:"enableAnalytics" gorm:"column:enable_analytics;type:boolean;not null;default:false"`
-	EnableVersionCheck      bool         `json:"enableVersionCheck" gorm:"column:enable_version_check;type:boolean;not null;default:true"`
-	PasswordLoginDisabled   bool         `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
-	EnableMFA               bool         `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
-	EnablePasskeyLogin      bool         `json:"enablePasskeyLogin" gorm:"column:enable_passkey_login;type:boolean;not null;default:true"`
-	LoginPrompt             string       `json:"loginPrompt" gorm:"column:login_prompt;type:text"`
-	JWTSecret               SecretString `json:"-" gorm:"column:jwt_secret;type:text"`
-	GlobalSidebarPreference string       `json:"-" gorm:"column:global_sidebar_preference;type:text"`
+	AIAgentEnabled        bool         `json:"aiAgentEnabled" gorm:"column:ai_agent_enabled;type:boolean;not null;default:false"`
+	AIProvider            string       `json:"aiProvider" gorm:"column:ai_provider;type:varchar(50);not null;default:'openai'"`
+	AIModel               string       `json:"aiModel" gorm:"column:ai_model;type:varchar(255);not null;default:'gpt-4o-mini'"`
+	AIAPIKey              SecretString `json:"aiApiKey" gorm:"column:ai_api_key;type:text"`
+	AIBaseURL             string       `json:"aiBaseUrl" gorm:"column:ai_base_url;type:varchar(500)"`
+	AIMaxTokens           int          `json:"aiMaxTokens" gorm:"column:ai_max_tokens;type:integer;default:16384"`
+	KubectlEnabled        bool         `json:"kubectlEnabled" gorm:"column:kubectl_enabled;type:boolean;not null;default:true"`
+	KubectlImage          string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'"`
+	NodeTerminalImage     string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'"`
+	ClusterAgentImage     string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'"`
+	EnableAnalytics       bool         `json:"enableAnalytics" gorm:"column:enable_analytics;type:boolean;not null;default:false"`
+	EnableVersionCheck    bool         `json:"enableVersionCheck" gorm:"column:enable_version_check;type:boolean;not null;default:true"`
+	PasswordLoginDisabled bool         `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
+	EnableMFA             bool         `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
+	EnablePasskeyLogin    bool         `json:"enablePasskeyLogin" gorm:"column:enable_passkey_login;type:boolean;not null;default:true"`
+	LoginPrompt           string       `json:"loginPrompt" gorm:"column:login_prompt;type:text"`
+	JWTSecret             SecretString `json:"-" gorm:"column:jwt_secret;type:text"`
+	// EncryptKeyFingerprint records which KITE_ENCRYPT_KEY encrypted the rows
+	// already in the database, so switching away from the built-in default key
+	// can be migrated instead of silently corrupting every stored secret.
+	EncryptKeyFingerprint   string `json:"-" gorm:"column:encrypt_key_fingerprint;type:varchar(64)"`
+	GlobalSidebarPreference string `json:"-" gorm:"column:global_sidebar_preference;type:text"`
 }
 
 func NormalizeGeneralAIProvider(provider string) string {

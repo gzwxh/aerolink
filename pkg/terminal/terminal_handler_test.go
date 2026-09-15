@@ -2,6 +2,8 @@ package terminal
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -12,7 +14,6 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/kube"
 	"github.com/zxh326/kite/pkg/model"
-	"github.com/zxh326/kite/pkg/wsutil"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestTerminalWebSocketsRejectUnauthorizedUsersBeforeClusterAccess(t *testing.T) {
+func TestTerminalWebSocketsRejectUnauthorizedUsersBeforeUpgrade(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	clientSet := &cluster.ClientSet{Name: "prod", K8sClient: &kube.K8sClient{}}
 	user := model.User{Username: "alice"}
@@ -56,26 +57,28 @@ func TestTerminalWebSocketsRejectUnauthorizedUsersBeforeClusterAccess(t *testing
 		t.Run(tt.path, func(t *testing.T) {
 			url := "ws" + strings.TrimPrefix(server.URL, "http") + tt.path
 			conn, response, err := websocket.DefaultDialer.Dial(url, nil)
-			if response != nil {
-				defer func() {
-					_ = response.Body.Close()
-				}()
+			if conn != nil {
+				_ = conn.Close()
+				t.Fatal("an unauthorized client must not get an established WebSocket session")
 			}
-			if err != nil {
-				if response != nil {
-					t.Fatalf("dialing WebSocket: %v, status=%d", err, response.StatusCode)
-				}
-				t.Fatalf("dialing WebSocket: %v", err)
+			if err == nil {
+				t.Fatal("dialing WebSocket succeeded, want an upgrade rejection")
+			}
+			if response == nil {
+				t.Fatalf("dialing WebSocket: %v, want an HTTP response carrying the rejection", err)
 			}
 			defer func() {
-				_ = conn.Close()
+				_ = response.Body.Close()
 			}()
-			var message wsutil.Message
-			if err := conn.ReadJSON(&message); err != nil {
-				t.Fatalf("reading rejection: %v", err)
+			if response.StatusCode != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusForbidden)
 			}
-			if message.Type != "error" || !strings.Contains(message.Data, tt.wantMessage) {
-				t.Fatalf("rejection message = %#v", message)
+			body, readErr := io.ReadAll(response.Body)
+			if readErr != nil {
+				t.Fatalf("reading rejection body: %v", readErr)
+			}
+			if !strings.Contains(string(body), tt.wantMessage) {
+				t.Fatalf("rejection body = %q, want it to contain %q", body, tt.wantMessage)
 			}
 		})
 	}

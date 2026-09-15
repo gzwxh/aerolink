@@ -5,10 +5,11 @@
 // single hollow interference line (no speckles, no solid strokes crossing the
 // digits, no transparency).
 //
-// Unlike a store backed implementation (Redis / in-memory) this keeps no server
-// side state: the id returned to the client carries the expiry and an HMAC over
-// the expected answer, so verification is stateless and the code can never be
-// read back out of the id.
+// Unlike a store backed implementation (Redis / in-memory) the answer itself is
+// never stored: the id returned to the client carries the expiry and an HMAC
+// over the expected answer, so the code can never be read back out of the id.
+// The only server side state is the set of already consumed ids, which makes
+// every token single use.
 package captcha
 
 import (
@@ -26,6 +27,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zxh326/kite/pkg/common"
@@ -61,6 +63,12 @@ var font = [10][7]uint8{
 	{0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C}, // 9
 }
 
+// consumed tracks the idKeys that already passed verification. Without it a
+// token stays valid for the whole TTL and its 4-digit code can be brute
+// forced with repeated submissions. Entries hold the expiry timestamp and are
+// swept by the janitor below.
+var consumed sync.Map
+
 // Make returns the signed id and the rendered image (PNG data URL) of a fresh
 // captcha.
 func Make() (idKey string, image string, err error) {
@@ -76,6 +84,8 @@ func Make() (idKey string, image string, err error) {
 }
 
 // Verify reports whether the answer matches the code the id was signed for.
+// A token is single use: once an answer is accepted the same idKey can never
+// verify again, so the short code cannot be enumerated within its TTL.
 func Verify(idKey string, answer string) bool {
 	expiresPart, signature, ok := strings.Cut(strings.TrimSpace(idKey), ".")
 	if !ok {
@@ -85,7 +95,37 @@ func Verify(idKey string, answer string) bool {
 	if err != nil || time.Now().Unix() > expires {
 		return false
 	}
-	return hmac.Equal([]byte(signAnswer(answer, expires)), []byte(signature))
+	if !hmac.Equal([]byte(signAnswer(answer, expires)), []byte(signature)) {
+		return false
+	}
+	// LoadOrStore is atomic: two concurrent submissions of the same token
+	// cannot both win.
+	_, alreadyUsed := consumed.LoadOrStore(idKey, expires)
+	if alreadyUsed {
+		return false
+	}
+	startJanitor()
+	return true
+}
+
+// startJanitor drops consumed entries once they are expired anyway.
+var janitorOnce sync.Once
+
+func startJanitor() {
+	janitorOnce.Do(func() {
+		go func() {
+			for {
+				time.Sleep(TTL)
+				now := time.Now().Unix()
+				consumed.Range(func(key, value any) bool {
+					if expiry, ok := value.(int64); ok && now > expiry {
+						consumed.Delete(key)
+					}
+					return true
+				})
+			}
+		}()
+	})
 }
 
 func sign(code string, expires int64) string {
@@ -93,8 +133,10 @@ func sign(code string, expires int64) string {
 }
 
 func signAnswer(answer string, expires int64) string {
+	// Domain-separated from other HMAC uses of the same secret (e.g. the MFA
+	// trust cookie) so the two can never be confused with each other.
 	mac := hmac.New(sha256.New, []byte(common.JwtSecret))
-	mac.Write([]byte(strings.ToLower(strings.TrimSpace(answer)) + ":" + strconv.FormatInt(expires, 10)))
+	mac.Write([]byte("captcha:" + strings.ToLower(strings.TrimSpace(answer)) + ":" + strconv.FormatInt(expires, 10)))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 

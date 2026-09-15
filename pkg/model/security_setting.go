@@ -23,9 +23,12 @@ type SecuritySettingData struct {
 	RemoteLoginNoticeEnabled bool   `json:"remoteLoginNoticeEnabled"`
 	MFAPolicy                string `json:"mfaPolicy"`
 	MFAThirdPartyEnabled     bool   `json:"mfaThirdPartyEnabled"`
-	MFAVerifyTTLSeconds      int    `json:"mfaVerifyTtlSeconds"`
-	OTPIssuerName            string `json:"otpIssuerName"`
-	OTPVerifyWindow          int    `json:"otpVerifyWindow"`
+	// MFAStepUpEnabled gates the re-verification required for sensitive
+	// operations (deletes, interactive shells) from MFA-enrolled users.
+	MFAStepUpEnabled    bool   `json:"mfaStepUpEnabled"`
+	MFAVerifyTTLSeconds int    `json:"mfaVerifyTtlSeconds"`
+	OTPIssuerName       string `json:"otpIssuerName"`
+	OTPVerifyWindow     int    `json:"otpVerifyWindow"`
 
 	// New user defaults（新建用户的默认状态）
 	DefaultUserEnabled    bool `json:"defaultUserEnabled"`
@@ -72,6 +75,7 @@ func DefaultSecuritySettingData() SecuritySettingData {
 		RemoteLoginNoticeEnabled: true,
 		MFAPolicy:                MFAPolicyDisabled,
 		MFAThirdPartyEnabled:     true,
+		MFAStepUpEnabled:         true,
 		MFAVerifyTTLSeconds:      60,
 		OTPIssuerName:            "Kite",
 		// 新建用户默认「激活」，默认不过期。

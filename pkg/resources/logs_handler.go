@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -28,21 +29,25 @@ func NewLogsHandler() *LogsHandler {
 
 // HandleLogsWebSocket handles WebSocket connections for log streaming
 func (h *LogsHandler) HandleLogsWebSocket(c *gin.Context) {
+	cs := c.MustGet("cluster").(*cluster.ClientSet)
+	user := c.MustGet("user").(model.User)
+	namespace := c.Param("namespace")
+	podName := c.Param("podName")
+	if namespace == "" || podName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace and podName are required"})
+		return
+	}
+
+	// Authorise before the WebSocket upgrade.
+	if !rbac.CanAccess(user, string(common.Pods), "log", cs.Name, namespace) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": rbac.NoAccess(user.Key(), string(common.VerbLog), string(common.Pods), namespace, cs.Name),
+		})
+		return
+	}
+
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		ctx := ws.Context
-		cs := c.MustGet("cluster").(*cluster.ClientSet)
-		user := c.MustGet("user").(model.User)
-		namespace := c.Param("namespace")
-		podName := c.Param("podName")
-		if namespace == "" || podName == "" {
-			ws.SendErrorMessage("namespace and podName are required")
-			return
-		}
-
-		if !rbac.CanAccess(user, string(common.Pods), "log", cs.Name, namespace) {
-			ws.SendErrorMessage(rbac.NoAccess(user.Key(), string(common.VerbLog), string(common.Pods), namespace, cs.Name))
-			return
-		}
 
 		container := c.Query("container")
 		tailLines := c.DefaultQuery("tailLines", "100")
@@ -83,6 +88,14 @@ func (h *LogsHandler) HandleLogsWebSocket(c *gin.Context) {
 		labelSelector := c.Query("labelSelector")
 		bl := kube.NewBatchLogHandler(ws.Conn, cs.K8sClient, logOptions)
 
+		// "_all" is the console's wildcard, not a real namespace: map it to the
+		// API convention of an empty namespace (all namespaces) before calling
+		// the Kubernetes API.
+		listNamespace := namespace
+		if listNamespace == common.AllNamespaces {
+			listNamespace = ""
+		}
+
 		if podName == common.AllNamespaces && labelSelector != "" {
 			selector, err := metav1.ParseToLabelSelector(labelSelector)
 			if err != nil {
@@ -97,7 +110,7 @@ func (h *LogsHandler) HandleLogsWebSocket(c *gin.Context) {
 
 			podList := &corev1.PodList{}
 			var listOpts []client.ListOption
-			listOpts = append(listOpts, client.InNamespace(namespace))
+			listOpts = append(listOpts, client.InNamespace(listNamespace))
 			listOpts = append(listOpts, client.MatchingLabelsSelector{Selector: labelSelectorOption})
 			if err := cs.K8sClient.List(ctx, podList, listOpts...); err != nil {
 				ws.SendErrorMessage("failed to list pods: " + err.Error())
@@ -109,12 +122,16 @@ func (h *LogsHandler) HandleLogsWebSocket(c *gin.Context) {
 				}
 			}
 
-			go h.watchPods(ctx, cs, namespace, labelSelectorOption, bl)
+			go h.watchPods(ctx, cs, listNamespace, labelSelectorOption, bl)
 		} else {
+			if podName == common.AllNamespaces {
+				ws.SendErrorMessage("streaming all pods requires a labelSelector")
+				return
+			}
 			bl.AddPod(corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      podName,
-					Namespace: namespace,
+					Namespace: listNamespace,
 				},
 			})
 		}

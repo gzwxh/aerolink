@@ -22,6 +22,7 @@ type bootstrapAuthOptions struct {
 	OAuthProviders      []string `json:"oauthProviders"`
 	LoginPrompt         string   `json:"loginPrompt"`
 	MFAEnabled          bool     `json:"mfaEnabled"`
+	MFAPolicy           string   `json:"mfaPolicy"`
 	PasskeyLoginEnabled bool     `json:"passkeyLoginEnabled"`
 	LoginCaptchaEnabled bool     `json:"loginCaptchaEnabled"`
 }
@@ -127,16 +128,23 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 	providers := append(append([]string{}, credentialProviders...), oauthProviders...)
 
 	loginCaptchaEnabled := false
+	mfaPolicy := model.MFAPolicyDisabled
 	if securitySetting, err := model.GetSecuritySetting(); err == nil && securitySetting != nil {
 		loginCaptchaEnabled = securitySetting.LoginCaptchaEnabled
+		mfaPolicy = securitySetting.MFAPolicy
 	}
+
+	// mfaEnabled 是对客户端暴露的综合开关：认证设置的功能闸与安全设置里
+	// 的全局 MFA 策略（未启用/所有用户/仅管理员）必须同时放行。
+	mfaEnabled := (setting == nil || setting.EnableMFA) && mfaPolicy != model.MFAPolicyDisabled
 
 	return bootstrapAuthOptions{
 		Providers:           providers,
 		CredentialProviders: credentialProviders,
 		OAuthProviders:      oauthProviders,
 		LoginPrompt:         loginPrompt,
-		MFAEnabled:          setting == nil || setting.EnableMFA,
+		MFAEnabled:          mfaEnabled,
+		MFAPolicy:           mfaPolicy,
 		PasskeyLoginEnabled: !ldapEnabled && setting != nil && setting.EnablePasskeyLogin,
 		LoginCaptchaEnabled: loginCaptchaEnabled,
 	}

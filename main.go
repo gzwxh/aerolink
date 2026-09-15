@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,9 +31,14 @@ func main() {
 		return
 	}
 	flag.Parse()
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	// pprof exposes heap dumps (which may contain plaintext secrets) and
+	// goroutine stacks, so it is opt-in: KITE_ENABLE_PPROF=true.
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("KITE_ENABLE_PPROF")), "true") {
+		klog.Warningf("pprof is enabled on localhost:6060 (KITE_ENABLE_PPROF=true)")
+		go func() {
+			log.Println(http.ListenAndServe("localhost:6060", nil))
+		}()
+	}
 
 	appCtx, cancelApp := context.WithCancel(context.Background())
 

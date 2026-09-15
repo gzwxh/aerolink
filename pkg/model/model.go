@@ -125,6 +125,6 @@ func InitDB() {
 	if err == nil {
 		sqldb.SetMaxOpenConns(common.DBMaxOpenConns)
 		sqldb.SetMaxIdleConns(common.DBMaxIdleConns)
-		sqldb.SetConnMaxLifetime(common.DBMaxIdleTime)
+		sqldb.SetConnMaxLifetime(common.DBConnMaxLifetime)
 	}
 }

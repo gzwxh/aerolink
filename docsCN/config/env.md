@@ -8,8 +8,10 @@ Kite 默认支持一些环境变量，来改变一些配置项的默认值。
 - **KUBECONFIG**：兼容旧配置的 kubeconfig 环境变量。仅在未设置 `KITE_CONFIG_FILE` 时读取并导入集群配置。
 - **ANONYMOUS_USER_ENABLED**：启用匿名用户访问，默认值为 `false`，当启用后所有访问将不再需要身份验证，并且默认拥有最高权限。
 
-- **JWT_SECRET**：用于签名和验证 JWT 的密钥
-- **KITE_ENCRYPT_KEY**：用于加密敏感数据的密钥, 例如用户密码，OAuth 的 clientSecret ，kubeconfig 等。
+- **JWT_SECRET**：用于签名和验证 JWT 的密钥。未设置时首次启动会自动生成随机密钥并保存到数据库；设置时长度不得少于 32 字节。
+- **KITE_ENCRYPT_KEY**：用于加密敏感数据的密钥, 例如用户密码，OAuth 的 clientSecret ，kubeconfig 等。**必填**：未设置时服务拒绝启动（除非 `KITE_ALLOW_INSECURE_SECRETS=true`）。更换该密钥会导致已保存的凭据无法解密，轮换后需重新保存全部凭据。
+- **KITE_REQUIRE_ENCRYPT_KEY**：设置为 `true` 时，即使开启 `KITE_ALLOW_INSECURE_SECRETS` 也必须设置 `KITE_ENCRYPT_KEY`。
+- **KITE_ALLOW_INSECURE_SECRETS**：仅限本地开发的逃生开关（`true`/`false`），允许使用内置默认密钥和较短的 JWT 密钥，生产环境禁止开启。
 
 - **HOST**: 用户 OAuth 2.0 授权回调地址生成，默认会从请求头获取，如果您发现结果不及预期可以手动配置此环境变量。
 
@@ -24,3 +26,23 @@ Kite 默认支持一些环境变量，来改变一些配置项的默认值。
 - **ENABLE_ANALYTICS**：启用数据分析功能，默认值为 `false`。当启用后，Kite 将收集有限数据以帮助改进产品。
 
 - **PORT**：Kite 运行的端口，默认值为 `8080`。
+
+## 数据库
+
+- **DB_TYPE**：数据库类型：`sqlite`（默认）、`mysql` 或 `postgres`。
+- **DB_DSN**：数据库 DSN，SQLite 默认为 `dev.db`。
+- **KITE_DB_MAX_OPEN_CONNS**：最大打开连接数，默认 `100`。
+- **KITE_DB_MAX_IDLE_CONNS**：最大空闲连接数，默认 `10`。
+- **KITE_DB_CONN_MAX_LIFETIME_MINUTES**：连接最大存活时间（分钟），默认 `10`。
+
+## 运行与运维
+
+- **KITE_BASE**：Kite 部署在子路径下时的基础路径（如 `/kite`）。
+- **CORS_ALLOWED_ORIGINS**：允许跨域的来源列表（逗号分隔），仅建议开发环境使用。
+- **DISABLE_GZIP**：设为 `true` 关闭 gzip 响应压缩（默认已关闭）。
+- **DISABLE_VERSION_CHECK**：设为 `true` 关闭版本更新检查。
+- **NAMESPACE**：终端 / kubectl Agent Pod 创建所在的 Kubernetes 命名空间，默认 `kube-system`。
+- **KITE_METRICS_TOKEN**：访问 `/metrics` 所需的 Bearer Token；未设置时该端点无需认证。
+- **KITE_ENABLE_PPROF**：设为 `true` 时在 `localhost:6060` 开放 pprof（堆转储可能包含敏感信息，默认关闭）。
+- **KITE_DISABLE_CSP**：设为 `true` 关闭 Content-Security-Policy 响应头（仅限开发）。
+- **KITE_ALLOW_PRIVATE_REGISTRIES**：设为 `true` 允许镜像标签查询访问内网 / 回环地址的镜像仓库。

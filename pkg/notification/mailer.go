@@ -19,6 +19,13 @@ import (
 // configuration is incomplete or mail notifications are switched off.
 var ErrMailNotConfigured = errors.New("邮件通知未启用，或 SMTP 配置不完整")
 
+const (
+	// smtpDialTimeout bounds the TCP/TLS handshake; smtpTotalTimeout bounds
+	// the whole SMTP conversation including message upload.
+	smtpDialTimeout  = 10 * time.Second
+	smtpTotalTimeout = 60 * time.Second
+)
+
 // smtpConfig is a resolved SMTP configuration ready to open a connection.
 type smtpConfig struct {
 	host       string
@@ -84,13 +91,18 @@ func (config *smtpConfig) send(to []string, subject, body string) error {
 		MinVersion:         tls.VersionTLS12,
 	}
 
+	// An unreachable SMTP server must never hang the caller (login paths run
+	// through here) — bound both the dial and the whole conversation.
+	dialer := &net.Dialer{Timeout: smtpDialTimeout}
+
 	var client *smtp.Client
 	if config.tlsMode == "ssl" {
 		// Implicit TLS (usually port 465).
-		connection, err := tls.Dial("tcp", address, tlsConfig)
+		connection, err := tls.DialWithDialer(dialer, "tcp", address, tlsConfig)
 		if err != nil {
 			return fmt.Errorf("无法连接 SMTP 服务器 %s: %w", address, err)
 		}
+		_ = connection.SetDeadline(time.Now().Add(smtpTotalTimeout))
 		client, err = smtp.NewClient(connection, config.host)
 		if err != nil {
 			_ = connection.Close()
@@ -98,8 +110,14 @@ func (config *smtpConfig) send(to []string, subject, body string) error {
 		}
 	} else {
 		var err error
-		client, err = smtp.Dial(address)
+		conn, err := dialer.Dial("tcp", address)
 		if err != nil {
+			return fmt.Errorf("无法连接 SMTP 服务器 %s: %w", address, err)
+		}
+		_ = conn.SetDeadline(time.Now().Add(smtpTotalTimeout))
+		client, err = smtp.NewClient(conn, config.host)
+		if err != nil {
+			_ = conn.Close()
 			return fmt.Errorf("无法连接 SMTP 服务器 %s: %w", address, err)
 		}
 		if config.tlsMode == "starttls" {
