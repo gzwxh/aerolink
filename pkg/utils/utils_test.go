@@ -26,8 +26,11 @@ func TestInjectKiteBase(t *testing.T) {
 		if !strings.Contains(got, `src="/kite/assets/main.js"`) {
 			t.Fatalf("expected asset src to include subpath: %s", got)
 		}
-		if !strings.Contains(got, `<script>window.__dynamic_base__="/kite";</script>`) {
-			t.Fatalf("expected runtime base script: %s", got)
+		if !strings.Contains(got, `<script src="/kite/config.js"></script>`) {
+			t.Fatalf("expected external runtime base script: %s", got)
+		}
+		if strings.Contains(got, "window.__dynamic_base__") {
+			t.Fatalf("no inline base script expected under strict CSP: %s", got)
 		}
 	})
 
@@ -40,8 +43,8 @@ func TestInjectKiteBase(t *testing.T) {
 		if !strings.Contains(got, `src="/assets/main.js"`) {
 			t.Fatalf("expected root asset src: %s", got)
 		}
-		if !strings.Contains(got, `<script>window.__dynamic_base__="";</script>`) {
-			t.Fatalf("expected empty runtime base script: %s", got)
+		if !strings.Contains(got, `<script src="/config.js"></script>`) {
+			t.Fatalf("expected external runtime base script: %s", got)
 		}
 	})
 
@@ -54,10 +57,29 @@ func TestInjectKiteBase(t *testing.T) {
 		if !strings.Contains(got, `href="/ki&#34;te/assets/index.js"`) {
 			t.Fatalf("expected escaped quote in asset href: %s", got)
 		}
-		if !strings.Contains(got, `<script>window.__dynamic_base__="/ki\"te";</script>`) {
-			t.Fatalf("expected runtime base script to remain safely quoted: %s", got)
+		if !strings.Contains(got, `<script src="/ki&#34;te/config.js"></script>`) {
+			t.Fatalf("expected base script src to be escaped: %s", got)
 		}
 	})
+}
+
+func TestConfigScript(t *testing.T) {
+	cases := []struct {
+		name      string
+		assetBase string
+		want      string
+	}{
+		{name: "root", assetBase: "", want: `window.__dynamic_base__="";`},
+		{name: "subpath", assetBase: "/kite", want: `window.__dynamic_base__="/kite";`},
+		{name: "escapes quotes for js string", assetBase: `/ki"te`, want: `window.__dynamic_base__="/ki\"te";`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ConfigScript(tc.assetBase); got != tc.want {
+				t.Fatalf("ConfigScript(%q) = %q, want %q", tc.assetBase, got, tc.want)
+			}
+		})
+	}
 }
 
 func TestInjectAnalytics(t *testing.T) {

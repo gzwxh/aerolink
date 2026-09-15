@@ -1,18 +1,18 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { IconShieldLock, IconX } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
   fetchLockedLoginIPs,
-  type MFAPolicy,
-  type SecuritySetting,
   updateSecuritySetting,
   useSecuritySetting,
+  type MFAPolicy,
+  type SecuritySetting,
 } from '@/lib/api'
-import { formatDate, translateError } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,16 +26,17 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@/components/ui/toggle-group'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+
+import { UserStatusPanel } from './user-status-panel'
 
 type SecurityTab = 'authentication' | 'loginPolicy' | 'password' | 'session'
 
 const DEFAULT_SECURITY_SETTING: SecuritySetting = {
   loginCaptchaEnabled: false,
   inactiveUserDisableDays: 999,
+  defaultUserEnabled: true,
+  defaultUserExpireDays: 0,
   remoteLoginNoticeEnabled: true,
   mfaPolicy: 'disabled',
   mfaThirdPartyEnabled: true,
@@ -55,6 +56,7 @@ const DEFAULT_SECURITY_SETTING: SecuritySetting = {
   passwordExpireDays: 900,
   passwordHistoryCount: 5,
   passwordMinLength: 8,
+  passwordMinClasses: 3,
   adminPasswordMinLength: 12,
   passwordRequireUppercase: true,
   passwordRequireLowercase: true,
@@ -65,7 +67,13 @@ const DEFAULT_SECURITY_SETTING: SecuritySetting = {
   sessionMaxHours: 24,
 }
 
-function SettingGroup({ title, children }: { title: string; children: ReactNode }) {
+function SettingGroup({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
   return (
     <div className="rounded-lg border">
       <div className="bg-muted/40 px-3 py-2 text-sm font-medium">{title}</div>
@@ -169,9 +177,9 @@ export function SecurityManagement() {
     'session',
   ] as const
   const tabParam = searchParams.get('tab') ?? 'authentication'
-  const tab = (securityTabs.includes(tabParam as SecurityTab)
-    ? tabParam
-    : 'authentication') as SecurityTab
+  const tab = (
+    securityTabs.includes(tabParam as SecurityTab) ? tabParam : 'authentication'
+  ) as SecurityTab
   const [formData, setFormData] = useState<SecuritySetting>(
     DEFAULT_SECURITY_SETTING
   )
@@ -190,8 +198,8 @@ export function SecurityManagement() {
         t('securitySettings.messages.updated', 'Security settings updated')
       )
     },
-    onError: (error) => {
-      toast.error(translateError(error, t))
+    onError: () => {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 
@@ -229,13 +237,12 @@ export function SecurityManagement() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <Tabs value={tab} onValueChange={(value) => setSearchParams({ tab: value })}>
-
-
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setSearchParams({ tab: value })}
+        >
           <TabsContent value="authentication" className="space-y-4">
-            <SettingGroup
-              title={t('securitySettings.groups.basic', 'Basic')}
-            >
+            <SettingGroup title={t('securitySettings.groups.basic', 'Basic')}>
               <SettingRow
                 label={t(
                   'securitySettings.fields.loginCaptchaEnabled',
@@ -319,24 +326,35 @@ export function SecurityManagement() {
                     }
                   }}
                 >
-                  <ToggleGroupItem
-                    value="disabled"
-                    className="rounded-md px-3 first:rounded-md last:rounded-md data-[variant=outline]:border-l"
-                  >
-                    {t('securitySettings.mfaPolicy.disabled', 'Disabled')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="all"
-                    className="rounded-md px-3 first:rounded-md last:rounded-md data-[variant=outline]:border-l"
-                  >
-                    {t('securitySettings.mfaPolicy.all', 'All users')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="admin"
-                    className="rounded-md px-3 first:rounded-md last:rounded-md data-[variant=outline]:border-l"
-                  >
-                    {t('securitySettings.mfaPolicy.admin', 'Admins only')}
-                  </ToggleGroupItem>
+                  {(
+                    [
+                      [
+                        'disabled',
+                        t('securitySettings.mfaPolicy.disabled', 'Disabled'),
+                      ],
+                      ['all', t('securitySettings.mfaPolicy.all', 'All users')],
+                      [
+                        'admin',
+                        t('securitySettings.mfaPolicy.admin', 'Admins only'),
+                      ],
+                    ] as [MFAPolicy, string][]
+                  ).map(([value, label]) => {
+                    const active = formData.mfaPolicy === value
+                    return (
+                      <ToggleGroupItem
+                        key={value}
+                        value={value}
+                        className={cn(
+                          'rounded-md px-3 font-medium first:rounded-md last:rounded-md data-[variant=outline]:border-l',
+                          active
+                            ? 'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-semibold data-[state=on]:border-primary data-[state=on]:shadow-sm'
+                            : 'data-[state=off]:text-muted-foreground data-[state=off]:hover:bg-muted data-[state=off]:hover:text-foreground'
+                        )}
+                      >
+                        {label}
+                      </ToggleGroupItem>
+                    )
+                  })}
                 </ToggleGroup>
               </SettingRow>
 
@@ -559,10 +577,7 @@ export function SecurityManagement() {
               </SettingRow>
 
               <SettingRow
-                label={t(
-                  'securitySettings.fields.ipBlacklist',
-                  'IP deny list'
-                )}
+                label={t('securitySettings.fields.ipBlacklist', 'IP deny list')}
                 hint={t(
                   'securitySettings.fields.ipListHint',
                   'Ranges are supported, for example 192.168.10.1-192.168.10.20 or 2001:db8:a1-2001:db8:1:a10.'
@@ -657,6 +672,56 @@ export function SecurityManagement() {
                 />
               </SettingRow>
             </SettingGroup>
+
+            <SettingGroup
+              title={t(
+                'securitySettings.newUserDefaults.title',
+                '新建用户默认状态'
+              )}
+            >
+              <SettingRow
+                label={t(
+                  'securitySettings.newUserDefaults.enabled',
+                  '默认激活'
+                )}
+                hint={t(
+                  'securitySettings.newUserDefaults.enabledHint',
+                  '关闭后新建用户默认禁用，需要管理员手动启用'
+                )}
+              >
+                <Switch
+                  id="security-default-user-enabled"
+                  checked={formData.defaultUserEnabled}
+                  onCheckedChange={(checked) =>
+                    patch('defaultUserEnabled', checked)
+                  }
+                />
+              </SettingRow>
+              <SettingRow
+                label={t(
+                  'securitySettings.newUserDefaults.expireDays',
+                  '默认失效天数'
+                )}
+                hint={t(
+                  'securitySettings.newUserDefaults.expireDaysHint',
+                  '0 表示永不过期'
+                )}
+              >
+                <Input
+                  id="security-default-user-expire-days"
+                  type="number"
+                  min={0}
+                  value={formData.defaultUserExpireDays}
+                  onChange={(event) =>
+                    patch('defaultUserExpireDays', toNumber(event.target.value))
+                  }
+                  className="max-w-40"
+                />
+              </SettingRow>
+            </SettingGroup>
+
+            {/* 被上方「不活跃自动禁用」策略关闭的账号在此恢复。 */}
+            <UserStatusPanel />
           </TabsContent>
 
           <TabsContent value="password" className="space-y-4">
@@ -709,7 +774,10 @@ export function SecurityManagement() {
             </SettingGroup>
 
             <SettingGroup
-              title={t('securitySettings.groups.passwordRules', 'Password Rules')}
+              title={t(
+                'securitySettings.groups.passwordRules',
+                'Password Rules'
+              )}
             >
               <SettingRow
                 label={t(
@@ -747,6 +815,30 @@ export function SecurityManagement() {
                       'adminPasswordMinLength',
                       toNumber(event.target.value)
                     )
+                  }
+                  className="max-w-40"
+                />
+              </SettingRow>
+
+              <SettingRow
+                label={t(
+                  'securitySettings.fields.passwordMinClasses',
+                  'Minimum character classes'
+                )}
+                hint={t(
+                  'securitySettings.fields.passwordMinClassesHint',
+                  '0 = require every enabled class below; 1-4 = require at least N of lowercase / uppercase / digit / special.'
+                )}
+                required
+              >
+                <Input
+                  id="security-password-min-classes"
+                  type="number"
+                  min={0}
+                  max={4}
+                  value={formData.passwordMinClasses}
+                  onChange={(event) =>
+                    patch('passwordMinClasses', toNumber(event.target.value))
                   }
                   className="max-w-40"
                 />
@@ -815,7 +907,9 @@ export function SecurityManagement() {
           </TabsContent>
 
           <TabsContent value="session" className="space-y-4">
-            <SettingGroup title={t('securitySettings.groups.session', 'Session')}>
+            <SettingGroup
+              title={t('securitySettings.groups.session', 'Session')}
+            >
               <SettingRow
                 label={t(
                   'securitySettings.fields.sessionExpireOnBrowserClose',
@@ -925,11 +1019,9 @@ export function SecurityManagement() {
                 >
                   <span className="font-medium">{item.ip}</span>
                   <span className="text-muted-foreground">
-                    {t(
-                      'securitySettings.lockedIPs.until',
-                      'Until {{time}}',
-                      { time: formatDate(item.blockedUntil) }
-                    )}
+                    {t('securitySettings.lockedIPs.until', 'Until {{time}}', {
+                      time: formatDate(item.blockedUntil),
+                    })}
                   </span>
                 </div>
               ))}

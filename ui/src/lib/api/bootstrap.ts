@@ -21,7 +21,6 @@ export interface AuthProviderCatalog {
   mfaEnabled: boolean
   /** Global MFA policy from security settings: disabled / all / admin. */
   mfaPolicy: 'disabled' | 'all' | 'admin'
-  passkeyLoginEnabled: boolean
   loginCaptchaEnabled: boolean
 }
 

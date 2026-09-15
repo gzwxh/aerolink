@@ -5,13 +5,9 @@ import { useTranslation } from 'react-i18next'
 import { fetchUserList, useRoleList } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+
 import { GrantsScopePanel } from './grants-scope-panel'
 
 interface RoleGrant {
@@ -185,7 +181,9 @@ export function UserGrantsView({
                   onClick={() => setSelectedKey(key)}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
-                    selected && `user:${selected.subject}` === key && 'bg-accent'
+                    selected &&
+                      `user:${selected.subject}` === key &&
+                      'bg-accent'
                   )}
                 >
                   <IconUser className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -254,10 +252,7 @@ export function UserGrantsView({
                     key={group}
                     type="button"
                     className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                    title={t(
-                      'userGrants.openGroupHint',
-                      'Open group grants'
-                    )}
+                    title={t('userGrants.openGroupHint', 'Open group grants')}
                     onClick={() => onOpenGroup(group)}
                   >
                     <IconUsers className="h-3 w-3" />

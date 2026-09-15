@@ -2,10 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { verifyCurrentUserMFA } from '@/lib/api'
-import {
-  MFA_PROMPT_EVENT,
-  resolveMFAVerification,
-} from '@/lib/mfa-prompt'
+import { MFA_PROMPT_EVENT, resolveMFAVerification } from '@/lib/mfa-prompt'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

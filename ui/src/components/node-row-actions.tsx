@@ -15,7 +15,6 @@ import { toast } from 'sonner'
 
 import { NodeWithMetrics } from '@/types/api'
 import { cordonNode, deleteResource, uncordonNode } from '@/lib/api'
-import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Button } from '@/components/ui/button'
 import {
@@ -74,7 +73,7 @@ export function NodeRowActions({
       }
       await queryClient.invalidateQueries({ queryKey: ['nodes'] })
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -86,7 +85,7 @@ export function NodeRowActions({
       setShowDelete(false)
       await queryClient.invalidateQueries({ queryKey: ['nodes'] })
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsDeleting(false)
     }

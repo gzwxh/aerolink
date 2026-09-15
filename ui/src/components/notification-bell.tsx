@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { IconBell } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
 
 import {
+  useClearNotifications,
   useMarkNotificationsRead,
   useNotifications,
   useUnreadNotificationCount,
@@ -21,12 +22,24 @@ import {
 export function NotificationBell() {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [confirmingClear, setConfirmingClear] = useState(false)
   const { data: unread } = useUnreadNotificationCount(true)
   const { data, isLoading } = useNotifications(1, 20, open)
   const markRead = useMarkNotificationsRead()
+  const clearAll = useClearNotifications()
 
   const count = unread?.count ?? 0
   const items: InAppNotification[] = data?.items ?? []
+
+  const handleClearAll = () => {
+    // 两段式确认：第一次点击进入确认态，再次点击才真正清空，防止误触。
+    if (!confirmingClear) {
+      setConfirmingClear(true)
+      return
+    }
+    setConfirmingClear(false)
+    clearAll.mutate()
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -50,14 +63,31 @@ export function NotificationBell() {
           <span className="text-sm font-medium">
             {t('notifications.inbox.title', '通知')}
           </span>
-          {count > 0 && (
-            <button
-              type="button"
-              className="text-xs text-primary hover:underline"
-              onClick={() => markRead.mutate({ all: true })}
-            >
-              {t('notifications.inbox.markAllRead', '全部已读')}
-            </button>
+          {items.length > 0 && (
+            <div className="flex items-center gap-3">
+              {count > 0 && (
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => markRead.mutate({ all: true })}
+                >
+                  {t('notifications.inbox.markAllRead', '全部已读')}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={clearAll.isPending}
+                className={`text-xs hover:underline ${
+                  confirmingClear ? 'text-destructive font-medium' : 'text-muted-foreground'
+                }`}
+                onClick={handleClearAll}
+                onMouseLeave={() => setConfirmingClear(false)}
+              >
+                {confirmingClear
+                  ? t('notifications.inbox.confirmClear', '确认清空？')
+                  : t('notifications.inbox.clearAll', '清空全部')}
+              </button>
+            </div>
           )}
         </div>
         <div className="max-h-80 overflow-y-auto">
@@ -86,7 +116,9 @@ export function NotificationBell() {
                 {!item.read && (
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
                 )}
-                <span className="truncate text-sm font-medium">{item.title}</span>
+                <span className="truncate text-sm font-medium">
+                  {item.title}
+                </span>
               </div>
               <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
                 {item.content}

@@ -1,6 +1,6 @@
 # Authentication
 
-Kite supports interactive login through OAuth, password users, LDAP, MFA, and passkeys, plus programmatic access through API keys. API keys authenticate as special users and follow the same RBAC model as interactive users.
+Kite supports interactive login through OAuth, password users, LDAP, and MFA, plus programmatic access through API keys. API keys authenticate as special users and follow the same RBAC model as interactive users.
 
 ## Interactive login
 
@@ -51,39 +51,10 @@ The setup response includes `secret`, `otpauth_url`, and `qr_code`. Enable or di
 }
 ```
 
-## Passkey login
-
-Passkeys are available for password users. Users can register and delete passkeys from account settings.
-
-Current-user passkey endpoints:
-
-```http
-GET /api/users/me/passkeys
-POST /api/users/me/passkeys/begin
-POST /api/users/me/passkeys/finish
-DELETE /api/users/me/passkeys/:id
-```
-
-Registration starts with the passkey name and current password. If the user has MFA enabled, `mfa_code` is also required:
-
-```json
-{
-  "name": "Work laptop",
-  "current_password": "change-me",
-  "mfa_code": "123456"
-}
-```
-
-Passkey sign-in uses the WebAuthn begin/finish flow:
-
-```http
-POST /api/auth/passkey/login/begin
-POST /api/auth/passkey/login/finish
-```
 
 ## Authentication settings
 
-Admins can enable or disable password login, MFA, and passkey login in **Settings -> Authentication**.
+Admins can enable or disable password login and MFA in **Settings -> Authentication**.
 
 The same settings are available through:
 
@@ -97,8 +68,7 @@ Relevant request fields:
 ```json
 {
   "passwordLoginDisabled": false,
-  "enableMFA": true,
-  "enablePasskeyLogin": true
+  "enableMFA": true
 }
 ```
 

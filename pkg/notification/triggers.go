@@ -121,6 +121,38 @@ func RunDailyChecks() {
 	}
 	checkPasswordExpiry(setting, securitySetting)
 	checkInactiveUsers(securitySetting)
+	checkAccountExpiry()
+}
+
+// accountExpiryNoticeDays 是账号到期前开始提醒的天数。
+const accountExpiryNoticeDays = 7
+
+// checkAccountExpiry reminds users whose account expires within the notice
+// window. Like the password expiry check it re-sends daily while in the
+// window, so an ignored reminder keeps resurfacing.
+func checkAccountExpiry() {
+	users, err := model.ListUsersExpiringBefore(
+		time.Now().AddDate(0, 0, accountExpiryNoticeDays),
+	)
+	if err != nil {
+		klog.Errorf("failed to list users for account expiry: %v", err)
+		return
+	}
+	now := time.Now()
+	for _, user := range users {
+		if user.ExpiresAt == nil {
+			continue
+		}
+		daysLeft := int(user.ExpiresAt.Sub(now).Hours() / 24)
+		if daysLeft < 0 {
+			continue // already expired; login enforcement handles access
+		}
+		SendEvent(model.NotificationEventAccountExpiring, map[string]string{
+			"username":   user.Username,
+			"days":       strconv.Itoa(daysLeft + 1),
+			"expireDate": user.ExpiresAt.Format("2006-01-02"),
+		}, Recipient{UserID: user.ID, Email: user.Email})
+	}
 }
 
 // checkPasswordExpiry reminds users whose password is about to expire (or just

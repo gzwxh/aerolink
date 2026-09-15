@@ -31,7 +31,6 @@ import {
   formatCPU,
   formatDate,
   formatMemory,
-  translateError,
 } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
@@ -139,7 +138,7 @@ export function NodeDetail(props: { name: string }) {
       await refetch()
       await refetchRelated()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -150,7 +149,7 @@ export function NodeDetail(props: { name: string }) {
       setIsCordonPopoverOpen(false)
       refetch()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -161,7 +160,7 @@ export function NodeDetail(props: { name: string }) {
       setIsCordonPopoverOpen(false)
       refetch()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -177,7 +176,7 @@ export function NodeDetail(props: { name: string }) {
       setTaintData({ key: '', value: '', effect: 'NoSchedule' })
       refetch()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -193,7 +192,7 @@ export function NodeDetail(props: { name: string }) {
       if (!key) setUntaintKey('')
       refetch()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 

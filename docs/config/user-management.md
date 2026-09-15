@@ -8,7 +8,7 @@ Kite supports multiple user management methods, combining OAuth with local passw
 
 For how to configure OAuth, see [OAuth Configuration Guide](./oauth-setup)
 
-- **Password Users**: Login through username and password. Password users can enable authenticator app MFA and register passkeys for passwordless login.
+- **Password Users**: Login through username and password. Password users can enable authenticator app MFA.
 - **API Keys**: Used for scripts, CI/CD, or external systems calling Kite APIs. See [API Authentication](../api/authentication).
 
 ## User Management
@@ -26,21 +26,17 @@ In this interface, you can:
 
 ## Account Security
 
-MFA and passkey login are enabled by default and can be managed by admins in **Settings -> Authentication**.
+MFA login is enabled by default and can be managed by admins in **Settings -> Authentication**.
 
-Password users can manage their own security settings from the account settings dialog:
+Password users can enable MFA with a TOTP authenticator app from the account settings dialog.
 
-- Enable MFA with a TOTP authenticator app
-- Add or delete passkeys
-- Use passkeys to sign in when passkey login is enabled
-
-MFA and passkeys are available only for password users. OAuth and LDAP users should use the security policies from their identity provider.
+MFA is available only for password users. OAuth and LDAP users should use the security policies from their identity provider.
 
 ## Best Practices
 
 - Recommend prioritizing OAuth users to achieve unified identity management
 - Password users are suitable for special or temporary scenarios
-- Enable MFA or passkeys for password users
+- Enable MFA for password users
 - Regularly review user lists and role assignments to ensure minimal permissions
 - Disable unused accounts to reduce security risks
 

@@ -12,7 +12,6 @@ import { Link, useLocation } from 'react-router-dom'
 
 import { SidebarCustomResourceItem, SidebarItem } from '@/types/sidebar'
 import { useResources, useVersionInfo } from '@/lib/api'
-import { getSettingsSections } from '@/components/settings/settings-sections'
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +27,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { getSettingsSections } from '@/components/settings/settings-sections'
 
 import { ClusterSelector } from './cluster-selector'
 import { Collapsible, CollapsibleTrigger } from './ui/collapsible'
@@ -288,9 +288,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-                {/* 系统设置页面不需要集群切换器 */}
+        {/* 系统设置页面不需要集群切换器 */}
         {!location.pathname.startsWith('/settings') && (
-  <SidebarGroup>
+          <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -338,147 +338,222 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {/* 进入系统设置后只保留设置相关入口，隐藏业务导航 */}
         {!location.pathname.startsWith('/settings') &&
           visibleGroups.map((group) => (
-          <Collapsible
-            key={group.id}
-            defaultOpen={!group.collapsed}
-            className="group/collapsible"
-          >
-            <SidebarGroup>
-              <SidebarGroupLabel asChild>
-                <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group-data-[state=open]:text-foreground">
-                  <span className="uppercase tracking-wide text-xs font-bold">
-                    {group.nameKey
-                      ? t(group.nameKey, { defaultValue: group.nameKey })
-                      : ''}
-                  </span>
-                  <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                </CollapsibleTrigger>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent className="flex flex-col gap-2">
-                  <SidebarMenu>
-                    {group.items.map(renderSidebarItem)}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
-        ))}
+            <Collapsible
+              key={group.id}
+              defaultOpen={!group.collapsed}
+              className="group/collapsible"
+            >
+              <SidebarGroup>
+                <SidebarGroupLabel asChild>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group-data-[state=open]:text-foreground">
+                    <span className="uppercase tracking-wide text-xs font-bold">
+                      {group.nameKey
+                        ? t(group.nameKey, { defaultValue: group.nameKey })
+                        : ''}
+                    </span>
+                    <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                  </CollapsibleTrigger>
+                </SidebarGroupLabel>
+                <CollapsibleContent>
+                  <SidebarGroupContent className="flex flex-col gap-2">
+                    <SidebarMenu>
+                      {group.items.map(renderSidebarItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </SidebarGroup>
+            </Collapsible>
+          ))}
 
         {isAdmin && location.pathname.startsWith('/settings') && (
-                    <SidebarGroup>
+          <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                    {settingsSections.map((section) => {
-                      const SectionIcon = section.icon
-                      const sectionActive = location.pathname.startsWith(
-                        `/settings/${section.value}`
-                      )
-                      // 各章节的子页签：侧边栏子菜单 + 内容区页签共用
-                      const sectionSubTabs: Record<
-                        string,
-                        { param: string; tabs: { value: string; labelKey: string; defaultLabel: string }[] }
-                      > = {
-                        rbac: {
-                          param: 'rbacTab',
-                          tabs: [
-                            { value: 'roles', labelKey: 'settings.subTabs.rbacRoles', defaultLabel: 'Roles' },
-                            { value: 'user', labelKey: 'settings.subTabs.rbacUsers', defaultLabel: 'Users' },
-                            { value: 'group', labelKey: 'settings.subTabs.rbacGroups', defaultLabel: 'User Groups' },
-                            { value: 'namespace', labelKey: 'settings.subTabs.rbacNamespaces', defaultLabel: 'Namespace Grants' },
-                            { value: 'node', labelKey: 'settings.subTabs.rbacNodes', defaultLabel: 'Node Permissions' },
-                          ],
+                {settingsSections.map((section) => {
+                  const SectionIcon = section.icon
+                  const sectionActive = location.pathname.startsWith(
+                    `/settings/${section.value}`
+                  )
+                  // 各章节的子页签：侧边栏子菜单 + 内容区页签共用
+                  const sectionSubTabs: Record<
+                    string,
+                    {
+                      param: string
+                      tabs: {
+                        value: string
+                        labelKey: string
+                        defaultLabel: string
+                      }[]
+                    }
+                  > = {
+                    rbac: {
+                      param: 'rbacTab',
+                      tabs: [
+                        {
+                          value: 'roles',
+                          labelKey: 'settings.subTabs.rbacRoles',
+                          defaultLabel: 'Roles',
                         },
-                        user: {
-                          param: 'tab',
-                          tabs: [
-                            { value: 'users', labelKey: 'settings.tabs.users', defaultLabel: 'Users' },
-                            { value: 'group', labelKey: 'settings.subTabs.rbacGroups', defaultLabel: 'User Groups' },
-                          ],
+                        {
+                          value: 'user',
+                          labelKey: 'settings.subTabs.rbacUsers',
+                          defaultLabel: 'Users',
                         },
-                        security: {
-                          param: 'tab',
-                          tabs: [
-                            { value: 'authentication', labelKey: 'securitySettings.tabs.authentication', defaultLabel: 'Authentication' },
-                            { value: 'loginPolicy', labelKey: 'securitySettings.tabs.loginPolicy', defaultLabel: 'Login Policy' },
-                            { value: 'password', labelKey: 'securitySettings.tabs.password', defaultLabel: 'Password' },
-                            { value: 'session', labelKey: 'securitySettings.tabs.session', defaultLabel: 'Session' },
-                          ],
+                        {
+                          value: 'group',
+                          labelKey: 'settings.subTabs.rbacGroups',
+                          defaultLabel: 'User Groups',
                         },
-                        notification: {
-                          param: 'tab',
-                          tabs: [
-                            { value: 'email', labelKey: 'notifications.tabs.email', defaultLabel: 'Mail' },
-                            { value: 'templates', labelKey: 'notifications.tabs.templates', defaultLabel: 'Templates' },
-                            { value: 'subscriptions', labelKey: 'notifications.tabs.subscriptions', defaultLabel: 'Subscriptions' },
-                          ],
+                        {
+                          value: 'namespace',
+                          labelKey: 'settings.subTabs.rbacNamespaces',
+                          defaultLabel: 'Namespace Grants',
                         },
-                        audit: {
-                          param: 'tab',
-                          tabs: [
-                            { value: 'login', labelKey: 'audit.tabs.login', defaultLabel: 'Login Logs' },
-                            { value: 'operation', labelKey: 'audit.tabs.operation', defaultLabel: 'Operation Logs' },
-                            { value: 'password', labelKey: 'audit.tabs.password', defaultLabel: 'Password Change Logs' },
-                          ],
+                        {
+                          value: 'node',
+                          labelKey: 'settings.subTabs.rbacNodes',
+                          defaultLabel: 'Node Permissions',
                         },
-                      }
-                      const sub = sectionSubTabs[section.value]
-                      const currentSubTab = sub
-                        ? (new URLSearchParams(location.search).get(sub.param) ??
-                          sub.tabs[0]?.value)
-                        : undefined
+                      ],
+                    },
+                    user: {
+                      param: 'tab',
+                      tabs: [
+                        {
+                          value: 'users',
+                          labelKey: 'settings.tabs.users',
+                          defaultLabel: 'Users',
+                        },
+                        {
+                          value: 'group',
+                          labelKey: 'settings.subTabs.rbacGroups',
+                          defaultLabel: 'User Groups',
+                        },
+                      ],
+                    },
+                    security: {
+                      param: 'tab',
+                      tabs: [
+                        {
+                          value: 'authentication',
+                          labelKey: 'securitySettings.tabs.authentication',
+                          defaultLabel: 'Authentication',
+                        },
+                        {
+                          value: 'loginPolicy',
+                          labelKey: 'securitySettings.tabs.loginPolicy',
+                          defaultLabel: 'Login Policy',
+                        },
+                        {
+                          value: 'password',
+                          labelKey: 'securitySettings.tabs.password',
+                          defaultLabel: 'Password',
+                        },
+                        {
+                          value: 'session',
+                          labelKey: 'securitySettings.tabs.session',
+                          defaultLabel: 'Session',
+                        },
+                      ],
+                    },
+                    notification: {
+                      param: 'tab',
+                      tabs: [
+                        {
+                          value: 'email',
+                          labelKey: 'notifications.tabs.email',
+                          defaultLabel: 'Mail',
+                        },
+                        {
+                          value: 'templates',
+                          labelKey: 'notifications.tabs.templates',
+                          defaultLabel: 'Templates',
+                        },
+                        {
+                          value: 'subscriptions',
+                          labelKey: 'notifications.tabs.subscriptions',
+                          defaultLabel: 'Subscriptions',
+                        },
+                      ],
+                    },
+                    audit: {
+                      param: 'tab',
+                      tabs: [
+                        {
+                          value: 'login',
+                          labelKey: 'audit.tabs.login',
+                          defaultLabel: 'Login Logs',
+                        },
+                        {
+                          value: 'operation',
+                          labelKey: 'audit.tabs.operation',
+                          defaultLabel: 'Operation Logs',
+                        },
+                        {
+                          value: 'password',
+                          labelKey: 'audit.tabs.password',
+                          defaultLabel: 'Password Change Logs',
+                        },
+                      ],
+                    },
+                  }
+                  const sub = sectionSubTabs[section.value]
+                  const currentSubTab = sub
+                    ? (new URLSearchParams(location.search).get(sub.param) ??
+                      sub.tabs[0]?.value)
+                    : undefined
 
-                      return (
-                        <SidebarMenuItem key={section.value}>
-                          <SidebarMenuButton
-                            tooltip={section.label}
-                            asChild
-                            isActive={isActive(`/settings/${section.value}`)}
-                            className="transition-colors data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary"
-                          >
-                            <Link
-                              to={`/settings/${section.value}`}
-                              onClick={handleMenuItemClick}
-                            >
-                              <SectionIcon className="text-sidebar-primary" />
-                              <span>{section.label}</span>
-                              {sub && (
-                                <ChevronDown
-                                  className={`ml-auto h-4 w-4 transition-transform duration-200 ${
-                                    sectionActive ? 'rotate-180' : ''
-                                  }`}
-                                />
-                              )}
-                            </Link>
-                          </SidebarMenuButton>
-                          {sectionActive && sub && (
-                            <SidebarMenuSub>
-                              {sub.tabs.map((subTab) => (
-                                <SidebarMenuSubItem key={subTab.value}>
-                                  <SidebarMenuSubButton
-                                    asChild
-                                    isActive={currentSubTab === subTab.value}
-                                    className="data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary"
-                                  >
-                                    <Link
-                                      to={`/settings/${section.value}?${sub.param}=${subTab.value}`}
-                                      onClick={handleMenuItemClick}
-                                    >
-                                      <span>
-                                        {t(subTab.labelKey, {
-                                          defaultValue: subTab.defaultLabel,
-                                        })}
-                                      </span>
-                                    </Link>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              ))}
-                            </SidebarMenuSub>
+                  return (
+                    <SidebarMenuItem key={section.value}>
+                      <SidebarMenuButton
+                        tooltip={section.label}
+                        asChild
+                        isActive={isActive(`/settings/${section.value}`)}
+                        className="transition-colors data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary"
+                      >
+                        <Link
+                          to={`/settings/${section.value}`}
+                          onClick={handleMenuItemClick}
+                        >
+                          <SectionIcon className="text-sidebar-primary" />
+                          <span>{section.label}</span>
+                          {sub && (
+                            <ChevronDown
+                              className={`ml-auto h-4 w-4 transition-transform duration-200 ${
+                                sectionActive ? 'rotate-180' : ''
+                              }`}
+                            />
                           )}
-                        </SidebarMenuItem>
-                      )
-                    })}
-                  </SidebarMenu>
+                        </Link>
+                      </SidebarMenuButton>
+                      {sectionActive && sub && (
+                        <SidebarMenuSub>
+                          {sub.tabs.map((subTab) => (
+                            <SidebarMenuSubItem key={subTab.value}>
+                              <SidebarMenuSubButton
+                                asChild
+                                isActive={currentSubTab === subTab.value}
+                                className="data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary"
+                              >
+                                <Link
+                                  to={`/settings/${section.value}?${sub.param}=${subTab.value}`}
+                                  onClick={handleMenuItemClick}
+                                >
+                                  <span>
+                                    {t(subTab.labelKey, {
+                                      defaultValue: subTab.defaultLabel,
+                                    })}
+                                  </span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      )}
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         )}

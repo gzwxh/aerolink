@@ -8,12 +8,11 @@ import {
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
 
 import { type ResourceType } from '@/types/api'
 import { getResourceListPath } from '@/lib/resource-catalog'
 import { getResourceMetadata } from '@/lib/resource-metadata'
-import { cn, translateError } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
@@ -161,7 +160,7 @@ export function ResourceDetailShell<T>({
       try {
         await onSaveYaml(content)
       } catch (saveError) {
-        toast.error(translateError(saveError, t))
+        // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       } finally {
         setIsSavingYaml(false)
       }

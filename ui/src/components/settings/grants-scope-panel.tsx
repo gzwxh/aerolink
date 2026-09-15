@@ -58,10 +58,7 @@ export function GrantsScopePanel({ roles }: { roles: GrantsScopeRole[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectableClusters.join(',')])
 
-  const {
-    data: clusterNamespaces = [],
-    isLoading: nsLoading,
-  } = useQuery({
+  const { data: clusterNamespaces = [], isLoading: nsLoading } = useQuery({
     queryKey: ['rbac-cluster-namespaces', activeCluster],
     queryFn: () => fetchClusterNamespaces(activeCluster!),
     enabled: !!activeCluster,

@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 
 import { patchResource, useResources } from '@/lib/api'
 import { createSearchFilter } from '@/lib/k8s'
-import { formatDate, translateError } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ResourceTable } from '@/components/resource-table'
@@ -81,8 +81,8 @@ export function StorageClassListPage() {
         })
       )
     },
-    onError: (error) => {
-      toast.error(translateError(error, t))
+    onError: () => {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: ['storageclasses'] }),

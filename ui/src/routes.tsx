@@ -23,8 +23,8 @@ import { ResourceList } from './pages/resource-list'
 import { ServiceCreatePage } from './pages/service-create-page'
 import { ServiceListPage } from './pages/service-list-page'
 import { SettingsPage, SettingsRedirect } from './pages/settings'
-import { UserCreatePage } from './pages/user-create'
 import { StatefulSetListPage } from './pages/statefulset-list-page'
+import { UserCreatePage } from './pages/user-create'
 
 const subPath = getSubPath()
 

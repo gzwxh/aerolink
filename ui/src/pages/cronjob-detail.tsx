@@ -20,7 +20,7 @@ import {
   getJobStatusBadge,
   type JobStatusBadge,
 } from '@/lib/job-status'
-import { formatDate, getAge, translateError } from '@/lib/utils'
+import { formatDate, getAge } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -175,7 +175,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       )
       await Promise.all([refetchCronJob(), refetchJobs()])
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsTogglingSuspend(false)
     }
@@ -226,7 +226,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       toast.success('Job created successfully')
       await refetchJobs()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsRunningNow(false)
     }

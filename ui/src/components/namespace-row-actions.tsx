@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '@/contexts/auth-context'
 import {
   IconCopy,
   IconDeviceFloppy,
@@ -8,8 +9,8 @@ import {
   IconShieldCheck,
   IconTrash,
 } from '@tabler/icons-react'
-import * as yaml from 'js-yaml'
 import { useQueryClient } from '@tanstack/react-query'
+import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -21,9 +22,8 @@ import {
   updateResource,
   updateRole,
 } from '@/lib/api'
-import { useCluster } from '@/hooks/use-cluster'
-import { useAuth } from '@/contexts/auth-context'
 import { translateError } from '@/lib/utils'
+import { useCluster } from '@/hooks/use-cluster'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,10 +43,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 import { Textarea } from '@/components/ui/textarea'
-import { NamespacePermissionDialog } from '@/components/namespace-permission-dialog'
 import { CloneResourceDialog } from '@/components/clone-resource-dialog'
+import { NamespacePermissionDialog } from '@/components/namespace-permission-dialog'
+import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 
 type MutableResource = Record<string, unknown> & {
   metadata?: Record<string, unknown>
@@ -117,7 +117,9 @@ function parseMemory(value: unknown): string {
   return Number.isNaN(bytes) ? '' : String(Math.round(bytes / (1024 * 1024)))
 }
 
-function quotaToForm(hard: Record<string, unknown> | undefined): QuotaFormValues {
+function quotaToForm(
+  hard: Record<string, unknown> | undefined
+): QuotaFormValues {
   if (!hard) return { ...emptyQuota }
   return {
     cpuRequests: parseCpu(hard[QUOTA_KEYS.cpuRequests]),
@@ -135,7 +137,8 @@ function buildQuotaHard(values: QuotaFormValues): Record<string, string> {
   const hard: Record<string, string> = {}
   const { cpuRequests, cpuLimits, memoryRequests, memoryLimits, gpuLimits } =
     values
-  if (cpuRequests.trim()) hard[QUOTA_KEYS.cpuRequests] = `${cpuRequests.trim()}m`
+  if (cpuRequests.trim())
+    hard[QUOTA_KEYS.cpuRequests] = `${cpuRequests.trim()}m`
   if (cpuLimits.trim()) hard[QUOTA_KEYS.cpuLimits] = `${cpuLimits.trim()}m`
   if (memoryRequests.trim())
     hard[QUOTA_KEYS.memoryRequests] = `${memoryRequests.trim()}Mi`
@@ -236,7 +239,7 @@ export function NamespaceRowActions({
       setShowDelete(false)
       queryClient.invalidateQueries()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setDeleting(false)
     }

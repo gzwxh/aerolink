@@ -63,12 +63,7 @@ export function UserRoleAssignment({ open, onOpenChange, subject }: Props) {
       queryClient.invalidateQueries({ queryKey: ['apikey-list'] })
       queryClient.invalidateQueries({ queryKey: ['role-list'] })
       setSelected((s) => ({ ...s, [roleId]: !s[roleId] }))
-    } catch (err: unknown) {
-      toast.error(
-        (err as Error).message ||
-          t('common.messages.failedToAssign', 'Failed to assign')
-      )
-    }
+    } catch (err: unknown) {}
   }
 
   return (

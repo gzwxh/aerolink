@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,13 @@ var templateVariables = map[string][]string{
 	model.NotificationEventPasswordExpired:      {"username", "expireDate"},
 	model.NotificationEventInactiveUserDisabled: {"username", "days"},
 	model.NotificationEventTest:                 {"time"},
+	model.NotificationEventPasswordResetByAdmin: {"username", "operator", "time"},
+	model.NotificationEventAccountDisabled:      {"username", "operator", "time"},
+	model.NotificationEventAccountEnabled:       {"username", "operator", "time"},
+	model.NotificationEventAccountExpiring:      {"username", "days", "expireDate"},
+	model.NotificationEventRoleAssigned:         {"username", "role", "time"},
+	model.NotificationEventRoleUnassigned:       {"username", "role", "time"},
+	model.NotificationEventMailDeliveryFailed:   {"time", "address", "event", "reason"},
 }
 
 type updateNotificationSettingRequest struct {
@@ -387,4 +395,104 @@ func HandleMarkNotificationsRead(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+// HandleClearNotifications deletes all in-app messages of the current user.
+//
+// 路由：POST /api/v1/notifications/clear（任意登录用户）。
+func HandleClearNotifications(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
+	if err := model.ClearNotifications(user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear notifications"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+// clientEventRateLimiter bounds how many client-reported failures one account
+// can turn into inbox rows per minute, so a broken loop cannot flood the
+// notifications table.
+type clientEventRateLimiter struct {
+	mu     sync.Mutex
+	window time.Duration
+	limit  int
+	hits   map[uint][]time.Time
+}
+
+var clientEventLimiter = &clientEventRateLimiter{
+	window: time.Minute,
+	limit:  10,
+	hits:   map[uint][]time.Time{},
+}
+
+func (l *clientEventRateLimiter) allow(userID uint) bool {
+	now := time.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	times := l.hits[userID]
+	fresh := times[:0]
+	for _, t := range times {
+		if now.Sub(t) <= l.window {
+			fresh = append(fresh, t)
+		}
+	}
+	if len(fresh) >= l.limit {
+		l.hits[userID] = fresh
+		return false
+	}
+	l.hits[userID] = append(fresh, now)
+	return true
+}
+
+// HandleCreateClientNotification turns an operation failure reported by the
+// web client into an in-app message for that user.
+//
+// 路由：POST /api/v1/notifications/client-events（任意登录用户）。
+//
+// The client cannot rely on a toast for feedback when the request itself
+// failed (e.g. connection reset), so it reports the failure here and the
+// message shows up in the notification bell once connectivity is restored.
+func HandleCreateClientNotification(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
+	if !clientEventLimiter.allow(user.ID) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many notifications, try again later"})
+		return
+	}
+
+	var req struct {
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+		Path   string `json:"path"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		return
+	}
+
+	title := truncateRunes(strings.TrimSpace(req.Title), 200)
+	if title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		return
+	}
+	detail := truncateRunes(strings.TrimSpace(req.Detail), 2000)
+	path := truncateRunes(strings.TrimSpace(req.Path), 300)
+	if path != "" {
+		detail = strings.TrimSpace(path + "\n" + detail)
+	}
+
+	if err := model.CreateUserNotification(
+		user.ID, model.NotificationEventOperationFailed, title, detail); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save notification"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"success": true})
+}
+
+func truncateRunes(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max])
 }

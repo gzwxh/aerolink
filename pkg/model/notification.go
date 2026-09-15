@@ -26,6 +26,18 @@ const (
 	NotificationEventInactiveUserDisabled = "inactive_user_disabled"
 	// NotificationEventTest is used by the "send test mail" action.
 	NotificationEventTest = "test"
+
+	// Security/account lifecycle events reported to the affected user.
+	NotificationEventPasswordResetByAdmin = "password_reset_by_admin"
+	NotificationEventAccountDisabled      = "account_disabled"
+	NotificationEventAccountEnabled       = "account_enabled"
+	NotificationEventAccountExpiring      = "account_expiring"
+	// RBAC changes that affect a user's permissions.
+	NotificationEventRoleAssigned   = "role_assigned"
+	NotificationEventRoleUnassigned = "role_unassigned"
+	// NotificationEventMailDeliveryFailed warns administrators that the SMTP
+	// delivery of a notification failed. It is in-app only to avoid recursion.
+	NotificationEventMailDeliveryFailed = "mail_delivery_failed"
 )
 
 // Notification delivery channels.
@@ -167,6 +179,27 @@ func (LoginRecord) TableName() string {
 	return "login_records"
 }
 
+// NotificationEventOperationFailed marks an operation failure reported by the
+// web client (e.g. a request that could not reach the server). These rows are
+// only shown in the in-app inbox.
+const NotificationEventOperationFailed = "operation_failed"
+
+// CreateUserNotification writes one in-app message for the given user. Unlike
+// SendEvent it bypasses subscriptions and mail delivery: it is for failures the
+// client itself observed, which must be visible even when mail is not set up.
+func CreateUserNotification(userID uint, event, title, content string) error {
+	if userID == 0 {
+		return errors.New("user id is required")
+	}
+	notification := Notification{
+		UserID:  userID,
+		Event:   event,
+		Title:   title,
+		Content: content,
+	}
+	return DB.Create(&notification).Error
+}
+
 // defaultNotificationTemplates seeds every event the module can emit. The text
 // is editable from the UI afterwards.
 var defaultNotificationTemplates = map[string]struct {
@@ -215,6 +248,65 @@ var defaultNotificationTemplates = map[string]struct {
 发送时间：{{time}}
 `,
 	},
+	NotificationEventPasswordResetByAdmin: {
+		Subject: "[Kite] 密码已被管理员重置",
+		Body: `您好 {{username}}：
+
+您的账号密码已被管理员 {{operator}} 于 {{time}} 重置。
+
+如果这不是您预期的操作，请立即联系管理员核实。
+`,
+	},
+	NotificationEventAccountDisabled: {
+		Subject: "[Kite] 账号已被禁用",
+		Body: `您好 {{username}}：
+
+您的账号已被管理员 {{operator}} 于 {{time}} 禁用，将无法登录 Kite。
+
+如有疑问，请联系管理员。
+`,
+	},
+	NotificationEventAccountEnabled: {
+		Subject: "[Kite] 账号已启用",
+		Body: `您好 {{username}}：
+
+您的账号已被管理员 {{operator}} 于 {{time}} 启用，现在可以正常登录使用。
+`,
+	},
+	NotificationEventAccountExpiring: {
+		Subject: "[Kite] 账号即将过期",
+		Body: `您好 {{username}}：
+
+您的账号将于 {{expireDate}}（{{days}} 天后）过期，过期后将无法登录。
+
+如需继续使用，请联系管理员办理延期。
+`,
+	},
+	NotificationEventRoleAssigned: {
+		Subject: "[Kite] 已为您分配角色",
+		Body: `您好 {{username}}：
+
+管理员于 {{time}} 为您的账号分配了角色「{{role}}」，相关权限已生效。
+`,
+	},
+	NotificationEventRoleUnassigned: {
+		Subject: "[Kite] 角色已被移除",
+		Body: `您好 {{username}}：
+
+管理员于 {{time}} 移除了您账号的角色「{{role}}」，相关权限已收回。
+`,
+	},
+	NotificationEventMailDeliveryFailed: {
+		Subject: "[Kite] 通知邮件发送失败",
+		Body: `管理员您好：
+
+{{time}} 向 {{address}} 发送事件「{{event}}」的通知邮件失败：
+
+  {{reason}}
+
+请检查系统设置中的 SMTP 配置。
+`,
+	},
 }
 
 // NotificationEventList returns every supported event identifier.
@@ -224,6 +316,13 @@ func NotificationEventList() []string {
 		NotificationEventPasswordExpiring,
 		NotificationEventPasswordExpired,
 		NotificationEventInactiveUserDisabled,
+		NotificationEventPasswordResetByAdmin,
+		NotificationEventAccountDisabled,
+		NotificationEventAccountEnabled,
+		NotificationEventAccountExpiring,
+		NotificationEventRoleAssigned,
+		NotificationEventRoleUnassigned,
+		NotificationEventMailDeliveryFailed,
 	}
 }
 
@@ -444,6 +543,44 @@ func CreateInAppNotifications(userIDs []uint, event, title, content string) erro
 }
 
 // ListNotifications returns one page of inbox messages for a user.
+// ClearNotifications deletes every in-app message of the user.
+func ClearNotifications(userID uint) error {
+	return DB.Where("user_id = ?", userID).Delete(&Notification{}).Error
+}
+
+// ListUsersExpiringBefore returns enabled users whose ExpiresAt falls on or
+// before the given deadline, for the "account expiring" reminder.
+func ListUsersExpiringBefore(deadline time.Time) ([]User, error) {
+	var users []User
+	err := DB.Where(
+		"enabled = ? AND expires_at IS NOT NULL AND expires_at <= ?",
+		true, deadline,
+	).Find(&users).Error
+	return users, err
+}
+
+// ListAdminUserIDs returns the user IDs of enabled accounts that hold the
+// admin role through a direct assignment.
+func ListAdminUserIDs() ([]uint, error) {
+	var adminRole Role
+	if err := DB.Where("name = ?", DefaultAdminRole.Name).First(&adminRole).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var ids []uint
+	err := DB.Model(&User{}).
+		Joins("JOIN role_assignments ON role_assignments.subject = users.username").
+		Where(
+			"role_assignments.role_id = ? AND role_assignments.subject_type = ? AND users.enabled = ?",
+			adminRole.ID, SubjectTypeUser, true,
+		).
+		Distinct("users.id").
+		Pluck("users.id", &ids).Error
+	return ids, err
+}
+
 func ListNotifications(userID uint, page, size int) ([]Notification, int64, error) {
 	if page < 1 {
 		page = 1

@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
   notificationEvents,
-  sendTestNotification,
   runDailyNotificationChecks,
+  sendTestNotification,
   updateNotificationSetting,
   useCreateNotificationSubscription,
   useDeleteNotificationSubscription,
@@ -38,6 +38,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { PasswordInput } from '@/components/password-input'
 
 /**
  * 通知设置：邮件服务器、消息模板与消息订阅。
@@ -64,17 +65,16 @@ export function NotificationManagement() {
           onValueChange={(value) => setSearchParams({ tab: value })}
           className="flex flex-row gap-4 space-y-0 [&>[role=tabpanel]]:min-w-0 [&>[role=tabpanel]]:flex-1"
         >
-
-      <TabsContent value="email">
-        <MailSettings />
-      </TabsContent>
-      <TabsContent value="templates">
-        <TemplateList />
-      </TabsContent>
-      <TabsContent value="subscriptions">
-        <SubscriptionList />
-      </TabsContent>
-    </Tabs>
+          <TabsContent value="email">
+            <MailSettings />
+          </TabsContent>
+          <TabsContent value="templates">
+            <TemplateList />
+          </TabsContent>
+          <TabsContent value="subscriptions">
+            <SubscriptionList />
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   )
@@ -108,7 +108,8 @@ function MailSettings() {
   const patch = <K extends keyof NotificationSetting>(
     key: K,
     value: NotificationSetting[K]
-  ) => setForm((previous) => (previous ? { ...previous, [key]: value } : previous))
+  ) =>
+    setForm((previous) => (previous ? { ...previous, [key]: value } : previous))
 
   const handleSave = async () => {
     setSaving(true)
@@ -118,14 +119,11 @@ function MailSettings() {
         smtpPassword: smtpPassword || undefined,
       })
       setSmtpPassword('')
-      await queryClient.invalidateQueries({ queryKey: ['notification-setting'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['notification-setting'],
+      })
       toast.success(t('notifications.messages.saved', '已保存'))
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t('notifications.messages.saveFailed', '保存失败')
-      )
     } finally {
       setSaving(false)
     }
@@ -137,11 +135,6 @@ function MailSettings() {
       await sendTestNotification(testRecipient)
       toast.success(t('notifications.messages.testSent', '测试邮件已发送'))
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t('notifications.messages.testFailed', '测试邮件发送失败')
-      )
     } finally {
       setTesting(false)
     }
@@ -185,7 +178,10 @@ function MailSettings() {
         <CardHeader>
           <CardTitle>{t('notifications.smtp.title', '邮件服务器')}</CardTitle>
           <CardDescription>
-            {t('notifications.smtp.description', 'SMTP 配置，保存后可发送测试邮件')}
+            {t(
+              'notifications.smtp.description',
+              'SMTP 配置，保存后可发送测试邮件'
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -231,13 +227,15 @@ function MailSettings() {
               <Label htmlFor="smtpPassword">
                 {t('notifications.fields.smtpPassword', '密码 / 授权码')}
               </Label>
-              <Input
+              <PasswordInput
                 id="smtpPassword"
-                type="password"
                 value={smtpPassword}
                 placeholder={
                   data?.smtpPasswordConfigured
-                    ? t('notifications.fields.smtpPasswordKeep', '已配置，留空则不修改')
+                    ? t(
+                        'notifications.fields.smtpPasswordKeep',
+                        '已配置，留空则不修改'
+                      )
                     : ''
                 }
                 onChange={(event) => setSmtpPassword(event.target.value)}
@@ -265,7 +263,9 @@ function MailSettings() {
                 id="smtpSenderName"
                 value={form.smtpSenderName}
                 placeholder="Kite"
-                onChange={(event) => patch('smtpSenderName', event.target.value)}
+                onChange={(event) =>
+                  patch('smtpSenderName', event.target.value)
+                }
               />
             </div>
             <div className="space-y-2">
@@ -313,7 +313,10 @@ function MailSettings() {
               className="sm:w-40"
               value={form.passwordExpireNoticeDays}
               onChange={(event) =>
-                patch('passwordExpireNoticeDays', Number(event.target.value) || 0)
+                patch(
+                  'passwordExpireNoticeDays',
+                  Number(event.target.value) || 0
+                )
               }
             />
             <p className="text-xs text-muted-foreground">
@@ -336,11 +339,6 @@ function MailSettings() {
                     t('notifications.messages.dailyRan', '每日检查已执行')
                   )
                 } catch (error) {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : t('notifications.messages.dailyFailed', '执行失败')
-                  )
                 } finally {
                   setRunning(false)
                 }
@@ -435,8 +433,6 @@ function TemplateList() {
               {
                 onSuccess: () =>
                   toast.success(t('notifications.messages.saved', '已保存')),
-                onError: () =>
-                  toast.error(t('notifications.messages.saveFailed', '保存失败')),
               }
             )
           }
@@ -489,7 +485,10 @@ function TemplateCard(props: TemplateCardProps) {
       <CardContent className="space-y-3">
         <div className="space-y-2">
           <Label>{t('notifications.fields.subject', '标题')}</Label>
-          <Input value={subject} onChange={(event) => setSubject(event.target.value)} />
+          <Input
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label>{t('notifications.fields.body', '内容')}</Label>
@@ -535,13 +534,7 @@ function SubscriptionList() {
       })
       setReceiver('')
       toast.success(t('notifications.messages.saved', '已保存'))
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t('notifications.messages.saveFailed', '保存失败')
-      )
-    }
+    } catch (error) {}
   }
 
   return (
@@ -574,7 +567,9 @@ function SubscriptionList() {
 
           <Select
             value={receiverType}
-            onValueChange={(value) => setReceiverType(value as 'user' | 'email')}
+            onValueChange={(value) =>
+              setReceiverType(value as 'user' | 'email')
+            }
           >
             <SelectTrigger>
               <SelectValue />

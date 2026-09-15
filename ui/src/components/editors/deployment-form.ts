@@ -111,12 +111,7 @@ export const emptyToleration = (): TolerationForm => ({
 })
 
 export type SchedulingOperator =
-  | 'In'
-  | 'NotIn'
-  | 'Exists'
-  | 'DoesNotExist'
-  | 'Gt'
-  | 'Lt'
+  'In' | 'NotIn' | 'Exists' | 'DoesNotExist' | 'Gt' | 'Lt'
 
 export const SCHEDULING_OPERATORS: Array<{
   value: SchedulingOperator
@@ -214,12 +209,7 @@ export interface DeploymentFormData {
 }
 
 export type WorkloadResourceType =
-  | 'deployments'
-  | 'pods'
-  | 'daemonsets'
-  | 'statefulsets'
-  | 'jobs'
-  | 'cronjobs'
+  'deployments' | 'pods' | 'daemonsets' | 'statefulsets' | 'jobs' | 'cronjobs'
 
 export const createDefaultContainer = (index: number): ContainerConfig => ({
   name: `container-${index + 1}`,
@@ -507,9 +497,7 @@ export function buildServiceDocuments(
     for (const p of c.ports) {
       if (p.serviceType === 'none' || !p.containerPort) continue
       const group = groups.get(p.serviceType) || []
-      const exists = group.some(
-        (gp) => gp.containerPort === p.containerPort
-      )
+      const exists = group.some((gp) => gp.containerPort === p.containerPort)
       if (exists) continue
       group.push({
         ...(p.name && { name: p.name }),
@@ -609,7 +597,9 @@ export function generateWorkloadYaml(
   const scheduling = formData.podSpec?.scheduling
   const network = formData.podSpec?.network
   const schedulingFields = scheduling ? buildSchedulingPodSpec(scheduling) : {}
-  const nodeSelectorObj = pairsToRecord(formData.podSpec?.nodeSelectorPairs || [])
+  const nodeSelectorObj = pairsToRecord(
+    formData.podSpec?.nodeSelectorPairs || []
+  )
   const gracePeriod = Number(formData.podSpec?.terminationGracePeriodSeconds)
   const fsGroup = Number(formData.podSpec?.fsGroup)
   const initContainerConfigs = formData.containers.filter((c) => c.isInit)
@@ -766,7 +756,10 @@ export function generateWorkloadYaml(
         if (strategy.type === 'Recreate') {
           spec.strategy = { type: 'Recreate' }
         } else {
-          const maxSurge = formatQuantity(strategy.maxSurge, strategy.maxSurgeUnit)
+          const maxSurge = formatQuantity(
+            strategy.maxSurge,
+            strategy.maxSurgeUnit
+          )
           const maxUnavailable = formatQuantity(
             strategy.maxUnavailable,
             strategy.maxUnavailableUnit
@@ -847,7 +840,10 @@ export function parseYamlToFormData(
 
     const metadata = (workload.metadata || {}) as Record<string, unknown>
     const labelsObj = (metadata.labels || {}) as Record<string, string>
-    const annotationsObj = (metadata.annotations || {}) as Record<string, string>
+    const annotationsObj = (metadata.annotations || {}) as Record<
+      string,
+      string
+    >
     const toPairs = (obj: Record<string, string>) =>
       Object.entries(obj).map(([key, value]) => ({ key, value }))
 
@@ -872,8 +868,14 @@ export function parseYamlToFormData(
         })),
         pullPolicy: c.imagePullPolicy || 'IfNotPresent',
         resources: {
-          requests: { cpu: res.requests?.cpu || '', memory: res.requests?.memory || '' },
-          limits: { cpu: res.limits?.cpu || '', memory: res.limits?.memory || '' },
+          requests: {
+            cpu: res.requests?.cpu || '',
+            memory: res.requests?.memory || '',
+          },
+          limits: {
+            cpu: res.limits?.cpu || '',
+            memory: res.limits?.memory || '',
+          },
         },
         gpu:
           res.limits?.['nvidia.com/gpu'] === undefined ||
@@ -1007,7 +1009,8 @@ export function parseYamlToFormData(
       (tol) => ({
         id: nextSchedulingFormId(),
         key: tol.key || '',
-        operator: tol.operator === 'Exists' ? ('Exists' as const) : ('Equal' as const),
+        operator:
+          tol.operator === 'Exists' ? ('Exists' as const) : ('Equal' as const),
         value: tol.value || '',
         effect: (tol.effect || '') as TolerationForm['effect'],
         tolerationSeconds:
@@ -1018,7 +1021,8 @@ export function parseYamlToFormData(
             : String(tol.tolerationSeconds),
       })
     )
-    scheduling.priorityClassName = (podSpecDoc.priorityClassName as string) || ''
+    scheduling.priorityClassName =
+      (podSpecDoc.priorityClassName as string) || ''
 
     const base: DeploymentFormData = {
       ...fallback,

@@ -115,9 +115,6 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({
       })
     } catch (switchError) {
       console.error('Failed to switch cluster:', switchError)
-      toast.error('Failed to switch cluster', {
-        id: 'cluster-switch',
-      })
     } finally {
       setIsSwitching(false)
     }

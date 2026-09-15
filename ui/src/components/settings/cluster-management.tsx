@@ -313,15 +313,7 @@ export function ClusterManagement() {
         }
       }
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'clusterManagement.messages.createError',
-            'Failed to create cluster'
-          )
-      )
-    },
+    onError: () => {},
   })
 
   const importMutation = useMutation({
@@ -352,15 +344,7 @@ export function ClusterManagement() {
       setShowClusterDialog(false)
       setEditingCluster(null)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'clusterManagement.messages.updateError',
-            'Failed to update cluster'
-          )
-      )
-    },
+    onError: () => {},
   })
 
   // Delete cluster mutation
@@ -373,15 +357,7 @@ export function ClusterManagement() {
       )
       setDeletingCluster(null)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'clusterManagement.messages.deleteError',
-            'Failed to delete cluster'
-          )
-      )
-    },
+    onError: () => {},
   })
 
   const handleSubmitCluster = (clusterData: ClusterCreateRequest) => {

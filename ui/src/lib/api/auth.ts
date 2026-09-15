@@ -1,10 +1,4 @@
 import { authApiClient } from '../api-client'
-import type {
-  WebAuthnAssertionResponseJSON,
-  WebAuthnCreationOptionsJSON,
-  WebAuthnRegistrationResponseJSON,
-  WebAuthnRequestOptionsJSON,
-} from '../webauthn'
 
 export type CredentialProvider = 'password' | 'ldap'
 
@@ -117,14 +111,6 @@ export interface MFASetupResponse {
   qr_code: string
 }
 
-export interface PasskeyCredential {
-  id: number
-  name: string
-  credential_id: string
-  createdAt: string
-  last_used_at?: string
-}
-
 export const setupCurrentUserMFA = async (
   currentPassword: string
 ): Promise<MFASetupResponse> => {
@@ -145,58 +131,4 @@ export const disableCurrentUserMFA = async (
   code: string
 ): Promise<AuthUser> => {
   return authApiClient.post<AuthUser>('/users/me/mfa/disable', { code })
-}
-
-export const listCurrentUserPasskeys = async (): Promise<
-  PasskeyCredential[]
-> => {
-  const result = await authApiClient.get<{ passkeys: PasskeyCredential[] }>(
-    '/users/me/passkeys'
-  )
-  return result.passkeys
-}
-
-export const beginCurrentUserPasskeyRegistration = async (
-  name: string,
-  currentPassword: string,
-  mfaCode?: string
-): Promise<WebAuthnCreationOptionsJSON> => {
-  return authApiClient.post<WebAuthnCreationOptionsJSON>(
-    '/users/me/passkeys/begin',
-    {
-      name,
-      current_password: currentPassword,
-      ...(mfaCode ? { mfa_code: mfaCode } : {}),
-    }
-  )
-}
-
-export const finishCurrentUserPasskeyRegistration = async (
-  credential: WebAuthnRegistrationResponseJSON
-): Promise<PasskeyCredential> => {
-  return authApiClient.post<PasskeyCredential>(
-    '/users/me/passkeys/finish',
-    credential
-  )
-}
-
-export const deleteCurrentUserPasskey = async (id: number): Promise<void> => {
-  await authApiClient.delete<void>(`/users/me/passkeys/${id}`)
-}
-
-export const beginPasskeyLogin =
-  async (): Promise<WebAuthnRequestOptionsJSON> => {
-    return authApiClient.post<WebAuthnRequestOptionsJSON>(
-      '/auth/passkey/login/begin',
-      undefined,
-      { retryOnUnauthorized: false }
-    )
-  }
-
-export const finishPasskeyLogin = async (
-  credential: WebAuthnAssertionResponseJSON
-): Promise<void> => {
-  await authApiClient.post<void>('/auth/passkey/login/finish', credential, {
-    retryOnUnauthorized: false,
-  })
 }

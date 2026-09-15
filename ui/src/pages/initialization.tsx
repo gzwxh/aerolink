@@ -12,6 +12,8 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { createSuperUser, importClusters, useInitCheck } from '@/lib/api'
+import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
+import { translateError } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,6 +28,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Footer } from '@/components/footer'
 import { LanguageToggle } from '@/components/language-toggle'
+import { PasswordInput } from '@/components/password-input'
+import { PasswordRulesPanel } from '@/components/password-rules-panel'
 
 interface InitStepProps {
   step: number
@@ -111,6 +115,15 @@ export function InitializationPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [name, setName] = useState('')
 
+  // 初始化页只在「从未初始化」时出现，此时安全设置一定是默认值，
+  // 直接使用默认策略构建规则清单。
+  const passwordRules = buildPasswordRules(password, t)
+  const passwordValid = isPasswordRulesValid(passwordRules)
+  const passwordTouched = password.length > 0
+  const confirmMismatch =
+    confirmPassword.length > 0 && confirmPassword !== password
+  const [passwordFocused, setPasswordFocused] = useState(false)
+
   // Cluster form state
   const [kubeconfig, setKubeconfig] = useState('')
   const [isFileMode, setIsFileMode] = useState(false)
@@ -161,8 +174,8 @@ export function InitializationPage() {
     e.preventDefault()
     setError(null)
 
-    if (password !== confirmPassword) {
-      setError(t('initialization.step1.passwordMismatch'))
+    // 密码要求与两次一致性均由输入框下方实时提示，不再使用顶部横幅。
+    if (!passwordValid || confirmMismatch) {
       return
     }
 
@@ -183,11 +196,7 @@ export function InitializationPage() {
       }
       await refetch()
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t('initialization.step1.createError')
-      )
+      setError(translateError(err, t))
     } finally {
       setIsSubmitting(false)
     }
@@ -290,35 +299,61 @@ export function InitializationPage() {
                       onChange={(e) => setName(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="relative space-y-2">
                     <Label htmlFor="password">
                       {t('initialization.step1.passwordRequired')}
                     </Label>
-                    <Input
+                    <PasswordInput
+                      showLock
                       id="password"
-                      type="password"
                       placeholder={t(
                         'initialization.step1.passwordPlaceholder'
                       )}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onFocus={() => setPasswordFocused(true)}
+                      onBlur={() => setPasswordFocused(false)}
+                      aria-invalid={passwordTouched && !passwordValid}
+                      className={
+                        passwordTouched && !passwordValid
+                          ? 'border-red-500 focus-visible:ring-red-500'
+                          : undefined
+                      }
                       required
+                    />
+                    {/* 密码要求浮层：普通文本可直接选中复制；鼠标悬停面板时保持显示 */}
+                    <PasswordRulesPanel
+                      rules={passwordRules}
+                      touched={passwordTouched}
+                      focused={passwordFocused}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword">
                       {t('initialization.step1.confirmPasswordRequired')}
                     </Label>
-                    <Input
+                    <PasswordInput
+                      showLock
                       id="confirmPassword"
-                      type="password"
                       placeholder={t(
                         'initialization.step1.confirmPasswordPlaceholder'
                       )}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
+                      aria-invalid={confirmMismatch}
+                      className={
+                        confirmMismatch
+                          ? 'border-red-500 focus-visible:ring-red-500'
+                          : undefined
+                      }
                       required
                     />
+                    {/* 两次密码不一致：内联提示在确认密码框正下方 */}
+                    {confirmMismatch && (
+                      <p className="text-xs text-red-600">
+                        {t('initialization.step1.passwordMismatch')}
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="submit"

@@ -1,6 +1,6 @@
 # 认证
 
-Kite 支持通过 OAuth、密码用户、LDAP、MFA 和 Passkey 进行页面登录，也支持通过 API 密钥进行程序化访问。API 密钥会以一个特殊用户身份完成认证，并沿用与页面登录用户相同的 RBAC 模型。
+Kite 支持通过 OAuth、密码用户、LDAP 和 MFA 进行页面登录，也支持通过 API 密钥进行程序化访问。API 密钥会以一个特殊用户身份完成认证，并沿用与页面登录用户相同的 RBAC 模型。
 
 ## 页面登录
 
@@ -51,39 +51,10 @@ POST /api/users/me/mfa/disable
 }
 ```
 
-## Passkey 登录
-
-Passkey 适用于密码用户。用户可以在账号设置中注册和删除 Passkey。
-
-当前用户 Passkey 接口：
-
-```http
-GET /api/users/me/passkeys
-POST /api/users/me/passkeys/begin
-POST /api/users/me/passkeys/finish
-DELETE /api/users/me/passkeys/:id
-```
-
-注册 Passkey 时需要传名称和当前密码。如果该用户已启用 MFA，还需要传 `mfa_code`：
-
-```json
-{
-  "name": "Work laptop",
-  "current_password": "change-me",
-  "mfa_code": "123456"
-}
-```
-
-Passkey 登录使用 WebAuthn begin/finish 流程：
-
-```http
-POST /api/auth/passkey/login/begin
-POST /api/auth/passkey/login/finish
-```
 
 ## 认证设置
 
-管理员可以在 **设置 -> 认证** 中启用或停用密码登录、MFA 和 Passkey 登录。
+管理员可以在 **设置 -> 认证** 中启用或停用密码登录和 MFA。
 
 同样的设置也可以通过以下接口管理：
 
@@ -97,8 +68,7 @@ PUT /api/v1/admin/general-setting/
 ```json
 {
   "passwordLoginDisabled": false,
-  "enableMFA": true,
-  "enablePasskeyLogin": true
+  "enableMFA": true
 }
 ```
 

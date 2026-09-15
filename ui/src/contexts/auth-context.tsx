@@ -44,7 +44,6 @@ interface AuthContextType {
   oauthProviders: string[]
   loginPrompt: string
   mfaEnabled: boolean
-  passkeyLoginEnabled: boolean
   loginCaptchaEnabled: boolean
   capabilities: BootstrapCapabilities
   login: (provider?: string) => Promise<void>
@@ -211,7 +210,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     globalSidebarPreference.trim() !== ''
   const loginPrompt = bootstrap?.auth.loginPrompt || ''
   const mfaEnabled = bootstrap?.auth.mfaEnabled ?? true
-  const passkeyLoginEnabled = bootstrap?.auth.passkeyLoginEnabled ?? false
   const loginCaptchaEnabled = bootstrap?.auth.loginCaptchaEnabled ?? false
   const capabilities = bootstrap?.capabilities ?? defaultCapabilities
 
@@ -228,7 +226,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       oauthProviders,
       loginPrompt,
       mfaEnabled,
-      passkeyLoginEnabled,
       loginCaptchaEnabled,
       capabilities,
       login,
@@ -246,7 +243,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     bootstrap?.auth.oauthProviders,
     loginPrompt,
     mfaEnabled,
-    passkeyLoginEnabled,
     loginCaptchaEnabled,
     capabilities,
     login,

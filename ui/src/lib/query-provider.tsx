@@ -3,7 +3,9 @@ import { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // Create a client
-const queryClient = new QueryClient({
+// Exported so non-hook modules (e.g. the operation-failure reporter) can
+// invalidate notification queries after writing an inbox message.
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: true,

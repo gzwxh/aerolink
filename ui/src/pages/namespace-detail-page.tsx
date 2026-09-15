@@ -24,7 +24,7 @@ import {
 } from '@/lib/api'
 import { getPodStatus } from '@/lib/k8s'
 import { getResourceDetailPath } from '@/lib/resource-catalog'
-import { getAge, translateError } from '@/lib/utils'
+import { getAge } from '@/lib/utils'
 import { useCluster } from '@/hooks/use-cluster'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -245,7 +245,7 @@ export function NamespaceDetailPage({ name }: { name: string }) {
       queryClient.invalidateQueries()
       navigate('/namespaces')
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       setDeleting(false)
     }
   }

@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
+import { useAuth } from '@/contexts/auth-context'
 import { IconLoader2, IconShieldLock } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
-import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import {
   Card,

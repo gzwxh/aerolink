@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { IconEdit, IconServer } from '@tabler/icons-react'
+import { IconEdit, IconEye, IconServer } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { Cluster } from '@/types/api'
 import { ClusterCreateRequest } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -71,6 +73,29 @@ function ClusterDialogContent({
 }: Omit<ClusterDialogProps, 'open'>) {
   const { t } = useTranslation()
   const isEditMode = !!cluster
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false)
+
+  // 查看已存的 kubeconfig：属于凭据暴露操作，后端受 MFA step-up 保护——
+  // 开启 MFA 且已绑定的管理员会先弹出动态码验证，验证通过后自动重放请求。
+  const handleViewConfig = async () => {
+    if (!cluster?.id) return
+    setIsLoadingConfig(true)
+    try {
+      const data = await apiClient.get<{ config: string }>(
+        `/admin/clusters/${encodeURIComponent(cluster.name)}/kubeconfig`
+      )
+      handleChange('config', data.config)
+      toast.success(
+        t('clusterManagement.dialog.configLoaded', '当前配置已加载')
+      )
+    } catch {
+      toast.error(
+        t('clusterManagement.dialog.configLoadFailed', '加载当前配置失败')
+      )
+    } finally {
+      setIsLoadingConfig(false)
+    }
+  }
 
   const [formData, setFormData] = useState(() => createClusterFormData(cluster))
 
@@ -178,10 +203,26 @@ function ClusterDialogContent({
 
         {!formData.inCluster && !formData.clusterAgent && (
           <div className="space-y-2">
-            <Label htmlFor="cluster-config">
-              {t('clusterManagement.dialog.config', 'Kubeconfig')}
-              {!isEditMode && ' *'}
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="cluster-config">
+                {t('clusterManagement.dialog.config', 'Kubeconfig')}
+                {!isEditMode && ' *'}
+              </Label>
+              {isEditMode && cluster?.id && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+                  disabled={isLoadingConfig}
+                  onClick={handleViewConfig}
+                >
+                  <IconEye className="h-3.5 w-3.5" />
+                  {t(
+                    'clusterManagement.dialog.viewCurrentConfig',
+                    '查看当前配置'
+                  )}
+                </button>
+              )}
+            </div>
             {isEditMode && (
               <p className="text-xs text-muted-foreground">
                 {t(

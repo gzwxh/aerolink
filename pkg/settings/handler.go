@@ -32,7 +32,6 @@ func HandleGetGeneralSetting(c *gin.Context) {
 		"enableVersionCheck":    setting.EnableVersionCheck,
 		"passwordLoginDisabled": setting.PasswordLoginDisabled,
 		"enableMFA":             setting.EnableMFA,
-		"enablePasskeyLogin":    setting.EnablePasskeyLogin,
 		"loginPrompt":           setting.LoginPrompt,
 	})
 }
@@ -52,7 +51,6 @@ type UpdateGeneralSettingRequest struct {
 	EnableVersionCheck    *bool   `json:"enableVersionCheck"`
 	PasswordLoginDisabled *bool   `json:"passwordLoginDisabled"`
 	EnableMFA             *bool   `json:"enableMFA"`
-	EnablePasskeyLogin    *bool   `json:"enablePasskeyLogin"`
 	LoginPrompt           *string `json:"loginPrompt"`
 }
 
@@ -186,9 +184,6 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 	if req.EnableMFA != nil {
 		updates["enable_mfa"] = *req.EnableMFA
 	}
-	if req.EnablePasskeyLogin != nil {
-		updates["enable_passkey_login"] = *req.EnablePasskeyLogin
-	}
 	if shouldUpdateAIAPIKey {
 		updates["ai_api_key"] = model.SecretString(aiAPIKey)
 	}
@@ -216,7 +211,6 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		"enableVersionCheck":    updated.EnableVersionCheck,
 		"passwordLoginDisabled": updated.PasswordLoginDisabled,
 		"enableMFA":             updated.EnableMFA,
-		"enablePasskeyLogin":    updated.EnablePasskeyLogin,
 		"loginPrompt":           updated.LoginPrompt,
 	})
 }

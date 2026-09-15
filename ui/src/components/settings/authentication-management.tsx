@@ -21,9 +21,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { PasswordInput } from '@/components/password-input'
 
-import { OAuthProviderManagement } from './oauth-provider-management'
 import { LDAPImportDialog } from './ldap-import-dialog'
+import { OAuthProviderManagement } from './oauth-provider-management'
 
 type AuthenticationFormData = LDAPSetting
 
@@ -80,7 +81,6 @@ export function AuthenticationManagement() {
     createDefaultSettings
   )
   const [passwordLoginEnabled, setPasswordLoginEnabled] = useState(true)
-  const [passkeyLoginEnabled, setPasskeyLoginEnabled] = useState(true)
 
   useEffect(() => {
     setFormData(toFormData(data))
@@ -89,7 +89,6 @@ export function AuthenticationManagement() {
   useEffect(() => {
     if (generalSetting) {
       setPasswordLoginEnabled(!generalSetting.passwordLoginDisabled)
-      setPasskeyLoginEnabled(generalSetting.enablePasskeyLogin ?? true)
     }
   }, [generalSetting])
 
@@ -97,12 +96,10 @@ export function AuthenticationManagement() {
     mutationFn: (params: {
       ldap: LDAPSettingUpdateRequest
       passwordLoginDisabled: boolean
-      enablePasskeyLogin: boolean
     }) => {
       const promises: Promise<unknown>[] = [
         updateGeneralSetting({
           passwordLoginDisabled: params.passwordLoginDisabled,
-          enablePasskeyLogin: params.enablePasskeyLogin,
         }),
         updateLDAPSetting(params.ldap),
       ]
@@ -121,8 +118,8 @@ export function AuthenticationManagement() {
         )
       )
     },
-    onError: (error) => {
-      toast.error(translateError(error, t))
+    onError: () => {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 
@@ -161,7 +158,6 @@ export function AuthenticationManagement() {
     mutation.mutate({
       ldap: payload,
       passwordLoginDisabled: !passwordLoginEnabled,
-      enablePasskeyLogin: passkeyLoginEnabled,
     })
   }
 
@@ -226,13 +222,10 @@ export function AuthenticationManagement() {
       setLdapSyncResult(status.lastResult ?? null)
       setLdapSyncAt(status.lastSyncAt)
       toast.success(
-        t(
-          'authenticationManagement.ldap.sync.started',
-          'LDAP sync started'
-        )
+        t('authenticationManagement.ldap.sync.started', 'LDAP sync started')
       )
     } catch (err) {
-      toast.error(translateError(err as Error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -319,43 +312,6 @@ export function AuthenticationManagement() {
                 </div>
               </div>
             )}
-          </div>
-
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between p-3">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">
-                  {t('authenticationManagement.mfa.title', 'MFA')}
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {t(
-                    'authenticationManagement.mfa.description',
-                    'Managed by the global MFA policy in Security settings.'
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between p-3">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">
-                  {t('authenticationManagement.passkey.title', 'Passkey Login')}
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {t(
-                    'authenticationManagement.passkey.description',
-                    'Allow users to register passkeys and sign in with a passkey.'
-                  )}
-                </p>
-              </div>
-              <Switch
-                checked={passkeyLoginEnabled}
-                onCheckedChange={setPasskeyLoginEnabled}
-                disabled={!generalSetting}
-              />
-            </div>
           </div>
 
           <div className="flex justify-end">
@@ -480,9 +436,8 @@ export function AuthenticationManagement() {
                         'Bind Password'
                       )}
                     </Label>
-                    <Input
+                    <PasswordInput
                       id="ldap-bind-password"
-                      type="password"
                       value={formData.bindPassword}
                       onChange={(e) =>
                         setFormData((prev) => ({
@@ -658,7 +613,10 @@ export function AuthenticationManagement() {
                         id="ldap-auto-sync"
                         checked={formData.autoSync}
                         onCheckedChange={(checked) =>
-                          setFormData((prev) => ({ ...prev, autoSync: checked }))
+                          setFormData((prev) => ({
+                            ...prev,
+                            autoSync: checked,
+                          }))
                         }
                       />
                     </div>

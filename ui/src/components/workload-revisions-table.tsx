@@ -123,7 +123,7 @@ export function WorkloadRevisionsTable({
     try {
       await rollbackWorkload(resourceType, namespace, name, revision)
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       setRollingBackRevision(null)
       return false
     }

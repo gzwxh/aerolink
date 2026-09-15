@@ -23,7 +23,6 @@ type bootstrapAuthOptions struct {
 	LoginPrompt         string   `json:"loginPrompt"`
 	MFAEnabled          bool     `json:"mfaEnabled"`
 	MFAPolicy           string   `json:"mfaPolicy"`
-	PasskeyLoginEnabled bool     `json:"passkeyLoginEnabled"`
 	LoginCaptchaEnabled bool     `json:"loginCaptchaEnabled"`
 }
 
@@ -111,7 +110,7 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 	// LDAP is the primary credential method when enabled. Local password
 	// sign-in stays available as a secondary escape hatch so a built-in admin
 	// can always sign in and manage grants (directory users may lack admin
-	// rights). Passkey stays hidden in LDAP mode.
+	// rights).
 	if setting != nil && !setting.PasswordLoginDisabled {
 		credentialProviders = append(credentialProviders, model.AuthProviderPassword)
 	}
@@ -145,7 +144,6 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 		LoginPrompt:         loginPrompt,
 		MFAEnabled:          mfaEnabled,
 		MFAPolicy:           mfaPolicy,
-		PasskeyLoginEnabled: !ldapEnabled && setting != nil && setting.EnablePasskeyLogin,
 		LoginCaptchaEnabled: loginCaptchaEnabled,
 	}
 }

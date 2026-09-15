@@ -16,7 +16,7 @@ import {
   getResourceDetailPath,
   getResourceQueryKey,
 } from '@/lib/resource-metadata'
-import { isVersionAtLeast, translateError } from '@/lib/utils'
+import { isVersionAtLeast } from '@/lib/utils'
 import { useCluster } from '@/hooks/use-cluster'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -143,7 +143,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
       await refetch()
       setIsResizeDialogOpen(false)
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsResizing(false)
     }

@@ -173,14 +173,7 @@ export function APIKeyManagement() {
         })
       )
     },
-    onError: () => {
-      toast.error(
-        t('common.messages.failedToCreate', {
-          resource: t('common.fields.apiKey', 'API Key'),
-          defaultValue: 'Failed to create API Key. Please try again.',
-        })
-      )
-    },
+    onError: () => {},
   })
 
   const deleteMutation = useMutation({
@@ -195,14 +188,7 @@ export function APIKeyManagement() {
         })
       )
     },
-    onError: () => {
-      toast.error(
-        t('common.messages.failedToDelete', {
-          resource: t('common.fields.apiKey', 'API Key'),
-          defaultValue: 'Failed to delete API Key. Please try again.',
-        })
-      )
-    },
+    onError: () => {},
   })
 
   const handleCreate = useCallback(

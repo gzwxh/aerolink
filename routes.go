@@ -88,8 +88,6 @@ func registerAuthRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler) {
 	authGroup.POST("/login/password", authHandler.PasswordLogin)
 	authGroup.GET("/captcha", authHandler.Captcha)
 	authGroup.POST("/login/ldap", authHandler.LDAPLogin)
-	authGroup.POST("/passkey/login/begin", authHandler.PasskeyLoginBegin)
-	authGroup.POST("/passkey/login/finish", authHandler.PasskeyLoginFinish)
 	authGroup.GET("/login", authHandler.Login)
 	authGroup.GET("/callback", authHandler.Callback)
 	authGroup.POST("/logout", authHandler.Logout)
@@ -105,10 +103,6 @@ func registerUserRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler) {
 	userGroup.POST("/me/mfa/enable", authHandler.RequireAuth(), users.EnableCurrentUserMFA)
 	userGroup.POST("/me/mfa/disable", authHandler.RequireAuth(), users.DisableCurrentUserMFA)
 	userGroup.POST("/me/mfa/verify", authHandler.RequireAuth(), users.VerifyCurrentUserMFA)
-	userGroup.GET("/me/passkeys", authHandler.RequireAuth(), users.ListCurrentUserPasskeys)
-	userGroup.POST("/me/passkeys/begin", authHandler.RequireAuth(), users.BeginCurrentUserPasskeyRegistration)
-	userGroup.POST("/me/passkeys/finish", authHandler.RequireAuth(), users.FinishCurrentUserPasskeyRegistration)
-	userGroup.DELETE("/me/passkeys/:id", authHandler.RequireAuth(), users.DeleteCurrentUserPasskey)
 	userGroup.POST("/sidebar_preference", authHandler.RequireAuth(), users.UpdateSidebarPreference)
 }
 
@@ -149,6 +143,10 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	clusterAPI.POST("/import", cm.ImportClustersFromKubeconfig)
 	clusterAPI.PUT("/:id", cm.UpdateCluster)
 	clusterAPI.DELETE("/:id", cm.DeleteCluster)
+	// 查看已存的 kubeconfig 属于凭据暴露操作：开启 MFA 后需要二次校验动态码。
+	// 注意参数名必须是 :name（GET 树中已有 /:name/namespaces 等通配）。
+	clusterAPI.GET("/:name/kubeconfig",
+		authHandler.RequireMFAStepUp(), cm.GetClusterKubeconfig)
 
 	rbacAPI := adminAPI.Group("/roles")
 	rbacAPI.GET("/", rbac.ListRoles)
@@ -214,6 +212,8 @@ func registerProtectedRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, 
 	api.GET("/notifications", authHandler.RequireAuth(), notification.HandleListNotifications)
 	api.GET("/notifications/unread-count", authHandler.RequireAuth(), notification.HandleNotificationUnreadCount)
 	api.POST("/notifications/read", authHandler.RequireAuth(), notification.HandleMarkNotificationsRead)
+	api.POST("/notifications/client-events", authHandler.RequireAuth(), notification.HandleCreateClientNotification)
+	api.POST("/notifications/clear", authHandler.RequireAuth(), notification.HandleClearNotifications)
 	defaultAPI := api.Group("")
 	defaultAPI.Use(authHandler.RequireAuth(), middleware.ClusterMiddleware(cm))
 	registerClusterProtectedRoutes(defaultAPI, helmChartsHandler)

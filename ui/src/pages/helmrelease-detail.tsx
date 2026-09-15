@@ -571,7 +571,7 @@ function HelmReleaseHistoryTable({
       toast.success(t('helm.messages.rollbackStarted'))
       await Promise.all([refetchHistory(), onRollbackComplete()])
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setRollingBackRevision(null)
     }

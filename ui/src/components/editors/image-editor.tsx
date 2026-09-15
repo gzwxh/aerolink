@@ -13,10 +13,7 @@ interface ImageEditorProps {
   onUpdate: (updates: Partial<Container>) => void
 }
 
-export function ImageEditor({
-  container,
-  onUpdate,
-}: ImageEditorProps) {
+export function ImageEditor({ container, onUpdate }: ImageEditorProps) {
   const { t } = useTranslation()
   const [showTagDropdown, setShowTagDropdown] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)

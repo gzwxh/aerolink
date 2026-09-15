@@ -139,15 +139,7 @@ export function OAuthProviderManagement() {
       )
       setShowProviderDialog(false)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'oauthManagement.messages.createError',
-            'Failed to create OAuth provider'
-          )
-      )
-    },
+    onError: () => {},
   })
 
   // Update provider mutation
@@ -171,15 +163,7 @@ export function OAuthProviderManagement() {
       setShowProviderDialog(false)
       setEditingProvider(null)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'oauthManagement.messages.updateError',
-            'Failed to update OAuth provider'
-          )
-      )
-    },
+    onError: () => {},
   })
 
   // Delete provider mutation
@@ -196,15 +180,7 @@ export function OAuthProviderManagement() {
       )
       setDeletingProvider(null)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'oauthManagement.messages.deleteError',
-            'Failed to delete OAuth provider'
-          )
-      )
-    },
+    onError: () => {},
   })
 
   const handleSubmitProvider = (providerData: OAuthProviderCreateRequest) => {

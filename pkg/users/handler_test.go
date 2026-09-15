@@ -210,7 +210,7 @@ func TestUpdateSidebarPreferenceHonorsGlobalPolicy(t *testing.T) {
 
 // setupUserHandlerTestDB 为每个用例准备一套隔离的测试环境：
 // 打开内存 SQLite 并迁移 User / GeneralSetting 表，写入默认全局设置
-// （打开 MFA 与 Passkey）和本地密码用户 alice，最后用 t.Cleanup 还原
+// （打开 MFA）和本地密码用户 alice，最后用 t.Cleanup 还原
 // 被替换的全局状态（model.DB、加密密钥、JWT 密钥）并关闭连接。
 func setupUserHandlerTestDB(t *testing.T) *model.User {
 	t.Helper()
@@ -238,7 +238,6 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 		NodeTerminalImage:  model.DefaultGeneralNodeTerminalImage,
 		EnableVersionCheck: true,
 		EnableMFA:          true,
-		EnablePasskeyLogin: true,
 		JWTSecret:          model.SecretString(common.JwtSecret),
 	}
 	if err := db.Create(&setting).Error; err != nil {

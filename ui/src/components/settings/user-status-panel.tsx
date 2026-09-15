@@ -1,18 +1,11 @@
-import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { setUserEnabled } from '@/lib/api'
 import { fetchAPI } from '@/lib/api/shared'
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 interface AutoDisabledUser {
   id: number
@@ -48,29 +41,23 @@ export function UserStatusPanel() {
         })
       )
       await refetch()
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t('securitySettings.userStatus.restoreFailed', '恢复失败')
-      )
-    }
+    } catch (error) {}
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
+    <div className="rounded-lg border">
+      <div className="bg-muted/40 px-3 py-2">
+        <div className="text-sm font-medium">
           {t('securitySettings.userStatus.title', '用户状态')}
-        </CardTitle>
-        <CardDescription>
+        </div>
+        <p className="text-xs text-muted-foreground">
           {t(
             'securitySettings.userStatus.description',
             '被「不活跃用户自动禁用」关闭的账号会列在这里，可手动恢复；恢复后用户需要重新登录。'
           )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
+        </p>
+      </div>
+      <div className="space-y-2 px-3 py-3">
         {isLoading && (
           <p className="text-sm text-muted-foreground">
             {t('common.messages.loading', '加载中...')}
@@ -112,7 +99,7 @@ export function UserStatusPanel() {
             </Button>
           </div>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

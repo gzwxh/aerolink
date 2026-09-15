@@ -18,20 +18,14 @@ import {
   fetchKnownGroups,
   fetchUserList,
   renameGroup as renameGroupApi,
-  useRoleList,
   updateUser,
+  useRoleList,
 } from '@/lib/api'
+import { cn, formatDate } from '@/lib/utils'
 import { useCluster } from '@/hooks/use-cluster'
-import { cn, formatDate, translateError } from '@/lib/utils'
-import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -42,6 +36,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { MultiSelect } from '@/components/multi-select'
 
 interface MemberInfo {
@@ -114,10 +109,7 @@ export function UserGroupsTab() {
               groups: u.oidc_groups || [],
             }))
           )
-          if (
-            collected.length >= res.total ||
-            (res.users || []).length === 0
-          ) {
+          if (collected.length >= res.total || (res.users || []).length === 0) {
             break
           }
         }
@@ -174,6 +166,8 @@ export function UserGroupsTab() {
 
     for (const user of allUsers) {
       for (const group of user.groups) {
+        // 历史脏数据可能带空字符串组名，跳过避免出现"空名组"。
+        if (!group.trim()) continue
         const entry = ensure(group)
         const member: MemberInfo = user
         if (isNative(user.provider)) {
@@ -184,9 +178,7 @@ export function UserGroupsTab() {
       }
     }
 
-    return Array.from(map.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    )
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [roles, allUsers, persistedGroups])
 
   const filtered = useMemo(() => {
@@ -195,8 +187,7 @@ export function UserGroupsTab() {
     return groups.filter((g) => g.name.toLowerCase().includes(q))
   }, [groups, search])
 
-  const selectedGroup =
-    filtered.find((g) => g.name === selected) ?? filtered[0]
+  const selectedGroup = filtered.find((g) => g.name === selected) ?? filtered[0]
 
   const allMembers = selectedGroup
     ? [...selectedGroup.editableMembers, ...selectedGroup.externalMembers]
@@ -211,11 +202,10 @@ export function UserGroupsTab() {
     [allUsers]
   )
 
-  const setMemberGroups = async (
-    member: MemberInfo,
-    nextGroups: string[]
-  ) => {
-    await updateUser(member.id, { oidc_groups: nextGroups })
+  const setMemberGroups = async (member: MemberInfo, nextGroups: string[]) => {
+    // 后端 UpdateUser 的请求字段是 groups（oidc_groups 是用户列表的返回字段名，
+    // 用错字段后端会静默忽略更新并返回 200，导致"添加成功"的假象）。
+    await updateUser(member.id, { groups: nextGroups })
     setAllUsers((prev) =>
       prev.map((u) => (u.id === member.id ? { ...u, groups: nextGroups } : u))
     )
@@ -262,7 +252,7 @@ export function UserGroupsTab() {
       setNewGroupName('')
       setNewGroupMembers([])
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsCreating(false)
     }
@@ -282,7 +272,7 @@ export function UserGroupsTab() {
       setShowAddMember(false)
       setAddMemberSelection([])
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsMutating(false)
     }
@@ -299,7 +289,7 @@ export function UserGroupsTab() {
       await invalidate()
       toast.success(t('userManagement.memberRemoved', 'Member removed'))
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsMutating(false)
     }
@@ -358,7 +348,7 @@ export function UserGroupsTab() {
       setShowRename(false)
     } catch (err) {
       await invalidate()
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsMutating(false)
     }
@@ -389,7 +379,7 @@ export function UserGroupsTab() {
       setShowDelete(false)
     } catch (err) {
       await invalidate()
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsMutating(false)
     }
@@ -707,10 +697,7 @@ export function UserGroupsTab() {
       )}
 
       {showAddMember && selectedGroup && (
-        <Dialog
-          open
-          onOpenChange={(open) => !open && setShowAddMember(false)}
-        >
+        <Dialog open onOpenChange={(open) => !open && setShowAddMember(false)}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
@@ -739,7 +726,10 @@ export function UserGroupsTab() {
                   'common.placeholders.selectUsers',
                   'Select users...'
                 )}
-                emptyText={t('common.messages.noOptionsFound', 'No options found')}
+                emptyText={t(
+                  'common.messages.noOptionsFound',
+                  'No options found'
+                )}
               />
             </div>
             <DialogFooter>
@@ -764,10 +754,7 @@ export function UserGroupsTab() {
         </Dialog>
       )}
       {showRename && selectedGroup && (
-        <Dialog
-          open
-          onOpenChange={(open) => !open && setShowRename(false)}
-        >
+        <Dialog open onOpenChange={(open) => !open && setShowRename(false)}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>

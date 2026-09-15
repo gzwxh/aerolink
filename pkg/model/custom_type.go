@@ -94,7 +94,16 @@ func (s *SliceString) Scan(value interface{}) error {
 	default:
 		return fmt.Errorf("cannot scan %T into SliceString", value)
 	}
-	*s = SliceString(strArray)
+	// 历史数据可能存有 "a," / ",a" / "" 这类值，Split 会产生空字符串元素；
+	// 它们会被前端当成一个"空名组"，进而触发对 /admin/groups/ 的非法请求。
+	// 这里在读取侧统一清洗：去空白、丢弃空元素。
+	cleaned := make(SliceString, 0, len(strArray))
+	for _, item := range strArray {
+		if item = strings.TrimSpace(item); item != "" {
+			cleaned = append(cleaned, item)
+		}
+	}
+	*s = cleaned
 	return nil
 }
 
@@ -102,7 +111,16 @@ func (s SliceString) Value() (driver.Value, error) {
 	if s == nil {
 		return "", nil
 	}
-	return strings.Join(s, ","), nil
+	cleaned := make(SliceString, 0, len(s))
+	for _, item := range s {
+		if item = strings.TrimSpace(item); item != "" {
+			cleaned = append(cleaned, item)
+		}
+	}
+	if len(cleaned) == 0 {
+		return "", nil
+	}
+	return strings.Join(cleaned, ","), nil
 }
 
 // JSONField stores arbitrary JSON data

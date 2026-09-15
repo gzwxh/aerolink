@@ -37,7 +37,7 @@ Create and edit Kubernetes resources, manage Helm releases, open Pod and Node te
 
 ### Govern
 
-Manage team access with OAuth, MFA, passkeys, users, RBAC, role mappings, and audit logs across multiple clusters.
+Manage team access with OAuth, MFA, users, RBAC, role mappings, and audit logs across multiple clusters.
 
 ## Where Kite fits
 

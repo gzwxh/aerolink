@@ -118,10 +118,7 @@ export function LDAPImportDialog({
     }
     setImporting(true)
     try {
-      const result = await importLDAPUsers(
-        Array.from(selected),
-        enableImported
-      )
+      const result = await importLDAPUsers(Array.from(selected), enableImported)
       const refreshed = await fetchLDAPImportCandidates()
       setUsers(refreshed)
       setSelected(new Set())
@@ -139,7 +136,7 @@ export function LDAPImportDialog({
       queryClient.invalidateQueries({ queryKey: ['user-list'] })
       queryClient.invalidateQueries({ queryKey: ['ldap-setting'] })
     } catch (err) {
-      toast.error(translateError(err as Error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setImporting(false)
     }
@@ -213,10 +210,9 @@ export function LDAPImportDialog({
                 })}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {t(
-                  'authenticationManagement.ldap.import.enableImportedHint',
-                  { defaultValue: 'New users are disabled by default.' }
-                )}
+                {t('authenticationManagement.ldap.import.enableImportedHint', {
+                  defaultValue: 'New users are disabled by default.',
+                })}
               </p>
             </div>
             <Switch
@@ -252,7 +248,9 @@ export function LDAPImportDialog({
                   <label
                     key={u.username}
                     className={`flex items-center gap-3 px-3 py-2 ${
-                      disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                      disabled
+                        ? 'opacity-60 cursor-not-allowed'
+                        : 'cursor-pointer'
                     }`}
                   >
                     <Checkbox

@@ -196,6 +196,20 @@ func (h *AuthHandler) blockSensitiveOperation(c *gin.Context, user *model.User) 
 	if !isSensitiveOperation(c.Request.Method, c.Request.URL.Path) {
 		return false
 	}
+	if !h.mfaStepUpRequired(c, user) {
+		return false
+	}
+	c.JSON(http.StatusForbidden, gin.H{"error": "mfa_verification_required"})
+	c.Abort()
+	return true
+}
+
+// mfaStepUpRequired reports whether this browser must re-verify an MFA code
+// before the request may be served.
+func (h *AuthHandler) mfaStepUpRequired(c *gin.Context, user *model.User) bool {
+	if user == nil || !user.MFAEnabled {
+		return false
+	}
 	setting, err := model.GetSecuritySetting()
 	if err != nil {
 		klog.Warningf("step-up verification skipped: failed to load security setting: %v", err)
@@ -207,10 +221,23 @@ func (h *AuthHandler) blockSensitiveOperation(c *gin.Context, user *model.User) 
 	if mfa.IsTrusted(c, user.ID) {
 		return false
 	}
-
-	c.JSON(http.StatusForbidden, gin.H{"error": "mfa_verification_required"})
-	c.Abort()
 	return true
+}
+
+// RequireMFAStepUp gates routes that expose sensitive data (such as a stored
+// cluster kubeconfig): browsers that have not recently verified an MFA code
+// get a 403 mfa_verification_required, which the SPA turns into the MFA
+// re-verification prompt and replays the request after success.
+func (h *AuthHandler) RequireMFAStepUp() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := c.MustGet("user").(model.User)
+		if h.mfaStepUpRequired(c, &user) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "mfa_verification_required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 // mfaEnrollmentPaths stay reachable while the security policy forces the user to

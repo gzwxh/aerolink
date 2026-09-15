@@ -11,7 +11,6 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
-import { translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -111,7 +110,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -143,7 +142,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -177,7 +176,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
         )
         setRefreshInterval(1000)
       } catch (err) {
-        toast.error(translateError(err, t))
+        // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       }
     },
     [name, namespace, statefulset, t]

@@ -1,15 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+
 import { UserGroupsTab } from './user-groups-tab'
 import { UserManagement } from './user-management'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Tabs, TabsContent } from '@/components/ui/tabs'
 
 /**
  * 用户与用户组合并后的容器：/settings/user?tab=users | ?tab=group

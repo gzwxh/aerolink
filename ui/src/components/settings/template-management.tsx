@@ -17,7 +17,6 @@ import {
   updateTemplate,
   useTemplates,
 } from '@/lib/api'
-import { translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -65,7 +64,7 @@ export function TemplateManagement() {
     },
     onError: (error) => {
       console.error('Error creating template:', error)
-      toast.error(translateError(error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 
@@ -89,7 +88,7 @@ export function TemplateManagement() {
     },
     onError: (error) => {
       console.error('Error updating template:', error)
-      toast.error(translateError(error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 
@@ -107,7 +106,7 @@ export function TemplateManagement() {
     },
     onError: (error) => {
       console.error('Error deleting template:', error)
-      toast.error(translateError(error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 

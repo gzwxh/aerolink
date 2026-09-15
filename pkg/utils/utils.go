@@ -26,9 +26,21 @@ func InjectKiteBase(htmlContent string, base string) string {
 
 	htmlContent = strings.ReplaceAll(htmlContent, kiteBasePlaceholder, html.EscapeString(assetBase))
 
-	baseScript := fmt.Sprintf(`<script>window.__dynamic_base__=%q;</script>`, assetBase)
+	// The runtime base must reach the SPA before its bundle runs. It cannot be
+	// an inline <script>: the served Content-Security-Policy is
+	// script-src 'self', which blocks inline execution. It is loaded as a
+	// same-origin external file served at {base}/config.js (see setupStatic).
+	baseScript := fmt.Sprintf(`<script src="%s/config.js"></script>`, html.EscapeString(assetBase))
 	re := regexp.MustCompile(`<head>`)
 	return re.ReplaceAllString(htmlContent, "<head>\n    "+baseScript)
+}
+
+// ConfigScript renders the body of the external config.js that publishes the
+// runtime base path to the SPA (window.__dynamic_base__). The value is the
+// asset base ("." semantics already resolved by the caller): "" for root or
+// the configured sub path.
+func ConfigScript(assetBase string) string {
+	return fmt.Sprintf(`window.__dynamic_base__=%q;`, assetBase)
 }
 
 func RandomString(length int) string {

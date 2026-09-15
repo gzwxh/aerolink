@@ -7,7 +7,6 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { applyResource } from '@/lib/api'
-import { translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -186,7 +185,7 @@ export function ServiceCreatePage() {
       toast.success(t('common.messages.applied', 'Applied successfully'))
       navigate(`/services/${formData.namespace}/${formData.name}`)
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsCreating(false)
     }

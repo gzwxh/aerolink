@@ -6,14 +6,9 @@ import {
   NODE_ROLE_NAME_PREFIX,
   nodePermissionPresets,
 } from '@/lib/node-permissions'
-import { RequireAdmin } from '@/components/require-admin'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { RequireAdmin } from '@/components/require-admin'
 
 import { GroupGrantsView } from './group-grants-view'
 import { NamespaceGrantsView } from './namespace-grants-view'
@@ -78,46 +73,48 @@ export function RBACView() {
             onValueChange={handleTabChange}
             className="flex flex-row gap-4 space-y-0 [&>[role=tabpanel]]:min-w-0 [&>[role=tabpanel]]:flex-1"
           >
-            
-          <TabsContent value="roles">
-            <RBACManagement />
-          </TabsContent>
-          <TabsContent value="user">
-            <UserGrantsView
-              key={subject || 'all'}
-              initialSubject={subject}
-              onOpenGroup={openGroup}
-            />
-          </TabsContent>
-          <TabsContent value="group">
-            <GroupGrantsView key={subject || 'all'} initialSubject={subject} />
-          </TabsContent>
-          <TabsContent value="namespace">
-            <NamespaceGrantsView
-              key={`${searchParams.get('cluster') || 'all'}-${searchParams.get('namespace') || 'all'}`}
-              initialCluster={searchParams.get('cluster') || undefined}
-              initialNamespace={searchParams.get('namespace') || undefined}
-            />
-          </TabsContent>
-          <TabsContent value="node">
-            <RBACManagement
-              resourceFilter={NODE_RESOURCE}
-              defaultResources={[NODE_RESOURCE]}
-              lockedResources={[NODE_RESOURCE]}
-              hideNamespacePanel
-              namePrefix={NODE_ROLE_NAME_PREFIX}
-              startInViewMode
-              permissionPanelTitle={t(
-                'rbac.nodePermissions.panelTitle',
-                'Node permissions'
-              )}
-              permissionHint={t(
-                'rbac.nodePermissionHint',
-                'Buttons on the node pages are shown only when the matching permission is granted.'
-              )}
-              permissionPresets={nodePermissionPresets(t)}
-            />
-          </TabsContent>
+            <TabsContent value="roles">
+              <RBACManagement />
+            </TabsContent>
+            <TabsContent value="user">
+              <UserGrantsView
+                key={subject || 'all'}
+                initialSubject={subject}
+                onOpenGroup={openGroup}
+              />
+            </TabsContent>
+            <TabsContent value="group">
+              <GroupGrantsView
+                key={subject || 'all'}
+                initialSubject={subject}
+              />
+            </TabsContent>
+            <TabsContent value="namespace">
+              <NamespaceGrantsView
+                key={`${searchParams.get('cluster') || 'all'}-${searchParams.get('namespace') || 'all'}`}
+                initialCluster={searchParams.get('cluster') || undefined}
+                initialNamespace={searchParams.get('namespace') || undefined}
+              />
+            </TabsContent>
+            <TabsContent value="node">
+              <RBACManagement
+                resourceFilter={NODE_RESOURCE}
+                defaultResources={[NODE_RESOURCE]}
+                lockedResources={[NODE_RESOURCE]}
+                hideNamespacePanel
+                namePrefix={NODE_ROLE_NAME_PREFIX}
+                startInViewMode
+                permissionPanelTitle={t(
+                  'rbac.nodePermissions.panelTitle',
+                  'Node permissions'
+                )}
+                permissionHint={t(
+                  'rbac.nodePermissionHint',
+                  'Buttons on the node pages are shown only when the matching permission is granted.'
+                )}
+                permissionPresets={nodePermissionPresets(t)}
+              />
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>

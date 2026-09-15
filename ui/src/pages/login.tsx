@@ -12,15 +12,11 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, useSearchParams } from 'react-router-dom'
 
 import {
-  beginPasskeyLogin,
   fetchLoginCaptcha,
-  finishPasskeyLogin,
   type CredentialProvider,
   type LoginCaptchaChallenge,
 } from '@/lib/api'
 import { withSubPath } from '@/lib/subpath'
-import { getPasskeyCredential } from '@/lib/webauthn'
-import { markLoginSucceeded } from '@/contexts/auth-context'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -42,11 +38,9 @@ export function LoginPage() {
     user,
     login,
     loginWithCredentials,
-    checkAuth,
     credentialProviders,
     oauthProviders,
     loginPrompt,
-    passkeyLoginEnabled,
     loginCaptchaEnabled,
     isLoading,
   } = useAuth()
@@ -68,15 +62,8 @@ export function LoginPage() {
 
   const error = searchParams.get('error')
   const redirectHref = searchParams.get('href') || ''
-  const passkeySupported =
-    passkeyLoginEnabled &&
-    typeof window !== 'undefined' &&
-    Boolean(window.PublicKeyCredential)
-  const totalProviders =
-    credentialProviders.length +
-    oauthProviders.length +
-    (passkeySupported ? 1 : 0)
-  const hasAlternativeLogin = oauthProviders.length > 0 || passkeySupported
+  const totalProviders = credentialProviders.length + oauthProviders.length
+  const hasAlternativeLogin = oauthProviders.length > 0
   // LDAP + local password coexist: LDAP is the primary form, the local
   // account is reachable through a small link below the form (admin escape
   // hatch) instead of a prominent tab.
@@ -207,24 +194,6 @@ export function LoginPage() {
     }
   }
 
-  const handlePasskeyLogin = async () => {
-    setLoginLoading('passkey')
-    setCredentialError(null)
-    try {
-      const options = await beginPasskeyLogin()
-      const credential = await getPasskeyCredential(options)
-      await finishPasskeyLogin(credential)
-      markLoginSucceeded()
-      await checkAuth()
-    } catch (error) {
-      setCredentialError(
-        error instanceof Error ? error.message : 'Passkey sign-in failed'
-      )
-    } finally {
-      setLoginLoading(null)
-    }
-  }
-
   const credentialTabLabel = {
     password: t('common.fields.password', 'Password'),
     ldap: t('login.tabs.ldap', 'LDAP'),
@@ -326,15 +295,17 @@ export function LoginPage() {
               <img src={Logo} className="h-10 w-10 dark:invert" />{' '}
               <h1 className="text-2xl font-bold">Kite</h1>
             </div>
-            <p className="text-gray-600">{t('login.kubernetesDashboard')}</p>
           </div>
 
           <Card>
             <CardHeader className="text-center">
               <CardTitle className="text-xl">{t('login.signIn')}</CardTitle>
-              <CardDescription className="text-gray-600">
-                {t('login.subtitle')}
-              </CardDescription>
+              {/* 默认说明与管理员自定义登录提示二选一，避免两段文案重复冲突 */}
+              {loginPromptLines.length === 0 && (
+                <CardDescription className="text-gray-600">
+                  {t('login.subtitle')}
+                </CardDescription>
+              )}
               {loginPromptLines.map((line, index) => (
                 <p
                   key={`${index}-${line}`}
@@ -504,7 +475,9 @@ export function LoginPage() {
                                 value={captchaCode}
                                 onChange={(e) =>
                                   setCaptchaCode(
-                                    e.target.value.replace(/\D/g, '').slice(0, 4)
+                                    e.target.value
+                                      .replace(/\D/g, '')
+                                      .slice(0, 4)
                                   )
                                 }
                                 required
@@ -516,7 +489,10 @@ export function LoginPage() {
                                   'login.refreshCaptcha',
                                   'Refresh code'
                                 )}
-                                title={t('login.refreshCaptcha', 'Refresh code')}
+                                title={t(
+                                  'login.refreshCaptcha',
+                                  'Refresh code'
+                                )}
                                 className="flex h-[44px] w-[120px] shrink-0 items-center justify-center overflow-hidden rounded-md border bg-white"
                               >
                                 {captcha ? (
@@ -651,25 +627,6 @@ export function LoginPage() {
                             )}
                           </Button>
                         ))}
-
-                        {passkeySupported && (
-                          <Button
-                            type="button"
-                            onClick={handlePasskeyLogin}
-                            disabled={loginLoading !== null}
-                            className="w-full h-10 text-foreground"
-                            variant="outline"
-                          >
-                            {loginLoading === 'passkey' ? (
-                              <span className="flex items-center space-x-2">
-                                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></span>
-                                <span>{t('login.signingIn')}</span>
-                              </span>
-                            ) : (
-                              <span>{t('login.signInWithPasskey')}</span>
-                            )}
-                          </Button>
-                        )}
                         {credentialProviders.length === 0 &&
                           credentialError && (
                             <Alert variant="destructive">

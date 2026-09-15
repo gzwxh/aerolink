@@ -257,7 +257,11 @@ export const fetchUserList = async (
   return fetchAPI<FetchUserListResponse>(`/admin/users/?${params.toString()}`)
 }
 
-export const updateUser = async (id: number, data: Partial<UserItem>) => {
+export const updateUser = async (
+  id: number,
+  // 请求字段是 groups（用户列表返回里才叫 oidc_groups）。
+  data: Partial<UserItem> & { groups?: string[] }
+) => {
   return apiClient.put<{ user: UserItem }>(`/admin/users/${id}`, data)
 }
 
@@ -469,7 +473,6 @@ export interface GeneralSetting {
   enableVersionCheck: boolean
   passwordLoginDisabled: boolean
   enableMFA: boolean
-  enablePasskeyLogin: boolean
   loginPrompt: string
 }
 
@@ -488,7 +491,6 @@ export interface GeneralSettingUpdateRequest {
   enableVersionCheck?: boolean
   passwordLoginDisabled?: boolean
   enableMFA?: boolean
-  enablePasskeyLogin?: boolean
   loginPrompt?: string
 }
 
@@ -554,6 +556,8 @@ export type MFAPolicy = 'disabled' | 'all' | 'admin'
 export interface SecuritySetting {
   loginCaptchaEnabled: boolean
   inactiveUserDisableDays: number
+  defaultUserEnabled: boolean
+  defaultUserExpireDays: number
   remoteLoginNoticeEnabled: boolean
   mfaPolicy: MFAPolicy
   mfaThirdPartyEnabled: boolean
@@ -574,6 +578,7 @@ export interface SecuritySetting {
   passwordHistoryCount: number
   passwordMinLength: number
   adminPasswordMinLength: number
+  passwordMinClasses: number
   passwordRequireUppercase: boolean
   passwordRequireLowercase: boolean
   passwordRequireDigit: boolean
@@ -714,10 +719,13 @@ export const importLDAPUsers = async (
   usernames: string[],
   enableImported: boolean
 ): Promise<LDAPImportResult> => {
-  return await apiClient.post<LDAPImportResult>('/admin/ldap-setting/users/import', {
-    usernames,
-    enableImported,
-  })
+  return await apiClient.post<LDAPImportResult>(
+    '/admin/ldap-setting/users/import',
+    {
+      usernames,
+      enableImported,
+    }
+  )
 }
 
 export const fetchClusterNamespaces = async (

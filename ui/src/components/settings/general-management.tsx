@@ -15,6 +15,7 @@ import {
   updateGeneralSetting,
   useGeneralSetting,
 } from '@/lib/api'
+import { reportOperationFailure } from '@/lib/error-reporter'
 import { translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,6 +30,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { PasswordInput } from '@/components/password-input'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5'
@@ -112,7 +114,9 @@ export function GeneralManagement() {
       )
     },
     onError: (error) => {
-      toast.error(translateError(error, t))
+      // 操作失败不再使用弹窗：写入当前用户的站内信，服务器不可达时
+      // 本地排队，恢复后自动补报（见 reportOperationFailure）。
+      reportOperationFailure(translateError(error, t))
     },
   })
 
@@ -281,9 +285,8 @@ export function GeneralManagement() {
                 <Label htmlFor="general-ai-api-key">
                   {t('generalManagement.aiAgent.form.apiKey', 'API Key')}
                 </Label>
-                <Input
+                <PasswordInput
                   id="general-ai-api-key"
-                  type="password"
                   value={formData.aiApiKey}
                   onChange={(e) =>
                     setFormData((prev) => ({

@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
+	"github.com/zxh326/kite/pkg/notification"
 	"gorm.io/gorm"
 )
 
@@ -340,6 +342,7 @@ func AssignRole(c *gin.Context) {
 		return
 	}
 	TriggerSync()
+	notifyRoleChange(model.NotificationEventRoleAssigned, role.Name, req.SubjectType, req.Subject)
 	c.JSON(http.StatusCreated, gin.H{"assignment": assignment})
 }
 
@@ -362,10 +365,38 @@ func UnassignRole(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "subjectType and subject query params are required"})
 		return
 	}
+	var role model.Role
+	if err := model.DB.First(&role, uint(dbID)).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "role not found"})
+		return
+	}
 	if err := model.DB.Where("role_id = ? AND subject_type = ? AND subject = ?", uint(dbID), subjectType, subject).Delete(&model.RoleAssignment{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove assignment: " + err.Error()})
 		return
 	}
 	TriggerSync()
+	notifyRoleChange(model.NotificationEventRoleUnassigned, role.Name, subjectType, subject)
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// notifyRoleChange tells the affected user (only direct user assignments;
+// group-level changes fan out to many members and stay silent) that their
+// roles changed, so permission differences never come as a surprise.
+func notifyRoleChange(event string, roleName, subjectType, subject string) {
+	if event != model.NotificationEventRoleAssigned &&
+		event != model.NotificationEventRoleUnassigned {
+		return
+	}
+	if subjectType != string(model.SubjectTypeUser) {
+		return
+	}
+	user, err := model.GetUserByUsername(strings.TrimSpace(subject))
+	if err != nil || user == nil || !user.Enabled {
+		return
+	}
+	notification.SendEvent(event, map[string]string{
+		"username": user.Username,
+		"role":     roleName,
+		"time":     time.Now().Format("2006-01-02 15:04:05"),
+	}, notification.Recipient{UserID: user.ID, Email: user.Email})
 }

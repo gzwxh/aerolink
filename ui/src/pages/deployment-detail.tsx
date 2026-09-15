@@ -16,8 +16,6 @@ import {
   useResourcesWatch,
 } from '@/lib/api'
 import { getDeploymentStatus, toSimpleContainer } from '@/lib/k8s'
-import { WorkloadServiceYamlTab } from '@/components/workload-service-yaml-tab'
-import { translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -52,6 +50,7 @@ import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { Terminal } from '@/components/terminal'
 import { VolumeTable } from '@/components/volume-table'
 import { WorkloadHistoryTabs } from '@/components/workload-history-tabs'
+import { WorkloadServiceYamlTab } from '@/components/workload-service-yaml-tab'
 
 import {
   ResourceDetailShell,
@@ -179,7 +178,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }, [t, deployment, name, namespace])
 
@@ -198,7 +197,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }, [t, deployment, name, namespace, scaleReplicas])
 
@@ -249,7 +248,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       setIsExposeDialogOpen(false)
       await refetchRelatedResources()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsExposing(false)
     }
@@ -294,7 +293,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
         )
         setRefreshInterval(1000)
       } catch (err) {
-        toast.error(translateError(err, t))
+        // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       }
     },
     [deployment, name, namespace, t]

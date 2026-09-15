@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
+import { PasswordInput } from '@/components/password-input'
 
 interface OAuthProviderDialogProps {
   open: boolean
@@ -219,9 +220,8 @@ function OAuthProviderDialogContent({
                 {t('oauthManagement.dialog.clientSecret', 'Client Secret')}
                 {isEditMode ? '' : ' *'}
               </Label>
-              <Input
+              <PasswordInput
                 id="client_secret"
-                type="password"
                 value={formData.clientSecret}
                 onChange={handleInputChange('clientSecret')}
                 placeholder={

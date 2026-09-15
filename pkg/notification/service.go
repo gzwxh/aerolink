@@ -3,7 +3,10 @@
 package notification
 
 import (
+	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/zxh326/kite/pkg/model"
 	"k8s.io/klog/v2"
@@ -100,11 +103,62 @@ func SendEvent(event string, variables map[string]string, extras ...Recipient) {
 		klog.Warningf("skip sending %q mails: %v", event, err)
 		return
 	}
+	deliveryFailed := false
 	for address := range emails {
 		if err := config.send([]string{address}, title, content); err != nil {
 			klog.Errorf("failed to send %q mail to %s: %v", event, address, err)
+			deliveryFailed = true
 		}
 	}
+	if deliveryFailed {
+		notifyAdminsOfMailFailure(event, emails)
+	}
+}
+
+// mailFailureAlertMu throttles the admin-facing inbox alert so a broken SMTP
+// server cannot flood the notification table while events keep firing.
+var (
+	mailFailureAlertMu   sync.Mutex
+	lastMailFailureAlert time.Time
+)
+
+// notifyAdminsOfMailFailure writes an in-app-only message to every enabled
+// admin. It deliberately bypasses SendEvent/mail: the mail channel is exactly
+// what just failed, so emailing about it would recurse.
+func notifyAdminsOfMailFailure(event string, addresses map[string]bool) {
+	mailFailureAlertMu.Lock()
+	if time.Since(lastMailFailureAlert) < time.Hour {
+		mailFailureAlertMu.Unlock()
+		return
+	}
+	lastMailFailureAlert = time.Now()
+	mailFailureAlertMu.Unlock()
+
+	adminIDs, err := model.ListAdminUserIDs()
+	if err != nil {
+		klog.Errorf("failed to list admins for mail failure alert: %v", err)
+		return
+	}
+	title := "[Kite] 通知邮件发送失败"
+	content := fmt.Sprintf(
+		"%s 事件「%s」的通知邮件发送失败（收件地址：%s）。请检查系统设置中的 SMTP 配置。",
+		time.Now().Format("2006-01-02 15:04:05"), event,
+		strings.Join(mapKeys(addresses), "、"),
+	)
+	for _, id := range adminIDs {
+		if err := model.CreateUserNotification(
+			id, model.NotificationEventMailDeliveryFailed, title, content); err != nil {
+			klog.Errorf("failed to store mail failure alert for admin %d: %v", id, err)
+		}
+	}
+}
+
+func mapKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func resolveSubscriptionUser(subscription model.NotificationSubscription) (*model.User, error) {

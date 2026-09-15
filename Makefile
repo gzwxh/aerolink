@@ -264,8 +264,12 @@ IMAGE ?= swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.0
 # 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径），
 # 这里只保留依赖源镜像（npm/go 代理）；直连环境可置空：
 #   make image DOCKER_BUILD_ARGS=
+# --provenance=false --sbom=false：禁止 BuildKit 附加 provenance/SBOM 证明清单。
+# 带证明的镜像会以 OCI manifest list 推送，部分仓库（如华为云 SWR）无法解析，
+# 推送时报 "Invalid image, fail to parse 'manifest.json'"。
 DOCKER_BUILD_ARGS ?= --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
-	--build-arg GOPROXY=https://goproxy.cn,direct
+	--build-arg GOPROXY=https://goproxy.cn,direct \
+	--provenance=false --sbom=false
 
 .PHONY: image push
 image: ## Build the Docker image (IMAGE=registry/repo:tag)

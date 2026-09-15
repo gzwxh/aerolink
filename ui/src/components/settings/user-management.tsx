@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import * as Avatar from '@radix-ui/react-avatar'
 import {
   IconEdit,
@@ -20,22 +19,23 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { UserItem } from '@/types/api'
 import {
   createPasswordUser,
   deleteUser,
+  fetchSecuritySetting,
   resetUserPassword,
   setUserEnabled,
   updateUser,
   useRoleList,
   useUserList,
 } from '@/lib/api'
-import { Switch } from '@/components/ui/switch'
-import { fetchSecuritySetting } from '@/lib/api'
 import { fetchAPI } from '@/lib/api/shared'
-import { formatDate } from '@/lib/utils'
+import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
+import { formatDate, translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -59,7 +59,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { PasswordInput } from '@/components/password-input'
 import { ResourceTableView } from '@/components/resource-table-view'
 
 import { Action } from '../action-table'
@@ -146,6 +148,8 @@ export function UserManagement() {
   // 列表「状态」列可直接启用/禁用。
   const handleToggleStatus = useCallback(
     async (user: UserItem) => {
+      // 超级管理员不允许禁用，UI 上也不给出可点击入口。
+      if (user.username === 'admin') return
       setTogglingUserId(user.id)
       try {
         await setUserEnabled(user.id, !user.enabled)
@@ -156,11 +160,6 @@ export function UserManagement() {
             : t('common.messages.enabled', '已启用')
         )
       } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : t('common.messages.operationFailed', '操作失败')
-        )
       } finally {
         setTogglingUserId(null)
       }
@@ -173,15 +172,24 @@ export function UserManagement() {
       return (
         <button
           type="button"
-          disabled={togglingUserId === user.id}
+          disabled={togglingUserId === user.id || user.username === 'admin'}
           onClick={() => void handleToggleStatus(user)}
-          title={t('common.fields.status', 'Status')}
-          className="cursor-pointer disabled:cursor-wait disabled:opacity-60"
+          title={
+            user.username === 'admin'
+              ? t(
+                  'userManagement.messages.superAdminProtected',
+                  '超级管理员不支持禁用'
+                )
+              : t('common.fields.status', 'Status')
+          }
+          className="cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
         >
           {user.enabled ? (
             <Badge variant="default">{t('status.enabled', 'Enabled')}</Badge>
           ) : (
-            <Badge variant="secondary">{t('status.disabled', 'Disabled')}</Badge>
+            <Badge variant="secondary">
+              {t('status.disabled', 'Disabled')}
+            </Badge>
           )}
         </button>
       )
@@ -191,6 +199,8 @@ export function UserManagement() {
 
   const handleToggleEnable = useCallback(
     async (u: UserItem) => {
+      // 超级管理员不允许禁用（与列表状态徽章的不可点击保持一致）。
+      if (u.username === 'admin') return
       await setUserEnabled(u.id, !u.enabled)
       queryClient.invalidateQueries({ queryKey: ['user-list'] })
       toast.success(
@@ -229,6 +239,8 @@ export function UserManagement() {
             </>
           ),
         onClick: (item) => handleToggleEnable(item),
+        // 超级管理员不支持禁用，菜单项置灰。
+        shouldDisable: (item) => item.username === 'admin',
       },
       {
         label: (
@@ -502,15 +514,7 @@ export function UserManagement() {
       )
       setDeletingUser(null)
     },
-    onError: (err: Error) => {
-      toast.error(
-        err.message ||
-          t('common.messages.failedToDelete', {
-            resource: t('common.fields.user', 'user'),
-            defaultValue: 'Failed to delete user',
-          })
-      )
-    },
+    onError: () => {},
   })
 
   const createMutation = useMutation({
@@ -537,15 +541,7 @@ export function UserManagement() {
       )
       setShowAddDialog(false)
     },
-    onError: (err: Error) => {
-      toast.error(
-        err.message ||
-          t('common.messages.failedToCreate', {
-            resource: t('common.fields.user', 'user'),
-            defaultValue: 'Failed to create user',
-          })
-      )
-    },
+    onError: () => {},
   })
 
   const resetPasswordMutation = useMutation({
@@ -555,10 +551,12 @@ export function UserManagement() {
       toast.success(t('common.messages.passwordReset', 'Password reset'))
       setShowResetDialog(null)
     },
-    onError: (err: Error) => {
+    onError: (error) => {
+      // 后端密码策略失败（长度/强度/历史密码重复等）必须展示给用户，
+      // 否则弹窗停留在原地且没有任何反馈。
       toast.error(
-        err.message ||
-          t('common.messages.failedToResetPassword', 'Failed to reset password')
+        translateError(error, t) ||
+          t('common.messages.failedToResetPassword', '重置密码失败')
       )
     },
   })
@@ -576,15 +574,7 @@ export function UserManagement() {
       )
       setEditingUser(null)
     },
-    onError: (err: Error) => {
-      toast.error(
-        err.message ||
-          t('common.messages.failedToUpdate', {
-            resource: t('common.fields.user', 'user'),
-            defaultValue: 'Failed to update user',
-          })
-      )
-    },
+    onError: () => {},
   })
 
   const handleDelete = () => {
@@ -718,7 +708,10 @@ export function UserManagement() {
                   className="pl-9 w-64"
                 />
               </div>
-              <Button onClick={() => navigate('/settings/users/create')} className="gap-2">
+              <Button
+                onClick={() => navigate('/settings/users/create')}
+                className="gap-2"
+              >
                 <IconPlus className="h-4 w-4" />
                 {t('common.actions.add', 'Add')}{' '}
                 {t('common.fields.passwordUser', 'Password User')}
@@ -1122,36 +1115,14 @@ export function UserManagement() {
               <label className="block text-sm">
                 {t('common.fields.password', 'Password')}
               </label>
-              <Input
+              <PasswordInput
                 name="password"
-                type="password"
                 value={resetPasswordValue}
                 onChange={(e) => setResetPasswordValue(e.target.value)}
               />
               {(() => {
                 const value = resetPasswordValue
-                const checks = [
-                  {
-                    label: t('passwordPolicy.length', '长度至少 12 位'),
-                    ok: value.length >= 12,
-                  },
-                  {
-                    label: t('passwordPolicy.lowercase', '包含小写字母'),
-                    ok: /[a-z]/.test(value),
-                  },
-                  {
-                    label: t('passwordPolicy.uppercase', '包含大写字母'),
-                    ok: /[A-Z]/.test(value),
-                  },
-                  {
-                    label: t('passwordPolicy.number', '包含数字'),
-                    ok: /\d/.test(value),
-                  },
-                  {
-                    label: t('passwordPolicy.special', '包含特殊字符'),
-                    ok: /[^A-Za-z0-9]/.test(value),
-                  },
-                ]
+                const checks = buildPasswordRules(value, t)
                 const passed = checks.filter((c) => c.ok).length
                 return (
                   <div className="mt-2 space-y-1">
@@ -1170,7 +1141,9 @@ export function UserManagement() {
                         <li
                           key={check.label}
                           className={
-                            check.ok ? 'text-green-600' : 'text-muted-foreground'
+                            check.ok
+                              ? 'text-green-600'
+                              : 'text-muted-foreground'
                           }
                         >
                           {check.ok ? '✓' : '○'} {check.label}
@@ -1186,7 +1159,17 @@ export function UserManagement() {
               })()}
             </div>
             <DialogFooter>
-              <Button type="submit">{t('common.actions.save', 'Save')}</Button>
+              <Button
+                type="submit"
+                disabled={
+                  resetPasswordMutation.isPending ||
+                  !isPasswordRulesValid(
+                    buildPasswordRules(resetPasswordValue, t)
+                  )
+                }
+              >
+                {t('common.actions.save', 'Save')}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

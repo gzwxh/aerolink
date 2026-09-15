@@ -1,0 +1,172 @@
+# Kite Kubernetes 部署清单（外部 MySQL 数据库版）
+#
+# 使用前必改项（搜索 REPLACE-ME）：
+#   1. JWT_SECRET / KITE_ENCRYPT_KEY —— 用 `openssl rand -base64 32` 生成随机值。
+#      ⚠ KITE_ENCRYPT_KEY 用于加密存库的敏感数据（集群 kubeconfig、LDAP/SMTP/OAuth
+#      密码、AI Key 等），一旦投入使用不可更换，否则已保存的凭据将无法解密；
+#      请务必妥善备份。
+#   2. MYSQL_DSN —— 替换为实际的 MySQL 连接信息。
+#
+# 数据库要求（二选一，提前手动建好）：
+#   CREATE DATABASE kite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+#   CREATE USER 'kite'@'%' IDENTIFIED BY '你的密码';
+#   GRANT ALL PRIVILEGES ON kite.* TO 'kite'@'%';
+#   -- 数据表由 Kite 首次启动时自动迁移创建，无需手工建表。
+#
+# 数据库版本：MySQL 5.7 / 8.0 / 8.4 LTS 均可，推荐 8.0。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kite
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kite
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: kite
+    namespace: kite
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kite
+  namespace: kite
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kite-secret
+  namespace: kite
+type: Opaque
+stringData:
+  # openssl rand -base64 32 生成，妥善保存
+  JWT_SECRET: "3z7WBs8FsvXbFs1gPM6zs69iN0z6hyB2Id1rfSTseLU="
+  KITE_ENCRYPT_KEY: "3z7WBs8FsvXbFs1gPM6zs69iN0z6hyB2Id1rfSTseLU="
+  # go-sql-driver DSN 格式：
+  #   用户名:密码@tcp(mysql主机:3306)/库名?charset=utf8mb4&parseTime=True&loc=Local
+  # 密码含特殊字符（@ : / ( )）时需按驱动规则转义；也可将密码并入连接串后整体 base64。
+  MYSQL_DSN: "root:rootroot@tcp(10.10.11.107:3306)/kite?charset=utf8mb4&parseTime=True&loc=Local"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: kite
+  name: kite
+  namespace: kite
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kite
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: kite
+    spec:
+      serviceAccountName: kite
+      containers:
+        - image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.0
+          imagePullPolicy: IfNotPresent
+          name: kite
+          envFrom:
+            - secretRef:
+                name: kite-secret
+          env:
+            - name: DB_TYPE
+              value: mysql
+            - name: DB_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: kite-secret
+                  key: MYSQL_DSN
+            # Kite 通过 in-cluster kubeconfig（ServiceAccount 令牌）访问本集群；
+            # 管理多集群时在页面上添加其它集群的 kubeconfig（加密后存于 MySQL）。
+            - name: DISABLE_VERSION_CHECK
+              value: "true"
+            # 反向代理/Ingress 场景下必须收紧为真实代理网段，防止伪造来源 IP：
+            - name: TRUSTED_PROXIES
+              value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+      # 保证重启策略与优雅退出
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: kite
+  name: kite
+  namespace: kite
+spec:
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: kite
+  type: ClusterIP
+---
+# 可选：通过 Ingress 暴露。不需要可删除本段。
+# 启用 HTTPS 后建议同时在 Deployment 的 env 中加 HOST=https://kite.example.com
+# （与实际访问协议一致，否则登录 Cookie 会带 Secure 标记在 HTTP 下被浏览器丢弃）。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kite
+  namespace: kite
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "32m"
+    # 终端 / 日志流使用的 WebSocket 需要较长超时
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: kite.gogdev.cn
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kite
+                port:
+                  number: 8080

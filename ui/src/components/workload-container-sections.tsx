@@ -1,14 +1,9 @@
-import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
+import type { Container, Probe } from 'kubernetes-types/core/v1'
+import { useTranslation } from 'react-i18next'
+
 import { fetchNodePortRange } from '@/lib/api'
 import { useCluster } from '@/hooks/use-cluster'
-
-
-import type { Container, Probe } from 'kubernetes-types/core/v1'
-import type {
-  PortForm,
-  PortServiceType,
-} from '@/components/editors/deployment-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,6 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type {
+  PortForm,
+  PortServiceType,
+} from '@/components/editors/deployment-form'
 
 type OnUpdate = (updates: Partial<Container>) => void
 
@@ -84,9 +83,7 @@ export function PortsEditor({
       const valid = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.test(ip)
       if (
         !valid ||
-        ip
-          .split('.')
-          .some((oct) => Number(oct) < 0 || Number(oct) > 255)
+        ip.split('.').some((oct) => Number(oct) < 0 || Number(oct) > 255)
       ) {
         return t(
           'containerAdv.clusterIPFormatError',
@@ -313,9 +310,7 @@ export function PortsEditor({
                 {t('containerAdv.remove', '移除')}
               </button>
             </div>
-            {error && (
-              <p className="pl-1 text-xs text-destructive">{error}</p>
-            )}
+            {error && <p className="pl-1 text-xs text-destructive">{error}</p>}
           </div>
         )
       })}
@@ -392,16 +387,22 @@ export function CommandEditor({
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">{t('containerAdv.workingDir', '工作目录')}</Label>
+          <Label className="text-xs">
+            {t('containerAdv.workingDir', '工作目录')}
+          </Label>
           <Input
             value={container.workingDir || ''}
-            onChange={(e) => onUpdate({ workingDir: e.target.value || undefined })}
+            onChange={(e) =>
+              onUpdate({ workingDir: e.target.value || undefined })
+            }
             placeholder="/myapp"
             className="h-9"
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">{t('containerAdv.stdin', '标准输入')}</Label>
+          <Label className="text-xs">
+            {t('containerAdv.stdin', '标准输入')}
+          </Label>
           <Select
             value={container.stdin ? 'yes' : 'no'}
             onValueChange={(v) => onUpdate({ stdin: v === 'yes' })}
@@ -411,7 +412,9 @@ export function CommandEditor({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="no">{t('common.values.no', '否')}</SelectItem>
-              <SelectItem value="yes">{t('common.values.yes', '是')}</SelectItem>
+              <SelectItem value="yes">
+                {t('common.values.yes', '是')}
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -425,8 +428,7 @@ type ProbeType = 'none' | 'http' | 'https' | 'tcp' | 'exec'
 
 function probeTypeOf(probe?: Probe): ProbeType {
   if (!probe) return 'none'
-  if (probe.httpGet)
-    return probe.httpGet.scheme === 'HTTPS' ? 'https' : 'http'
+  if (probe.httpGet) return probe.httpGet.scheme === 'HTTPS' ? 'https' : 'http'
   if (probe.tcpSocket) return 'tcp'
   if (probe.exec) return 'exec'
   return 'none'
@@ -472,7 +474,8 @@ function ProbeField({
               return setProbe({
                 httpGet: { path: '/', port: 443, scheme: 'HTTPS' },
               } as never)
-            if (next === 'tcp') return setProbe({ tcpSocket: { port: 80 } as never })
+            if (next === 'tcp')
+              return setProbe({ tcpSocket: { port: 80 } as never })
             return setProbe({ exec: { command: [] } })
           }}
         >
@@ -507,7 +510,9 @@ function ProbeField({
           {probe.httpGet && (
             <>
               <div className="space-y-1.5">
-                <Label className="text-xs">{t('containerAdv.probePath', '路径')}</Label>
+                <Label className="text-xs">
+                  {t('containerAdv.probePath', '路径')}
+                </Label>
                 <Input
                   value={probe.httpGet.path || ''}
                   onChange={(e) =>
@@ -521,10 +526,16 @@ function ProbeField({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">{t('containerAdv.probePort', '端口')}</Label>
+                <Label className="text-xs">
+                  {t('containerAdv.probePort', '端口')}
+                </Label>
                 <Input
                   type="number"
-                  value={typeof probe.httpGet.port === 'number' ? probe.httpGet.port : ''}
+                  value={
+                    typeof probe.httpGet.port === 'number'
+                      ? probe.httpGet.port
+                      : ''
+                  }
                   onChange={(e) =>
                     setProbe({
                       ...probe,
@@ -541,10 +552,16 @@ function ProbeField({
           )}
           {probe.tcpSocket && (
             <div className="space-y-1.5">
-              <Label className="text-xs">{t('containerAdv.probePort', '端口')}</Label>
+              <Label className="text-xs">
+                {t('containerAdv.probePort', '端口')}
+              </Label>
               <Input
                 type="number"
-                value={typeof probe.tcpSocket.port === 'number' ? probe.tcpSocket.port : ''}
+                value={
+                  typeof probe.tcpSocket.port === 'number'
+                    ? probe.tcpSocket.port
+                    : ''
+                }
                 onChange={(e) =>
                   setProbe({
                     ...probe,
@@ -568,7 +585,9 @@ function ProbeField({
                 onChange={(e) =>
                   setProbe({
                     ...probe,
-                    exec: { command: e.target.value.split(' ').filter(Boolean) },
+                    exec: {
+                      command: e.target.value.split(' ').filter(Boolean),
+                    },
                   } as Probe)
                 }
                 placeholder="cat /tmp/ready"
@@ -577,32 +596,44 @@ function ProbeField({
             </div>
           )}
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('containerAdv.probeDelay', '初始延迟(秒)')}</Label>
+            <Label className="text-xs">
+              {t('containerAdv.probeDelay', '初始延迟(秒)')}
+            </Label>
             <Input
               type="number"
               min={0}
               value={probe.initialDelaySeconds ?? ''}
-              onChange={(e) => patch({ initialDelaySeconds: intOrUndefined(e.target.value) })}
+              onChange={(e) =>
+                patch({ initialDelaySeconds: intOrUndefined(e.target.value) })
+              }
               className="h-9"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('containerAdv.probePeriod', '检查间隔(秒)')}</Label>
+            <Label className="text-xs">
+              {t('containerAdv.probePeriod', '检查间隔(秒)')}
+            </Label>
             <Input
               type="number"
               min={1}
               value={probe.periodSeconds ?? ''}
-              onChange={(e) => patch({ periodSeconds: intOrUndefined(e.target.value) })}
+              onChange={(e) =>
+                patch({ periodSeconds: intOrUndefined(e.target.value) })
+              }
               className="h-9"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('containerAdv.probeThreshold', '失败阈值')}</Label>
+            <Label className="text-xs">
+              {t('containerAdv.probeThreshold', '失败阈值')}
+            </Label>
             <Input
               type="number"
               min={1}
               value={probe.failureThreshold ?? ''}
-              onChange={(e) => patch({ failureThreshold: intOrUndefined(e.target.value) })}
+              onChange={(e) =>
+                patch({ failureThreshold: intOrUndefined(e.target.value) })
+              }
               className="h-9"
             />
           </div>
@@ -622,7 +653,8 @@ export function ProbesEditor({
 }) {
   const { t } = useTranslation()
   const renderProbe = (kind: ProbeKind) => {
-    const key = `${kind}Probe` as 'readinessProbe' | 'livenessProbe' | 'startupProbe'
+    const key = `${kind}Probe` as
+      'readinessProbe' | 'livenessProbe' | 'startupProbe'
     const probe = (container[key] as Probe | undefined) || undefined
     return (
       <ProbeField

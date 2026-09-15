@@ -1,11 +1,16 @@
 import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { createPasswordUser, fetchSecuritySetting } from '@/lib/api'
 import { fetchAPI } from '@/lib/api/shared'
+import {
+  buildPasswordRules,
+  DEFAULT_PASSWORD_LIMITS,
+  isPasswordRulesValid,
+} from '@/lib/password-rules'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -29,6 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PasswordInput } from '@/components/password-input'
+import { PasswordRulesPanel } from '@/components/password-rules-panel'
 
 /**
  * 创建密码用户（独立页面）：/settings/users/create
@@ -79,6 +86,21 @@ export function UserCreatePage() {
   })
   const [saving, setSaving] = useState(false)
 
+  // 密码实时校验：策略值来自安全设置，与后端 ValidatePassword 保持一致。
+  const passwordLimits = {
+    minLength:
+      (securitySetting as { passwordMinLength?: number } | undefined)
+        ?.passwordMinLength ?? DEFAULT_PASSWORD_LIMITS.minLength,
+    maxLength: DEFAULT_PASSWORD_LIMITS.maxLength,
+    minClasses:
+      (securitySetting as { passwordMinClasses?: number } | undefined)
+        ?.passwordMinClasses ?? DEFAULT_PASSWORD_LIMITS.minClasses,
+  }
+  const passwordRules = buildPasswordRules(form.password, t, passwordLimits)
+  const passwordValid = isPasswordRulesValid(passwordRules)
+  const passwordTouched = form.password.length > 0
+  const [passwordFocused, setPasswordFocused] = useState(false)
+
   const randomPassword = () => {
     const charset =
       'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*'
@@ -103,6 +125,11 @@ export function UserCreatePage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
+    // 密码要求由输入框旁的面板实时提示，不满足时直接拦截提交。
+    if (!passwordValid) {
+      toast.error(t('passwordPolicy.title', '密码要求') + '未满足')
+      return
+    }
     setSaving(true)
     try {
       await createPasswordUser({
@@ -118,14 +145,11 @@ export function UserCreatePage() {
         mfaDisabled: form.mfaDisabled,
       } as Parameters<typeof createPasswordUser>[0])
       await queryClient.invalidateQueries({ queryKey: ['user-list'] })
-      toast.success(t('common.messages.created', { defaultValue: 'User created' }))
+      toast.success(
+        t('common.messages.created', { defaultValue: 'User created' })
+      )
       navigate('/settings/user?tab=users')
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t('common.messages.failedToCreate', { defaultValue: '创建失败' })
-      )
     } finally {
       setSaving(false)
     }
@@ -140,27 +164,25 @@ export function UserCreatePage() {
             {t('createUser.accountHint', '登录名在全部来源中必须唯一')}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="username">
-                {t('common.fields.username', '用户名')}
-              </Label>
-              <Input
-                id="username"
-                required
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="name">{t('common.fields.name', '名称')}</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="username">
+              {t('common.fields.username', '用户名')}
+            </Label>
+            <Input
+              id="username"
+              required
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="name">{t('common.fields.name', '名称')}</Label>
+            <Input
+              id="name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">{t('common.fields.email', '邮箱')}</Label>
@@ -172,11 +194,15 @@ export function UserCreatePage() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 sm:col-start-1">
             <Label>{t('userManagement.fields.groups', '用户组')}</Label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" className="w-full justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-between"
+                >
                   {form.groups.length > 0
                     ? `${t('userManagement.fields.groups', '用户组')}：${form.groups.join('、')}`
                     : t('createUser.selectGroups', '选择用户组（可多选）')}
@@ -210,7 +236,7 @@ export function UserCreatePage() {
             {t('createUser.sections.authentication', '认证')}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">
@@ -224,12 +250,27 @@ export function UserCreatePage() {
                 {t('createUser.randomPassword', '随机生成')}
               </button>
             </div>
-            <Input
-              id="password"
-              required
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
+            <div className="relative">
+              <PasswordInput
+                id="password"
+                required
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
+                aria-invalid={passwordTouched && !passwordValid}
+                className={
+                  passwordTouched && !passwordValid
+                    ? 'border-red-500 focus-visible:ring-red-500'
+                    : undefined
+                }
+              />
+              <PasswordRulesPanel
+                rules={passwordRules}
+                touched={passwordTouched}
+                focused={passwordFocused}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label>{t('createUser.fields.mfaLevel', 'MFA 级别')}</Label>
@@ -252,10 +293,7 @@ export function UserCreatePage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {t(
-                'createUser.mfaLevelHint',
-                '当前全局策略：'
-              )}
+              {t('createUser.mfaLevelHint', '当前全局策略：')}
               {t(
                 `createUser.mfaPolicy.${mfaPolicy}`,
                 mfaPolicy === 'required'

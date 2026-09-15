@@ -91,11 +91,7 @@ export function ResourceHistoryTable<T extends ResourceType>({
       // You might want to add a refetch function here if available
     } catch (error) {
       console.error('Failed to rollback resource:', error)
-
-      // Show error toast
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error occurred'
-      toast.error(`${t('resourceHistory.rollback.error')}: ${errorMessage}`)
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsRollingBack(false)
     }

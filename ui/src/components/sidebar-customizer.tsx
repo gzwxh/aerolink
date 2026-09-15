@@ -269,9 +269,6 @@ export function SidebarCustomizer({
       )
     } catch (error) {
       console.error('Failed to update global sidebar:', error)
-      toast.error(
-        t('sidebar.setAsGlobalError', 'Failed to update global sidebar')
-      )
     } finally {
       setIsPublishingGlobal(false)
     }
@@ -291,9 +288,6 @@ export function SidebarCustomizer({
       )
     } catch (error) {
       console.error('Failed to clear global sidebar:', error)
-      toast.error(
-        t('sidebar.unsetGlobalError', 'Failed to disable global sidebar')
-      )
     } finally {
       setIsClearingGlobal(false)
     }

@@ -26,7 +26,6 @@ var encryptedColumns = []struct{ Table, Column string }{
 	{"ldap_settings", "bind_password"},
 	{"notification_settings", "smtp_password"},
 	{"oauth_providers", "client_secret"},
-	{"passkey_credentials", "credential"},
 }
 
 func encryptionKeyFingerprint(key string) string {

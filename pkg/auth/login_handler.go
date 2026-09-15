@@ -14,7 +14,6 @@ import (
 	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/notification"
-	"github.com/zxh326/kite/pkg/passkey"
 	"github.com/zxh326/kite/pkg/rbac"
 	"gorm.io/gorm"
 	"k8s.io/klog/v2"
@@ -194,42 +193,6 @@ func (r *captchaRateLimiter) allow(ip string) bool {
 	}
 	r.hits[ip] = append(fresh, now)
 	return true
-}
-
-func (h *AuthHandler) PasskeyLoginBegin(c *gin.Context) {
-	enabled, err := passkey.Enabled()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting"})
-		return
-	}
-	if !enabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkey login is disabled"})
-		return
-	}
-	assertion, err := passkey.BeginLogin(c)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start passkey login"})
-		return
-	}
-	c.JSON(http.StatusOK, assertion)
-}
-
-func (h *AuthHandler) PasskeyLoginFinish(c *gin.Context) {
-	enabled, err := passkey.Enabled()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting"})
-		return
-	}
-	if !enabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkey login is disabled"})
-		return
-	}
-	user, err := passkey.FinishLogin(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid passkey"})
-		return
-	}
-	h.completePasswordLikeLogin(c, user)
 }
 
 func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, authenticate credentialAuthenticator) {

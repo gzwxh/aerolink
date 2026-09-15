@@ -1,5 +1,6 @@
 // API client with authentication support
 import { appendCurrentClusterHeader } from './current-cluster'
+import { reportOperationFailure } from './error-reporter'
 import { requestMFAVerification } from './mfa-prompt'
 import { withSubPath } from './subpath'
 
@@ -126,12 +127,32 @@ class ApiClient {
     url: string,
     options: ApiRequestOptions = {}
   ): Promise<T> {
-    const response = await this.request(url, options)
+    let response: Response
+    try {
+      response = await this.request(url, options)
+    } catch (error) {
+      // 网络层失败（服务器不可达 / 连接被重置等）：写入当前用户的站内信。
+      reportOperationFailure(
+        `${methodOf(options)} ${url} 请求失败: ${errorText(error)}`
+      )
+      throw error
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      const message =
+        errorData.error || `HTTP error! status: ${response.status}`
+      // 401 由刷新/跳登录流程接管；MFA 校验取消是用户主动行为，均不记站内信。
+      if (
+        response.status !== 401 &&
+        errorData.code !== 'mfa_verification_required'
+      ) {
+        reportOperationFailure(
+          `${methodOf(options)} ${url} 失败 (HTTP ${response.status}): ${message}`
+        )
+      }
       throw new ApiError(
-        errorData.error || `HTTP error! status: ${response.status}`,
+        message,
         response.status,
         errorData.code,
         errorData.params
@@ -207,6 +228,17 @@ class ApiClient {
 }
 
 export const API_BASE_URL = '/api/v1'
+
+function methodOf(options: ApiRequestOptions): string {
+  return (options.method || 'GET').toUpperCase()
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message || error.name
+  }
+  return String(error)
+}
 
 // Create a singleton instance
 export const apiClient = new ApiClient(API_BASE_URL)

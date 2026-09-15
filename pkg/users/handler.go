@@ -4,7 +4,7 @@
 //
 //   - 管理员用户管理（列表、编辑、删除、重置密码、启用/禁用），
 //     挂载在 /api/v1/admin/users 下，由 RequireAdmin 中间件保护；
-//   - 个人账号自助接口（昵称、密码、MFA、Passkey、侧边栏偏好），
+//   - 个人账号自助接口（昵称、密码、MFA、侧边栏偏好），
 //     挂载在 /api/users 下，始终操作鉴权中间件写入 gin context 的那个用户；
 //   - 全局侧边栏策略接口，同样仅管理员可调用。
 //
@@ -22,9 +22,9 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
+	"github.com/zxh326/kite/pkg/notification"
 	"time"
 
-	"github.com/zxh326/kite/pkg/passkey"
 	"github.com/zxh326/kite/pkg/rbac"
 	"k8s.io/klog/v2"
 )
@@ -516,143 +516,8 @@ func VerifyCurrentUserMFA(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-// ListCurrentUserPasskeys 列出当前登录用户已注册的 Passkey（WebAuthn 凭据）。
-//
-// 路由：GET /api/users/me/passkeys（需登录，仅本地密码用户）。
-//
-// 若管理员在全局设置里关闭了 Passkey 登录，则直接返回 403。
-func ListCurrentUserPasskeys(c *gin.Context) {
-	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
-	if !ensurePasskeyLoginEnabled(c) {
-		return
-	}
-	credentials, err := passkey.CredentialsForUser(user.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list passkeys"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"passkeys": credentials})
-}
-
-// BeginCurrentUserPasskeyRegistration 开始 Passkey 注册流程，
-// 返回供浏览器 navigator.credentials.create() 使用的创建参数。
-//
-// 路由：POST /api/users/me/passkeys/begin（需登录，仅本地密码用户）。
-//
-// 校验顺序：当前密码必填必对；若账号已启用 MFA，则还必须提交有效动态码——
-// 这样「新增 Passkey」就不能被用来绕过第二因素。
-// 生成的 challenge 由 passkey 包写入会话，供 Finish 阶段校验。
-func BeginCurrentUserPasskeyRegistration(c *gin.Context) {
-	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
-	if !ensurePasskeyLoginEnabled(c) {
-		return
-	}
-
-	var req struct {
-		Name            string `json:"name"`
-		CurrentPassword string `json:"current_password" binding:"required"`
-		MFACode         string `json:"mfa_code"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if !model.CheckPassword(user.Password, req.CurrentPassword) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
-		return
-	}
-	if user.MFAEnabled && !mfa.Verify(string(user.MFASecret), req.MFACode) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
-		return
-	}
-
-	creation, err := passkey.BeginRegistration(c, user, req.Name)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start passkey registration"})
-		return
-	}
-	c.JSON(http.StatusOK, creation)
-}
-
-// FinishCurrentUserPasskeyRegistration 校验认证器的注册响应并落库新凭据。
-//
-// 路由：POST /api/users/me/passkeys/finish（需登录，仅本地密码用户）。
-//
-// 与 Begin 成对使用：认证器返回的 attestation 会与 Begin 阶段存进会话的
-// challenge 比对，校验失败返回 400。
-func FinishCurrentUserPasskeyRegistration(c *gin.Context) {
-	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
-	if !ensurePasskeyLoginEnabled(c) {
-		return
-	}
-
-	credential, err := passkey.FinishRegistration(c, user)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to finish passkey registration"})
-		return
-	}
-	c.JSON(http.StatusOK, credential)
-}
-
-// DeleteCurrentUserPasskey 删除当前登录用户的某个 Passkey。
-//
-// 路由：DELETE /api/users/me/passkeys/:id（需登录，仅本地密码用户）。
-//
-// 删除时以「用户 ID + 凭据 ID」为条件，因此无法删除属于其他用户的凭据。
-func DeleteCurrentUserPasskey(c *gin.Context) {
-	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
-	if !ensurePasskeyLoginEnabled(c) {
-		return
-	}
-
-	var id uint
-	if _, err := fmt.Sscanf(c.Param("id"), "%d", &id); err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-		return
-	}
-
-	if err := passkey.DeleteCredential(user.ID, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete passkey"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
-}
-
-// ensurePasskeyLoginEnabled 检查全局是否开启了 Passkey 登录。
-//
-// 失败时它已经自行写好了响应（读取配置失败 500、未开启 403），
-// 因此调用方只需在返回 false 时直接 return 即可。
-func ensurePasskeyLoginEnabled(c *gin.Context) bool {
-	enabled, err := passkey.Enabled()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting"})
-		return false
-	}
-	if !enabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkey login is disabled"})
-		return false
-	}
-	return true
-}
-
-// ensureMFAEnabled 是 ensurePasskeyLoginEnabled 的 MFA 版本：
-// 检查全局 enable_mfa 开关，失败时同样自己写响应（500 / 403）并返回 false。
+// ensureMFAEnabled 检查全局 enable_mfa 开关：
+// 校验失败时自己写响应（500 / 403）并返回 false。
 func ensureMFAEnabled(c *gin.Context) bool {
 	setting, err := model.GetGeneralSetting()
 	if err != nil {
@@ -673,18 +538,10 @@ func ensureMFAEnabled(c *gin.Context) bool {
 		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is disabled"})
 		return false
 	}
-	// 「安全设置 → 认证安全」的全局 MFA 策略同样约束绑定操作：未启用时
-	// 不允许配置/启停 MFA。策略加载失败时放行（与登录侧一致，避免存储
-	// 异常把用户锁死在 MFA 门外）。
-	security, err := model.GetSecuritySetting()
-	if err != nil {
-		klog.Warningf("failed to load security setting for MFA policy: %v", err)
-		return true
-	}
-	if security != nil && security.MFAPolicy == model.MFAPolicyDisabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is disabled by security policy"})
-		return false
-	}
+	// 「安全设置 → 认证安全」的全局 MFA 策略含义是「是否强制用户绑定」，
+	// 不是「禁止使用」：无论策略如何，用户都应可以自愿绑定 MFA（增强安全）
+	// 或在验证动态码后解绑（例如更换手机），否则换机时会被永久锁死。
+	// 因此这里不再按策略拦截，仅保留上方 EnableMFA 总开关。
 	return true
 }
 
@@ -771,6 +628,12 @@ func ResetPassword(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password"})
 		return
 	}
+	// 告知本人密码已被重置（安全惯例）：非本人操作可第一时间申诉。
+	notification.SendEvent(model.NotificationEventPasswordResetByAdmin, map[string]string{
+		"username": target.Username,
+		"operator": operator.Username,
+		"time":     time.Now().Format("2006-01-02 15:04:05"),
+	}, notification.Recipient{UserID: target.ID, Email: target.Email})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -793,10 +656,26 @@ func SetUserEnabled(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	target, err := model.GetUserByID(uint64(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
 	if err := model.SetUserEnabled(id, req.Enabled); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set enabled"})
 		return
 	}
+	// 告知本人账号状态变化；被禁用的用户重新获得访问权后也能看到留痕。
+	operator := c.MustGet("user").(model.User)
+	event := model.NotificationEventAccountEnabled
+	if !req.Enabled {
+		event = model.NotificationEventAccountDisabled
+	}
+	notification.SendEvent(event, map[string]string{
+		"username": target.Username,
+		"operator": operator.Username,
+		"time":     time.Now().Format("2006-01-02 15:04:05"),
+	}, notification.Recipient{UserID: target.ID, Email: target.Email})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

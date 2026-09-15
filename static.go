@@ -31,6 +31,19 @@ func setupStatic(r *gin.Engine) {
 	assetsGroup.Use(middleware.StaticCache())
 	assetsGroup.StaticFS("/", http.FS(assetsFS))
 
+	// The runtime base path is published as a same-origin external script so
+	// the strict CSP (script-src 'self') keeps working; an inline script in
+	// index.html would be blocked by the browser.
+	r.GET(base+"/config.js", func(c *gin.Context) {
+		assetBase := common.Base
+		if assetBase == "/" {
+			assetBase = ""
+		}
+		c.Header("Content-Type", "application/javascript; charset=utf-8")
+		c.Header("Cache-Control", "no-store")
+		c.String(http.StatusOK, utils.ConfigScript(assetBase))
+	})
+
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 		if len(path) >= len(base)+5 && path[len(base):len(base)+5] == "/api/" {

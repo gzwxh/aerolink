@@ -21,7 +21,6 @@ import {
   updateRole,
   useRoleList,
 } from '@/lib/api'
-import { translateError } from '@/lib/utils'
 import { resourceCatalog } from '@/lib/resource-catalog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -160,9 +159,7 @@ export function NamespacePermissionDialog({
 
   const subjectOptions = useMemo(() => {
     const base =
-      subjectType === 'user'
-        ? userOptions.map((u) => u.username)
-        : groupOptions
+      subjectType === 'user' ? userOptions.map((u) => u.username) : groupOptions
     return base.sort((a, b) => a.localeCompare(b))
   }, [subjectType, userOptions, groupOptions])
 
@@ -290,7 +287,7 @@ export function NamespacePermissionDialog({
       setSubjects([])
       onClose()
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsSaving(false)
     }
@@ -333,7 +330,7 @@ export function NamespacePermissionDialog({
       await invalidate()
       toast.success(t('common.messages.unassigned', 'Unassigned'))
     } catch (err) {
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsRevoking(false)
     }
@@ -507,7 +504,10 @@ export function NamespacePermissionDialog({
                     ? t('common.placeholders.selectUsers', 'Select users...')
                     : t('common.placeholders.selectGroups', 'Select groups...')
                 }
-                emptyText={t('common.messages.noOptionsFound', 'No options found')}
+                emptyText={t(
+                  'common.messages.noOptionsFound',
+                  'No options found'
+                )}
               />
               {subjectType === 'group' && (
                 <p className="text-xs text-muted-foreground">

@@ -5,13 +5,9 @@ import { useTranslation } from 'react-i18next'
 import { fetchUserList, useRoleList } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+
 import { GrantsScopePanel } from './grants-scope-panel'
 
 interface RoleGrant {
@@ -29,7 +25,11 @@ interface GroupEntry {
   roles: RoleGrant[]
 }
 
-export function GroupGrantsView({ initialSubject }: { initialSubject?: string }) {
+export function GroupGrantsView({
+  initialSubject,
+}: {
+  initialSubject?: string
+}) {
   const { t } = useTranslation()
   const { data: roles = [], isLoading, error } = useRoleList()
 
@@ -178,7 +178,9 @@ export function GroupGrantsView({ initialSubject }: { initialSubject?: string })
                   onClick={() => setSelectedKey(key)}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
-                    selected && `group:${selected.subject}` === key && 'bg-accent'
+                    selected &&
+                      `group:${selected.subject}` === key &&
+                      'bg-accent'
                   )}
                 >
                   <IconUsers className="h-4 w-4 shrink-0 text-muted-foreground" />

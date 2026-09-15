@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useAuth } from '@/contexts/auth-context'
 import {
   IconArrowUp,
   IconDownload,
@@ -22,8 +23,6 @@ import {
 } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
 import { roleCanAccessAnyNamespace } from '@/lib/rbac-permissions'
-import { useAuth } from '@/contexts/auth-context'
-import { translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -139,7 +138,7 @@ export function PodFileBrowser({
       refetch()
       toast.success(`Uploaded ${file.name} successfully`)
     } catch (error) {
-      toast.error(translateError(error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsUploading(false)
       e.target.value = ''

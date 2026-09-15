@@ -12,16 +12,39 @@ import (
 // Password policy error codes. Messages stay in English, consistent with the
 // rest of the API, and the code lets callers map them to localized text.
 const (
-	passwordErrTooShort    = "password_too_short"
-	passwordErrTooLong     = "password_too_long"
-	passwordErrNoUppercase = "password_missing_uppercase"
-	passwordErrNoLowercase = "password_missing_lowercase"
-	passwordErrNoDigit     = "password_missing_digit"
-	passwordErrNoSpecial   = "password_missing_special"
-	passwordErrReused      = "password_reused"
+	passwordErrTooShort      = "password_too_short"
+	passwordErrTooLong       = "password_too_long"
+	passwordErrNoUppercase   = "password_missing_uppercase"
+	passwordErrNoLowercase   = "password_missing_lowercase"
+	passwordErrNoDigit       = "password_missing_digit"
+	passwordErrNoSpecial     = "password_missing_special"
+	passwordErrReused        = "password_reused"
+	passwordErrContainsSpace = "password_contains_space"
+	passwordErrInvalidStart  = "password_invalid_start"
+	passwordErrTooFewClasses = "password_too_few_classes"
 )
 
-const maxPasswordLength = 128
+// 密码长度上限与腾讯云 CVM 等主流平台的规则对齐（8~30 位）。
+const maxPasswordLength = 30
+
+// passwordClassCount returns how many of the four character classes
+// (lowercase / uppercase / digit / special) the password contains.
+func passwordClassCount(plainPassword string) int {
+	classes := 0
+	if strings.ContainsFunc(plainPassword, unicode.IsLower) {
+		classes++
+	}
+	if strings.ContainsFunc(plainPassword, unicode.IsUpper) {
+		classes++
+	}
+	if strings.ContainsFunc(plainPassword, unicode.IsDigit) {
+		classes++
+	}
+	if strings.ContainsFunc(plainPassword, isSpecialPasswordChar) {
+		classes++
+	}
+	return classes
+}
 
 // PasswordPolicyError is returned when a password violates the security policy.
 // Code and Params let clients render a localized message instead of the English
@@ -94,6 +117,31 @@ func ValidatePassword(plainPassword string, isAdmin bool) error {
 			Message: fmt.Sprintf("password must be at most %d characters", maxPasswordLength),
 			Params:  map[string]any{"max": maxPasswordLength},
 		}
+	}
+	// 空格与以 "/" 开头会带来 shell / 路径转义问题，一律禁止。
+	if strings.ContainsRune(plainPassword, ' ') {
+		return &PasswordPolicyError{
+			Code:    passwordErrContainsSpace,
+			Message: "password must not contain spaces",
+		}
+	}
+	if strings.HasPrefix(plainPassword, "/") {
+		return &PasswordPolicyError{
+			Code:    passwordErrInvalidStart,
+			Message: `password must not start with "/"`,
+		}
+	}
+	// PasswordMinClasses > 0 时按「四类字符至少包含 N 类」校验；
+	// 为 0 时保持旧行为：按下方各字符类开关逐项全要求。
+	if setting.PasswordMinClasses > 0 {
+		if classes := passwordClassCount(plainPassword); classes < setting.PasswordMinClasses {
+			return &PasswordPolicyError{
+				Code:    passwordErrTooFewClasses,
+				Message: fmt.Sprintf("password must contain at least %d character classes", setting.PasswordMinClasses),
+				Params:  map[string]any{"count": setting.PasswordMinClasses},
+			}
+		}
+		return nil
 	}
 	if setting.PasswordRequireUppercase && !strings.ContainsFunc(plainPassword, unicode.IsUpper) {
 		return &PasswordPolicyError{

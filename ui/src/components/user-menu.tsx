@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import {
@@ -11,6 +10,7 @@ import {
   UserCog,
   ZoomIn,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -129,7 +129,8 @@ export function UserMenu() {
               )}
               {user.roles && user.roles.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {t('userMenu.role', 'Role')}: {user.roles.map((role) => role.name).join(', ')}
+                  {t('userMenu.role', 'Role')}:{' '}
+                  {user.roles.map((role) => role.name).join(', ')}
                 </p>
               )}
             </div>

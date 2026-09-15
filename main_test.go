@@ -155,11 +155,30 @@ func TestSetupStatic(t *testing.T) {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 		}
 		body := rec.Body.String()
-		if !strings.Contains(body, `window.__dynamic_base__="/kite"`) {
-			t.Fatalf("body missing dynamic base injection")
+		if !strings.Contains(body, `<script src="/kite/config.js"></script>`) {
+			t.Fatalf("body missing external dynamic base script")
+		}
+		if strings.Contains(body, "window.__dynamic_base__") {
+			t.Fatalf("inline dynamic base script must not be served (blocked by CSP)")
 		}
 		if !strings.Contains(body, "cloud.umami.is/script.js") {
 			t.Fatalf("body missing analytics injection")
+		}
+	})
+
+	t.Run("serves config.js with the runtime base", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/kite/config.js", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if got := rec.Body.String(); got != `window.__dynamic_base__="/kite";` {
+			t.Fatalf("config.js body = %q", got)
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/javascript") {
+			t.Fatalf("Content-Type = %q, want application/javascript", ct)
 		}
 	})
 

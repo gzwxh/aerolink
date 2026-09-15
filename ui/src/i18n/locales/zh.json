@@ -260,12 +260,15 @@
       "failedToDelete": "删除{{resource}}失败",
       "failedToLoad": "加载{{resource}}失败",
       "failedToResetPassword": "重置密码失败",
+      "superAdminProtected": "超级管理员不支持禁用",
       "failedToUnassign": "取消分配失败",
       "failedToUpdate": "更新{{resource}}失败",
       "inClusterConfiguration": "此集群使用集群内 ServiceAccount 配置，不需要额外的 kubeconfig。",
       "invalidYaml": "YAML 无效",
       "issuerOrOAuthUrlRequired": "请填写 Issuer，或填写 OAuth URL（Authorization、Token、User Info）",
       "keepCurrentConfiguration": "留空则保持当前配置不变",
+      "viewCurrentConfig": "查看当前配置",
+      "configLoaded": "当前配置已加载，保存后将以该内容覆盖",
       "loading": "加载中...",
       "loadingEditor": "编辑器加载中...",
       "loadingPods": "Pods 加载中...",
@@ -291,7 +294,7 @@
       "notReady": "未就绪",
       "notStarted": "未启动",
       "passwordLoginDescription": "允许用户使用用户名和密码登录。",
-      "passwordLoginWarningDescription": "保存前请确认 LDAP、OAuth Provider、Passkey 可用。没有可用的替代登录方式时，你将无法登录，只能通过重置数据库恢复。",
+      "passwordLoginWarningDescription": "保存前请确认 LDAP、OAuth Provider 可用。没有可用的替代登录方式时，你将无法登录，只能通过重置数据库恢复。",
       "passwordLoginWarningTitle": "警告：你可能会失去访问权限！",
       "passwordReset": "密码已重置",
       "resourceNotFound": "未找到{{resource}}",
@@ -779,7 +782,6 @@
   "login": {
     "title": "登录",
     "subtitle": "访问 Kubernetes 控制台",
-    "kubernetesDashboard": "Kubernetes Dashboard",
     "signIn": "登录",
     "enterUsername": "请输入用户名",
     "enterPassword": "请输入密码",
@@ -791,7 +793,6 @@
     "signInWithLdap": "LDAP 登录",
     "useLocalAccount": "使用本地账号登录",
     "useLdapAccount": "使用 LDAP 账号登录",
-    "signInWithPasskey": "使用 Passkey 登录",
     "success": "登录成功",
     "tabs": {
       "ldap": "LDAP"
@@ -802,8 +803,7 @@
     "tryAgainHint": "请尝试使用有权限的其他账号登录。",
     "noLoginMethods": "未配置登录方式",
     "configureAuth": "请先配置认证方式",
-    "footer": "© {{year}} Kite. All rights reserved.",
-    "documentation": "文档",
+    "footer": "© {{year}} Kite · {{company}} 版权所有",
     "errors": {
       "accessDenied": "访问被拒绝",
       "authenticationFailed": "认证失败",
@@ -1332,6 +1332,7 @@
     }
   },
   "notifications": {
+    "operationFailed": "操作失败",
     "tabs": {
       "email": "邮件设置",
       "templates": "消息模板",
@@ -1350,12 +1351,21 @@
       "password_expiring": "密码即将过期提醒",
       "password_expired": "密码已过期提醒",
       "inactive_user_disabled": "不活跃账号禁用提醒",
+      "password_reset_by_admin": "密码被管理员重置",
+      "account_disabled": "账号已被禁用",
+      "account_enabled": "账号已启用",
+      "account_expiring": "账号即将过期提醒",
+      "role_assigned": "角色分配通知",
+      "role_unassigned": "角色移除通知",
+      "mail_delivery_failed": "邮件发送失败告警",
       "test": "测试邮件"
     },
     "inbox": {
       "title": "通知",
       "empty": "暂无通知",
       "markAllRead": "全部已读",
+      "clearAll": "清空全部",
+      "confirmClear": "确认清空？",
       "unread": "未读"
     },
     "actions": {
@@ -1461,14 +1471,6 @@
   },
   "authenticationManagement": {
     "title": "认证设置",
-    "mfa": {
-      "title": "MFA",
-      "description": "由「安全设置 → 认证安全」中的全局 MFA 策略统一管理。"
-    },
-    "passkey": {
-      "title": "Passkey 登录",
-      "description": "允许用户注册 Passkey 并使用 Passkey 登录。"
-    },
     "ldap": {
       "title": "LDAP",
       "description": "启用 LDAP 登录，并同步 LDAP 组到 RBAC。",
@@ -2255,6 +2257,20 @@
     "copy": "复制"
   },
   "passwordPolicy": {
+    "title": "密码要求",
+    "length": "长度至少 {{min}} 位",
+    "rulesLength": "长度在 {{min}} ~ {{max}} 位字符以内（推荐 12 位以上）",
+    "rulesNoSpace": "不能包含空格",
+    "rulesNoSlashStart": "不能以 \"/\" 开头",
+    "rulesMinClasses": "至少包含以下四项中的 {{count}} 项",
+    "classLower": "小写字母 a ~ z",
+    "classUpper": "大写字母 A ~ Z",
+    "classDigit": "数字 0 ~ 9",
+    "classSpecial": "特殊字符 ()`~!@#$%^&*-+=_|{}[]:;'<>,.?/",
+    "lowercase": "包含小写字母",
+    "uppercase": "包含大写字母",
+    "number": "包含数字",
+    "special": "包含特殊字符",
     "errors": {
       "password_too_short": "密码长度不足，至少需要 {{min}} 位",
       "password_too_long": "密码长度超出限制，最多 {{max}} 位",
@@ -2262,7 +2278,10 @@
       "password_missing_lowercase": "密码必须包含小写字母",
       "password_missing_digit": "密码必须包含数字",
       "password_missing_special": "密码必须包含特殊字符",
-      "password_reused": "密码不能与前 {{count}} 次使用过的密码重复"
+      "password_reused": "密码不能与前 {{count}} 次使用过的密码重复",
+      "password_contains_space": "密码不能包含空格",
+      "password_invalid_start": "密码不能以 \"/\" 开头",
+      "password_too_few_classes": "密码至少需要包含 {{count}} 类字符（小写/大写/数字/特殊字符）"
     }
   },
   "mfaPrompt": {
@@ -2275,6 +2294,7 @@
   "mfaEnrollment": {
     "title": "需要完成 MFA 绑定",
     "description": "管理员已要求你的账号启用 MFA，请先绑定身份验证器后继续使用。",
+    "passwordStepHint": "为防止会话被盗用，请先验证当前密码；验证通过后将显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
     "passwordLabel": "当前密码",
     "continue": "继续",
     "scanHint": "请使用身份验证器扫描二维码，并输入其显示的 6 位动态码。",
@@ -2350,6 +2370,8 @@
       "passwordHistoryCountHint": "提示：用户重置密码时，不能为该用户前几次使用过的密码",
       "passwordMinLength": "密码最小长度",
       "adminPasswordMinLength": "管理员密码最小长度",
+      "passwordMinClasses": "至少包含字符类别数",
+      "passwordMinClassesHint": "0 = 要求包含下方勾选的所有字符类；1~4 = 小写/大写/数字/特殊字符至少包含 N 类",
       "passwordRequireUppercase": "必须包含大写字符",
       "passwordRequireLowercase": "必须包含小写字符",
       "passwordRequireDigit": "必须包含数字",
@@ -2411,20 +2433,6 @@
         "disableError": "停用失败",
         "qrCodeAlt": "MFA 二维码",
         "otpauthUrl": "otpauth 链接"
-      },
-      "passkeys": {
-        "title": "Passkeys",
-        "addButton": "添加 Passkey",
-        "added": "Passkey 已添加",
-        "addedOn": "添加于",
-        "addError": "添加失败",
-        "deleteAriaLabel": "删除 Passkey",
-        "deleted": "Passkey 已删除",
-        "deleteError": "删除失败",
-        "empty": "暂无 Passkey",
-        "lastUsed": "最近使用",
-        "loadError": "加载失败",
-        "namePlaceholder": "Passkey 名称"
       }
     },
     "mfa": "MFA",
@@ -2432,10 +2440,6 @@
     "enabled": "已启用",
     "disableMfa": "停用 MFA",
     "enableMfa": "启用 MFA",
-    "passkeys": "Passkeys",
-    "addPasskey": "添加 Passkey",
-    "passkeyName": "Passkey 名称",
-    "noPasskeys": "暂无 Passkey",
     "tabs": {
       "profile": "个人资料",
       "password": "修改密码",

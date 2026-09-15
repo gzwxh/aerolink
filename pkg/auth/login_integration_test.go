@@ -153,7 +153,6 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 		NodeTerminalImage:  model.DefaultGeneralNodeTerminalImage,
 		EnableVersionCheck: true,
 		EnableMFA:          true,
-		EnablePasskeyLogin: true,
 		JWTSecret:          model.SecretString(common.JwtSecret),
 	}
 	if err := db.Create(&setting).Error; err != nil {

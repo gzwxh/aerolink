@@ -260,12 +260,15 @@
       "failedToDelete": "Failed to delete {{resource}}",
       "failedToLoad": "Failed to load {{resource}}",
       "failedToResetPassword": "Failed to reset password",
+      "superAdminProtected": "The super admin cannot be disabled",
       "failedToUnassign": "Failed to unassign",
       "failedToUpdate": "Failed to update {{resource}}",
       "inClusterConfiguration": "This cluster uses the in-cluster service account configuration. No additional kubeconfig is required.",
       "invalidYaml": "Invalid YAML",
       "issuerOrOAuthUrlRequired": "Please fill in either Issuer or OAuth URL (Authorization, Token, User Info)",
       "keepCurrentConfiguration": "Leave empty to keep current configuration",
+      "viewCurrentConfig": "View current config",
+      "configLoaded": "Current config loaded; saving will overwrite with this content",
       "loading": "Loading...",
       "loadingEditor": "Loading editor...",
       "loadingPods": "Loading pods...",
@@ -291,7 +294,7 @@
       "notReady": "Not Ready",
       "notStarted": "Not started",
       "passwordLoginDescription": "Allow users to sign in with a username and password.",
-      "passwordLoginWarningDescription": "Verify that your LDAP、OAuth Provider、Passkey provider is working before saving. Without a working alternative login method, you will be locked out and can only recover by resetting the database.",
+      "passwordLoginWarningDescription": "Verify that your LDAP、OAuth Provider is working before saving. Without a working alternative login method, you will be locked out and can only recover by resetting the database.",
       "passwordLoginWarningTitle": "Warning: You may lose access!",
       "passwordReset": "Password reset",
       "resourceNotFound": "{{resource}} not found",
@@ -779,7 +782,6 @@
   "login": {
     "title": "Sign In",
     "subtitle": "Access your Kubernetes dashboard",
-    "kubernetesDashboard": "Kubernetes Dashboard",
     "signIn": "Sign In",
     "enterUsername": "Enter your username",
     "enterPassword": "Enter your password",
@@ -791,7 +793,6 @@
     "signInWithLdap": "Sign In with LDAP",
     "useLocalAccount": "Sign in with a local account",
     "useLdapAccount": "Sign in with LDAP",
-    "signInWithPasskey": "Sign in with a passkey",
     "success": "Login successful",
     "tabs": {
       "ldap": "LDAP"
@@ -802,8 +803,7 @@
     "tryAgainHint": "You can try logging in with a different account that has the required permissions.",
     "noLoginMethods": "No login methods configured",
     "configureAuth": "Please configure authentication providers in your environment",
-    "footer": "© {{year}} Kite. All rights reserved.",
-    "documentation": "Documentation",
+    "footer": "© {{year}} Kite · {{company}}. All rights reserved.",
     "errors": {
       "accessDenied": "Access Denied",
       "authenticationFailed": "Authentication Failed",
@@ -1332,6 +1332,7 @@
     }
   },
   "notifications": {
+    "operationFailed": "Operation failed",
     "tabs": {
       "email": "Mail",
       "templates": "Templates",
@@ -1350,12 +1351,21 @@
       "password_expiring": "Password expiring soon",
       "password_expired": "Password expired",
       "inactive_user_disabled": "Inactive account disabled",
+      "password_reset_by_admin": "Password reset by admin",
+      "account_disabled": "Account disabled",
+      "account_enabled": "Account enabled",
+      "account_expiring": "Account expiring soon",
+      "role_assigned": "Role assigned",
+      "role_unassigned": "Role removed",
+      "mail_delivery_failed": "Mail delivery failed",
       "test": "Test mail"
     },
     "inbox": {
       "title": "Notifications",
       "empty": "No notifications",
       "markAllRead": "Mark all read",
+      "clearAll": "Clear all",
+      "confirmClear": "Confirm clear?",
       "unread": "Unread"
     },
     "actions": {
@@ -1461,14 +1471,6 @@
   },
   "authenticationManagement": {
     "title": "Authentication",
-    "mfa": {
-      "title": "MFA",
-      "description": "Managed by the global MFA policy in Security settings."
-    },
-    "passkey": {
-      "title": "Passkey Login",
-      "description": "Allow users to register passkeys and sign in with a passkey."
-    },
     "ldap": {
       "title": "LDAP",
       "description": "Enable LDAP username/password login and sync groups into RBAC.",
@@ -2255,6 +2257,20 @@
     "jumpToBottom": "Jump to bottom"
   },
   "passwordPolicy": {
+    "title": "Password requirements",
+    "length": "At least {{min}} characters",
+    "rulesLength": "{{min}} ~ {{max}} characters (12+ recommended)",
+    "rulesNoSpace": "No spaces",
+    "rulesNoSlashStart": "Must not start with \"/\"",
+    "rulesMinClasses": "At least {{count}} of the following 4",
+    "classLower": "Lowercase letters a ~ z",
+    "classUpper": "Uppercase letters A ~ Z",
+    "classDigit": "Digits 0 ~ 9",
+    "classSpecial": "Special characters ()`~!@#$%^&*-+=_|{}[]:;'<>,.?/",
+    "lowercase": "Contains a lowercase letter",
+    "uppercase": "Contains an uppercase letter",
+    "number": "Contains a digit",
+    "special": "Contains a special character",
     "errors": {
       "password_too_short": "Password must be at least {{min}} characters",
       "password_too_long": "Password must be at most {{max}} characters",
@@ -2262,7 +2278,10 @@
       "password_missing_lowercase": "Password must contain a lowercase letter",
       "password_missing_digit": "Password must contain a digit",
       "password_missing_special": "Password must contain a special character",
-      "password_reused": "Password cannot repeat any of the last {{count}} passwords"
+      "password_reused": "Password cannot repeat any of the last {{count}} passwords",
+      "password_contains_space": "Password must not contain spaces",
+      "password_invalid_start": "Password must not start with \"/\"",
+      "password_too_few_classes": "Password must contain at least {{count}} of the character classes (lowercase / uppercase / digit / special)"
     }
   },
   "mfaPrompt": {
@@ -2275,6 +2294,7 @@
   "mfaEnrollment": {
     "title": "Multi-factor authentication is required",
     "description": "An administrator requires MFA for your account. Bind an authenticator app to continue.",
+    "passwordStepHint": "To protect this session, verify your current password first. A QR code for binding will appear once verified — scan it with your authenticator app to finish.",
     "passwordLabel": "Current password",
     "continue": "Continue",
     "scanHint": "Scan the QR code with your authenticator app, then enter the 6-digit code it shows.",
@@ -2350,6 +2370,8 @@
       "passwordHistoryCountHint": "Passwords used by the user within this count cannot be reused.",
       "passwordMinLength": "Minimum password length",
       "adminPasswordMinLength": "Minimum admin password length",
+      "passwordMinClasses": "Minimum character classes",
+      "passwordMinClassesHint": "0 = require every enabled class below; 1-4 = require at least N of lowercase / uppercase / digit / special.",
       "passwordRequireUppercase": "Require uppercase letters",
       "passwordRequireLowercase": "Require lowercase letters",
       "passwordRequireDigit": "Require digits",

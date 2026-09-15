@@ -293,6 +293,12 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 			return
 		}
 	}
+	// in-cluster 类型不可通过编辑改变：它依赖 Kite 自身 Pod 的服务账号
+	// 连接，没有 kubeconfig，类型一旦丢失集群将永久无法连接。
+	if cluster.InCluster {
+		req.InCluster = true
+		req.Config = ""
+	}
 	if cluster.ClusterAgent {
 		req.InCluster = false
 		req.Config = ""
@@ -322,6 +328,69 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	TriggerClusterSync()
 
 	c.JSON(http.StatusOK, gin.H{"message": "cluster updated successfully"})
+}
+
+// GetClusterKubeconfig returns the decrypted kubeconfig stored for a cluster
+// so an administrator can review the connection details. It sits behind the
+// MFA step-up gate: with the security policy on, an MFA-enrolled admin must
+// re-verify a code before the credentials are released.
+//
+// 路由：GET /api/v1/admin/clusters/:id/kubeconfig。
+func (cm *ClusterManager) GetClusterKubeconfig(c *gin.Context) {
+	if common.IsSectionManaged("clusters") {
+		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})
+		return
+	}
+
+	// 路由参数为集群名（GET 路由树中已有 /:name/... 通配，gin 不允许同一
+	// 位置出现不同参数名），因此这里按 name 查询而不是 id。
+	name := c.Param("name")
+	if strings.TrimSpace(name) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cluster name"})
+		return
+	}
+
+	cluster, err := model.GetClusterByName(name)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "cluster not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	switch {
+	case cluster.InCluster:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "the in-cluster connection uses the pod service account and has no stored kubeconfig",
+		})
+		return
+	case cluster.ClusterAgent:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "agent-managed clusters connect through the cluster agent and have no stored kubeconfig",
+		})
+		return
+	}
+
+	raw, err := cluster.Config.Value()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to decrypt the stored kubeconfig: " + err.Error(),
+		})
+		return
+	}
+	plain, ok := raw.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "stored kubeconfig has an unexpected format"})
+		return
+	}
+	if strings.TrimSpace(plain) == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no kubeconfig stored for this cluster"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"config": plain})
 }
 
 func (cm *ClusterManager) DeleteCluster(c *gin.Context) {

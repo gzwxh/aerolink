@@ -5,16 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { applyResource, useTemplates } from '@/lib/api'
-import { translateError } from '@/lib/utils'
-import {
-  NodeSchedulingSection,
-  applySchedulingToYaml,
-  parseSchedulingFromYaml,
-} from '@/components/node-scheduling-section'
-import {
-  defaultSchedulingConfig,
-  type SchedulingConfig,
-} from '@/components/editors/deployment-form'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -32,6 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  defaultSchedulingConfig,
+  type SchedulingConfig,
+} from '@/components/editors/deployment-form'
+import {
+  applySchedulingToYaml,
+  NodeSchedulingSection,
+  parseSchedulingFromYaml,
+} from '@/components/node-scheduling-section'
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 
@@ -129,7 +128,7 @@ function CreateResourceDialogContent({
       onOpenChange(false)
     } catch (err) {
       console.error('Failed to apply resource', err)
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsLoading(false)
     }

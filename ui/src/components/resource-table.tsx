@@ -391,9 +391,7 @@ function ResourceTableContent<T>({
         .catch((error) => {
           setDeleteProgress((prev) => ({ ...prev, done: prev.done + 1 }))
           console.error(`Failed to delete ${name}:`, error)
-          toast.error(
-            t('resourceTable.deleteFailed', { name, error: error.message })
-          )
+
           throw error
         })
     })

@@ -50,6 +50,7 @@ type SecuritySettingData struct {
 	PasswordHistoryCount     int  `json:"passwordHistoryCount"`
 	PasswordMinLength        int  `json:"passwordMinLength"`
 	AdminPasswordMinLength   int  `json:"adminPasswordMinLength"`
+	PasswordMinClasses       int  `json:"passwordMinClasses"`
 	PasswordRequireUppercase bool `json:"passwordRequireUppercase"`
 	PasswordRequireLowercase bool `json:"passwordRequireLowercase"`
 	PasswordRequireDigit     bool `json:"passwordRequireDigit"`
@@ -93,10 +94,13 @@ func DefaultSecuritySettingData() SecuritySettingData {
 		ExistingUserOnly:      true,
 		LoginSourceRestricted: true,
 
-		PasswordExpireDays:       900,
-		PasswordHistoryCount:     5,
-		PasswordMinLength:        8,
-		AdminPasswordMinLength:   12,
+		PasswordExpireDays:     900,
+		PasswordHistoryCount:   5,
+		PasswordMinLength:      8,
+		AdminPasswordMinLength: 8,
+		// 四类字符（小写/大写/数字/特殊）至少包含三类；0 表示按下方
+		// 各字符类开关逐项全要求。
+		PasswordMinClasses:       3,
 		PasswordRequireUppercase: true,
 		PasswordRequireLowercase: true,
 		PasswordRequireDigit:     true,
@@ -156,6 +160,7 @@ func (d *SecuritySettingData) Normalize() {
 	clampInt(&d.DefaultUserExpireDays, 0, 3650)
 	clampInt(&d.PasswordMinLength, 1, 64)
 	clampInt(&d.AdminPasswordMinLength, 1, 64)
+	clampInt(&d.PasswordMinClasses, 0, 4)
 	clampInt(&d.SessionMaxIdleMinutes, 1, 43200)
 	clampInt(&d.SessionMaxHours, 1, 8760)
 

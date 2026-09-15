@@ -249,7 +249,9 @@ export function EnvironmentEditor({
   )
 
   const configMapKeys = (name: string) =>
-    Object.keys(configMaps?.find((cm) => cm.metadata?.name === name)?.data || {})
+    Object.keys(
+      configMaps?.find((cm) => cm.metadata?.name === name)?.data || {}
+    )
   const secretKeys = (name: string) =>
     Object.keys(secrets?.find((s) => s.metadata?.name === name)?.data || {})
 
@@ -281,7 +283,12 @@ export function EnvironmentEditor({
       onValueChange={(value) => updateRow(index, { refName: value, key: '' })}
     >
       <SelectTrigger className="h-9 w-full">
-        <SelectValue placeholder={t('workloadWizard.envSelectResource', { kind, defaultValue: `选择 ${kind}` })} />
+        <SelectValue
+          placeholder={t('workloadWizard.envSelectResource', {
+            kind,
+            defaultValue: `选择 ${kind}`,
+          })}
+        />
       </SelectTrigger>
       <SelectContent>
         {row.refName && !names.includes(row.refName) && (
@@ -289,7 +296,10 @@ export function EnvironmentEditor({
         )}
         {names.length === 0 && (
           <SelectItem disabled value="_empty">
-            {t('workloadWizard.envNoResources', { kind, defaultValue: `暂无 ${kind}` })}
+            {t('workloadWizard.envNoResources', {
+              kind,
+              defaultValue: `暂无 ${kind}`,
+            })}
           </SelectItem>
         )}
         {names.map((name) => (
@@ -301,11 +311,7 @@ export function EnvironmentEditor({
     </Select>
   )
 
-  const renderKeyPicker = (
-    row: EnvRow,
-    index: number,
-    keys: string[]
-  ) => {
+  const renderKeyPicker = (row: EnvRow, index: number, keys: string[]) => {
     const disabled = !row.refName
     return (
       <Select
@@ -365,7 +371,10 @@ export function EnvironmentEditor({
               <Input
                 value={row.value}
                 onChange={(e) => updateRow(index, { value: e.target.value })}
-                placeholder={t('workloadWizard.envValuePlaceholder', '例如: bar')}
+                placeholder={t(
+                  'workloadWizard.envValuePlaceholder',
+                  '例如: bar'
+                )}
                 className="h-9"
               />
             </Field>
@@ -407,7 +416,9 @@ export function EnvironmentEditor({
             >
               <Select
                 value={row.fieldPath || POD_FIELDS[0]}
-                onValueChange={(value) => updateRow(index, { fieldPath: value })}
+                onValueChange={(value) =>
+                  updateRow(index, { fieldPath: value })
+                }
               >
                 <SelectTrigger className="h-9 w-full">
                   <SelectValue />
@@ -454,7 +465,10 @@ export function EnvironmentEditor({
               <Input
                 value={row.prefix}
                 onChange={(e) => updateRow(index, { prefix: e.target.value })}
-                placeholder={t('workloadWizard.envPrefixPlaceholder', '例如: FOO_')}
+                placeholder={t(
+                  'workloadWizard.envPrefixPlaceholder',
+                  '例如: FOO_'
+                )}
                 className="h-9"
               />
             </Field>
@@ -473,7 +487,10 @@ export function EnvironmentEditor({
               <Input
                 value={row.prefix}
                 onChange={(e) => updateRow(index, { prefix: e.target.value })}
-                placeholder={t('workloadWizard.envPrefixPlaceholder', '例如: FOO_')}
+                placeholder={t(
+                  'workloadWizard.envPrefixPlaceholder',
+                  '例如: FOO_'
+                )}
                 className="h-9"
               />
             </Field>
@@ -493,7 +510,10 @@ export function EnvironmentEditor({
       value: 'value',
       label: t('workloadWizard.envTypeValue', 'Key/Value Pair'),
     },
-    { value: 'resource', label: t('workloadWizard.envTypeResource', 'Resource') },
+    {
+      value: 'resource',
+      label: t('workloadWizard.envTypeResource', 'Resource'),
+    },
     {
       value: 'configMapKey',
       label: t('workloadWizard.envTypeConfigMapKey', 'ConfigMap Key'),
@@ -502,9 +522,15 @@ export function EnvironmentEditor({
       value: 'secretKey',
       label: t('workloadWizard.envTypeSecretKey', 'Secret key'),
     },
-    { value: 'podField', label: t('workloadWizard.envTypePodField', 'Pod Field') },
+    {
+      value: 'podField',
+      label: t('workloadWizard.envTypePodField', 'Pod Field'),
+    },
     { value: 'secret', label: t('workloadWizard.envTypeSecret', 'Secret') },
-    { value: 'configMap', label: t('workloadWizard.envTypeConfigMap', 'ConfigMap') },
+    {
+      value: 'configMap',
+      label: t('workloadWizard.envTypeConfigMap', 'ConfigMap'),
+    },
   ]
 
   return (
@@ -521,7 +547,9 @@ export function EnvironmentEditor({
             <Field label={t('workloadWizard.envType', '类型')}>
               <Select
                 value={row.type}
-                onValueChange={(value) => changeType(index, value as EnvRowType)}
+                onValueChange={(value) =>
+                  changeType(index, value as EnvRowType)
+                }
               >
                 <SelectTrigger className="h-9 w-full">
                   <SelectValue />

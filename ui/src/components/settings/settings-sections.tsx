@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react'
 import {
   IconAdjustments,
   IconApi,
+  IconBell,
   IconHistory,
   IconKey,
   IconServer,
@@ -9,8 +10,6 @@ import {
   IconShieldLock,
   IconTemplate,
   IconUser,
-
-  IconBell,
 } from '@tabler/icons-react'
 import type { TFunction } from 'i18next'
 
@@ -19,11 +18,9 @@ import { AuditLog } from './audit-log'
 import { AuthenticationManagement } from './authentication-management'
 import { ClusterManagement } from './cluster-management'
 import { GeneralManagement } from './general-management'
+import { NotificationManagement } from './notification-management'
 import { RBACView } from './rbac-view'
 import { SecurityManagement } from './security-management'
-import { UserStatusPanel } from './user-status-panel'
-import { NewUserDefaultsPanel } from './new-user-defaults-panel'
-import { NotificationManagement } from './notification-management'
 import { TemplateManagement } from './template-management'
 import { UserManagementTabs } from './user-management-tabs'
 
@@ -98,13 +95,7 @@ export const settingsSectionRegistry: SettingsSectionDefinition[] = [
     labelKey: 'settings.tabs.security',
     defaultLabel: 'Security',
     icon: IconShieldLock,
-    render: () => (
-      <div className="space-y-4">
-        <SecurityManagement />
-        <NewUserDefaultsPanel />
-        <UserStatusPanel />
-      </div>
-    ),
+    render: () => <SecurityManagement />,
   },
   {
     value: 'notification',

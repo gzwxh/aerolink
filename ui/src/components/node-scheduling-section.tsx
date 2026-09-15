@@ -3,14 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { useResources } from '@/lib/api'
-import {
-  SchedulingConfig,
-  TolerationForm,
-  defaultSchedulingConfig,
-  emptySchedulingTerm,
-  emptyToleration,
-  genSchedulingId,
-} from '@/components/editors/deployment-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,6 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  defaultSchedulingConfig,
+  emptySchedulingTerm,
+  emptyToleration,
+  genSchedulingId,
+  SchedulingConfig,
+  TolerationForm,
+} from '@/components/editors/deployment-form'
 
 const OPERATORS: Array<{
   value: SchedulingRuleOp
@@ -34,7 +34,8 @@ const OPERATORS: Array<{
   { value: 'Lt', label: '小于' },
 ]
 
-type SchedulingRuleOp = SchedulingConfig['terms'][number]['expressions'][number]['operator']
+type SchedulingRuleOp =
+  SchedulingConfig['terms'][number]['expressions'][number]['operator']
 
 const EFFECTS: Array<{
   value: TolerationForm['effect']
@@ -60,7 +61,9 @@ export function parseSchedulingFromYaml(content: string): SchedulingConfig {
       | {
           spec?: {
             template?: { spec?: Record<string, unknown> }
-            jobTemplate?: { spec?: { template?: { spec?: Record<string, unknown> } } }
+            jobTemplate?: {
+              spec?: { template?: { spec?: Record<string, unknown> } }
+            }
           }
         }
       | undefined
@@ -74,19 +77,17 @@ export function parseSchedulingFromYaml(content: string): SchedulingConfig {
     if (!podSpec) return config
 
     config.priorityClassName = (podSpec.priorityClassName as string) || ''
-    config.tolerations = ((podSpec.tolerations as Array<Record<string, unknown>>) || []).map(
-      (t) => ({
-        id: genSchedulingId(),
-        key: (t.key as string) || '',
-        operator: t.operator === 'Exists' ? 'Exists' : 'Equal',
-        value: (t.value as string) || '',
-        effect: ((t.effect as string) || '') as TolerationForm['effect'],
-        tolerationSeconds:
-          t.tolerationSeconds !== undefined
-            ? String(t.tolerationSeconds)
-            : '',
-      })
-    )
+    config.tolerations = (
+      (podSpec.tolerations as Array<Record<string, unknown>>) || []
+    ).map((t) => ({
+      id: genSchedulingId(),
+      key: (t.key as string) || '',
+      operator: t.operator === 'Exists' ? 'Exists' : 'Equal',
+      value: (t.value as string) || '',
+      effect: ((t.effect as string) || '') as TolerationForm['effect'],
+      tolerationSeconds:
+        t.tolerationSeconds !== undefined ? String(t.tolerationSeconds) : '',
+    }))
 
     if (podSpec.nodeName) {
       config.mode = 'specific'
@@ -218,7 +219,6 @@ function buildSchedulingPodSpecLocal(
   }
   return podSpec
 }
-
 
 /** Shared hook: sorted node names of the current cluster. */
 function useNodeNames(): string[] {

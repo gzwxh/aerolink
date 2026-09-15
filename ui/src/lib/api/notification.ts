@@ -91,8 +91,7 @@ export const useNotificationSetting = () => {
   })
 }
 
-export interface UpdateNotificationSettingPayload
-  extends Partial<NotificationSetting> {
+export interface UpdateNotificationSettingPayload extends Partial<NotificationSetting> {
   smtpPassword?: string
   clearSmtpPassword?: boolean
 }
@@ -196,7 +195,9 @@ export const useCreateNotificationSubscription = () => {
   return useMutation({
     mutationFn: createNotificationSubscription,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-subscriptions'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notification-subscriptions'],
+      })
     },
   })
 }
@@ -210,7 +211,9 @@ export const useUpdateNotificationSubscription = () => {
         { enabled }
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-subscriptions'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notification-subscriptions'],
+      })
     },
   })
 }
@@ -221,7 +224,9 @@ export const useDeleteNotificationSubscription = () => {
     mutationFn: (id: number) =>
       apiClient.delete<void>(`/admin/notification-subscriptions/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-subscriptions'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notification-subscriptions'],
+      })
     },
   })
 }
@@ -234,7 +239,11 @@ export const fetchNotifications = async (page = 1, size = 20) => {
   )
 }
 
-export const useNotifications = (page: number, size: number, enabled: boolean) => {
+export const useNotifications = (
+  page: number,
+  size: number,
+  enabled: boolean
+) => {
   return useQuery({
     queryKey: ['notifications', page, size],
     queryFn: () => fetchNotifications(page, size),
@@ -264,13 +273,30 @@ export const markNotificationsRead = async (payload: {
   return apiClient.post<{ message: string }>('/notifications/read', payload)
 }
 
+export const clearNotifications = async () => {
+  return apiClient.post<{ message: string }>('/notifications/clear')
+}
+
+export const useClearNotifications = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: clearNotifications,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    },
+  })
+}
+
 export const useMarkNotificationsRead = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: markNotificationsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notifications-unread-count'],
+      })
     },
   })
 }

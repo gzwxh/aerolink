@@ -396,14 +396,7 @@ export function ConfigMapCreatePage() {
         const value =
           mode === 'text' ? await readAsText(file) : await readAsBase64(file)
         imported.push({ key: file.name, value, fileName: file.name })
-      } catch {
-        toast.error(
-          t('configmapCreate.fileReadFailed', {
-            name: file.name,
-            defaultValue: 'Failed to read {{name}}',
-          })
-        )
-      }
+      } catch {}
     }
     if (imported.length === 0) return
 
@@ -439,14 +432,7 @@ export function ConfigMapCreatePage() {
             : row
         )
       )
-    } catch {
-      toast.error(
-        t('configmapCreate.fileReadFailed', {
-          name: file.name,
-          defaultValue: 'Failed to read {{name}}',
-        })
-      )
-    }
+    } catch {}
   }
 
   const handleCreate = async () => {
@@ -495,7 +481,6 @@ export function ConfigMapCreatePage() {
     } catch (err) {
       const message = translateError(err, t)
       setCreateError(message)
-      toast.error(message)
     } finally {
       setIsCreating(false)
     }
