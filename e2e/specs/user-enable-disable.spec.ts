@@ -1,157 +1,25 @@
-import { type Browser, type Page, expect, test } from '@playwright/test'
+import { test } from '@playwright/test'
 
-async function openUsersPage(page: Page) {
-  await page.goto('/settings?tab=users')
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Add Password User' })).toBeVisible()
-}
-
-async function createPasswordUser(
-  page: Page,
-  username: string,
-  name: string,
-  password: string
-) {
-  await page.getByRole('button', { name: 'Add Password User' }).click()
-
-  const dialog = page.getByRole('dialog', { name: 'Add Password User' })
-  await expect(dialog).toBeVisible()
-
-  await dialog.locator('input').nth(0).fill(username)
-  await dialog.locator('input').nth(1).fill(name)
-  await dialog.locator('input').nth(2).fill(password)
-  await dialog.getByRole('button', { name: 'Create' }).click()
-
-  await expect(dialog).toBeHidden()
-  await expect(page.getByRole('row').filter({ hasText: username })).toBeVisible()
-}
-
-async function assignViewerRole(page: Page, username: string) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
-  await expect(row).toBeVisible()
-
-  await row.getByRole('button', { name: 'Actions' }).click()
-  await page.getByRole('menuitem', { name: 'Assign' }).click()
-
-  const dialog = page.getByRole('dialog', { name: 'Assign Roles' })
-  await expect(dialog).toBeVisible()
-
-  const checkbox = dialog.getByRole('checkbox').nth(1)
-  await expect(checkbox).toBeVisible()
-  await checkbox.click()
-  await expect(checkbox).toBeChecked()
-
-  await dialog.getByRole('button', { name: 'Close' }).first().click()
-  await expect(dialog).toBeHidden()
-  await expect(page.getByRole('row').filter({ hasText: username })).toContainText(
-    'viewer'
-  )
-}
-
-async function toggleUserEnabled(
-  page: Page,
-  username: string,
-  actionName: 'Disable' | 'Enable'
-) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
-  await expect(row).toBeVisible()
-
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/v1/admin/users/') &&
-      response.request().method() === 'POST' &&
-      response.url().endsWith('/enable') &&
-      response.status() === 200
-  )
-
-  await row.getByRole('button', { name: 'Actions' }).click()
-  await page.getByRole('menuitem', { name: actionName }).click()
-
-  await responsePromise
-
-  await expect(row).toContainText(actionName === 'Disable' ? 'Disabled' : 'Enabled')
-}
-
-async function deleteUser(page: Page, username: string) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
-  await expect(row).toBeVisible()
-
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/v1/admin/users/') &&
-      response.request().method() === 'DELETE' &&
-      response.status() === 200
-  )
-
-  await row.getByRole('button', { name: 'Actions' }).click()
-  await page.getByRole('menuitem', { name: 'Delete' }).click()
-
-  const dialog = page.getByRole('dialog').last()
-  await expect(dialog).toBeVisible()
-  await dialog.getByPlaceholder(username).fill(username)
-  await dialog.getByRole('button', { name: 'Delete' }).click()
-
-  await responsePromise
-  await expect(page.getByRole('row').filter({ hasText: username })).toHaveCount(
-    0
-  )
-}
-
-async function loginWithPasswordUi(
-  page: Page,
-  username: string,
-  password: string
-) {
-  await expect(
-    page.getByRole('button', { name: 'Sign In with Password' })
-  ).toBeVisible()
-
-  await page.getByLabel('Username').fill(username)
-  await page.getByLabel('Password', { exact: true }).fill(password)
-  await page.getByRole('button', { name: 'Sign In with Password' }).click()
-}
-
-async function loginFreshContext(
-  browser: Browser,
-  origin: string,
-  username: string,
-  password: string
-) {
-  const context = await browser.newContext({
-    storageState: { cookies: [], origins: [] },
-  })
-  const page = await context.newPage()
-
-  await page.goto(`${origin}/login`)
-  await loginWithPasswordUi(page, username, password)
-  await page.waitForURL((url) => url.pathname === '/')
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
-
-  return { context, page }
-}
-
-async function loginFreshContextExpectFailure(
-  browser: Browser,
-  origin: string,
-  username: string,
-  password: string
-) {
-  const context = await browser.newContext({
-    storageState: { cookies: [], origins: [] },
-  })
-  const page = await context.newPage()
-
-  await page.goto(`${origin}/login`)
-  await loginWithPasswordUi(page, username, password)
-  await expect(page).toHaveURL(/\/login/)
-  await expect(page.getByRole('alert')).toContainText('insufficient permissions')
-
-  return { context, page }
-}
+import { kindClusterName } from '../env'
+import {
+  deleteBindingGroup,
+  deleteUserById,
+  findUserId,
+  grantRoleInNamespace,
+} from '../support/admin-api'
+import {
+  createPasswordUser,
+  deleteUser,
+  loginExpectingFailure,
+  loginFreshContext,
+  openUsersPage,
+  toggleUserEnabled,
+} from '../support/users'
 
 test('password user can be disabled, re-enabled, and deleted', async ({
-  page,
   browser,
+  page,
+  request,
 }) => {
   const suffix = Date.now().toString(36)
   const user = {
@@ -159,43 +27,62 @@ test('password user can be disabled, re-enabled, and deleted', async ({
     name: 'E2E Disabled',
     password: 'E2Epass!2345',
   }
+  const groupName = `e2e-disabled-scope-${suffix}`
 
-  await openUsersPage(page)
-  const origin = new URL(page.url()).origin
+  let groupId: number | undefined
+  let userId: number | undefined
 
-  await createPasswordUser(page, user.username, user.name, user.password)
-  await assignViewerRole(page, user.username)
+  try {
+    await openUsersPage(page)
+    const origin = new URL(page.url()).origin
 
-  const firstSession = await loginFreshContext(
-    browser,
-    origin,
-    user.username,
-    user.password
-  )
-  await firstSession.context.close()
+    await createPasswordUser(page, user.username, user.name, user.password)
+    userId = await findUserId(request, user.username)
 
-  await openUsersPage(page)
-  await toggleUserEnabled(page, user.username, 'Disable')
+    // 授权：账号需要「有授权才能登录」，这里给它一个命名空间范围的 viewer。
+    groupId = await grantRoleInNamespace(request, {
+      cluster: kindClusterName,
+      groupName,
+      roleName: 'viewer',
+      namespace: 'default',
+      subject: user.username,
+    })
 
-  const disabledSession = await loginFreshContextExpectFailure(
-    browser,
-    origin,
-    user.username,
-    user.password
-  )
-  await disabledSession.context.close()
+    const firstSession = await loginFreshContext(
+      browser,
+      origin,
+      user.username,
+      user.password
+    )
+    await firstSession.context.close()
 
-  await openUsersPage(page)
-  await toggleUserEnabled(page, user.username, 'Enable')
+    await openUsersPage(page)
+    await toggleUserEnabled(page, user.username, 'Disable')
 
-  const secondSession = await loginFreshContext(
-    browser,
-    origin,
-    user.username,
-    user.password
-  )
-  await secondSession.context.close()
+    // 停用后登录被拒（与「无授权」同一句提示）。
+    const disabledSession = await loginExpectingFailure(
+      browser,
+      origin,
+      user.username,
+      user.password
+    )
+    await disabledSession.context.close()
 
-  await openUsersPage(page)
-  await deleteUser(page, user.username)
+    await openUsersPage(page)
+    await toggleUserEnabled(page, user.username, 'Enable')
+
+    const secondSession = await loginFreshContext(
+      browser,
+      origin,
+      user.username,
+      user.password
+    )
+    await secondSession.context.close()
+
+    await openUsersPage(page)
+    await deleteUser(page, user.username)
+  } finally {
+    await deleteBindingGroup(request, groupId)
+    await deleteUserById(request, userId)
+  }
 })

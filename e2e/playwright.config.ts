@@ -2,12 +2,11 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
 
-import { authFile } from './env'
+import { authFile, e2eBaseUrl, englishStorageState } from './env'
 
 const e2eDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(e2eDir, '..')
-const port = process.env.KITE_E2E_PORT || '38080'
-const baseURL = process.env.KITE_E2E_BASE_URL || `http://127.0.0.1:${port}`
+const baseURL = e2eBaseUrl
 const useSystemChrome = process.env.KITE_E2E_USE_SYSTEM_CHROME === 'true'
 
 export default defineConfig({
@@ -26,6 +25,11 @@ export default defineConfig({
   outputDir: 'test-results',
   use: {
     baseURL,
+    // 浏览器没有存储语言偏好时，控制台会回退到中文，
+    // 而各测试断言的是英文文案。setup 项目会
+    // 保存上下文携带的内容，因此它写入的管理员存储状态
+    // 会为已认证项目保留该偏好。
+    storageState: englishStorageState(),
     ...(useSystemChrome ? { channel: 'chrome' as const } : {}),
     locale: 'en-US',
     trace: 'retain-on-failure',

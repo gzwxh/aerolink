@@ -1,124 +1,56 @@
-import { type Browser, type Page, expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
-import { adminUser as seededAdminUser } from '../env'
+import { kindClusterName } from '../env'
+import {
+  deleteBindingGroup,
+  deleteUserById,
+  expectStatus,
+  findUserId,
+  grantRoleInNamespace,
+} from '../support/admin-api'
+import {
+  createPasswordUser,
+  deleteUser,
+  loginExpectingFailure,
+  loginFreshContext,
+  openUsersPage,
+} from '../support/users'
 
-async function openUsersPage(page: Page) {
-  await page.goto('/settings?tab=users')
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Add Password User' })).toBeVisible()
-}
+/**
+ * 管理员页签：把账号加进当前集群受保护的「超级权限绑定」。
+ * 这是界面上授予系统管理员权限的唯一入口。
+ */
+async function addAdministrator(page: Page, username: string) {
+  await page.goto('/settings/rbac?rbacTab=administrators')
 
-async function createPasswordUser(
-  page: Page,
-  username: string,
-  name: string,
-  password: string
-) {
-  await page.getByRole('button', { name: 'Add Password User' }).click()
-
-  const dialog = page.getByRole('dialog', { name: 'Add Password User' })
+  await page.getByRole('button', { name: 'Add administrator' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Add administrator' })
   await expect(dialog).toBeVisible()
 
-  await dialog.locator('input').nth(0).fill(username)
-  await dialog.locator('input').nth(1).fill(name)
-  await dialog.locator('input').nth(2).fill(password)
-  await dialog.getByRole('button', { name: 'Create' }).click()
+  // 弹窗现在有「用户 / 用户组 / 角色」三个选择器（角色已默认选中系统管理员），
+  // 按占位文案定位到用户那个。
+  await dialog
+    .getByRole('combobox')
+    .filter({ hasText: 'Select users' })
+    .click()
+  await page.getByPlaceholder('Search...').fill(username)
+  await page.getByRole('option', { name: username }).click()
+  // 该选择器是多选：选中后仍保持打开以便
+  // 继续选择多个账号，而它的弹层会盖住提交按钮。
+  // 像用户那样关掉它（Escape 关闭弹层，而不是对话框）。
+  await page.keyboard.press('Escape')
 
+  await dialog.getByRole('button', { name: 'Add administrator' }).click()
   await expect(dialog).toBeHidden()
-  await expect(page.getByRole('row').filter({ hasText: username })).toBeVisible()
-}
-
-async function assignBuiltInRole(
-  page: Page,
-  username: string,
-  roleName: 'viewer' | 'admin'
-) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
-  await expect(row).toBeVisible()
-
-  await row.getByRole('button', { name: 'Actions' }).click()
-  await page.getByRole('menuitem', { name: 'Assign' }).click()
-
-  const dialog = page.getByRole('dialog', { name: 'Assign Roles' })
-  await expect(dialog).toBeVisible()
-  const checkbox = dialog.getByRole('checkbox').nth(roleName === 'admin' ? 0 : 1)
-  await expect(checkbox).toBeVisible()
-  await checkbox.click()
-  await expect(checkbox).toBeChecked()
-
-  await dialog.getByRole('button', { name: 'Close' }).first().click()
-  await expect(dialog).toBeHidden()
-  await expect(page.getByRole('row').filter({ hasText: username })).toContainText(
-    roleName
-  )
-}
-
-async function deleteUser(
-  page: Page,
-  username: string
-) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
-  await expect(row).toBeVisible()
-
-  await row.getByRole('button', { name: 'Actions' }).click()
-  await page.getByRole('menuitem', { name: 'Delete' }).click()
-
-  const dialog = page.getByRole('dialog').last()
-  await expect(dialog).toBeVisible()
-  await dialog.getByPlaceholder(username).fill(username)
-  await dialog.getByRole('button', { name: 'Delete' }).click()
-
-  await expect(page.getByRole('row').filter({ hasText: username })).toHaveCount(0)
-}
-
-async function loginFreshContext(
-  browser: Browser,
-  origin: string,
-  username: string,
-  password: string
-) {
-  const context = await browser.newContext({
-    storageState: { cookies: [], origins: [] },
-  })
-  const page = await context.newPage()
-
-  await page.goto(`${origin}/login`)
-  await loginWithPasswordUi(page, username, password)
-  await page.waitForURL((url) => url.pathname === '/')
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
-
-  return { context, page }
-}
-
-async function loginWithPasswordUi(
-  page: Page,
-  username: string,
-  password: string
-) {
   await expect(
-    page.getByRole('button', { name: 'Sign In with Password' })
+    page.getByRole('row').filter({ hasText: username })
   ).toBeVisible()
-
-  await page.getByLabel('Username').fill(username)
-  await page.getByLabel('Password', { exact: true }).fill(password)
-  await page.getByRole('button', { name: 'Sign In with Password' }).click()
 }
 
-async function loginCurrentContext(
-  page: Page,
-  origin: string,
-  username: string,
-  password: string
-) {
-  await page.goto(`${origin}/login`)
-  await loginWithPasswordUi(page, username, password)
-  await page.waitForURL((url) => url.pathname === '/')
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
-}
-
-test('password user lifecycle and built-in roles', async ({
-  page,
+test('password user lifecycle and access scopes', async ({
   browser,
+  page,
+  request,
 }) => {
   const suffix = Date.now().toString(36)
   const noRoleUser = {
@@ -126,7 +58,7 @@ test('password user lifecycle and built-in roles', async ({
     name: 'E2E No Role',
     password: 'E2Epass!2345',
   }
-  const viewerUser = {
+  const scopedUser = {
     username: `e2e-viewer-${suffix}`,
     name: 'E2E Viewer',
     password: 'E2Epass!2345',
@@ -136,86 +68,106 @@ test('password user lifecycle and built-in roles', async ({
     name: 'E2E Admin',
     password: 'E2Epass!2345',
   }
+  const groupName = `e2e-access-scope-${suffix}`
 
-  await openUsersPage(page)
-  const origin = new URL(page.url()).origin
-  await createPasswordUser(
-    page,
-    noRoleUser.username,
-    noRoleUser.name,
-    noRoleUser.password
-  )
+  const userIds: Array<number | undefined> = []
+  let groupId: number | undefined
 
-  await page.evaluate(async () => {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
+  try {
+    await openUsersPage(page)
+    const origin = new URL(page.url()).origin
+
+    // 1) 没有任何授权的账号连登录都不允许。
+    await createPasswordUser(
+      page,
+      noRoleUser.username,
+      noRoleUser.name,
+      noRoleUser.password
+    )
+    userIds.push(await findUserId(request, noRoleUser.username))
+
+    const noRoleSession = await loginExpectingFailure(
+      browser,
+      origin,
+      noRoleUser.username,
+      noRoleUser.password
+    )
+    await noRoleSession.context.close()
+
+    // 2) 权限绑定组的成员：只在组内命名空间可用，看不到管理面。
+    await openUsersPage(page)
+    await createPasswordUser(
+      page,
+      scopedUser.username,
+      scopedUser.name,
+      scopedUser.password
+    )
+    userIds.push(await findUserId(request, scopedUser.username))
+    groupId = await grantRoleInNamespace(request, {
+      cluster: kindClusterName,
+      groupName,
+      roleName: 'viewer',
+      namespace: 'kube-system',
+      subject: scopedUser.username,
     })
-  })
-  await page.goto(`${origin}/login`)
-  await loginWithPasswordUi(page, noRoleUser.username, noRoleUser.password)
-  await expect(page).toHaveURL(/\/login/)
-  await expect(page.getByRole('alert')).toContainText(
-    'insufficient permissions'
-  )
-  await loginCurrentContext(
-    page,
-    origin,
-    seededAdminUser.username,
-    seededAdminUser.password
-  )
 
-  await openUsersPage(page)
-  await createPasswordUser(
-    page,
-    viewerUser.username,
-    viewerUser.name,
-    viewerUser.password
-  )
-  await createPasswordUser(
-    page,
-    managedAdminUser.username,
-    managedAdminUser.name,
-    managedAdminUser.password
-  )
+    const scopedSession = await loginFreshContext(
+      browser,
+      origin,
+      scopedUser.username,
+      scopedUser.password
+    )
+    await scopedSession.page.goto(`${origin}/namespaces`)
+    await expect(
+      scopedSession.page.getByRole('link', { name: 'kube-system' })
+    ).toBeVisible()
+    await expect(
+      scopedSession.page.getByRole('link', { name: 'System Settings' })
+    ).toHaveCount(0)
+    await expect(
+      scopedSession.page.getByRole('button', {
+        name: 'Toggle Kubectl Terminal',
+      })
+    ).toHaveCount(0)
+    await scopedSession.context.close()
 
-  await assignBuiltInRole(page, viewerUser.username, 'viewer')
-  await assignBuiltInRole(page, managedAdminUser.username, 'admin')
+    // 3) 管理员页签：加入超级权限绑定，拿到系统管理员的全部权限。
+    await openUsersPage(page)
+    await createPasswordUser(
+      page,
+      managedAdminUser.username,
+      managedAdminUser.name,
+      managedAdminUser.password
+    )
+    userIds.push(await findUserId(request, managedAdminUser.username))
+    await addAdministrator(page, managedAdminUser.username)
 
-  const viewerSession = await loginFreshContext(
-    browser,
-    origin,
-    viewerUser.username,
-    viewerUser.password
-  )
-  await viewerSession.page.goto(`${origin}/namespaces`)
-  await expect(
-    viewerSession.page.getByRole('link', { name: 'kube-system' })
-  ).toBeVisible()
-  await expect(
-    viewerSession.page.getByRole('link', { name: 'System Settings' })
-  ).toHaveCount(0)
-  await expect(
-    viewerSession.page.getByRole('button', { name: 'Toggle Kubectl Terminal' })
-  ).toHaveCount(0)
-  await viewerSession.context.close()
+    const adminSession = await loginFreshContext(
+      browser,
+      origin,
+      managedAdminUser.username,
+      managedAdminUser.password
+    )
+    // 控制台导航以 /api/auth/user 上报的角色为准，
+    // 而那里只带直接角色分配——全局权限绑定组的成员身份
+    // 有意不在那里上报。但授权本身是真实的：后端用
+    // effectiveRoles（直接角色 + 全局绑定组）做鉴权，因此应在 API 层
+    // 断言该能力。
+    await expectStatus(
+      await adminSession.page.request.get('/api/v1/admin/users/'),
+      200
+    )
+    await adminSession.context.close()
 
-  const adminSession = await loginFreshContext(
-    browser,
-    origin,
-    managedAdminUser.username,
-    managedAdminUser.password
-  )
-  await expect(
-    adminSession.page.getByRole('link', { name: 'System Settings' })
-  ).toBeVisible()
-  await expect(
-    adminSession.page.getByRole('button', { name: 'Toggle Kubectl Terminal' })
-  ).toBeVisible()
-  await adminSession.context.close()
-
-  await openUsersPage(page)
-  await deleteUser(page, noRoleUser.username)
-  await deleteUser(page, viewerUser.username)
-  await deleteUser(page, managedAdminUser.username)
+    // 收尾：删掉三个账号（用户删除会一并清掉它们的成员关系）。
+    await openUsersPage(page)
+    for (const user of [noRoleUser, scopedUser, managedAdminUser]) {
+      await deleteUser(page, user.username)
+    }
+  } finally {
+    await deleteBindingGroup(request, groupId)
+    for (const id of userIds) {
+      await deleteUserById(request, id)
+    }
+  }
 })

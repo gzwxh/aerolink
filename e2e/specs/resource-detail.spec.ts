@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
 
-import { kindClusterName } from '../env'
+import { e2eNodeName } from '../env'
 
-const controlPlaneNodeName = `${kindClusterName}-control-plane`
+const nodeName = e2eNodeName
 
 test.describe('resource detail navigation', () => {
   test('navigates from the services list to service detail', async ({
@@ -29,14 +29,12 @@ test.describe('resource detail navigation', () => {
   test('navigates from the nodes list to node detail', async ({ page }) => {
     await page.goto('/nodes')
 
-    await page
-      .getByPlaceholder(/^Search nodes/i)
-      .fill(controlPlaneNodeName)
-    const nodeLink = page.getByRole('link', { name: controlPlaneNodeName })
+    await page.getByPlaceholder(/^Search nodes/i).fill(nodeName)
+    const nodeLink = page.getByRole('link', { name: nodeName })
     await expect(nodeLink).toBeVisible()
     await nodeLink.click()
 
-    await page.waitForURL(`**/nodes/${controlPlaneNodeName}`)
+    await page.waitForURL(`**/nodes/${nodeName}`)
     await expect(
       page.getByRole('navigation', { name: 'breadcrumb' })
     ).toContainText(/nodes/i)

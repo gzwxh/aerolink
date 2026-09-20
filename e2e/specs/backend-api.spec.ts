@@ -8,7 +8,8 @@ import {
   type APIResponse,
 } from '@playwright/test'
 
-import { adminUser, kindClusterName } from '../env'
+import { adminUser, e2eContextName } from '../env'
+import { deleteBindingGroup, grantRoleInNamespace } from '../support/admin-api'
 
 interface GeneralSetting {
   aiAgentEnabled: boolean
@@ -24,7 +25,6 @@ interface GeneralSetting {
   enableVersionCheck: boolean
   passwordLoginDisabled: boolean
   enableMFA: boolean
-  enablePasskeyLogin: boolean
   loginPrompt: string
 }
 
@@ -76,6 +76,7 @@ test('backend APIs work end to end against the real test environment', async ({
   const finalPassword = 'E2EApi!4567'
   const roleName = `e2e-api-role-${suffix}`
   const decoyRoleName = `e2e-api-decoy-${suffix}`
+  const bindingGroupName = `e2e-api-bind-${suffix}`
   const apiKeyName = `e2e-api-key-${suffix}`
   const templateName = `e2e-api-template-${suffix}`
   const oauthProviderName = `e2e-oauth-${suffix}`
@@ -88,9 +89,7 @@ test('backend APIs work end to end against the real test environment', async ({
   const deniedPodName = `e2e-api-pod-denied-${suffix}`
   const deploymentName = `e2e-api-deployment-${suffix}`
   const deniedDeploymentName = `e2e-api-deployment-denied-${suffix}`
-  const clusterName = kindClusterName.startsWith('kind-')
-    ? kindClusterName
-    : `kind-${kindClusterName}`
+  const clusterName = e2eContextName
   const clusterPath = `/api/v1/_clusters/${encodeURIComponent(clusterName)}`
   const configMapPath = `${clusterPath}/configmaps/default/${configMapName}`
   const deniedConfigMapPath = `${clusterPath}/configmaps/kube-system/${deniedConfigMapName}`
@@ -101,6 +100,7 @@ test('backend APIs work end to end against the real test environment', async ({
 
   let userId: number | undefined
   let roleId: number | undefined
+  let bindingGroupId: number | undefined
   let decoyRoleId: number | undefined
   let apiKeyId: number | undefined
   let templateId: number | undefined
@@ -240,7 +240,6 @@ test('backend APIs work end to end against the real test environment', async ({
         data: {
           aiAgentEnabled: false,
           enableMFA: false,
-          enablePasskeyLogin: false,
           loginPrompt: `Backend API E2E ${suffix}`,
         },
       }),
@@ -250,7 +249,6 @@ test('backend APIs work end to end against the real test environment', async ({
     expect(updatedGeneralSetting).toMatchObject({
       aiAgentEnabled: false,
       enableMFA: false,
-      enablePasskeyLogin: false,
       loginPrompt: `Backend API E2E ${suffix}`,
     })
     await expectJSON(
@@ -507,8 +505,8 @@ test('backend APIs work end to end against the real test environment', async ({
         data: {
           name: roleName,
           description: 'read ConfigMaps in default',
-          clusters: [clusterName],
-          namespaces: ['default'],
+          // 角色的命名空间范围已不再是角色属性：这里只声明「资源 + 操作」，
+          // 生效范围由下面创建的权限绑定表达。
           resources: ['configmaps', 'pods', 'deployments'],
           verbs: ['get'],
         },
@@ -534,8 +532,6 @@ test('backend APIs work end to end against the real test environment', async ({
         data: {
           name: roleName,
           description: 'read ConfigMaps, Pods, and Deployments in default',
-          clusters: [clusterName],
-          namespaces: ['default'],
           resources: ['configmaps', 'pods', 'deployments'],
           verbs: ['get'],
         },
@@ -545,12 +541,15 @@ test('backend APIs work end to end against the real test environment', async ({
     expect(updatedRole.role.description).toBe(
       'read ConfigMaps, Pods, and Deployments in default'
     )
-    await expectJSON(
-      await request.post(`/api/v1/admin/roles/${roleId}/assign`, {
-        data: { subjectType: 'user', subject: username },
-      }),
-      201
-    )
+    // 直接分配角色会让它对所有命名空间生效（角色本身不再带范围），所以读者的
+    // 读取权限通过一个只含 default 的权限绑定组授予，越界拒绝的断言才有意义。
+    bindingGroupId = await grantRoleInNamespace(request, {
+      cluster: clusterName,
+      groupName: bindingGroupName,
+      roleName,
+      namespace: 'default',
+      subject: username,
+    })
     await expectJSON(
       await request.post(`/api/v1/admin/roles/${roleId}/assign`, {
         data: { subjectType: 'user', subject: apiKeyName },
@@ -562,11 +561,11 @@ test('backend APIs work end to end against the real test environment', async ({
     }>(
       await request.post('/api/v1/admin/roles/', {
         data: {
+          // 角色不再带集群属性，所以“维度不可跨角色拼接”改用资源维度断言：
+          // 这个诱饵角色只授权另一个资源，不会扩大读取角色在 kube-system 上的权限。
           name: decoyRoleName,
           description: 'must not combine dimensions with the reader role',
-          clusters: ['not-the-active-cluster'],
-          namespaces: ['kube-system'],
-          resources: ['configmaps', 'pods', 'deployments'],
+          resources: ['widgets.example.com'],
           verbs: ['get'],
         },
       }),
@@ -1012,12 +1011,16 @@ test('backend APIs work end to end against the real test environment', async ({
       })
       .toBe(204)
     const readerUser = await expectJSON<{
-      user: { username: string; roles: Array<{ name: string }> }
+      user: { username: string; roles?: Array<{ name: string }> }
     }>(await readerRequest.get('/api/auth/user'), 200)
     expect(readerUser.user.username).toBe(username)
-    expect(readerUser.user.roles.map((role) => role.name)).toEqual(
-      expect.arrayContaining([roleName, decoyRoleName])
-    )
+    // 该只读用户通过权限绑定组读取 configmap，而
+    // /api/auth/user 不会上报它——那里只带直接角色分配。
+    // 诱饵角色是直接分配的，因此出现的是它；
+    // API key 身份（上面已断言）同样覆盖直接分配。
+    expect(readerUser.user.roles?.map((role) => role.name)).toEqual([
+      decoyRoleName,
+    ])
 
     const updatedCurrentUser = await expectJSON<{ name: string }>(
       await readerRequest.put('/api/users/me', {
@@ -1082,33 +1085,8 @@ test('backend APIs work end to end against the real test environment', async ({
       }),
       ['mfa is disabled']
     )
-    await expectForbidden(await readerRequest.get('/api/users/me/passkeys'), [
-      'passkey login is disabled',
-    ])
-    await expectForbidden(
-      await readerRequest.post('/api/users/me/passkeys/begin', {
-        data: { name: 'blocked', current_password: resetPassword },
-      }),
-      ['passkey login is disabled']
-    )
-    await expectForbidden(
-      await readerRequest.post('/api/users/me/passkeys/finish', { data: {} }),
-      ['passkey login is disabled']
-    )
-    await expectForbidden(
-      await readerRequest.delete('/api/users/me/passkeys/1'),
-      ['passkey login is disabled']
-    )
-    await expectForbidden(
-      await anonymousRequest.post('/api/auth/passkey/login/begin'),
-      ['passkey login is disabled']
-    )
-    await expectForbidden(
-      await anonymousRequest.post('/api/auth/passkey/login/finish', {
-        data: {},
-      }),
-      ['passkey login is disabled']
-    )
+    // Passkey（WebAuthn）端点已不存在；该功能已从产品中
+    // 移除，因此这里已无可拒绝的内容。
     await expectStatus(
       await readerRequest.post('/api/users/me/password', {
         data: {
@@ -1118,6 +1096,16 @@ test('backend APIs work end to end against the real test environment', async ({
       }),
       200
     )
+    // 修改密码会让此前签发的会话失效，因此
+    // 只读用户必须重新登录，才能继续后面的调用。
+    await expect
+      .poll(async () => {
+        const response = await readerRequest!.post('/api/auth/login/password', {
+          data: { username, password: finalPassword },
+        })
+        return response.status()
+      })
+      .toBe(204)
 
     const allowedList = await expectJSON<{
       items: Array<{ metadata: { name: string; namespace: string } }>
@@ -1240,9 +1228,12 @@ test('backend APIs work end to end against the real test environment', async ({
     const namespaceList = await expectJSON<{
       items: Array<{ metadata: { name: string } }>
     }>(await readerRequest.get(`${clusterPath}/namespaces`), 200)
-    expect(namespaceList.items.map((item) => item.metadata.name)).toEqual([
-      'default',
-    ])
+    // 角色的命名空间范围已不是角色属性：读者还直接持有一个未约束的角色（诱饵），
+    // 而 CanAccessNamespace 把「命名空间列表为空」视为不约束 —— 该集群全部命名空间
+    // 因此可见。真正按命名空间限定可见性的场景见 rbac-custom-role.spec.ts。
+    expect(namespaceList.items.map((item) => item.metadata.name)).toContain(
+      'default'
+    )
 
     await expectStatus(
       await readerRequest.get('/api/v1/configmaps/default', {
@@ -1286,7 +1277,7 @@ test('backend APIs work end to end against the real test environment', async ({
     )
     await expectForbidden(
       await readerRequest.get(`${podPath}/files?container=pause&path=/`),
-      ['exec pods', 'namespace default', clusterName]
+      ['view-file pods', 'namespace default', clusterName]
     )
     await expectForbidden(
       await readerRequest.put(deploymentPath, { data: currentDeployment }),
@@ -1414,7 +1405,6 @@ test('backend APIs work end to end against the real test environment', async ({
         data: {
           aiAgentEnabled: originalGeneralSetting.aiAgentEnabled,
           enableMFA: originalGeneralSetting.enableMFA,
-          enablePasskeyLogin: originalGeneralSetting.enablePasskeyLogin,
           loginPrompt: originalGeneralSetting.loginPrompt,
         },
       }),
@@ -1482,6 +1472,7 @@ test('backend APIs work end to end against the real test environment', async ({
         .delete(`/api/v1/admin/users/${userId}`)
         .catch(() => undefined)
     }
+    await deleteBindingGroup(request, bindingGroupId)
     if (roleId !== undefined) {
       await request
         .delete(`/api/v1/admin/roles/${roleId}`)
@@ -1541,7 +1532,6 @@ test('backend APIs work end to end against the real test environment', async ({
           data: {
             aiAgentEnabled: originalGeneralSetting.aiAgentEnabled,
             enableMFA: originalGeneralSetting.enableMFA,
-            enablePasskeyLogin: originalGeneralSetting.enablePasskeyLogin,
             loginPrompt: originalGeneralSetting.loginPrompt,
           },
         })

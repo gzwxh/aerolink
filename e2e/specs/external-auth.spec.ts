@@ -1,10 +1,13 @@
-import { type Browser, type Page, expect, test } from '@playwright/test'
+import { expect, test, type Browser, type Page } from '@playwright/test'
 
-import { authFile } from '../env'
+import {
+  authFile,
+  e2eBaseUrl,
+  englishStorageState,
+  kindClusterName,
+} from '../env'
 
-const baseURL =
-  process.env.KITE_E2E_BASE_URL ||
-  `http://127.0.0.1:${process.env.KITE_E2E_PORT || '38080'}`
+const baseURL = e2eBaseUrl
 const ldapURL = process.env.KITE_E2E_LDAP_URL
 const oauthIssuer = process.env.KITE_E2E_OAUTH_ISSUER
 
@@ -41,10 +44,19 @@ const customGroupClaimOAuthProvider = {
   allowedGroups: 'OAuth E2E',
 }
 
+// 外部身份（LDAP / OIDC 用户组）通过**权限绑定**拿到 viewer：
+// 绑定组 = 集群 + 命名空间（default）+ 成员（用户组 × 角色）。
+// 绑定对象是用户组，所以成员的增删完全由目录维护，Kite 侧不需要跟着改。
+const externalBinding = {
+  name: 'e2e-external-scope',
+  namespace: 'default',
+  groups: ['e2e-viewers', 'OAuth E2E'],
+}
+
 async function openAnonymousPage(browser: Browser) {
   const context = await browser.newContext({
     baseURL,
-    storageState: { cookies: [], origins: [] },
+    storageState: englishStorageState(baseURL),
   })
   const page = await context.newPage()
   return { context, page }
@@ -77,7 +89,14 @@ async function expectSignedInUser(
   provider: string
 ) {
   await page.waitForURL((url) => url.pathname === '/')
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+
+  // 授权效果：外部账号只被绑定到一个命名空间，命名空间列表就该只有它。
+  // （权限绑定组的成员不持有全局角色，所以用户菜单不会出现 Role 行；
+  //  概览页读的是集群级数据，对被授权范围收窄的账号不再作为断言。）
+  await page.goto('/namespaces')
+  await expect(
+    page.getByRole('link', { name: externalBinding.namespace })
+  ).toBeVisible()
 
   await openUserMenu(page)
   await expect(
@@ -90,12 +109,6 @@ async function expectSignedInUser(
     page
       .locator('p.text-xs.text-muted-foreground')
       .filter({ hasText: `via ${provider}` })
-      .first()
-  ).toBeVisible()
-  await expect(
-    page
-      .locator('p.text-xs.text-muted-foreground')
-      .filter({ hasText: 'Role: viewer' })
       .first()
   ).toBeVisible()
 }
@@ -147,9 +160,7 @@ async function configureOAuthViaUI(page: Page) {
   await dialog.getByLabel('Client ID *').fill('kite-e2e')
   await dialog.getByLabel('Client Secret *').fill('kite-e2e-secret')
   await dialog.getByLabel('Issuer').fill(oauthIssuer!)
-  await dialog
-    .getByLabel('Scopes')
-    .fill('openid,profile,email,groups')
+  await dialog.getByLabel('Scopes').fill('openid,profile,email,groups')
   await dialog.getByRole('button', { name: 'Create' }).click()
 
   await expect(providerRow).toBeVisible()
@@ -308,28 +319,69 @@ async function configureCustomGroupClaimOAuthViaUI(page: Page) {
   await expect(providerRow).toBeVisible()
 }
 
-async function assignViewerRoleViaUI(page: Page, groupName: string) {
-  await page.goto('/rbac')
-  await expect(
-    page.getByRole('heading', { name: 'RBAC Management' })
-  ).toBeVisible()
+// 角色成员界面已收敛到权限绑定页：这里按当前模型给外部用户组建权限绑定。
+// 幂等：重跑时复用已存在的绑定组，只刷新命名空间与成员。
+async function grantViewerToExternalGroups(page: Page) {
+  const rolesResponse = await page.request.get('/api/v1/admin/roles/')
+  const rolesBody = await rolesResponse.text()
+  expect(rolesResponse.status(), rolesBody).toBe(200)
 
-  await page
-    .getByTestId('rbac-role-list')
-    .getByRole('button', { name: 'viewer' })
-    .click()
+  const viewer = (
+    JSON.parse(rolesBody) as { roles: Array<{ id: number; name: string }> }
+  ).roles.find((role) => role.name === 'viewer')
+  expect(viewer, 'built-in viewer role should exist').toBeTruthy()
 
-  if (!(await page.getByText(groupName).count())) {
-    await page.getByRole('combobox', { name: /^User$/ }).click()
-    await page.getByRole('option', { name: 'OIDC Group' }).click()
+  const listResponse = await page.request.get(
+    `/api/v1/admin/binding-groups/?cluster=${encodeURIComponent(kindClusterName)}`
+  )
+  const listBody = await listResponse.text()
+  expect(listResponse.status(), listBody).toBe(200)
 
-    await page.getByRole('combobox', { name: /Select groups.../ }).click()
-    await page.getByPlaceholder('Search...').last().fill(groupName)
-    await page.getByRole('option', { name: groupName }).click()
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
+  const existing = (
+    JSON.parse(listBody) as {
+      bindingGroups: Array<{ id: number; name: string }>
+    }
+  ).bindingGroups.find((group) => group.name === externalBinding.name)
+
+  let groupId = existing?.id
+  if (groupId === undefined) {
+    const createResponse = await page.request.post(
+      '/api/v1/admin/binding-groups/',
+      {
+        data: {
+          cluster: kindClusterName,
+          name: externalBinding.name,
+          description: 'e2e: viewer for external groups',
+        },
+      }
+    )
+    const createBody = await createResponse.text()
+    expect(createResponse.status(), createBody).toBe(201)
+    groupId = (JSON.parse(createBody) as { bindingGroup: { id: number } })
+      .bindingGroup.id
   }
 
-  await expect(page.getByText(groupName).first()).toBeVisible()
+  const namespacesResponse = await page.request.put(
+    `/api/v1/admin/binding-groups/${groupId}/namespaces`,
+    { data: { namespaces: [externalBinding.namespace] } }
+  )
+  expect(namespacesResponse.status(), await namespacesResponse.text()).toBe(200)
+
+  const membersResponse = await page.request.put(
+    `/api/v1/admin/binding-groups/${groupId}/members`,
+    {
+      data: {
+        members: externalBinding.groups.map((group) => ({
+          subjectType: 'group',
+          subject: group,
+          // 空字符串 = 组内全部命名空间。
+          namespace: '',
+          roleIds: [viewer!.id],
+        })),
+      },
+    }
+  )
+  expect(membersResponse.status(), await membersResponse.text()).toBe(200)
 }
 
 test.describe('external auth', () => {
@@ -351,8 +403,8 @@ test.describe('external auth', () => {
       await configureUsernameClaimOAuthViaUI(adminPage)
       await configureRestrictedOAuthViaUI(adminPage)
       await configureCustomGroupClaimOAuthViaUI(adminPage)
-      await assignViewerRoleViaUI(adminPage, 'e2e-viewers')
-      await assignViewerRoleViaUI(adminPage, 'OAuth E2E')
+      // 外部用户组的授权：一个权限绑定（命名空间 default + viewer）。
+      await grantViewerToExternalGroups(adminPage)
     } finally {
       await adminContext.close()
     }
@@ -389,7 +441,9 @@ test.describe('external auth', () => {
         page.getByRole('heading', { name: 'Log in to Your Account' })
       ).toBeVisible()
       await page.getByLabel('Username').fill(oauthUser.username)
-      await page.getByLabel('Password', { exact: true }).fill(oauthUser.password)
+      await page
+        .getByLabel('Password', { exact: true })
+        .fill(oauthUser.password)
       await page.getByRole('button', { name: 'Login' }).click()
 
       await expectSignedInUser(page, oauthUser.username, oauthUser.provider)
@@ -421,7 +475,9 @@ test.describe('external auth', () => {
         page.getByRole('heading', { name: 'Log in to Your Account' })
       ).toBeVisible()
       await page.getByLabel('Username').fill(oauthUser.username)
-      await page.getByLabel('Password', { exact: true }).fill(oauthUser.password)
+      await page
+        .getByLabel('Password', { exact: true })
+        .fill(oauthUser.password)
       await page.getByRole('button', { name: 'Login' }).click()
 
       await expectSignedInUser(
@@ -459,7 +515,9 @@ test.describe('external auth', () => {
     }
   })
 
-  test('rejects Dex OAuth users without a mapped group', async ({ browser }) => {
+  test('rejects Dex OAuth users without a mapped group', async ({
+    browser,
+  }) => {
     const { context, page } = await openAnonymousPage(browser)
 
     try {
@@ -510,7 +568,9 @@ test.describe('external auth', () => {
         page.getByRole('heading', { name: 'Log in to Your Account' })
       ).toBeVisible()
       await page.getByLabel('Username').fill(oauthUser.username)
-      await page.getByLabel('Password', { exact: true }).fill(oauthUser.password)
+      await page
+        .getByLabel('Password', { exact: true })
+        .fill(oauthUser.password)
       await page.getByRole('button', { name: 'Login' }).click()
 
       await expectSignedInUser(
@@ -546,7 +606,9 @@ test.describe('external auth', () => {
         page.getByRole('heading', { name: 'Log in to Your Account' })
       ).toBeVisible()
       await page.getByLabel('Username').fill(oauthUser.username)
-      await page.getByLabel('Password', { exact: true }).fill(oauthUser.password)
+      await page
+        .getByLabel('Password', { exact: true })
+        .fill(oauthUser.password)
       await page.getByRole('button', { name: 'Login' }).click()
 
       await expectSignedInUser(

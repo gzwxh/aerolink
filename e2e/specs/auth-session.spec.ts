@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { adminUser } from '../env'
+import { adminUser, englishStorageState } from '../env'
 
 test.describe('auth session', () => {
   test('logout returns to login', async ({ page }) => {
@@ -19,7 +19,7 @@ test.describe('auth session', () => {
 })
 
 test.describe('password login', () => {
-  test.use({ storageState: { cookies: [], origins: [] } })
+  test.use({ storageState: englishStorageState() })
 
   test('returns to the app', async ({ page }) => {
     await page.goto('/login')
