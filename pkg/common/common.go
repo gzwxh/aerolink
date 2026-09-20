@@ -1,6 +1,7 @@
 package common
 
 import (
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -239,6 +240,50 @@ func loadDatabaseEnvs() {
 			klog.Warningf("Invalid KITE_DB_CONN_MAX_LIFETIME_MINUTES %q, keeping %s", v, DBConnMaxLifetime)
 		}
 	}
+
+	// PostgreSQL 的 DSN 没有 MySQL 那样的默认值兜底（见 model.MySQLDSN）：漏写 TimeZone
+	// 不会报错，但 timestamptz 会按服务端时区解释（官方镜像默认 Etc/UTC），界面与审计
+	// 日志里的时间会整体偏移。这里只告警、不改写 DSN——静默改时区比报错更难定位。
+	if warn := postgresDSNTimeZoneWarning(DBType, DBDSN); warn != "" {
+		klog.Warningf("%s", warn)
+	}
+}
+
+// postgresDSNTimeZoneWarning 报告 PostgreSQL 的 DSN 是否漏写了 TimeZone，漏则返回告警文案。
+//
+// 只查这一项是刻意的：DSN 里其它参数漏了通常症状很直接（连不上、读写报错），
+// 而时区漏了不报错，只让时间静默偏移——这类问题最难在事后定位。
+func postgresDSNTimeZoneWarning(dbType, dsn string) string {
+	if dbType != "postgres" || dsnHasTimeZone(dsn) {
+		return ""
+	}
+	return `DB_DSN does not set TimeZone for PostgreSQL: timestamptz values are interpreted in the server's time zone ` +
+		`(the official image defaults to Etc/UTC), so timestamps in the UI and audit logs shift by that offset. ` +
+		`Add it to DB_DSN, e.g. TimeZone=Asia/Shanghai, or ?TimeZone=Asia%2FShanghai in the URL form.`
+}
+
+// dsnHasTimeZone 在两种 DSN 写法里找 timezone 参数（大小写不敏感，pgx 两种都支持）。
+func dsnHasTimeZone(dsn string) bool {
+	if strings.Contains(dsn, "://") {
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return false
+		}
+		query := u.Query()
+		for key := range query {
+			if strings.EqualFold(key, "timezone") {
+				return true
+			}
+		}
+		// 也认 options=-c timezone=... 这种写法。
+		return strings.Contains(strings.ToLower(query.Get("options")), "timezone")
+	}
+	for _, field := range strings.Fields(dsn) {
+		if key, _, ok := strings.Cut(field, "="); ok && strings.EqualFold(key, "timezone") {
+			return true
+		}
+	}
+	return false
 }
 
 // loadServerEnvs 读取监听、反向代理与本地化相关配置。
