@@ -107,6 +107,37 @@ export function WorkloadInfoRow({
   )
 }
 
+/**
+ * Selector 这类「key=value」列表。
+ *
+ * 单个键值对可能很长（`app.kubernetes.io/instance=release-…`）而概览列很窄，
+ * 以前用 `truncate` 会把它截成省略号、看不到完整内容，所以这里改成换行显示完整值
+ * （`break-all` 让没有空格的键名也能折行），鼠标悬停仍有完整文本。
+ */
+export function SelectorBadges({
+  entries,
+}: {
+  entries: Array<[string, string]>
+}) {
+  if (entries.length === 0) {
+    return <span className="text-muted-foreground">-</span>
+  }
+  return (
+    <div className="flex min-w-0 flex-wrap gap-1">
+      {entries.map(([key, value]) => (
+        <Badge
+          key={key}
+          variant="outline"
+          className="h-auto max-w-full items-start whitespace-normal break-all py-0.5 text-left font-mono"
+          title={`${key}=${value}`}
+        >
+          {key}={value}
+        </Badge>
+      ))}
+    </div>
+  )
+}
+
 export function ContainerImagesList({
   containers,
 }: {

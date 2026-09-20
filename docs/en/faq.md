@@ -2,13 +2,13 @@
 
 ## Data Sharing
 
-By default, Kite does not collect any analytics data.
+Kite collects no data and reports nothing to third parties. The upstream anonymous analytics
+(umami) has been removed from this internal branch entirely: there is no analytics switch, no
+injected script, and the `Content-Security-Policy` served by the backend allows no third-party
+origin.
 
-If you would like to help improve the product, you can set the environment variable `ENABLE_ANALYTICS` to `true`.
-
-Kite will use umami to collect minimal anonymous usage data.
-
-The source code can be found [here](https://github.com/kite-org/kite/blob/main/pkg/utils/utils.go#L10-L16).
+Kite does not query upstream releases either: there is no update check and no request to
+`api.github.com`.
 
 ## Permission Issues
 
@@ -68,11 +68,13 @@ For more details, see [Issue #204](https://github.com/kite-org/kite/issues/204).
 
 ## How to Change Font
 
-By default, Kite provides three fonts: system default, `Maple Mono`, and `JetBrains Mono`.
+By default, Kite provides five fonts: system default, `Maple Mono`, `JetBrains Mono`, and the Chinese-first Song and Kai typefaces.
+
+Song and Kai ship with the binary as interface subsets of SIL OFL 1.1 fonts (see `NOTICE`): Song derives from Source Han Serif CN and Kai from ChillKai. They cover GB2312 plus the UI copy only, and only include weight 400 — bold is synthesized by the browser. See `ui/src/components/font-provider.tsx` and `scripts/build-font-subsets.sh`.
 
 If you want to use a different font, you need to build the project yourself.
 
-Build kite with make and change the font in `./ui/src/index.css`:
+Build kite with make and change the font in `./ui/src/styles/base.css`:
 
 ```css
 @font-face {

@@ -2,6 +2,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
+import { canSelfEnrollMFA } from '@/lib/mfa-enrollment'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -21,8 +22,11 @@ const TAB_PARAM = 'tab'
  * 这些内容原来挤在头像菜单的「账号设置」弹窗里；改成整页后才有位置展示账号的
  * 只读信息（用户名、身份来源、角色、创建 / 登录时间）。
  *
- * 「安全」页签只对本地密码用户显示：改密码与绑定动态码都要求校验当前密码，
- * 而目录用户（LDAP / OIDC）没有本地密码，后端也会直接 403。
+ * 「安全」页签对本地密码账号与 LDAP 账号显示：两者的动态码都能自助绑定
+ * （密码账号提交当前密码，LDAP 账号要求近期重新登录过，见 lib/mfa-enrollment.ts）。
+ * 改密码区块只对本地密码账号渲染——目录账号的密码由身份源管理。
+ * OIDC 等外部身份源不提供绑定入口，只有已经绑定过动态码的账号才显示该页签，
+ * 让本人仍能自行解绑。
  */
 export function AccountPage() {
   const { t } = useTranslation()
@@ -34,9 +38,10 @@ export function AccountPage() {
     tabParam === 'security' || tabParam === 'appearance' ? tabParam : 'profile'
 
   const isPasswordUser = !user?.provider || user.provider === 'password'
-  // 目录用户没有「安全」页签，带着 ?tab=security 进来时落回基础信息。
+  const showSecurityTab = canSelfEnrollMFA(user) || Boolean(user?.mfa_enabled)
+  // 不支持自助绑定的账号没有「安全」页签，带着 ?tab=security 进来时落回基础信息。
   const tab: AccountTab =
-    requested === 'security' && !isPasswordUser ? 'profile' : requested
+    requested === 'security' && !showSecurityTab ? 'profile' : requested
 
   const handleTabChange = (next: string) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -75,7 +80,7 @@ export function AccountPage() {
               <TabsTrigger value="profile">
                 {t('accountSettings.tabs.profile', '个人资料')}
               </TabsTrigger>
-              {isPasswordUser && (
+              {showSecurityTab && (
                 <TabsTrigger value="security">
                   {t('accountSettings.tabs.security', '安全')}
                 </TabsTrigger>
@@ -90,7 +95,7 @@ export function AccountPage() {
             </TabsContent>
             <TabsContent value="security">
               <div className="space-y-8">
-                <PasswordSection />
+                {isPasswordUser && <PasswordSection />}
                 <MFASection />
               </div>
             </TabsContent>

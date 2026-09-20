@@ -2,11 +2,12 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { PersistentVolume } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { createSearchFilter } from '@/lib/k8s'
 import { formatDate, parseBytes } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 const pvSearchFilter = createSearchFilter<PersistentVolume>(
@@ -21,6 +22,7 @@ const columnHelper = createColumnHelper<PersistentVolume>()
 
 export function PVListPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
 
   // 定义 PV 表格的列
   const columns = useMemo(
@@ -129,6 +131,20 @@ export function PVListPage() {
           )
         },
       }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="persistentvolumes"
+              resource={row.original}
+            />
+          </div>
+        ),
+      }),
     ],
     [t]
   )
@@ -136,9 +152,12 @@ export function PVListPage() {
   return (
     <ResourceTable
       resourceName={'PersistentVolumes'}
+      resourceType="persistentvolumes"
       columns={columns}
       clusterScope={true}
       searchQueryFilter={pvSearchFilter}
+      showCreateButton
+      onCreateClick={() => navigate('/persistentvolumes/create')}
     />
   )
 }

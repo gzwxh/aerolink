@@ -51,25 +51,19 @@ func DefaultGeneralClusterAgentImageValue() string {
 
 type GeneralSetting struct {
 	Model
-	AIAgentEnabled    bool         `json:"aiAgentEnabled" gorm:"column:ai_agent_enabled;type:boolean;not null;default:false"`
-	AIProvider        string       `json:"aiProvider" gorm:"column:ai_provider;type:varchar(50);not null;default:'openai'"`
-	AIModel           string       `json:"aiModel" gorm:"column:ai_model;type:varchar(255);not null;default:'gpt-4o-mini'"`
-	AIAPIKey          SecretString `json:"aiApiKey" gorm:"column:ai_api_key;type:text"`
-	AIBaseURL         string       `json:"aiBaseUrl" gorm:"column:ai_base_url;type:varchar(500)"`
-	AIMaxTokens       int          `json:"aiMaxTokens" gorm:"column:ai_max_tokens;type:integer;default:16384"`
-	KubectlEnabled    bool         `json:"kubectlEnabled" gorm:"column:kubectl_enabled;type:boolean;not null;default:true"`
-	KubectlImage      string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'"`
-	NodeTerminalImage string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'"`
-	ClusterAgentImage string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'"`
-	// AutoBindUserNamespace 控制「普通用户新建命名空间后自动纳入其已有的授权范围」：
-	// 优先归属其权限绑定组，无法归属时退回追加到其直接持有的受限角色的命名空间列表。
-	// 关闭后任何新建命名空间都不自动归属，交给管理员在权限绑定里分配。
-	AutoBindUserNamespace bool   `json:"autoBindUserNamespace" gorm:"column:auto_bind_user_namespace;type:boolean;not null;default:true"`
-	EnableAnalytics       bool   `json:"enableAnalytics" gorm:"column:enable_analytics;type:boolean;not null;default:false"`
-	EnableVersionCheck    bool   `json:"enableVersionCheck" gorm:"column:enable_version_check;type:boolean;not null;default:true"`
-	PasswordLoginDisabled bool   `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
-	EnableMFA             bool   `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
-	LoginPrompt           string `json:"loginPrompt" gorm:"column:login_prompt;type:text"`
+	AIAgentEnabled        bool         `json:"aiAgentEnabled" gorm:"column:ai_agent_enabled;type:boolean;not null;default:false"`
+	AIProvider            string       `json:"aiProvider" gorm:"column:ai_provider;type:varchar(50);not null;default:'openai'"`
+	AIModel               string       `json:"aiModel" gorm:"column:ai_model;type:varchar(255);not null;default:'gpt-4o-mini'"`
+	AIAPIKey              SecretString `json:"aiApiKey" gorm:"column:ai_api_key;type:text"`
+	AIBaseURL             string       `json:"aiBaseUrl" gorm:"column:ai_base_url;type:varchar(500)"`
+	AIMaxTokens           int          `json:"aiMaxTokens" gorm:"column:ai_max_tokens;type:integer;default:16384"`
+	KubectlEnabled        bool         `json:"kubectlEnabled" gorm:"column:kubectl_enabled;type:boolean;not null;default:true"`
+	KubectlImage          string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'"`
+	NodeTerminalImage     string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'"`
+	ClusterAgentImage     string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'"`
+	PasswordLoginDisabled bool         `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
+	EnableMFA             bool         `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
+	LoginPrompt           string       `json:"loginPrompt" gorm:"column:login_prompt;type:text"`
 	// LogoURL 是控制台的自定义 logo（http(s) 或 data: 地址）。为空时前端用内置图标。
 	// 它通过公开的 bootstrap 接口下发，以便登录页也能显示同一个 logo。
 	LogoURL string `json:"logoUrl" gorm:"column:logo_url;type:text"`
@@ -195,7 +189,6 @@ func LoadGeneralSetting() (*GeneralSetting, error) {
 				return nil, err
 			}
 		}
-		applyRuntimeGeneralSetting(&setting)
 		return &setting, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -203,19 +196,16 @@ func LoadGeneralSetting() (*GeneralSetting, error) {
 	}
 
 	setting = GeneralSetting{
-		Model:                 Model{ID: 1},
-		AIAgentEnabled:        false,
-		AIProvider:            DefaultGeneralAIProvider,
-		AIModel:               DefaultGeneralAIModel,
-		AIMaxTokens:           16384,
-		KubectlEnabled:        true,
-		KubectlImage:          DefaultGeneralKubectlImageValue(),
-		NodeTerminalImage:     DefaultGeneralNodeTerminalImageValue(),
-		ClusterAgentImage:     DefaultGeneralClusterAgentImageValue(),
-		AutoBindUserNamespace: true,
-		EnableAnalytics:       common.EnableAnalytics.Load(),
-		EnableVersionCheck:    common.EnableVersionCheck.Load(),
-		EnableMFA:             true,
+		Model:             Model{ID: 1},
+		AIAgentEnabled:    false,
+		AIProvider:        DefaultGeneralAIProvider,
+		AIModel:           DefaultGeneralAIModel,
+		AIMaxTokens:       16384,
+		KubectlEnabled:    true,
+		KubectlImage:      DefaultGeneralKubectlImageValue(),
+		NodeTerminalImage: DefaultGeneralNodeTerminalImageValue(),
+		ClusterAgentImage: DefaultGeneralClusterAgentImageValue(),
+		EnableMFA:         true,
 	}
 	if err := ensureJWTSecret(&setting, nil); err != nil {
 		return nil, err
@@ -223,7 +213,6 @@ func LoadGeneralSetting() (*GeneralSetting, error) {
 	if err := DB.Create(&setting).Error; err != nil {
 		return nil, err
 	}
-	applyRuntimeGeneralSetting(&setting)
 	return &setting, nil
 }
 
@@ -258,16 +247,7 @@ func UpdateGeneralSetting(updates map[string]interface{}) (*GeneralSetting, erro
 	if err := DB.First(setting, setting.ID).Error; err != nil {
 		return nil, err
 	}
-	applyRuntimeGeneralSetting(setting)
 	return setting, nil
-}
-
-func applyRuntimeGeneralSetting(setting *GeneralSetting) {
-	if setting == nil {
-		return
-	}
-	common.EnableAnalytics.Store(setting.EnableAnalytics)
-	common.EnableVersionCheck.Store(setting.EnableVersionCheck)
 }
 
 func ensureJWTSecret(setting *GeneralSetting, updates map[string]interface{}) error {

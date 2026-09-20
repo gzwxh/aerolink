@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { createResource, type NamespaceBindingOutcome } from '@/lib/api'
+import { createResource } from '@/lib/api'
 import { DESCRIPTION_ANNOTATION } from '@/lib/k8s'
 import { translateError } from '@/lib/utils'
 import {
@@ -77,33 +77,6 @@ export function CreateNamespaceDialog({ onClose }: { onClose: () => void }) {
   const close = useCallback(() => onClose(), [onClose])
   const guard = useUnsavedChangesGuard({ dirty: isDirty, onClose: close })
 
-  // 自动归属结论 → 提示。管理员创建的命名空间本就不自动归属，不额外提示（表单里的
-  // 说明已交待过），避免每次建命名空间都弹一条无用信息。
-  const notifyNamespaceBinding = (binding?: NamespaceBindingOutcome) => {
-    if (!binding || binding.reason === 'administrator') {
-      return
-    }
-    if (binding.bound && binding.method === 'binding_group') {
-      toast.success(
-        t('nsCreate.boundToBinding', {
-          name: binding.bindingName || '',
-          defaultValue: '已自动归属到权限绑定「{{name}}」',
-        })
-      )
-      return
-    }
-    if (binding.bound && binding.method === 'role_namespaces') {
-      toast.success(
-        t('nsCreate.boundToRoles', {
-          roles: (binding.roles || []).join('、'),
-          defaultValue: '已把该命名空间加入角色「{{roles}}」的命名空间范围',
-        })
-      )
-      return
-    }
-    toast.info(t('nsCreate.notBound', '未自动归属，请联系管理员分配'))
-  }
-
   const handleCreate = async () => {
     const trimmedName = name.trim()
     if (!NAME_PATTERN.test(trimmedName)) {
@@ -124,15 +97,11 @@ export function CreateNamespaceDialog({ onClose }: { onClose: () => void }) {
         annotations[DESCRIPTION_ANNOTATION] = description.trim()
       }
 
-      const created = await createResource('namespaces', undefined, {
+      await createResource('namespaces', undefined, {
         apiVersion: 'v1',
         kind: 'Namespace',
         metadata: { name: trimmedName, annotations },
       } as never)
-
-      // 服务端返回的自动归属结论。命名空间的创建已收归管理员，而管理员创建的命名空间
-      // 不参与自动归属，因此这条提示当前不会触发。
-      notifyNamespaceBinding(created?.namespaceBinding)
 
       const hard = buildQuotaHard(quota)
       if (Object.keys(hard).length > 0) {

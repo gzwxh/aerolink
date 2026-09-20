@@ -59,7 +59,7 @@ func NotifyRemoteLogin(c *gin.Context, user *model.User) {
 			"time":      time.Now().Format(timeLayout),
 			"provider":  user.Provider,
 			"userAgent": userAgent,
-		}, Recipient{UserID: user.ID, Email: user.Email})
+		})
 	}()
 }
 
@@ -163,7 +163,7 @@ func checkAccountExpiry() {
 			"username":   user.Username,
 			"days":       strconv.Itoa(daysLeft + 1),
 			"expireDate": user.ExpiresAt.Format("2006-01-02"),
-		}, Recipient{UserID: user.ID, Email: user.Email})
+		})
 	}
 }
 
@@ -192,7 +192,7 @@ func checkPasswordExpiry(setting *model.NotificationSettingData, securitySetting
 			"username":   user.Username,
 			"days":       days,
 			"expireDate": expireAt.Format(dateLayout),
-		}, Recipient{UserID: user.ID, Email: user.Email})
+		})
 	}
 }
 
@@ -275,7 +275,7 @@ func checkInactiveUsers(securitySetting *model.SecuritySettingData) int {
 		SendEvent(model.NotificationEventInactiveUserDisabled, map[string]string{
 			"username": user.Username,
 			"days":     strconv.Itoa(days),
-		}, Recipient{UserID: user.ID, Email: user.Email})
+		})
 	}
 	return disabled
 }

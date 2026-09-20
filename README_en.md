@@ -123,7 +123,6 @@ docker run -d --name kite --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://kite.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  -e DISABLE_VERSION_CHECK=true \
   swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
 ```
 
@@ -155,8 +154,6 @@ The first visit walks through creating the admin account; configure the remainin
 | `KITE_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | connection max lifetime in minutes |
 | `KITE_BASE` | empty | sub-path deployment (e.g. `/kite`) |
 | `NAMESPACE` | empty | namespace for Kite's own agent/terminal pods |
-| `DISABLE_VERSION_CHECK` | `false` | `true` skips the version check (recommended on air-gapped networks) |
-| `ENABLE_ANALYTICS` | `false` | anonymous telemetry; keep off internally |
 | `DISABLE_GZIP` | `false` | `true` disables response compression (proxy troubleshooting) |
 | `KUBECONFIG` / `KITE_CONFIG_FILE` | empty | external kubeconfig / config file path |
 | `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest` | node terminal image (company SWR) |

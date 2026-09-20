@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { IconReload, IconScale } from '@tabler/icons-react'
+import { IconEdit, IconReload, IconScale } from '@tabler/icons-react'
 import { StatefulSet } from 'kubernetes-types/apps/v1'
 import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -44,8 +45,9 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
   const [scaleReplicas, setScaleReplicas] = useState(0)
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const can = useCan()
-  // 扩缩容 / 重启会改写 Pod 模板，是写操作：只读角色不该看到入口。
+  // 扩缩容 / 重启 / 进编辑页都会改写对象，是写操作：只读角色不该看到入口。
   const canUpdate = can('statefulsets', 'update', { namespace })
   const canExec = can('pods', 'exec', { namespace })
   // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
@@ -396,6 +398,16 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       headerActions={
         canUpdate ? (
           <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                navigate(`/statefulsets/${namespace}/${name}/edit`)
+              }
+            >
+              <IconEdit className="w-4 h-4" />
+              {t('common.actions.edit')}
+            </Button>
             <Popover
               open={isScalePopoverOpen}
               onOpenChange={setIsScalePopoverOpen}

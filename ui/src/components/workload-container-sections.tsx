@@ -1,9 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
 import type { Container, Probe } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 
-import { fetchNodePortRange } from '@/lib/api'
-import { useCluster } from '@/hooks/use-cluster'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,10 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CommandListInput } from '@/components/command-list-input'
-import type {
-  PortForm,
-  PortServiceType,
-} from '@/components/editors/deployment-form'
+import type { PortForm } from '@/components/editors/deployment-form'
 
 type OnUpdate = (updates: Partial<Container>) => void
 
@@ -28,79 +22,31 @@ const intOrUndefined = (value: string) => {
   return Number.isNaN(num) ? undefined : num
 }
 
-/** 网络: container ports with per-port Service settings. */
+/**
+ * 网络：容器的监听端口。
+ *
+ * Service 是独立对象、由它自己的选择器决定关联哪些 Pod，因此不再在这里定义与生成：
+ * 需要 Service 就去「服务」页面创建（选择本工作负载的 Pod 标签），本页只展示已关联的
+ * Service 名称并给出跳转入口（见 AssociatedServices）。
+ */
 export function PortsEditor({
   ports,
   onUpdate,
-  workloadName = '',
 }: {
   ports: PortForm[]
   onUpdate: (ports: PortForm[]) => void
-  /** 工作负载名，用于预览自动生成的 Service 名称。 */
-  workloadName?: string
 }) {
   const { t } = useTranslation()
-  const { currentCluster } = useCluster()
-  const { data: nodePortRange } = useQuery({
-    queryKey: ['nodeport-range', currentCluster],
-    queryFn: () => fetchNodePortRange(currentCluster || ''),
-    enabled: !!currentCluster,
-    staleTime: 10 * 60 * 1000,
-    retry: false,
-  })
-  // 该范围可通过 kube-apiserver 的 --service-node-port-range 配置；
-  // 无法获取时回退到 Kubernetes 默认值。
-  const nodePortMin = nodePortRange?.min ?? 30000
-  const nodePortMax = nodePortRange?.max ?? 32767
 
   const updatePort = (index: number, patch: Partial<PortForm>) => {
     onUpdate(ports.map((p, i) => (i === index ? { ...p, ...patch } : p)))
   }
 
-  // 与 buildServiceDocuments 一致：Service 名称为空时回退到
-  // 工作负载名（ClusterIP），其它类型则回退为 "<workload>-<type>"。
-  const autoServiceName = (type: PortServiceType) => {
-    const base = workloadName.trim()
-    if (!base || type === 'none') return ''
-    return type === 'ClusterIP' ? base : `${base}-${type.toLowerCase()}`
-  }
-
   const portError = (p: PortForm) => {
     if (!p.containerPort || p.containerPort < 1 || p.containerPort > 65535)
       return t('containerAdv.portRangeError', '容器端口必须为 1-65535 的数字')
-    if (p.serviceType === 'NodePort') {
-      // nodePort 为空是合法的：集群会自动分配一个。
-      if (p.nodePort && (p.nodePort < nodePortMin || p.nodePort > nodePortMax))
-        return t('containerAdv.nodePortRangeError', {
-          min: nodePortMin,
-          max: nodePortMax,
-          defaultValue: `监听端口必须在 ${nodePortMin}-${nodePortMax} 范围内`,
-        })
-    }
-    if (p.servicePort && (p.servicePort < 1 || p.servicePort > 65535))
-      return t('containerAdv.servicePortRangeError', '监听端口必须为 1-65535')
-    if (p.serviceType === 'ClusterIP' && p.clusterIP?.trim()) {
-      const ip = p.clusterIP.trim()
-      const valid = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.test(ip)
-      if (
-        !valid ||
-        ip.split('.').some((oct) => Number(oct) < 0 || Number(oct) > 255)
-      ) {
-        return t(
-          'containerAdv.clusterIPFormatError',
-          '主机 IP 格式不正确，例如 1.1.1.1'
-        )
-      }
-    }
     return null
   }
-
-  const SERVICE_TYPES: Array<{ value: PortServiceType; label: string }> = [
-    { value: 'none', label: t('containerAdv.svcNone', '不创建服务') },
-    { value: 'ClusterIP', label: 'ClusterIP' },
-    { value: 'NodePort', label: 'NodePort' },
-    { value: 'LoadBalancer', label: 'LoadBalancer' },
-  ]
 
   return (
     <div className="space-y-2">
@@ -109,64 +55,31 @@ export function PortsEditor({
       </h4>
       <p className="text-xs text-muted-foreground">
         {t(
-          'containerAdv.networkHintFull',
-          '定义一个 Service 来公开容器。如果选择了 ClusterIP、LoadBalancer 或 NodePort，则会自动创建一个 Service，该 Service 将使用标签来选择此工作负载中的 Pod。'
+          'containerAdv.networkHint',
+          '容器监听的端口。要在集群内外访问它们，请在「服务」页面创建 Service 并选中本工作负载的 Pod 标签。'
         )}
       </p>
       {ports.map((port, index) => {
         const error = portError(port)
-        const listenInvalid =
-          port.serviceType === 'NodePort' &&
-          !!port.nodePort &&
-          (port.nodePort < nodePortMin || port.nodePort > nodePortMax)
         return (
           <div key={index} className="space-y-1">
-            <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_100px_minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-normal text-muted-foreground">
-                  {t('containerAdv.serviceTypeLabel', 'Service 类型')}
-                </Label>
-                <Select
-                  value={port.serviceType}
-                  onValueChange={(v) =>
-                    updatePort(index, { serviceType: v as PortServiceType })
-                  }
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SERVICE_TYPES.map((st) => (
-                      <SelectItem key={st.value} value={st.value}>
-                        {st.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-normal text-muted-foreground">
-                  {t('containerAdv.serviceNameLabel', '名称')}
+                  {t('containerAdv.portName', '端口名称')}
                 </Label>
                 <Input
                   value={port.name || ''}
                   onChange={(e) =>
                     updatePort(index, { name: e.target.value || undefined })
                   }
-                  placeholder={
-                    autoServiceName(port.serviceType)
-                      ? t('containerAdv.portNameAuto', {
-                          name: autoServiceName(port.serviceType),
-                          defaultValue: `默认: ${autoServiceName(port.serviceType)}`,
-                        })
-                      : t('containerAdv.portName', '名称')
-                  }
+                  placeholder={t('containerAdv.portNameHint', '可留空')}
                   className="h-9"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-normal text-muted-foreground">
-                  {t('containerAdv.privatePortLabel', '私有容器端口')}
+                  {t('containerAdv.privatePortLabel', '容器端口')}
                 </Label>
                 <Input
                   type="number"
@@ -211,98 +124,6 @@ export function PortsEditor({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-normal text-muted-foreground">
-                  {port.serviceType === 'NodePort'
-                    ? t('containerAdv.nodePort', '监听端口')
-                    : port.serviceType === 'none'
-                      ? '\u00A0'
-                      : t('containerAdv.servicePortLabel', '服务端口')}
-                </Label>
-                {port.serviceType === 'none' ? (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="h-9 px-0 text-xs"
-                    onClick={() =>
-                      onUpdate([
-                        ...ports,
-                        {
-                          containerPort: 0,
-                          protocol: 'TCP' as const,
-                          serviceType: 'ClusterIP' as const,
-                        },
-                      ])
-                    }
-                  >
-                    {t('containerAdv.addHost', '添加主机')}
-                  </Button>
-                ) : (
-                  <Input
-                    type="number"
-                    min={port.serviceType === 'NodePort' ? 30000 : 1}
-                    max={port.serviceType === 'NodePort' ? 32767 : 65535}
-                    value={
-                      port.serviceType === 'NodePort'
-                        ? (port.nodePort ?? '')
-                        : (port.servicePort ?? '')
-                    }
-                    onChange={(e) => {
-                      const v = intOrUndefined(e.target.value)
-                      updatePort(
-                        index,
-                        port.serviceType === 'NodePort'
-                          ? { nodePort: v, servicePort: v }
-                          : { servicePort: v }
-                      )
-                    }}
-                    placeholder={
-                      port.serviceType === 'NodePort'
-                        ? t(
-                            'containerAdv.nodePortAutoPlaceholder',
-                            '留空自动分配'
-                          )
-                        : port.serviceType === 'LoadBalancer'
-                          ? t('containerAdv.listenPortPlaceholder', 'e.g. 8080')
-                          : t('containerAdv.publicPortPlaceholder', 'e.g. 80')
-                    }
-                    className={
-                      'h-9 ' + (listenInvalid ? 'border-destructive' : '')
-                    }
-                  />
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-normal text-muted-foreground">
-                  {port.serviceType === 'ClusterIP'
-                    ? t('containerAdv.hostIPLabel', '主机 IP')
-                    : '\u00A0'}
-                </Label>
-                {port.serviceType === 'ClusterIP' ? (
-                  <Input
-                    value={port.clusterIP ?? ''}
-                    onChange={(e) =>
-                      updatePort(index, { clusterIP: e.target.value })
-                    }
-                    placeholder={t('containerAdv.hostIP', 'e.g. 1.1.1.1')}
-                    className={
-                      'h-9 ' +
-                      (port.clusterIP?.trim() &&
-                      portError(port)?.includes(
-                        t(
-                          'containerAdv.clusterIPFormatError',
-                          '主机 IP 格式不正确，例如 1.1.1.1'
-                        ).slice(0, 6)
-                      )
-                        ? 'border-destructive'
-                        : '')
-                    }
-                  />
-                ) : (
-                  <div className="h-9" />
-                )}
-              </div>
               <button
                 type="button"
                 className="flex h-9 shrink-0 items-center text-sm text-primary transition-colors hover:underline"
@@ -322,27 +143,11 @@ export function PortsEditor({
         size="sm"
         className="h-8 border-primary/40 bg-primary/5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
         onClick={() =>
-          onUpdate([
-            ...ports,
-            {
-              containerPort: 80,
-              protocol: 'TCP' as const,
-              serviceType: 'ClusterIP' as const,
-            },
-          ])
+          onUpdate([...ports, { containerPort: 80, protocol: 'TCP' as const }])
         }
       >
-        {t('containerAdv.addPortOrService', '添加端口或 Service')}
+        {t('containerAdv.addPort', '添加端口')}
       </Button>
-      {ports.some((p) => p.serviceType === 'NodePort') && (
-        <p className="text-xs text-muted-foreground">
-          {t('containerAdv.nodePortRangeHint', {
-            min: nodePortMin,
-            max: nodePortMax,
-            defaultValue: '监听端口范围 {{min}}-{{max}}，留空自动分配',
-          })}
-        </p>
-      )}
     </div>
   )
 }

@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/common"
 )
 
 var (
@@ -13,27 +12,18 @@ var (
 	CommitID  = "unknown"
 )
 
+// VersionInfo 只暴露本地构建信息。这里刻意不含「是否有新版本」：本分支不访问
+// api.github.com，也不上报任何数据。
 type VersionInfo struct {
 	Version   string `json:"version"`
 	BuildDate string `json:"buildDate"`
 	CommitID  string `json:"commitId"`
-	HasNew    bool   `json:"hasNewVersion"`
-	Release   string `json:"releaseUrl"`
 }
 
 func GetVersion(c *gin.Context) {
-	versionInfo := VersionInfo{
+	c.JSON(http.StatusOK, VersionInfo{
 		Version:   Version,
 		BuildDate: BuildDate,
 		CommitID:  CommitID,
-	}
-
-	if common.EnableVersionCheck.Load() {
-		r := checkForUpdate(c.Request.Context(), Version)
-		versionInfo.HasNew = r.hasNew
-		if versionInfo.HasNew {
-			versionInfo.Release = r.releaseURL
-		}
-	}
-	c.JSON(http.StatusOK, versionInfo)
+	})
 }

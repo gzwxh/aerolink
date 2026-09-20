@@ -53,6 +53,10 @@ This document describes all available configuration options for the Kite Helm Ch
 | ----------- | ---------------------------------------- | ------- |
 | `extraEnvs` | List of additional environment variables | `[]`    |
 
+## Outbound Requests
+
+Kite makes no outbound requests at all: no update check, no telemetry. Instances only talk to the API servers of their own cluster (plus any cluster you add in the UI) and the configured database; `/api/v1/version` returns local build information only.
+
 ## Application Configuration
 
 Kite supports loading cluster, OAuth/LDAP, and RBAC configuration from a YAML config file. When enabled, managed sections become read-only in the UI.

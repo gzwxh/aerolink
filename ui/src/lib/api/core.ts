@@ -568,7 +568,10 @@ export const copyDebugPod = async (
   return apiClient.post(`/pods/${namespace}/${name}/debug-copy`, body)
 }
 
-type DeepPartial<T> = T extends object
+// DeepPartial 描述 patch 请求体：只提交要改的字段，其余不动。工作负载行的
+// 「修改镜像」菜单需要按资源类型拼出这个请求体（Pod 与 CronJob 的容器路径不同），
+// 因此把类型一并导出。
+export type DeepPartial<T> = T extends object
   ? {
       [P in keyof T]?: DeepPartial<T[P]>
     }
@@ -602,32 +605,13 @@ export const restartWorkload = async (
   })
 }
 
-/**
- * 服务端在创建命名空间后回传的「自动归属」结论（见 pkg/bindinggroups/auto_bind.go）。
- * 只有命名空间的创建响应会带这个字段。
- */
-export interface NamespaceBindingOutcome {
-  /** 是否已把该命名空间纳入创建者的授权范围。 */
-  bound: boolean
-  method?: 'binding_group' | 'role_namespaces'
-  bindingId?: number
-  bindingName?: string
-  roles?: string[]
-  reason?:
-    'administrator' | 'no_candidates' | 'multiple_binding_groups' | 'conflict'
-}
-
 export const createResource = async <T extends ResourceType>(
   resource: T,
   namespace: string | undefined,
   body: ResourceTypeMap[T]
-): Promise<
-  ResourceTypeMap[T] & { namespaceBinding?: NamespaceBindingOutcome }
-> => {
+): Promise<ResourceTypeMap[T]> => {
   const endpoint = `/${resource}/${namespace || '_all'}`
-  return await apiClient.post<
-    ResourceTypeMap[T] & { namespaceBinding?: NamespaceBindingOutcome }
-  >(`${endpoint}`, body)
+  return await apiClient.post<ResourceTypeMap[T]>(`${endpoint}`, body)
 }
 
 export const deleteResource = async <T extends ResourceType>(
@@ -910,12 +894,15 @@ export const useResource = <T extends keyof ResourceTypeMap>(
   resource: T,
   name: string,
   namespace?: string,
-  options?: { staleTime?: number; refreshInterval?: number }
+  options?: { staleTime?: number; refreshInterval?: number; enabled?: boolean }
 ) => {
   const { currentCluster } = useCluster()
   const ns = namespace || '_all'
   return useQuery({
     queryKey: getResourceQueryKey(resource, ns, name, currentCluster),
+    // 没有名字时不要发请求：创建页会渲染同一个组件，空名字的 GET 只会拿到 404
+    // 并被记进站内信。
+    enabled: options?.enabled ?? true,
     queryFn: () => {
       return fetchResource<ResourceTypeMap[T]>(
         resource,

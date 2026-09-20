@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsTrigger } from '@/components/ui/tabs'
+import { AssociatedServices } from '@/components/associated-services'
 import {
   applyEditedManifest,
   createDefaultContainer,
@@ -466,6 +467,16 @@ function DeploymentFormPage({
       ? activeTab
       : 0
   const container = formData.containers[activeContainer]
+
+  // Pod 模板标签：Service 的 selector 是否关联到本工作负载，就看这份标签。
+  const podLabelRecord = useMemo(
+    () =>
+      (formData.podLabels || []).reduce<Record<string, string>>((acc, pair) => {
+        if (pair.key.trim()) acc[pair.key.trim()] = pair.value
+        return acc
+      }, {}),
+    [formData.podLabels]
+  )
 
   const containerTabs = formData.containers.map((c, i) => ({
     key: `container-${i}`,
@@ -1186,11 +1197,19 @@ function DeploymentFormPage({
                     <div className="border-t pt-4">
                       <PortsEditor
                         ports={container.ports}
-                        workloadName={formData.name}
                         onUpdate={(ports) =>
                           updateContainer(activeContainer, { ports })
                         }
                       />
+                      {/* Service 是独立对象：这里只展示关联到的名称并给跳转入口，
+                          创建与修改都在「服务」页面。 */}
+                      <div className="mt-4 border-t pt-4">
+                        <AssociatedServices
+                          namespace={formData.namespace}
+                          workloadName={formData.name}
+                          labels={podLabelRecord}
+                        />
+                      </div>
                     </div>
 
                     <div className="border-t pt-4">

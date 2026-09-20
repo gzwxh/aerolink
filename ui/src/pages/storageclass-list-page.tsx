@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { StorageClass } from 'kubernetes-types/storage/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { patchResource, useResources } from '@/lib/api'
@@ -12,6 +12,7 @@ import { formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 const defaultStorageClassAnnotation =
@@ -36,14 +37,11 @@ const columnHelper = createColumnHelper<StorageClass>()
 
 export function StorageClassListPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   // 设为默认需要改写 annotation，是写操作。
   const canUpdateStorageClass = useCanAnyNamespace()('storageclasses', 'update')
-  const { data: storageClasses = [] } = useResources(
-    'storageclasses',
-    undefined,
-    { reduce: true }
-  )
+  const { data: storageClasses = [] } = useResources('storageclasses')
   const defaultStorageClassCount = storageClasses.filter(
     isDefaultStorageClass
   ).length
@@ -143,9 +141,10 @@ export function StorageClassListPage() {
           </span>
         ),
       }),
+      // 「设为默认」单独成列（它不是菜单项：默认类最多一个，适合直接可点）。
       columnHelper.display({
-        id: 'actions',
-        header: t('common.fields.actions'),
+        id: 'setDefault',
+        header: t('storageClasses.actions.setDefault', '设为默认'),
         cell: ({ row }) => {
           if (!canUpdateStorageClass) {
             return '-'
@@ -176,6 +175,20 @@ export function StorageClassListPage() {
           )
         },
       }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="storageclasses"
+              resource={row.original}
+            />
+          </div>
+        ),
+      }),
     ],
     [canUpdateStorageClass, defaultStorageClassCount, setDefaultMutation, t]
   )
@@ -187,6 +200,8 @@ export function StorageClassListPage() {
       columns={columns}
       clusterScope={true}
       searchQueryFilter={storageClassSearchFilter}
+      showCreateButton
+      onCreateClick={() => navigate('/storageclasses/create')}
     />
   )
 }

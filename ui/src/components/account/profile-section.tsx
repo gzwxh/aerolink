@@ -1,10 +1,17 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useAuth } from '@/contexts/auth-context'
+import { IconLoader2, IconTrash, IconUpload } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { updateCurrentUser } from '@/lib/api'
-import { formatDate } from '@/lib/utils'
+import {
+  deleteCurrentUserAvatar,
+  updateCurrentUser,
+  uploadCurrentUserAvatar,
+} from '@/lib/api'
+import { AVATAR_MAX_BYTES, prepareAvatarFile } from '@/lib/avatar-upload'
+import { normalizeAvatarUrl, resolveAvatarSrc } from '@/lib/avatar-url'
+import { formatBytes, formatDate, translateError } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -53,13 +60,65 @@ export function ProfileSection() {
     name: user?.name ?? '',
     email: user?.email ?? '',
     phone: user?.phone ?? '',
-    avatar_url: user?.avatar_url ?? '',
+    // 地址栏只表示「外链」：上传的头像地址（/api/...）不放进输入框显示。
+    avatar_url: (user?.avatar_url ?? '').startsWith('/api/')
+      ? ''
+      : (user?.avatar_url ?? ''),
   })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (!user) {
     return null
+  }
+
+  // 上传的头像由服务端写入 avatar_url（/api/users/<id>/avatar?v=<n>），
+  // 所以「当前是不是上传的头像」看这个前缀即可（与 lib/avatar-url 的解析一致）。
+  const hasUploadedAvatar = (user.avatar_url ?? '').startsWith('/api/')
+
+  const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    // 清空 input：否则再次选择同一个文件不会触发 change。
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+
+    setAvatarBusy(true)
+    setError('')
+    try {
+      // 在浏览器里裁方、缩放、重编码，随后才上传（限制说明见 avatar-upload.ts）。
+      const prepared = await prepareAvatarFile(file)
+      await uploadCurrentUserAvatar(prepared)
+      await checkAuth()
+      // 重新取一次用户对象里的 avatar_url，让预览立刻用上新地址。
+      setForm((prev) => ({ ...prev, avatar_url: '' }))
+      toast.success(t('accountSettings.profile.avatarUploadSuccess'))
+    } catch (err) {
+      setError(
+        translateError(err, t) ||
+          t('accountSettings.profile.avatarUploadFailed')
+      )
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
+  const handleAvatarRemove = async () => {
+    setAvatarBusy(true)
+    setError('')
+    try {
+      await deleteCurrentUserAvatar()
+      await checkAuth()
+      setForm((prev) => ({ ...prev, avatar_url: '' }))
+      toast.success(t('accountSettings.profile.avatarRemoveSuccess'))
+    } catch (err) {
+      setError(translateError(err, t))
+    } finally {
+      setAvatarBusy(false)
+    }
   }
 
   const provider = user.provider || 'password'
@@ -76,13 +135,21 @@ export function ProfileSection() {
 
     try {
       // 目录用户只提交头像：其余字段后端会忽略，界面也就不去假装它们可改。
+      // 头像三态：填了外链就以它为准；否则保留上传的头像（地址栏是空的，
+      // 不能当成「清空」提交，后端会按不变式删掉上传的字节行）；两者都没有就清空。
+      const typedUrl = normalizeAvatarUrl(form.avatar_url)
+      const avatarPayload = typedUrl
+        ? { avatar_url: typedUrl }
+        : hasUploadedAvatar
+          ? { avatar_url: user.avatar_url ?? '' }
+          : { avatar_url: '' }
       const payload = externalUser
-        ? { avatar_url: form.avatar_url.trim() }
+        ? avatarPayload
         : {
             name: form.name.trim(),
             email: form.email.trim(),
             phone: form.phone.trim(),
-            avatar_url: form.avatar_url.trim(),
+            ...avatarPayload,
           }
       await updateCurrentUser(payload)
       await checkAuth()
@@ -101,10 +168,15 @@ export function ProfileSection() {
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-4">
           <Avatar className="size-16">
             <AvatarImage
-              src={form.avatar_url || undefined}
+              /* 上传的头像即时生效（已落库），未上传时按表单里的外链预览。 */
+              src={
+                hasUploadedAvatar
+                  ? resolveAvatarSrc(user.avatar_url)
+                  : resolveAvatarSrc(form.avatar_url)
+              }
               alt={user.name || user.username}
             />
             <AvatarFallback className="bg-primary text-lg text-primary-foreground">
@@ -112,16 +184,69 @@ export function ProfileSection() {
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1 space-y-2">
-            <Label htmlFor="profile-avatar-url">
-              {t('common.fields.avatarUrl', '头像 URL')}
-            </Label>
-            <Input
-              id="profile-avatar-url"
-              value={form.avatar_url}
-              placeholder="https://…"
-              autoComplete="off"
-              onChange={(event) => patch('avatar_url', event.target.value)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={avatarBusy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {avatarBusy ? (
+                  <IconLoader2 className="size-4 animate-spin" />
+                ) : (
+                  <IconUpload className="size-4" />
+                )}
+                {avatarBusy
+                  ? t('accountSettings.profile.avatarUploading')
+                  : t('accountSettings.profile.avatarUpload')}
+              </Button>
+              {hasUploadedAvatar && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={avatarBusy}
+                  onClick={() => void handleAvatarRemove()}
+                >
+                  <IconTrash className="size-4" />
+                  {t('accountSettings.profile.avatarRemove')}
+                </Button>
+              )}
+              {/* 真正的 file input 藏在按钮后面：原生控件样式与界面不统一。 */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => void handleAvatarUpload(event)}
+              />
+            </div>
+            {hasUploadedAvatar && (
+              <p className="text-xs text-muted-foreground">
+                {t('accountSettings.profile.avatarUploadedHint')}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {t('accountSettings.profile.avatarUploadHint', {
+                limit: formatBytes(AVATAR_MAX_BYTES),
+              })}
+            </p>
+            <div className="space-y-1.5 pt-1">
+              <Label htmlFor="profile-avatar-url">
+                {t('accountSettings.profile.avatarUrlLabel')}
+              </Label>
+              <Input
+                id="profile-avatar-url"
+                value={form.avatar_url}
+                placeholder="https://…"
+                autoComplete="off"
+                onChange={(event) => patch('avatar_url', event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('accountSettings.profile.avatarUrlHint')}
+              </p>
+            </div>
           </div>
         </div>
 

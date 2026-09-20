@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import {
+  IconEdit,
   IconPlayerPause,
   IconPlayerPlay,
   IconPlayerPlayFilled,
 } from '@tabler/icons-react'
 import { CronJob, Job } from 'kubernetes-types/batch/v1'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -43,8 +45,9 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
   const [isTogglingSuspend, setIsTogglingSuspend] = useState(false)
   const [isRunningNow, setIsRunningNow] = useState(false)
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const can = useCan()
-  // 立即运行会创建 Job，暂停 / 恢复会更新 CronJob：只读角色不该看到入口。
+  // 立即运行会创建 Job，暂停 / 恢复 / 编辑会更新 CronJob：只读角色不该看到入口。
   const canUpdateCronJob = can('cronjobs', 'update', { namespace })
   const canCreateJobs = can('jobs', 'create', { namespace })
 
@@ -408,6 +411,16 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       }
       headerActions={
         <>
+          {canUpdateCronJob ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/cronjobs/${namespace}/${name}/edit`)}
+            >
+              <IconEdit className="w-4 h-4" />
+              {t('common.actions.edit')}
+            </Button>
+          ) : null}
           {canCreateJobs ? (
             <Button
               variant="outline"

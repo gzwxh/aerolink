@@ -12,7 +12,8 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router-dom'
 
 import { SidebarCustomResourceItem, SidebarItem } from '@/types/sidebar'
-import { useResources, useVersionInfo } from '@/lib/api'
+import { useResources } from '@/lib/api'
+import { splitSiteName } from '@/lib/site-name'
 import { cn } from '@/lib/utils'
 import {
   Sidebar,
@@ -38,13 +39,44 @@ import { ClusterSelector } from './cluster-selector'
 import { Collapsible, CollapsibleTrigger } from './ui/collapsible'
 import { VersionInfo } from './version-info'
 
+/**
+ * 侧边栏里的品牌名称。
+ *
+ * 侧边栏是固定宽度（16rem、overflow-hidden），单行放不下的名称会被**直接裁掉**
+ * （不是省略号，是后面的字看不见）。所以按显示宽度折成最多两行
+ * （见 lib/site-name.ts），并把完整名称放进 title 作为兜底。
+ *
+ * 两行要完整显示，外层的 SidebarMenuButton 就不能锁高（默认 h-8，用 h-auto 覆盖），
+ * 否则 40px 的文本会被 overflow-hidden 上下各裁掉一截。颜色取
+ * `--sidebar-foreground`：品牌名在侧边栏上，用 `--primary` 之类的内容区 token 在
+ * 深色侧边栏（如墨绿主题的浅色模式）会看不清。
+ */
+function SiteNameText({
+  name,
+  className,
+}: {
+  name: string
+  className?: string
+}) {
+  const lines = splitSiteName(name)
+
+  return (
+    <span className={cn('text-base font-semibold', className)} title={name}>
+      {lines.map((line, index) => (
+        <span key={index} className="block leading-tight break-words">
+          {line}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
   const { user } = useAuth()
   const location = useLocation()
   const { isMobile, setOpenMobile } = useSidebar()
   const { config, isLoading, getIconComponent } = useSidebarConfig()
-  const { data: versionInfo } = useVersionInfo()
   const { logoUrl, siteName, isCustomBranding } = useBranding()
   const [openAPIGroupItems, setOpenAPIGroupItems] = useState<
     Record<string, boolean>
@@ -260,7 +292,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pinnedGroup =
     pinnedItems.length > 0 ? (
       <SidebarGroup>
-        <SidebarGroupLabel className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+        <SidebarGroupLabel className="text-xs font-bold uppercase tracking-wide text-sidebar-foreground/70">
           {t('sidebar.pinned', 'Pinned')}
         </SidebarGroupLabel>
         <SidebarGroupContent>
@@ -275,21 +307,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild>
+              <SidebarMenuButton asChild className="h-auto">
                 <Link to="/" onClick={handleMenuItemClick}>
                   <img
                     src={logoUrl}
                     alt={`${siteName} Logo`}
                     className="ml-1 h-8 w-8"
                   />
-                  <span className="text-base font-semibold">{siteName}</span>
+                  <SiteNameText name={siteName} />
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <div className="p-4 text-center text-muted-foreground">
+          <div className="p-4 text-center text-sidebar-foreground/70">
             {t('common.messages.loading', 'Loading...')}
           </div>
         </SidebarContent>
@@ -304,7 +336,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="data-[slot=sidebar-menu-button]:!p-1.5 hover:bg-accent/50 transition-colors"
+              className="data-[slot=sidebar-menu-button]:!p-1.5 hover:bg-accent/50 transition-colors h-auto"
             >
               <Link to="/" onClick={handleMenuItemClick}>
                 <div className="relative flex items-center justify-between w-full">
@@ -315,39 +347,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       className="h-8 w-8"
                     />
                     <div className="flex flex-col">
-                      <span className="text-base font-semibold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                        {siteName}
-                      </span>
+                      <SiteNameText
+                        name={siteName}
+                        className="text-sidebar-foreground"
+                      />
                       {/* 改了品牌就不再暴露上游版本号与提交链接（见 Branding） */}
                       {isCustomBranding ? null : <VersionInfo />}
                     </div>
                   </div>
-                  {!isCustomBranding && versionInfo?.hasNewVersion ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        if (versionInfo?.releaseUrl) {
-                          window.open(versionInfo.releaseUrl, '_blank')
-                        }
-                      }}
-                      className="absolute right-0 top-0 mr-1 mt-1 rounded-sm bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-red-500 hover:bg-red-500/20"
-                      title={t('sidebar.updateAvailable')}
-                    >
-                      New
-                    </button>
-                  ) : null}
                 </div>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
         {/* 集群切换器固定在 logo 下方（SidebarHeader 不随内容滚动）：各页面与设置章节
-            都按集群生效，切换是一个全局的客户端偏好，放到内容区会被滚走。 */}
+            都按集群生效，切换是一个全局的客户端偏好，放到内容区会被滚走。
+            底色取 sidebar 作用域的 token、不画描边：--border/--muted 是内容区的值，
+            落在深色侧边栏（如墨绿浅色模式）上会画出一条亮框，实测描边对底色的对比
+            度 5.56（默认主题只有 1.15），和旁边的菜单项不协调。 */}
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-gradient-to-r from-muted/40 to-muted/20 px-1.5 py-1 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-md bg-sidebar-accent px-1.5 py-1">
               <ClusterSelector />
             </div>
           </SidebarMenuItem>
@@ -386,7 +406,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               >
                 <SidebarGroup>
                   <SidebarGroupLabel asChild>
-                    <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group-data-[state=open]:text-foreground">
+                    <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors group-data-[state=open]:text-sidebar-foreground">
                       <span className="uppercase tracking-wide text-xs font-bold">
                         {group.nameKey
                           ? t(group.nameKey, { defaultValue: group.nameKey })
@@ -468,7 +488,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                 open ? '收起' : '展开'
                               )}`}
                               aria-expanded={open}
-                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground group-data-[collapsible=icon]:hidden"
+                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/70 transition-colors hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
                               onClick={() =>
                                 setOpenSettingsSections((current) => ({
                                   ...current,

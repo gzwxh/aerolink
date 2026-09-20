@@ -15,7 +15,7 @@ export function VersionInfo() {
   }
 
   return (
-    <div className="text-[10px] text-muted-foreground/60 font-mono leading-none">
+    <div className="text-[10px] text-sidebar-foreground/60 font-mono leading-none">
       v{versionInfo.version.replace(/^v/, '')} •{' '}
       <button
         onClick={handleCommitClick}

@@ -309,6 +309,13 @@ func UpdateUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 		return
 	}
+	// 与自服务同一条不变式：avatar_url 换成别的值（或清空）时，上传的字节行要删掉。
+	// 管理员只能填 URL，所以这里只会删除、不会写入。
+	if req.AvatarURL != nil && !isUploadedAvatarPath(id, user.AvatarURL) {
+		if err := model.DeleteUserAvatar(id); err != nil {
+			klog.V(4).Infof("failed to delete the avatar of user %d: %v", id, err)
+		}
+	}
 	c.JSON(http.StatusOK, user)
 }
 
@@ -368,6 +375,12 @@ func UpdateCurrentUser(c *gin.Context) {
 	if err := model.UpdateUser(&user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 		return
+	}
+	// avatar_url 不再指向上传的头像时，字节行要一起删掉，否则会留下取不到的孤儿图片。
+	if req.AvatarURL != nil && !isUploadedAvatarPath(uint64(user.ID), user.AvatarURL) {
+		if err := model.DeleteUserAvatar(uint64(user.ID)); err != nil {
+			klog.V(4).Infof("failed to delete the avatar of user %d: %v", user.ID, err)
+		}
 	}
 	c.JSON(http.StatusOK, user)
 }
@@ -469,38 +482,86 @@ func ChangeCurrentUserPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+// mfaSelfEnrollReauthWindow 是自助绑定动态码允许的「登录新鲜度」：只有在这段时间内
+// 重新登录过的目录账号才能开始绑定。
+//
+// 它只约束「开始绑定」这一步：二维码显示出来之后，用户装身份验证器花多久都不影响
+// 提交动态码。要调整窗口改这一行即可。
+const mfaSelfEnrollReauthWindow = 5 * time.Minute
+
+// recentlyAuthenticated 报告该账号是否在 mfaSelfEnrollReauthWindow 内登录过。
+//
+// 登录时间取 `user_sessions.started_at`（多副本共享同一份，见 pkg/auth/session_policy.go）：
+// 只有真正走完登录流程才会刷新它，令牌续期不会。读不到会话记录时按「不新鲜」处理
+// （失败关闭）——重新认证属于安全边界，宁可让本人多登录一次。
+func recentlyAuthenticated(user *model.User) bool {
+	if user == nil || user.ID == 0 {
+		return false
+	}
+	session, err := model.GetUserSession(user.ID)
+	if err != nil || session.StartedAt.IsZero() {
+		return false
+	}
+	return time.Since(session.StartedAt) <= mfaSelfEnrollReauthWindow
+}
+
 // SetupCurrentUserMFA 为当前登录用户发起 TOTP（动态口令）绑定。
 //
-// 路由：POST /api/users/me/mfa/setup（需登录，仅本地密码用户）。
+// 路由：POST /api/users/me/mfa/setup（需登录，本地密码账号或 LDAP 账号）。
 //
-// 前置条件：当前密码校验通过、全局 MFA 开关已打开、且该账号尚未启用 MFA。
+// 前置条件：一次成功的再认证（本地密码账号提交当前密码；LDAP 账号要求近期重新登录过，
+// 见 recentlyAuthenticated）、全局 MFA 开关已打开、且该账号尚未启用 MFA。
 // 注意这里只「生成并保存」密钥，并不会把 MFA 置为已启用——
 // 客户端还需调用 EnableCurrentUserMFA 提交一个有效动态码才算绑定完成。
 // 响应中包含明文密钥、otpauth:// 链接以及二维码的 data URL，供客户端展示。
 func SetupCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
+	if !user.CanSelfEnrollMFA() {
+		// OIDC / 第三方身份源的二次验证由 IdP 负责，Kite 不提供自助绑定
+		// （见 model.(*User).CanSelfEnrollMFA 与 MFARequiredFor）。
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "mfa self-enrollment is not available for this account",
+			"code":  "mfa_not_self_enrollable",
+		})
 		return
 	}
 	if !ensureMFAEnabled(c) {
-		return
-	}
-	var req struct {
-		CurrentPassword string `json:"current_password" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if !model.CheckPassword(user.Password, req.CurrentPassword) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
 		return
 	}
 	// 已启用的账号不允许重复绑定，需先关闭再重新绑定。
 	if user.MFAEnabled {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is already enabled"})
 		return
+	}
+
+	// 绑定等于给账号加一把长期有效的钥匙，必须先证明是本人：
+	//   - 本地密码账号：提交当前密码；
+	//   - LDAP 账号：要求在窗口内重新登录过。那次登录本身就是一次完整的目录认证
+	//     （包含审计、失败限流、账号有效期检查），比在向导里另做一次 LDAP bind 更完整。
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if user.Provider == model.AuthProviderLDAP {
+		if !recentlyAuthenticated(&user) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "a recent sign-in is required to bind MFA",
+				"code":  "mfa_reauth_required",
+			})
+			return
+		}
+	} else {
+		if strings.TrimSpace(req.CurrentPassword) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is required"})
+			return
+		}
+		if !model.CheckPassword(user.Password, req.CurrentPassword) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+			return
+		}
 	}
 
 	secret, err := mfa.GenerateSecret()
@@ -528,14 +589,17 @@ func SetupCurrentUserMFA(c *gin.Context) {
 
 // EnableCurrentUserMFA 确认并正式启用 TOTP 绑定。
 //
-// 路由：POST /api/users/me/mfa/enable（需登录，仅本地密码用户）。
+// 路由：POST /api/users/me/mfa/enable（需登录，本地密码账号或 LDAP 账号）。
 //
 // 必须已经通过 SetupCurrentUserMFA 写入过密钥，并提交一个当时有效的动态码；
-// 校验通过后才把账号标记为已启用 MFA。
+// 校验通过后才把账号标记为已启用 MFA。再认证已经在 setup 那步做过，这里只看密钥与动态码。
 func EnableCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
+	if !user.CanSelfEnrollMFA() {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "mfa self-enrollment is not available for this account",
+			"code":  "mfa_not_self_enrollable",
+		})
 		return
 	}
 	if !ensureMFAEnabled(c) {
@@ -568,16 +632,15 @@ func EnableCurrentUserMFA(c *gin.Context) {
 
 // DisableCurrentUserMFA 关闭当前登录用户的 TOTP 绑定。
 //
-// 路由：POST /api/users/me/mfa/disable（需登录，仅本地密码用户）。
+// 路由：POST /api/users/me/mfa/disable（需登录）。
 //
 // 关闭时必须提交一个当前有效的动态码（仅有会话不足以关闭二次验证）；
 // 关闭成功后连同密钥一起清除，账号回到未启用 MFA 的状态。
+//
+// 这里不按 provider 拦截：能提交当前动态码就说明本人仍持有这个绑定，解绑是他的正当
+// 操作；一律拦掉的话，账号后来改用 OIDC 登录的人就再也解不掉自己的绑定，只能找管理员重置。
 func DisableCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
-		return
-	}
 	if !ensureMFAEnabled(c) {
 		return
 	}
@@ -641,7 +704,7 @@ func ResetUserMFA(c *gin.Context) {
 		"username": target.Username,
 		"operator": operator.Username,
 		"time":     time.Now().Format("2006-01-02 15:04:05"),
-	}, notification.Recipient{UserID: target.ID, Email: target.Email})
+	})
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -809,7 +872,7 @@ func ResetPassword(c *gin.Context) {
 		"username": target.Username,
 		"operator": operator.Username,
 		"time":     time.Now().Format("2006-01-02 15:04:05"),
-	}, notification.Recipient{UserID: target.ID, Email: target.Email})
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -903,7 +966,7 @@ func RestoreDisabledUsers(c *gin.Context) {
 				"username": u.Username,
 				"operator": operatorName,
 				"time":     now,
-			}, notification.Recipient{UserID: u.ID, Email: u.Email})
+			})
 		}
 	}(restored, operator.Username)
 
@@ -957,7 +1020,7 @@ func SetUserEnabled(c *gin.Context) {
 		"username": target.Username,
 		"operator": operator.Username,
 		"time":     time.Now().Format("2006-01-02 15:04:05"),
-	}, notification.Recipient{UserID: target.ID, Email: target.Email})
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

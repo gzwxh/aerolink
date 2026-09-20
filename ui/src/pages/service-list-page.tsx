@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Service } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 const serviceSearchFilter = createSearchFilter<Service>(
@@ -27,6 +28,9 @@ const columnHelper = createColumnHelper<Service>()
 export function ServiceListPage() {
   const navigate = useNavigate()
   const { namespace: namespaceParam } = useParams()
+  // 从工作负载页点 Service 名称跳过来时带 `?search=<name>`：只显示那一个。
+  const [searchParams] = useSearchParams()
+  const initialSearch = searchParams.get('search') ?? undefined
 
   const handleCreateClick = () => {
     // URL 优先，其次是表格持久化的选择；多选或
@@ -124,6 +128,20 @@ export function ServiceListPage() {
           )
         },
       }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="services"
+              resource={row.original}
+            />
+          </div>
+        ),
+      }),
     ],
     [t]
   )
@@ -137,6 +155,7 @@ export function ServiceListPage() {
       showCreateButton={true}
       onCreateClick={handleCreateClick}
       initialNamespace={namespaceParam}
+      initialSearch={initialSearch}
       onNamespaceChange={(ns) => {
         navigate(
           ns && ns !== '_all'

@@ -23,13 +23,11 @@ export const useInitCheck = () => {
   }
 }
 
-// 版本信息
+// 版本信息（只有本地构建信息，不含「是否有新版本」：本分支不查询上游发布）
 export interface VersionInfo {
   version: string
   buildDate: string
   commitId: string
-  hasNewVersion: boolean
-  releaseUrl: string
 }
 
 export const fetchVersionInfo = (): Promise<VersionInfo> => {

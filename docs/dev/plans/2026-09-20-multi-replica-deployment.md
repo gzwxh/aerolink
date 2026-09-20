@@ -1,0 +1,115 @@
+# 方案：多副本部署（单机三进程 + nginx 入口）
+
+- 状态：**已实测**（同一份数据下 3 副本跑通 96 项回归，含跨副本会话、顶下线、失败计数、设置传播）
+- 触发：员工反馈卡顿，扩容是为了分流
+- 前置：数据库已从 SQLite 换到 PostgreSQL 12.12（`docs/dev/plans/2026-09-20-pg12-now-and-upgrade-path.md`）；
+  多副本需要的三项共享状态已入库（`docs/dev/plans/2026-09-20-multi-replica-shared-state.md`）
+
+## 1. 拓扑
+
+```
+员工浏览器 ──► nginx :8080 ──┬─► kite :8081 ┐
+                             ├─► kite :8082 ├─► PostgreSQL 12.12 :5433
+                             └─► kite :8083 ┘      （容器 kite-postgres12）
+```
+
+- 副本**无状态**：会话、登录失败计数、待验证票据、设置缓存、头像、集群 kubeconfig 全在 PostgreSQL 里；
+  静态前端资源内嵌在二进制里。所以**不需要粘性会话**，轮询就行（实测 9 次请求 3/3/3 分摊）。
+- 每个副本各持一份 K8s informer 缓存：副本数翻倍，对 apiserver 的 watch 压力也翻倍，这是扩容要
+  盯的副作用之一（也可能是当初「卡顿」的候选原因）。
+
+### 为什么当时没走 K8s
+
+`charts/kite` 与 `deploy/install.yaml` 都能跑在 K8s 里（`replicaCount` + `db.type: postgres` 即可多副本），
+而本节点现状是「裸进程 + 宿主机 nginx」、宿主机又已经装了 nginx，所以先用最小改动落地。
+
+镜像这条限制已经松动：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite:v1.0.0`
+现在可以公开拉取（2026-09-20 实测 `docker manifest inspect` 通过）。要走 K8s 还差一个入口层——
+该命名空间里没有 nginx 镜像，用集群已有的 ingress controller，或另推一个即可。
+
+## 2. 单机三副本能解决什么、不能解决什么
+
+- **能**：把「单个进程内排队」的部分摊开——多个副本各自处理请求、各自持有自己的 K8s 缓存，
+  某一个副本在做重活（拉大列表、跑审计导出）时，其它副本仍然能响应。
+- **不能**：同一台机器上的三个副本共用同一份 CPU 与内存，**机器级瓶颈不会消失**。
+  真正要「多节点」时：把副本放到不同机器上，nginx 的 upstream 换成那些机器的地址，
+  数据库仍是同一个（PostgreSQL 已监听 `0.0.0.0:5433`，其它机器可直连；建议用防火墙限制来源）。
+  `deploy/kite@.service`、`deploy/nginx-kite.conf`、`deploy/kite.env.example` 三份产物对此不用改。
+
+## 3. 容量口径
+
+```
+副本数 × KITE_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ PostgreSQL 的 max_connections
+```
+
+- 现网数据库 `max_connections=400`（见 PG 12 文档 §2.5 的算法），单副本 100 的话最多 3 个副本；
+  要跑 4 个以上就把 `KITE_DB_MAX_OPEN_CONNS` 调到 80，或同步上调 `max_connections`。
+- 连接池是**每个副本**一份，且空闲连接也占着数据库坑位——这是最容易算错的地方。
+
+## 4. 部署步骤（可粘贴）
+
+```sh
+# 1) 共享配置（所有副本一份，只有 PORT 由 systemd 实例号给出）
+install -d -m 750 /etc/kite
+cp deploy/kite.env.example /etc/kite/kite.env
+chmod 600 /etc/kite/kite.env
+vi /etc/kite/kite.env                     # 改 DB_DSN 与两个密钥（与既有库配套，别换）
+
+# 2) 装 unit（实例号 = 端口）
+install -m 644 deploy/kite@.service /etc/systemd/system/kite@.service
+systemctl daemon-reload
+systemctl enable --now kite@8081 kite@8082 kite@8083
+systemctl status 'kite@*' --no-pager       # 三个都应是 active (running)
+
+# 3) 入口（nginx 已在宿主机上）
+install -m 644 deploy/nginx-kite.conf /etc/nginx/conf.d/kite.conf
+nginx -t && systemctl reload nginx
+curl -s http://127.0.0.1:8080/healthz      # {"status":"ok"}
+
+# 4) 原来那个「裸进程」版本停掉（它占着 8080，会被 nginx 取代）
+```
+
+### 滚动重启（改配置、换二进制）
+
+会话与票据都在库里，所以**同一时刻只重启一个副本**就不会让人掉线：
+
+```sh
+for port in 8081 8082 8083; do
+  systemctl restart kite@$port
+  sleep 5
+done
+```
+
+换二进制时先 `make backend`，再照上面滚动重启。nginx 的 `max_fails=3 fail_timeout=10s`
+会把正在重启的副本自动摘掉。
+
+### 回滚
+
+- 摘副本：`systemctl disable --now kite@8083`（nginx 会把它踢出 upstream）。
+- 回单进程：`systemctl disable --now 'kite@*'`，`systemctl stop nginx`，再按旧方式起一个裸进程。
+- 数据库回滚见 PG 12 文档 §6.6。
+
+## 5. 本次实测记录（2026-09-20，同一份生产数据克隆）
+
+| 验证项 | 结果 |
+| --- | --- |
+| 会话跨副本 | 在副本 A 登录，同一 cookie 在 B、C 上都被接受（会话在库里） |
+| 单设备顶下线 | 设备 B 在另一副本登录后，设备 A 在 **22–32 秒**内被所有副本拒绝（`session_superseded`），设备 B 不受影响。延迟来自 `sessionStateCacheTTL`（30 秒） |
+| 登录失败计数共享 | 7 次错误口令**分散打在三个副本**上 → 第 8 次从任意副本用**正确**口令也被拒（429）；库里的 `login_attempts` 是同一行 |
+| 设置变更传播 | 在副本 A 改 `loginPrompt`，12 秒后 B、C 都读到新值（每个副本 10 秒缓存） |
+| 负载均衡 | 9 次请求恰好 3/3/3 分摊到三个副本 |
+| 全量回归 | 经 nginx 入口跑 `tools/apismoke`（读 + 写 + AI 工具 + 邮件投递 + 日志扫描）：**96/96 通过**；三个副本都实际参与了读写（请求数 145/132/134，其中写操作 55/48/42） |
+
+## 6. 已知行为与注意事项
+
+1. **设置改动的传播延迟**：多副本下每个副本各有一份 10 秒缓存，经负载均衡改设置后，
+   另一个副本最多 10 秒后才看到新值。`tools/apismoke` 为此在改设置后等 12 秒再断言，
+   否则会误报「AI is not enabled」这类假失败。
+2. **顶下线/闲置超时最多延迟 30 秒**（同上缓存 TTL）。要更紧就把 `sessionStateCacheTTL`
+   调小（代价是更多次数据库读）。
+3. **日志分散**：每个副本各写一份日志，排查时要一起看。`tools/apismoke -log-file a,b,c`
+   支持逗号分隔多个文件。
+4. **WebSocket（终端、日志跟随）经 nginx 需要 `Upgrade` 头**，`deploy/nginx-kite.conf`
+   里已经配好，并关掉了 SSE（AI 对话）需要的 `proxy_buffering`。
+5. 还没验的：跨副本的第三方 MFA 票据兑换（票据在库里、单实例已验证原子消费，跨副本由库层保证）；
+   终端/日志的 WebSocket 经 nginx 的实测（本次没跑 WS 客户端）。

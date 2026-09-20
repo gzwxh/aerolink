@@ -351,8 +351,7 @@
       "related": "相关资源",
       "terminal": "终端",
       "volumes": "卷",
-      "yaml": "YAML",
-      "serviceYaml": "关联 Service"
+      "yaml": "YAML"
     },
     "units": {
       "pods": "pods",
@@ -424,7 +423,8 @@
       "loading": "加载中...",
       "noResults": "没有匹配结果",
       "toggle": "切换 Namespace {{name}}"
-    }
+    },
+    "currentCluster": "当前集群"
   },
   "globalSearch": {
     "title": "全局搜索",
@@ -497,7 +497,6 @@
     "crdEmpty": "未找到 CRD",
     "crdLoading": "CRD 加载中...",
     "crdLoadFailed": "CRD 加载失败",
-    "updateAvailable": "有新的 Kite 版本可用",
     "saveFailed": "保存侧边栏配置失败，请稍后重试"
   },
   "nav": {
@@ -616,7 +615,9 @@
       "modified": "修改时间"
     },
     "errors": {
-      "pod_files_unsupported": "容器 {{container}} 不支持文件浏览（缺少 ls 命令）",
+      "pod_files_unsupported": "容器 {{container}} 不支持文件操作（镜像里缺少 ls、cat 等命令）",
+      "pod_files_not_found": "容器 {{container}} 里没有这个文件：{{path}}",
+      "pod_files_is_directory": "{{path}} 是目录，不能预览",
       "pod_files_path_required": "请填写文件路径",
       "pod_files_path_invalid": "文件路径无效",
       "pod_files_path_traversal": "路径不能包含 \"..\""
@@ -681,7 +682,7 @@
     "exposeInvalidPort": "端口必须在 1 到 65535 之间",
     "exposeNoSelector": "Deployment 没有可用于暴露的 selector 标签"
   },
-  "deploymentActions": {
+  "resourceActions": {
     "viewYaml": "查看 YAML",
     "viewYamlDescription": "{{name}} 的当前 YAML 配置（只读）。",
     "editImage": "修改镜像版本",
@@ -1038,6 +1039,7 @@
     "batchActionFailed": "{{count}} 个资源操作失败",
     "batchActionPartialResult": "已完成 {{succeeded}}/{{total}} 个资源。",
     "failedResources": "{{count}} 个失败资源",
+    "keyCount": "共 {{count}} 个键",
     "batchActions": {
       "cordonNodesTitle": "停止所选 {{count}} 个节点的调度？",
       "cordonNodesDescription": "所选节点将停止接受新的 Pod，现有 Pod 会继续运行。",
@@ -1095,6 +1097,87 @@
     "gpuLimits": "GPU Limits",
     "saved": "命名空间已更新"
   },
+  "pvCreate": {
+    "pageTitle": "PersistentVolume：创建",
+    "editPageTitle": "PersistentVolume：编辑",
+    "name": "名称",
+    "capacity": "容量",
+    "capacityHint": "支持 Ki/Mi/Gi/Ti 等单位，例如 10Gi；不带单位按字节解释（填 10 就是 10 字节）。",
+    "capacityInvalid": "容量格式形如 10Gi、500Mi、1Ti",
+    "accessModes": "访问模式",
+    "accessModesRequired": "至少选择一种访问模式",
+    "reclaimPolicy": "回收策略",
+    "reclaimPolicyHint": "Retain 保留底层数据，Delete 随 PVC 释放而删除卷。",
+    "storageClassName": "存储类",
+    "storageClassNone": "（不指定）",
+    "volumeMode": "卷模式",
+    "volumeModeDefault": "（默认）",
+    "sourceType": "卷来源",
+    "hostPathPath": "节点路径",
+    "hostPathType": "路径类型",
+    "hostPathTypeNone": "（不指定）",
+    "hostPathRequired": "请填写宿主节点路径",
+    "localPath": "本地路径",
+    "localNodeName": "所在节点",
+    "localNodeHint": "用于生成 nodeAffinity（kubernetes.io/hostname）。",
+    "localPathRequired": "请填写本地卷路径",
+    "localNodeRequired": "本地卷必须指定所在节点（用于生成节点亲和）",
+    "nfsServer": "NFS 服务器",
+    "nfsPath": "共享路径",
+    "nfsRequired": "NFS 需要服务器地址与共享路径",
+    "csiDriver": "驱动名称",
+    "csiVolumeHandle": "卷标识",
+    "csiFsType": "文件系统类型",
+    "csiRequired": "CSI 需要驱动名与卷标识（volumeHandle）",
+    "readOnly": "只读挂载",
+    "invalidForm": "请完善必填信息后再创建",
+    "created": "PersistentVolume {{name}} 已创建",
+    "createButton": "创建 PersistentVolume",
+    "noCreatePermission": "你没有创建 PersistentVolume 的权限。",
+    "mountOptions": "挂载参数",
+    "mountOptionsHint": "以逗号或换行分隔，直接写入挂载参数（mountOptions）。",
+    "claimRef": "预绑定到 PVC（可选）",
+    "claimRefNamespace": "命名空间",
+    "claimRefName": "PVC 名称",
+    "claimRefHint": "填上命名空间与 PVC 名称，就把这个卷锁定给该声明（claimRef）。两个要一起填；留空则不预绑定。",
+    "claimRefIncomplete": "预绑定需要同时填写命名空间与 PVC 名称",
+    "noUpdatePermission": "你没有修改 PersistentVolume 的权限。",
+    "editHint": "编辑时只能改容量（只增）、访问模式、回收策略与挂载参数；卷来源、卷模式、存储类与预绑定创建后不可变，下方已置灰。",
+    "unsupportedSource": "这个卷的来源类型不在表单支持范围内（hostPath / local / nfs / csi），下方来源字段无法显示；如需修改请用「查看 YAML」标签页。",
+    "yamlTabEditHint": "这是由上方配置生成的 YAML。编辑模式下保存的是表单里的可变字段，YAML 仅供查看；要改不可变字段请用详情页的 YAML 标签页。"
+  },
+  "storageClassCreate": {
+    "pageTitle": "StorageClass：创建",
+    "editPageTitle": "StorageClass：编辑",
+    "name": "名称",
+    "nameHint": "资源名需符合 DNS 子域名规则（小写字母、数字、- 与 .）。",
+    "provisioner": "Provisioner",
+    "provisionerHint": "负责动态供给存储的驱动，例如 rancher.io/local-path、nfs.csi.k8s.io；纯静态卷填 kubernetes.io/no-provisioner。",
+    "reclaimPolicy": "回收策略",
+    "reclaimPolicyHint": "Delete：PVC 删除后自动回收底层卷；Retain：保留卷需要人工处理。",
+    "volumeBindingMode": "卷绑定模式",
+    "volumeBindingModeHint": "WaitForFirstConsumer 会等到 Pod 调度后再绑定卷，适合本地盘等依赖节点位置的后端。",
+    "allowVolumeExpansion": "允许扩容",
+    "isDefault": "设为默认 StorageClass",
+    "isDefaultHint": "默认 StorageClass 会影响所有未显式指定 storageClassName 的 PVC；集群里通常只保留一个默认。",
+    "parameters": "参数（parameters）",
+    "parametersHint": "各驱动的参数名不同，例如 nfs.csi.k8s.io 需要 server 与 share。",
+    "addParameter": "添加参数",
+    "mountOptions": "挂载选项",
+    "mountOptionsHint": "以逗号分隔，直接写入挂载参数（mountOptions）。",
+    "invalidForm": "请完善必填信息后再创建",
+    "created": "StorageClass {{name}} 已创建",
+    "createButton": "创建 StorageClass",
+    "noCreatePermission": "你没有创建 StorageClass 的权限。",
+    "staticProvisionerHint": "no-provisioner 是纯静态卷：已自动改用 WaitForFirstConsumer，否则 PVC 可能被绑到 Pod 调度不上去的节点上（Bound 却一直 Pending）。",
+    "duplicateParameters": "参数名重复：{{keys}}。同名参数只会保留最后一行，请合并或改名。",
+    "allowedTopologies": "允许的拓扑（可选）",
+    "allowedTopologiesHint": "每行一条，写成 键=值1,值2（例如 topology.kubernetes.io/zone=cn-south-1a）。留空表示不限制；一个 term 里要写多个表达式时请用下面的 YAML 编辑器。",
+    "invalidTopologies": "写法有误：{{lines}}。每行形如 topology.kubernetes.io/zone=cn-south-1a。",
+    "editHint": "编辑时只能改允许扩容、默认类标记、挂载选项与允许的拓扑；Provisioner、参数、回收策略与卷绑定模式创建后不可变，下方已置灰。",
+    "complexTopologies": "这个 StorageClass 的 allowedTopologies 在一个 term 里写了多个表达式，表单那行简写表达不出来；保存时会保持它不变，要改请用 YAML 标签页。",
+    "yamlTabEditHint": "这是由上方配置生成的 YAML。编辑模式下保存的是表单里的可变字段，YAML 仅供查看；要改不可变字段请用详情页的 YAML 标签页。"
+  },
   "nsDelete": {
     "title": "删除命名空间 {{name}}？",
     "description": "删除命名空间将永久移除其内部的所有资源。",
@@ -1129,10 +1212,7 @@
     "descPlaceholder": "请输入可选的描述",
     "invalidName": "名称只能包含小写字母、数字和中划线。",
     "grantMovedHint": "授权统一在「权限管理 → 权限绑定」中配置：把该命名空间归属到某个权限绑定，并把用户或用户组作为成员绑定角色。",
-    "created": "命名空间 {{name}} 创建成功",
-    "boundToBinding": "已自动归属到权限绑定「{{name}}」",
-    "boundToRoles": "已把该命名空间加入角色「{{roles}}」的命名空间范围",
-    "notBound": "未自动归属，请联系管理员分配"
+    "created": "命名空间 {{name}} 创建成功"
   },
   "workloadCreate": {
     "title": "创建 {{kind}}",
@@ -1607,7 +1687,9 @@
     },
     "receiverTypes": {
       "user": "用户",
-      "email": "邮箱地址"
+      "all_users": "全体用户",
+      "email": "邮箱地址",
+      "allUsersHint": "当前与以后新建的所有已启用账号；停用账号不会收到。"
     },
     "events": {
       "remote_login": "异地登录提醒",
@@ -1686,7 +1768,16 @@
       "add": "新增订阅",
       "empty": "暂无订阅",
       "existing": "已配置订阅",
-      "description": "选择需要通知的事件与接收人；用户需先在「用户」中配置邮箱才能用邮件接收"
+      "description": "选择需要通知的事件与接收人；用户需先在「用户」中配置邮箱才能用邮件接收",
+      "events": "事件",
+      "selectAll": "全选",
+      "selectedCount": "已选 {{selected}}/{{total}}",
+      "mandatory": "管理员必收",
+      "mandatoryHint": "带锁的事件是安全事件：无论订阅怎么配，都会以站内信通知全部管理员，无法取消。",
+      "noReceiverHint": "没有配置接收者的事件不会通知任何人（管理员也一样）。",
+      "addSelected": "添加订阅（{{count}}）",
+      "addedResult": "已新增 {{created}} 条，跳过 {{skipped}} 条（已存在）",
+      "selectEventsFirst": "请先选择事件"
     },
     "templates": {
       "empty": "暂无模板",
@@ -1803,21 +1894,6 @@
         "image": "镜像"
       }
     },
-    "runtime": {
-      "title": "运行时",
-      "description": "配置数据统计和版本检查。",
-      "form": {
-        "enableAnalytics": "启用数据统计",
-        "enableVersionCheck": "启用版本检查"
-      }
-    },
-    "autoBindNamespace": {
-      "title": "命名空间自动归属",
-      "description": "普通用户在权限范围内新建命名空间时，自动把它纳入自己已有的授权（优先归属其权限绑定组）；管理员创建的命名空间不自动归属，便于管理员手动分配。",
-      "form": {
-        "enabled": "用户创建命名空间时自动归属其权限"
-      }
-    },
     "loginPrompt": {
       "title": "登录提示",
       "description": "在登录页展示自定义提示。",
@@ -1831,7 +1907,8 @@
       "description": "自定义控制台外观：名称与 logo 会用在侧边栏、登录页、初始化页与浏览器标签上；留空则用默认值（Kite + 内置图标）。仅管理员可改。",
       "nameLabel": "名称",
       "namePlaceholder": "Kite",
-      "nameHint": "展示在侧边栏、登录页与浏览器标签上；留空则使用默认名称 Kite。",
+      "nameHint": "展示在侧边栏、登录页与浏览器标签上；最长 16 个字符（中文按 1 个算），过长时侧边栏会折成两行完整展示。留空则使用默认名称 Kite。",
+      "nameCounter": "{{used}}/{{max}}",
       "preview": "Logo 预览",
       "upload": "选择图片",
       "reset": "恢复默认",
@@ -2058,6 +2135,43 @@
     },
     "viewAll": "查看所有设置"
   },
+  "clusterBadge": {
+    "title": "自定义集群徽章",
+    "preview": "集群图标和名称效果",
+    "enabled": "显示此集群的徽章",
+    "enabledHint": "关闭后，顶栏与创建页的「当前集群」、集群管理列表都不再显示这个徽章；集群图标由下面的「自定义集群图标」单独控制。",
+    "text": "自定义说明",
+    "textPlaceholder": "如：测试环境",
+    "textHint": "最多 16 个字符，显示时会完整展示，不会截断。",
+    "color": "徽章背景颜色",
+    "colorHint": "十六进制颜色，如 #0011ff",
+    "colorInvalid": "请填写十六进制颜色，如 #0011ff",
+    "iconEnabled": "自定义集群图标",
+    "iconHint": "上传一张图片，或用最多 6 个汉字代替默认的集群图标；与上面的徽章开关互不影响。",
+    "iconUpload": "上传图标",
+    "iconUploading": "处理中…",
+    "iconRemove": "移除图标",
+    "iconUploadedHint": "当前图标来自上传，保存在本实例的数据库中；显示时优先于图标文本。",
+    "iconUploadHint": "支持 PNG / JPG，大小不超过 {{limit}}；上传前自动裁剪为正方形并缩放到 {{size}}×{{size}} 以内。",
+    "iconUploadSuccess": "集群图标已更新",
+    "iconUploadFailed": "图标上传失败",
+    "iconRemoveSuccess": "已移除集群图标",
+    "iconText": "图标文本",
+    "iconTextPlaceholder": "如：测试环境",
+    "iconTextHint": "最多 6 个汉字，显示时会完整展示，不会截断。",
+    "saved": "集群徽章已更新",
+    "errors": {
+      "cluster_icon_file_missing": "没有收到图片文件，请重新选择",
+      "cluster_icon_too_large": "图标不能超过 {{limit}}，请换一张更小的图",
+      "cluster_icon_invalid_type": "图标只支持 PNG / JPG 格式",
+      "cluster_icon_invalid_image": "这张图片已损坏或无法解析",
+      "cluster_icon_dimensions_too_large": "图标边长不能超过 {{dimension}} 像素",
+      "cluster_icon_client_not_image": "请选择图片文件（PNG / JPG / WebP 等常见格式都可以）",
+      "cluster_icon_client_decode_failed": "浏览器无法解析这张图片，请先转成 PNG 或 JPG 再上传（iPhone 的 HEIC 格式常见这种情况）",
+      "cluster_icon_client_encode_failed": "图片处理失败，请换一张试试",
+      "cluster_icon_client_too_large": "这张图片处理后仍然太大，请换一张更小的图"
+    }
+  },
   "clusterManagement": {
     "title": "集群管理",
     "currentBadge": "当前",
@@ -2071,7 +2185,8 @@
       "switch": "切换到此集群",
       "add": "添加集群",
       "import": "导入集群",
-      "importing": "导入中..."
+      "importing": "导入中...",
+      "badge": "自定义徽章"
     },
     "table": {
       "prometheus": "Prometheus"
@@ -2566,6 +2681,10 @@
     }
   },
   "containerAdv": {
+    "portNameHint": "可留空",
+    "associatedServices": "关联的 Service",
+    "noAssociatedServices": "暂无关联的 Service。需要暴露这些端口时，请在「服务」页面创建 Service 并选中本工作负载的 Pod 标签。",
+    "openService": "在服务页面查看 {{name}}",
     "networkTitle": "网络",
     "addCapabilities": "添加能力",
     "dropCapabilities": "移除能力",
@@ -2602,9 +2721,7 @@
     "probePeriod": "检查间隔(秒)",
     "probeThreshold": "失败阈值",
     "containerPortPlaceholder": "e.g. 8080",
-    "listenPortPlaceholder": "e.g. 8080",
     "portRangeError": "端口必须为 1-65535 的数字",
-    "servicePortRangeError": "监听端口必须为 1-65535",
     "nodePortRangeHint": "监听端口范围 {{min}}-{{max}}，留空自动分配",
     "healthTitle": "健康检查",
     "probe": {
@@ -2624,33 +2741,10 @@
     "hookNone": "无",
     "hookExec": "添加要执行的命令",
     "hookHttp": "创建 HTTP 请求",
-    "serviceTitle": "Service",
-    "serviceHint": "选择 ClusterIP、NodePort 或 LoadBalancer 时，创建工作负载将一并创建对应的 Service，并通过标签关联本工作负载的 Pod。",
-    "serviceType": "服务类型",
-    "serviceName": "Service 名称",
-    "serviceNamePlaceholder": "同工作负载名称",
-    "serviceGenerated": "创建时将生成 kind: Service 的 YAML 文档，端口取自上方配置的容器端口。",
-    "svcNone": "不创建服务",
-    "networkHintFull": "定义一个 Service 公开容器；选择 ClusterIP、LoadBalancer 或 NodePort 会自动创建 Service 并关联本工作负载的 Pod。",
     "protocol": "协议",
     "portName": "名称",
-    "serviceTypeLabel": "Service 类型",
-    "serviceNameLabel": "名称",
     "privatePortLabel": "私有容器端口",
-    "servicePortLabel": "监听端口",
-    "hostIPLabel": "主机 IP",
-    "portNameAuto": "默认: {{name}}",
-    "nodePortAutoPlaceholder": "留空自动分配",
-    "containerPort": "容器端口",
-    "nodePort": "监听端口",
-    "nodePortPlaceholder": "监听端口 *",
-    "addPortOrService": "添加端口或 Service",
-    "publicPortPlaceholder": "e.g. 80",
-    "hostIP": "e.g. 1.1.1.1",
-    "clusterIPFormatError": "主机 IP 格式不正确，例如 1.1.1.1",
-    "addHost": "添加主机",
-    "nodePortRangeError": "监听端口必须在 {{min}}-{{max}} 范围内",
-    "networkHint": "定义容器监听的端口，稍后通过 Service 暴露。",
+    "networkHint": "容器监听的端口。要在集群内外访问它们，请在「服务」页面创建 Service 并选中本工作负载的 Pod 标签。",
     "addPort": "添加端口"
   },
   "containerEdit": {
@@ -2671,6 +2765,7 @@
     "memoryLimitHint": "例如 512Mi、2Gi、1G"
   },
   "configmapCreate": {
+    "editPageTitle": "ConfigMap: 编辑",
     "pageTitle": "ConfigMap: 创建",
     "namePlaceholder": "请输入名称",
     "tabData": "数据",
@@ -2698,6 +2793,7 @@
     "createButton": "创建 ConfigMap"
   },
   "secretCreate": {
+    "editPageTitle": "Secret: 编辑",
     "pageTitle": "Secret: 创建",
     "namePlaceholder": "请输入名称",
     "tabData": "数据",
@@ -2741,11 +2837,24 @@
     "revealAll": "显示全部",
     "noEntries": "暂无条目",
     "noDataEntries": "暂无数据条目",
-    "noBinaryDataEntries": "暂无二进制数据条目"
+    "noBinaryDataEntries": "暂无二进制数据条目",
+    "edit": "编辑",
+    "editTitle": "编辑条目",
+    "editHint": "可修改、新增或删除条目；保存后写回该资源。",
+    "addEntry": "新增条目",
+    "invalidKey": "键不能为空",
+    "duplicateKey": "键 {{key}} 重复",
+    "saveFailed": "保存失败"
   },
   "secretDetail": {
     "showBase64": "显示 Base64",
-    "decodeValues": "解码明文"
+    "decodeValues": "解码明文",
+    "dataSaved": "Secret 数据已保存"
+  },
+  "configMapDetail": {
+    "showBase64": "显示 Base64",
+    "decodeBinaryData": "解码明文",
+    "dataSaved": "ConfigMap 数据已保存"
   },
   "labelMatch": {
     "loading": "正在匹配现有 Pod…",
@@ -2762,6 +2871,7 @@
   },
   "serviceCreate": {
     "pageTitle": "Service: 创建",
+    "editPageTitle": "Service: 编辑",
     "noCreatePermission": "你没有权限在命名空间 {{namespace}} 中创建 Service。",
     "serviceName": "服务名称",
     "serviceType": "服务类型",
@@ -2782,13 +2892,11 @@
     "targetPortRangeError": "目标端口必须为 1-65535",
     "nodePortRangeError": "NodePort 必须为 30000-32767",
     "invalidForm": "请完善必填信息后再创建",
-    "createButton": "创建 Service"
-  },
-  "workloadServiceYaml": {
-    "noServices": "该工作负载暂无关联的 Service（创建工作负载时的网络配置会自动生成）。",
-    "saved": "Service {{name}} 已更新",
-    "deleted": "Service {{name}} 已删除",
-    "invalidYaml": "YAML 格式不正确"
+    "createButton": "创建 Service",
+    "noUpdatePermission": "你没有权限在命名空间 {{namespace}} 中修改 Service。",
+    "targetPortNameError": "目标端口要么是 1-65535 的数字，要么是合法的端口名（小写字母/数字/-，最长 15 个字符）",
+    "typeImmutableHint": "ExternalName 与其他类型之间不能互相转换，类型已锁定。",
+    "yamlTabEditHint": "这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准更新；返回修改表单会重新生成。"
   },
   "deploymentOverview": {
     "endpointsTitle": "Endpoints",
@@ -2837,6 +2945,9 @@
     "description": "管理员已要求你的账号启用 MFA，请先绑定身份验证器后继续使用。",
     "passwordStepHint": "为防止会话被盗用，请先验证当前密码；验证通过后将显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
     "passwordLabel": "当前密码",
+    "directoryStepHint": "目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认。点击继续后显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
+    "reauthRequired": "为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。",
+    "reauthAction": "退出并重新登录",
     "continue": "继续",
     "scanHint": "请使用身份验证器扫描二维码，并输入其显示的 6 位动态码。",
     "qrAlt": "MFA 二维码",
@@ -2910,7 +3021,7 @@
       "mfaPolicy": "强制绑定 MFA",
       "mfaPolicyHint": "只决定谁必须绑定动态验证码；已绑定 MFA 的账号登录时一律验码，与这里的选择无关",
       "mfaThirdPartyEnabled": "LDAP 管理员强制绑定动态码",
-      "mfaThirdPartyEnabledHint": "开启后，用 LDAP 登录的管理员即使还没绑定动态码也会被要求输码；因此未绑定的管理员将无法登录，需要其他管理员协助绑定或关闭此项",
+      "mfaThirdPartyEnabledHint": "开启后，用 LDAP 登录的管理员必须绑定动态码：未绑定时会被引导到绑定页面；绑定后每次登录都要验码",
       "mfaStepUpEnabled": "敏感操作要求 MFA 校验",
       "mfaStepUpEnabledHint": "已启用 MFA 的用户在执行删除类操作或打开交互终端前需重新校验动态码",
       "mfaVerifyTtlSeconds": "MFA 校验有效期",
@@ -2988,6 +3099,16 @@
   "accountSettings": {
     "title": "账号设置",
     "profile": {
+      "avatarUrlHint": "填写图片直链；粘贴 GitHub 页面链接会自动转换为 raw 直链。",
+      "avatarUpload": "上传图片",
+      "avatarUploading": "处理中…",
+      "avatarRemove": "恢复默认头像",
+      "avatarUploadedHint": "当前头像来自上传，保存在本实例的数据库中。",
+      "avatarUploadHint": "支持 PNG / JPG，其它格式（含手机里的 WebP / HEIC）会先在浏览器里转换；上传前自动裁剪为正方形并缩放到 512×512 以内，动图只保留第一帧；大小不超过 1 MB。",
+      "avatarUploadSuccess": "头像已更新",
+      "avatarRemoveSuccess": "已恢复为默认头像",
+      "avatarUploadFailed": "头像上传失败",
+      "avatarUrlLabel": "或填写图片地址",
       "nickname": "昵称",
       "saveButton": "保存",
       "saved": "已保存",
@@ -3023,7 +3144,10 @@
         "qrCodeAlt": "MFA 二维码",
         "otpauthUrl": "otpauth 链接",
         "description": "绑定动态码后，登录与敏感操作会要求输入一次动态码。",
-        "policyDisabled": "当前安全策略已关闭动态码，需要在「安全管理」里启用后才能绑定。"
+        "featureDisabled": "当前部署已在「设置 → 通用」里关闭动态码功能，无法绑定；需要管理员启用后才能使用。",
+        "directoryHint": "目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认；若最近没有重新登录过，请先退出并重新登录，再回来绑定。",
+        "reauthRequired": "为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。",
+        "reauthAction": "退出并重新登录"
       }
     },
     "mfa": "MFA",
@@ -3047,7 +3171,23 @@
   },
   "userMenu": {
     "accountSettings": "账号设置",
+    "themeMode": "外观模式",
+    "themeModes": {
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统"
+    },
+    "toggleTheme": "切换主题",
     "colorTheme": "主题",
+    "colorThemes": {
+      "default": "默认",
+      "eye-care": "护眼",
+      "darkmatter": "暗物质",
+      "notebook": "笔记本",
+      "clean-slate": "石板",
+      "claude": "陶土",
+      "emerald": "墨绿"
+    },
     "font": "字体",
     "displayScale": "显示缩放",
     "logout": "退出登录",
@@ -3056,16 +3196,37 @@
     "fonts": {
       "system": "系统",
       "maple": "Maple",
-      "jetbrains": "JetBrains Mono"
+      "jetbrains": "JetBrains Mono",
+      "serif": "宋体",
+      "kai": "楷体"
     },
     "accountInfo": "用户信息"
   },
   "audit": {
     "timeRange": {
-      "label": "时间范围",
-      "from": "开始日期",
-      "to": "结束日期",
-      "clear": "清除时间范围"
+      "placeholder": "请选择时间范围",
+      "from": "开始时间",
+      "fromTime": "开始时刻",
+      "to": "结束时间",
+      "toTime": "结束时刻",
+      "separator": "至",
+      "unbounded": "不限",
+      "invalid": "结束时间不能早于开始时间",
+      "clear": "清空",
+      "monthLabel": "{{year}}年{{month}}月",
+      "weekdays": "日,一,二,三,四,五,六",
+      "prevYear": "上一年",
+      "prevMonth": "上个月",
+      "nextMonth": "下个月",
+      "nextYear": "下一年",
+      "presets": {
+        "day": "最近一天",
+        "week": "最近一周",
+        "month": "最近一月",
+        "quarter": "最近三月",
+        "halfYear": "最近半年",
+        "year": "最近一年"
+      }
     },
     "export": {
       "button": "导出 CSV",
@@ -3294,13 +3455,6 @@
       "addDescription": "选中的用户或用户组将获得安全管理员（security-admin）角色。"
     }
   },
-  "serviceYaml": {
-    "deleteTitle": "删除 Service {{name}}？",
-    "deleted": "Service {{name}} 已删除",
-    "invalidYaml": "YAML 格式不正确",
-    "saved": "Service {{name}} 已更新",
-    "deleteDescription": "删除后通过该 Service 的外部访问将立即中断，且无法恢复。"
-  },
   "logViewer": {
     "title": "日志",
     "lineCount": "{{count}} 行",
@@ -3325,6 +3479,19 @@
       "increaseFontSize": "增大字号",
       "decreaseFontSize": "减小字号",
       "resetFontSize": "重置字号"
+    }
+  },
+  "avatarUpload": {
+    "errors": {
+      "avatar_client_not_image": "请选择图片文件（PNG / JPG / WebP 等常见格式都可以）",
+      "avatar_client_decode_failed": "浏览器无法解析这张图片，请先转成 PNG 或 JPG 再上传（iPhone 的 HEIC 格式常见这种情况）",
+      "avatar_client_encode_failed": "图片处理失败，请换一张试试",
+      "avatar_client_too_large": "这张图片处理后仍然太大，请换一张更小的图",
+      "avatar_file_missing": "没有收到图片文件，请重新选择",
+      "avatar_too_large": "头像不能超过 {{limit}}，请换一张更小的图",
+      "avatar_invalid_type": "头像只支持 PNG / JPG 格式",
+      "avatar_invalid_image": "这张图片已损坏或无法解析",
+      "avatar_dimensions_too_large": "头像边长不能超过 {{dimension}} 像素"
     }
   }
 }

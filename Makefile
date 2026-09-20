@@ -281,7 +281,7 @@ docs-build: ## Build documentation
 	cd docs && pnpm run docs:build
 
 # ----- Docker 镜像 -----
-IMAGE ?= swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite:v1.0.0
 # 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径），
 # 这里只保留依赖源镜像（npm/go 代理）；直连环境可置空：
 #   make image DOCKER_BUILD_ARGS=

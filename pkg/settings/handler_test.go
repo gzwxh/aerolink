@@ -100,13 +100,9 @@ func setupGeneralSettingTestDB(t *testing.T, apiKey string) {
 	originalDB := model.DB
 	originalEncryptKey := common.KiteEncryptKey
 	originalJWTSecret := common.JwtSecret
-	originalAnalytics := common.EnableAnalytics.Load()
-	originalVersionCheck := common.EnableVersionCheck.Load()
 
 	common.KiteEncryptKey = "settings-handler-test-key"
 	common.JwtSecret = "settings-handler-test-jwt-secret"
-	common.EnableAnalytics.Store(false)
-	common.EnableVersionCheck.Store(true)
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -117,17 +113,16 @@ func setupGeneralSettingTestDB(t *testing.T, apiKey string) {
 	}
 	model.DB = db
 	setting := model.GeneralSetting{
-		Model:              model.Model{ID: 1},
-		AIProvider:         model.DefaultGeneralAIProvider,
-		AIModel:            model.DefaultGeneralAIModel,
-		AIAPIKey:           model.SecretString(apiKey),
-		AIMaxTokens:        4096,
-		KubectlEnabled:     true,
-		KubectlImage:       model.DefaultGeneralKubectlImage,
-		NodeTerminalImage:  model.DefaultGeneralNodeTerminalImage,
-		EnableVersionCheck: true,
-		EnableMFA:          true,
-		JWTSecret:          model.SecretString(common.JwtSecret),
+		Model:             model.Model{ID: 1},
+		AIProvider:        model.DefaultGeneralAIProvider,
+		AIModel:           model.DefaultGeneralAIModel,
+		AIAPIKey:          model.SecretString(apiKey),
+		AIMaxTokens:       4096,
+		KubectlEnabled:    true,
+		KubectlImage:      model.DefaultGeneralKubectlImage,
+		NodeTerminalImage: model.DefaultGeneralNodeTerminalImage,
+		EnableMFA:         true,
+		JWTSecret:         model.SecretString(common.JwtSecret),
 	}
 	if err := db.Create(&setting).Error; err != nil {
 		t.Fatalf("creating general setting: %v", err)
@@ -141,8 +136,6 @@ func setupGeneralSettingTestDB(t *testing.T, apiKey string) {
 		model.DB = originalDB
 		common.KiteEncryptKey = originalEncryptKey
 		common.JwtSecret = originalJWTSecret
-		common.EnableAnalytics.Store(originalAnalytics)
-		common.EnableVersionCheck.Store(originalVersionCheck)
 	})
 }
 

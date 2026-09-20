@@ -55,6 +55,10 @@ const (
 const (
 	NotificationReceiverUser  = "user"
 	NotificationReceiverEmail = "email"
+	// NotificationReceiverAllUsers 指整个实例的全体用户：订阅不绑定具体账号，
+	// 投递时展开成当时所有已启用账号（见 pkg/notification 的 resolveRecipients），
+	// 因此新入职的人不需要管理员再回来补一条订阅。
+	NotificationReceiverAllUsers = "all_users"
 )
 
 // NotificationSettingData 保存通知模块的配置。SMTP 凭据放在 NotificationSetting 中，
@@ -142,12 +146,13 @@ type NotificationSubscription struct {
 	Event string `json:"event" gorm:"type:varchar(50);index;not null"`
 	// Channel 取 NotificationChannelInApp 或 NotificationChannelEmail。
 	Channel string `json:"channel" gorm:"type:varchar(20);not null"`
-	// ReceiverType 取 NotificationReceiverUser 或 NotificationReceiverEmail。
+	// ReceiverType 取 NotificationReceiverUser / NotificationReceiverEmail /
+	// NotificationReceiverAllUsers。
 	ReceiverType string `json:"receiverType" gorm:"type:varchar(20);not null"`
 	// ReceiverID 在 ReceiverType 为 "user" 时是用户 ID。
 	ReceiverID uint `json:"receiverId"`
 	// Receiver 保存用户名或原始邮箱地址，既用于展示，也便于在不联表的情况下
-	// 解析出收件地址。
+	// 解析出收件地址。全体用户订阅没有具体接收者，这里留空。
 	Receiver string `json:"receiver" gorm:"type:varchar(255)"`
 	Enabled  bool   `json:"enabled" gorm:"type:boolean;default:true"`
 }
@@ -370,6 +375,37 @@ var defaultNotificationTemplates = map[string]struct {
 请检查系统设置中的 SMTP 配置。
 `,
 	},
+}
+
+// mandatoryAdminEvents 是「必须送达全部管理员、且无法被订阅配置关掉」的事件。
+//
+// 入选依据只有两类：**别人动了账号或权限**（重置密码、清动态码、角色变更），以及
+// **系统自身发不出通知**（邮件通道故障）。这些是事后追责与应急处置的线索，不能因为
+// 没人订阅就没人知道，所以投递时无条件并上全部管理员（见 notification.resolveRecipients）。
+// 只走站内信：邮件依赖 SMTP，而这类事件按次群发给全体管理员只会变成噪音。
+//
+// 有意保持很短的清单：每加一项都等于让管理员无法退订，加之前先想清楚。
+var mandatoryAdminEvents = []string{
+	NotificationEventPasswordResetByAdmin,
+	NotificationEventMFAResetByAdmin,
+	NotificationEventRoleAssigned,
+	NotificationEventRoleUnassigned,
+	NotificationEventMailDeliveryFailed,
+}
+
+// MandatoryAdminEvents 返回管理员必收、无法取消的事件（供接口下发与测试使用）。
+func MandatoryAdminEvents() []string {
+	return append([]string(nil), mandatoryAdminEvents...)
+}
+
+// NotificationEventMandatoryForAdmins 报告某个事件是否必须发给全部管理员。
+func NotificationEventMandatoryForAdmins(event string) bool {
+	for _, value := range mandatoryAdminEvents {
+		if value == event {
+			return true
+		}
+	}
+	return false
 }
 
 // NotificationEventList 返回所有受支持的事件标识。
@@ -658,6 +694,16 @@ func ListAdminUserIDs() ([]uint, error) {
 		ids = append(ids, user.ID)
 	}
 	return ids, nil
+}
+
+// ListEnabledUsers 返回全部已启用账号，供「全体用户」订阅在投递时展开收件人。
+//
+// 只按 enabled 过滤（与 ListAdminUsers 同一口径）：停用账号登不进来，站内信没人看，
+// 邮件也不该再发。
+func ListEnabledUsers() ([]User, error) {
+	var users []User
+	err := DB.Where("enabled = ?", true).Find(&users).Error
+	return users, err
 }
 
 func ListNotifications(userID uint, page, size int) ([]Notification, int64, error) {

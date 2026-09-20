@@ -12,57 +12,91 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// Recipient 是一个未通过订阅配置的投递目标，
-// 例如刚刚登录的那个账号。
-type Recipient struct {
-	UserID uint
-	Email  string
+// SendEvent 渲染某个事件的模板，并投递给该事件的订阅者。
+//
+// 收件人**只**来自启用的订阅（`notification_subscriptions`）：某个事件发给谁、走哪个
+// 渠道，完全由管理员在「通知 → 订阅」里配置。此前这里还接受调用方传入的「额外接收人」
+// （例如受影响的那个用户），那条路径不看订阅，于是从没订阅过的人也会收到站内信。
+// 唯一保留的例外是「通知邮件发送失败」的自监控提醒（见 notifyAdminsOfMailFailure）：
+// 出问题的正是邮件通道，不能再依赖订阅。
+//
+// 它从不返回错误：通知失败只记录日志，因此不会影响调用方（例如一次登录）。
+func SendEvent(event string, variables map[string]string) {
+	setting, title, content, ok := renderEvent(event, variables)
+	if !ok {
+		return
+	}
+	inAppUsers, emails := resolveRecipients(event)
+	if setting.InAppEnabled {
+		deliverInApp(inAppUsers, event, title, content)
+	}
+	deliverEmails(setting, emails, event, title, content)
 }
 
-// SendEvent 渲染某个事件的模板，并投递给已配置的
-// 订阅者以及额外传入的接收者。它从不返回错误：
-// 通知失败只记录日志，因此不会影响调用方（例如一次登录）。
-func SendEvent(event string, variables map[string]string, extras ...Recipient) {
+// renderEvent 加载通知设置与事件模板并渲染内容。
+// 最后一个返回值为 false 表示这个事件不该发（渠道全关 / 模板不存在或被停用）。
+func renderEvent(
+	event string, variables map[string]string,
+) (*model.NotificationSettingData, string, string, bool) {
 	setting, err := model.GetNotificationSetting()
 	if err != nil {
 		klog.Errorf("failed to load notification setting: %v", err)
-		return
+		return nil, "", "", false
 	}
 	if !setting.EmailEnabled && !setting.InAppEnabled {
-		return
+		return nil, "", "", false
 	}
 
 	template, err := model.GetNotificationTemplate(event)
 	if err != nil {
 		klog.Errorf("failed to load notification template %q: %v", event, err)
-		return
+		return nil, "", "", false
 	}
 	if template == nil {
 		// 未知事件，或者模板已被禁用。
 		klog.V(1).Infof("notification event %q has no enabled template, skipped", event)
-		return
+		return nil, "", "", false
 	}
 
-	title := RenderTemplate(template.Subject, variables)
-	content := RenderTemplate(template.Body, variables)
+	return setting,
+		RenderTemplate(template.Subject, variables),
+		RenderTemplate(template.Body, variables),
+		true
+}
 
-	inAppUsers := make([]uint, 0, len(extras)+1)
+// resolveRecipients 按启用的订阅解析收件人：站内信用户与邮件地址。
+//
+// 「全体用户」订阅在每一次投递时才展开成当前的账号列表，而不是把订阅时的那批人
+// 固定下来：新入职的人自动收到，停用（或离职）的人也不再收到。
+func resolveRecipients(event string) ([]uint, map[string]bool) {
+	inAppUsers := make([]uint, 0, 4)
 	emails := make(map[string]bool)
-	for _, extra := range extras {
-		if extra.UserID != 0 {
-			inAppUsers = append(inAppUsers, extra.UserID)
-		}
-		if email := strings.TrimSpace(extra.Email); email != "" {
-			emails[email] = true
-		}
-	}
 
 	subscriptions, err := model.ListNotificationSubscriptions(event)
 	if err != nil {
 		klog.Errorf("failed to load notification subscriptions: %v", err)
+		return inAppUsers, emails
 	}
 	for _, subscription := range subscriptions {
 		if !subscription.Enabled {
+			continue
+		}
+		if subscription.ReceiverType == model.NotificationReceiverAllUsers {
+			users, err := model.ListEnabledUsers()
+			if err != nil {
+				klog.Errorf("failed to expand the all-users subscription: %v", err)
+				continue
+			}
+			for _, user := range users {
+				switch subscription.Channel {
+				case model.NotificationChannelInApp:
+					inAppUsers = append(inAppUsers, user.ID)
+				case model.NotificationChannelEmail:
+					if email := strings.TrimSpace(user.Email); email != "" {
+						emails[email] = true
+					}
+				}
+			}
 			continue
 		}
 		if subscription.ReceiverType == model.NotificationReceiverEmail {
@@ -87,13 +121,67 @@ func SendEvent(event string, variables map[string]string, extras ...Recipient) {
 			}
 		}
 	}
-
-	if setting.InAppEnabled && len(inAppUsers) > 0 {
-		if err := model.CreateInAppNotifications(inAppUsers, event, title, content); err != nil {
-			klog.Errorf("failed to store in-app notifications: %v", err)
+	// 「管理员必收」的事件不看订阅：这类事件（重置密码、清动态码、角色变更、
+	// 邮件通道故障）是追责与应急处置的线索，任何订阅配置都不该让它消失。
+	if model.NotificationEventMandatoryForAdmins(event) {
+		adminIDs, adminErr := adminUserResolver()
+		if adminErr != nil {
+			klog.Errorf("failed to resolve admins for the mandatory event %q: %v", event, adminErr)
+		} else {
+			inAppUsers = append(inAppUsers, adminIDs...)
 		}
 	}
 
+	// 同一个人可能同时被「全体用户」与单独订阅命中，写站内信前先去重，
+	// 否则他会收到两份同样的消息。
+	return dedupeUserIDs(inAppUsers), emails
+}
+
+// adminUserResolver 解析「全部管理员」的实现，默认只查直接授权（纯 SQL）。
+//
+// 通过全局权限绑定组持有 admin 角色的账号需要看 rbac 包的内存角色映射，而
+// pkg/rbac 依赖本包（handler.go 用了通知里的接口），不能反向 import；因此由
+// app.go 在 rbac 初始化之后注入更完整的实现（rbac.AdminUserIDs）。
+var adminUserResolver = model.ListAdminUserIDs
+
+// SetAdminUserResolver 注入「查全部管理员」的实现；传 nil 表示恢复默认。
+func SetAdminUserResolver(resolver func() ([]uint, error)) {
+	if resolver == nil {
+		adminUserResolver = model.ListAdminUserIDs
+		return
+	}
+	adminUserResolver = resolver
+}
+
+func dedupeUserIDs(userIDs []uint) []uint {
+	seen := make(map[uint]bool, len(userIDs))
+	unique := make([]uint, 0, len(userIDs))
+	for _, id := range userIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		unique = append(unique, id)
+	}
+	return unique
+}
+
+// deliverInApp 把内容写进这些用户的站内信箱。调用方负责判断渠道开关。
+func deliverInApp(userIDs []uint, event, title, content string) {
+	if len(userIDs) == 0 {
+		return
+	}
+	if err := model.CreateInAppNotifications(userIDs, event, title, content); err != nil {
+		klog.Errorf("failed to store in-app notifications: %v", err)
+	}
+}
+
+// deliverEmails 逐个地址发送通知邮件；有失败时给管理员留一条站内提醒。
+func deliverEmails(
+	setting *model.NotificationSettingData,
+	emails map[string]bool,
+	event, title, content string,
+) {
 	if !setting.EmailEnabled || len(emails) == 0 {
 		return
 	}
@@ -133,7 +221,7 @@ func notifyAdminsOfMailFailure(event string, addresses map[string]bool) {
 	lastMailFailureAlert = time.Now()
 	mailFailureAlertMu.Unlock()
 
-	adminIDs, err := model.ListAdminUserIDs()
+	adminIDs, err := adminUserResolver()
 	if err != nil {
 		klog.Errorf("failed to list admins for mail failure alert: %v", err)
 		return

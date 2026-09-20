@@ -175,12 +175,6 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 			"name":      obj.GetName(),
 			"namespace": obj.GetNamespace(),
 		}
-		// 命名空间由普通用户通过 YAML 创建时，与资源创建接口一样纳入其授权范围。
-		if operation == "create" && resource == string(common.Namespaces) {
-			for key, value := range autoBindCreatedNamespace(user, cs.Name, obj.GetName()) {
-				applied[key] = value
-			}
-		}
 		appliedResources = append(appliedResources, applied)
 	}
 

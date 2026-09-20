@@ -20,17 +20,17 @@ export interface VolumeMountForm {
   readOnly?: boolean
 }
 
-export type PortServiceType = 'none' | 'ClusterIP' | 'NodePort' | 'LoadBalancer'
-
+/**
+ * 容器的监听端口。
+ *
+ * 这里只描述 *容器* 暴露了什么，不再顺带生成 Service：Service 是独立对象，
+ * 关联（它的选择器选中哪些 Pod）由 Service 自己决定，在「服务」页面创建与修改；
+ * 工作负载表单只展示已关联的 Service 名称并给出跳转入口。
+ */
 export interface PortForm {
   name?: string
   containerPort: number
   protocol: 'TCP' | 'UDP'
-  serviceType: PortServiceType
-  servicePort?: number
-  nodePort?: number
-  /** 静态 ClusterIP（必须位于 Service CIDR 内）。 */
-  clusterIP?: string
 }
 
 export interface ContainerConfig {
@@ -280,36 +280,46 @@ export function validateStep(
 }
 
 function buildVolumes(volumeForms: VolumeForm[]): Volume[] {
-  return volumeForms.map((volume): Volume => {
+  const volumes: Volume[] = []
+  for (const volume of volumeForms) {
     switch (volume.sourceType) {
       case 'emptyDir':
-        return { name: volume.name, emptyDir: {} }
+        volumes.push({ name: volume.name, emptyDir: {} })
+        break
       case 'hostPath':
-        return {
+        volumes.push({
           name: volume.name,
           hostPath: { path: volume.options?.path || '/data' },
-        }
+        })
+        break
       case 'configMap':
-        return {
+        volumes.push({
           name: volume.name,
           configMap: { name: volume.options?.configMapName || '' },
-        }
+        })
+        break
       case 'secret':
-        return {
+        volumes.push({
           name: volume.name,
           secret: { secretName: volume.options?.secretName || '' },
-        }
+        })
+        break
       case 'pvc':
-        return {
+        volumes.push({
           name: volume.name,
           persistentVolumeClaim: {
             claimName: volume.options?.claimName || '',
           },
-        }
+        })
+        break
       default:
-        return { name: volume.name }
+        // 表单表达不了的卷类型：整条跳过，绝不发一个空 source —— 空的
+        // VolumeSource 会把线上对象的真实卷覆盖成空（server-side apply 不区分
+        // 「我不管理它」和「它没有来源」）。
+        break
     }
-  })
+  }
+  return volumes
 }
 
 function buildContainers(configs: ContainerConfig[]): Container[] {
@@ -475,81 +485,6 @@ const formatQuantity = (value: string, unit: 'count' | 'percent') => {
   return unit === 'percent' ? `${num}%` : num
 }
 
-/** 依据请求创建 Service 的端口行，构造 Service 文档。 */
-export function buildServiceDocuments(
-  formData: DeploymentFormData
-): Array<Record<string, unknown>> {
-  const labelsObj = formData.labels.reduce(
-    (acc, label) => {
-      if (label.key && label.value) acc[label.key] = label.value
-      return acc
-    },
-    {} as Record<string, string>
-  )
-  if (!labelsObj.app && formData.name) labelsObj.app = formData.name
-
-  // 按 service 类型对需要暴露 Service 的端口行分组。
-  const groups = new Map<
-    Exclude<PortServiceType, 'none'>,
-    Array<Record<string, unknown>>
-  >()
-  for (const c of formData.containers) {
-    for (const p of c.ports) {
-      if (p.serviceType === 'none' || !p.containerPort) continue
-      const group = groups.get(p.serviceType) || []
-      const exists = group.some((gp) => gp.containerPort === p.containerPort)
-      if (exists) continue
-      group.push({
-        ...(p.name && { name: p.name }),
-        port: p.servicePort || p.containerPort,
-        targetPort: p.containerPort,
-        ...(p.nodePort && p.serviceType === 'NodePort'
-          ? { nodePort: p.nodePort }
-          : {}),
-        ...(p.protocol !== 'TCP' ? { protocol: p.protocol } : {}),
-      })
-      group[group.length - 1].containerPort = p.containerPort
-      groups.set(p.serviceType, group)
-    }
-  }
-
-  const docs: Array<Record<string, unknown>> = []
-  for (const [type, ports] of groups) {
-    const portsOut = ports.map((p) => {
-      const rest: Record<string, unknown> = { ...p }
-      delete rest.containerPort
-      return rest
-    })
-    const spec: Record<string, unknown> = {
-      type,
-      selector: labelsObj,
-      ports: portsOut,
-    }
-    // 静态 ClusterIP 分配（kubernetes.io cluster-ip-allocation）：
-    // 用户可以在 Service CIDR 内指定一个具体 IP。
-    if (type === 'ClusterIP') {
-      const staticIP = ports.find(
-        (p) => typeof p.clusterIP === 'string' && p.clusterIP.trim()
-      )?.clusterIP as string | undefined
-      if (staticIP) spec.clusterIP = staticIP
-    }
-    docs.push({
-      apiVersion: 'v1',
-      kind: 'Service',
-      metadata: {
-        name:
-          type === 'ClusterIP'
-            ? formData.name
-            : `${formData.name}-${type.toLowerCase()}`,
-        namespace: formData.namespace,
-        labels: labelsObj,
-      },
-      spec,
-    })
-  }
-  return docs
-}
-
 export function generateDeploymentYaml(formData: DeploymentFormData): string {
   return generateWorkloadYaml(formData, 'deployments')
 }
@@ -653,7 +588,9 @@ export function generateWorkloadYaml(
     ...(!Number.isNaN(fsGroup) && formData.podSpec?.fsGroup
       ? { securityContext: { fsGroup } }
       : {}),
-    volumes: buildVolumes(formData.podSpec?.volumes || []),
+    ...(buildVolumes(formData.podSpec?.volumes || []).length > 0 && {
+      volumes: buildVolumes(formData.podSpec?.volumes || []),
+    }),
     ...(initContainerConfigs.length > 0 && {
       initContainers: buildContainers(initContainerConfigs),
     }),
@@ -811,16 +748,6 @@ export function generateWorkloadYaml(
     }
   }
 
-  // 请求 Service 时输出多文档 YAML：
-  // 先是 Service，然后才是工作负载，一次性应用。
-  const serviceDocs = buildServiceDocuments(formData)
-  if (serviceDocs.length > 0) {
-    const dumpOpts = { indent: 2, noRefs: true, lineWidth: -1 }
-    const parts = serviceDocs.map((d) => yaml.dump(d, dumpOpts))
-    parts.push(yaml.dump(manifest, dumpOpts))
-    return parts.join('---\n')
-  }
-
   return yaml.dump(manifest, { indent: 2, noRefs: true })
 }
 /** 尽力而为的反向解析：工作负载 YAML（+ Service 文档）-> 表单状态。 */
@@ -870,7 +797,6 @@ export function parseYamlToFormData(
           name: p.name,
           containerPort: Number(p.containerPort) || 0,
           protocol: p.protocol === 'UDP' ? ('UDP' as const) : ('TCP' as const),
-          serviceType: 'none' as const,
         })),
         pullPolicy: c.imagePullPolicy || 'IfNotPresent',
         resources: {
@@ -1046,24 +972,49 @@ export function parseYamlToFormData(
       podLabels: toPairs(podMeta.labels || {}),
       podAnnotations: toPairs(podMeta.annotations || {}),
       podSpec: {
-        volumes: ((podSpecDoc.volumes as Array<any>) || []).map((v) => {
-          let sourceType: VolumeForm['sourceType'] = 'emptyDir'
-          let options: VolumeForm['options'] = {}
-          if (v.hostPath) {
-            sourceType = 'hostPath'
-            options = { path: v.hostPath.path }
-          } else if (v.configMap) {
-            sourceType = 'configMap'
-            options = { configMapName: v.configMap.name }
-          } else if (v.secret) {
-            sourceType = 'secret'
-            options = { secretName: v.secret.secretName }
-          } else if (v.persistentVolumeClaim) {
-            sourceType = 'pvc'
-            options = { claimName: v.persistentVolumeClaim.claimName }
+        // 只把表单能表达的卷类型读进来：projected / nfs / csi / downwardAPI 这类
+        // 没有对应输入项，硬塞进表单只会被当成空卷写回去（把线上对象改坏），
+        // 所以留给 mergeEditedManifest 从线上对象恢复。
+        volumes: ((podSpecDoc.volumes as Array<any>) || []).flatMap(
+          (v): VolumeForm[] => {
+            const name = v.name || ''
+            if (v.emptyDir)
+              return [{ name, sourceType: 'emptyDir' as const, options: {} }]
+            if (v.hostPath)
+              return [
+                {
+                  name,
+                  sourceType: 'hostPath' as const,
+                  options: { path: v.hostPath.path },
+                },
+              ]
+            if (v.configMap)
+              return [
+                {
+                  name,
+                  sourceType: 'configMap' as const,
+                  options: { configMapName: v.configMap.name },
+                },
+              ]
+            if (v.secret)
+              return [
+                {
+                  name,
+                  sourceType: 'secret' as const,
+                  options: { secretName: v.secret.secretName },
+                },
+              ]
+            if (v.persistentVolumeClaim)
+              return [
+                {
+                  name,
+                  sourceType: 'pvc' as const,
+                  options: { claimName: v.persistentVolumeClaim.claimName },
+                },
+              ]
+            return []
           }
-          return { name: v.name || '', sourceType, options }
-        }),
+        ),
         scheduling,
         network: {
           dnsPolicy: podSpecDoc.dnsPolicy || '',
@@ -1116,25 +1067,6 @@ export function parseYamlToFormData(
     if (resourceType === 'cronjobs' && spec.schedule)
       base.schedule = String(spec.schedule)
 
-    // 把 Service 文档映射回端口行。
-    for (const svc of docs.filter((d) => d.kind === 'Service')) {
-      const svcSpec = (svc.spec || {}) as Record<string, any>
-      const svcType = (svcSpec.type as PortServiceType) || 'ClusterIP'
-      for (const sp of (svcSpec.ports as Array<any>) || []) {
-        const target = Number(sp.targetPort)
-        for (const c of base.containers) {
-          for (const p of c.ports) {
-            if (p.containerPort === target) {
-              p.serviceType = svcType
-              if (sp.port !== undefined && Number(sp.port) !== target)
-                p.servicePort = Number(sp.port)
-              if (sp.nodePort !== undefined) p.nodePort = Number(sp.nodePort)
-            }
-          }
-        }
-      }
-    }
-
     return base
   } catch {
     return fallback
@@ -1160,6 +1092,26 @@ function overlayObject(
   return result
 }
 
+/** Pod 模板在 manifest 里的位置：工作负载在 spec.template，CronJob 在 spec.jobTemplate.spec.template。 */
+const POD_TEMPLATE_PATHS: string[][] = [
+  ['spec', 'template'],
+  ['spec', 'jobTemplate', 'spec', 'template'],
+]
+
+/** 取出 manifest 里的 Pod 模板；找不到时返回 null。 */
+function podTemplateOf(
+  manifest: Record<string, unknown>
+): Record<string, unknown> | null {
+  for (const path of POD_TEMPLATE_PATHS) {
+    let current: unknown = manifest
+    for (const key of path) {
+      current = isPlainObject(current) ? current[key] : undefined
+    }
+    if (isPlainObject(current)) return current
+  }
+  return null
+}
+
 /**
  * 把表单生成的 manifest 叠加到正在编辑的线上对象之上，
  * 使可视化表单未建模的字段（serviceAccountName、Pod 级
@@ -1177,10 +1129,27 @@ export function mergeEditedManifest(
   if (isPlainObject(merged.metadata)) delete merged.metadata.managedFields
 
   const spec = isPlainObject(merged.spec) ? merged.spec : null
+  if (!spec) return merged
+
+  // 表单没有 restartPolicy 这一栏，但生成 batch 模板（Job / CronJob）时固定写
+  // OnFailure（API 不接受 Job 模板用 Always）。线上对象用的是 Never 时，这个固定值会把
+  // 「什么都没改」的保存变成一次 Pod 模板变更：Job 的模板不可变，API 会直接以
+  // `spec.template: field is immutable` 拒绝。所以在编辑模式下按线上对象恢复 ——
+  // YAML 标签页不走这里，想改 restartPolicy 仍然可以在那里改。
+  const generatedPodSpec = podTemplateOf(merged)?.spec
+  const originalPodSpec = podTemplateOf(original)?.spec
+  if (
+    isPlainObject(generatedPodSpec) &&
+    isPlainObject(originalPodSpec) &&
+    typeof originalPodSpec.restartPolicy === 'string'
+  ) {
+    generatedPodSpec.restartPolicy = originalPodSpec.restartPolicy
+  }
+
   const selector = isPlainObject(original.spec)
     ? original.spec.selector
     : undefined
-  if (!spec || !isPlainObject(selector)) return merged
+  if (!isPlainObject(selector)) return merged
 
   const template = isPlainObject(spec.template) ? spec.template : {}
   const templateMetadata = isPlainObject(template.metadata)

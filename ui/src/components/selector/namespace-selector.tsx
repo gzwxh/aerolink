@@ -207,8 +207,11 @@ export function NamespaceSelector({
                 <CommandEmpty>
                   {t('common.namespaceSelector.noResults', 'No results')}
                 </CommandEmpty>
-                <CommandGroup>
-                  {showAll && (
+                {/* 分组之间不能嵌套 CommandGroup：cmdk 在搜索时只保留「直属 item
+                    命中」的分组，外层空分组会被连子分组一起隐藏，表现就是输入
+                    关键词后整个列表空白。所以各分组一律作为 CommandList 的直接子级。 */}
+                {showAll && (
+                  <CommandGroup>
                     <CommandItem
                       value="_all"
                       onSelect={() => {
@@ -228,28 +231,28 @@ export function NamespaceSelector({
                         {t('common.namespaceSelector.all', 'All Namespaces')}
                       </span>
                     </CommandItem>
-                  )}
+                  </CommandGroup>
+                )}
 
-                  {namespaceGroups.grouped.map(([groupName, list]) => (
-                    <CommandGroup key={groupName} heading={groupName}>
-                      {list.map(renderNamespaceItem)}
-                    </CommandGroup>
-                  ))}
-                  {namespaceGroups.loose.length > 0 && (
-                    <CommandGroup
-                      heading={
-                        namespaceGroups.grouped.length > 0
-                          ? t(
-                              'common.namespaceSelector.other',
-                              'Other namespaces'
-                            )
-                          : undefined
-                      }
-                    >
-                      {namespaceGroups.loose.map(renderNamespaceItem)}
-                    </CommandGroup>
-                  )}
-                </CommandGroup>
+                {namespaceGroups.grouped.map(([groupName, list]) => (
+                  <CommandGroup key={groupName} heading={groupName}>
+                    {list.map(renderNamespaceItem)}
+                  </CommandGroup>
+                ))}
+                {namespaceGroups.loose.length > 0 && (
+                  <CommandGroup
+                    heading={
+                      namespaceGroups.grouped.length > 0
+                        ? t(
+                            'common.namespaceSelector.other',
+                            'Other namespaces'
+                          )
+                        : undefined
+                    }
+                  >
+                    {namespaceGroups.loose.map(renderNamespaceItem)}
+                  </CommandGroup>
+                )}
               </>
             )}
           </CommandList>

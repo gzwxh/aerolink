@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as YAML from 'js-yaml'
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { applyResource } from '@/lib/api'
+import { applyResource, useResource } from '@/lib/api'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
   DESCRIPTION_ANNOTATION,
@@ -54,15 +54,31 @@ const parseConfigMapYaml = (text: string): ConfigMap | null => {
   }
 }
 
+/**
+ * ConfigMap 的表单页：没有 `:name` 时是创建，有 `:name`（路由 `…/:namespace/:name/edit`）
+ * 时读出线上对象预填，保存即更新（同一套表单，避免创建与修改两套界面走偏）。
+ */
+/** 把线上对象的 map 字段转成键/值行；空对象给一行空行，保证表格不为空。 */
+function rowsFromRecord(record: Record<string, string> | undefined): DataRow[] {
+  const rows = Object.entries(record || {}).map(([key, value]) => ({
+    key,
+    value,
+  }))
+  return rows.length > 0 ? rows : [{ key: '', value: '' }]
+}
+
 export function ConfigMapCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { namespace: namespaceParam } = useParams()
+  const { namespace: namespaceParam, name: editName } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const can = useCan()
+  const isEdit = Boolean(editName)
 
-  const pageTitle = t('configmapCreate.pageTitle', 'ConfigMap: 创建')
+  const pageTitle = isEdit
+    ? t('configmapCreate.editPageTitle', 'ConfigMap: 编辑')
+    : t('configmapCreate.pageTitle', 'ConfigMap: 创建')
   usePageTitle(pageTitle)
 
   const [namespace, setNamespace] = useState(() =>
@@ -116,6 +132,28 @@ export function ConfigMapCreatePage() {
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
+  // 编辑模式：把线上对象读回来预填（创建模式下不发请求）。
+  const { data: existing } = useResource(
+    'configmaps',
+    editName || '',
+    namespace,
+    { enabled: isEdit }
+  )
+  useEffect(() => {
+    if (!existing) return
+    const annotations = existing.metadata?.annotations || {}
+    const { [DESCRIPTION_ANNOTATION]: description, ...rest } = annotations
+    setName(existing.metadata?.name || '')
+    setNamespace(existing.metadata?.namespace || namespace)
+    setDescription(description || '')
+    setDataRows(rowsFromRecord(existing.data))
+    setBinaryRows(rowsFromRecord(existing.binaryData))
+    setLabels(rowsFromRecord(existing.metadata?.labels))
+    setAnnotations(rowsFromRecord(rest))
+    // 只有线上对象变化时重填，否则会把用户正在编辑的内容冲掉。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing])
+
   // 支撑"从文件读取" / "选择文件"操作的隐藏 input。
   const dataFileInputRef = useRef<HTMLInputElement>(null)
   const binaryBulkInputRef = useRef<HTMLInputElement>(null)
@@ -129,7 +167,7 @@ export function ConfigMapCreatePage() {
     (yamlOverrides
       ? parseConfigMapYaml(editedYaml)?.metadata?.namespace?.trim()
       : '') || namespace
-  const canCreate = can('configmaps', 'create', {
+  const canCreate = can('configmaps', isEdit ? 'update' : 'create', {
     namespace: targetNamespace,
   })
 
@@ -182,8 +220,8 @@ export function ConfigMapCreatePage() {
       )
     }
     // "/configmaps/<ns>/create" 本身就是创建路由，因此名为
-    // "create" 的 ConfigMap 将永远无法再次打开。
-    if (RESERVED_CREATE_NAMES.has(trimmedName)) {
+    // "create" 的 ConfigMap 将永远无法再次打开（编辑已有对象时不存在这个问题）。
+    if (!isEdit && RESERVED_CREATE_NAMES.has(trimmedName)) {
       return t('configmapCreate.reservedName', {
         name: trimmedName,
         defaultValue:
@@ -391,7 +429,9 @@ export function ConfigMapCreatePage() {
       queryClient.invalidateQueries()
       toast.success(t('common.messages.applied', 'Applied successfully'))
       navigate(
-        `/configmaps/${encodeURIComponent(target.namespace)}/${target.name}`
+        `/configmaps/${encodeURIComponent(target.namespace)}/${
+          isEdit && editName ? editName : target.name
+        }`
       )
     } catch (err) {
       const message = translateError(err, t)
@@ -424,7 +464,13 @@ export function ConfigMapCreatePage() {
           className="h-8 w-8"
           aria-label={t('common.actions.backToList', '返回列表')}
           title={t('common.actions.backToList', '返回列表')}
-          onClick={() => navigate('/configmaps')}
+          onClick={() =>
+            isEdit && editName
+              ? navigate(
+                  `/configmaps/${encodeURIComponent(namespace)}/${editName}`
+                )
+              : navigate('/configmaps')
+          }
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -448,6 +494,7 @@ export function ConfigMapCreatePage() {
                 )
               }}
               triggerClassName="w-full sm:w-full sm:max-w-none"
+              disabled={isEdit}
               modal
             />
           </div>
@@ -464,6 +511,7 @@ export function ConfigMapCreatePage() {
                   'configmapCreate.namePlaceholder',
                   'Enter a name'
                 )}
+                disabled={isEdit}
                 className={cn('h-9', !name.trim() && 'border-destructive')}
               />
               {!name.trim() && (
@@ -512,6 +560,7 @@ export function ConfigMapCreatePage() {
               <ValueRows
                 rows={dataRows}
                 mode="text"
+                multilineValues
                 keyPlaceholder={t(
                   'workloadWizard.labelKeyPlaceholder',
                   'e.g. foo'
@@ -784,13 +833,24 @@ export function ConfigMapCreatePage() {
 
       {/* Footer actions */}
       <div className="flex items-center justify-end gap-2 border-t pt-3">
-        <Button variant="outline" onClick={() => navigate('/configmaps')}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            isEdit && editName
+              ? navigate(
+                  `/configmaps/${encodeURIComponent(namespace)}/${editName}`
+                )
+              : navigate('/configmaps')
+          }
+        >
           {t('common.actions.cancel', 'Cancel')}
         </Button>
         {/* Kept clickable while invalid so the banner can name the problem. */}
         <Button onClick={handleCreate} disabled={isCreating || !canCreate}>
           {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {t('configmapCreate.createButton', 'Create ConfigMap')}
+          {isEdit
+            ? t('common.actions.save', '保存')
+            : t('configmapCreate.createButton', 'Create ConfigMap')}
         </Button>
       </div>
 

@@ -8,8 +8,8 @@
 #     --build-arg NPM_REGISTRY=https://registry.npmjs.org \
 #     --build-arg GOPROXY=https://proxy.golang.org,direct \
 #     -t kite:local .
-ARG NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/node:24-alpine
-ARG GOLANG_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/golang:1.26-alpine
+ARG NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/node:24-alpine
+ARG GOLANG_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26-alpine
 ARG RUNTIME_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/gcr.io/distroless/static:latest
 #ARG RUNTIME_IMAGE=gcr.io/distroless/static
 #ARG RUNTIME_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.23.2

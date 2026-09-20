@@ -202,6 +202,178 @@ func TestClusterMutationsHonorManagedConfiguration(t *testing.T) {
 	}
 }
 
+// 徽章同样遵守「没给的字段不动」，并且非法颜色 / 超长文本要被拒绝：
+// 颜色会进前端的内联样式，超限静默截断会让用户以为设置生效了。
+func TestUpdateClusterBadgePartialUpdateAndValidation(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}
+	router := gin.New()
+	router.PUT("/clusters/:id", manager.UpdateCluster)
+	router.GET("/clusters", manager.GetClusterList)
+
+	cluster := &model.Cluster{Name: "primary", Description: "main", Config: model.SecretString("secret-kubeconfig"), Enable: true}
+	if err := model.AddCluster(cluster); err != nil {
+		t.Fatalf("creating cluster: %v", err)
+	}
+	path := fmt.Sprintf("/clusters/%d", cluster.ID)
+
+	response := performClusterRequest(router, http.MethodPut, path,
+		`{"badgeEnabled":true,"badgeText":"  测试环境  ","badgeColor":"#0011ff","badgeIconEnabled":true,"badgeIconText":" 测试 "}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("badge update status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	after, err := model.GetClusterByID(cluster.ID)
+	if err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	}
+	if !after.BadgeEnabled || after.BadgeText != "测试环境" || after.BadgeColor != "#0011ff" ||
+		!after.BadgeIconEnabled || after.BadgeIconText != "测试" {
+		t.Fatalf("badge fields = %#v", after)
+	}
+	if !after.Enable || after.Description != "main" || string(after.Config) != "secret-kubeconfig" {
+		t.Errorf("badge update touched unrelated fields: %#v", after)
+	}
+
+	// 只改说明：开关、颜色、图标都要保留。
+	response = performClusterRequest(router, http.MethodPut, path, `{"badgeText":"生产环境"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("text-only update status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	after, err = model.GetClusterByID(cluster.ID)
+	if err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	}
+	if after.BadgeText != "生产环境" || !after.BadgeEnabled || after.BadgeColor != "#0011ff" || after.BadgeIconText != "测试" {
+		t.Errorf("partial badge update lost values: %#v", after)
+	}
+
+	// 管理员编辑用的列表接口要原样回传，关闭徽章的集群也得能看到已填内容。
+	list := performClusterRequest(router, http.MethodGet, "/clusters", "")
+	if list.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want %d", list.Code, http.StatusOK)
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(list.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decoding list response: %v", err)
+	}
+	if len(listed) != 1 || listed[0]["badgeText"] != "生产环境" || listed[0]["badgeColor"] != "#0011ff" {
+		t.Fatalf("listed cluster badge = %#v", listed)
+	}
+
+	for name, body := range map[string]string{
+		"启用徽章但没写说明": `{"badgeEnabled":true,"badgeText":""}`,
+		"颜色不是十六进制":  `{"badgeColor":"red"}`,
+		"颜色带样式注入":   `{"badgeColor":"#fff;background:url(x)"}`,
+		"说明超长":      fmt.Sprintf(`{"badgeText":%q}`, strings.Repeat("测", 17)),
+		// 图标文本按「最多 6 个汉字」收，7 个就要拒。
+		"图标文本超长": fmt.Sprintf(`{"badgeIconText":%q}`, strings.Repeat("测", 7)),
+	} {
+		response = performClusterRequest(router, http.MethodPut, path, body)
+		if response.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want %d: %s", name, response.Code, http.StatusBadRequest, response.Body.String())
+		}
+	}
+
+	// 正好 16 个字符要能存下：徽章按整段展示、不截断，界面宽度就是按这个长度留的。
+	sixteen := strings.Repeat("测", 16)
+	response = performClusterRequest(router, http.MethodPut, path, fmt.Sprintf(`{"badgeText":%q}`, sixteen))
+	if response.Code != http.StatusOK {
+		t.Fatalf("sixteen-character badge text status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if after, err = model.GetClusterByID(cluster.ID); err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	} else if after.BadgeText != sixteen {
+		t.Errorf("badge text = %q, want it stored whole", after.BadgeText)
+	}
+
+	// 正好 6 个汉字要能存下：图标位宽度是给这个长度留的。
+	response = performClusterRequest(router, http.MethodPut, path, `{"badgeIconText":"测试环境图标"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("six-character badge icon text status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if after, err = model.GetClusterByID(cluster.ID); err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	} else if after.BadgeIconText != "测试环境图标" {
+		t.Errorf("badge icon text = %q, want it stored whole", after.BadgeIconText)
+	}
+}
+
+// 切换器与顶栏取的是展示用数据：未启用徽章的集群不下发徽章字段，
+// 前端因此不需要处理「拿到半套徽章数据」的情况。
+//
+// 图标是例外：它由 badge_icon_enabled 单独控制，徽章关着也要下发，
+// 否则「只换了图标」的集群在界面上毫无变化。
+func TestGetClustersIncludesBadgeOnlyWhenEnabled(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	for _, cluster := range []*model.Cluster{
+		{Name: "tagged", Enable: true, BadgeEnabled: true, BadgeText: "测试环境", BadgeColor: "#0011ff", BadgeIconEnabled: true, BadgeIconText: "测试"},
+		{Name: "icononly", Enable: true, BadgeIconEnabled: true, BadgeIconText: "独立图标", BadgeIconURL: "/api/v1/clusters/3/badge-icon?v=abc"},
+		{Name: "plain", Enable: true, BadgeText: "不该下发", BadgeColor: "#ff0000"},
+	} {
+		if err := model.AddCluster(cluster); err != nil {
+			t.Fatalf("creating cluster %s: %v", cluster.Name, err)
+		}
+	}
+
+	manager := &ClusterManager{
+		clusters: map[string]*ClientSet{
+			"tagged":   {Name: "tagged", Version: "v1.36.0"},
+			"icononly": {Name: "icononly", Version: "v1.36.0"},
+			"plain":    {Name: "plain", Version: "v1.36.0"},
+		},
+		errors: map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/clusters", nil)
+	ctx.Set("user", model.User{Username: "alice", Roles: []common.Role{{
+		Name:     "limited",
+		Clusters: []string{"tagged", "icononly", "plain"},
+	}}})
+
+	manager.GetClusters(ctx)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	byName := map[string]map[string]any{}
+	for _, item := range listed {
+		name, _ := item["name"].(string)
+		byName[name] = item
+	}
+	if len(byName) != 3 {
+		t.Fatalf("clusters = %#v", listed)
+	}
+
+	tagged := byName["tagged"]
+	if tagged["badgeEnabled"] != true || tagged["badgeText"] != "测试环境" ||
+		tagged["badgeColor"] != "#0011ff" || tagged["badgeIconEnabled"] != true || tagged["badgeIconText"] != "测试" {
+		t.Errorf("enabled badge = %#v", tagged)
+	}
+
+	iconOnly := byName["icononly"]
+	if iconOnly["badgeIconEnabled"] != true || iconOnly["badgeIconText"] != "独立图标" ||
+		iconOnly["badgeIconUrl"] != "/api/v1/clusters/3/badge-icon?v=abc" {
+		t.Errorf("icon-only cluster = %#v", iconOnly)
+	}
+	// 图标下发不等于徽章下发：徽章字段仍按自己的开关走。
+	for _, key := range []string{"badgeEnabled", "badgeText", "badgeColor"} {
+		if _, ok := iconOnly[key]; ok {
+			t.Errorf("icon-only cluster leaked badge %q: %#v", key, iconOnly)
+		}
+	}
+
+	for _, key := range []string{"badgeEnabled", "badgeText", "badgeColor", "badgeIconEnabled", "badgeIconText", "badgeIconUrl"} {
+		if _, ok := byName["plain"][key]; ok {
+			t.Errorf("disabled badge leaked %q into the cluster list: %#v", key, byName["plain"])
+		}
+	}
+}
+
 func setupClusterHandlerTestDB(t *testing.T) {
 	t.Helper()
 	originalDB := model.DB
@@ -216,10 +388,11 @@ func setupClusterHandlerTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
 	}
-	// 删除集群时也会处理该集群的权限绑定组，
+	// 删除集群时也会处理该集群的权限绑定组、以及该集群的徽章图标字节，
 	// 因此测试数据库中必须有这些表。
 	if err := db.AutoMigrate(
 		&model.Cluster{},
+		&model.ClusterBadgeIcon{},
 		&model.GeneralSetting{},
 		&model.BindingGroup{},
 		&model.BindingGroupNamespace{},

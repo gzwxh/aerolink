@@ -449,13 +449,6 @@ func CanAccessCluster(user model.User, name string) bool {
 	return false
 }
 
-// RoleCoversCluster 判断角色自身的集群列表是否作用于该集群（支持 * 与正则模式，
-// 以及 ! 排除）。调用方需要按角色逐个判断集群范围时用它，例如「新建命名空间自动归属」
-// 在退化路径上只需考虑与该集群相关的角色。
-func RoleCoversCluster(clusters []string, cluster string) bool {
-	return match(clusters, cluster)
-}
-
 func CanAccessNamespace(user model.User, cluster, name string) bool {
 	// 兼容存量：显式配置 namespaces 的角色按列表匹配；空（新建角色）= 不约束，
 	// 对该集群全部命名空间可见。权限绑定组成员额外可见其组内命名空间。
@@ -573,6 +566,43 @@ func UserHasRole(user model.User, roleName string) bool {
 		}
 	}
 	return false
+}
+
+// AdminUserIDs 返回全部「管理员」账号的 ID：直接分配 admin 角色的，以及通过全局权限
+// 绑定组持有该角色的。已停用账号不在其中（登不进来，站内信也没人看）。
+//
+// 为什么不直接用 model.ListAdminUserIDs：那个只认「直接授权」这一条 SQL 路径，会漏掉
+// 组授权的管理员。这里的判定与 IsAdministrator 同源，避免两处口径不一致。
+//
+// 供 notification 包这类不能反向 import 本包的调用方使用：由 app.go 启动时注入
+// （见 notification.SetAdminUserResolver）。
+func AdminUserIDs() ([]uint, error) {
+	ids, err := model.ListAdminUserIDs()
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[uint]struct{}, len(ids))
+	for _, id := range ids {
+		seen[id] = struct{}{}
+	}
+
+	users, err := model.ListEnabledUsers()
+	if err != nil {
+		return nil, err
+	}
+	for _, user := range users {
+		if _, ok := seen[user.ID]; ok {
+			continue
+		}
+		// Roles 由调用方按需填充；这里刻意清空，让判定回落到 RBACConfig 里的角色映射，
+		// 从而覆盖「通过用户组/组映射授权」的账号。
+		user.Roles = nil
+		if IsAdministrator(user) {
+			seen[user.ID] = struct{}{}
+			ids = append(ids, user.ID)
+		}
+	}
+	return ids, nil
 }
 
 // IsAdministrator 报告用户是否是特权控制台操作员。内置的

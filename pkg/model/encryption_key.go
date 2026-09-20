@@ -127,11 +127,17 @@ func storedEncryptionKeyFingerprint() (string, error) {
 	// 这套机制出现之前创建的数据库上，并让已有行保持 NULL。
 	// 把它当成错误会跳过这个标记本来要触发的迁移。
 	//
+	// 全新安装时表还不存在（AutoMigrate 会建），按「尚未记录」处理。
+	// 用 HasTable 判断，而不是匹配错误文本：各驱动的措辞不同（sqlite 是
+	// "no such table"，PostgreSQL 是 `relation "x" does not exist`），
+	// 按文本匹配等于只有 sqlite 生效。
+	if !DB.Migrator().HasTable("general_settings") {
+		return "", nil
+	}
 	var fingerprint sql.NullString
 	row := DB.Raw("SELECT encrypt_key_fingerprint FROM general_settings WHERE id = 1").Row()
 	if err := row.Scan(&fingerprint); err != nil {
-		// 全新安装时，表或单例行可能还不存在。
-		if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "no such table") {
+		if errors.Is(err, sql.ErrNoRows) {
 			return "", nil
 		}
 		return "", err
@@ -167,13 +173,15 @@ func migrateEncryptedColumns(oldKey, newKey string) (int, error) {
 			ID    uint
 			Value string
 		}
+		// 该功能在这套安装里从未用过，表不存在就跳过。同样不能用错误文本判断：
+		// PostgreSQL 上 `no such table` 永远匹配不到，会从「跳过」变成「迁移失败」。
+		if !tx.Migrator().HasTable(column.Table) {
+			continue
+		}
 		var rows []row
 		query := fmt.Sprintf("SELECT id, %s AS value FROM %s WHERE %s IS NOT NULL AND %s <> ''",
 			column.Column, column.Table, column.Column, column.Column)
 		if err := tx.Raw(query).Scan(&rows).Error; err != nil {
-			if strings.Contains(err.Error(), "no such table") {
-				continue // feature never used on this installation
-			}
 			tx.Rollback()
 			return 0, fmt.Errorf("reading %s.%s: %w", column.Table, column.Column, err)
 		}

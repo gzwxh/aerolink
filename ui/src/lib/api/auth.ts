@@ -136,6 +136,21 @@ export const updateCurrentUser = async (data: {
   return authApiClient.put<AuthUser>('/users/me', data)
 }
 
+// 上传当前用户头像（multipart，字段名 file）。服务端会写回 users.avatar_url，
+// 返回更新后的用户对象；限制与说明见 docs/dev/plans/2026-09-20-avatar-upload.md。
+export const uploadCurrentUserAvatar = async (
+  file: File
+): Promise<AuthUser> => {
+  const form = new FormData()
+  form.append('file', file)
+  return authApiClient.post<AuthUser>('/users/me/avatar', form)
+}
+
+// 清除当前用户头像（恢复首字母占位）。
+export const deleteCurrentUserAvatar = async (): Promise<AuthUser> => {
+  return authApiClient.delete<AuthUser>('/users/me/avatar')
+}
+
 export const changeCurrentUserPassword = async (
   currentPassword: string,
   newPassword: string
@@ -152,8 +167,14 @@ export interface MFASetupResponse {
   qr_code: string
 }
 
+/**
+ * 发起动态码绑定，返回密钥、otpauth 链接与二维码。
+ *
+ * `currentPassword` 是本地密码账号的再认证凭据；LDAP 账号没有本地口令，不传该字段，
+ * 后端改用「最近重新登录过」判定（不满足时返回 `mfa_reauth_required`）。
+ */
 export const setupCurrentUserMFA = async (
-  currentPassword: string
+  currentPassword?: string
 ): Promise<MFASetupResponse> => {
   return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', {
     current_password: currentPassword,

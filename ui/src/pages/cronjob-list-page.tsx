@@ -8,6 +8,7 @@ import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 function getSuspendBadge(cronjob: CronJob) {
@@ -102,6 +103,20 @@ export function CronJobListPage() {
             </span>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="cronjobs"
+              resource={row.original}
+            />
+          </div>
+        ),
       }),
     ],
     [t]

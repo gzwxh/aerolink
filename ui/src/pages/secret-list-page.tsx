@@ -1,12 +1,15 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Secret } from 'kubernetes-types/core/v1'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { DataKeysCell } from '@/components/data-keys-cell'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 const secretSearchFilter = createSearchFilter<Secret>(
@@ -19,6 +22,7 @@ const secretSearchFilter = createSearchFilter<Secret>(
 const columnHelper = createColumnHelper<Secret>()
 
 export function SecretListPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { namespace: namespaceParam } = useParams()
 
@@ -37,7 +41,7 @@ export function SecretListPage() {
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
-        header: 'Name',
+        header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <Link
@@ -52,7 +56,7 @@ export function SecretListPage() {
       }),
       columnHelper.accessor((row) => row.type || 'Opaque', {
         id: 'type',
-        header: 'Type',
+        header: t('common.fields.type'),
         cell: ({ getValue }) => {
           const type = getValue() || 'Opaque'
           return <Badge variant="outline">{type}</Badge>
@@ -60,25 +64,14 @@ export function SecretListPage() {
       }),
       columnHelper.accessor((row) => Object.keys(row.data || {}).join(', '), {
         id: 'data',
-        header: 'Data Keys',
-        cell: ({ row }) => {
-          const data = row.original.data || {}
-          const keys = Object.keys(data)
-          if (keys.length === 0) {
-            return '-'
-          }
-          // 展示时只取前 5 个 key
-          return keys.length > 5 ? (
-            <span className="text-muted-foreground">
-              {keys.slice(0, 5).join(', ')}...
-            </span>
-          ) : (
-            <span className="text-muted-foreground">{keys.join(', ')}</span>
-          )
-        },
+        header: t('common.fields.keys'),
+        // 键的数量与长度都不受控：只显示一行，其余交给 tooltip。
+        cell: ({ row }) => (
+          <DataKeysCell keys={Object.keys(row.original.data || {})} />
+        ),
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
-        header: 'Created',
+        header: t('common.fields.created'),
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
 
@@ -87,8 +80,22 @@ export function SecretListPage() {
           )
         },
       }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="secrets"
+              resource={row.original}
+            />
+          </div>
+        ),
+      }),
     ],
-    []
+    [t]
   )
 
   return (

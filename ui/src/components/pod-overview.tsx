@@ -21,6 +21,7 @@ import {
 } from './pod-container-matrix'
 import { PodOverviewSidebar } from './pod-overview-sidebar'
 import type { PodOverviewContainer } from './pod-overview-types'
+import { SelectorBadges } from './workload-overview-parts'
 
 type TranslationFn = ReturnType<typeof useTranslation>['t']
 
@@ -231,9 +232,6 @@ function PodInformationCard({ pod }: { pod: Pod }) {
   const priorityClass =
     pod.spec?.priorityClassName || pod.spec?.priority?.toString()
   const nodeSelectorEntries = Object.entries(pod.spec?.nodeSelector || {})
-  const nodeSelectorSummary = nodeSelectorEntries
-    .map(([key, value]) => `${key}=${value}`)
-    .join(', ')
   const schedulerName = pod.spec?.schedulerName
   const volumeTabSearchParams = new URLSearchParams(searchParams)
   volumeTabSearchParams.set('tab', 'volumes')
@@ -315,8 +313,8 @@ function PodInformationCard({ pod }: { pod: Pod }) {
               </PodInfoRow>
             ) : null}
             {nodeSelectorEntries.length > 0 ? (
-              <PodInfoRow label={t('pods.nodeSelector')} mono>
-                {nodeSelectorSummary}
+              <PodInfoRow label={t('pods.nodeSelector')} mono truncate={false}>
+                <SelectorBadges entries={nodeSelectorEntries} />
               </PodInfoRow>
             ) : null}
           </div>

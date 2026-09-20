@@ -17,6 +17,7 @@ import { formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import {
   ResourceTable,
   type ResourceTableBatchAction,
@@ -119,6 +120,20 @@ export function DaemonSetListPage() {
             <span className="text-muted-foreground text-sm">{dateStr}</span>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="daemonsets"
+              resource={row.original}
+            />
+          </div>
+        ),
       }),
     ],
     [t]

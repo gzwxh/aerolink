@@ -132,6 +132,61 @@ func TestTouchAndDeleteUserSession(t *testing.T) {
 	}
 }
 
+// 退出登录只标记结束时间，序号必须保留：删行会让序号回退，已作废的旧令牌会因此复活。
+func TestEndUserSessionKeepsSeqAndStartClearsIt(t *testing.T) {
+	newUserSessionTestDB(t)
+
+	first, err := StartUserSession(7, time.Now())
+	if err != nil {
+		t.Fatalf("StartUserSession() error = %v", err)
+	}
+
+	endedAt := time.Now()
+	if err := EndUserSession(7, endedAt); err != nil {
+		t.Fatalf("EndUserSession() error = %v", err)
+	}
+	ended := loadUserSessionRow(t, 7)
+	if ended.Seq != first.Seq {
+		t.Fatalf("seq after sign-out = %d, want it to stay %d", ended.Seq, first.Seq)
+	}
+	if ended.EndedAt == nil || !ended.EndedAt.Equal(endedAt) {
+		t.Fatalf("EndedAt = %v, want %v", ended.EndedAt, endedAt)
+	}
+
+	// 下一次登录是新会话：结束标记要被清掉，否则它自己也会被当成「已结束的会话」。
+	second, err := StartUserSession(7, time.Now())
+	if err != nil {
+		t.Fatalf("StartUserSession() error = %v", err)
+	}
+	if second.Seq != first.Seq+1 {
+		t.Fatalf("seq after signing in again = %d, want %d", second.Seq, first.Seq+1)
+	}
+	if restarted := loadUserSessionRow(t, 7); restarted.EndedAt != nil {
+		t.Fatalf("EndedAt = %v after signing in again, want nil", restarted.EndedAt)
+	}
+}
+
+// 没有会话行时结束操作是无操作（例如令牌有效但状态已被清理），不该报错。
+func TestEndUserSessionWithoutRow(t *testing.T) {
+	newUserSessionTestDB(t)
+
+	if err := EndUserSession(99, time.Now()); err != nil {
+		t.Fatalf("EndUserSession() error = %v", err)
+	}
+	if _, err := GetUserSession(99); err == nil {
+		t.Fatal("EndUserSession() created a row")
+	}
+}
+
+func loadUserSessionRow(t *testing.T, userID uint) *UserSession {
+	t.Helper()
+	session, err := GetUserSession(userID)
+	if err != nil {
+		t.Fatalf("GetUserSession(%d) error = %v", userID, err)
+	}
+	return session
+}
+
 // 清理只删「按任何策略都不可能仍然有效」的行：开始与最近活动都早于界限。
 func TestCleanupExpiredUserSessions(t *testing.T) {
 	newUserSessionTestDB(t)

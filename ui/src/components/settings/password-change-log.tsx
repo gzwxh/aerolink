@@ -14,6 +14,7 @@ import {
   usePasswordChangeLogs,
   useUserList,
 } from '@/lib/api'
+import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
@@ -29,7 +30,8 @@ import {
 import { ResourceTableView } from '@/components/resource-table-view'
 import { TableColumnToggle } from '@/components/table-column-toggle'
 
-import { AuditExportButton, AuditTimeRangePicker } from './audit-filters'
+import { AuditExportButton } from './audit-filters'
+import { AuditTimeRangePicker } from './audit-time-range-picker'
 
 export function PasswordChangeLog() {
   const { t } = useTranslation()
@@ -44,7 +46,10 @@ export function PasswordChangeLog() {
   )
   const [userId, setUserId] = useState<number | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState('')
-  const [timeRange, setTimeRange] = useState<AuditTimeRange>({})
+  // 默认按最近一周过滤：界面一进来就有具体区间可显示，查询与显示保持一致。
+  const [timeRange, setTimeRange] = useState<AuditTimeRange>(() =>
+    defaultAuditTimeRange()
+  )
 
   const { data: usersData } = useUserList(1, 200)
   const {
@@ -184,8 +189,9 @@ export function PasswordChangeLog() {
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle>
+          {/* 标题让位给右侧筛选栏：窗口不够宽时先压标题，不去挤筛选栏换行。 */}
+          <div className="min-w-0">
+            <CardTitle className="truncate">
               {t('common.fields.passwordChangeLogs', 'Password Change Logs')}
             </CardTitle>
             <p className="text-muted-foreground text-sm">
@@ -195,7 +201,7 @@ export function PasswordChangeLog() {
               )}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          <div className="flex shrink-0 items-center justify-end gap-2">
             <AuditTimeRangePicker
               value={timeRange}
               onChange={handleTimeRangeChange}
@@ -207,13 +213,13 @@ export function PasswordChangeLog() {
               )}
               value={searchQuery}
               onChange={(event) => handleSearchChange(event.target.value)}
-              className="w-64"
+              className="w-52"
             />
             <Select
               value={userId ? String(userId) : 'all'}
               onValueChange={handleUserFilterChange}
             >
-              <SelectTrigger className="w-56">
+              <SelectTrigger className="w-40">
                 <SelectValue
                   placeholder={t('common.values.allUsers', 'All users')}
                 />

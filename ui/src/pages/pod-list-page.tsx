@@ -21,6 +21,7 @@ import {
 import { MetricCell } from '@/components/metrics-cell'
 import { NodeLink } from '@/components/node-link'
 import { PodStatusIcon } from '@/components/pod-status-icon'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 const podSearchFilter = createSearchFilter<Pod>(
@@ -143,6 +144,17 @@ export function PodListPage() {
             </Tooltip>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions resourceType="pods" resource={row.original} />
+          </div>
+        ),
       }),
     ],
     [t]

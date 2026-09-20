@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
+import { IconLock } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -9,15 +10,17 @@ import {
   runDailyNotificationChecks,
   sendTestNotification,
   updateNotificationSetting,
-  useCreateNotificationSubscription,
+  useCreateNotificationSubscriptionsBatch,
   useDeleteNotificationSubscription,
   useNotificationSetting,
   useNotificationSubscriptions,
   useNotificationTemplates,
   useUpdateNotificationSubscription,
   useUpdateNotificationTemplate,
+  type NotificationReceiverType,
   type NotificationSetting,
 } from '@/lib/api'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -26,6 +29,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -38,6 +42,11 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { PasswordInput } from '@/components/password-input'
 
 /**
@@ -526,7 +535,7 @@ function SubscriptionList() {
   const { t } = useTranslation()
   const { readOnly } = useSettingsSectionAccess()
   const { data: subscriptions, isLoading } = useNotificationSubscriptions()
-  const createSubscription = useCreateNotificationSubscription()
+  const createSubscriptions = useCreateNotificationSubscriptionsBatch()
   const updateSubscription = useUpdateNotificationSubscription()
   const deleteSubscription = useDeleteNotificationSubscription()
 
@@ -538,28 +547,55 @@ function SubscriptionList() {
     .map((template) => template.event as string)
     .filter((value) => value !== 'test')
 
-  const [event, setEvent] = useState('')
+  // 事件改成多选：以前一次只能给一个事件配接收者，13 个事件要点 13 遍。
+  const [selectedEvents, setSelectedEvents] = useState<string[]>([])
   const [channel, setChannel] = useState<'inapp' | 'email'>('inapp')
-  const [receiverType, setReceiverType] = useState<'user' | 'email'>('user')
+  const [receiverType, setReceiverType] =
+    useState<NotificationReceiverType>('user')
   const [receiver, setReceiver] = useState('')
 
-  // 模板还没加载完时先留空，拿到列表后默认选中第一个。
-  useEffect(() => {
-    if (!event && eventOptions.length > 0) {
-      setEvent(eventOptions[0])
-    }
-  }, [event, eventOptions])
+  // 「全体用户」不需要具体接收者，邮件渠道也不需要先知道收件人是谁。
+  const needsReceiver = receiverType !== 'all_users'
+
+  // 「管理员必收、无法取消」的事件清单由后端下发（见 model.mandatoryAdminEvents）。
+  const mandatoryEvents = subscriptions?.mandatoryEvents ?? []
+  const isMandatory = (value: string) => mandatoryEvents.includes(value)
+  const allSelected =
+    eventOptions.length > 0 && selectedEvents.length === eventOptions.length
+
+  const toggleEvent = (value: string, checked: boolean) => {
+    setSelectedEvents((prev) =>
+      checked
+        ? [...prev, value].filter(
+            (item, index, list) => list.indexOf(item) === index
+          )
+        : prev.filter((item) => item !== value)
+    )
+  }
 
   const handleCreate = async () => {
+    if (selectedEvents.length === 0) {
+      toast.error(
+        t('notifications.subscriptions.selectEventsFirst', '请先选择事件')
+      )
+      return
+    }
     try {
-      await createSubscription.mutateAsync({
-        event,
+      const result = await createSubscriptions.mutateAsync({
+        events: selectedEvents,
         channel,
         receiverType,
-        receiver,
+        receiver: needsReceiver ? receiver : undefined,
       })
       setReceiver('')
-      toast.success(t('notifications.messages.saved', '已保存'))
+      setSelectedEvents([])
+      toast.success(
+        t('notifications.subscriptions.addedResult', {
+          defaultValue: '已新增 {{created}} 条，跳过 {{skipped}} 条（已存在）',
+          created: result.created.length,
+          skipped: result.skipped.length,
+        })
+      )
     } catch {
       // 失败已由 API 客户端统一写入站内信
     }
@@ -579,74 +615,152 @@ function SubscriptionList() {
             )}
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-4">
-          <Select value={event} onValueChange={setEvent}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {eventOptions.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {t(`notifications.events.${value}`, value)}
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Select
+              value={receiverType}
+              onValueChange={(value) =>
+                setReceiverType(value as NotificationReceiverType)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">
+                  {t('notifications.receiverTypes.user', '用户')}
                 </SelectItem>
+                <SelectItem value="all_users">
+                  {t('notifications.receiverTypes.all_users', '全体用户')}
+                </SelectItem>
+                <SelectItem value="email">
+                  {t('notifications.receiverTypes.email', '邮箱地址')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={channel}
+              onValueChange={(value) => setChannel(value as 'inapp' | 'email')}
+              disabled={receiverType === 'email'}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inapp">
+                  {t('notifications.channels.inapp', '站内信')}
+                </SelectItem>
+                <SelectItem value="email">
+                  {t('notifications.channels.email', '邮件')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            {needsReceiver ? (
+              <Input
+                value={receiver}
+                placeholder={
+                  receiverType === 'user'
+                    ? t('notifications.fields.username', '用户名')
+                    : 'ops@example.com'
+                }
+                onChange={(event) => setReceiver(event.target.value)}
+              />
+            ) : (
+              <p className="self-center text-xs text-muted-foreground">
+                {t(
+                  'notifications.receiverTypes.allUsersHint',
+                  '当前与以后新建的所有已启用账号；停用账号不会收到。'
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* 事件多选：勾选后一次为这批事件建同一套接收者（原来的单选要一个个加）。 */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label>{t('notifications.subscriptions.events', '事件')}</Label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={(checked) => {
+                    if (readOnly) return
+                    setSelectedEvents(checked ? [...eventOptions] : [])
+                  }}
+                  disabled={readOnly}
+                  aria-label={t(
+                    'notifications.subscriptions.selectAll',
+                    '全选'
+                  )}
+                />
+                {t('notifications.subscriptions.selectAll', '全选')}
+                <span>
+                  {t('notifications.subscriptions.selectedCount', {
+                    defaultValue: '已选 {{selected}}/{{total}}',
+                    selected: selectedEvents.length,
+                    total: eventOptions.length,
+                  })}
+                </span>
+              </label>
+            </div>
+            <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-3">
+              {eventOptions.map((value) => (
+                <label
+                  key={value}
+                  className="flex cursor-pointer items-center gap-2 text-sm"
+                >
+                  <Checkbox
+                    checked={selectedEvents.includes(value)}
+                    onCheckedChange={(checked) => {
+                      if (readOnly) return
+                      toggleEvent(value, checked === true)
+                    }}
+                    disabled={readOnly}
+                  />
+                  <span className="truncate">
+                    {t(`notifications.events.${value}`, value)}
+                  </span>
+                  {isMandatory(value) && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex text-muted-foreground">
+                          <IconLock className="size-3.5" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        {t(
+                          'notifications.subscriptions.mandatory',
+                          '管理员必收'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </label>
               ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={receiverType}
-            onValueChange={(value) =>
-              setReceiverType(value as 'user' | 'email')
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="user">
-                {t('notifications.receiverTypes.user', '用户')}
-              </SelectItem>
-              <SelectItem value="email">
-                {t('notifications.receiverTypes.email', '邮箱地址')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={channel}
-            onValueChange={(value) => setChannel(value as 'inapp' | 'email')}
-            disabled={receiverType === 'email'}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="inapp">
-                {t('notifications.channels.inapp', '站内信')}
-              </SelectItem>
-              <SelectItem value="email">
-                {t('notifications.channels.email', '邮件')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Input
-            value={receiver}
-            placeholder={
-              receiverType === 'user'
-                ? t('notifications.fields.username', '用户名')
-                : 'ops@example.com'
-            }
-            onChange={(event) => setReceiver(event.target.value)}
-          />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t('notifications.subscriptions.noReceiverHint')}
+            </p>
+            {mandatoryEvents.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t('notifications.subscriptions.mandatoryHint')}
+              </p>
+            )}
+          </div>
 
           {!readOnly && (
-            <div className="sm:col-span-4 flex justify-end">
+            <div className="flex justify-end">
               <Button
                 onClick={handleCreate}
-                disabled={createSubscription.isPending || !receiver || !event}
+                disabled={
+                  createSubscriptions.isPending || selectedEvents.length === 0
+                }
               >
-                {t('notifications.actions.add', '添加')}
+                {t('notifications.subscriptions.addSelected', {
+                  defaultValue: '添加订阅（{{count}}）',
+                  count: selectedEvents.length,
+                })}
               </Button>
             </div>
           )}
@@ -676,10 +790,18 @@ function SubscriptionList() {
               className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
             >
               <div className="min-w-0">
-                <div className="text-sm font-medium">
+                <div className="flex items-center gap-2 text-sm font-medium">
                   {t(
                     `notifications.events.${subscription.event}`,
                     subscription.event
+                  )}
+                  {/* 必收事件即使没有任何订阅也会送达管理员，这里标出来免得管理员
+                      以为删掉这条订阅就收不到了。 */}
+                  {isMandatory(subscription.event) && (
+                    <Badge variant="secondary" className="gap-1 font-normal">
+                      <IconLock className="size-3" />
+                      {t('notifications.subscriptions.mandatory', '管理员必收')}
+                    </Badge>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">
@@ -688,7 +810,9 @@ function SubscriptionList() {
                     subscription.channel
                   )}
                   {' · '}
-                  {subscription.receiver}
+                  {subscription.receiverType === 'all_users'
+                    ? t('notifications.receiverTypes.all_users', '全体用户')
+                    : subscription.receiver}
                 </div>
               </div>
               {!readOnly && (

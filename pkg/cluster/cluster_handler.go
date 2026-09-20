@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/clusteragent"
@@ -45,13 +47,13 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 	result := make([]common.ClusterInfo, 0, len(clusters))
 	user := c.MustGet("user").(model.User)
 
-	// 自定义展示信息（描述）保存在数据库中，而不是内存中的
+	// 自定义展示信息（描述、徽章）保存在数据库中，而不是内存中的
 	// 集群快照里。要能优雅容忍数据库缺失（单元测试）的情况。
-	descriptions := map[string]string{}
+	stored := map[string]*model.Cluster{}
 	if model.DB != nil {
-		if stored, err := model.ListClusters(); err == nil {
-			for _, sc := range stored {
-				descriptions[sc.Name] = sc.Description
+		if list, err := model.ListClusters(); err == nil {
+			for _, sc := range list {
+				stored[sc.Name] = sc
 			}
 		}
 	}
@@ -62,24 +64,24 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 		if !rbac.CanSeeNamespacesInCluster(user, name) {
 			continue
 		}
-		result = append(result, common.ClusterInfo{
-			Name:        name,
-			Description: descriptions[name],
-			Version:     cluster.Version,
-			IsDefault:   name == defaultContext,
-		})
+		info := common.ClusterInfo{
+			Name:      name,
+			Version:   cluster.Version,
+			IsDefault: name == defaultContext,
+		}
+		applyStoredDisplayInfo(&info, stored[name])
+		result = append(result, info)
 	}
 	for name, errMsg := range errors {
 		if !rbac.CanSeeNamespacesInCluster(user, name) {
 			continue
 		}
-		result = append(result, common.ClusterInfo{
-			Name:        name,
-			Description: descriptions[name],
-			Version:     "",
-			IsDefault:   false,
-			Error:       errMsg,
-		})
+		info := common.ClusterInfo{
+			Name:  name,
+			Error: errMsg,
+		}
+		applyStoredDisplayInfo(&info, stored[name])
+		result = append(result, info)
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Name < result[j].Name
@@ -98,16 +100,22 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 	result := make([]gin.H, 0, len(clusters))
 	for _, cluster := range clusters {
 		clusterInfo := gin.H{
-			"id":            cluster.ID,
-			"name":          cluster.Name,
-			"description":   cluster.Description,
-			"enabled":       cluster.Enable,
-			"inCluster":     cluster.InCluster,
-			"clusterAgent":  cluster.ClusterAgent,
-			"connected":     cluster.ClusterAgent && cm.clusterAgentManager.Connected(cluster.ID),
-			"isDefault":     cluster.IsDefault,
-			"prometheusURL": cluster.PrometheusURL,
-			"config":        "",
+			"id":               cluster.ID,
+			"name":             cluster.Name,
+			"description":      cluster.Description,
+			"enabled":          cluster.Enable,
+			"inCluster":        cluster.InCluster,
+			"clusterAgent":     cluster.ClusterAgent,
+			"connected":        cluster.ClusterAgent && cm.clusterAgentManager.Connected(cluster.ID),
+			"isDefault":        cluster.IsDefault,
+			"prometheusURL":    cluster.PrometheusURL,
+			"config":           "",
+			"badgeEnabled":     cluster.BadgeEnabled,
+			"badgeText":        cluster.BadgeText,
+			"badgeColor":       cluster.BadgeColor,
+			"badgeIconEnabled": cluster.BadgeIconEnabled,
+			"badgeIconText":    cluster.BadgeIconText,
+			"badgeIconUrl":     cluster.BadgeIconURL,
 		}
 		if cluster.ClusterAgent {
 			clusterInfo["clusterAgentVersion"] = cm.clusterAgentManager.Version(cluster.ID)
@@ -256,6 +264,64 @@ func (cm *ClusterManager) CreateCluster(c *gin.Context) {
 	c.JSON(http.StatusCreated, result)
 }
 
+// applyStoredDisplayInfo 把数据库里保存的展示信息（描述、徽章、图标）填进下发的
+// 集群信息。stored 为 nil 表示库里没有这个集群（或数据库不可用），保持零值。
+//
+// 徽章只在启用时下发：这个接口是给切换器/顶栏取展示数据的，未启用的徽章
+// 连文案和颜色都不该出现在响应里；管理员编辑用的集群列表接口会返回原始字段，
+// 见 GetClusterList。
+//
+// 图标不跟着徽章开关走：只换图标、不显示说明的集群也要能拿到自己的图标，
+// 否则在界面上设置了图标却看不到任何变化。
+func applyStoredDisplayInfo(info *common.ClusterInfo, stored *model.Cluster) {
+	if stored == nil {
+		return
+	}
+	info.Description = stored.Description
+	if stored.BadgeEnabled {
+		info.BadgeEnabled = true
+		info.BadgeText = stored.BadgeText
+		info.BadgeColor = stored.BadgeColor
+	}
+	if stored.BadgeIconEnabled {
+		info.BadgeIconEnabled = true
+		info.BadgeIconText = stored.BadgeIconText
+		info.BadgeIconURL = stored.BadgeIconURL
+	}
+}
+
+// badgeColorPattern 只放行严格的 #RRGGBB。徽章颜色会进前端的内联样式，
+// 放宽成任意字符串等于把样式注入面交出去。
+var badgeColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+const (
+	// maxBadgeTextRunes 是「自定义说明」的长度上限，按字符数计。收在 16 是因为界面上
+	// 徽章按整段展示、不截断（见 ui/src/components/cluster-badge.tsx），再长就会把
+	// 「当前集群」标签和集群管理列表的名称列撑变形。
+	maxBadgeTextRunes = 16
+	// maxBadgeIconTextRunes 是图标文本的长度上限，按字符数计。图标位只有十几像素高，
+	// 再长就会挤垮旁边的集群名，所以按「最多 6 个汉字」收紧（列宽留余量，见 model.Cluster）。
+	maxBadgeIconTextRunes = 6
+)
+
+// validateClusterBadge 校验徽章字段，超限一律报错而不是静默截断。
+// 启用徽章时说明文案必填——只有颜色没有文本，渲染出来就是一个空色块。
+func validateClusterBadge(badge model.Cluster) error {
+	if badge.BadgeEnabled && badge.BadgeText == "" {
+		return errors.New("badgeText is required when the badge is enabled")
+	}
+	if utf8.RuneCountInString(badge.BadgeText) > maxBadgeTextRunes {
+		return fmt.Errorf("badgeText must be at most %d characters", maxBadgeTextRunes)
+	}
+	if badge.BadgeColor != "" && !badgeColorPattern.MatchString(badge.BadgeColor) {
+		return errors.New("badgeColor must be a hex color such as #0011ff")
+	}
+	if utf8.RuneCountInString(badge.BadgeIconText) > maxBadgeIconTextRunes {
+		return fmt.Errorf("badgeIconText must be at most %d characters", maxBadgeIconTextRunes)
+	}
+	return nil
+}
+
 func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	if common.IsSectionManaged("clusters") {
 		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})
@@ -272,9 +338,9 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	// 可选字段一律用指针：请求里没给的字段不能被当成「显式设为零值」。
 	// 以前这里是非指针 bool，任何只改部分字段的请求（例如只改描述）都会把
 	// in_cluster / is_default / enabled 按 false 写回——静默停用集群、清掉默认集群标记。
-	// 可选字段一律用指针：请求里没给的字段不能被当成「显式设为零值」。
-	// 以前这里是非指针 bool，任何只改部分字段的请求（例如只改描述）都会把
-	// in_cluster / is_default / enabled 按 false 写回——静默停用集群、清掉默认集群标记。
+	//
+	// 这里刻意不接收 badgeIconUrl：它只能由上传/删除图标的接口维护，否则会与
+	// 「有字节行 ⇔ URL 指向它」的不变式脱钩（见 cluster_badge_icon.go）。
 	var req struct {
 		Name          *string `json:"name"`
 		Description   *string `json:"description"`
@@ -283,6 +349,12 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		InCluster     *bool   `json:"inCluster"`
 		IsDefault     *bool   `json:"isDefault"`
 		Enabled       *bool   `json:"enabled"`
+		// 集群徽章，见 validateClusterBadge。
+		BadgeEnabled     *bool   `json:"badgeEnabled"`
+		BadgeText        *string `json:"badgeText"`
+		BadgeColor       *string `json:"badgeColor"`
+		BadgeIconEnabled *bool   `json:"badgeIconEnabled"`
+		BadgeIconText    *string `json:"badgeIconText"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -306,9 +378,53 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 			return
 		}
 	}
+	// 徽章按「本次请求之后的最终状态」校验：只改颜色或只打开开关的请求，
+	// 也要拿库里的旧值补齐后再判断文本是否为空。
+	nextBadge := model.Cluster{
+		BadgeEnabled:     cluster.BadgeEnabled,
+		BadgeText:        cluster.BadgeText,
+		BadgeColor:       cluster.BadgeColor,
+		BadgeIconEnabled: cluster.BadgeIconEnabled,
+		BadgeIconText:    cluster.BadgeIconText,
+	}
+	if req.BadgeEnabled != nil {
+		nextBadge.BadgeEnabled = *req.BadgeEnabled
+	}
+	if req.BadgeText != nil {
+		nextBadge.BadgeText = strings.TrimSpace(*req.BadgeText)
+	}
+	if req.BadgeColor != nil {
+		nextBadge.BadgeColor = strings.TrimSpace(*req.BadgeColor)
+	}
+	if req.BadgeIconEnabled != nil {
+		nextBadge.BadgeIconEnabled = *req.BadgeIconEnabled
+	}
+	if req.BadgeIconText != nil {
+		nextBadge.BadgeIconText = strings.TrimSpace(*req.BadgeIconText)
+	}
+	if err := validateClusterBadge(nextBadge); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	updates := map[string]interface{}{}
 	if req.Description != nil {
 		updates["description"] = *req.Description
+	}
+	if req.BadgeEnabled != nil {
+		updates["badge_enabled"] = nextBadge.BadgeEnabled
+	}
+	if req.BadgeText != nil {
+		updates["badge_text"] = nextBadge.BadgeText
+	}
+	if req.BadgeColor != nil {
+		updates["badge_color"] = nextBadge.BadgeColor
+	}
+	if req.BadgeIconEnabled != nil {
+		updates["badge_icon_enabled"] = nextBadge.BadgeIconEnabled
+	}
+	if req.BadgeIconText != nil {
+		updates["badge_icon_text"] = nextBadge.BadgeIconText
 	}
 	if req.PrometheusURL != nil {
 		updates["prometheus_url"] = *req.PrometheusURL

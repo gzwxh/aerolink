@@ -23,8 +23,6 @@ Kite supports several environment variables by default to change the default val
 
 - **CLUSTER_AGENT_IMAGE**: Docker image used when generating the Cluster Agent manifest for Cluster Agent clusters.
 
-- **ENABLE_ANALYTICS**: Enable data analytics functionality, default value is `false`. When enabled, Kite will collect limited data to help improve the product.
-
 - **PORT**: Port on which Kite runs, default value is `8080`.
 
 ## Database
@@ -40,7 +38,6 @@ Kite supports several environment variables by default to change the default val
 - **KITE_BASE**: Base path when Kite is served behind a sub-path (e.g. `/kite`).
 - **CORS_ALLOWED_ORIGINS**: Comma-separated list of origins allowed for CORS. Development only.
 - **DISABLE_GZIP**: Set to `true` to disable gzip response compression (default: disabled).
-- **DISABLE_VERSION_CHECK**: Set to `true` to disable the version update check.
 - **NAMESPACE**: Kubernetes namespace where terminal/kubectl agent pods are created (default `kube-system`).
 - **KITE_METRICS_TOKEN**: Bearer token required to access `/metrics`. Unset leaves the endpoint unauthenticated.
 - **KITE_ENABLE_PPROF**: Set to `true` to expose pprof on `localhost:6060` (may leak secrets via heap dumps; opt-in only).

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { IconReload } from '@tabler/icons-react'
+import { IconEdit, IconReload } from '@tabler/icons-react'
 import { DaemonSet } from 'kubernetes-types/apps/v1'
 import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -40,8 +41,9 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
   const [isRestartPopoverOpen, setIsRestartPopoverOpen] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const can = useCan()
-  // 重启会改写 Pod 模板，是写操作：只读角色看不到入口，容器编辑同理。
+  // 重启 / 进编辑页都会改写对象，是写操作：只读角色看不到入口，容器编辑同理。
   const canUpdate = can('daemonsets', 'update', { namespace })
   const canExec = can('pods', 'exec', { namespace })
   // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
@@ -352,47 +354,57 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
       }
       headerActions={
         canUpdate ? (
-          <Popover
-            open={isRestartPopoverOpen}
-            onOpenChange={setIsRestartPopoverOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <IconReload className="w-4 h-4" />
-                Restart
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium">Restart DaemonSet</h4>
-                  <p className="text-sm text-muted-foreground">
-                    This will restart all pods managed by this DaemonSet. This
-                    action cannot be undone.
-                  </p>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/daemonsets/${namespace}/${name}/edit`)}
+            >
+              <IconEdit className="w-4 h-4" />
+              {t('common.actions.edit')}
+            </Button>
+            <Popover
+              open={isRestartPopoverOpen}
+              onOpenChange={setIsRestartPopoverOpen}
+            >
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <IconReload className="w-4 h-4" />
+                  Restart
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Restart DaemonSet</h4>
+                    <p className="text-sm text-muted-foreground">
+                      This will restart all pods managed by this DaemonSet. This
+                      action cannot be undone.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsRestartPopoverOpen(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleRestart()
+                        setIsRestartPopoverOpen(false)
+                      }}
+                      className="flex-1"
+                    >
+                      <IconReload className="w-4 h-4 mr-2" />
+                      Restart
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsRestartPopoverOpen(false)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      handleRestart()
-                      setIsRestartPopoverOpen(false)
-                    }}
-                    className="flex-1"
-                  >
-                    <IconReload className="w-4 h-4 mr-2" />
-                    Restart
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverContent>
+            </Popover>
+          </>
         ) : null
       }
       preYamlTabs={extraTabs.filter((tab) =>

@@ -4,7 +4,8 @@ import { apiClient } from '../api-client'
 import { fetchAPI } from './shared'
 
 export type NotificationChannel = 'inapp' | 'email'
-export type NotificationReceiverType = 'user' | 'email'
+// all_users 是「全体用户」：不绑定具体账号，投递时展开成当时的所有已启用账号。
+export type NotificationReceiverType = 'user' | 'email' | 'all_users'
 // NotificationEvent 与后端 model.NotificationEventList() 保持一致；事件列表不在前端硬编码，
 // 订阅下拉直接取「通知模板」接口返回的事件（见 SubscriptionList）。
 export type NotificationEvent =
@@ -163,9 +164,14 @@ export const useUpdateNotificationTemplate = () => {
 
 export const fetchNotificationSubscriptions = async (event?: string) => {
   const query = event ? `?event=${encodeURIComponent(event)}` : ''
-  return fetchAPI<{ subscriptions: NotificationSubscription[] }>(
-    `/admin/notification-subscriptions/${query}`
-  )
+  return fetchAPI<{
+    subscriptions: NotificationSubscription[]
+    /**
+     * 「管理员必收、无法取消」的事件清单。由后端下发（`model.mandatoryAdminEvents`），
+     * 界面据此上锁，不另抄一份。
+     */
+    mandatoryEvents: string[]
+  }>(`/admin/notification-subscriptions/${query}`)
 }
 
 export const useNotificationSubscriptions = (enabled = true) => {
@@ -192,6 +198,42 @@ export const createNotificationSubscription = async (
     '/admin/notification-subscriptions/',
     data
   )
+}
+
+export interface BatchNotificationSubscriptionPayload {
+  events: string[]
+  channel: NotificationChannel
+  receiverType: NotificationReceiverType
+  receiverId?: number
+  receiver?: string
+}
+
+export interface BatchNotificationSubscriptionResult {
+  created: NotificationSubscription[]
+  /** 已存在完全相同订阅、被跳过的事件。 */
+  skipped: string[]
+}
+
+/** 「全选」：一次为多个事件建同一套接收者（已存在的由后端跳过）。 */
+export const createNotificationSubscriptionsBatch = async (
+  data: BatchNotificationSubscriptionPayload
+) => {
+  return apiClient.post<BatchNotificationSubscriptionResult>(
+    '/admin/notification-subscriptions/batch',
+    data
+  )
+}
+
+export const useCreateNotificationSubscriptionsBatch = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: createNotificationSubscriptionsBatch,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['notification-subscriptions'],
+      })
+    },
+  })
 }
 
 export const useCreateNotificationSubscription = () => {

@@ -1,8 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useState } from 'react'
+import { IconEye, IconEyeOff } from '@tabler/icons-react'
 import { Plus, Upload } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { PasswordInput } from '@/components/password-input'
 
 /** 创建表单中的一行键/值（或键/文件）。 */
@@ -52,6 +57,7 @@ export function ValueRows({
   binaryLoadedLabel,
   removeLabel,
   maskValues = false,
+  multilineValues = false,
   onKeyChange,
   onValueChange,
   onRemove,
@@ -66,6 +72,11 @@ export function ValueRows({
   removeLabel: string
   /** 值默认隐藏、每行一个「显示/隐藏」切换（用于 Secret 这类敏感值）。 */
   maskValues?: boolean
+  /**
+   * 值改用多行文本域。配置内容经常是多行的（nginx.conf、证书、token、JSON），
+   * 单行输入框里既看不全也不好编辑。
+   */
+  multilineValues?: boolean
   onKeyChange: (index: number, key: string) => void
   onValueChange: (index: number, value: string) => void
   onRemove: (index: number) => void
@@ -74,7 +85,13 @@ export function ValueRows({
   return (
     <div className="space-y-2">
       {rows.map((row, index) => (
-        <div key={index} className="flex items-center gap-3">
+        <div
+          key={index}
+          className={cn(
+            'flex gap-3',
+            multilineValues ? 'items-start' : 'items-center'
+          )}
+        >
           <Input
             value={row.key}
             onChange={(e) => onKeyChange(index, e.target.value)}
@@ -96,16 +113,31 @@ export function ValueRows({
               </span>
             </Button>
           ) : maskValues ? (
-            // 敏感值：默认隐藏，点眼睛临时显示（PasswordInput 自带切换）。
-            <div className="min-w-0 flex-1">
-              <PasswordInput
+            multilineValues ? (
+              <SecretTextarea
                 value={row.value}
-                onChange={(e) => onValueChange(index, e.target.value)}
+                onChange={(value) => onValueChange(index, value)}
                 placeholder={valuePlaceholder}
-                autoComplete="new-password"
-                className="h-9"
               />
-            </div>
+            ) : (
+              // 敏感值：默认隐藏，点眼睛临时显示（PasswordInput 自带切换）。
+              <div className="min-w-0 flex-1">
+                <PasswordInput
+                  value={row.value}
+                  onChange={(e) => onValueChange(index, e.target.value)}
+                  placeholder={valuePlaceholder}
+                  autoComplete="new-password"
+                  className="h-9"
+                />
+              </div>
+            )
+          ) : multilineValues ? (
+            <Textarea
+              value={row.value}
+              onChange={(e) => onValueChange(index, e.target.value)}
+              placeholder={valuePlaceholder}
+              className="min-h-20 min-w-0 flex-1 font-mono"
+            />
           ) : (
             <Input
               value={row.value}
@@ -123,6 +155,63 @@ export function ValueRows({
           </button>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * 敏感值的多行输入框：默认按密码样式遮住，点眼睛（或点一下框）后换成可编辑的多行
+ * 文本域 —— 证书、token、配置文件这类内容本身就多行，单行密码框粘贴起来很别扭。
+ */
+function SecretTextarea({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  const { t } = useTranslation()
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      {visible ? (
+        <Textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          autoComplete="new-password"
+          className="min-h-20 pr-9 font-mono"
+        />
+      ) : (
+        <Input
+          readOnly
+          type="password"
+          value={value}
+          placeholder={placeholder}
+          onFocus={() => setVisible(true)}
+          onClick={() => setVisible(true)}
+          className="h-9 pr-9"
+        />
+      )}
+      <button
+        type="button"
+        aria-label={
+          visible
+            ? t('common.actions.hide', '隐藏')
+            : t('common.actions.show', '显示')
+        }
+        onClick={() => setVisible((show) => !show)}
+        className="absolute right-1 top-1.5 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {visible ? (
+          <IconEyeOff className="h-4 w-4" />
+        ) : (
+          <IconEye className="h-4 w-4" />
+        )}
+      </button>
     </div>
   )
 }

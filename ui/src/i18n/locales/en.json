@@ -351,8 +351,7 @@
       "related": "Related",
       "terminal": "Terminal",
       "volumes": "Volumes",
-      "yaml": "YAML",
-      "serviceYaml": "Related Services"
+      "yaml": "YAML"
     },
     "units": {
       "pods": "pods",
@@ -424,7 +423,8 @@
       "loading": "Loading...",
       "noResults": "No results",
       "toggle": "Toggle namespace {{name}}"
-    }
+    },
+    "currentCluster": "Current cluster"
   },
   "globalSearch": {
     "title": "Global Search",
@@ -477,7 +477,6 @@
     "unsetGlobal": "Unset global sidebar",
     "unsetGlobalSuccess": "Global sidebar disabled successfully",
     "unsetGlobalError": "Failed to disable global sidebar",
-    "updateAvailable": "A newer Kite version is available",
     "customize": "Customize Sidebar",
     "customizeTitle": "Customize Sidebar",
     "expand": "Expand",
@@ -616,7 +615,9 @@
       "modified": "Modified"
     },
     "errors": {
-      "pod_files_unsupported": "File browsing is not supported for container {{container}} (missing 'ls' command)",
+      "pod_files_unsupported": "File operations are not supported for container {{container}} (missing ls, cat, etc.)",
+      "pod_files_not_found": "{{path}} is not present in container {{container}}",
+      "pod_files_is_directory": "{{path}} is a directory and cannot be previewed",
       "pod_files_path_required": "File path is required",
       "pod_files_path_invalid": "Invalid file path",
       "pod_files_path_traversal": "Path must not contain '..'"
@@ -681,7 +682,7 @@
     "exposeInvalidPort": "Port must be between 1 and 65535",
     "exposeNoSelector": "No Deployment selector labels found to expose"
   },
-  "deploymentActions": {
+  "resourceActions": {
     "viewYaml": "View YAML",
     "viewYamlDescription": "Current YAML of {{name}} (read-only).",
     "editImage": "Edit image",
@@ -1038,6 +1039,7 @@
     "batchActionFailed": "{{count}} resources failed",
     "batchActionPartialResult": "Completed {{succeeded}} of {{total}} resources.",
     "failedResources": "{{count}} failed resources",
+    "keyCount": "{{count}} key(s)",
     "batchActions": {
       "cordonNodesTitle": "Cordon {{count}} selected nodes?",
       "cordonNodesDescription": "Selected nodes will stop accepting new Pods. Existing Pods will keep running.",
@@ -1095,6 +1097,87 @@
     "gpuLimits": "GPU Limits",
     "saved": "Namespace updated"
   },
+  "pvCreate": {
+    "pageTitle": "PersistentVolume: Create",
+    "editPageTitle": "PersistentVolume: Edit",
+    "name": "Name",
+    "capacity": "Capacity",
+    "capacityHint": "Units such as Ki/Mi/Gi/Ti are supported, e.g. 10Gi. A bare number is bytes (10 means 10 bytes).",
+    "capacityInvalid": "Capacity looks like 10Gi, 500Mi or 1Ti",
+    "accessModes": "Access modes",
+    "accessModesRequired": "Select at least one access mode",
+    "reclaimPolicy": "Reclaim policy",
+    "reclaimPolicyHint": "Retain keeps the underlying data; Delete removes the volume when the PVC is released.",
+    "storageClassName": "Storage class",
+    "storageClassNone": "(none)",
+    "volumeMode": "Volume mode",
+    "volumeModeDefault": "(default)",
+    "sourceType": "Volume source",
+    "hostPathPath": "Node path",
+    "hostPathType": "Path type",
+    "hostPathTypeNone": "(unspecified)",
+    "hostPathRequired": "Provide the host path on the node",
+    "localPath": "Local path",
+    "localNodeName": "Node",
+    "localNodeHint": "Used to generate nodeAffinity (kubernetes.io/hostname).",
+    "localPathRequired": "Provide the local volume path",
+    "localNodeRequired": "A local volume must name its node (used for node affinity)",
+    "nfsServer": "NFS server",
+    "nfsPath": "Share path",
+    "nfsRequired": "NFS needs both the server address and the share path",
+    "csiDriver": "Driver",
+    "csiVolumeHandle": "Volume handle",
+    "csiFsType": "Filesystem type",
+    "csiRequired": "CSI needs a driver and a volumeHandle",
+    "readOnly": "Mount read-only",
+    "invalidForm": "Complete the required fields before creating",
+    "created": "PersistentVolume {{name}} created",
+    "createButton": "Create PersistentVolume",
+    "noCreatePermission": "You don't have permission to create PersistentVolumes.",
+    "mountOptions": "Mount options",
+    "mountOptionsHint": "Comma or newline separated; written straight into mountOptions.",
+    "claimRef": "Pre-bind to a PVC (optional)",
+    "claimRefNamespace": "Namespace",
+    "claimRefName": "PVC name",
+    "claimRefHint": "Give both the namespace and the PVC name to lock this volume to that claim (claimRef). Fill both or neither.",
+    "claimRefIncomplete": "Pre-binding needs both the namespace and the PVC name",
+    "noUpdatePermission": "You do not have permission to update PersistentVolumes.",
+    "editHint": "Only capacity (increase), access modes, reclaim policy and mount options can be edited; the volume source, volume mode, storage class and pre-binding are immutable after creation and are greyed out below.",
+    "unsupportedSource": "This volume uses a source type the form does not support (hostPath / local / nfs / csi), so the source fields cannot be shown; use the YAML tab to change it.",
+    "yamlTabEditHint": "This YAML is generated from the form. In edit mode the mutable form fields are saved and the YAML is read-only; use the detail page YAML tab to change immutable fields."
+  },
+  "storageClassCreate": {
+    "pageTitle": "StorageClass: Create",
+    "editPageTitle": "StorageClass: Edit",
+    "name": "Name",
+    "nameHint": "Names must follow DNS subdomain rules (lowercase letters, digits, - and .).",
+    "provisioner": "Provisioner",
+    "provisionerHint": "Driver that provisions volumes, e.g. rancher.io/local-path or nfs.csi.k8s.io; use kubernetes.io/no-provisioner for static volumes only.",
+    "reclaimPolicy": "Reclaim policy",
+    "reclaimPolicyHint": "Delete reclaims the underlying volume when the PVC is deleted; Retain keeps it for manual cleanup.",
+    "volumeBindingMode": "Volume binding mode",
+    "volumeBindingModeHint": "WaitForFirstConsumer binds the volume after the Pod is scheduled, as node-local backends require.",
+    "allowVolumeExpansion": "Allow volume expansion",
+    "isDefault": "Set as default StorageClass",
+    "isDefaultHint": "The default StorageClass applies to every PVC without an explicit storageClassName; usually only one per cluster.",
+    "parameters": "Parameters",
+    "parametersHint": "Parameter names are driver specific, e.g. nfs.csi.k8s.io needs server and share.",
+    "addParameter": "Add parameter",
+    "mountOptions": "Mount options",
+    "mountOptionsHint": "Comma separated; written to spec.mountOptions as-is.",
+    "invalidForm": "Complete the required fields before creating",
+    "created": "StorageClass {{name}} created",
+    "createButton": "Create StorageClass",
+    "noCreatePermission": "You don't have permission to create StorageClasses.",
+    "staticProvisionerHint": "no-provisioner serves statically created volumes: the binding mode was switched to WaitForFirstConsumer, otherwise a PVC may bind to a volume on a node where no pod can be scheduled (Bound but Pending forever).",
+    "duplicateParameters": "Duplicate parameter names: {{keys}}. Only the last row with the same name is kept — merge or rename them.",
+    "allowedTopologies": "Allowed topologies (optional)",
+    "allowedTopologiesHint": "One per line, written as key=value1,value2 (e.g. topology.kubernetes.io/zone=cn-south-1a). Empty means unrestricted; use the YAML editor below for several expressions inside one term.",
+    "invalidTopologies": "Invalid lines: {{lines}}. Each line looks like topology.kubernetes.io/zone=cn-south-1a.",
+    "editHint": "Only volume expansion, the default-class annotation, mount options and allowed topologies can be edited; provisioner, parameters, reclaim policy and volume binding mode are immutable after creation and are greyed out below.",
+    "complexTopologies": "This StorageClass has several match expressions in one allowedTopologies term, which the single-line form cannot express; saving keeps it unchanged, use the YAML tab to change it.",
+    "yamlTabEditHint": "This YAML is generated from the form. In edit mode the mutable form fields are saved and the YAML is read-only; use the detail page YAML tab to change immutable fields."
+  },
   "nsDelete": {
     "title": "Delete namespace {{name}}?",
     "description": "Deleting a namespace permanently removes all resources inside it.",
@@ -1129,10 +1212,7 @@
     "descPlaceholder": "Enter an optional description",
     "invalidName": "Name may only contain lowercase letters, numbers and dashes.",
     "grantMovedHint": "Authorization is configured in Permission Binding: assign this namespace to a group and bind its members to roles there.",
-    "created": "Namespace {{name}} created",
-    "boundToBinding": "Automatically bound to permission binding \"{{name}}\"",
-    "boundToRoles": "Added to the namespace scope of role(s) \"{{roles}}\"",
-    "notBound": "Not assigned automatically. Ask an administrator to allocate it."
+    "created": "Namespace {{name}} created"
   },
   "workloadCreate": {
     "title": "Create {{kind}}",
@@ -1607,7 +1687,9 @@
     },
     "receiverTypes": {
       "user": "User",
-      "email": "Email address"
+      "all_users": "All users",
+      "email": "Email address",
+      "allUsersHint": "Every enabled account, including accounts created later. Disabled accounts are skipped."
     },
     "events": {
       "remote_login": "Remote login notice",
@@ -1686,7 +1768,16 @@
       "add": "Add subscription",
       "empty": "No subscriptions configured",
       "existing": "Configured subscriptions",
-      "description": "Choose the events and recipients to notify; users need an email address configured under Users to receive email"
+      "description": "Choose the events and recipients to notify; users need an email address configured under Users to receive email",
+      "events": "Events",
+      "selectAll": "Select all",
+      "selectedCount": "{{selected}}/{{total}} selected",
+      "mandatory": "Admins always receive",
+      "mandatoryHint": "Locked events are security events: they always reach every admin as an in-app message, regardless of subscriptions, and cannot be turned off.",
+      "noReceiverHint": "Events without a configured recipient are not delivered to anyone (including admins).",
+      "addSelected": "Add subscriptions ({{count}})",
+      "addedResult": "Added {{created}}, skipped {{skipped}} (already configured)",
+      "selectEventsFirst": "Choose at least one event"
     },
     "templates": {
       "empty": "No templates",
@@ -1803,21 +1894,6 @@
         "image": "Image"
       }
     },
-    "runtime": {
-      "title": "Runtime",
-      "description": "Configure analytics and version checking behavior.",
-      "form": {
-        "enableAnalytics": "Enable analytics",
-        "enableVersionCheck": "Enable version check"
-      }
-    },
-    "autoBindNamespace": {
-      "title": "Namespace auto-binding",
-      "description": "When a regular user creates a namespace, it is automatically added to their existing authorization (preferring their permission binding group). Namespaces created by an administrator stay unassigned so the administrator can allocate them deliberately.",
-      "form": {
-        "enabled": "Auto-assign a user-created namespace to their permissions"
-      }
-    },
     "loginPrompt": {
       "title": "Login Prompt",
       "description": "Show a custom message on the login page.",
@@ -1831,7 +1907,8 @@
       "description": "Customize the console appearance: the name and logo are used in the sidebar, the login page, the setup page and the browser tab. Leave them empty for the defaults (Kite + built-in icon). Administrators only.",
       "nameLabel": "Name",
       "namePlaceholder": "Kite",
-      "nameHint": "Shown in the sidebar, on the login page and in the browser tab; leave empty to keep the default name Kite.",
+      "nameHint": "Shown in the sidebar, on the login page and in the browser tab; at most 16 characters, and longer names wrap onto two lines in the sidebar so the whole name stays visible. Leave empty to use the default name Kite.",
+      "nameCounter": "{{used}}/{{max}}",
       "preview": "Logo preview",
       "upload": "Choose image",
       "reset": "Use default",
@@ -2058,6 +2135,43 @@
     },
     "viewAll": "View All Settings"
   },
+  "clusterBadge": {
+    "title": "Custom Cluster Badge",
+    "preview": "Cluster icon and name preview",
+    "enabled": "Show this cluster's badge",
+    "enabledHint": "When off, the header's and create pages' current-cluster label and the cluster management list stop showing this badge. The cluster icon is controlled separately under Custom cluster icon.",
+    "text": "Custom label",
+    "textPlaceholder": "e.g. Staging",
+    "textHint": "At most 16 characters; shown in full, never truncated.",
+    "color": "Badge background",
+    "colorHint": "Hex color, e.g. #0011ff",
+    "colorInvalid": "Enter a hex color, e.g. #0011ff",
+    "iconEnabled": "Custom cluster icon",
+    "iconHint": "Upload an image, or use up to 6 characters instead of the default cluster icon; independent of the badge switch above.",
+    "iconUpload": "Upload icon",
+    "iconUploading": "Processing…",
+    "iconRemove": "Remove icon",
+    "iconUploadedHint": "This icon was uploaded and is stored in this instance's database; it takes precedence over the icon text.",
+    "iconUploadHint": "PNG / JPG, up to {{limit}}; cropped to a square and scaled to at most {{size}}×{{size}} before upload.",
+    "iconUploadSuccess": "Cluster icon updated",
+    "iconUploadFailed": "Failed to upload the icon",
+    "iconRemoveSuccess": "Cluster icon removed",
+    "iconText": "Icon text",
+    "iconTextPlaceholder": "e.g. Staging",
+    "iconTextHint": "Up to 6 characters, always shown in full (never truncated).",
+    "saved": "Cluster badge updated",
+    "errors": {
+      "cluster_icon_file_missing": "No image file was received; please pick one again",
+      "cluster_icon_too_large": "The icon must be at most {{limit}}; please pick a smaller image",
+      "cluster_icon_invalid_type": "Icons support PNG / JPG only",
+      "cluster_icon_invalid_image": "This image is corrupted or cannot be parsed",
+      "cluster_icon_dimensions_too_large": "The icon must be at most {{dimension}} pixels on a side",
+      "cluster_icon_client_not_image": "Please choose an image file (PNG / JPG / WebP and other common formats are fine)",
+      "cluster_icon_client_decode_failed": "The browser cannot decode this image; convert it to PNG or JPG first (common with iPhone HEIC files)",
+      "cluster_icon_client_encode_failed": "Image processing failed; please try another image",
+      "cluster_icon_client_too_large": "This image is still too large after processing; please pick a smaller one"
+    }
+  },
   "clusterManagement": {
     "title": "Cluster Management",
     "currentBadge": "Current",
@@ -2071,7 +2185,8 @@
       "switch": "Switch to this cluster",
       "add": "Add Cluster",
       "import": "Import Clusters",
-      "importing": "Importing..."
+      "importing": "Importing...",
+      "badge": "Custom badge"
     },
     "table": {
       "prometheus": "Prometheus"
@@ -2536,18 +2651,19 @@
     }
   },
   "containerAdv": {
+    "portNameHint": "optional",
+    "associatedServices": "Associated Services",
+    "noAssociatedServices": "No associated Service yet. To expose these ports, create a Service on the Services page and select the pod labels of this workload.",
+    "openService": "Open {{name}} on the Services page",
     "networkTitle": "Network",
     "commandPlaceholder": "e.g. /bin/sh",
     "argsPlaceholder": "e.g. /usr/sbin/httpd -f httpd.conf",
     "containerPortPlaceholder": "e.g. 8080",
-    "listenPortPlaceholder": "e.g. 8080",
     "nodePortRangeHint": "NodePort range {{min}}-{{max}}, empty = auto-assign",
     "portRangeError": "Port must be a number between 1 and 65535",
-    "servicePortRangeError": "Service port must be between 1 and 65535",
     "remove": "Remove",
-    "networkHint": "Define the ports the container listens on; expose them via a Service later.",
+    "networkHint": "Ports the container listens on. To expose them inside or outside the cluster, create a Service on the Services page that selects the pod labels of this workload.",
     "portName": "Name",
-    "containerPort": "Container Port",
     "addPort": "Add Port",
     "commandTitle": "Command",
     "command": "Command",
@@ -2598,30 +2714,8 @@
     "hookNone": "None",
     "hookExec": "Run a command",
     "hookHttp": "Create an HTTP request",
-    "serviceTitle": "Service",
-    "serviceHint": "Choosing ClusterIP, NodePort or LoadBalancer creates a matching Service together with the workload, linked via labels.",
-    "serviceType": "Service Type",
-    "serviceName": "Service Name",
-    "serviceNamePlaceholder": "Defaults to the workload name",
-    "serviceGenerated": "A kind: Service YAML document will be generated on create; ports come from the container ports above.",
-    "svcNone": "Do not create a Service",
-    "networkHintFull": "Define a Service to expose the container; ClusterIP, LoadBalancer or NodePort auto-creates a Service linked to this workload's Pods via labels.",
     "protocol": "Protocol",
-    "serviceTypeLabel": "Service Type",
-    "serviceNameLabel": "Name",
-    "privatePortLabel": "Container Port",
-    "servicePortLabel": "Listening Port",
-    "hostIPLabel": "Host IP",
-    "portNameAuto": "Default: {{name}}",
-    "nodePortAutoPlaceholder": "Empty = auto-assign",
-    "nodePort": "Listening Port",
-    "nodePortPlaceholder": "Listening Port *",
-    "addPortOrService": "Add Port or Service",
-    "publicPortPlaceholder": "e.g. 80",
-    "hostIP": "e.g. 1.1.1.1",
-    "clusterIPFormatError": "Invalid host IP format, e.g. 1.1.1.1",
-    "addHost": "Add Host IP",
-    "nodePortRangeError": "Listening port must be within {{min}}-{{max}}"
+    "privatePortLabel": "Container Port"
   },
   "containerEdit": {
     "title": "Edit Container: {{name}}",
@@ -2641,6 +2735,7 @@
     "memoryLimitHint": "e.g., 512Mi, 2Gi, 1G"
   },
   "configmapCreate": {
+    "editPageTitle": "ConfigMap: Edit",
     "pageTitle": "ConfigMap: Create",
     "namePlaceholder": "Enter a name",
     "tabData": "Data",
@@ -2668,6 +2763,7 @@
     "createButton": "Create ConfigMap"
   },
   "secretCreate": {
+    "editPageTitle": "Secret: Edit",
     "pageTitle": "Secret: Create",
     "namePlaceholder": "Enter a name",
     "tabData": "Data",
@@ -2711,11 +2807,24 @@
     "revealAll": "Reveal All",
     "noEntries": "No entries",
     "noDataEntries": "No data entries",
-    "noBinaryDataEntries": "No binary data entries"
+    "noBinaryDataEntries": "No binary data entries",
+    "edit": "Edit",
+    "editTitle": "Edit entries",
+    "editHint": "Modify, add or remove entries; saving writes them back to the resource.",
+    "addEntry": "Add entry",
+    "invalidKey": "Key cannot be empty",
+    "duplicateKey": "Duplicate key {{key}}",
+    "saveFailed": "Failed to save"
   },
   "secretDetail": {
     "showBase64": "Show Base64",
-    "decodeValues": "Decode Values"
+    "decodeValues": "Decode Values",
+    "dataSaved": "Secret data saved"
+  },
+  "configMapDetail": {
+    "dataSaved": "ConfigMap data saved",
+    "showBase64": "Show Base64",
+    "decodeBinaryData": "Decode Values"
   },
   "labelMatch": {
     "loading": "Matching existing Pods...",
@@ -2732,6 +2841,7 @@
   },
   "serviceCreate": {
     "pageTitle": "Service: Create",
+    "editPageTitle": "Service: Edit",
     "noCreatePermission": "You do not have permission to create Services in namespace {{namespace}}.",
     "serviceName": "Service Name",
     "serviceType": "Service Type",
@@ -2752,13 +2862,11 @@
     "targetPortRangeError": "Target port must be a number between 1 and 65535",
     "nodePortRangeError": "NodePort must be between 30000 and 32767",
     "invalidForm": "Please complete all required fields before creating",
-    "createButton": "Create Service"
-  },
-  "workloadServiceYaml": {
-    "noServices": "No Services are associated with this workload yet (network settings on the create page generate them automatically).",
-    "saved": "Service {{name}} updated",
-    "deleted": "Service {{name}} deleted",
-    "invalidYaml": "Invalid YAML"
+    "createButton": "Create Service",
+    "noUpdatePermission": "You do not have permission to update Services in namespace {{namespace}}.",
+    "targetPortNameError": "Target port must be a number between 1-65535 or a valid port name (lowercase letters, digits, \"-\", up to 15 characters)",
+    "typeImmutableHint": "ExternalName cannot be converted to or from another type, so the type is locked.",
+    "yamlTabEditHint": "This YAML is generated from the form above and can be edited directly. After manual edits it is used as-is for the update; changing the form regenerates it."
   },
   "deploymentOverview": {
     "endpointsTitle": "Endpoints",
@@ -2837,6 +2945,9 @@
     "description": "An administrator requires MFA for your account. Bind an authenticator app to continue.",
     "passwordStepHint": "To protect this session, verify your current password first. A QR code for binding will appear once verified — scan it with your authenticator app to finish.",
     "passwordLabel": "Current password",
+    "directoryStepHint": "Directory (LDAP) accounts have no local password here: Kite treats your most recent sign-in as the confirmation of identity. Continue to show the QR code and scan it with your authenticator app.",
+    "reauthRequired": "To confirm it is you, binding an authenticator code requires a sign-in within the last 5 minutes. Sign out and back in, then return to bind.",
+    "reauthAction": "Sign out and sign in again",
     "continue": "Continue",
     "scanHint": "Scan the QR code with your authenticator app, then enter the 6-digit code it shows.",
     "qrAlt": "MFA QR code",
@@ -2910,7 +3021,7 @@
       "mfaPolicy": "Require MFA enrollment",
       "mfaPolicyHint": "Decides who must enroll in time-based codes. Accounts that have already enrolled are always challenged at login, regardless of this choice.",
       "mfaThirdPartyEnabled": "Require LDAP admins to enroll in MFA",
-      "mfaThirdPartyEnabledHint": "When on, LDAP administrators are asked for a code even if they have not enrolled yet; unenrolled admins cannot sign in until another administrator helps them enroll or this is turned off.",
+      "mfaThirdPartyEnabledHint": "When on, LDAP administrators must enroll an authenticator code: those who have not enrolled are guided to the binding page, and every later sign-in asks for a code.",
       "mfaStepUpEnabled": "Require MFA for sensitive operations",
       "mfaStepUpEnabledHint": "Ask MFA-enrolled users to re-verify before deletes and interactive shells.",
       "mfaVerifyTtlSeconds": "MFA verification validity",
@@ -2987,10 +3098,29 @@
   },
   "audit": {
     "timeRange": {
-      "label": "Time range",
-      "from": "From date",
-      "to": "To date",
-      "clear": "Clear time range"
+      "placeholder": "Select a time range",
+      "from": "Start date",
+      "fromTime": "Start time",
+      "to": "End date",
+      "toTime": "End time",
+      "separator": "to",
+      "unbounded": "Any",
+      "invalid": "End time must not be earlier than start time",
+      "clear": "Clear",
+      "monthLabel": "{{month}}/{{year}}",
+      "weekdays": "Sun,Mon,Tue,Wed,Thu,Fri,Sat",
+      "prevYear": "Previous year",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "nextYear": "Next year",
+      "presets": {
+        "day": "Last day",
+        "week": "Last week",
+        "month": "Last month",
+        "quarter": "Last 3 months",
+        "halfYear": "Last 6 months",
+        "year": "Last year"
+      }
     },
     "export": {
       "button": "Export CSV",
@@ -3222,6 +3352,16 @@
   "accountSettings": {
     "title": "Account Settings",
     "profile": {
+      "avatarUrlHint": "Use a direct image URL; GitHub page links are converted to raw links automatically.",
+      "avatarUpload": "Upload image",
+      "avatarUploading": "Processing…",
+      "avatarRemove": "Reset to default",
+      "avatarUploadedHint": "This avatar was uploaded and is stored in this instance’s database.",
+      "avatarUploadHint": "PNG / JPG are supported; other formats (including WebP / HEIC from phones) are converted in the browser first. Images are cropped to a square and scaled to fit 512×512, animations keep only the first frame, and the size limit is 1 MB.",
+      "avatarUploadSuccess": "Avatar updated",
+      "avatarRemoveSuccess": "Avatar reset to the default",
+      "avatarUploadFailed": "Failed to upload the avatar",
+      "avatarUrlLabel": "Or paste an image URL",
       "nickname": "Nickname",
       "saveButton": "Save",
       "saved": "Saved",
@@ -3257,7 +3397,10 @@
         "qrCodeAlt": "MFA QR code",
         "otpauthUrl": "otpauth URL",
         "description": "Once an authenticator is bound, sign-in and sensitive operations ask for a one-time code.",
-        "policyDisabled": "The current security policy has authenticator codes turned off; enable them in Security Management before binding."
+        "featureDisabled": "This deployment has authenticator codes turned off in Settings → General, so binding is unavailable. Ask an administrator to enable it first.",
+        "directoryHint": "Directory (LDAP) accounts have no local password here: Kite treats your most recent sign-in as the confirmation of identity. If you have not signed in recently, sign out and back in, then return to bind.",
+        "reauthRequired": "To confirm it is you, binding an authenticator code requires a sign-in within the last 5 minutes. Sign out and back in, then return to bind.",
+        "reauthAction": "Sign out and sign in again"
       }
     },
     "mfa": "MFA",
@@ -3281,7 +3424,23 @@
   },
   "userMenu": {
     "accountSettings": "Account Settings",
+    "themeMode": "Appearance Mode",
+    "themeModes": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "toggleTheme": "Toggle theme",
     "colorTheme": "Theme",
+    "colorThemes": {
+      "default": "Default",
+      "eye-care": "Eye Care",
+      "darkmatter": "Darkmatter",
+      "notebook": "Notebook",
+      "clean-slate": "Clean Slate",
+      "claude": "Claude",
+      "emerald": "Emerald"
+    },
     "font": "Font",
     "displayScale": "Display Scale",
     "logout": "Log out",
@@ -3290,16 +3449,11 @@
     "fonts": {
       "system": "System",
       "maple": "Maple",
-      "jetbrains": "JetBrains Mono"
+      "jetbrains": "JetBrains Mono",
+      "serif": "Song",
+      "kai": "Kai"
     },
     "accountInfo": "Account"
-  },
-  "serviceYaml": {
-    "deleteTitle": "Delete Service {{name}}?",
-    "deleted": "Service {{name}} deleted",
-    "invalidYaml": "Invalid YAML",
-    "saved": "Service {{name}} updated",
-    "deleteDescription": "Deleting this Service immediately cuts off external access through it, and cannot be undone."
   },
   "logViewer": {
     "title": "Logs",
@@ -3325,6 +3479,19 @@
       "increaseFontSize": "Increase Font Size",
       "decreaseFontSize": "Decrease Font Size",
       "resetFontSize": "Reset Font Size"
+    }
+  },
+  "avatarUpload": {
+    "errors": {
+      "avatar_client_not_image": "Choose an image file (PNG / JPG / WebP and other common formats work)",
+      "avatar_client_decode_failed": "The browser cannot decode this image — convert it to PNG or JPG first (common with HEIC photos from iPhones)",
+      "avatar_client_encode_failed": "Failed to process the image, try another one",
+      "avatar_client_too_large": "This image is still too large after processing, try a smaller one",
+      "avatar_file_missing": "No image file was received, choose it again",
+      "avatar_too_large": "The avatar must be at most {{limit}}, try a smaller image",
+      "avatar_invalid_type": "The avatar must be a PNG or JPG image",
+      "avatar_invalid_image": "This image is corrupted or cannot be read",
+      "avatar_dimensions_too_large": "The avatar must not exceed {{dimension}} pixels on a side"
     }
   }
 }

@@ -1,0 +1,167 @@
+# 方案：StorageClass / PersistentVolume 创建页加固
+
+- 状态：**已实现**（A/B/C 三项修复 + D 类五项补全 + 单元/组件测试 + e2e，均已在本地集群实跑验证）
+- 触发：核查 `/storageclasses` 与 `/persistentvolumes` 两个页面的创建功能是否完善，并确定测试方式。
+- 相关：`docs/dev/plans/2026-09-20-namespace-create-admin-only.md`（同一批集群级资源的口径）
+
+## 1. 核查方式（不是读代码猜的）
+
+用脚本从页面源码里**原样抽出**两个 YAML 生成函数（不改源码），构造 16 个表单组合，把生成的
+YAML 逐个交给真实集群做 `kubectl apply --dry-run=server`：
+
+- PV（10 个）：hostPath+RWO+Retain+10Gi / local+nodeAffinity / nfs+ROX+readOnly+指定 SC /
+  csi+Block / Recycle / ReadWriteOncePod / hostPath+Block / 无单位容量(10) / hostPathType 留空 /
+  多访问模式
+- SC（6 个）：local-path 风格 / 静态卷(no-provisioner)+WFFC / no-provisioner 但 Immediate /
+  参数+挂载项+设为默认 / 空 key 的参数行 / 挂载项含逗号空格
+
+**16/16 通过**，说明字段映射与 YAML 形状都没有 schema 级错误。但校验通过不等于语义正确 ——
+下面三处是真实集群接受、却会坑人的地方。
+
+## 2. 三处修复
+
+### A. 选到纯静态驱动时自动改用 WaitForFirstConsumer
+
+`storageclass-create-page.tsx` 的表单默认 `volumeBindingMode: 'Immediate'`。管理员想建一个
+「纯静态卷」的类（`provisioner = kubernetes.io/no-provisioner`，正是本集群现有 `hostpath` 的
+形态）却保持默认时：PVC 一创建就会去绑任意可用 PV；对带 `nodeAffinity` 的 node-local PV，
+会绑到 Pod 调度不上去的节点，表现成 **PVC 已 Bound 但 Pod 一直 Pending**，很难排查。
+
+实测 `kubectl apply --dry-run=server` **不会**拒绝这个组合，所以只能在界面层拦：
+
+- 落点在 `ui/src/lib/storageclass-yaml.ts` 的 `resolveVolumeBindingMode(provisioner, current)`：
+  仅当新驱动是 no-provisioner 且当前是 `Immediate` 时改成 `WaitForFirstConsumer`；用户手动改回
+  不会被反复覆盖。
+- 页面在卷绑定模式下方给出说明（`storageClassCreate.staticProvisionerHint`）。
+
+### B. 去掉已废弃的 Recycle
+
+集群自己的 API 文档（`kubectl explain pv.spec.persistentVolumeReclaimPolicy`）写着
+`Recycle (deprecated)`，且要求底层插件支持回收 —— 现代 CSI / 本地盘都不支持。选它不报错、
+也不回收，等于「看起来会自动清理、实际什么都不做」。
+
+- 类型收窄为 `'Retain' | 'Delete'`；
+- 选项提到 `ui/src/lib/pv-yaml.ts` 的 `reclaimPolicyOptions`，页面遍历渲染 —— 这样
+  「下拉里不可能出现 Recycle」有单测锁住（`SelectItem` 的 value 只是字符串，光靠类型锁不住）。
+
+### C. 参数名重复：标红 + 拦下提交
+
+生成 YAML 时参数按 key 累加，同名参数**后者覆盖前者**（实测两行 `server` 只留最后一个），
+而表单没有任何提示。现在：
+
+- `findDuplicateParameterKeys(parameters)`（`ui/src/lib/storageclass-yaml.ts`）算出重复的 key；
+- 重复行的键输入框标红并带 `aria-invalid`；
+- 参数区下方给出重复提示；
+- 有重复就**不通过表单校验**，提交被拦在界面这一层。
+
+## 3. 顺带做的重构
+
+两个页面的 YAML 生成函数原本内联在 500 行的页面组件里、且未导出，无法测试。已抽成纯函数模块：
+
+| 新文件 | 内容 |
+| --- | --- |
+| `ui/src/lib/pv-yaml.ts` | PV 表单类型、`pvAccessModes`/`pvHostPathTypes`/容量正则、`reclaimPolicyOptions`、`generatePVYaml` |
+| `ui/src/lib/storageclass-yaml.ts` | SC 表单类型、`commonProvisioners`、`resolveVolumeBindingMode`、`findDuplicateParameterKeys`、`parseMountOptions`、`generateStorageClassYaml` |
+
+页面只保留收集输入与提示错误（DOM 逻辑）。行为零变化。
+
+## 4. 测试
+
+### L1 单元 / 组件（`pnpm --dir ui run test`，随现有 157 个用例一起跑）
+
+| 文件 | 覆盖 |
+| --- | --- |
+| `ui/src/lib/pv-yaml.test.ts` | 各卷来源的字段映射、可选字段省略、nodeAffinity 生成、**reclaimPolicyOptions 不含 Recycle** |
+| `ui/src/lib/storageclass-yaml.test.ts` | 基本字段、默认类注解、参数/挂载项处理、**resolveVolumeBindingMode**、**findDuplicateParameterKeys** |
+| `ui/src/pages/storageclass-create-page.test.tsx` | 提交内容、必填校验、**静态驱动的自动切换 + 提示**、**重复参数标红且不提交**、无权限禁用 |
+| `ui/src/pages/pv-create-page.test.tsx` | 提交内容、容量格式/必填/访问模式校验、YAML 编辑器覆盖、无权限禁用 |
+
+组件测试按 `resource-table.test.tsx` 的既有模式 mock 掉 `@/lib/api`、`sonner`、`@/hooks/use-can`
+与 Monaco（`SimpleYamlEditor` 换成纯文本域），并避开 Radix Select 的交互。
+
+### L2 生成物对真实 API 的 dry-run
+
+上面那 16 个组合就是一次手工的 L2。**尚未固化**成脚本/CI（需要能连集群，建议只在有
+`KUBECONFIG` 时跑）。
+
+### L3 e2e（`e2e/specs/storage-creation.spec.ts`）
+
+四个用例，全部自清理（`zz-e2e-*` 前缀 + `finally` 删除）：
+
+1. 静态 StorageClass 建出来 → API 复核 `provisioner` / `volumeBindingMode=WaitForFirstConsumer`；
+2. 同名参数被界面拦下 → API 确认什么都没建出来；
+3. hostPath PV 建出来 → API 复核 capacity / accessModes / reclaimPolicy / hostPath；
+4. 容量格式非法被拦 → API 确认 404。
+
+**已在本地集群实跑通过（5 passed，含 setup）**，命令见下节。
+
+## 5. 怎么跑
+
+用本地集群（不需要 kind）：
+
+```sh
+make e2e-run-existing \
+  KUBECONFIG=/root/.kube/config \
+  E2E_CLUSTER_NAME='kubernetes-admin@kubernetes' \
+  E2E_CONTEXT_NAME='kubernetes-admin@kubernetes' \
+  E2E_NODE_NAME=node1 \
+  SPEC="specs/storage-creation.spec.ts"
+```
+
+要点：
+
+- 被测应用是**另起的一次性实例**（临时 sqlite + 临时 HOME + 端口 38080），
+  不碰正在用的 8080 实例与它的库；
+- 集群名 = kubeconfig 的 **context 名**（`pkg/cluster/cluster_manager.go` 按 context 命名导入的集群），
+  所以 `E2E_CONTEXT_NAME` 必须写成真实 context；`E2E_NODE_NAME` 因为不是 kind 要显式给；
+- **只跑指定 spec**：整套 e2e 里有 `node-operations.spec.ts` 会对节点做 cordon/uncordon，
+  而本机集群只有 `node1` 一个节点（就是 10.100.117.8 本身），整套跑不合适。
+
+⚠️ 本次实跑前发现 `scripts/*.sh` 在这份工作副本里丢了可执行位（全部 `0600`），
+`make e2e-run*` 会直接 `Permission denied`；已 `chmod 755` 修好。
+
+## 6. D 类缺口（本轮一并补上）
+
+| 缺口 | 落点 |
+| --- | --- |
+| PV 没有 `mountOptions` | `PVFormData.mountOptions` → `spec.mountOptions`；表单给输入框 + 说明 |
+| PV 没有预绑定（`claimRef`） | `claimRefNamespace` / `claimRefName` 两个字段，两个都填才写 `spec.claimRef`；只填一个由 `hasPartialClaimRef` 拦下并提示 |
+| SC 没有 `allowedTopologies` | `parseAllowedTopologies`：每行一条 `key=value1,value2` → 一个 term；写错的行标红并拦下提交。一个 term 里要多个表达式的场景仍走 YAML 编辑器（说明里已交待） |
+| 容量提示没说明不带单位 = 字节 | `pvCreate.capacityHint` 改为「…例如 10Gi；不带单位按字节解释（填 10 就是 10 字节）」 |
+| 创建页不显示当前集群 | 新增 `ui/src/components/current-cluster-badge.tsx`，两个存储创建页头部都渲染 |
+
+mountOptions 的解析（StorageClass 与 PV 写法相同）抽到 `ui/src/lib/mount-options.ts`，两边共用。
+
+**尚未铺开**：集群徽标只加在这两个存储创建页。其它创建页（ConfigMap / Secret / Service /
+Deployment）同样存在「切错集群不易察觉」的问题，各加一行即可，本轮按「改动保持局部」没动。
+
+## 7. 顺手修掉的缺陷：/deployments 多选命名空间把整页打崩
+
+用户在 `/deployments` 反馈「命名空间那个位置的搜索有点问题」，实测是一个硬故障：
+
+1. 命名空间选择器是**多选**的（点行内复选框才会追加，点整行是替换）；
+2. `onNamespaceChange` 把整个选择写进 URL：`/deployments/default%2Ckube-system`；
+3. 该页有个「URL 里的命名空间在当前集群中是否存在」的守卫（只有这一页有），把
+   `default,kube-system` 当成**一个**命名空间名去查 → 判定不存在；
+4. 于是整页被「Namespace default,kube-system does not exist in the current cluster」
+   替换，工具栏（含命名空间选择器与搜索框）一起消失，用户只能点 View all 逃出来。
+
+修复（`ui/src/pages/deployment-list-page.tsx`）：
+
+- URL 的单段路径只能表达一个命名空间：多选（含逗号）时回落到 `/deployments`，选择本身由
+  表格状态（sessionStorage）持久化，刷新可恢复；
+- 守卫只对「恰好一个」命名空间做存在性判定，多选值不再触发整页替换（防御旧书签/手输 URL）。
+
+回归测试：`e2e/specs/deployment-namespace-filter.spec.ts`（两个用例：多选后页面仍可用且
+URL 无逗号、刷新后选择恢复；单选仍然同步 URL）。反证做过：把两处改动都回退，快照里出现
+`Namespace default,cert-manager does not exist in the current cluster` 且表格消失。
+
+**注意**：命名空间选择器里的**搜索本身是正常的**（实测 `kube`→3 项、`sys`→kube-system），
+排查结论记录在此以免下次重复怀疑。
+
+## 8. 小事（未处理）
+
+- PV 页取 StorageClass 列表时传了 `reduce: true`，但该参数只有 pod 列表处理器认
+  （`pkg/resources/pod_handler.go`），通用列表忽略它 —— 空转，无功能影响。
+- 集群里有一个 21 小时前遗留的 e2e 命名空间 `zz-e2e-ns-mu7xqvcu`（空），来自更早的
+  某次 e2e 运行，需要时手工删掉即可。

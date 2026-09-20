@@ -48,6 +48,8 @@ export interface ResourceTableProps<T> {
   columns: ColumnDef<T, any>[]
   clusterScope?: boolean // If true, don't show namespace selector
   initialNamespace?: string // Optional namespace preset (e.g. from the URL)
+  /** 预设搜索词（例如从工作负载页跳来时只显示某一个对象）。 */
+  initialSearch?: string
   onNamespaceChange?: (namespace: string) => void // Notified when the user changes the namespace filter
   searchQueryFilter?: (item: T, query: string) => boolean // Custom filter function
   showCreateButton?: boolean // If true, show create button
@@ -79,6 +81,7 @@ function ResourceTableContent<T>({
   resourceName,
   resourceType,
   initialNamespace,
+  initialSearch,
   onNamespaceChange,
   columns,
   clusterScope = false,
@@ -124,6 +127,7 @@ function ResourceTableContent<T>({
     clusterScope,
     defaultHiddenColumns,
     initialNamespace,
+    initialSearch,
   })
 
   // 在内置处理器执行后通知父组件（例如同步 URL）。

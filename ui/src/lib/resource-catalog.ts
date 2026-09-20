@@ -1145,6 +1145,48 @@ export function getResourceDetailPath(
     : `/${resource}/${namespace}/${name}`
 }
 
+/**
+ * 有可视化表单编辑页的资源类型。列表行操作菜单与详情页标题栏据此决定要不要给出
+ * 「编辑」入口，路径模板也由这里推导，避免两处各写一份、改路由时漏掉一处静默 404。
+ * 新增表单编辑页（`routes.tsx` 里的 `:resource/.../:name/edit`）时要同步这里，
+ * 否则那些资源只剩详情页的 YAML 一条改法（resource-catalog.test.ts 会在漏同步时报错）。
+ */
+export const formEditableResourceTypes = [
+  'deployments',
+  'statefulsets',
+  'daemonsets',
+  'jobs',
+  'cronjobs',
+  'pods',
+  'services',
+  'configmaps',
+  'secrets',
+  'persistentvolumes',
+  'storageclasses',
+] as const
+
+const formEditableResources = new Set<string>(formEditableResourceTypes)
+
+export function hasResourceFormEdit(resource?: string | null) {
+  return !!resource && formEditableResources.has(resource)
+}
+
+/** 没有表单编辑页时返回 undefined（调用方据此不渲染编辑入口）。 */
+export function getResourceFormEditPath(
+  resource: string,
+  name: string,
+  namespace?: string
+) {
+  if (!hasResourceFormEdit(resource)) {
+    return undefined
+  }
+  const segment = encodeURIComponent(name)
+  // 集群级资源（PV / StorageClass）的编辑路由没有命名空间段。
+  return isClusterScopedResource(resource) || !namespace
+    ? `/${resource}/${segment}/edit`
+    : `/${resource}/${encodeURIComponent(namespace)}/${segment}/edit`
+}
+
 export function getResourceQueryKey(
   resource: string,
   namespace?: string,

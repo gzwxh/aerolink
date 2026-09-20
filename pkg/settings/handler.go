@@ -29,9 +29,6 @@ func HandleGetGeneralSetting(c *gin.Context) {
 		"kubectlImage":          setting.KubectlImage,
 		"nodeTerminalImage":     setting.NodeTerminalImage,
 		"clusterAgentImage":     setting.ClusterAgentImage,
-		"autoBindUserNamespace": setting.AutoBindUserNamespace,
-		"enableAnalytics":       setting.EnableAnalytics,
-		"enableVersionCheck":    setting.EnableVersionCheck,
 		"passwordLoginDisabled": setting.PasswordLoginDisabled,
 		"enableMFA":             setting.EnableMFA,
 		"loginPrompt":           setting.LoginPrompt,
@@ -45,24 +42,22 @@ func HandleGetGeneralSetting(c *gin.Context) {
 // 所以限制在 256 KiB 以内；更大的图片建议放静态服务器后用 URL 引用。
 const maxLogoURLLength = 256 * 1024
 
-// maxSiteNameLength 与 users 表无关，是控制台名称本身的上限（列宽 varchar(100)）。
-const maxSiteNameLength = 100
+// maxSiteNameLength 是控制台名称（品牌名称）的字符上限。列宽是 varchar(100)，
+// 但侧边栏只有 16rem 宽，名字太长放不下：前端会按两行折行展示，超过 16 个字符
+// （中文按 1 个算）两行也放不下，因此在写入处就收紧到 16。
+const maxSiteNameLength = 16
 
 type UpdateGeneralSettingRequest struct {
-	AIAgentEnabled    *bool   `json:"aiAgentEnabled"`
-	AIProvider        *string `json:"aiProvider"`
-	AIModel           *string `json:"aiModel"`
-	AIAPIKey          *string `json:"aiApiKey"`
-	AIBaseURL         *string `json:"aiBaseUrl"`
-	AIMaxTokens       *int    `json:"aiMaxTokens"`
-	KubectlEnabled    *bool   `json:"kubectlEnabled"`
-	KubectlImage      *string `json:"kubectlImage"`
-	NodeTerminalImage *string `json:"nodeTerminalImage"`
-	ClusterAgentImage *string `json:"clusterAgentImage"`
-	// AutoBindUserNamespace 控制普通用户新建命名空间后是否自动纳入其权限范围。
-	AutoBindUserNamespace *bool   `json:"autoBindUserNamespace"`
-	EnableAnalytics       *bool   `json:"enableAnalytics"`
-	EnableVersionCheck    *bool   `json:"enableVersionCheck"`
+	AIAgentEnabled        *bool   `json:"aiAgentEnabled"`
+	AIProvider            *string `json:"aiProvider"`
+	AIModel               *string `json:"aiModel"`
+	AIAPIKey              *string `json:"aiApiKey"`
+	AIBaseURL             *string `json:"aiBaseUrl"`
+	AIMaxTokens           *int    `json:"aiMaxTokens"`
+	KubectlEnabled        *bool   `json:"kubectlEnabled"`
+	KubectlImage          *string `json:"kubectlImage"`
+	NodeTerminalImage     *string `json:"nodeTerminalImage"`
+	ClusterAgentImage     *string `json:"clusterAgentImage"`
 	PasswordLoginDisabled *bool   `json:"passwordLoginDisabled"`
 	EnableMFA             *bool   `json:"enableMFA"`
 	LoginPrompt           *string `json:"loginPrompt"`
@@ -186,15 +181,6 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 	if req.ClusterAgentImage != nil {
 		updates["cluster_agent_image"] = clusterAgentImage
 	}
-	if req.AutoBindUserNamespace != nil {
-		updates["auto_bind_user_namespace"] = *req.AutoBindUserNamespace
-	}
-	if req.EnableAnalytics != nil {
-		updates["enable_analytics"] = *req.EnableAnalytics
-	}
-	if req.EnableVersionCheck != nil {
-		updates["enable_version_check"] = *req.EnableVersionCheck
-	}
 	if req.LoginPrompt != nil {
 		updates["login_prompt"] = strings.TrimSpace(*req.LoginPrompt)
 	}
@@ -243,9 +229,6 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		"kubectlImage":          updated.KubectlImage,
 		"nodeTerminalImage":     updated.NodeTerminalImage,
 		"clusterAgentImage":     updated.ClusterAgentImage,
-		"autoBindUserNamespace": updated.AutoBindUserNamespace,
-		"enableAnalytics":       updated.EnableAnalytics,
-		"enableVersionCheck":    updated.EnableVersionCheck,
 		"passwordLoginDisabled": updated.PasswordLoginDisabled,
 		"enableMFA":             updated.EnableMFA,
 		"loginPrompt":           updated.LoginPrompt,

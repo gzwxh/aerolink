@@ -46,8 +46,6 @@ services:
       DB_DSN: "REPLACE-ME"
       JWT_SECRET: "REPLACE-ME"
       KITE_ENCRYPT_KEY: "REPLACE-ME"
-      # 内网/离线环境建议保留，减少无意义的版本检查请求
-      DISABLE_VERSION_CHECK: "true"
       # 反向代理场景下必须收紧为真实代理网段，防止伪造来源 IP；
       # 默认值已覆盖 docker 网桥（172.16.0.0/12）。
       TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"

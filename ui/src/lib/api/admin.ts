@@ -15,6 +15,7 @@ import {
 } from '@/types/api'
 
 import { apiClient } from '../api-client'
+import { toAuditQueryTimeRange } from '../audit-time-range'
 import { downloadFile, fetchAPI } from './shared'
 
 export interface ClusterCreateRequest {
@@ -29,6 +30,15 @@ export interface ClusterCreateRequest {
 
 export interface ClusterUpdateRequest extends ClusterCreateRequest {
   enabled?: boolean
+}
+
+/** 集群徽章：只发徽章字段，后端按字段是否出现决定改不改。 */
+export interface ClusterBadgeUpdateRequest {
+  badgeEnabled?: boolean
+  badgeText?: string
+  badgeColor?: string
+  badgeIconEnabled?: boolean
+  badgeIconText?: string
 }
 
 // 获取用于管理的集群列表
@@ -78,6 +88,39 @@ export const updateCluster = async (
     `/admin/clusters/${id}`,
     clusterData
   )
+}
+
+// 更新集群徽章（复用更新接口，只带徽章字段，不碰集群配置）
+export const updateClusterBadge = async (
+  id: number,
+  badgeData: ClusterBadgeUpdateRequest
+): Promise<{ message: string }> => {
+  return await apiClient.put<{ message: string }>(
+    `/admin/clusters/${id}`,
+    badgeData
+  )
+}
+
+// 上传（或替换）集群徽章图标：multipart，字段名 file。图标是二进制，走专用接口
+// 而不是 PUT /admin/clusters/:id 的 JSON 体（见 pkg/cluster/cluster_badge_icon.go）。
+// 上传前在浏览器里裁方缩放，服务端只收 PNG / JPG 且不超过 1 MiB。
+// 服务端会顺带打开 badge_icon_enabled，并返回新的图标地址（带内容哈希，用于破缓存）。
+export const uploadClusterBadgeIcon = async (
+  id: number,
+  file: File
+): Promise<{ message: string; badgeIconUrl: string }> => {
+  const form = new FormData()
+  form.append('file', file)
+  return apiClient.post<{ message: string; badgeIconUrl: string }>(
+    `/admin/clusters/${id}/badge-icon`,
+    form
+  )
+}
+
+// 移除集群图标：字节与 clusters.badge_icon_url 一并清掉，图标位回落到图标文本
+// 或默认图标。图标文本本身不受影响，要一起清掉请另开开关或清空文本。
+export const deleteClusterBadgeIcon = async (id: number): Promise<void> => {
+  await apiClient.delete<void>(`/admin/clusters/${id}/badge-icon`)
 }
 
 // 删除集群
@@ -609,18 +652,20 @@ export const useUserList = (
 }
 
 // 审计日志的时间范围筛选（等保三级：按时间段核查与导出审计记录）。
-// 传 `YYYY-MM-DD` 时，`to` 含当天（后端按次日 0 点做开区间）。
+// 取值是本地时间字符串 `YYYY-MM-DD HH:mm:ss`（见 lib/audit-time-range），下发前转成
+// 带时区的 RFC3339；`to` 补到该秒的最后一刻，以配合后端的半开区间 `[from, to)`。
 export interface AuditTimeRange {
   from?: string
   to?: string
 }
 
 function appendTimeRange(params: URLSearchParams, range: AuditTimeRange = {}) {
-  if (range.from) {
-    params.set('from', range.from)
+  const query = toAuditQueryTimeRange(range)
+  if (query.from) {
+    params.set('from', query.from)
   }
-  if (range.to) {
-    params.set('to', range.to)
+  if (query.to) {
+    params.set('to', query.to)
   }
 }
 
@@ -929,10 +974,6 @@ export interface GeneralSetting {
   kubectlImage: string
   nodeTerminalImage: string
   clusterAgentImage: string
-  /** 普通用户新建命名空间后是否自动纳入其权限范围（优先归属其权限绑定）。 */
-  autoBindUserNamespace: boolean
-  enableAnalytics: boolean
-  enableVersionCheck: boolean
   passwordLoginDisabled: boolean
   enableMFA: boolean
   loginPrompt: string
@@ -953,9 +994,6 @@ export interface GeneralSettingUpdateRequest {
   kubectlImage?: string
   nodeTerminalImage?: string
   clusterAgentImage?: string
-  autoBindUserNamespace?: boolean
-  enableAnalytics?: boolean
-  enableVersionCheck?: boolean
   passwordLoginDisabled?: boolean
   enableMFA?: boolean
   loginPrompt?: string

@@ -1,4 +1,5 @@
 import { Moon, Sun } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -10,6 +11,7 @@ import {
 import { useAppearance } from '@/components/appearance-provider'
 
 export function ModeToggle() {
+  const { t } = useTranslation()
   const { setTheme } = useAppearance()
 
   return (
@@ -18,18 +20,20 @@ export function ModeToggle() {
         <Button variant="ghost" size="icon">
           <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
+          <span className="sr-only">
+            {t('userMenu.toggleTheme', '切换主题')}
+          </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => setTheme('light')}>
-          Light
+          {t('userMenu.themeModes.light', '浅色')}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme('dark')}>
-          Dark
+          {t('userMenu.themeModes.dark', '深色')}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme('system')}>
-          System
+          {t('userMenu.themeModes.system', '跟随系统')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

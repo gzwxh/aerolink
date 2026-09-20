@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { IconEdit } from '@tabler/icons-react'
 import { Service } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -10,6 +12,8 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
+import { useCan } from '@/hooks/use-can'
+import { Button } from '@/components/ui/button'
 import { EventTable } from '@/components/event-table'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ResourceHistoryTable } from '@/components/resource-history-table'
@@ -23,6 +27,11 @@ import {
 export function ServiceDetail(props: { name: string; namespace?: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const can = useCan()
+
+  // 服务页是维护 Service 的唯一入口，编辑入口必须挂在这里。
+  const canUpdate = can('services', 'update', { namespace })
 
   const { data, isLoading, isError, error, refetch } = useResource(
     'services',
@@ -134,6 +143,18 @@ export function ServiceDetail(props: { name: string; namespace?: string }) {
             events={serviceEvents}
             isEventsLoading={isEventsLoading}
           />
+        ) : null
+      }
+      headerActions={
+        canUpdate ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/services/${namespace}/${name}/edit`)}
+          >
+            <IconEdit className="w-4 h-4" />
+            {t('common.actions.edit')}
+          </Button>
         ) : null
       }
       extraTabs={tabs}
