@@ -617,7 +617,9 @@
       "modified": "修改时间"
     },
     "errors": {
-      "pod_files_unsupported": "容器 {{container}} 不支持文件浏览（缺少 ls 命令）",
+      "pod_files_unsupported": "容器 {{container}} 不支持文件操作（镜像里缺少 ls、cat 等命令）",
+      "pod_files_not_found": "容器 {{container}} 里没有这个文件：{{path}}",
+      "pod_files_is_directory": "{{path}} 是目录，不能预览",
       "pod_files_path_required": "请填写文件路径",
       "pod_files_path_invalid": "文件路径无效",
       "pod_files_path_traversal": "路径不能包含 \"..\""

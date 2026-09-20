@@ -617,7 +617,9 @@
       "modified": "Modified"
     },
     "errors": {
-      "pod_files_unsupported": "File browsing is not supported for container {{container}} (missing 'ls' command)",
+      "pod_files_unsupported": "File operations are not supported for container {{container}} (missing ls, cat, etc.)",
+      "pod_files_not_found": "{{path}} is not present in container {{container}}",
+      "pod_files_is_directory": "{{path}} is a directory and cannot be previewed",
       "pod_files_path_required": "File path is required",
       "pod_files_path_invalid": "Invalid file path",
       "pod_files_path_traversal": "Path must not contain '..'"

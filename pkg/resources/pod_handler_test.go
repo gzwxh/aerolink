@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"errors"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -170,6 +171,30 @@ func TestParseKubeSemverAndResizeSupport(t *testing.T) {
 			}
 			if tt.wantValid && parsed.Major == 0 && parsed.Minor == 0 && parsed.Patch == 0 {
 				t.Fatalf("expected parsed version for %q", tt.version)
+			}
+		})
+	}
+}
+
+// 容器里没有命令时，k8s 与 busybox 系的报错措辞不同，两者都要认出来。
+// 认错一边就会把「容器不支持文件操作」误判成「路径不存在」（或者反过来），
+// 从而给出错误的提示（见 probeContainerPath / ListFiles）。
+func TestContainerCommandMissing(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		stderr string
+		want   bool
+	}{
+		{"k8s 报找不到可执行文件", errors.New(`error code 126: exec: "ls": executable file not found in $PATH`), "", true},
+		{"busybox 把 not found 写进 stderr", errors.New("command terminated with exit code 127"), "sh: cat: not found", true},
+		{"正常的非零退出不算缺命令", errors.New("command terminated with exit code 1"), "cat: /nope: No such file or directory", false},
+		{"没有错误", nil, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := containerCommandMissing(tt.err, tt.stderr); got != tt.want {
+				t.Fatalf("containerCommandMissing(%v, %q) = %v, want %v", tt.err, tt.stderr, got, tt.want)
 			}
 		})
 	}

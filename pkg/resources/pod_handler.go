@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -314,7 +315,7 @@ func (h *PodHandler) ListFiles(c *gin.Context) {
 	cmd := []string{"ls", "-lah", "--full-time", safeExecPath(path)}
 	stdout, stderr, err := cs.K8sClient.ExecCommandBuffered(c.Request.Context(), namespace, podName, container, cmd)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(stderr, "not found") {
+		if containerCommandMissing(err, stderr) {
 			respondFileError(c, http.StatusBadRequest, fileCodeUnsupported,
 				fmt.Sprintf("File browsing is not supported for %s container (missing 'ls' command)", container),
 				gin.H{"container": container})
@@ -420,6 +421,17 @@ func (h *PodHandler) PreviewFile(c *gin.Context) {
 		return
 	}
 
+	probe := probeContainerPath(c.Request.Context(), cs, namespace, podName, container, path)
+	if respondFileProbeFailure(c, probe, container, path, "File preview") {
+		return
+	}
+	if probe.IsDir {
+		respondFileError(c, http.StatusBadRequest, fileCodeIsDirectory,
+			fmt.Sprintf("%s is a directory and cannot be previewed", path),
+			gin.H{"path": path, "container": container})
+		return
+	}
+
 	cmd := []string{"cat", safeExecPath(path)}
 
 	contentType := mime.TypeByExtension(filepath.Ext(path))
@@ -465,8 +477,11 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 
-	_, _, err := cs.K8sClient.ExecCommandBuffered(c.Request.Context(), namespace, podName, container, []string{"test", "-d", path})
-	isDir := err == nil
+	probe := probeContainerPath(c.Request.Context(), cs, namespace, podName, container, path)
+	if respondFileProbeFailure(c, probe, container, path, "File download") {
+		return
+	}
+	isDir := probe.IsDir
 
 	var cmd []string
 	if isDir {
@@ -479,7 +494,9 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 		cmd = []string{"cat", safeExecPath(path)}
 	}
 
-	err = cs.K8sClient.ExecCommand(c.Request.Context(), kube.ExecOptions{
+	// 走到这里说明命令与路径都探过了，剩下的失败（例如传输中途断开）已经无法改写
+	// 状态码，只能记日志与审计。
+	err := cs.K8sClient.ExecCommand(c.Request.Context(), kube.ExecOptions{
 		Namespace:     namespace,
 		PodName:       podName,
 		ContainerName: container,
@@ -538,10 +555,71 @@ func validateContainerPath(p string) error {
 // 容器文件接口的错误码：前端按码本地化提示，error 字段保留英文原文供日志排查。
 const (
 	fileCodeUnsupported   = "pod_files_unsupported"
+	fileCodeNotFound      = "pod_files_not_found"
+	fileCodeIsDirectory   = "pod_files_is_directory"
 	fileCodePathRequired  = "pod_files_path_required"
 	fileCodePathInvalid   = "pod_files_path_invalid"
 	fileCodePathTraversal = "pod_files_path_traversal"
 )
+
+// containerCommandMissing 报告一次 exec 失败是不是因为容器里没有这个命令
+// （distroless 之类的精简镜像）。k8s 会把「找不到可执行文件」作为 exec 错误返回，
+// busybox 系的 shell 则把 not found 写进 stderr，两处都要看。
+func containerCommandMissing(err error, stderr string) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "not found") || strings.Contains(stderr, "not found")
+}
+
+// containerPathProbe 是写响应之前对容器内路径的探测结果。
+type containerPathProbe struct {
+	IsDir bool
+	// Exists 为 false 且 Unsupported 为 false 时表示路径不存在。
+	Exists bool
+	// Unsupported 表示容器里没有 test 命令，文件操作没法进行。
+	Unsupported bool
+}
+
+// probeContainerPath 在开始流式响应之前探明路径的类型。
+//
+// 必须探测：下载/预览是把 cat（或 tar）的输出直接流给客户端的，等它报错时 200 与
+// 响应头都已经发出去了，客户端只会拿到一个空文件——错误只剩日志。所以「容器缺命令」
+// 与「路径不存在」都要在这里分辨出来，返回显式错误。
+//
+// 顺带一提：test 与 cat/tar 通常由同一套 coreutils/busybox 提供，所以用 test 探活
+// 足以覆盖缺命令的情况。
+func probeContainerPath(ctx context.Context, cs *cluster.ClientSet, namespace, podName, container, path string) containerPathProbe {
+	target := safeExecPath(path)
+	if _, stderr, err := cs.K8sClient.ExecCommandBuffered(ctx, namespace, podName, container, []string{"test", "-d", target}); err == nil {
+		return containerPathProbe{IsDir: true, Exists: true}
+	} else if containerCommandMissing(err, stderr) {
+		return containerPathProbe{Unsupported: true}
+	}
+	if _, stderr, err := cs.K8sClient.ExecCommandBuffered(ctx, namespace, podName, container, []string{"test", "-e", target}); err == nil {
+		return containerPathProbe{Exists: true}
+	} else if containerCommandMissing(err, stderr) {
+		return containerPathProbe{Unsupported: true}
+	}
+	return containerPathProbe{}
+}
+
+// respondFileProbeFailure 按探测结果写错误响应，返回 true 表示已经响应、调用方应返回。
+func respondFileProbeFailure(c *gin.Context, probe containerPathProbe, container, path, operation string) bool {
+	switch {
+	case probe.Unsupported:
+		respondFileError(c, http.StatusBadRequest, fileCodeUnsupported,
+			fmt.Sprintf("%s is not supported for the %s container (missing required commands)", operation, container),
+			gin.H{"container": container})
+		return true
+	case !probe.Exists:
+		respondFileError(c, http.StatusNotFound, fileCodeNotFound,
+			fmt.Sprintf("%s is not present in the %s container", path, container),
+			gin.H{"path": path, "container": container})
+		return true
+	}
+	return false
+}
 
 // respondFileError 写入带错误码的 JSON，params 供前端拼装本地化文案里的变量。
 func respondFileError(c *gin.Context, status int, code, message string, params gin.H) {
