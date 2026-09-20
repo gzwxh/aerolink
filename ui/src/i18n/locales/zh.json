@@ -1768,7 +1768,16 @@
       "add": "新增订阅",
       "empty": "暂无订阅",
       "existing": "已配置订阅",
-      "description": "选择需要通知的事件与接收人；用户需先在「用户」中配置邮箱才能用邮件接收"
+      "description": "选择需要通知的事件与接收人；用户需先在「用户」中配置邮箱才能用邮件接收",
+      "events": "事件",
+      "selectAll": "全选",
+      "selectedCount": "已选 {{selected}}/{{total}}",
+      "mandatory": "管理员必收",
+      "mandatoryHint": "带锁的事件是安全事件：无论订阅怎么配，都会以站内信通知全部管理员，无法取消。",
+      "noReceiverHint": "没有配置接收者的事件不会通知任何人（管理员也一样）。",
+      "addSelected": "添加订阅（{{count}}）",
+      "addedResult": "已新增 {{created}} 条，跳过 {{skipped}} 条（已存在）",
+      "selectEventsFirst": "请先选择事件"
     },
     "templates": {
       "empty": "暂无模板",

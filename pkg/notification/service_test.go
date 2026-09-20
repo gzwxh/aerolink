@@ -27,6 +27,9 @@ func newNotificationTestDB(t *testing.T) {
 		&model.NotificationTemplate{},
 		&model.NotificationSubscription{},
 		&model.Notification{},
+		// 管理员解析（强制送达的安全事件）走 role_assignments，缺表会静默查不到管理员。
+		&model.Role{},
+		&model.RoleAssignment{},
 	); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -37,6 +40,28 @@ func newNotificationTestDB(t *testing.T) {
 			_ = sqlDB.Close()
 		}
 	})
+}
+
+// seedNotificationAdmin 建一个持有内置 admin 角色的账号：强制送达的安全事件要发给它。
+func seedNotificationAdmin(t *testing.T, username string) *model.User {
+	t.Helper()
+	user := seedNotificationUser(t, username)
+
+	var role model.Role
+	if err := model.DB.Where("name = ?", model.DefaultAdminRole.Name).First(&role).Error; err != nil {
+		role = model.Role{Name: model.DefaultAdminRole.Name, Description: "admin"}
+		if err := model.DB.Create(&role).Error; err != nil {
+			t.Fatalf("seeding admin role: %v", err)
+		}
+	}
+	if err := model.DB.Create(&model.RoleAssignment{
+		RoleID:      role.ID,
+		SubjectType: model.SubjectTypeUser,
+		Subject:     user.Username,
+	}).Error; err != nil {
+		t.Fatalf("assigning the admin role to %s: %v", username, err)
+	}
+	return user
 }
 
 func seedNotificationUser(t *testing.T, username string) *model.User {

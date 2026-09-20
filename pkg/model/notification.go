@@ -377,6 +377,37 @@ var defaultNotificationTemplates = map[string]struct {
 	},
 }
 
+// mandatoryAdminEvents 是「必须送达全部管理员、且无法被订阅配置关掉」的事件。
+//
+// 入选依据只有两类：**别人动了账号或权限**（重置密码、清动态码、角色变更），以及
+// **系统自身发不出通知**（邮件通道故障）。这些是事后追责与应急处置的线索，不能因为
+// 没人订阅就没人知道，所以投递时无条件并上全部管理员（见 notification.resolveRecipients）。
+// 只走站内信：邮件依赖 SMTP，而这类事件按次群发给全体管理员只会变成噪音。
+//
+// 有意保持很短的清单：每加一项都等于让管理员无法退订，加之前先想清楚。
+var mandatoryAdminEvents = []string{
+	NotificationEventPasswordResetByAdmin,
+	NotificationEventMFAResetByAdmin,
+	NotificationEventRoleAssigned,
+	NotificationEventRoleUnassigned,
+	NotificationEventMailDeliveryFailed,
+}
+
+// MandatoryAdminEvents 返回管理员必收、无法取消的事件（供接口下发与测试使用）。
+func MandatoryAdminEvents() []string {
+	return append([]string(nil), mandatoryAdminEvents...)
+}
+
+// NotificationEventMandatoryForAdmins 报告某个事件是否必须发给全部管理员。
+func NotificationEventMandatoryForAdmins(event string) bool {
+	for _, value := range mandatoryAdminEvents {
+		if value == event {
+			return true
+		}
+	}
+	return false
+}
+
 // NotificationEventList 返回所有受支持的事件标识。
 func NotificationEventList() []string {
 	return []string{

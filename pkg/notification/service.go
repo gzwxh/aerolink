@@ -121,9 +121,36 @@ func resolveRecipients(event string) ([]uint, map[string]bool) {
 			}
 		}
 	}
+	// 「管理员必收」的事件不看订阅：这类事件（重置密码、清动态码、角色变更、
+	// 邮件通道故障）是追责与应急处置的线索，任何订阅配置都不该让它消失。
+	if model.NotificationEventMandatoryForAdmins(event) {
+		adminIDs, adminErr := adminUserResolver()
+		if adminErr != nil {
+			klog.Errorf("failed to resolve admins for the mandatory event %q: %v", event, adminErr)
+		} else {
+			inAppUsers = append(inAppUsers, adminIDs...)
+		}
+	}
+
 	// 同一个人可能同时被「全体用户」与单独订阅命中，写站内信前先去重，
 	// 否则他会收到两份同样的消息。
 	return dedupeUserIDs(inAppUsers), emails
+}
+
+// adminUserResolver 解析「全部管理员」的实现，默认只查直接授权（纯 SQL）。
+//
+// 通过全局权限绑定组持有 admin 角色的账号需要看 rbac 包的内存角色映射，而
+// pkg/rbac 依赖本包（handler.go 用了通知里的接口），不能反向 import；因此由
+// app.go 在 rbac 初始化之后注入更完整的实现（rbac.AdminUserIDs）。
+var adminUserResolver = model.ListAdminUserIDs
+
+// SetAdminUserResolver 注入「查全部管理员」的实现；传 nil 表示恢复默认。
+func SetAdminUserResolver(resolver func() ([]uint, error)) {
+	if resolver == nil {
+		adminUserResolver = model.ListAdminUserIDs
+		return
+	}
+	adminUserResolver = resolver
 }
 
 func dedupeUserIDs(userIDs []uint) []uint {
@@ -194,7 +221,7 @@ func notifyAdminsOfMailFailure(event string, addresses map[string]bool) {
 	lastMailFailureAlert = time.Now()
 	mailFailureAlertMu.Unlock()
 
-	adminIDs, err := model.ListAdminUserIDs()
+	adminIDs, err := adminUserResolver()
 	if err != nil {
 		klog.Errorf("failed to list admins for mail failure alert: %v", err)
 		return

@@ -57,6 +57,9 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 	}
 
 	rbac.InitRBAC()
+	// 「管理员必收」的站内信要靠 rbac 的角色判定才能算全（含权限绑定组授权），
+	// 而 pkg/rbac 依赖 pkg/notification，反向 import 会成环，所以在这里注入。
+	notification.SetAdminUserResolver(rbac.AdminUserIDs)
 	templates.InitTemplates()
 	// 问候模板必须在后台任务前播种，否则定时通知会因缺少模板被跳过。
 	if _, err := model.EnsureNotificationTemplates(); err != nil {

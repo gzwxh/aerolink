@@ -1768,7 +1768,16 @@
       "add": "Add subscription",
       "empty": "No subscriptions configured",
       "existing": "Configured subscriptions",
-      "description": "Choose the events and recipients to notify; users need an email address configured under Users to receive email"
+      "description": "Choose the events and recipients to notify; users need an email address configured under Users to receive email",
+      "events": "Events",
+      "selectAll": "Select all",
+      "selectedCount": "{{selected}}/{{total}} selected",
+      "mandatory": "Admins always receive",
+      "mandatoryHint": "Locked events are security events: they always reach every admin as an in-app message, regardless of subscriptions, and cannot be turned off.",
+      "noReceiverHint": "Events without a configured recipient are not delivered to anyone (including admins).",
+      "addSelected": "Add subscriptions ({{count}})",
+      "addedResult": "Added {{created}}, skipped {{skipped}} (already configured)",
+      "selectEventsFirst": "Choose at least one event"
     },
     "templates": {
       "empty": "No templates",

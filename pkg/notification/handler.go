@@ -1,6 +1,8 @@
 package notification
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -185,26 +187,31 @@ func HandleListNotificationSubscriptions(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load notification subscriptions"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"subscriptions": subscriptions})
+	// mandatoryEvents 一并下发：界面要把这些事件标成「管理员必收、无法取消」，
+	// 清单只存在后端（model.mandatoryAdminEvents），前端不另抄一份。
+	c.JSON(http.StatusOK, gin.H{
+		"subscriptions":   subscriptions,
+		"mandatoryEvents": model.MandatoryAdminEvents(),
+	})
 }
 
-// HandleCreateNotificationSubscription 为某个事件新增一个接收者。
-//
-// 路由：POST /api/v1/admin/notification-subscriptions/（仅管理员）。
-func HandleCreateNotificationSubscription(c *gin.Context) {
-	var request struct {
-		Event        string `json:"event"`
-		Channel      string `json:"channel"`
-		ReceiverType string `json:"receiverType"`
-		ReceiverID   uint   `json:"receiverId"`
-		Receiver     string `json:"receiver"`
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+// maxBatchSubscriptionEvents 限制单次批量创建的订阅数：界面最多是「全选」当前事件列表
+// （十几个），给一个宽松上限挡掉构造出来的超大请求。
+const maxBatchSubscriptionEvents = 100
 
-	subscription := model.NotificationSubscription{
+// subscriptionRequest 是新增订阅的请求体，单条与批量共用。
+type subscriptionRequest struct {
+	Event        string `json:"event"`
+	Channel      string `json:"channel"`
+	ReceiverType string `json:"receiverType"`
+	ReceiverID   uint   `json:"receiverId"`
+	Receiver     string `json:"receiver"`
+}
+
+// buildSubscription 校验并规范化一条订阅。返回的错误信息可以直接展示给用户
+// （与原来的单条创建逻辑完全一致，只是搬到了函数里，批量接口共用同一套校验）。
+func buildSubscription(request subscriptionRequest) (*model.NotificationSubscription, error) {
+	subscription := &model.NotificationSubscription{
 		Event:        strings.TrimSpace(request.Event),
 		Channel:      strings.TrimSpace(request.Channel),
 		ReceiverType: strings.TrimSpace(request.ReceiverType),
@@ -213,12 +220,10 @@ func HandleCreateNotificationSubscription(c *gin.Context) {
 		Enabled:      true,
 	}
 	if subscription.Event == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请选择事件"})
-		return
+		return nil, errors.New("请选择事件")
 	}
 	if subscription.Channel != model.NotificationChannelInApp && subscription.Channel != model.NotificationChannelEmail {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请选择接收渠道"})
-		return
+		return nil, errors.New("请选择接收渠道")
 	}
 
 	switch subscription.ReceiverType {
@@ -238,36 +243,132 @@ func HandleCreateNotificationSubscription(c *gin.Context) {
 		case subscription.Receiver != "":
 			user, err = model.GetUserByUsername(subscription.Receiver)
 		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请选择接收用户"})
-			return
+			return nil, errors.New("请选择接收用户")
 		}
 		if err != nil || user == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
-			return
+			return nil, errors.New("user not found")
 		}
 		subscription.ReceiverID = user.ID
 		subscription.Receiver = user.Username
 		if subscription.Channel == model.NotificationChannelEmail && strings.TrimSpace(user.Email) == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "该用户未配置邮箱，无法通过邮件接收"})
-			return
+			return nil, errors.New("该用户未配置邮箱，无法通过邮件接收")
 		}
 	case model.NotificationReceiverEmail:
 		if !strings.Contains(subscription.Receiver, "@") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请输入合法的邮箱地址"})
-			return
+			return nil, errors.New("请输入合法的邮箱地址")
 		}
 		subscription.Channel = model.NotificationChannelEmail
 		subscription.ReceiverID = 0
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请选择接收人类型"})
+		return nil, errors.New("请选择接收人类型")
+	}
+	return subscription, nil
+}
+
+// subscriptionKey 是「同一条订阅」的判重键，用于批量创建时跳过重复项。
+func subscriptionKey(subscription model.NotificationSubscription) string {
+	return strings.Join([]string{
+		subscription.Event,
+		subscription.Channel,
+		subscription.ReceiverType,
+		strconv.FormatUint(uint64(subscription.ReceiverID), 10),
+		strings.ToLower(subscription.Receiver),
+	}, "|")
+}
+
+// HandleCreateNotificationSubscription 为某个事件新增一个接收者。
+//
+// 路由：POST /api/v1/admin/notification-subscriptions/（仅管理员）。
+func HandleCreateNotificationSubscription(c *gin.Context) {
+	var request subscriptionRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := model.CreateNotificationSubscription(&subscription); err != nil {
+	subscription, err := buildSubscription(request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := model.CreateNotificationSubscription(subscription); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create notification subscription"})
 		return
 	}
 	c.JSON(http.StatusCreated, subscription)
+}
+
+// HandleCreateNotificationSubscriptions 一次为多个事件建同一套接收者（界面上的「全选」）。
+//
+// 路由：POST /api/v1/admin/notification-subscriptions/batch（仅管理员）。
+//
+// 语义：事件 × (渠道, 接收人) 展开成多条订阅；已经存在完全相同订阅的事件跳过，
+// 所以「全选」点两次不会留下重复行。任何一个事件校验不过就整批不写（保持一致，
+// 也避免界面只提示一半）。新建与跳过的分开回传，界面能说明「新增 N 条、跳过 M 条」。
+func HandleCreateNotificationSubscriptions(c *gin.Context) {
+	var request struct {
+		Events       []string `json:"events"`
+		Channel      string   `json:"channel"`
+		ReceiverType string   `json:"receiverType"`
+		ReceiverID   uint     `json:"receiverId"`
+		Receiver     string   `json:"receiver"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(request.Events) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请选择事件"})
+		return
+	}
+	if len(request.Events) > maxBatchSubscriptionEvents {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("一次最多为 %d 个事件创建订阅", maxBatchSubscriptionEvents),
+		})
+		return
+	}
+
+	existing, err := model.ListNotificationSubscriptions("")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load notification subscriptions"})
+		return
+	}
+	seen := make(map[string]bool, len(existing))
+	for _, subscription := range existing {
+		seen[subscriptionKey(subscription)] = true
+	}
+
+	created := make([]model.NotificationSubscription, 0, len(request.Events))
+	skipped := make([]string, 0)
+	for _, event := range request.Events {
+		subscription, err := buildSubscription(subscriptionRequest{
+			Event:        event,
+			Channel:      request.Channel,
+			ReceiverType: request.ReceiverType,
+			ReceiverID:   request.ReceiverID,
+			Receiver:     request.Receiver,
+		})
+		if err != nil {
+			// 带上事件名：批量的报错必须能看出是哪一项不合法。
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("%s: %s", strings.TrimSpace(event), err.Error()),
+			})
+			return
+		}
+		key := subscriptionKey(*subscription)
+		if seen[key] {
+			skipped = append(skipped, subscription.Event)
+			continue
+		}
+		if err := model.CreateNotificationSubscription(subscription); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create notification subscription"})
+			return
+		}
+		seen[key] = true
+		created = append(created, *subscription)
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"created": created, "skipped": skipped})
 }
 
 // HandleUpdateNotificationSubscription 启用或停用一条订阅。

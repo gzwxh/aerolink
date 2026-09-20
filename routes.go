@@ -274,6 +274,8 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	notificationSubscriptionAPI := adminAPI.Group("/notification-subscriptions", requireNotification)
 	notificationSubscriptionAPI.GET("/", notification.HandleListNotificationSubscriptions)
 	notificationSubscriptionAPI.POST("/", notification.HandleCreateNotificationSubscription)
+	// 「全选」：一次为多个事件建同一套接收者（已存在的跳过）。
+	notificationSubscriptionAPI.POST("/batch", notification.HandleCreateNotificationSubscriptions)
 	notificationSubscriptionAPI.PUT("/:id", notification.HandleUpdateNotificationSubscription)
 	notificationSubscriptionAPI.DELETE("/:id", notification.HandleDeleteNotificationSubscription)
 
