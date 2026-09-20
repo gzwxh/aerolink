@@ -196,13 +196,32 @@ export function ClusterManagement() {
               )}
               {cluster.isDefault && <Badge variant="secondary">Default</Badge>}
             </div>
-            {cluster.description && (
-              <div className="text-sm text-muted-foreground">
-                {cluster.description}
-              </div>
-            )}
           </div>
         ),
+      },
+      {
+        id: 'description',
+        header: t('common.fields.description', 'Description'),
+        cell: ({ row: { original: cluster } }) => {
+          const description = cluster.description?.trim()
+          if (!description) {
+            return <span className="text-muted-foreground">-</span>
+          }
+          // 备注往往是整段说明：列表里只显示两行，完整内容放 tooltip
+          // （编辑弹窗里也能看到全文），免得把表格撑宽、把行撑高。
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="line-clamp-2 max-w-64 cursor-default break-all text-muted-foreground">
+                  {description}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="max-w-sm break-all">{description}</p>
+              </TooltipContent>
+            </Tooltip>
+          )
+        },
       },
       {
         id: 'version',
