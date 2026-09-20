@@ -309,6 +309,13 @@ func UpdateUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 		return
 	}
+	// 与自服务同一条不变式：avatar_url 换成别的值（或清空）时，上传的字节行要删掉。
+	// 管理员只能填 URL，所以这里只会删除、不会写入。
+	if req.AvatarURL != nil && !isUploadedAvatarPath(id, user.AvatarURL) {
+		if err := model.DeleteUserAvatar(id); err != nil {
+			klog.V(4).Infof("failed to delete the avatar of user %d: %v", id, err)
+		}
+	}
 	c.JSON(http.StatusOK, user)
 }
 
@@ -368,6 +375,12 @@ func UpdateCurrentUser(c *gin.Context) {
 	if err := model.UpdateUser(&user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 		return
+	}
+	// avatar_url 不再指向上传的头像时，字节行要一起删掉，否则会留下取不到的孤儿图片。
+	if req.AvatarURL != nil && !isUploadedAvatarPath(uint64(user.ID), user.AvatarURL) {
+		if err := model.DeleteUserAvatar(uint64(user.ID)); err != nil {
+			klog.V(4).Infof("failed to delete the avatar of user %d: %v", user.ID, err)
+		}
 	}
 	c.JSON(http.StatusOK, user)
 }

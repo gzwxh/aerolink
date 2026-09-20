@@ -108,6 +108,8 @@ func InitDB() {
 func Models() []interface{} {
 	return []interface{}{
 		User{},
+		// 头像字节单独成表（见 user_avatar.go）：users 行是高频整行读取，不能混进 blob。
+		UserAvatar{},
 		Cluster{},
 		GeneralSetting{},
 		SecuritySetting{},

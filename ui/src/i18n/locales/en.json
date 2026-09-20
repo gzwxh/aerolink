@@ -3300,6 +3300,15 @@
     "title": "Account Settings",
     "profile": {
       "avatarUrlHint": "Use a direct image URL; GitHub page links are converted to raw links automatically.",
+      "avatarUpload": "Upload image",
+      "avatarUploading": "Processing…",
+      "avatarRemove": "Reset to default",
+      "avatarUploadedHint": "This avatar was uploaded and is stored in this instance’s database.",
+      "avatarUploadHint": "PNG / JPG are supported; other formats (including WebP / HEIC from phones) are converted in the browser first. Images are cropped to a square and scaled to fit 512×512, animations keep only the first frame, and the size limit is 1 MB.",
+      "avatarUploadSuccess": "Avatar updated",
+      "avatarRemoveSuccess": "Avatar reset to the default",
+      "avatarUploadFailed": "Failed to upload the avatar",
+      "avatarUrlLabel": "Or paste an image URL",
       "nickname": "Nickname",
       "saveButton": "Save",
       "saved": "Saved",
@@ -3406,6 +3415,19 @@
       "increaseFontSize": "Increase Font Size",
       "decreaseFontSize": "Decrease Font Size",
       "resetFontSize": "Reset Font Size"
+    }
+  },
+  "avatarUpload": {
+    "errors": {
+      "avatar_client_not_image": "Choose an image file (PNG / JPG / WebP and other common formats work)",
+      "avatar_client_decode_failed": "The browser cannot decode this image — convert it to PNG or JPG first (common with HEIC photos from iPhones)",
+      "avatar_client_encode_failed": "Failed to process the image, try another one",
+      "avatar_client_too_large": "This image is still too large after processing, try a smaller one",
+      "avatar_file_missing": "No image file was received, choose it again",
+      "avatar_too_large": "The avatar must be at most {{limit}}, try a smaller image",
+      "avatar_invalid_type": "The avatar must be a PNG or JPG image",
+      "avatar_invalid_image": "This image is corrupted or cannot be read",
+      "avatar_dimensions_too_large": "The avatar must not exceed {{dimension}} pixels on a side"
     }
   }
 }

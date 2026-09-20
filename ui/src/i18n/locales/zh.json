@@ -3066,6 +3066,15 @@
     "title": "账号设置",
     "profile": {
       "avatarUrlHint": "填写图片直链；粘贴 GitHub 页面链接会自动转换为 raw 直链。",
+      "avatarUpload": "上传图片",
+      "avatarUploading": "处理中…",
+      "avatarRemove": "恢复默认头像",
+      "avatarUploadedHint": "当前头像来自上传，保存在本实例的数据库中。",
+      "avatarUploadHint": "支持 PNG / JPG，其它格式（含手机里的 WebP / HEIC）会先在浏览器里转换；上传前自动裁剪为正方形并缩放到 512×512 以内，动图只保留第一帧；大小不超过 1 MB。",
+      "avatarUploadSuccess": "头像已更新",
+      "avatarRemoveSuccess": "已恢复为默认头像",
+      "avatarUploadFailed": "头像上传失败",
+      "avatarUrlLabel": "或填写图片地址",
       "nickname": "昵称",
       "saveButton": "保存",
       "saved": "已保存",
@@ -3406,6 +3415,19 @@
       "increaseFontSize": "增大字号",
       "decreaseFontSize": "减小字号",
       "resetFontSize": "重置字号"
+    }
+  },
+  "avatarUpload": {
+    "errors": {
+      "avatar_client_not_image": "请选择图片文件（PNG / JPG / WebP 等常见格式都可以）",
+      "avatar_client_decode_failed": "浏览器无法解析这张图片，请先转成 PNG 或 JPG 再上传（iPhone 的 HEIC 格式常见这种情况）",
+      "avatar_client_encode_failed": "图片处理失败，请换一张试试",
+      "avatar_client_too_large": "这张图片处理后仍然太大，请换一张更小的图",
+      "avatar_file_missing": "没有收到图片文件，请重新选择",
+      "avatar_too_large": "头像不能超过 {{limit}}，请换一张更小的图",
+      "avatar_invalid_type": "头像只支持 PNG / JPG 格式",
+      "avatar_invalid_image": "这张图片已损坏或无法解析",
+      "avatar_dimensions_too_large": "头像边长不能超过 {{dimension}} 像素"
     }
   }
 }

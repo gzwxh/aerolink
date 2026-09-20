@@ -105,6 +105,12 @@ func registerAuthRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler) {
 func registerUserRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler) {
 	userGroup := r.Group("/api/users")
 	userGroup.PUT("/me", authHandler.RequireAuth(), users.UpdateCurrentUser)
+	// 头像上传：字节落 user_avatars 表，并把 users.avatar_url 指向取图接口
+	// （见 pkg/users/avatar.go 与 docs/dev/plans/2026-09-20-avatar-upload.md）。
+	userGroup.POST("/me/avatar", authHandler.RequireAuth(), users.UploadCurrentUserAvatar)
+	userGroup.DELETE("/me/avatar", authHandler.RequireAuth(), users.DeleteCurrentUserAvatar)
+	// 取图只要登录：头像不敏感，按「只能读自己」判定会让用户列表里的头像全部 404。
+	userGroup.GET("/:id/avatar", authHandler.RequireAuth(), users.GetUserAvatar)
 	userGroup.POST("/me/password", authHandler.RequireAuth(), users.ChangeCurrentUserPassword)
 	userGroup.POST("/me/mfa/setup", authHandler.RequireAuth(), users.SetupCurrentUserMFA)
 	userGroup.POST("/me/mfa/enable", authHandler.RequireAuth(), users.EnableCurrentUserMFA)
