@@ -277,6 +277,19 @@ export function translateError(error: Error | unknown, t: TFunction): string {
       defaultValue: error.message,
     })
   }
+  // 头像上传：服务端的 avatar_*（类型/大小/尺寸/损坏）与浏览器侧的
+  // avatar_client_*（解不出图、编码失败）走同一套文案，见 lib/avatar-upload.ts。
+  if (policyError.code?.startsWith('avatar_')) {
+    const params = { ...(policyError.params ?? {}) }
+    // limit 是字节数，直接显示 1048576 没人看得懂。
+    if (typeof params.limit === 'number') {
+      params.limit = formatBytes(params.limit)
+    }
+    return t(`avatarUpload.errors.${policyError.code}`, {
+      ...params,
+      defaultValue: error.message,
+    })
+  }
 
   const crdMatch = CRD_NOT_INSTALLED_RE.exec(error.message)
   if (crdMatch) {

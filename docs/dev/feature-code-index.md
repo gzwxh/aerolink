@@ -69,6 +69,7 @@
 | 登录（密码/LDAP） | `ui/src/pages/login.tsx` | `ui/src/lib/api/auth.ts` | `pkg/auth/login_handler.go`、`pkg/captcha` | `users`、`login_records` |
 | 初始化向导 | `ui/src/pages/initialization.tsx` | `ui/src/lib/api/system.ts`、`ui/src/lib/api/bootstrap.ts` | `pkg/auth/bootstrap_handler.go`、`internal/config.go` | `general_settings` |
 | MFA（动态码） | `ui/src/components/account/mfa-section.tsx`、`ui/src/components/mfa-enrollment-gate.tsx`、`ui/src/components/mfa-prompt-dialog.tsx`、`ui/src/lib/mfa-enrollment.ts`（自助绑定范围与再认证方式） | `ui/src/lib/api/auth.ts`、`ui/src/lib/mfa-prompt.ts` | `pkg/mfa`、`pkg/auth`、`pkg/users/handler.go`（自助绑定接口）、`pkg/model/security_setting.go`（谁必须绑定） | `users.mfa_*`、`user_sessions.started_at`（目录账号的再认证依据） |
+| 头像（外链 / 上传存库） | `ui/src/components/account/profile-section.tsx`（上传与移除）、`ui/src/lib/avatar-upload.ts`（浏览器端裁方+缩放+重编码）、`ui/src/lib/avatar-url.ts`（`resolveAvatarSrc` 区分内链/外链，4 处头像渲染点共用） | `ui/src/lib/api/auth.ts` | `pkg/users/avatar.go`（校验与三个接口）、`pkg/model/user_avatar.go` | `user_avatars`（字节按用户一行；`users.avatar_url` 存 `/api/users/<id>/avatar?v=<内容哈希>`，口径见 `plans/2026-09-20-avatar-upload.md`） |
 | 会话策略（空闲/总时长/单点登录） | `ui/src/components/settings/security-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/auth/session_policy.go`、`pkg/auth/login_attempt_limiter.go` | `security_settings` |
 | 会话心跳 / 被顶下线 | `ui/src/hooks/use-session-heartbeat.ts`、`ui/src/hooks/use-session-takeover-notice.tsx`、`ui/src/components/session-superseded-dialog.tsx` | — | `pkg/auth`、`pkg/notification/session_takeover.go` | 进程内状态 + `notifications` |
 | 登录失败限流 / IP 黑白名单 | `ui/src/components/settings/security-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/auth/login_attempt_limiter.go` | `security_settings` |
@@ -197,7 +198,8 @@
 ## 4. 后端约定（改接口前先看这里）
 
 - **加表**：在 `pkg/model/<x>.go` 定义结构体 → 加进 `pkg/model/model.go` 的 `models` 列表（启动时逐模型 AutoMigrate）
-- **列类型**：可能超过 64 KB 的文本用 `model.LongText` / `JSONField`（MySQL `TEXT` 上限 64 KiB，超长写入直接报错）；时间列用 GORM 默认 `datetime(3)`，不要写 `type:timestamp`
+- **列类型**：可能超过 64 KB 的文本用 `model.LongText` / `JSONField`（MySQL `TEXT` 上限 64 KiB，超长写入直接报错）；时间列用 GORM 默认 `datetime(3)`，不要写 `type:timestamp`；二进制用裸 `[]byte`（不要带 `type:` 标签，GORM 会按方言落成 `longblob` / `bytea` / `blob`）
+- **大字段单独成表**：`users` 这类会被高频整行读取的表里不要放 blob/长文本（头像走 `user_avatars`，见 `plans/2026-09-20-avatar-upload.md`）；主键不是自增列时写 `gorm:"primaryKey;autoIncrement:false"`
 - **资源类型**：`pkg/common/resource.go` + `pkg/resources/handler.go` + `ui/src/lib/resource-catalog.ts` 三处必须同步
 - **权限**：接口在 `routes.go` 的分组上挂门；资源级判定走 `pkg/rbac`（`CanAccess`）；前端 `useCan()` 只是展示判定，不是安全边界
 - **审计**：管理类写操作由 `pkg/middleware/audit.go` 统一落 `resource_histories`；资源操作在 handler 内显式写（`recordHistory`）

@@ -4,8 +4,8 @@ import { LogOut, UserCog } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
+import { resolveAvatarSrc } from '@/lib/avatar-url'
 import { MFA_SETUP_REQUEST_EVENT } from '@/lib/mfa-prompt'
-import { normalizeAvatarUrl } from '@/lib/avatar-url'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -71,7 +71,8 @@ export function UserMenu() {
         >
           <Avatar className="size-sm">
             <AvatarImage
-              src={normalizeAvatarUrl(user.avatar_url) || undefined}
+              /* 上传的头像地址是站内路径，子路径部署要靠 resolveAvatarSrc 补前缀。 */
+              src={resolveAvatarSrc(user.avatar_url)}
               alt={user.name || user.username}
             />
             <AvatarFallback className="bg-primary text-primary-foreground">
