@@ -5,7 +5,9 @@
 > 下文保留作为历史：它记录了为什么曾经把创建开放给受限角色（当时的理由是让绑定组成员
 > 能建出自己组的第一个命名空间），以及那次改动涉及的判定位置。
 
-- 状态：**已被取代**（原实现已回退，相关分支与函数已删除）
+- 状态：**已被取代**（原实现已回退；文中引用的 `pkg/bindinggroups/auto_bind.go`、
+  `pkg/resources/namespace_handler.go` 及 `nsCreate.autoBindHint` 等已随「自动归属」
+  整体下线一并删除）
 - 相关：`docs/dev/plans/2026-09-18-comment-chinese-migration.md` 之后的配套口径；
   自动归属见 `pkg/bindinggroups/auto_bind.go`
 

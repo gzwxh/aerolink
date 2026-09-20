@@ -22,7 +22,8 @@
 | 前端静态资源（embedded） | `static.go` + `static/`（生成物，勿手改） |
 | 配置文件加载与监听 | `internal/config.go` |
 | 环境变量与默认值 | `pkg/common/common.go` |
-| 数据模型与 AutoMigrate 清单 | `pkg/model/model.go`（`models` 列表） |
+| 换库/整库搬运（SQLite/MySQL/PostgreSQL 互导） | `tools/dbmigrate/main.go`（`go run ./tools/dbmigrate`；方案见 `plans/2026-09-20-sqlite-to-postgres-migration.md`） |
+| 数据模型与 AutoMigrate 清单 | `pkg/model/model.go`（`Models()`，顺序即外键依赖顺序） |
 | 资源类型目录（后端权威） | `pkg/common/resource.go` |
 | 资源 handler 注册入口 | `pkg/resources/handler.go` |
 
@@ -45,6 +46,7 @@
 | 挂载与应用外壳 | `ui/src/main.tsx`、`ui/src/App.tsx` |
 | 路由表 | `ui/src/routes.tsx` |
 | 资源列表总分发 | `ui/src/pages/resource-list.tsx` |
+| 列表页的命名空间筛选 | `ui/src/components/resource-table-toolbar.tsx`（挂 `ui/src/components/selector/namespace-selector.tsx`）+ `ui/src/hooks/use-resource-table-state.ts`（`selectedNamespace` 可选多值「a,b」，多值时按 `_all` 拉取再前端过滤）。**约定：URL 的单段路径只能表达一个命名空间，多选值不写进 URL**；`/deployments` 另有「URL 里的命名空间是否存在」的守卫，判定时只认单值（见 `docs/dev/plans/2026-09-20-storage-create-hardening.md` §7） |
 | 资源详情总分发 | `ui/src/pages/resource-detail.tsx` + `ui/src/pages/resource-definitions.tsx`（类型 → 专用页面映射） |
 | 资源目录（前端） | `ui/src/lib/resource-catalog.ts`（须与 `pkg/common/resource.go` 同步） |
 | 侧边栏菜单来源 | `ui/src/components/app-sidebar.tsx` + `ui/src/contexts/sidebar-config-context.tsx` + `ui/src/contexts/sidebar-config-defaults.ts` |
@@ -66,7 +68,7 @@
 | --- | --- | --- | --- | --- |
 | 登录（密码/LDAP） | `ui/src/pages/login.tsx` | `ui/src/lib/api/auth.ts` | `pkg/auth/login_handler.go`、`pkg/captcha` | `users`、`login_records` |
 | 初始化向导 | `ui/src/pages/initialization.tsx` | `ui/src/lib/api/system.ts`、`ui/src/lib/api/bootstrap.ts` | `pkg/auth/bootstrap_handler.go`、`internal/config.go` | `general_settings` |
-| MFA（动态码） | `ui/src/components/account/mfa-section.tsx`、`ui/src/components/mfa-enrollment-gate.tsx`、`ui/src/components/mfa-prompt-dialog.tsx` | `ui/src/lib/api/auth.ts`、`ui/src/lib/mfa-prompt.ts` | `pkg/mfa`、`pkg/auth` | `users.mfa_*` |
+| MFA（动态码） | `ui/src/components/account/mfa-section.tsx`、`ui/src/components/mfa-enrollment-gate.tsx`、`ui/src/components/mfa-prompt-dialog.tsx`、`ui/src/lib/mfa-enrollment.ts`（自助绑定范围与再认证方式） | `ui/src/lib/api/auth.ts`、`ui/src/lib/mfa-prompt.ts` | `pkg/mfa`、`pkg/auth`、`pkg/users/handler.go`（自助绑定接口）、`pkg/model/security_setting.go`（谁必须绑定） | `users.mfa_*`、`user_sessions.started_at`（目录账号的再认证依据） |
 | 会话策略（空闲/总时长/单点登录） | `ui/src/components/settings/security-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/auth/session_policy.go`、`pkg/auth/login_attempt_limiter.go` | `security_settings` |
 | 会话心跳 / 被顶下线 | `ui/src/hooks/use-session-heartbeat.ts`、`ui/src/hooks/use-session-takeover-notice.tsx`、`ui/src/components/session-superseded-dialog.tsx` | — | `pkg/auth`、`pkg/notification/session_takeover.go` | 进程内状态 + `notifications` |
 | 登录失败限流 / IP 黑白名单 | `ui/src/components/settings/security-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/auth/login_attempt_limiter.go` | `security_settings` |
@@ -81,7 +83,6 @@
 | 权限判定（前端展示） | `ui/src/hooks/use-can.ts`、`ui/src/lib/rbac-permissions.ts`、`ui/src/lib/rbac-privileges.ts`、`ui/src/lib/node-permissions.ts` | — | — | — |
 | 角色与授权 | `ui/src/components/settings/rbac-management.tsx`、`rbac-view.tsx`、`rbac-role-form-dialog.tsx`、`rbac-permission-catalog.tsx` | `ui/src/lib/api/admin.ts` | `pkg/rbac`、`pkg/resources/rbac_list_test.go` | `roles`、`role_assignments` |
 | 权限绑定组（集群/命名空间范围） | `ui/src/components/settings/binding-group-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/bindinggroups`、`pkg/rbac/manager.go` | `binding_groups`、`binding_group_namespaces`、`binding_group_members` |
-| 新建命名空间自动归属创建者 | `ui/src/components/create-namespace-dialog.tsx`（创建后按响应提示）、`ui/src/components/settings/general-management.tsx`（开关） | `ui/src/lib/api/core.ts`（`createResource` 回传 `namespaceBinding`） | `pkg/resources/namespace_handler.go`（创建钩子）、`pkg/bindinggroups/auto_bind.go` | `binding_group_namespaces`（优先）/ `roles.namespaces`（退化） |
 | 创建命名空间只归管理员（不通过角色 / 绑定组下发） | `ui/src/lib/rbac-permissions.ts`（`isNamespaceCreate`，镜像后端）、`ui/src/lib/node-permissions.ts`（角色编辑器不列 create） | — | `pkg/rbac/rbac.go`（`canAccessVerb` 开头的管理员分支） | — （口径见 `docs/dev/plans/2026-09-20-namespace-create-admin-only.md`；管理员的创建入口在权限绑定组页，`pkg/bindinggroups/handler.go` 的 `CreateBindingGroupNamespace`） |
 | 用户与用户组 | `ui/src/components/settings/user-management.tsx`、`user-form-dialog.tsx`、`user-detail-dialog.tsx`、`user-management-tabs.tsx`、`user-groups-tab.tsx` | `ui/src/lib/api/admin.ts` | `pkg/users` | `users`、`local_groups`、`group_members` |
 | 三权分立 / 审计员视图 | `ui/src/pages/rbac.tsx`、`ui/src/components/settings/administrator-management.tsx`、`separation-of-duties-banner.tsx` | `ui/src/lib/api/admin.ts` | `pkg/rbac` | `roles`、`role_assignments` |
@@ -97,9 +98,13 @@
 | ConfigMap | `ui/src/pages/configmap-list-page.tsx`、`configmap-detail.tsx`、`configmap-create-page.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources` | — |
 | Secret | `ui/src/pages/secret-list-page.tsx`、`secret-detail.tsx`、`secret-create-page.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources` | — |
 | 工作负载列表/详情 | `ui/src/pages/{deployment,statefulset,daemonset,cronjob,job,pod}-{list-page,detail}.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/{deployment,statefulset,daemonset}_handler.go` | — |
-| 工作负载创建/编辑表单 | `ui/src/pages/deployment-create-page.tsx`、`ui/src/components/workload-container-sections.tsx`、`workload-container-security.tsx`、`ui/src/components/editors/deployment-form.ts` | `ui/src/lib/api/core.ts` | `pkg/resources/apply_handler.go` | — |
+| 工作负载创建/编辑表单 | `ui/src/pages/deployment-create-page.tsx`、`ui/src/components/workload-container-sections.tsx`、`workload-container-security.tsx`、`ui/src/components/editors/deployment-form.ts`（编辑模式下的合并规则见 `mergeEditedManifest`） | `ui/src/lib/api/core.ts` | `pkg/resources/apply_handler.go` | — （**表单不生成 Service**：端口只描述容器端口，关联的 Service 只读展示见下一行） |
+| 工作负载编辑入口（Deployment / StatefulSet / DaemonSet / Job / CronJob 同一套） | 路由 `ui/src/routes.tsx` 的 `…/:namespace/:name/edit`；详情页 `headerActions` 里的「编辑」按钮 | — | — | 口径见 `docs/dev/plans/2026-09-20-workload-edit-parity.md` |
+| 对象编辑入口（工作负载 + Pod / ConfigMap / Secret） | 路由 `ui/src/routes.tsx` 的 `…/:namespace/:name/edit`；详情页 `headerActions` 里的「编辑」按钮；ConfigMap/Secret 的编辑模式在各自的 create page 内 | `ui/src/lib/api/core.ts` | `pkg/resources/apply_handler.go` | Service / PV / StorageClass 暂无表单编辑（见 `docs/dev/plans/2026-09-20-console-ux-and-notification-fixes.md` §3） |
+| 工作负载关联的 Service（只读 + 跳转） | `ui/src/components/associated-services.tsx`、`ui/src/lib/k8s.ts` 的 `servicesForWorkload`；服务列表页 `?search=` 预填（`resource-table.tsx` / `use-resource-table-state.ts` 的 `initialSearch`） | — | — | — |
+| 通知投递口径（只发订阅者） | — | — | `pkg/notification/service.go`（`SendEvent` / `resolveRecipients`）、`session_takeover.go` | `notification_subscriptions`、`notifications`（口径见 `docs/dev/plans/2026-09-20-console-ux-and-notification-fixes.md` §5） |
 | 容器编辑对话框 | `ui/src/components/container-edit-dialog.tsx`、`container-table.tsx`、`container-info-card.tsx` | `ui/src/lib/api/core.ts` | 同上 | — |
-| 存储（PV/PVC/StorageClass） | `ui/src/pages/pv-list-page.tsx`、`pvc-list-page.tsx`、`storageclass-list-page.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources` | — |
+| 存储（PV/PVC/StorageClass） | `ui/src/pages/pv-list-page.tsx`、`pvc-list-page.tsx`、`storageclass-list-page.tsx`；创建页 `pv-create-page.tsx`、`storageclass-create-page.tsx`（YAML 生成在 `ui/src/lib/pv-yaml.ts`、`ui/src/lib/storageclass-yaml.ts`，有单测与组件测试） | `ui/src/lib/api/core.ts`（`applyResource`） | `pkg/resources`（`apply_handler.go` 的集群级资源分支） | — |
 | 网络（Service/Ingress/HTTPRoute/Gateway） | `ui/src/pages/service-*.tsx`、`ingress-list-page.tsx`、`httproute-list-page.tsx`、`gateway-list-page.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources` | — |
 | 节点与调度 | `ui/src/pages/node-list-page.tsx`、`node-detail.tsx`、`ui/src/components/node-scheduling-section.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/node_handler.go` | — |
 | 事件 | `ui/src/pages/event-list-page.tsx`、`ui/src/components/event-table.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/event_handler.go` | — |
@@ -211,6 +216,8 @@
 | 新增前端页面 | `ui/src/pages/*.tsx` → `ui/src/routes.tsx` → 文案进两个 locale |
 | 表格列显隐偏好 | `ui/src/hooks/use-table-column-visibility.ts` + `ui/src/components/table-column-toggle.tsx` |
 | 用户可配置偏好 | 见 `plans/2026-09-18-server-side-user-preferences.md`（当前分散在 localStorage） |
+| 改「谁必须绑定 MFA」/ 自助绑定口径 | `pkg/model/security_setting.go`（`MFARequiredFor`）→ `pkg/auth/middleware.go`（绑定引导拦截）→ `pkg/auth/login_handler.go`（登录挑战）→ `pkg/users/handler.go`（自助绑定）→ `ui/src/lib/mfa-enrollment.ts`（前端镜像）；口径见 `plans/2026-09-20-directory-user-mfa-enrollment.md` |
+| 换数据库（如切到 PostgreSQL 以扩副本） | `tools/dbmigrate`（搬数据）→ `pkg/common/common.go` 的 `DB_TYPE`/`DB_DSN` 环境变量 → `dev.env` / `charts/kite` 的 `db.*`；步骤与校验见 `plans/2026-09-20-sqlite-to-postgres-migration.md` |
 
 ---
 

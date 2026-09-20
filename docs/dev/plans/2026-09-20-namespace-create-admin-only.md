@@ -87,20 +87,29 @@ if resource == string(common.Namespaces) && verb == string(common.VerbCreate) {
   角色编辑器里也不再列出它，管理员下次编辑该角色时该项自然消失。
 - 命名空间归属、组内授权、其它操作全部不变。
 
-## 6. 待决定：自动归属已成空开关
+## 6. 连带下线：「自动归属」
 
-`pkg/bindinggroups/auto_bind.go` 的 `AutoBindCreatedNamespace` 对管理员**直接返回**
-（`NamespaceBindingReasonAdministrator`），而创建现在只有管理员能做 —— 也就是说这条链路
-永远走不到「归属」分支，连带这些内容都失效了：
+「新建命名空间自动归属创建者」这个功能随本次改动**整体删除** —— 它已经是个空开关：
+`AutoBindCreatedNamespace` 对管理员直接返回 `namespaceBindingReasonAdministrator`，而创建
+现在只有管理员能做，这条链路永远走不到「归属」分支。
 
-| 位置 | 现在的状态 |
+删除清单：
+
+| 位置 | 删除的内容 |
 | --- | --- |
-| 通用设置「命名空间自动归属」开关（`general_setting.auto_bind_user_namespace`） | 打开或关掉都没有任何效果 |
-| `create-namespace-dialog.tsx` 的归属提示（`boundToBinding` / `boundToRoles` / `notBound`） | 不会触发（管理员拿到的 reason 是 `administrator`，函数直接返回） |
-| 创建响应的 `namespaceBinding` 字段 | 恒为 `{"reason":"administrator"}` |
+| `pkg/bindinggroups/auto_bind.go` + `auto_bind_test.go` | 整个文件 |
+| `pkg/resources/namespace_handler.go` | 整个文件（`handler.go` 里改回通用的 `NewGenericResourceHandler[Namespace]`） |
+| `pkg/resources/generic_resource_handler.go`、`generic_resource_handler_write.go` | `afterCreate` 扩展点与 `mergeExtraFields`（唯一使用者就是命名空间处理器） |
+| `pkg/resources/apply_handler.go` | YAML 创建命名空间后的归属合并 |
+| `pkg/model/general_setting.go`、`pkg/settings/handler.go` | `AutoBindUserNamespace` 字段、请求体字段、两处响应字段（`auto_bind_user_namespace` 列本身保留在库里，不再读写） |
+| `ui/src/lib/api/core.ts`、`admin.ts` | `NamespaceBindingOutcome` 类型与 `namespaceBinding` 响应字段、通用设置的 `autoBindUserNamespace` |
+| `ui/src/components/create-namespace-dialog.tsx` | 归属提示逻辑与相关 i18n 键（`nsCreate.boundToBinding` / `boundToRoles` / `notBound`） |
+| `ui/src/components/settings/general-management.tsx` | 「命名空间自动归属」开关卡片与 `generalManagement.autoBindNamespace.*` 键 |
+| `pkg/rbac/rbac.go` | `RoleCoversCluster`（唯一调用方是已删除的归属退化路径） |
+| `ui/src/components/namespace-row-actions.tsx` | 注释里关于克隆体自动归属的描述 |
 
-本次只把**与授权规则直接冲突的文案**改掉了（删 `nsCreate.autoBindHint`、改
-`rbac.permissionsHint`），功能本身没动，等确认后再整体下线。
+**库里的 `auto_bind_user_namespace` 列不删**（AutoMigrate 不做破坏性变更，留着空列无害），
+新建库不会再建它。
 
 ## 7. 不变的部分
 

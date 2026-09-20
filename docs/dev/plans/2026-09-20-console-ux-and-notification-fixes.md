@@ -1,0 +1,102 @@
+# 方案：控制台体验与通知口径的五项修复
+
+- 状态：**已实现**（前端 + 后端；单元/组件测试 + 本地集群 e2e 实跑）
+- 触发：用户在现网控制台上逐页核查后提出的五条问题（下列 1–5 与用户编号一致）。
+
+## 1. 概览里的 Selector 过长被截断
+
+**问题**：Deployment / StatefulSet / DaemonSet / Job / Service 概览与 Pod 概览的 Node Selector 都用
+`max-w-full truncate` 的 Badge 展示键值对，`app.kubernetes.io/instance=很长的发布名` 这种会变成省略号，
+看不到完整内容（只有原生 title 提示）。
+
+**改动**：新增 `ui/src/components/workload-overview-parts.tsx` 的 `SelectorBadges`，统一改为
+**换行显示完整值**（`whitespace-normal break-all`，长到没空格的键名也能折行），替换上面 5 处
+重复的 Badge 块 + Pod 概览的 Node Selector（后者原来把键值对拼成一个字符串放进会截断的行里）。
+
+## 2. 工作负载不再直接创建/修改 Service，只展示名称并跳转
+
+**问题**：工作负载表单的「端口」区可以选 Service 类型/名称/服务端口/静态 ClusterIP，保存时
+顺带把 Service 一起生成出来（多文档 YAML）。用户要求：工作负载页不要直接展示和修改 service
+关联，只展示 service 名称，点击跳到服务页面（并用服务页面的搜索只显示这一个）。
+
+**改动**：
+
+- 删掉 `deployment-form.ts` 的 `buildServiceDocuments`（以及生成多文档 YAML 的分支、把 Service
+  端口映射回表单行的解析逻辑），`PortForm` 只保留 `name / containerPort / protocol`。
+- `workload-container-sections.tsx` 的 `PortsEditor` 去掉 Service 类型/名称/服务端口/NodePort/
+  静态 IP 这些输入项，只留端口名称、容器端口、协议。
+- 新增 `ui/src/components/associated-services.tsx`：**只读**列出关联到的 Service 名称，
+  点击跳 `/services/<namespace>?search=<name>`。关联判定抽成 `lib/k8s.ts` 的
+  `servicesForWorkload()`（选择器被工作负载 Pod 标签覆盖，或名字等于工作负载名/以其加 `-` 开头），
+  `deployment-detail.tsx` 里原来那段内联实现改为复用它。
+- `ResourceTable` / `useResourceTableState` 新增 `initialSearch`，服务列表页读取 `?search=` 预填搜索框。
+- Deployment 概览的 Endpoints 卡片里，Service 名称也改成同样的跳转链接。
+- 清掉随之失效的 25 个 i18n 键（两个语言包同步删除）。
+
+## 3. 「所有能创建的都要能改」——目前完成的部分
+
+本次补齐 **Pod / ConfigMap / Secret** 的编辑（工作负载与 Deployment 已在上一批完成）：
+
+- Pod：复用工作负载表单（`DeploymentCreatePage` 的 pods 模式），详情页加「编辑」入口。
+- ConfigMap / Secret：`configmap-create-page.tsx` / `secret-create-page.tsx` 增加编辑模式
+  （路由 `…/:namespace/:name/edit`）——同一个组件通过 `:name` 是否存在切换：读回线上对象预填、
+  身份字段锁定、权限改看 `update`、按钮变「保存」、保存后回详情页。
+  Secret 的 `type` 创建后不可变，编辑时禁用；`data` 里能安全编解码往返的走明文行，
+  其余（keystore、证书）走二进制行原样保留（`lib/base64.ts` 的 `splitSecretData`）。
+
+**仍未做**：Service、PersistentVolume、StorageClass 的表单编辑。三者都是「字段多且多为不可变」
+（Service 的 clusterIP/type、PV 的容量只增不减、SC 的 provisioner 不可变），表单预填需要逐个字段
+设计，因此单独排；在此之前这三类仍可用详情页的 YAML 标签页修改。
+
+## 4. ConfigMap / Secret 的值改用多行文本域
+
+**问题**：值输入框是单行 `Input`，配置文件（nginx.conf、证书、token、JSON）看不出换行。
+
+**改动**：`key-value-rows.tsx` 的 `ValueRows` 新增 `multilineValues`：值渲染为 `Textarea`
+（等宽、可拖拽放大）；Secret 的敏感值用新的 `SecretTextarea`——默认按密码样式遮住，
+点眼睛（或点一下框）换成可编辑的多行文本域。ConfigMap 的 data 与 Secret 的 data 都启用；
+标签/注解这类短键值仍用单行输入。
+
+## 5. 没订阅站内信的用户也收到了站内信
+
+**问题**：`SendEvent` 除了订阅者，还会投递给调用方传进来的「额外接收人」（被操作的那个用户、
+全部管理员等），那条路径**不看订阅**。现网就是这样：`notification_subscriptions` 是空表，
+而 `notifications` 里有上千条（登录提醒、账号启停、密码重置、MFA 重置、角色分配、会话顶替…）。
+
+**改动**：投递口径改为「**只发给订阅了该事件 + 该渠道的接收者**」：
+
+- 删掉 `SendEvent` 的 `extras` 参数与 `Recipient` 类型，调用方（`pkg/users`、`pkg/rbac`、
+  `pkg/notification/triggers.go` 共 9 处）不再传「额外接收人」。
+- 抽出 `renderEvent` / `resolveRecipients` / `deliverInApp` / `deliverEmails`，`session_takeover`
+  也改走同一套（原来是「本人 + 全部管理员」无条件发），只保留它原有的邮件节流
+  （同一账号 24h 内被顶替 ≥3 次才发邮件）。
+- **保留的例外**：`mail_delivery_failed`（SMTP 发送失败告警，只发管理员）——出问题的正是邮件
+  通道本身，不能再依赖订阅；前端上报的 `operation_failed`（用户自己浏览器上报自己的失败请求）
+  也不属于事件订阅。
+
+**注意（需要运维知道）**：订阅是唯一入口，而订阅只能由管理员在「通知 → 订阅」里配置，
+且接收者粒度是「用户 / 邮箱地址」。也就是说**安全类提醒（异地登录、密码/账号变更）现在必须先有
+订阅才会发出**；要「所有用户都收到」，需要按用户逐个加订阅（或后续加一个「全体用户 / 按用户组」
+接收者类型）。
+
+## 6. 测试与验证
+
+- 单元/组件（vitest）：`SelectorBadges`、`ValueRows` 多行与遮罩、`splitSecretData`、
+  `servicesForWorkload`、工作负载 YAML 不再产出 Service 文档、`mergeEditedManifest` 的
+  Job/CronJob `restartPolicy` 恢复。
+- 后端（go test）：`pkg/notification` 新增「无订阅谁都不发 / 只发订阅者 / 订阅停用后不发 /
+  只订邮件不写站内信」用例（补上了容器里没建模的字段）。
+- e2e（本地集群实跑，14 passed）：`specs/resource-edit.spec.ts`（Pod 改镜像且保留 nodeSelector、
+  ConfigMap 多行值往返、Secret 改明文值而二进制值逐字节不变）+ `specs/workload-edit.spec.ts`
+  + `specs/resource-creation.spec.ts`（表单删掉 Service 生成后创建流程仍正常）。
+- 反证：逐条关掉对应改动（去掉订阅判定 / 恢复额外接收人 / 把所有账号都当作可自助绑定…），
+  确认对应用例失败且断言指向该行为，再还原。
+
+## 7. 顺带修掉的两个真问题
+
+1. **表单会写坏不认识的数据卷**：`buildVolumes` 对表单没建模的卷类型（projected / nfs / csi…）
+   返回 `{ name }` 这种**空 source**，解析时又把它们当成 `emptyDir` 读进表单 —— 编辑任何一个
+   带这类卷的对象（Pod 最典型，Pod 默认就注入 `kube-api-access-*`）保存后，真实卷的来源会被
+   覆盖成空。现在解析阶段跳过这些卷、生成阶段也绝不发空 source，交给 `mergeEditedManifest`
+   从线上对象恢复。
+2. **没有卷时会发 `volumes: []`**：同一个坑的另一半，改为不写这个字段。
