@@ -8,8 +8,14 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { PasswordChangeLog as PasswordChangeLogItem } from '@/types/api'
-import { usePasswordChangeLogs, useUserList } from '@/lib/api'
+import {
+  AuditTimeRange,
+  exportPasswordChangeLogs,
+  usePasswordChangeLogs,
+  useUserList,
+} from '@/lib/api'
 import { formatDate } from '@/lib/utils'
+import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -21,6 +27,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ResourceTableView } from '@/components/resource-table-view'
+import { TableColumnToggle } from '@/components/table-column-toggle'
+
+import { AuditExportButton, AuditTimeRangePicker } from './audit-filters'
 
 export function PasswordChangeLog() {
   const { t } = useTranslation()
@@ -28,8 +37,14 @@ export function PasswordChangeLog() {
     pageIndex: 0,
     pageSize: 20,
   })
+  // 列显示偏好：与资源列表（/deployments 等）一致，齿轮菜单勾选 + 持久化。
+  // 日志是全局数据，键不带集群前缀。
+  const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
+    'kite-password-change-logs-columnVisibility'
+  )
   const [userId, setUserId] = useState<number | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState('')
+  const [timeRange, setTimeRange] = useState<AuditTimeRange>({})
 
   const { data: usersData } = useUserList(1, 200)
   const {
@@ -40,7 +55,8 @@ export function PasswordChangeLog() {
     pagination.pageIndex + 1,
     pagination.pageSize,
     userId,
-    searchQuery
+    searchQuery,
+    timeRange
   )
 
   const handleUserFilterChange = useCallback((value: string) => {
@@ -57,6 +73,16 @@ export function PasswordChangeLog() {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }))
     setSearchQuery(value)
   }, [])
+
+  const handleTimeRangeChange = useCallback((value: AuditTimeRange) => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    setTimeRange(value)
+  }, [])
+
+  const handleExport = useCallback(
+    () => exportPasswordChangeLogs(userId, searchQuery, timeRange),
+    [searchQuery, timeRange, userId]
+  )
 
   const getSourceLabel = useCallback(
     (source: string) =>
@@ -110,8 +136,9 @@ export function PasswordChangeLog() {
     data: logData?.data ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
-    state: { pagination },
+    state: { pagination, columnVisibility },
     onPaginationChange: setPagination,
+    onColumnVisibilityChange: setColumnVisibility,
     manualPagination: true,
     pageCount: Math.ceil((logData?.total ?? 0) / pagination.pageSize) || 0,
   })
@@ -156,7 +183,7 @@ export function PasswordChangeLog() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <CardTitle>
               {t('common.fields.passwordChangeLogs', 'Password Change Logs')}
@@ -168,7 +195,11 @@ export function PasswordChangeLog() {
               )}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <AuditTimeRangePicker
+              value={timeRange}
+              onChange={handleTimeRangeChange}
+            />
             <Input
               placeholder={t(
                 'common.placeholders.searchUsers',
@@ -198,6 +229,9 @@ export function PasswordChangeLog() {
                 ))}
               </SelectContent>
             </Select>
+            <AuditExportButton onExport={handleExport} />
+            {/* 与资源列表一致：最右侧的齿轮菜单用来勾选要显示的列。 */}
+            <TableColumnToggle table={table} />
           </div>
         </div>
       </CardHeader>
@@ -209,7 +243,11 @@ export function PasswordChangeLog() {
           data={logData?.data}
           allPageSize={totalRowCount}
           emptyState={emptyState}
-          hasActiveFilters={Boolean(userId) || Boolean(searchQuery)}
+          hasActiveFilters={
+            Boolean(userId) ||
+            Boolean(searchQuery) ||
+            Boolean(timeRange.from || timeRange.to)
+          }
           filteredRowCount={filteredRowCount}
           totalRowCount={totalRowCount}
           searchQuery={searchQuery}

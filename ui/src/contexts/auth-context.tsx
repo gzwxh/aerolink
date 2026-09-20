@@ -23,7 +23,17 @@ import {
   useBootstrap,
   type AuthUser,
 } from '@/lib/api'
-import { roleCanAccess, type CanAccessOptions } from '@/lib/rbac-permissions'
+import { redirectToLogin } from '@/lib/api-client'
+import {
+  permissionRoles,
+  roleCanAccess,
+  roleCanAccessAnySettingsSection,
+  roleCanManageSettingsSection,
+  roleCanManageSystemSettings,
+  roleCanViewSettingsSection,
+  separationOfDutiesConflict,
+  type CanAccessOptions,
+} from '@/lib/rbac-permissions'
 import { withSubPath } from '@/lib/subpath'
 
 export type { CanAccessOptions }
@@ -31,6 +41,27 @@ export type { CanAccessOptions }
 interface User extends AuthUser {
   isAdmin(): boolean
   can(resource: string, verb: string, options?: CanAccessOptions): boolean
+  /**
+   * 用户是否可以修改*所有*控制台设置与权限。
+   * 对应 rbac.CanManageSystemSettings（父级 "settings" 资源）。
+   */
+  canManageSettings(): boolean
+  /**
+   * 用户是否至少可以打开一个控制台设置页面。对应
+   * rbac.CanAccessAnySettingsSection：设置区本身以此为准，
+   * 因此审计管理员（只有 settings.audit）可以打开审计页面，
+   * 而无需持有完整的管理员角色。
+   */
+  canViewSettings(): boolean
+  /** 用户是否可以打开某个控制台设置分区。 */
+  canViewSettingsSection(section: string): boolean
+  /** 用户是否可以修改某个控制台设置分区。 */
+  canManageSettingsSection(section: string): boolean
+  /**
+   * 职责分离（三权分立）冲突：账号同时持有互斥的管理员角色时，管理面会被后端
+   * 整体拒绝（见 rbac.SeparationOfDutiesConflict），界面据此给出提示并隐藏入口。
+   */
+  roleConflict(): { conflict: boolean; roles: string[] }
 
   Key(): string
 }
@@ -38,13 +69,11 @@ interface User extends AuthUser {
 interface AuthContextType {
   user: User | null
   isLoading: boolean
-  hasGlobalSidebarPreference: boolean
   globalSidebarPreference: string
   credentialProviders: CredentialProvider[]
   oauthProviders: string[]
   loginPrompt: string
   mfaEnabled: boolean
-  passkeyLoginEnabled: boolean
   loginCaptchaEnabled: boolean
   capabilities: BootstrapCapabilities
   login: (provider?: string) => Promise<void>
@@ -64,14 +93,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const loginSucceededFlag = 'kite_just_logged_in'
 
-// markLoginSucceeded remembers (in the same tab) that a login just succeeded so
-// the auth provider can show a short confirmation toast once the user object is
-// available — including after the OAuth provider round-trip redirect.
+// markLoginSucceeded 在同一标签页内记住刚刚登录成功，
+// 使认证提供方能在用户对象可用后展示一次简短的确认 toast——
+// 包括 OAuth 提供方往返重定向之后。
 export function markLoginSucceeded() {
   try {
     sessionStorage.setItem(loginSucceededFlag, '1')
   } catch {
-    // ignore storage failures
+    // 忽略存储失败
   }
 }
 
@@ -96,10 +125,33 @@ function normalizeUser(user: AuthUser): User {
   return {
     ...user,
     isAdmin() {
+      // 与后端 rbac.IsAdministrator 保持一致：持有 admin 系统角色。
       return this.roles?.some((role) => role.name === 'admin') || false
     },
     can(resource, verb, options) {
-      return roleCanAccess(this.roles, resource, verb, options)
+      // 命名空间级权限绑定组的角色也要参与：否则绑定组用户会看到范围外的操作入口。
+      // isAdmin 供「创建命名空间」使用（只认管理员，不看角色）。
+      return roleCanAccess(
+        permissionRoles(this.roles, this.namespaceScopedRoles),
+        resource,
+        verb,
+        { ...options, isAdmin: this.isAdmin() }
+      )
+    },
+    canManageSettings() {
+      return roleCanManageSystemSettings(this.roles)
+    },
+    canViewSettings() {
+      return roleCanAccessAnySettingsSection(this.roles)
+    },
+    canViewSettingsSection(section: string) {
+      return roleCanViewSettingsSection(this.roles, section)
+    },
+    canManageSettingsSection(section: string) {
+      return roleCanManageSettingsSection(this.roles, section)
+    },
+    roleConflict() {
+      return separationOfDutiesConflict(this.roles)
     },
     Key() {
       return this.username || this.id
@@ -158,7 +210,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.error('Token refresh failed:', error)
       await refetchBootstrap()
-      window.location.href = withSubPath('/login')
+      // 复用 api-client 的防重入跳转，避免登录页重复 401 造成刷新循环
+      redirectToLogin()
     }
   }, [refetchBootstrap])
 
@@ -174,7 +227,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       justLoggedIn = sessionStorage.getItem(loginSucceededFlag) === '1'
       if (justLoggedIn) sessionStorage.removeItem(loginSucceededFlag)
     } catch {
-      // ignore storage failures
+      // 忽略存储失败
     }
     if (justLoggedIn) {
       toast.success(t('login.success', 'Login successful'), { duration: 2000 })
@@ -206,12 +259,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const globalSidebarPreference = String(
     bootstrap?.globalSidebarPreference || ''
   )
-  const hasGlobalSidebarPreference =
-    bootstrap?.hasGlobalSidebarPreference ??
-    globalSidebarPreference.trim() !== ''
   const loginPrompt = bootstrap?.auth.loginPrompt || ''
   const mfaEnabled = bootstrap?.auth.mfaEnabled ?? true
-  const passkeyLoginEnabled = bootstrap?.auth.passkeyLoginEnabled ?? false
   const loginCaptchaEnabled = bootstrap?.auth.loginCaptchaEnabled ?? false
   const capabilities = bootstrap?.capabilities ?? defaultCapabilities
 
@@ -222,13 +271,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return {
       user,
       isLoading,
-      hasGlobalSidebarPreference,
       globalSidebarPreference,
       credentialProviders,
       oauthProviders,
       loginPrompt,
       mfaEnabled,
-      passkeyLoginEnabled,
       loginCaptchaEnabled,
       capabilities,
       login,
@@ -240,13 +287,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [
     user,
     isLoading,
-    hasGlobalSidebarPreference,
     globalSidebarPreference,
     bootstrap?.auth.credentialProviders,
     bootstrap?.auth.oauthProviders,
     loginPrompt,
     mfaEnabled,
-    passkeyLoginEnabled,
     loginCaptchaEnabled,
     capabilities,
     login,

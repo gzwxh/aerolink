@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { usePodMetrics } from '@/lib/api'
 import { getContainerState, getLastContainerState } from '@/lib/k8s'
 import { cn, formatDate, getAge } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,6 +38,11 @@ export function PodContainersCard({
   ) => void
 }) {
   const { t } = useTranslation()
+  // 容器行的日志 / 终端快捷入口与 Pod 详情页的两个页签同源，分别要求 pods:log 与
+  // pods:exec；没有权限时隐藏，避免点进被过滤掉的页签后没有任何反应。
+  const can = useCan()
+  const canLog = can('pods', 'log', { namespace })
+  const canExec = can('pods', 'exec', { namespace })
 
   return (
     <Card className="gap-0 overflow-hidden rounded-lg border-border/70 py-0 shadow-none">
@@ -81,6 +87,8 @@ export function PodContainersCard({
                   item={item}
                   namespace={namespace}
                   podName={podName}
+                  canLog={canLog}
+                  canExec={canExec}
                   onContainerSelect={onContainerSelect}
                 />
               ))
@@ -116,11 +124,15 @@ function PodOverviewContainerRow({
   item,
   namespace,
   podName,
+  canLog,
+  canExec,
   onContainerSelect,
 }: {
   item: PodOverviewContainer
   namespace: string
   podName: string
+  canLog: boolean
+  canExec: boolean
   onContainerSelect: (
     item: PodOverviewContainer,
     action?: PodContainerAction
@@ -169,20 +181,26 @@ function PodOverviewContainerRow({
                 {container.name}
               </button>
             </Badge>
-            <span className="hidden shrink-0 items-center gap-0 group-hover/container-row:inline-flex group-focus-within/container-row:inline-flex">
-              <ContainerQuickAction
-                label={`${t('common.tabs.logs')}: ${container.name}`}
-                onClick={() => onContainerSelect(item, 'logs')}
-              >
-                <IconFileText className="size-3.5" />
-              </ContainerQuickAction>
-              <ContainerQuickAction
-                label={`${t('common.tabs.terminal')}: ${container.name}`}
-                onClick={() => onContainerSelect(item, 'terminal')}
-              >
-                <IconTerminal2 className="size-3.5" />
-              </ContainerQuickAction>
-            </span>
+            {canLog || canExec ? (
+              <span className="hidden shrink-0 items-center gap-0 group-hover/container-row:inline-flex group-focus-within/container-row:inline-flex">
+                {canLog ? (
+                  <ContainerQuickAction
+                    label={`${t('common.tabs.logs')}: ${container.name}`}
+                    onClick={() => onContainerSelect(item, 'logs')}
+                  >
+                    <IconFileText className="size-3.5" />
+                  </ContainerQuickAction>
+                ) : null}
+                {canExec ? (
+                  <ContainerQuickAction
+                    label={`${t('common.tabs.terminal')}: ${container.name}`}
+                    onClick={() => onContainerSelect(item, 'terminal')}
+                  >
+                    <IconTerminal2 className="size-3.5" />
+                  </ContainerQuickAction>
+                ) : null}
+              </span>
+            ) : null}
             {init ? (
               <Badge variant="secondary" className="text-xs">
                 {container.restartPolicy === 'Always' ? 'Sidecar' : 'Init'}

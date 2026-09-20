@@ -122,11 +122,6 @@ export function ResourceBatchActionDialog<T extends BatchResource>({
     }
 
     setFailures(nextFailures)
-    toast.error(
-      t('resourceTable.batchActionFailed', {
-        count: nextFailures.length,
-      })
-    )
   }
 
   return (

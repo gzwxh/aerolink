@@ -1,8 +1,9 @@
 import * as React from 'react'
-import { useCallback, useMemo, useState } from 'react'
-import Icon from '@/assets/icon.svg'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
+import { useBranding } from '@/contexts/branding-context'
 import { useSidebarConfig } from '@/contexts/sidebar-config-context'
+import { SIDEBAR_CLUSTER_GROUP_ID } from '@/contexts/sidebar-config-defaults'
 import { CollapsibleContent } from '@radix-ui/react-collapsible'
 import { IconLayoutDashboard } from '@tabler/icons-react'
 import { CustomResourceDefinition } from 'kubernetes-types/apiextensions/v1'
@@ -12,7 +13,7 @@ import { Link, useLocation } from 'react-router-dom'
 
 import { SidebarCustomResourceItem, SidebarItem } from '@/types/sidebar'
 import { useResources, useVersionInfo } from '@/lib/api'
-import { getSettingsSections } from '@/components/settings/settings-sections'
+import { cn } from '@/lib/utils'
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +29,10 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import {
+  getSettingsSections,
+  settingsSubTabs,
+} from '@/components/settings/settings-sections'
 
 import { ClusterSelector } from './cluster-selector'
 import { Collapsible, CollapsibleTrigger } from './ui/collapsible'
@@ -36,12 +41,17 @@ import { VersionInfo } from './version-info'
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
   const { user } = useAuth()
-  const isAdmin = user ? user.isAdmin() : false
   const location = useLocation()
   const { isMobile, setOpenMobile } = useSidebar()
   const { config, isLoading, getIconComponent } = useSidebarConfig()
   const { data: versionInfo } = useVersionInfo()
+  const { logoUrl, siteName, isCustomBranding } = useBranding()
   const [openAPIGroupItems, setOpenAPIGroupItems] = useState<
+    Record<string, boolean>
+  >({})
+  // 设置章节的子页签展开状态。它与路由**解耦**：箭头是一个独立的开关，
+  // 否则只能展开不能收起（子页签曾经只按 sectionActive 渲染）。
+  const [openSettingsSections, setOpenSettingsSections] = useState<
     Record<string, boolean>
   >({})
   const hasConfiguredCRDItems = useMemo(
@@ -124,7 +134,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       .filter((group) => group.items.length > 0)
   }, [config, isCRDItemAvailable])
 
-  const settingsSections = useMemo(() => getSettingsSections(t), [t])
+  // 用户可以打开的分区：每个设置分区都带自己的授权，因此
+  // 审计管理员只会看到审计页面，安全管理员只会看到
+  // 身份/权限相关页面，依此类推。
+  const settingsSections = useMemo(
+    () =>
+      getSettingsSections(
+        t,
+        (section) => user?.canViewSettingsSection(section) ?? false
+      ),
+    [t, user]
+  )
+
+  // 路由切到某个设置章节时自动展开它的子页签（例如从别处跳到 /settings/security）。
+  // 只在指向的章节变化时补一次：用户手动收起当前章节后不会被立刻重新撑开。
+  const activeSettingsSection = settingsSections.find((section) =>
+    location.pathname.startsWith(`/settings/${section.value}`)
+  )?.value
+  useEffect(() => {
+    if (!activeSettingsSection || !settingsSubTabs[activeSettingsSection]) {
+      return
+    }
+    setOpenSettingsSections((current) =>
+      current[activeSettingsSection]
+        ? current
+        : { ...current, [activeSettingsSection]: true }
+    )
+  }, [activeSettingsSection])
 
   const isActive = (url: string) => {
     if (url === '/') {
@@ -136,7 +172,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return location.pathname.startsWith(url)
   }
 
-  // Handle menu item click on mobile - close sidebar
+  // 处理移动端的菜单项点击——关闭侧边栏
   const handleMenuItemClick = () => {
     if (isMobile) {
       setOpenMobile(false)
@@ -220,6 +256,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     )
   }
 
+  // 「收藏」（置顶项）跟在「集群」分组后面显示（见下方渲染顺序）。
+  const pinnedGroup =
+    pinnedItems.length > 0 ? (
+      <SidebarGroup>
+        <SidebarGroupLabel className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          {t('sidebar.pinned', 'Pinned')}
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>{pinnedItems.map(renderSidebarItem)}</SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    ) : null
+
   if (isLoading || !config) {
     return (
       <Sidebar collapsible="offcanvas" {...props}>
@@ -228,8 +277,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link to="/" onClick={handleMenuItemClick}>
-                  <img src={Icon} alt="Kite Logo" className="ml-1 h-8 w-8" />
-                  <span className="text-base font-semibold">Kite</span>
+                  <img
+                    src={logoUrl}
+                    alt={`${siteName} Logo`}
+                    className="ml-1 h-8 w-8"
+                  />
+                  <span className="text-base font-semibold">{siteName}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -256,15 +309,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <Link to="/" onClick={handleMenuItemClick}>
                 <div className="relative flex items-center justify-between w-full">
                   <div className="flex items-center gap-2">
-                    <img src={Icon} alt="Kite Logo" className="h-8 w-8" />
+                    <img
+                      src={logoUrl}
+                      alt={`${siteName} Logo`}
+                      className="h-8 w-8"
+                    />
                     <div className="flex flex-col">
                       <span className="text-base font-semibold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                        Kite
+                        {siteName}
                       </span>
-                      <VersionInfo />
+                      {/* 改了品牌就不再暴露上游版本号与提交链接（见 Branding） */}
+                      {isCustomBranding ? null : <VersionInfo />}
                     </div>
                   </div>
-                  {versionInfo?.hasNewVersion ? (
+                  {!isCustomBranding && versionInfo?.hasNewVersion ? (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -285,24 +343,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        {/* 集群切换器固定在 logo 下方（SidebarHeader 不随内容滚动）：各页面与设置章节
+            都按集群生效，切换是一个全局的客户端偏好，放到内容区会被滚走。 */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-gradient-to-r from-muted/40 to-muted/20 px-1.5 py-1 backdrop-blur-sm">
+              <ClusterSelector />
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent>
-                {/* 系统设置页面不需要集群切换器 */}
-        {!location.pathname.startsWith('/settings') && (
-  <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <div className="flex items-center gap-2 rounded-md border border-border/60 bg-gradient-to-r from-muted/40 to-muted/20 px-1.5 py-1 backdrop-blur-sm">
-                    <ClusterSelector />
-                  </div>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
         {/* 系统设置页面不需要概览入口 */}
         {!location.pathname.startsWith('/settings') && (
           <SidebarGroup>
@@ -324,117 +376,79 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         )}
 
-        {pinnedItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              {t('sidebar.pinned', 'Pinned')}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>{pinnedItems.map(renderSidebarItem)}</SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
         {/* 进入系统设置后只保留设置相关入口，隐藏业务导航 */}
         {!location.pathname.startsWith('/settings') &&
           visibleGroups.map((group) => (
-          <Collapsible
-            key={group.id}
-            defaultOpen={!group.collapsed}
-            className="group/collapsible"
-          >
+            <React.Fragment key={group.id}>
+              <Collapsible
+                defaultOpen={!group.collapsed}
+                className="group/collapsible"
+              >
+                <SidebarGroup>
+                  <SidebarGroupLabel asChild>
+                    <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group-data-[state=open]:text-foreground">
+                      <span className="uppercase tracking-wide text-xs font-bold">
+                        {group.nameKey
+                          ? t(group.nameKey, { defaultValue: group.nameKey })
+                          : ''}
+                      </span>
+                      <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                    </CollapsibleTrigger>
+                  </SidebarGroupLabel>
+                  <CollapsibleContent>
+                    <SidebarGroupContent className="flex flex-col gap-2">
+                      <SidebarMenu>
+                        {group.items.map(renderSidebarItem)}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </CollapsibleContent>
+                </SidebarGroup>
+              </Collapsible>
+              {/* 「收藏」（置顶项）紧跟在「集群」分组之后 */}
+              {group.id === SIDEBAR_CLUSTER_GROUP_ID && pinnedGroup}
+            </React.Fragment>
+          ))}
+
+        {settingsSections.length > 0 &&
+          location.pathname.startsWith('/settings') && (
             <SidebarGroup>
-              <SidebarGroupLabel asChild>
-                <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group-data-[state=open]:text-foreground">
-                  <span className="uppercase tracking-wide text-xs font-bold">
-                    {group.nameKey
-                      ? t(group.nameKey, { defaultValue: group.nameKey })
-                      : ''}
-                  </span>
-                  <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                </CollapsibleTrigger>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent className="flex flex-col gap-2">
-                  <SidebarMenu>
-                    {group.items.map(renderSidebarItem)}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
-        ))}
-
-        {isAdmin && location.pathname.startsWith('/settings') && (
-                    <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                    {settingsSections.map((section) => {
-                      const SectionIcon = section.icon
-                      const sectionActive = location.pathname.startsWith(
-                        `/settings/${section.value}`
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {settingsSections.map((section) => {
+                    const SectionIcon = section.icon
+                    const sectionActive = location.pathname.startsWith(
+                      `/settings/${section.value}`
+                    )
+                    const sub = settingsSubTabs[section.value]
+                    // 页签可能属于另一个设置章节（安全管理的「认证配置」= settings.authentication）：
+                    // 没有该章节读权限时不列出来，避免出现点进去就 403 的死链。
+                    const visibleSubTabs = sub?.tabs.filter((subTab) =>
+                      user?.canViewSettingsSection(
+                        subTab.section ?? section.section
                       )
-                      // 各章节的子页签：侧边栏子菜单 + 内容区页签共用
-                      const sectionSubTabs: Record<
-                        string,
-                        { param: string; tabs: { value: string; labelKey: string; defaultLabel: string }[] }
-                      > = {
-                        rbac: {
-                          param: 'rbacTab',
-                          tabs: [
-                            { value: 'roles', labelKey: 'settings.subTabs.rbacRoles', defaultLabel: 'Roles' },
-                            { value: 'user', labelKey: 'settings.subTabs.rbacUsers', defaultLabel: 'Users' },
-                            { value: 'group', labelKey: 'settings.subTabs.rbacGroups', defaultLabel: 'User Groups' },
-                            { value: 'namespace', labelKey: 'settings.subTabs.rbacNamespaces', defaultLabel: 'Namespace Grants' },
-                            { value: 'node', labelKey: 'settings.subTabs.rbacNodes', defaultLabel: 'Node Permissions' },
-                          ],
-                        },
-                        user: {
-                          param: 'tab',
-                          tabs: [
-                            { value: 'users', labelKey: 'settings.tabs.users', defaultLabel: 'Users' },
-                            { value: 'group', labelKey: 'settings.subTabs.rbacGroups', defaultLabel: 'User Groups' },
-                          ],
-                        },
-                        security: {
-                          param: 'tab',
-                          tabs: [
-                            { value: 'authentication', labelKey: 'securitySettings.tabs.authentication', defaultLabel: 'Authentication' },
-                            { value: 'loginPolicy', labelKey: 'securitySettings.tabs.loginPolicy', defaultLabel: 'Login Policy' },
-                            { value: 'password', labelKey: 'securitySettings.tabs.password', defaultLabel: 'Password' },
-                            { value: 'session', labelKey: 'securitySettings.tabs.session', defaultLabel: 'Session' },
-                          ],
-                        },
-                        notification: {
-                          param: 'tab',
-                          tabs: [
-                            { value: 'email', labelKey: 'notifications.tabs.email', defaultLabel: 'Mail' },
-                            { value: 'templates', labelKey: 'notifications.tabs.templates', defaultLabel: 'Templates' },
-                            { value: 'subscriptions', labelKey: 'notifications.tabs.subscriptions', defaultLabel: 'Subscriptions' },
-                          ],
-                        },
-                        audit: {
-                          param: 'tab',
-                          tabs: [
-                            { value: 'login', labelKey: 'audit.tabs.login', defaultLabel: 'Login Logs' },
-                            { value: 'operation', labelKey: 'audit.tabs.operation', defaultLabel: 'Operation Logs' },
-                            { value: 'password', labelKey: 'audit.tabs.password', defaultLabel: 'Password Change Logs' },
-                          ],
-                        },
-                      }
-                      const sub = sectionSubTabs[section.value]
-                      const currentSubTab = sub
-                        ? (new URLSearchParams(location.search).get(sub.param) ??
-                          sub.tabs[0]?.value)
-                        : undefined
+                    )
+                    const currentSubTab = sub
+                      ? (new URLSearchParams(location.search).get(sub.param) ??
+                        visibleSubTabs?.[0]?.value)
+                      : undefined
+                    // 默认跟随路由展开；箭头是独立开关，可以手动收起。
+                    const open =
+                      openSettingsSections[section.value] ?? sectionActive
 
-                      return (
-                        <SidebarMenuItem key={section.value}>
+                    return (
+                      <SidebarMenuItem key={section.value}>
+                        {/* 相对定位的容器只包住章节名这一行（不包含下面的子页签），
+                            否则展开后 li 变高，箭头会被居中到整组的中部。 */}
+                        <div className="relative">
                           <SidebarMenuButton
                             tooltip={section.label}
                             asChild
                             isActive={isActive(`/settings/${section.value}`)}
-                            className="transition-colors data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary"
+                            className={cn(
+                              'transition-colors data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary',
+                              // 给右侧的展开/收起开关留位置，避免章节名压在箭头上。
+                              sub && 'pr-8'
+                            )}
                           >
                             <Link
                               to={`/settings/${section.value}`}
@@ -442,22 +456,50 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             >
                               <SectionIcon className="text-sidebar-primary" />
                               <span>{section.label}</span>
-                              {sub && (
-                                <ChevronDown
-                                  className={`ml-auto h-4 w-4 transition-transform duration-200 ${
-                                    sectionActive ? 'rotate-180' : ''
-                                  }`}
-                                />
-                              )}
                             </Link>
                           </SidebarMenuButton>
-                          {sectionActive && sub && (
+                          {sub && (
+                            <button
+                              type="button"
+                              aria-label={`${section.label}: ${t(
+                                open
+                                  ? 'common.actions.collapse'
+                                  : 'common.actions.expand',
+                                open ? '收起' : '展开'
+                              )}`}
+                              aria-expanded={open}
+                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground group-data-[collapsible=icon]:hidden"
+                              onClick={() =>
+                                setOpenSettingsSections((current) => ({
+                                  ...current,
+                                  [section.value]: !open,
+                                }))
+                              }
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  'h-4 w-4 transition-transform duration-200',
+                                  open && 'rotate-180'
+                                )}
+                              />
+                            </button>
+                          )}
+                        </div>
+                        {open &&
+                          visibleSubTabs &&
+                          visibleSubTabs.length > 0 && (
                             <SidebarMenuSub>
-                              {sub.tabs.map((subTab) => (
+                              {visibleSubTabs.map((subTab) => (
                                 <SidebarMenuSubItem key={subTab.value}>
                                   <SidebarMenuSubButton
                                     asChild
-                                    isActive={currentSubTab === subTab.value}
+                                    // 必须同时满足「在本章节」和「参数值匹配」：各章节共用 `tab` 参数，
+                                    // 而且缺省时会退回第一个子页签，只看参数值就会让不在当前页的章节
+                                    // （例如权限管理的「角色管理」）也跟着亮起来。
+                                    isActive={
+                                      sectionActive &&
+                                      currentSubTab === subTab.value
+                                    }
                                     className="data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary"
                                   >
                                     <Link
@@ -475,13 +517,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                               ))}
                             </SidebarMenuSub>
                           )}
-                        </SidebarMenuItem>
-                      )
-                    })}
-                  </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+                      </SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
       </SidebarContent>
     </Sidebar>
   )

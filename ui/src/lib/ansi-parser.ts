@@ -1,12 +1,12 @@
 /* eslint-disable no-control-regex */
 /**
- * Simple ANSI escape sequence parser for terminal output
- * Supports basic color codes and formatting
+ * 用于终端输出的简易 ANSI 转义序列解析器
+ * 支持基础颜色码与格式
  */
 
-// ANSI color codes mapping
+// ANSI 颜色码映射
 const ANSI_COLORS = {
-  // Standard colors (30-37, 90-97)
+  // 标准颜色（30-37、90-97）
   30: '#000000', // black
   31: '#cd3131', // red
   32: '#0dbc79', // green
@@ -16,7 +16,7 @@ const ANSI_COLORS = {
   36: '#11a8cd', // cyan
   37: '#e5e5e5', // white
 
-  // Bright colors (90-97)
+  // 高亮颜色（90-97）
   90: '#666666', // bright black (gray)
   91: '#f14c4c', // bright red
   92: '#23d18b', // bright green
@@ -27,7 +27,7 @@ const ANSI_COLORS = {
   97: '#ffffff', // bright white
 } as const
 
-// Background colors (40-47, 100-107)
+// 背景颜色（40-47、100-107）
 const ANSI_BG_COLORS = {
   40: '#000000', // black
   41: '#cd3131', // red
@@ -62,7 +62,7 @@ interface ParsedSegment {
 }
 
 /**
- * Parse ANSI escape sequences in a string and return styled segments
+ * 解析字符串中的 ANSI 转义序列，并返回带样式的片段
  */
 export function parseAnsi(
   text: string,
@@ -72,23 +72,23 @@ export function parseAnsi(
   let currentState: AnsiState = { ...initialState }
   let currentText = ''
 
-  // Regex to match ANSI escape sequences - using Unicode escape instead of hex
+  // 匹配 ANSI 转义序列的正则——使用 Unicode 转义而不是十六进制
   const ansiRegex = new RegExp('\u001b\\[([0-9;]*)m', 'g')
   let lastIndex = 0
   let match: RegExpExecArray | null
 
   while ((match = ansiRegex.exec(text)) !== null) {
-    // Add text before the escape sequence
+    // 加入转义序列之前的文本
     const textBeforeEscape = text.slice(lastIndex, match.index)
     if (textBeforeEscape) {
       currentText += textBeforeEscape
     }
 
-    // Process the escape sequence
+    // 处理该转义序列
     const codes = match[1] ? match[1].split(';').map(Number) : [0]
     const newState = processAnsiCodes(codes, { ...currentState })
 
-    // If there's accumulated text, create a segment with the previous state
+    // 若已累积文本，则用之前的状态生成一个片段
     if (currentText) {
       segments.push({
         text: currentText,
@@ -101,13 +101,13 @@ export function parseAnsi(
     lastIndex = match.index + match[0].length
   }
 
-  // Add remaining text
+  // 加入剩余文本
   const remainingText = text.slice(lastIndex)
   if (remainingText) {
     currentText += remainingText
   }
 
-  // Add final segment if there's text
+  // 若仍有文本，加入最后一个片段
   if (currentText) {
     segments.push({
       text: currentText,
@@ -171,7 +171,7 @@ export function parseAnsi(
 }
 
 /**
- * Process ANSI codes and update the state
+ * 处理 ANSI 码并更新状态
  */
 function processAnsiCodes(codes: number[], currentState: AnsiState): AnsiState {
   let newState = { ...currentState }
@@ -215,11 +215,11 @@ function processAnsiCodes(codes: number[], currentState: AnsiState): AnsiState {
         break
 
       default:
-        // Foreground colors
+        // 前景色
         if (ANSI_COLORS[code as keyof typeof ANSI_COLORS]) {
           newState.color = ANSI_COLORS[code as keyof typeof ANSI_COLORS]
         }
-        // Background colors
+        // 背景色
         else if (ANSI_BG_COLORS[code as keyof typeof ANSI_BG_COLORS]) {
           newState.backgroundColor =
             ANSI_BG_COLORS[code as keyof typeof ANSI_BG_COLORS]
@@ -232,7 +232,7 @@ function processAnsiCodes(codes: number[], currentState: AnsiState): AnsiState {
 }
 
 /**
- * Convert AnsiState to CSS styles
+ * 把 AnsiState 转换为 CSS 样式
  */
 export function ansiStateToCss(state: AnsiState): React.CSSProperties {
   const styles: React.CSSProperties = {}
@@ -261,20 +261,20 @@ export function ansiStateToCss(state: AnsiState): React.CSSProperties {
 }
 
 /**
- * Strip ANSI escape sequences from text
+ * 从文本中剥离 ANSI 转义序列
  */
 export function stripAnsi(text: string): string {
   return text.replace(new RegExp('\u001b\\[[0-9;]*m', 'g'), '')
 }
 
 /**
- * Generate CSS class names for an AnsiState
+ * 为 AnsiState 生成 CSS 类名
  */
 export function getAnsiClassNames(state: AnsiState): string {
   const classes: string[] = []
 
   if (state.color) {
-    // Find the code for this color
+    // 查找该颜色对应的码
     const code = Object.entries(ANSI_COLORS).find(
       ([, value]) => value === state.color
     )?.[0]
@@ -296,22 +296,22 @@ export function getAnsiClassNames(state: AnsiState): string {
 }
 
 /**
- * Generate CSS styles for all ANSI classes
+ * 为所有 ANSI 类生成 CSS 样式
  */
 export function generateAnsiCss(): string {
   let css = ''
 
-  // Foreground colors
+  // 前景色
   Object.entries(ANSI_COLORS).forEach(([code, color]) => {
     css += `.ansi-fg-${code} { color: ${color} !important; }\n`
   })
 
-  // Background colors
+  // 背景色
   Object.entries(ANSI_BG_COLORS).forEach(([code, color]) => {
     css += `.ansi-bg-${code} { background-color: ${color} !important; }\n`
   })
 
-  // Styles
+  // 样式
   css += '.ansi-bold { font-weight: bold !important; }\n'
   css += '.ansi-italic { font-style: italic !important; }\n'
   css += '.ansi-underline { text-decoration: underline !important; }\n'

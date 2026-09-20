@@ -29,7 +29,7 @@ export function getWebSocketUrl(path: string): string {
   const isDev = process.env.NODE_ENV === 'development'
   const host = isDev ? 'localhost:8080' : window.location.host
 
-  // Ensure path starts with /
+  // 确保路径以 / 开头
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   const fullPath = subPath ? `${subPath}${normalizedPath}` : normalizedPath
 

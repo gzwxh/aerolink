@@ -32,6 +32,8 @@ interface ActionTableProps<T> {
 export interface Action<T> {
   label: string | React.ReactNode
   dynamicLabel?: (item: T) => string | React.ReactNode
+  /** 展示在标签旁的简短说明，例如某个操作为何被禁用。 */
+  hint?: (item: T) => string | undefined
   onClick: (item: T) => void
   shouldDisable?: (item: T) => boolean
 }
@@ -70,6 +72,11 @@ export function ActionTable<T>({
                     {action.dynamicLabel
                       ? action.dynamicLabel(row.original)
                       : action.label}
+                    {action.hint?.(row.original) && (
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {action.hint(row.original)}
+                      </span>
+                    )}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>

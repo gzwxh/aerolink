@@ -1,16 +1,9 @@
+/* eslint-disable react-refresh/only-export-components */
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { useResources } from '@/lib/api'
-import {
-  SchedulingConfig,
-  TolerationForm,
-  defaultSchedulingConfig,
-  emptySchedulingTerm,
-  emptyToleration,
-  genSchedulingId,
-} from '@/components/editors/deployment-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,29 +14,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  defaultSchedulingConfig,
+  emptySchedulingTerm,
+  emptyToleration,
+  genSchedulingId,
+  SchedulingConfig,
+  TolerationForm,
+} from '@/components/editors/deployment-form'
 
+// 运算符的 value 是 YAML 原值，必须稳定；展示文案走 i18n（中文语义见 locales）。
 const OPERATORS: Array<{
   value: SchedulingRuleOp
-  label: string
+  labelKey: string
 }> = [
-  { value: 'In', label: '在列表中' },
-  { value: 'NotIn', label: '不在列表中' },
-  { value: 'Exists', label: '存在' },
-  { value: 'DoesNotExist', label: '不存在' },
-  { value: 'Gt', label: '大于' },
-  { value: 'Lt', label: '小于' },
+  { value: 'In', labelKey: 'nodeScheduling.opIn' },
+  { value: 'NotIn', labelKey: 'nodeScheduling.opNotIn' },
+  { value: 'Exists', labelKey: 'nodeScheduling.opExists' },
+  { value: 'DoesNotExist', labelKey: 'nodeScheduling.opDoesNotExist' },
+  { value: 'Gt', labelKey: 'nodeScheduling.opGt' },
+  { value: 'Lt', labelKey: 'nodeScheduling.opLt' },
 ]
 
-type SchedulingRuleOp = SchedulingConfig['terms'][number]['expressions'][number]['operator']
+type SchedulingRuleOp =
+  SchedulingConfig['terms'][number]['expressions'][number]['operator']
 
-const EFFECTS: Array<{
-  value: TolerationForm['effect']
-  label: string
-}> = [
-  { value: '', label: '全部' },
-  { value: 'NoSchedule', label: 'NoSchedule' },
-  { value: 'PreferNoSchedule', label: 'PreferNoSchedule' },
-  { value: 'NoExecute', label: 'NoExecute' },
+// 空字符串表示不限制；其余三项是 Kubernetes 原值，中英文写法一致，只有「全部」需要翻译。
+const EFFECTS: Array<TolerationForm['effect']> = [
+  '',
+  'NoSchedule',
+  'PreferNoSchedule',
+  'NoExecute',
 ]
 
 const parseValues = (raw: string): string[] =>
@@ -52,7 +53,7 @@ const parseValues = (raw: string): string[] =>
     .map((v) => v.trim())
     .filter(Boolean)
 
-/** Parse scheduling fields from a workload YAML into panel state. */
+/** 把工作负载 YAML 中的调度字段解析为面板状态。 */
 export function parseSchedulingFromYaml(content: string): SchedulingConfig {
   const config = defaultSchedulingConfig()
   try {
@@ -60,7 +61,9 @@ export function parseSchedulingFromYaml(content: string): SchedulingConfig {
       | {
           spec?: {
             template?: { spec?: Record<string, unknown> }
-            jobTemplate?: { spec?: { template?: { spec?: Record<string, unknown> } } }
+            jobTemplate?: {
+              spec?: { template?: { spec?: Record<string, unknown> } }
+            }
           }
         }
       | undefined
@@ -74,19 +77,17 @@ export function parseSchedulingFromYaml(content: string): SchedulingConfig {
     if (!podSpec) return config
 
     config.priorityClassName = (podSpec.priorityClassName as string) || ''
-    config.tolerations = ((podSpec.tolerations as Array<Record<string, unknown>>) || []).map(
-      (t) => ({
-        id: genSchedulingId(),
-        key: (t.key as string) || '',
-        operator: t.operator === 'Exists' ? 'Exists' : 'Equal',
-        value: (t.value as string) || '',
-        effect: ((t.effect as string) || '') as TolerationForm['effect'],
-        tolerationSeconds:
-          t.tolerationSeconds !== undefined
-            ? String(t.tolerationSeconds)
-            : '',
-      })
-    )
+    config.tolerations = (
+      (podSpec.tolerations as Array<Record<string, unknown>>) || []
+    ).map((t) => ({
+      id: genSchedulingId(),
+      key: (t.key as string) || '',
+      operator: t.operator === 'Exists' ? 'Exists' : 'Equal',
+      value: (t.value as string) || '',
+      effect: ((t.effect as string) || '') as TolerationForm['effect'],
+      tolerationSeconds:
+        t.tolerationSeconds !== undefined ? String(t.tolerationSeconds) : '',
+    }))
 
     if (podSpec.nodeName) {
       config.mode = 'specific'
@@ -132,7 +133,7 @@ export function parseSchedulingFromYaml(content: string): SchedulingConfig {
   }
 }
 
-/** Write panel state into a workload YAML's spec.template.spec. */
+/** 把面板状态写入工作负载 YAML 的 spec.template.spec。 */
 export function applySchedulingToYaml(
   content: string,
   config: SchedulingConfig
@@ -219,8 +220,7 @@ function buildSchedulingPodSpecLocal(
   return podSpec
 }
 
-
-/** Shared hook: sorted node names of the current cluster. */
+/** 共享 hook：当前集群排序后的节点名。 */
 function useNodeNames(): string[] {
   const { data: nodes = [] } = useResources<'nodes'>('nodes', undefined, {
     staleTime: 60_000,
@@ -232,8 +232,8 @@ function useNodeNames(): string[] {
 }
 
 /**
- * Tencent-cloud-style node scheduling panel (controlled component).
- * Also used by the YAML-editing dialogs through the parse/apply helpers.
+ * 腾讯云风格的节点调度面板（受控组件）。
+ * YAML 编辑对话框也通过解析/应用辅助函数使用它。
  */
 export function NodeSchedulingSection({
   value,
@@ -393,7 +393,7 @@ export function NodeSchedulingSection({
                       <SelectContent>
                         {OPERATORS.map((op) => (
                           <SelectItem key={op.value} value={op.value}>
-                            {op.label}
+                            {t(op.labelKey)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -600,12 +600,9 @@ export function NodeSchedulingSection({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {EFFECTS.map((eff) => (
-                  <SelectItem
-                    key={eff.value || 'all'}
-                    value={eff.value || 'all'}
-                  >
-                    {eff.label}
+                {EFFECTS.map((effect) => (
+                  <SelectItem key={effect || 'all'} value={effect || 'all'}>
+                    {effect || t('nodeScheduling.effectAll', '全部')}
                   </SelectItem>
                 ))}
               </SelectContent>

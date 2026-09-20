@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="title desc">
+  <!--
+    项目 LOGO（自研素材，Apache-2.0，见仓库根目录 NOTICE）。
+    风筝（Kite）为主体，云朵托底点明"云端"，右上角的节点与光环表示云原生 /
+    数据连接；全部为几何图形，不含文字，不依赖任何字体与外部资源。
+  -->
+  <title id="title">Kite 电商云</title>
+  <desc id="desc">深蓝圆角方块上，一只白蓝相间的风筝立于云朵之上，右上有发光数据节点</desc>
+
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2F74CF" />
+      <stop offset="100%" stop-color="#14397F" />
+    </linearGradient>
+    <linearGradient id="kiteLit" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#D6E9FA" />
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="28" fill="url(#bgGrad)" />
+
+  <!-- 右上：数据节点光环 -->
+  <circle cx="97" cy="33" r="12" fill="none" stroke="#7FE3F5" stroke-width="1.4" opacity="0.4" />
+  <circle cx="97" cy="33" r="4.2" fill="#8FF0FF" />
+  <path d="M97 21 V13" stroke="#8FF0FF" stroke-width="1.4" opacity="0.5" stroke-linecap="round" />
+
+  <!-- 风筝：四色拼接的菱形 + 骨架 -->
+  <g transform="translate(60 56)">
+    <path d="M0 -30 L26 6 L0 42 L-26 6 Z" fill="url(#kiteLit)" />
+    <path d="M0 -30 L26 6 L0 6 Z" fill="#8FD8F5" />
+    <path d="M0 6 L26 6 L0 42 Z" fill="#4C9BEA" />
+    <path d="M0 -30 L-26 6 L0 6 Z" fill="#B7E4FB" opacity="0.9" />
+    <path d="M0 -30 L0 42 M-26 6 L26 6" stroke="#1D6FC4" stroke-width="1.6" opacity="0.45" />
+    <path d="M0 -30 L26 6 L0 42 L-26 6 Z" fill="none" stroke="#1D6FC4" stroke-width="1.6" opacity="0.35" />
+  </g>
+
+  <!-- 风筝线 -->
+  <path d="M60 98 C 54 108, 42 112, 30 117" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" opacity="0.75" />
+
+  <!-- 云朵底座 -->
+  <g fill="#FFFFFF" opacity="0.94">
+    <ellipse cx="62" cy="104" rx="34" ry="12" />
+    <ellipse cx="42" cy="100" rx="17" ry="10" />
+    <ellipse cx="82" cy="100" rx="15" ry="9" />
+  </g>
+  <ellipse cx="62" cy="112" rx="34" ry="5" fill="#8FB4E4" opacity="0.3" />
+</svg>

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
   IconEdit,
   IconPlus,
@@ -17,7 +18,10 @@ import {
   updateTemplate,
   useTemplates,
 } from '@/lib/api'
-import { translateError } from '@/lib/utils'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -32,12 +36,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 import { Action, ActionTable } from '../action-table'
 
 export function TemplateManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  // 只读章节（只有 settings.templates 的读权限）时不渲染模板写入口。
+  const { readOnly } = useSettingsSectionAccess()
   const { data: templates = [], isLoading } = useTemplates()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] =
@@ -51,6 +58,22 @@ export function TemplateManagement() {
     yaml: '',
   })
 
+  // 弹窗常驻挂载，而 formData 在每次打开时被重置成编辑目标（或空表单），
+  // 所以基线取这份重置后的初值，而不是首次渲染的空值。
+  const formBaseline = useMemo(
+    () => ({
+      name: editingTemplate?.name ?? '',
+      description: editingTemplate?.description ?? '',
+      yaml: editingTemplate?.yaml ?? '',
+    }),
+    [editingTemplate]
+  )
+  // 有草稿时先确认再关闭，避免点遮罩 / Esc / 右上角 X 丢输入；
+  // 保存成功走 close()，不需要确认。
+  const isDirty = useDraftDirty(formData, formBaseline)
+  const close = useCallback(() => setIsDialogOpen(false), [])
+  const guard = useUnsavedChangesGuard({ dirty: isDirty, onClose: close })
+
   const createMutation = useMutation({
     mutationFn: (data: Omit<ResourceTemplate, 'id'>) => createTemplate(data),
     onSuccess: () => {
@@ -61,11 +84,11 @@ export function TemplateManagement() {
           defaultValue: 'Template created successfully',
         })
       )
-      setIsDialogOpen(false)
+      close()
     },
     onError: (error) => {
       console.error('Error creating template:', error)
-      toast.error(translateError(error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 
@@ -85,11 +108,11 @@ export function TemplateManagement() {
           defaultValue: 'Template updated successfully',
         })
       )
-      setIsDialogOpen(false)
+      close()
     },
     onError: (error) => {
       console.error('Error updating template:', error)
-      toast.error(translateError(error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 
@@ -107,7 +130,7 @@ export function TemplateManagement() {
     },
     onError: (error) => {
       console.error('Error deleting template:', error)
-      toast.error(translateError(error, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 
@@ -224,15 +247,22 @@ export function TemplateManagement() {
                 )}
               </p>
             </div>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
-              <IconPlus className="h-4 w-4" />
-              {t('common.actions.add', 'Add')}{' '}
-              {t('common.fields.template', 'Template')}
-            </Button>
+            {!readOnly && (
+              <Button onClick={() => handleOpenDialog()} className="gap-2">
+                <IconPlus className="h-4 w-4" />
+                {t('common.actions.add', 'Add')}{' '}
+                {t('common.fields.template', 'Template')}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable data={templates} columns={columns} actions={actions} />
+          <ActionTable
+            data={templates}
+            columns={columns}
+            // 只读时传空操作列表，表格不渲染行末操作列。
+            actions={readOnly ? [] : actions}
+          />
           {templates.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <IconTemplate className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -247,7 +277,7 @@ export function TemplateManagement() {
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={guard.handleOpenChange}>
         <DialogContent className="max-w-4xl! max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
@@ -317,15 +347,20 @@ export function TemplateManagement() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => guard.handleOpenChange(false)}
+            >
               {t('common.actions.cancel', 'Cancel')}
             </Button>
-            <Button onClick={handleSubmit}>
+            <Button onClick={handleSubmit} disabled={readOnly}>
               {t('common.actions.save', 'Save')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
 
       <DeleteConfirmationDialog
         open={!!deletingTemplate}

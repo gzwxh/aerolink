@@ -9,6 +9,7 @@ import { ClusterStatsCards } from '@/components/cluster-stats-cards'
 import { RecentEvents } from '@/components/recent-events'
 import { ResourceCharts } from '@/components/resources-charts'
 import { SettingsHint } from '@/components/settings-hint'
+import { SuperAdminMFAGuide } from '@/components/super-admin-mfa-guide'
 
 export function Overview() {
   const { t } = useTranslation()
@@ -52,15 +53,20 @@ export function Overview() {
       <ClusterStatsCards stats={overview} isLoading={isLoading} />
       {!isDismissed &&
         user?.provider !== 'Anonymous' &&
-        user?.roles?.some((role) => role.name === 'admin') && <SettingsHint />}
+        user?.canViewSettings() && <SettingsHint />}
+      {/* 超级管理员的 MFA 绑定引导（等保三级 D4）。 */}
+      <SuperAdminMFAGuide />
 
       <div className="grid grid-cols-1 gap-4 @5xl/main:grid-cols-2">
-        <ResourceCharts
-          data={overview?.resource}
-          isLoading={isLoading}
-          error={error}
-          isError={isError}
-        />
+        {/* 受限账号没有集群容量数据（backend 返回的 allocatable 为 0），不渲染容量面板。 */}
+        {!overview?.scoped && (
+          <ResourceCharts
+            data={overview?.resource}
+            isLoading={isLoading}
+            error={error}
+            isError={isError}
+          />
+        )}
         <RecentEvents />
       </div>
 

@@ -15,7 +15,6 @@ import { toast } from 'sonner'
 
 import { NodeWithMetrics } from '@/types/api'
 import { cordonNode, deleteResource, uncordonNode } from '@/lib/api'
-import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Button } from '@/components/ui/button'
 import {
@@ -73,8 +72,8 @@ export function NodeRowActions({
         toast.success(t('detail.status.nodeCordoned', { name }))
       }
       await queryClient.invalidateQueries({ queryKey: ['nodes'] })
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -85,8 +84,8 @@ export function NodeRowActions({
       toast.success(t('resourceTable.deleteSuccess', { name }))
       setShowDelete(false)
       await queryClient.invalidateQueries({ queryKey: ['nodes'] })
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsDeleting(false)
     }

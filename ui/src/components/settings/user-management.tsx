@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import * as Avatar from '@radix-ui/react-avatar'
 import {
-  IconEdit,
-  IconLock,
-  IconLockOpen,
   IconPlus,
   IconSearch,
-  IconShieldCheck,
-  IconTrash,
+  IconShieldLock,
   IconUser,
 } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -24,18 +20,19 @@ import { toast } from 'sonner'
 
 import { UserItem } from '@/types/api'
 import {
-  createPasswordUser,
   deleteUser,
+  fetchKnownGroupDetails,
+  resetUserMFA,
   resetUserPassword,
   setUserEnabled,
-  updateUser,
+  useOAuthProviderList,
   useRoleList,
   useUserList,
 } from '@/lib/api'
-import { Switch } from '@/components/ui/switch'
-import { fetchSecuritySetting } from '@/lib/api'
-import { fetchAPI } from '@/lib/api/shared'
-import { formatDate } from '@/lib/utils'
+import { ApiError } from '@/lib/api-client'
+import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
+import { formatDate, translateError } from '@/lib/utils'
+import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -45,12 +42,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -59,67 +50,64 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { PasswordInput } from '@/components/password-input'
 import { ResourceTableView } from '@/components/resource-table-view'
+import { TableColumnToggle } from '@/components/table-column-toggle'
 
-import { Action } from '../action-table'
 import { Badge } from '../ui/badge'
-import UserRoleAssignment from './user-role-assignment'
-
-function userSubjectName(user: UserItem): string {
-  return user.username || user.name || user.sub || String(user.id)
-}
-
-// Native password users keep their group memberships in Kite; external users
-// (LDAP / OIDC) have theirs managed by the directory.
-function isNativeUser(user?: UserItem | null): boolean {
-  return !user?.provider || user.provider === 'password'
-}
-
-// Only native and LDAP-provisioned users can be deleted from Kite (LDAP
-// deletion removes the local record without touching the directory).
-function isDeletableUser(user?: UserItem | null): boolean {
-  return isNativeUser(user) || user?.provider === 'ldap'
-}
+import { UserDetailDialog } from './user-detail-dialog'
+import { UserFormDialog } from './user-form-dialog'
 
 export function UserManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
+  // 只读章节（只有 settings.<章节> 的读权限）时不渲染任何写入口。
+  const { readOnly } = useSettingsSectionAccess()
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 20,
   })
   const [sorting, setSorting] = useState<SortingState>([])
   const [searchQuery, setSearchQuery] = useState('')
+  // 四个列过滤条件：和 sortBy 一样直接下推到后端——列表是服务端分页，
+  // 只在当前页做过滤会得到前后矛盾的结果。
   const [roleFilter, setRoleFilter] = useState('')
+  const [enabledFilter, setEnabledFilter] = useState('')
+  const [providerFilter, setProviderFilter] = useState('')
+  const [groupFilter, setGroupFilter] = useState('')
+  // 列显示偏好：与资源列表（/deployments 等）一致，用齿轮菜单勾选，并持久化。
+  // 用户列表是全局数据、与当前集群无关，所以这里用不带集群前缀的键。
+  const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
+    'kite-users-columnVisibility'
+  )
   const { data: roles = [] } = useRoleList()
-  // 创建用户表单所需的可选用户组与全局 MFA 策略。
-  const { data: knownGroups = [] } = useQuery({
-    queryKey: ['known-groups'],
-    queryFn: async () => {
-      const result = await fetchAPI<unknown>('/admin/groups')
-      const list = Array.isArray(result)
-        ? result
-        : ((result as { groups?: unknown[] }).groups ?? [])
-      return list
-        .map((item) =>
-          typeof item === 'string'
-            ? item
-            : ((item as { name?: string }).name ?? '')
-        )
-        .filter(Boolean)
-    },
+  // 认证方式除了内置的密码 / LDAP，还可能是任意已配置的 OAuth 提供方名称。
+  const { data: oauthProviders = [] } = useOAuthProviderList()
+  const providerOptions = useMemo(
+    () => [
+      'password',
+      'ldap',
+      ...oauthProviders.map((provider) => provider.name),
+    ],
+    [oauthProviders]
+  )
+  // LDAP / OIDC 用户组：用后端已知的组名作为下拉选项。
+  const { data: knownGroupDetails } = useQuery({
+    queryKey: ['known-group-details'],
+    queryFn: fetchKnownGroupDetails,
     staleTime: 60000,
   })
-  const { data: createSecuritySetting } = useQuery({
-    queryKey: ['security-setting'],
-    queryFn: fetchSecuritySetting,
-    staleTime: 60000,
-  })
-  const securityMfaPolicy =
-    (createSecuritySetting as { mfaPolicy?: string } | undefined)?.mfaPolicy ??
-    'disabled'
+  const groupOptions = useMemo(
+    () =>
+      Object.keys(knownGroupDetails ?? {}).sort((a, b) => a.localeCompare(b)),
+    [knownGroupDetails]
+  )
 
   const sortParams = useMemo(() => {
     if (sorting.length === 0) {
@@ -132,142 +120,186 @@ export function UserManagement() {
     }
   }, [sorting])
 
+  // 过滤条件变化后回到第一页：否则会停在一个新结果集里并不存在的页码上。
+  useEffect(() => {
+    setPagination((prev) =>
+      prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 }
+    )
+  }, [searchQuery, roleFilter, enabledFilter, providerFilter, groupFilter])
+
   const { data, isLoading, error } = useUserList(
     pagination.pageIndex + 1,
     pagination.pageSize,
     searchQuery,
     sortParams.sortBy,
     sortParams.sortOrder,
-    roleFilter
+    roleFilter,
+    enabledFilter,
+    providerFilter,
+    groupFilter
   )
 
   const [togglingUserId, setTogglingUserId] = useState<number | null>(null)
+
+  // 启用/停用统一走一个 mutation：失败原因（例如「没有别的启用账号持有系统管理员角色」）
+  // 由 onError 当场提示，调用方只负责各自的成功反馈。
+  const toggleEnabledMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      setUserEnabled(id, enabled),
+    onError: (error) => {
+      if (
+        error instanceof ApiError &&
+        error.code === 'user_last_administrator'
+      ) {
+        toast.error(
+          t(
+            'userManagement.messages.lastAdministratorNeedsManager',
+            '当前没有其他启用账号持有「系统管理员」角色，操作后没人能接管管理面。请先把该角色分配给另一个启用账号，再继续。'
+          )
+        )
+        return
+      }
+      toast.error(translateError(error, t))
+    },
+  })
 
   // 列表「状态」列可直接启用/禁用。
   const handleToggleStatus = useCallback(
     async (user: UserItem) => {
       setTogglingUserId(user.id)
       try {
-        await setUserEnabled(user.id, !user.enabled)
+        await toggleEnabledMutation.mutateAsync({
+          id: user.id,
+          enabled: !user.enabled,
+        })
         await queryClient.invalidateQueries({ queryKey: ['user-list'] })
         toast.success(
           user.enabled
             ? t('common.messages.disabled', '已禁用')
             : t('common.messages.enabled', '已启用')
         )
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : t('common.messages.operationFailed', '操作失败')
-        )
+      } catch {
+        // 失败原因（含「没有别的账号能进控制台管理面」）已由 mutation 的 onError 提示
       } finally {
         setTogglingUserId(null)
       }
     },
-    [queryClient, t]
+    [queryClient, t, toggleEnabledMutation]
   )
 
   const getStatusBadge = useCallback(
     (user: UserItem) => {
+      const badge = user.enabled ? (
+        <Badge variant="default">{t('status.enabled', 'Enabled')}</Badge>
+      ) : (
+        <Badge variant="secondary">{t('status.disabled', 'Disabled')}</Badge>
+      )
+      // 超级管理员可以停用，但后端要求系统里还有别的启用账号能进控制台管理面；
+      // 它的保护手段是绑定 MFA，所以未绑定时额外给出引导。
+      const display =
+        user.isSuperAdmin && !user.mfa_enabled ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1.5">
+                {badge}
+                <Badge variant="outline" className="gap-1">
+                  <IconShieldLock className="h-3 w-3" />
+                  {t('userManagement.messages.mfaNotBound', '未绑定 MFA')}
+                </Badge>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-72 whitespace-normal">
+              {t(
+                'userManagement.messages.superAdminDisableHint',
+                '超级管理员可以停用，但系统里必须还有其他能进入控制台管理面、且未被停用的账号（例如安全管理员）。更推荐的做法是给它绑定 MFA。'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          badge
+        )
+      if (readOnly) return display
       return (
         <button
           type="button"
           disabled={togglingUserId === user.id}
           onClick={() => void handleToggleStatus(user)}
           title={t('common.fields.status', 'Status')}
-          className="cursor-pointer disabled:cursor-wait disabled:opacity-60"
+          className="cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {user.enabled ? (
-            <Badge variant="default">{t('status.enabled', 'Enabled')}</Badge>
-          ) : (
-            <Badge variant="secondary">{t('status.disabled', 'Disabled')}</Badge>
-          )}
+          {display}
         </button>
       )
     },
-    [handleToggleStatus, t, togglingUserId]
+    [handleToggleStatus, readOnly, t, togglingUserId]
   )
 
   const handleToggleEnable = useCallback(
     async (u: UserItem) => {
-      await setUserEnabled(u.id, !u.enabled)
-      queryClient.invalidateQueries({ queryKey: ['user-list'] })
-      toast.success(
-        t('common.messages.updated', {
-          resource: t('common.fields.user', 'User'),
-          defaultValue: 'User updated',
+      try {
+        await toggleEnabledMutation.mutateAsync({
+          id: u.id,
+          enabled: !u.enabled,
         })
-      )
+        queryClient.invalidateQueries({ queryKey: ['user-list'] })
+        toast.success(
+          t('common.messages.updated', {
+            resource: t('common.fields.user', 'User'),
+            defaultValue: 'User updated',
+          })
+        )
+      } catch {
+        // 失败原因已由 mutation 的 onError 提示
+      }
     },
-    [queryClient, t]
+    [queryClient, t, toggleEnabledMutation]
   )
 
-  const actions = useMemo<Action<UserItem>[]>(() => {
-    return [
-      {
-        label: (
-          <>
-            <IconEdit className="h-4 w-4" />
-            {t('common.actions.edit', 'Edit')}
-          </>
-        ),
-        onClick: (item) => setEditingUser(item),
-      },
-      {
-        label: '-',
-        dynamicLabel: (item) =>
-          item.enabled ? (
-            <>
-              <IconLock className="h-4 w-4" />
-              {t('common.actions.disable', 'Disable')}
-            </>
-          ) : (
-            <>
-              <IconLockOpen className="h-4 w-4" />
-              {t('common.actions.enable', 'Enable')}
-            </>
-          ),
-        onClick: (item) => handleToggleEnable(item),
-      },
-      {
-        label: (
-          <div className="inline-flex items-center gap-2 text-destructive">
-            <IconTrash className="h-4 w-4" />
-            {t('common.actions.delete', 'Delete')}
-          </div>
-        ),
-        shouldDisable: (item) => !isDeletableUser(item),
-        onClick: (item) => setDeletingUser(item),
-      },
-      {
-        label: (
-          <>
-            <IconLock className="h-4 w-4" />
-            {t('common.actions.resetPassword', 'Reset Password')}
-          </>
-        ),
-        shouldDisable: (item) => item.provider !== 'password',
-        onClick: (item) => handleResetPassword(item),
-      },
-      {
-        label: (
-          <>
-            <IconShieldCheck className="h-4 w-4" />
-            {t('common.actions.assign', 'Assign')}
-          </>
-        ),
-        onClick: (item) => {
-          setAssigning(item)
-        },
-      },
-    ]
-  }, [handleToggleEnable, t])
+  // 「重置 MFA」：强制 MFA 策略下身份验证器丢失时的唯一出路，否则账号永久锁死。
+  const resetMFAMutation = useMutation({
+    mutationFn: (id: number) => resetUserMFA(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-list'] })
+      toast.success(
+        t(
+          'userManagement.messages.mfaResetDone',
+          '已解除该账号的 MFA 绑定，请让本人重新绑定。'
+        )
+      )
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
 
-  const [editingUser, setEditingUser] = useState<UserItem | null>(null)
+  const handleResetMFA = useCallback(
+    (u: UserItem) => {
+      if (
+        !window.confirm(
+          t('userManagement.messages.mfaResetConfirm', {
+            username: u.username,
+            defaultValue:
+              '解除「{{username}}」的 MFA 绑定？本人在下次登录时需要重新绑定身份验证器。',
+          })
+        )
+      ) {
+        return
+      }
+      resetMFAMutation.mutate(u.id)
+    },
+    [resetMFAMutation, t]
+  )
+
+  // 详情弹窗：点用户名 / 头像或行内「编辑」打开，里面同时承载资料编辑与管理操作。
+  const [detailUser, setDetailUser] = useState<UserItem | null>(null)
+
+  // 弹窗里的操作（启用 / 停用、重置密码等）会让列表重新拉取：把弹窗手里的对象也换成
+  // 最新的一份，否则弹窗里的只读字段与按钮会停在旧值上。
+  useEffect(() => {
+    if (!detailUser) return
+    const fresh = data?.users.find((item) => item.id === detailUser.id)
+    if (fresh && fresh !== detailUser) setDetailUser(fresh)
+  }, [data, detailUser])
   const [deletingUser, setDeletingUser] = useState<UserItem | null>(null)
-  const [assigning, setAssigning] = useState<UserItem | null>(null)
-  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [showCreateUser, setShowCreateUser] = useState(false)
 
   const columns = useMemo<ColumnDef<UserItem>[]>(
     () => [
@@ -285,56 +317,70 @@ export function UserManagement() {
       {
         id: 'username',
         header: t('common.fields.username', 'Username'),
-        enableSorting: false,
+        enableSorting: true,
         accessorFn: (row) => row.username,
-        cell: ({ row }) => (
-          <div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setEditingUser(row.original)}
-                aria-label={`${t('common.actions.edit', 'Edit')} ${t('common.fields.user', 'user')}`}
-                className="p-0 bg-transparent border-0 inline-flex items-center"
-              >
-                <Avatar.Root className="inline-block">
-                  {row.original.avatar_url ? (
-                    <Avatar.Image
-                      src={row.original.avatar_url}
-                      alt={row.original.username}
-                      className="h-8 w-8 rounded-full object-cover"
-                    />
-                  ) : (
-                    <Avatar.Fallback className="h-8 w-8 rounded-full bg-muted-foreground text-white flex items-center justify-center">
-                      {row.original.username
-                        .split(' ')
-                        .map((part) => part[0])
-                        .join('')
-                        .toUpperCase()
-                        .slice(0, 2)}
-                    </Avatar.Fallback>
+        cell: ({ row }) => {
+          const avatar = (
+            <Avatar.Root className="inline-block">
+              {row.original.avatar_url ? (
+                <Avatar.Image
+                  src={row.original.avatar_url}
+                  alt={row.original.username}
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+              ) : (
+                <Avatar.Fallback className="h-8 w-8 rounded-full bg-muted-foreground text-white flex items-center justify-center">
+                  {row.original.username
+                    .split(' ')
+                    .map((part) => part[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2)}
+                </Avatar.Fallback>
+              )}
+            </Avatar.Root>
+          )
+          return (
+            <div>
+              <div className="flex items-center gap-3">
+                {/* 头像与用户名都是详情入口：查看与编辑（含操作）在同一个弹窗里。 */}
+                <button
+                  type="button"
+                  onClick={() => setDetailUser(row.original)}
+                  aria-label={t('userManagement.detail.title', '用户详情')}
+                  className="p-0 bg-transparent border-0 inline-flex items-center"
+                >
+                  {avatar}
+                </button>
+                <div className="flex flex-col min-w-0">
+                  {/* 用户名即详情入口：看只读详情（含 LDAP 同步信息）。 */}
+                  <button
+                    type="button"
+                    onClick={() => setDetailUser(row.original)}
+                    title={t('userManagement.detail.title', '用户详情')}
+                    className="text-left font-medium truncate hover:underline"
+                  >
+                    {row.original.username}
+                  </button>
+                  {row.original.name && (
+                    <span className="text-sm text-muted-foreground truncate">
+                      {row.original.name}
+                    </span>
                   )}
-                </Avatar.Root>
-              </button>
-              <div className="flex flex-col min-w-0">
-                <span className="font-medium truncate">
-                  {row.original.username}
-                </span>
-                {row.original.name && (
-                  <span className="text-sm text-muted-foreground truncate">
-                    {row.original.name}
-                  </span>
-                )}
+                </div>
               </div>
             </div>
-          </div>
-        ),
+          )
+        },
       },
       {
         id: 'status',
         header: t('common.fields.status', 'Status'),
         enableSorting: false,
         cell: ({ row: { original: user } }) => (
-          <div className="flex items-center gap-3">{getStatusBadge(user)}</div>
+          <div className="flex items-center justify-center gap-3">
+            {getStatusBadge(user)}
+          </div>
         ),
       },
       {
@@ -394,7 +440,7 @@ export function UserManagement() {
             return <span className="text-sm text-muted-foreground">-</span>
           }
           return (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap items-center justify-center gap-1">
               {groups.map((group) => (
                 <Badge key={group} variant="outline" className="text-xs">
                   {group}
@@ -408,85 +454,22 @@ export function UserManagement() {
     [getStatusBadge, t]
   )
 
-  const tableColumns = useMemo<ColumnDef<UserItem>[]>(() => {
-    const actionColumn: ColumnDef<UserItem> = {
-      id: 'actions',
-      header: t('common.fields.actions', 'Actions'),
-      cell: ({ row }) => (
-        <div className="text-right">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label={t('common.fields.actions', 'Actions')}
-              >
-                •••
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {actions.map((action, index) => (
-                <DropdownMenuItem
-                  key={index}
-                  disabled={action.shouldDisable?.(row.original)}
-                  onClick={() => action.onClick(row.original)}
-                  className="gap-2"
-                >
-                  {action.dynamicLabel
-                    ? action.dynamicLabel(row.original)
-                    : action.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
-    }
-    return [...columns, actionColumn]
-  }, [actions, columns, t])
-
   const table = useReactTable({
     data: data?.users ?? [],
-    columns: tableColumns,
+    columns,
     getCoreRowModel: getCoreRowModel(),
     state: {
       pagination,
       sorting,
+      columnVisibility,
     },
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
     manualPagination: true,
     manualSorting: true,
     pageCount: Math.ceil((data?.total ?? 0) / pagination.pageSize) || 0,
   })
-  const [newUser, setNewUser] = useState({
-    username: '',
-    name: '',
-    password: '',
-    email: '',
-    phone: '',
-    wechat: '',
-    remark: '',
-    // 激活状态：默认按「安全设置 → 新建用户默认状态」由后端决定，这里显式传开关值。
-    enabled: true,
-    // 失效日期（ISO 字符串，空表示不过期）。
-    expiresAt: '',
-    // 本地用户组（创建时一并加入）。
-    groups: [] as string[],
-    // 系统角色（创建后立即分配）。
-    roles: [] as string[],
-  })
-
-  // 生成一个满足复杂度要求（大小写+数字+符号）的随机密码。
-  const randomPassword = () => {
-    const charset =
-      'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%^&*'
-    const values = new Uint32Array(16)
-    crypto.getRandomValues(values)
-    return Array.from(values, (value) => charset[value % charset.length]).join(
-      ''
-    )
-  }
   const [showResetDialog, setShowResetDialog] = useState<UserItem | null>(null)
   const [resetPasswordValue, setResetPasswordValue] = useState('')
 
@@ -501,48 +484,41 @@ export function UserManagement() {
         })
       )
       setDeletingUser(null)
+      // 账号已不存在，详情弹窗不能再留着展示它（删除入口就在详情里）。
+      setDetailUser(null)
     },
-    onError: (err: Error) => {
+    // 拒绝删除的原因（超级管理员不可删 / 系统里将不再有管理员）必须当场告知，
+    // 否则弹窗停留在原地，用户不知道为什么删不掉。
+    onError: (error) => {
+      if (
+        error instanceof ApiError &&
+        error.code === 'user_super_admin_not_deletable'
+      ) {
+        toast.error(
+          t(
+            'userManagement.messages.superAdminNotDeletable',
+            '超级管理员账号不支持删除，请改用停用（停用前需要另有启用账号持有系统管理员角色）。'
+          )
+        )
+        return
+      }
+      if (
+        error instanceof ApiError &&
+        error.code === 'user_last_administrator'
+      ) {
+        toast.error(
+          t(
+            'userManagement.messages.lastAdministratorNeedsManager',
+            '当前没有其他启用账号持有「系统管理员」角色，操作后没人能接管管理面。请先把该角色分配给另一个启用账号，再继续。'
+          )
+        )
+        return
+      }
       toast.error(
-        err.message ||
+        translateError(error, t) ||
           t('common.messages.failedToDelete', {
-            resource: t('common.fields.user', 'user'),
-            defaultValue: 'Failed to delete user',
-          })
-      )
-    },
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (data: {
-      username: string
-      name?: string
-      password: string
-      email?: string
-      phone?: string
-      wechat?: string
-      remark?: string
-      enabled?: boolean
-      expiresAt?: string
-      groups?: string[]
-      roles?: string[]
-    }) => createPasswordUser(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-list'] })
-      toast.success(
-        t('common.messages.created', {
-          resource: t('common.fields.user', 'User'),
-          defaultValue: 'User created',
-        })
-      )
-      setShowAddDialog(false)
-    },
-    onError: (err: Error) => {
-      toast.error(
-        err.message ||
-          t('common.messages.failedToCreate', {
-            resource: t('common.fields.user', 'user'),
-            defaultValue: 'Failed to create user',
+            resource: t('common.fields.user', '用户'),
+            defaultValue: '删除用户失败',
           })
       )
     },
@@ -555,70 +531,25 @@ export function UserManagement() {
       toast.success(t('common.messages.passwordReset', 'Password reset'))
       setShowResetDialog(null)
     },
-    onError: (err: Error) => {
+    onError: (error) => {
+      // 后端密码策略失败（长度/强度/历史密码重复 等）必须展示给用户，
+      // 否则弹窗停留在原地且没有任何反馈。
       toast.error(
-        err.message ||
-          t('common.messages.failedToResetPassword', 'Failed to reset password')
-      )
-    },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<UserItem> }) =>
-      updateUser(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-list'] })
-      toast.success(
-        t('common.messages.updated', {
-          resource: t('common.fields.user', 'User'),
-          defaultValue: 'User updated',
-        })
-      )
-      setEditingUser(null)
-    },
-    onError: (err: Error) => {
-      toast.error(
-        err.message ||
-          t('common.messages.failedToUpdate', {
-            resource: t('common.fields.user', 'user'),
-            defaultValue: 'Failed to update user',
-          })
+        translateError(error, t) ||
+          t('common.messages.failedToResetPassword', '重置密码失败')
       )
     },
   })
 
   const handleDelete = () => {
     if (!deletingUser) return
+    // 能否删除由后端判定（超级管理员只在还有别的账号能管设置时才允许）：
+    // 拒绝原因会原样显示给用户，不在前端重复一套规则。
     deleteMutation.mutate(deletingUser.id)
   }
 
   const handleResetPassword = (u: UserItem) => {
     setShowResetDialog(u)
-  }
-
-  const handleCreateUser = (e: React.FormEvent) => {
-    e.preventDefault()
-    createMutation.mutate({
-      username: newUser.username,
-      name: newUser.name,
-      password: newUser.password,
-    })
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingUser) return
-    const data: Partial<UserItem> = {
-      avatar_url: editingUser.avatar_url,
-    }
-    if (isNativeUser(editingUser)) {
-      data.name = editingUser.name
-      data.oidc_groups = editingUser.oidc_groups ?? []
-    }
-    updateMutation.mutate({
-      id: editingUser.id,
-      data,
-    })
   }
 
   useEffect(() => {
@@ -676,21 +607,21 @@ export function UserManagement() {
     <div>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <IconUser className="h-5 w-5" />
                 {t('common.fields.users', 'User Management')}
               </CardTitle>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-3">
               <Select
                 value={roleFilter || 'all'}
                 onValueChange={(value) =>
                   setRoleFilter(value === 'all' ? '' : value)
                 }
               >
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-44">
                   <SelectValue
                     placeholder={t('common.values.allRoles', 'All roles')}
                   />
@@ -706,6 +637,78 @@ export function UserManagement() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select
+                value={enabledFilter || 'all'}
+                onValueChange={(value) =>
+                  setEnabledFilter(value === 'all' ? '' : value)
+                }
+              >
+                <SelectTrigger className="w-36">
+                  <SelectValue
+                    placeholder={t('common.values.allStatus', 'All statuses')}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {t('common.values.allStatus', 'All statuses')}
+                  </SelectItem>
+                  <SelectItem value="true">
+                    {t('status.enabled', 'Enabled')}
+                  </SelectItem>
+                  <SelectItem value="false">
+                    {t('status.disabled', 'Disabled')}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={providerFilter || 'all'}
+                onValueChange={(value) =>
+                  setProviderFilter(value === 'all' ? '' : value)
+                }
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue
+                    placeholder={t(
+                      'common.values.allProviders',
+                      'All providers'
+                    )}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {t('common.values.allProviders', 'All providers')}
+                  </SelectItem>
+                  {providerOptions.map((provider) => (
+                    <SelectItem key={provider} value={provider}>
+                      {provider}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(groupOptions.length > 0 || Boolean(groupFilter)) && (
+                <Select
+                  value={groupFilter || 'all'}
+                  onValueChange={(value) =>
+                    setGroupFilter(value === 'all' ? '' : value)
+                  }
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue
+                      placeholder={t('common.values.allGroups', 'All groups')}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      {t('common.values.allGroups', 'All groups')}
+                    </SelectItem>
+                    {groupOptions.map((group) => (
+                      <SelectItem key={group} value={group}>
+                        {group}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <div className="relative">
                 <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -715,26 +718,39 @@ export function UserManagement() {
                   )}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 w-64"
+                  className="pl-9 w-56"
                 />
               </div>
-              <Button onClick={() => navigate('/settings/users/create')} className="gap-2">
-                <IconPlus className="h-4 w-4" />
-                {t('common.actions.add', 'Add')}{' '}
-                {t('common.fields.passwordUser', 'Password User')}
-              </Button>
+              {!readOnly && (
+                <Button
+                  onClick={() => setShowCreateUser(true)}
+                  className="gap-2"
+                >
+                  <IconPlus className="h-4 w-4" />
+                  {t('common.actions.add', 'Add')}{' '}
+                  {t('common.fields.passwordUser', 'Password User')}
+                </Button>
+              )}
+              {/* 与资源列表一致：最右侧的齿轮菜单用来勾选要显示的列。 */}
+              <TableColumnToggle table={table} />
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <ResourceTableView
             table={table}
-            columnCount={tableColumns.length}
+            columnCount={columns.length}
             isLoading={isLoading}
             data={data?.users}
             allPageSize={totalRowCount}
             emptyState={emptyState}
-            hasActiveFilters={Boolean(searchQuery) || Boolean(roleFilter)}
+            hasActiveFilters={
+              Boolean(searchQuery) ||
+              Boolean(roleFilter) ||
+              Boolean(enabledFilter) ||
+              Boolean(providerFilter) ||
+              Boolean(groupFilter)
+            }
             filteredRowCount={filteredRowCount}
             totalRowCount={totalRowCount}
             searchQuery={searchQuery}
@@ -745,356 +761,31 @@ export function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t('common.actions.edit', 'Edit')}{' '}
-              {t('common.fields.user', 'User')}
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm">
-                {t('common.fields.username', 'Username')}
-              </label>
-              <Input value={editingUser?.username || ''} disabled />
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('common.fields.avatarUrl', 'Avatar URL')}
-              </label>
-              <Input
-                value={editingUser?.avatar_url || ''}
-                onChange={(e) =>
-                  setEditingUser({
-                    ...(editingUser as UserItem),
-                    avatar_url: e.target.value,
-                  })
-                }
-              />
-            </div>
-            {isNativeUser(editingUser) && (
-              <div>
-                <label className="block text-sm">
-                  {t('common.fields.name', 'Name')}
-                </label>
-                <Input
-                  value={editingUser?.name || ''}
-                  onChange={(e) =>
-                    setEditingUser({
-                      ...(editingUser as UserItem),
-                      name: e.target.value,
-                    })
-                  }
-                />
-              </div>
-            )}
-            {!isNativeUser(editingUser) && (
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'userManagement.messages.externalEditHint',
-                  'This user is managed by an external source. Only the avatar can be edited here.'
-                )}
-              </p>
-            )}
-            {isNativeUser(editingUser) && (
-              <div>
-                <label className="block text-sm">
-                  {t('userManagement.fields.groups', 'Groups')}
-                </label>
-                <Input
-                  value={(editingUser?.oidc_groups ?? []).join(', ')}
-                  onChange={(e) =>
-                    setEditingUser({
-                      ...(editingUser as UserItem),
-                      oidc_groups: e.target.value
-                        .split(',')
-                        .map((g) => g.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t(
-                    'userManagement.fields.groupsHint',
-                    'Comma-separated group names. Users inherit the roles assigned to these groups.'
-                  )}
-                </p>
-              </div>
-            )}
-            <DialogFooter>
-              <Button type="submit">{t('common.actions.save', 'Save')}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {showCreateUser && (
+        <UserFormDialog onClose={() => setShowCreateUser(false)} />
+      )}
 
-      {/* Role assignment dialog */}
-      <UserRoleAssignment
-        open={!!assigning}
-        onOpenChange={(o) => {
-          if (!o) setAssigning(null)
-        }}
-        subject={
-          assigning
-            ? { type: 'user', name: userSubjectName(assigning) }
-            : undefined
-        }
-      />
-
-      {/* Add Password User Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={() => setShowAddDialog(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t('common.actions.add', 'Add')}{' '}
-              {t('common.fields.passwordUser', 'Password User')}
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreateUser} className="space-y-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t('createUser.sections.account', '账户')}
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('common.fields.username', 'Username')}
-              </label>
-              <Input
-                value={newUser.username}
-                onChange={(e) =>
-                  setNewUser({ ...newUser, username: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('common.fields.name', 'Name')}
-              </label>
-              <Input
-                value={newUser.name}
-                onChange={(e) =>
-                  setNewUser({ ...newUser, name: e.target.value })
-                }
-              />
-            </div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t('createUser.sections.authentication', '认证')}
-            </div>
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="block text-sm">
-                  {t('common.fields.password', 'Password')}
-                </label>
-                <button
-                  type="button"
-                  className="text-xs text-primary hover:underline"
-                  onClick={() =>
-                    setNewUser({ ...newUser, password: randomPassword() })
-                  }
-                >
-                  {t('createUser.randomPassword', '随机生成')}
-                </button>
-              </div>
-              <Input
-                type="text"
-                value={newUser.password}
-                onChange={(e) =>
-                  setNewUser({ ...newUser, password: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('createUser.fields.mfaLevel', 'MFA 级别')}
-              </label>
-              <Input
-                value={t(
-                  `createUser.mfaLevels.${securityMfaPolicy}`,
-                  securityMfaPolicy === 'required'
-                    ? '强制'
-                    : securityMfaPolicy === 'optional'
-                      ? '启用（可选）'
-                      : '禁用'
-                )}
-                disabled
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t(
-                  'createUser.mfaLevelHint',
-                  '由「安全设置 → 认证策略」统一控制，用户首次登录时按策略引导绑定'
-                )}
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('userManagement.fields.groups', '用户组')}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {knownGroups.length === 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {t('createUser.noGroups', '暂无可选用户组')}
-                  </span>
-                )}
-                {knownGroups.map((group) => {
-                  const selected = newUser.groups.includes(group)
-                  return (
-                    <button
-                      key={group}
-                      type="button"
-                      onClick={() =>
-                        setNewUser({
-                          ...newUser,
-                          groups: selected
-                            ? newUser.groups.filter((item) => item !== group)
-                            : [...newUser.groups, group],
-                        })
-                      }
-                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                        selected
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {group}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('common.fields.email', 'Email')}
-              </label>
-              <Input
-                type="email"
-                value={newUser.email}
-                placeholder="user@example.com"
-                onChange={(e) =>
-                  setNewUser({ ...newUser, email: e.target.value })
-                }
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm">
-                  {t('common.fields.phone', 'Phone')}
-                </label>
-                <Input
-                  value={newUser.phone}
-                  onChange={(e) =>
-                    setNewUser({ ...newUser, phone: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-sm">
-                  {t('common.fields.wechat', 'WeChat')}
-                </label>
-                <Input
-                  value={newUser.wechat}
-                  onChange={(e) =>
-                    setNewUser({ ...newUser, wechat: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('common.fields.remark', 'Remark')}
-              </label>
-              <Input
-                value={newUser.remark}
-                onChange={(e) =>
-                  setNewUser({ ...newUser, remark: e.target.value })
-                }
-              />
-            </div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t('createUser.sections.security', '安全')}
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm">
-                {t('common.fields.enabled', 'Active')}
-              </label>
-              <Switch
-                checked={newUser.enabled}
-                onCheckedChange={(checked) =>
-                  setNewUser({ ...newUser, enabled: checked })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('createUser.fields.expiresAt', '失效日期')}
-              </label>
-              <Input
-                type="date"
-                value={newUser.expiresAt ? newUser.expiresAt.slice(0, 10) : ''}
-                onChange={(e) =>
-                  setNewUser({
-                    ...newUser,
-                    expiresAt: e.target.value
-                      ? new Date(`${e.target.value}T23:59:59`).toISOString()
-                      : '',
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-sm">
-                {t('common.fields.roles', '系统角色')}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {roles.length === 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {t('createUser.noRoles', '暂无可选角色')}
-                  </span>
-                )}
-                {roles.map((role) => {
-                  const selected = newUser.roles.includes(role.name)
-                  return (
-                    <button
-                      key={role.name}
-                      type="button"
-                      onClick={() =>
-                        setNewUser({
-                          ...newUser,
-                          roles: selected
-                            ? newUser.roles.filter((item) => item !== role.name)
-                            : [...newUser.roles, role.name],
-                        })
-                      }
-                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                        selected
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {role.name}
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t(
-                  'createUser.securityHint',
-                  '用户组与系统角色可在这里直接设置，也可在创建后通过列表的「分配」操作调整。'
-                )}
-              </p>
-            </div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t('createUser.sections.other', '其它')}
-            </div>
-            <DialogFooter>
-              <Button type="submit">
-                {t('common.actions.create', 'Create')}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* 用户详情：点用户名 / 头像或行内「编辑」打开，资料编辑与管理操作都在这里。
+          渲染顺序放在重置密码 / 删除确认弹窗之前，后挂载的弹窗才会叠在它上面。 */}
+      {detailUser && (
+        <UserDetailDialog
+          key={detailUser.id}
+          user={detailUser}
+          editable={!readOnly}
+          onOpenChange={(open) => !open && setDetailUser(null)}
+          // 用返回对象覆盖已知字段，而不是整份替换：更新接口不回传 roles（gorm:"-"），
+          // 整份替换会让「角色」短暂变成「暂无授权角色」。
+          onSaved={(updated) =>
+            setDetailUser((prev) =>
+              prev && prev.id === updated.id ? { ...prev, ...updated } : updated
+            )
+          }
+          onToggleEnabled={handleToggleEnable}
+          onResetPassword={handleResetPassword}
+          onResetMFA={handleResetMFA}
+          onDelete={setDeletingUser}
+        />
+      )}
 
       {/* Reset Password Dialog */}
       <Dialog
@@ -1122,36 +813,14 @@ export function UserManagement() {
               <label className="block text-sm">
                 {t('common.fields.password', 'Password')}
               </label>
-              <Input
+              <PasswordInput
                 name="password"
-                type="password"
                 value={resetPasswordValue}
                 onChange={(e) => setResetPasswordValue(e.target.value)}
               />
               {(() => {
                 const value = resetPasswordValue
-                const checks = [
-                  {
-                    label: t('passwordPolicy.length', '长度至少 12 位'),
-                    ok: value.length >= 12,
-                  },
-                  {
-                    label: t('passwordPolicy.lowercase', '包含小写字母'),
-                    ok: /[a-z]/.test(value),
-                  },
-                  {
-                    label: t('passwordPolicy.uppercase', '包含大写字母'),
-                    ok: /[A-Z]/.test(value),
-                  },
-                  {
-                    label: t('passwordPolicy.number', '包含数字'),
-                    ok: /\d/.test(value),
-                  },
-                  {
-                    label: t('passwordPolicy.special', '包含特殊字符'),
-                    ok: /[^A-Za-z0-9]/.test(value),
-                  },
-                ]
+                const checks = buildPasswordRules(value, t)
                 const passed = checks.filter((c) => c.ok).length
                 return (
                   <div className="mt-2 space-y-1">
@@ -1170,7 +839,9 @@ export function UserManagement() {
                         <li
                           key={check.label}
                           className={
-                            check.ok ? 'text-green-600' : 'text-muted-foreground'
+                            check.ok
+                              ? 'text-green-600'
+                              : 'text-muted-foreground'
                           }
                         >
                           {check.ok ? '✓' : '○'} {check.label}
@@ -1186,7 +857,18 @@ export function UserManagement() {
               })()}
             </div>
             <DialogFooter>
-              <Button type="submit">{t('common.actions.save', 'Save')}</Button>
+              <Button
+                type="submit"
+                disabled={
+                  readOnly ||
+                  resetPasswordMutation.isPending ||
+                  !isPasswordRulesValid(
+                    buildPasswordRules(resetPasswordValue, t)
+                  )
+                }
+              >
+                {t('common.actions.save', 'Save')}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -23,7 +23,7 @@ export type SimpleContainer = Array<{
 }>
 
 /**
- * @link https://kubernetes.io/docs/reference/node/node-status/#condition
+ * @link 节点状态文档：https://kubernetes.io/docs/reference/node/node-status/#condition
  */
 export type NodeConditionType =
   | 'Ready'

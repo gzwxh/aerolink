@@ -53,7 +53,7 @@ samp {
   font-family: var(--font-mono);
 }
 
-/* Ensure Tailwind font utility classes respect current choice */
+/* 确保 Tailwind 字体工具类遵循当前选择 */
 .font-sans {
   font-family: var(--app-font-sans) !important;
 }
@@ -120,10 +120,10 @@ body {
   body {
     @apply bg-background text-foreground;
   }
-  /* Console text should be copyable. Browsers (Safari in particular) disable
-     selection inside buttons by default, which also affects tabs, dropdown
-     triggers, badges and menu rows. Explicit `select-none` utilities still win
-     because they live in the utilities layer. */
+  /* 控制台文本应当可复制。浏览器（尤其是 Safari）默认禁止在按钮内选中
+     文本，这也波及标签页、下拉触发器、徽标与菜单行。显式的 `select-none`
+     工具类仍然优先，
+     因为它们位于 utilities 层。 */
   button,
   [role='button'],
   [role='tab'],
@@ -141,7 +141,7 @@ body {
   }
 }
 
-/* Breathing animation for log viewer connection indicator */
+/* 日志查看器连接指示灯的呼吸动画 */
 @keyframes breathing {
   0%,
   100% {
@@ -170,7 +170,7 @@ body {
   animation: breathing 3s ease-in-out infinite;
 }
 
-/* AI Chat markdown styles */
+/* AI 对话的 markdown 样式 */
 @keyframes ai-dot-wave {
   0%,
   60%,

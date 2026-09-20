@@ -1,126 +1,104 @@
-import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
-import {
-  NODE_RESOURCE,
-  NODE_ROLE_NAME_PREFIX,
-  nodePermissionPresets,
-} from '@/lib/node-permissions'
-import { RequireAdmin } from '@/components/require-admin'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { RequireSettingsAccess } from '@/components/require-admin'
 
-import { GroupGrantsView } from './group-grants-view'
-import { NamespaceGrantsView } from './namespace-grants-view'
-import { RBACManagement } from './rbac-management'
-import { UserGrantsView } from './user-grants-view'
+import {
+  AdministratorManagement,
+  AuditorManagement,
+  SecurityAdminManagement,
+} from './administrator-management'
+import {
+  BINDING_GROUP_NEW_PARAM,
+  BINDING_GROUP_PARAM,
+  BindingGroupManagement,
+} from './binding-group-management'
+import { RBACManagement, ROLE_PARAM } from './rbac-management'
+import { RBACPermissionCatalog } from './rbac-permission-catalog'
+import { SeparationOfDutiesBanner } from './separation-of-duties-banner'
 
-type RbacTab = 'roles' | 'user' | 'group' | 'namespace' | 'node'
+// 只有「权限绑定」跟随顶栏所选集群（它的作用域就是集群 + 命名空间）；角色、权限、系统管理员、
+// 审计管理员与安全管理员都是全局的。
+type RbacTab =
+  | 'roles'
+  | 'privileges'
+  | 'binding-groups'
+  | 'administrators'
+  | 'auditors'
+  | 'security-admins'
 
-// RBAC is a section of System Settings now, so its tabs need their own query
-// param instead of sharing the settings section param (`tab`).
+const RBAC_TABS: readonly RbacTab[] = [
+  'roles',
+  'privileges',
+  'binding-groups',
+  'administrators',
+  'auditors',
+  'security-admins',
+]
+
+// RBAC 现在是系统设置下的一个分区，因此它的标签页需要自己的查询
+// 参数，而不是共用设置分区参数（`tab`）。
 const RBAC_TAB_PARAM = 'rbacTab'
 
 export function RBACView() {
-  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const tabParam = searchParams.get(RBAC_TAB_PARAM)
-  const hasNamespace = !!searchParams.get('namespace')
-  // A cluster/namespace deep link without an explicit tab lands on the
-  // per-namespace grants view.
-  const tab: RbacTab =
-    tabParam === 'user'
-      ? 'user'
-      : tabParam === 'group'
-        ? 'group'
-        : tabParam === 'node'
-          ? 'node'
-          : tabParam === 'namespace' || (!tabParam && hasNamespace)
-            ? 'namespace'
-            : 'roles'
-  const subject = searchParams.get('subject') || undefined
+  const tab: RbacTab = RBAC_TABS.includes(tabParam as RbacTab)
+    ? (tabParam as RbacTab)
+    : 'roles'
 
   const handleTabChange = (next: string) => {
     const nextParams = new URLSearchParams(searchParams)
+    // 角色详情（?role=…）与权限绑定的新增/详情（?bindingGroup=… / ?newBindingGroup=1）
+    // 都是页签内部的视图：切页签时清掉，避免切回来又停在旧的详情上。
+    nextParams.delete(ROLE_PARAM)
+    nextParams.delete(BINDING_GROUP_PARAM)
+    nextParams.delete(BINDING_GROUP_NEW_PARAM)
     if (next === 'roles') {
       nextParams.delete(RBAC_TAB_PARAM)
     } else {
       nextParams.set(RBAC_TAB_PARAM, next)
     }
-    nextParams.delete('subject')
-    setSearchParams(nextParams)
-  }
-
-  const openGroup = (group: string) => {
-    const nextParams = new URLSearchParams(searchParams)
-    nextParams.set(RBAC_TAB_PARAM, 'group')
-    nextParams.set('subject', group)
     setSearchParams(nextParams)
   }
 
   return (
-    <RequireAdmin>
+    <RequireSettingsAccess section="rbac">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {t('rbac.title', 'RBAC 管理')}
-          </CardTitle>
-        </CardHeader>
         <CardContent>
+          {/* 职责分离冲突提示放在容器上：两个页签都要看得到（解绑动作通常发生在
+              权限绑定页，而不是角色页）。 */}
+          <div className="mb-4">
+            <SeparationOfDutiesBanner />
+          </div>
           <Tabs
             value={tab}
             onValueChange={handleTabChange}
             className="flex flex-row gap-4 space-y-0 [&>[role=tabpanel]]:min-w-0 [&>[role=tabpanel]]:flex-1"
           >
-            
-          <TabsContent value="roles">
-            <RBACManagement />
-          </TabsContent>
-          <TabsContent value="user">
-            <UserGrantsView
-              key={subject || 'all'}
-              initialSubject={subject}
-              onOpenGroup={openGroup}
-            />
-          </TabsContent>
-          <TabsContent value="group">
-            <GroupGrantsView key={subject || 'all'} initialSubject={subject} />
-          </TabsContent>
-          <TabsContent value="namespace">
-            <NamespaceGrantsView
-              key={`${searchParams.get('cluster') || 'all'}-${searchParams.get('namespace') || 'all'}`}
-              initialCluster={searchParams.get('cluster') || undefined}
-              initialNamespace={searchParams.get('namespace') || undefined}
-            />
-          </TabsContent>
-          <TabsContent value="node">
-            <RBACManagement
-              resourceFilter={NODE_RESOURCE}
-              defaultResources={[NODE_RESOURCE]}
-              lockedResources={[NODE_RESOURCE]}
-              hideNamespacePanel
-              namePrefix={NODE_ROLE_NAME_PREFIX}
-              startInViewMode
-              permissionPanelTitle={t(
-                'rbac.nodePermissions.panelTitle',
-                'Node permissions'
-              )}
-              permissionHint={t(
-                'rbac.nodePermissionHint',
-                'Buttons on the node pages are shown only when the matching permission is granted.'
-              )}
-              permissionPresets={nodePermissionPresets(t)}
-            />
-          </TabsContent>
+            <TabsContent value="roles">
+              <RBACManagement />
+            </TabsContent>
+            <TabsContent value="privileges">
+              <RBACPermissionCatalog />
+            </TabsContent>
+            <TabsContent value="binding-groups">
+              <BindingGroupManagement />
+            </TabsContent>
+            <TabsContent value="administrators">
+              <AdministratorManagement />
+            </TabsContent>
+            <TabsContent value="auditors">
+              <AuditorManagement />
+            </TabsContent>
+            <TabsContent value="security-admins">
+              <SecurityAdminManagement />
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
-    </RequireAdmin>
+    </RequireSettingsAccess>
   )
 }

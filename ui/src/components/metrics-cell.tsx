@@ -52,45 +52,45 @@ export function MetricCell({
         {showBar && (
           <div className="shrink-0">
             <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="w-14 h-2 relative">
-                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-300 ${getProgressColor()}`}
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-                {showRequest && metricRequest && metricLimit && (
-                  <div
-                    className="absolute -top-0.5 h-3 flex items-center justify-center"
-                    style={{
-                      left: `${Math.min((metricRequest / metricLimit) * 100, 100)}%`,
-                      transform: 'translateX(-50%)',
-                    }}
-                  >
-                    <div className="w-0.5 h-3 bg-muted-foreground dark:bg-gray-400 rounded-sm shadow-sm"></div>
+              <TooltipTrigger asChild>
+                <div className="w-14 h-2 relative">
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${getProgressColor()}`}
+                      style={{ width: `${percentage}%` }}
+                    />
                   </div>
-                )}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <div className="text-sm grid grid-cols-2 gap-x-3 gap-y-0.5 min-w-0">
-                <span>Usage:</span>
-                <span className="text-right">{formatValue(metricValue)}</span>
-                {showRequest &&
-                  metricRequest !== undefined &&
-                  metricRequest > 0 && (
-                    <>
-                      <span>Request:</span>
-                      <span className="text-right">
-                        {formatValue(metricRequest)}
-                      </span>
-                    </>
+                  {showRequest && metricRequest && metricLimit && (
+                    <div
+                      className="absolute -top-0.5 h-3 flex items-center justify-center"
+                      style={{
+                        left: `${Math.min((metricRequest / metricLimit) * 100, 100)}%`,
+                        transform: 'translateX(-50%)',
+                      }}
+                    >
+                      <div className="w-0.5 h-3 bg-muted-foreground dark:bg-gray-400 rounded-sm shadow-sm"></div>
+                    </div>
                   )}
-                <span>{limitLabel}:</span>
-                <span className="text-right">{formatValue(metricLimit)}</span>
-              </div>
-            </TooltipContent>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-sm grid grid-cols-2 gap-x-3 gap-y-0.5 min-w-0">
+                  <span>Usage:</span>
+                  <span className="text-right">{formatValue(metricValue)}</span>
+                  {showRequest &&
+                    metricRequest !== undefined &&
+                    metricRequest > 0 && (
+                      <>
+                        <span>Request:</span>
+                        <span className="text-right">
+                          {formatValue(metricRequest)}
+                        </span>
+                      </>
+                    )}
+                  <span>{limitLabel}:</span>
+                  <span className="text-right">{formatValue(metricLimit)}</span>
+                </div>
+              </TooltipContent>
             </Tooltip>
           </div>
         )}
@@ -112,7 +112,6 @@ export function MetricCell({
     metricRequest,
     formatValue,
     limitLabel,
-    type,
     showPercentage,
     showBar,
     showRequest,

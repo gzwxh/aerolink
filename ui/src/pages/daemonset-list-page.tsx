@@ -35,7 +35,7 @@ export function DaemonSetListPage() {
   const navigate = useNavigate()
   const { namespace: namespaceParam } = useParams()
 
-  // Define columns for the daemonset table
+  // 定义 DaemonSet 表格的列
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
@@ -127,7 +127,7 @@ export function DaemonSetListPage() {
   const [batchDaemonSets, setBatchDaemonSets] = useState<DaemonSet[]>([])
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
 
-  // Restarting patches the pod template, so it needs update permission.
+  // 重启会 patch pod 模板，因此需要 update 权限。
   const canUpdate = useCanAnyNamespace()('daemonsets', 'update')
   const batchActions = useMemo<ResourceTableBatchAction<DaemonSet>[]>(
     () => [
@@ -146,8 +146,8 @@ export function DaemonSetListPage() {
   )
 
   const handleCreateClick = () => {
-    // The URL wins, then the table's persisted selection; a multi or
-    // "all namespaces" selection cannot host a new object.
+    // URL 优先，其次是表格持久化的选择；多选或
+    // "所有命名空间"的选择无法承载新对象。
     const ns = resolveCreateNamespace(
       namespaceParam,
       sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { WorkloadRevisionItem, WorkloadRevisionResourceType } from '@/types/api'
 import { rollbackWorkload, useWorkloadRevisions } from '@/lib/api'
 import { formatDate, translateError } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 
 import { Column, SimpleTable } from './simple-table'
 import { Button } from './ui/button'
@@ -107,6 +108,10 @@ export function WorkloadRevisionsTable({
   onRollbackComplete: () => Promise<unknown>
 }) {
   const { t } = useTranslation()
+  const can = useCan()
+  // 回滚是写操作：没有对应 workload 的 update 权限时不显示回滚入口，
+  // 否则点下去只会被后端拒绝。
+  const canRollback = can(resourceType, 'update', { namespace })
   const [rollingBackRevision, setRollingBackRevision] = useState<number | null>(
     null
   )
@@ -122,8 +127,8 @@ export function WorkloadRevisionsTable({
     setRollingBackRevision(revision)
     try {
       await rollbackWorkload(resourceType, namespace, name, revision)
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       setRollingBackRevision(null)
       return false
     }
@@ -219,7 +224,7 @@ export function WorkloadRevisionsTable({
               <Button variant="outline" size="sm" className="w-24" disabled>
                 {t('common.fields.current')}
               </Button>
-            ) : (
+            ) : canRollback ? (
               <WorkloadRollbackButton
                 item={item}
                 namespace={namespace}
@@ -227,7 +232,7 @@ export function WorkloadRevisionsTable({
                 disabled={rollingBackRevision !== null}
                 onRollback={handleRollback}
               />
-            )}
+            ) : null}
           </div>
         )
       },

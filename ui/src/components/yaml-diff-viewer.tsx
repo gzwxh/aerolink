@@ -26,23 +26,23 @@ import {
 import { useAppearance } from './appearance-provider'
 
 interface YamlDiffViewerProps {
-  /** Original YAML content */
+  /** 原始 YAML 内容 */
   original: string
-  /** Modified YAML content */
+  /** 修改后的 YAML 内容 */
   modified: string
-  /** Current YAML content (for current vs modified diff) */
+  /** 当前 YAML 内容（用于"当前 vs 修改后"的对比） */
   current?: string
-  /** Whether the dialog is open */
+  /** 对话框是否打开 */
   open: boolean
-  /** Callback when dialog is closed */
+  /** 对话框关闭时的回调 */
   onOpenChange: (open: boolean) => void
-  /** Callback when user wants to rollback to a specific version */
+  /** 用户想回滚到某个版本时的回调 */
   onRollback?: (yamlContent: string) => void
-  /** Whether rollback operation is in progress */
+  /** 回滚操作是否进行中 */
   isRollingBack?: boolean
-  /** Dialog title */
+  /** 对话框标题 */
   title?: string
-  /** Height of the diff editor */
+  /** diff 编辑器的高度 */
   height?: number
 }
 
@@ -74,14 +74,14 @@ export function YamlDiffViewer({
     editorRef.current = editor
   }
 
-  // Remove status field from YAML content
+  // 从 YAML 内容中移除 status 字段
   const removeStatusField = (yamlContent: string): string => {
     if (!yamlContent.trim()) return yamlContent
 
     try {
       const parsed = yaml.load(yamlContent)
       if (parsed && typeof parsed === 'object') {
-        // Remove status field recursively
+        // 递归移除 status 字段
         const removeStatus = (obj: unknown): unknown => {
           if (obj && typeof obj === 'object') {
             if (Array.isArray(obj)) {
@@ -109,7 +109,7 @@ export function YamlDiffViewer({
     return yamlContent
   }
 
-  // Determine which content to show based on diff mode
+  // 依据 diff 模式决定展示哪一份内容
   const getDiffContent = () => {
     if (diffMode === 'current-vs-modified' && current) {
       return {
@@ -125,7 +125,7 @@ export function YamlDiffViewer({
 
   const { original: leftContent, modified: rightContent } = getDiffContent()
 
-  // Handle rollback button clicks
+  // 处理回滚按钮点击
   const handleRollbackClick = (yamlContent: string) => {
     if (onRollback) {
       onRollback(yamlContent)
@@ -139,7 +139,7 @@ export function YamlDiffViewer({
           <DialogTitle className="flex items-center justify-between">
             <span className="text-lg font-bold">{title}</span>
             <div className="flex items-center gap-2 mr-4">
-              {current && (
+              {current && onRollback && (
                 <>
                   {diffMode === 'current-vs-modified' && (
                     <Button

@@ -8,7 +8,7 @@ export function VersionInfo() {
   const handleCommitClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // GitHub repository URL - you can modify this to match your repository
+    // GitHub 仓库 URL——可以改成你仓库的地址
     const repoUrl = 'https://github.com/zxh326/kite'
     const commitUrl = `${repoUrl}/commit/${versionInfo.commitId}`
     window.open(commitUrl, '_blank')

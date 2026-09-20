@@ -1,37 +1,59 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
+  IconArrowLeft,
   IconLoader2,
+  IconNotes,
   IconPencil,
   IconPlus,
   IconSearch,
+  IconShieldCheck,
   IconTrash,
   IconUsers,
   IconX,
 } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
+import {
+  ColumnDef,
+  ColumnFiltersState,
+  getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  PaginationState,
+  SortingState,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
+  addGroupMember,
   createGroup,
   deleteGroup as deleteGroupApi,
-  fetchKnownGroups,
+  fetchGroupMembers,
+  fetchKnownGroupDetails,
   fetchUserList,
+  removeGroupMember,
   renameGroup as renameGroupApi,
+  updateGroupDescription,
   useRoleList,
-  updateUser,
+  type GroupSource,
+  type KnownGroupDetail,
 } from '@/lib/api'
-import { useCluster } from '@/hooks/use-cluster'
-import { cn, formatDate, translateError } from '@/lib/utils'
-import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { ApiError } from '@/lib/api-client'
+import { formatDate } from '@/lib/utils'
+import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -42,7 +64,19 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { MultiSelect } from '@/components/multi-select'
+import { ResourceTableView } from '@/components/resource-table-view'
+import { TableColumnToggle } from '@/components/table-column-toggle'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 interface MemberInfo {
   id: number
@@ -56,87 +90,137 @@ interface MemberInfo {
 
 interface GroupEntry {
   name: string
-  /** Local users whose profile carries this group and can be edited. */
+  /** 组本身的来源：本地创建，还是目录同步发现（决定能不能在这里改名/删除）。 */
+  source: GroupSource
+  /** 控制台的本地备注：不参与授权，也不参与目录同步，目录组同样可以标注。 */
+  description: string
+  /** 资料中包含该组、且可编辑的本地用户。 */
   editableMembers: MemberInfo[]
-  /** External (LDAP / OIDC) users; membership is directory-managed. */
+  /** 外部（LDAP / OIDC）用户；成员关系由目录管理。 */
   externalMembers: MemberInfo[]
-  /** Granted via RBAC role assignments; may have no members. */
-  hasRoleGrant: boolean
+  /** 授予该组的 RBAC 角色名称。 */
+  grantedRoleNames: string[]
 }
+
+// 详情页的成员表：用户名 / 状态 / 认证方式 / 最后登录 四列等宽平分（含表头），
+// 末尾留一个固定宽度的操作列，内容统一居中。
+const MEMBER_ROW_GRID =
+  'grid grid-cols-[1fr_1fr_1fr_1fr_2.5rem] items-center gap-3'
 
 const isNative = (provider: string) => !provider || provider === 'password'
 
+// 详情页选中的用户组放在 URL 上（?tab=group&group=<组名>）：
+// 设置页据此把组名接到面包屑末尾，刷新 / 前进后退也能停在同一组的详情上。
+const GROUP_PARAM = 'group'
+
+const memberCount = (group: GroupEntry) =>
+  group.editableMembers.length + group.externalMembers.length
+
 /**
- * Settings sub-tab for user groups: create local groups, manage members and
- * jump to the group's RBAC grants. Group membership lives on user profiles
- * (oidc_groups); external users are directory-managed and read-only here.
+ * 用户组的设置子标签页：创建本地组、管理成员，并
+ * 跳转到该组的 RBAC 授权。组成员关系保存在用户资料上
+ * （oidc_groups）；外部用户由目录管理，这里只读。
  */
 export function UserGroupsTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { currentCluster } = useCluster()
+  // 只读章节（只有 settings.<章节> 的读权限）时不渲染任何写入口。
+  const { readOnly } = useSettingsSectionAccess()
   const { data: roles = [] } = useRoleList()
 
   const [allUsers, setAllUsers] = useState<MemberInfo[]>([])
-  const [persistedGroups, setPersistedGroups] = useState<string[]>([])
+  // 已知用户组实体：来源（本地 / LDAP / OIDC）+ 控制台描述。目录组也只改目录，
+  // 不是在这里改名或删除的对象。
+  const [knownGroups, setKnownGroups] = useState<
+    Record<string, KnownGroupDetail>
+  >({})
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
+  // 详情页当前打开的用户组（null = 停留在列表页）：点击组名进入，点「返回列表」或改名/删除成功后退回列表。
+  const [searchParams, setSearchParams] = useSearchParams()
+  const detailGroupName = searchParams.get(GROUP_PARAM)
+  // 用 useCallback 包起来：列定义（useMemo）依赖它，普通函数每次渲染都换身份，
+  // 会让列定义无法复用（并被 react-hooks 提示缺少依赖）。
+  const setDetailGroupName = useCallback(
+    (name: string | null) => {
+      const next = new URLSearchParams(searchParams)
+      if (name) {
+        next.set(GROUP_PARAM, name)
+      } else {
+        next.delete(GROUP_PARAM)
+      }
+      // replace：列表 ↔ 详情之间切换不堆历史记录，浏览器的后退语义仍是「离开设置页」。
+      setSearchParams(next, { replace: true })
+    },
+    [searchParams, setSearchParams]
+  )
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
+  })
+  const [sorting, setSorting] = useState<SortingState>([])
+  // 列过滤（目前只有「来源」一列）：数据是整表载入的，沿用资源列表的分面过滤。
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  // 列显示偏好：与资源列表（/deployments 等）一致，用齿轮菜单勾选，并持久化。
+  // 用户组列表是全局数据，不带集群前缀。
+  const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
+    'kite-user-groups-columnVisibility'
+  )
 
   const [showAddGroup, setShowAddGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupDescription, setNewGroupDescription] = useState('')
   const [newGroupMembers, setNewGroupMembers] = useState<string[]>([])
   const [isCreating, setIsCreating] = useState(false)
 
   const [showAddMember, setShowAddMember] = useState(false)
   const [addMemberSelection, setAddMemberSelection] = useState<string[]>([])
   const [isMutating, setIsMutating] = useState(false)
+  // 展开组的成员关系来源（用户名 → local / ldap / oidc）：决定能不能在这里移除。
+  const [memberSources, setMemberSources] = useState<Record<string, string>>({})
 
   const [showRename, setShowRename] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+  const [showDescription, setShowDescription] = useState(false)
+  const [descriptionValue, setDescriptionValue] = useState('')
   const [showDelete, setShowDelete] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const collected: MemberInfo[] = []
-        for (let page = 1; ; page++) {
-          const res = await fetchUserList(page, 500, '')
-          collected.push(
-            ...(res.users || []).map((u) => ({
-              id: u.id,
-              username: u.username,
-              displayName: u.name,
-              enabled: u.enabled,
-              provider: u.provider,
-              lastLoginAt: u.lastLoginAt,
-              groups: u.oidc_groups || [],
-            }))
-          )
-          if (
-            collected.length >= res.total ||
-            (res.users || []).length === 0
-          ) {
-            break
-          }
+  const loadUsers = useCallback(async () => {
+    try {
+      const collected: MemberInfo[] = []
+      for (let page = 1; ; page++) {
+        const res = await fetchUserList(page, 500, '')
+        collected.push(
+          ...(res.users || []).map((u) => ({
+            id: u.id,
+            username: u.username,
+            displayName: u.name,
+            enabled: u.enabled,
+            provider: u.provider,
+            lastLoginAt: u.lastLoginAt,
+            groups: u.oidc_groups || [],
+          }))
+        )
+        if (collected.length >= res.total || (res.users || []).length === 0) {
+          break
         }
-        if (!cancelled) setAllUsers(collected)
-      } finally {
-        if (!cancelled) setIsLoading(false)
       }
-    })()
-    return () => {
-      cancelled = true
+      setAllUsers(collected)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 
-  // Groups persisted as entities (visible even with no members or grants).
+  useEffect(() => {
+    void loadUsers().catch(() => setIsLoading(false))
+  }, [loadUsers])
+
+  // 作为实体持久化的组（即使没有成员或授权也可见）。
   const refreshPersistedGroups = async () => {
     try {
-      setPersistedGroups(await fetchKnownGroups())
+      setKnownGroups(await fetchKnownGroupDetails())
     } catch {
-      // Non-fatal: derived groups from users/roles still render.
+      // 非致命：从用户/角色推导出的组仍会渲染。
     }
   }
 
@@ -151,29 +235,36 @@ export function UserGroupsTab() {
       if (!entry) {
         entry = {
           name,
+          source: knownGroups[name]?.source ?? 'local',
+          description: knownGroups[name]?.description ?? '',
           editableMembers: [],
           externalMembers: [],
-          hasRoleGrant: false,
+          grantedRoleNames: [],
         }
         map.set(name, entry)
       }
       return entry
     }
 
-    for (const name of persistedGroups) {
+    for (const name of Object.keys(knownGroups)) {
       ensure(name)
     }
 
     for (const role of roles) {
       for (const assignment of role.assignments || []) {
         if (assignment.subjectType === 'group') {
-          ensure(assignment.subject).hasRoleGrant = true
+          const entry = ensure(assignment.subject)
+          if (!entry.grantedRoleNames.includes(role.name)) {
+            entry.grantedRoleNames.push(role.name)
+          }
         }
       }
     }
 
     for (const user of allUsers) {
       for (const group of user.groups) {
+        // 历史脏数据可能带空字符串组名，跳过避免出现"空名组"。
+        if (!group.trim()) continue
         const entry = ensure(group)
         const member: MemberInfo = user
         if (isNative(user.provider)) {
@@ -184,10 +275,8 @@ export function UserGroupsTab() {
       }
     }
 
-    return Array.from(map.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    )
-  }, [roles, allUsers, persistedGroups])
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [roles, allUsers, knownGroups])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -195,37 +284,102 @@ export function UserGroupsTab() {
     return groups.filter((g) => g.name.toLowerCase().includes(q))
   }, [groups, search])
 
-  const selectedGroup =
-    filtered.find((g) => g.name === selected) ?? filtered[0]
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+  }, [search, sorting])
 
-  const allMembers = selectedGroup
-    ? [...selectedGroup.editableMembers, ...selectedGroup.externalMembers]
+  const activeGroup = groups.find((g) => g.name === detailGroupName) ?? null
+  const allMembers = activeGroup
+    ? [...activeGroup.editableMembers, ...activeGroup.externalMembers]
     : []
 
-  const nativeUserOptions = useMemo(
-    () =>
-      allUsers
-        .filter((u) => isNative(u.provider))
-        .map((u) => u.username)
-        .sort((a, b) => a.localeCompare(b)),
+  // 可选成员：**所有**账号（含 LDAP / OIDC）。目录账号被加进本地组时记为「本地附加」
+  // 成员关系（group_members.source = local），目录同步不会把它移除，
+  // 因此可以在这里直接维护。
+  const memberUserOptions = useMemo(
+    () => allUsers.map((u) => u.username).sort((a, b) => a.localeCompare(b)),
     [allUsers]
   )
 
-  const setMemberGroups = async (
-    member: MemberInfo,
-    nextGroups: string[]
-  ) => {
-    await updateUser(member.id, { oidc_groups: nextGroups })
-    setAllUsers((prev) =>
-      prev.map((u) => (u.id === member.id ? { ...u, groups: nextGroups } : u))
-    )
+  const loadGroupMembers = useCallback(async (groupName: string | null) => {
+    if (!groupName) {
+      setMemberSources({})
+      return
+    }
+    try {
+      const members = await fetchGroupMembers(groupName)
+      setMemberSources(
+        Object.fromEntries(members.map((m) => [m.username, m.source]))
+      )
+    } catch {
+      // 非致命：拿不到来源时按账号类型兜底判断可否移除。
+      setMemberSources({})
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadGroupMembers(detailGroupName)
+  }, [detailGroupName, allUsers, loadGroupMembers])
+
+  // 成员关系是否为本地来源（可在此移除）：
+  // 有来源记录时以它为准（目录同步来的组关系不能在这里删）；没有记录时
+  // 目录账号宁可保守处理，本地账号的成员关系一定是本地来源。
+  const isLocalMembership = (member: MemberInfo) => {
+    const source = memberSources[member.username]
+    if (source) return source === 'local'
+    return isNative(member.provider)
   }
 
-  const invalidate = () => {
+  const invalidate = async () => {
     queryClient.invalidateQueries({ queryKey: ['user-list'] })
     queryClient.invalidateQueries({ queryKey: ['role-list'] })
     void refreshPersistedGroups()
+    // 组的成员列表由 users.oidc_groups 推导，成员关系改完必须重拉用户列表，
+    // 否则界面停留在旧数据上（曾经表现为"保存成功但看不到"）。
+    await loadUsers()
+    await loadGroupMembers(detailGroupName)
   }
+
+  // 四个弹窗各自持有草稿，关闭即丢弃：逐个拦截遮罩点击 / Esc / 右上角 X，有改动时先确认。
+  // 四个草稿都在打开时被重置（Add Group / Add Members 置空，Rename / Description 写入
+  // 当前组名 / 原描述），所以基线显式给出，不依赖「首次渲染」那份值。
+  const isAddGroupDirty = useDraftDirty(
+    {
+      name: newGroupName,
+      description: newGroupDescription,
+      members: newGroupMembers,
+    },
+    { name: '', description: '', members: [] }
+  )
+  const closeAddGroup = useCallback(() => setShowAddGroup(false), [])
+  const addGroupGuard = useUnsavedChangesGuard({
+    dirty: isAddGroupDirty,
+    onClose: closeAddGroup,
+  })
+
+  const isAddMemberDirty = useDraftDirty(addMemberSelection, [])
+  const closeAddMember = useCallback(() => setShowAddMember(false), [])
+  const addMemberGuard = useUnsavedChangesGuard({
+    dirty: isAddMemberDirty,
+    onClose: closeAddMember,
+  })
+
+  const isRenameDirty = useDraftDirty(renameValue, activeGroup?.name ?? '')
+  const closeRename = useCallback(() => setShowRename(false), [])
+  const renameGuard = useUnsavedChangesGuard({
+    dirty: isRenameDirty,
+    onClose: closeRename,
+  })
+
+  const isDescriptionDirty = useDraftDirty(
+    descriptionValue,
+    activeGroup?.description ?? ''
+  )
+  const closeDescription = useCallback(() => setShowDescription(false), [])
+  const descriptionGuard = useUnsavedChangesGuard({
+    dirty: isDescriptionDirty,
+    onClose: closeDescription,
+  })
 
   const handleCreateGroup = async () => {
     const groupName = newGroupName.trim()
@@ -237,18 +391,16 @@ export function UserGroupsTab() {
 
     setIsCreating(true)
     try {
-      // Persist the group as an entity first so it stays visible even when
-      // no members are selected (members are optional).
+      // 先把该组作为实体持久化，这样即使没有选择任何成员
+      // 它也能保持可见（成员是可选的）。
       try {
-        await createGroup(groupName)
+        await createGroup(groupName, newGroupDescription.trim())
       } catch {
-        // Tolerate duplicates: an implicitly existing group (referenced by
-        // users or grants) may not be persisted yet but is equally valid.
+        // 容忍重复：一个隐式已存在的组（被用户或授权引用）
+        // 可能尚未持久化，但同样合法。
       }
       for (const username of newGroupMembers) {
-        const member = allUsers.find((u) => u.username === username)
-        if (!member || !isNative(member.provider)) continue
-        await setMemberGroups(member, [...member.groups, groupName])
+        await addGroupMember(groupName, username)
       }
       await invalidate()
       toast.success(
@@ -257,77 +409,76 @@ export function UserGroupsTab() {
           defaultValue: 'User group {{name}} created',
         })
       )
-      setSelected(groupName)
-      setShowAddGroup(false)
+      closeAddGroup()
       setNewGroupName('')
+      setNewGroupDescription('')
       setNewGroupMembers([])
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsCreating(false)
     }
   }
 
   const handleAddMembers = async () => {
-    if (!selectedGroup || addMemberSelection.length === 0) return
+    if (!activeGroup || addMemberSelection.length === 0) return
     setIsMutating(true)
     try {
+      // 走逐成员接口而不是整份更新用户：目录账号的 groups 字段会被后端
+      // 静默忽略（源系统管辖），旧写法对 LDAP / OIDC 用户表现为「保存成功但没加上」。
       for (const username of addMemberSelection) {
-        const member = allUsers.find((u) => u.username === username)
-        if (!member || member.groups.includes(selectedGroup.name)) continue
-        await setMemberGroups(member, [...member.groups, selectedGroup.name])
+        await addGroupMember(activeGroup.name, username)
       }
       await invalidate()
       toast.success(t('userManagement.memberAdded', 'Members added'))
-      setShowAddMember(false)
+      closeAddMember()
       setAddMemberSelection([])
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsMutating(false)
     }
   }
 
-  const handleRemoveMember = async (member: MemberInfo) => {
-    if (!selectedGroup) return
+  const handleRemoveMember = async (groupName: string, member: MemberInfo) => {
     setIsMutating(true)
     try {
-      await setMemberGroups(
-        member,
-        member.groups.filter((g) => g !== selectedGroup.name)
-      )
+      await removeGroupMember(groupName, member.username)
       await invalidate()
       toast.success(t('userManagement.memberRemoved', 'Member removed'))
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch (error) {
+      // 目录同步来的成员关系只能在目录里改，把后端的原因说清楚，
+      // 不要让界面看起来像成功了。
+      if (
+        error instanceof ApiError &&
+        error.code === 'group_member_directory_managed'
+      ) {
+        toast.error(
+          t('userManagement.memberDirectoryManaged', {
+            username: member.username,
+            defaultValue:
+              "{{username}}'s membership comes from the directory; remove it there.",
+          })
+        )
+      }
+      // 其余失败已由 API 客户端统一写入站内信
     } finally {
       setIsMutating(false)
     }
   }
 
-  const addMemberOptions = nativeUserOptions.filter(
+  const addMemberOptions = memberUserOptions.filter(
     (username) => !allMembers.some((m) => m.username === username)
   )
 
-  // Roles that currently carry a group-subject grant for the selected group.
-  const grantedRoles = useMemo(() => {
-    if (!selectedGroup) return []
-    const result: { id: number; name: string }[] = []
-    for (const role of roles) {
-      if (
-        (role.assignments || []).some(
-          (a) => a.subjectType === 'group' && a.subject === selectedGroup.name
-        )
-      ) {
-        result.push({ id: role.id, name: role.name })
-      }
-    }
-    return result
-  }, [roles, selectedGroup])
+  // 当前为展开的组持有"组主体"授权的角色。
+  const grantedRoles = (activeGroup?.grantedRoleNames ?? []).map((name) => ({
+    name,
+  }))
 
   const handleRenameGroup = async () => {
-    if (!selectedGroup) return
-    const oldName = selectedGroup.name
+    if (!activeGroup) return
+    const oldName = activeGroup.name
     const newName = renameValue.trim()
     if (!newName || newName === oldName) return
     if (groups.some((g) => g.name === newName)) {
@@ -337,8 +488,8 @@ export function UserGroupsTab() {
 
     setIsMutating(true)
     try {
-      // Backend renames the entity plus every reference (user profiles and
-      // role assignments) in one transaction.
+      // 后端在一个事务中重命名该实体及其每一处引用（用户资料与
+      // 角色授权）。
       await renameGroupApi(oldName, newName)
       setAllUsers((prev) =>
         prev.map((u) => ({
@@ -354,23 +505,48 @@ export function UserGroupsTab() {
           defaultValue: 'Group renamed to {{newName}}',
         })
       )
-      setSelected(newName)
-      setShowRename(false)
-    } catch (err) {
+      // 改名后回到列表页：名字已经变了，继续停在旧名字的详情上会让人以为没生效。
+      setDetailGroupName(null)
+      closeRename()
+    } catch {
       await invalidate()
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } finally {
+      setIsMutating(false)
+    }
+  }
+
+  // 描述只是控制台的本地备注：不改名、不动授权、不参与目录同步，因此目录组也能标注。
+  const handleUpdateDescription = async () => {
+    if (!activeGroup) return
+    const description = descriptionValue.trim()
+    if (description === activeGroup.description) {
+      closeDescription()
+      return
+    }
+
+    setIsMutating(true)
+    try {
+      await updateGroupDescription(activeGroup.name, description)
+      await invalidate()
+      toast.success(
+        t('userManagement.groupDescriptionUpdated', 'Description updated')
+      )
+      closeDescription()
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsMutating(false)
     }
   }
 
   const handleDeleteGroup = async () => {
-    if (!selectedGroup) return
-    const groupName = selectedGroup.name
+    if (!activeGroup) return
+    const groupName = activeGroup.name
     setIsMutating(true)
     try {
-      // Backend deletes the entity and cleans up every reference (memberships
-      // on user profiles and group-subject role assignments) atomically.
+      // 后端原子地删除该实体并清理每一处引用（用户资料上的成员关系
+      // 与以组为主体的角色授权）。
       await deleteGroupApi(groupName)
       setAllUsers((prev) =>
         prev.map((u) => ({
@@ -385,249 +561,540 @@ export function UserGroupsTab() {
           defaultValue: 'Group {{name}} deleted',
         })
       )
-      setSelected(null)
+      setDetailGroupName(null)
       setShowDelete(false)
-    } catch (err) {
+    } catch {
       await invalidate()
-      toast.error(translateError(err, t))
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsMutating(false)
     }
   }
 
-  return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <Card className="shrink-0 lg:w-64">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <IconUsers className="h-4 w-4" />
-            {t('userManagement.groupsTabTitle', 'User Groups')}
-            <Badge variant="secondary" className="ml-auto">
-              {groups.length}
-            </Badge>
-          </CardTitle>
-          <div className="relative">
-            <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('common.placeholders.searchItems', 'Search...')}
-              className="h-8 pl-8 text-sm"
-            />
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full gap-2"
-            onClick={() => {
-              setNewGroupName('')
-              setNewGroupMembers([])
-              setShowAddGroup(true)
-            }}
-          >
-            <IconPlus className="h-4 w-4" />
-            {t('userManagement.addGroup', 'Add User Group')}
-          </Button>
-        </CardHeader>
-        <CardContent className="p-2 pt-0">
-          <nav className="space-y-1">
-            {filtered.map((group) => (
+  const columns = useMemo<ColumnDef<GroupEntry>[]>(
+    () => [
+      {
+        accessorKey: 'name',
+        header: t('userManagement.groupName', 'Group Name'),
+        cell: ({ row }) => {
+          const group = row.original
+          return (
+            <div className="min-w-0">
               <button
-                key={group.name}
                 type="button"
-                onClick={() => setSelected(group.name)}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
-                  (selectedGroup?.name || '') === group.name && 'bg-accent'
-                )}
+                className="flex items-center gap-2 text-left hover:text-primary"
+                onClick={() => setDetailGroupName(group.name)}
               >
                 <IconUsers className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span
-                  className="min-w-0 flex-1 truncate font-medium"
+                  className="min-w-0 truncate font-medium"
                   title={group.name}
                 >
                   {group.name}
                 </span>
-                <Badge variant="secondary" className="shrink-0 text-xs">
-                  {group.editableMembers.length + group.externalMembers.length}
-                </Badge>
               </button>
-            ))}
-            {filtered.length === 0 && (
-              <div className="px-3 py-4 text-sm text-muted-foreground">
-                {isLoading
-                  ? t('common.messages.loading', 'Loading...')
-                  : t(
-                      'userManagement.groupsEmpty',
-                      'No groups found. Groups come from LDAP / OIDC sync or user profiles.'
-                    )}
-              </div>
+            </div>
+          )
+        },
+      },
+      {
+        accessorKey: 'description',
+        header: t('userManagement.groupDescription', 'Description'),
+        cell: ({ row }) => {
+          const description = row.original.description
+          if (!description) {
+            return <span className="text-sm text-muted-foreground">-</span>
+          }
+          return (
+            <div
+              className="line-clamp-2 max-w-[24rem] text-sm break-words text-muted-foreground"
+              title={description}
+            >
+              {description}
+            </div>
+          )
+        },
+      },
+      {
+        id: 'source',
+        header: t('userManagement.groupSource', 'Source'),
+        accessorFn: (group) => group.source,
+        enableColumnFilter: true,
+        filterFn: 'equalsString',
+        cell: ({ row }) => {
+          const source = row.original.source
+          return (
+            <Badge
+              variant={source === 'local' ? 'outline' : 'secondary'}
+              className="text-xs"
+            >
+              {source === 'local'
+                ? t('userManagement.groupSourceLocal', 'Local')
+                : source.toUpperCase()}
+            </Badge>
+          )
+        },
+      },
+      {
+        id: 'members',
+        header: t('userManagement.members', 'Members'),
+        accessorFn: (group) => memberCount(group),
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              {memberCount(row.original)}
+            </Badge>
+            {row.original.externalMembers.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {t('userManagement.membersBreakdown', {
+                  local: row.original.editableMembers.length,
+                  external: row.original.externalMembers.length,
+                  defaultValue: '{{local}} local · {{external}} external',
+                })}
+              </span>
             )}
-          </nav>
-        </CardContent>
-      </Card>
+          </div>
+        ),
+      },
+      {
+        id: 'roles',
+        header: t('userManagement.grantedRoles', 'Granted roles'),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const names = row.original.grantedRoleNames
+          if (names.length === 0) {
+            return <span className="text-sm text-muted-foreground">-</span>
+          }
+          const shown = names.slice(0, 2)
+          return (
+            <div
+              className="flex flex-wrap items-center justify-center gap-1"
+              title={names.join(', ')}
+            >
+              {shown.map((name) => (
+                <Badge key={name} variant="outline" className="text-xs">
+                  {name}
+                </Badge>
+              ))}
+              {names.length > shown.length && (
+                <span className="text-xs text-muted-foreground">
+                  +{names.length - shown.length}
+                </span>
+              )}
+            </div>
+          )
+        },
+      },
+    ],
+    [setDetailGroupName, t]
+  )
 
-      <div className="min-w-0 flex-1 space-y-4">
-        {!selectedGroup ? (
-          <div className="flex items-center justify-center rounded-md border border-dashed py-16 text-muted-foreground">
+  const table = useReactTable<GroupEntry>({
+    data: filtered,
+    columns,
+    state: { pagination, sorting, columnVisibility, columnFilters },
+    onPaginationChange: setPagination,
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
+  })
+
+  // 「来源」过滤器的候选项：与资源列表一致，取当前数据里实际出现过的值。
+  const sourceColumn = table.getColumn('source')
+  const sourceOptions = sourceColumn
+    ? Array.from(sourceColumn.getFacetedUniqueValues().keys())
+        .filter(Boolean)
+        .map(String)
+        .sort((a, b) => a.localeCompare(b))
+    : []
+
+  // 某个组的成员列表，渲染在它的可展开行中。
+  const renderMembers = (group: GroupEntry) => {
+    const members = [...group.editableMembers, ...group.externalMembers]
+    return (
+      <div className="overflow-hidden rounded-md border bg-background">
+        <div
+          className={`${MEMBER_ROW_GRID} border-b bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground`}
+        >
+          <span className="text-center">
+            {t('common.fields.username', 'Username')}
+          </span>
+          <span className="text-center">
+            {t('common.fields.status', 'Status')}
+          </span>
+          <span className="text-center">
+            {t('common.fields.provider', 'Provider')}
+          </span>
+          <span className="text-center">
+            {t('common.fields.lastLoginAt', 'Last Login')}
+          </span>
+          <span />
+        </div>
+        {members.length === 0 ? (
+          <div className="px-3 py-6 text-center text-sm text-muted-foreground">
             {t(
-              'userManagement.selectGroupHint',
-              'Select a group to view its members.'
+              'userManagement.noMembers',
+              'No members. Add local users to this group.'
             )}
           </div>
         ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <IconUsers className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-xl font-semibold">{selectedGroup.name}</h2>
-              <Badge variant="secondary">
-                {t('userManagement.membersCount', {
-                  count: allMembers.length,
-                  defaultValue: '{{count}} member(s)',
-                })}
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto"
-                onClick={() => {
-                  setAddMemberSelection([])
-                  setShowAddMember(true)
-                }}
-              >
-                <IconPlus className="h-4 w-4" />
-                {t('userManagement.addMember', 'Add Members')}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  window.location.href = `/settings/rbac?rbacTab=group&subject=${encodeURIComponent(selectedGroup.name)}${
-                    currentCluster
-                      ? `&cluster=${encodeURIComponent(currentCluster)}`
-                      : ''
-                  }`
-                }}
-              >
-                {t('userManagement.groupGrantsLink', 'View group grants')}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                disabled={isMutating}
-                aria-label={t('common.actions.rename', 'Rename')}
-                title={t('common.actions.rename', 'Rename')}
-                onClick={() => {
-                  setRenameValue(selectedGroup.name)
-                  setShowRename(true)
-                }}
-              >
-                <IconPencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                disabled={isMutating}
-                aria-label={t('common.actions.delete', 'Delete')}
-                title={t('common.actions.delete', 'Delete')}
-                onClick={() => setShowDelete(true)}
-              >
-                <IconTrash className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              {t(
-                'userManagement.groupsInheritHint',
-                'Members inherit the roles granted to this group in RBAC management.'
-              )}
-            </p>
-
-            <div className="overflow-hidden rounded-md border">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground">
-                <span>{t('common.fields.username', 'Username')}</span>
-                <span>{t('common.fields.status', 'Status')}</span>
-                <span>{t('common.fields.provider', 'Provider')}</span>
-                <span>{t('common.fields.lastLoginAt', 'Last Login')}</span>
+          members.map((member) => (
+            <div
+              key={member.username}
+              className={`${MEMBER_ROW_GRID} border-b px-3 py-2 text-sm last:border-b-0`}
+            >
+              <div className="flex min-w-0 items-center justify-center gap-2">
+                <span className="truncate font-medium">{member.username}</span>
+                {member.displayName && (
+                  <span className="truncate text-xs text-muted-foreground">
+                    {member.displayName}
+                  </span>
+                )}
               </div>
-              {allMembers.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  {selectedGroup.hasRoleGrant
-                    ? t(
-                        'userManagement.noMembers',
-                        'No members. Add local users to this group.'
-                      )
-                    : t('userManagement.noMembers', 'No members.')}
-                </div>
-              ) : (
-                allMembers.map((member) => (
-                  <div
-                    key={member.username}
-                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0"
+              <div className="flex justify-center">
+                <Badge
+                  variant={member.enabled === false ? 'secondary' : 'default'}
+                  className="text-xs"
+                >
+                  {member.enabled === false
+                    ? t('status.disabled', 'Disabled')
+                    : t('status.enabled', 'Enabled')}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-1">
+                <span className="text-xs text-muted-foreground">
+                  {member.provider || '-'}
+                </span>
+                {!isNative(member.provider) &&
+                  (isLocalMembership(member) ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      {t('userManagement.memberSourceLocal', 'Added locally')}
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {t(
+                        'userManagement.memberSourceDirectory',
+                        'From directory'
+                      )}
+                    </Badge>
+                  ))}
+              </div>
+              <span className="text-center text-xs text-muted-foreground">
+                {member.lastLoginAt ? formatDate(member.lastLoginAt) : '-'}
+              </span>
+              <div className="flex justify-center">
+                {isLocalMembership(member) ? (
+                  !readOnly && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      disabled={isMutating}
+                      aria-label={`${t('userManagement.removeMember', 'Remove')} ${member.username}`}
+                      onClick={() =>
+                        void handleRemoveMember(group.name, member)
+                      }
+                    >
+                      <IconX className="h-3.5 w-3.5" />
+                    </Button>
+                  )
+                ) : (
+                  <span
+                    className="text-xs text-muted-foreground"
+                    title={t(
+                      'userManagement.externalMemberHint',
+                      'Managed by the directory'
+                    )}
                   >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="font-medium">{member.username}</span>
-                      {member.displayName && (
-                        <span className="text-xs text-muted-foreground">
-                          {member.displayName}
-                        </span>
-                      )}
-                      {!isNative(member.provider) && (
-                        <span
-                          className="text-xs text-muted-foreground"
-                          title={t(
-                            'userManagement.externalMemberHint',
-                            'Managed by the directory'
-                          )}
-                        >
-                          <IconLoader2 className="h-3 w-3 opacity-60" />
-                        </span>
-                      )}
-                    </div>
+                    <IconLoader2 className="h-3 w-3 opacity-60" />
+                  </span>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    )
+  }
+
+  const emptyState = (() => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-muted-foreground">
+            {t('common.messages.loading', 'Loading...')}
+          </div>
+        </div>
+      )
+    }
+    if (groups.length === 0) {
+      return (
+        <div className="py-8 text-center text-muted-foreground">
+          <IconUsers className="mx-auto mb-4 h-12 w-12 opacity-50" />
+          <p>
+            {t(
+              'userManagement.groupsEmpty',
+              'No groups found. Groups come from LDAP / OIDC sync or user profiles.'
+            )}
+          </p>
+        </div>
+      )
+    }
+    return null
+  })()
+
+  return (
+    <div>
+      <Card>
+        {activeGroup ? (
+          <>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 gap-2 text-muted-foreground"
+                    onClick={() => setDetailGroupName(null)}
+                  >
+                    <IconArrowLeft className="h-4 w-4" />
+                    {t('common.actions.backToList', '返回列表')}
+                  </Button>
+                  <CardTitle className="flex flex-wrap items-center gap-2">
+                    <IconUsers className="h-5 w-5" />
+                    <span className="min-w-0 truncate">{activeGroup.name}</span>
                     <Badge
                       variant={
-                        member.enabled === false ? 'secondary' : 'default'
+                        activeGroup.source === 'local' ? 'outline' : 'secondary'
                       }
                       className="text-xs"
                     >
-                      {member.enabled === false
-                        ? t('status.disabled', 'Disabled')
-                        : t('status.enabled', 'Enabled')}
+                      {activeGroup.source === 'local'
+                        ? t('userManagement.groupSourceLocal', 'Local')
+                        : activeGroup.source.toUpperCase()}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {member.provider || '-'}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {member.lastLoginAt
-                        ? formatDate(member.lastLoginAt)
-                        : '-'}
-                    </span>
-                    {isNative(member.provider) ? (
+                  </CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      {activeGroup.description ||
+                        t(
+                          'userManagement.noGroupDescription',
+                          'No description yet.'
+                        )}
+                    </p>
+                    {!readOnly && (
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                        disabled={isMutating}
-                        aria-label={`${t('userManagement.removeMember', 'Remove')} ${member.username}`}
-                        onClick={() => void handleRemoveMember(member)}
+                        size="sm"
+                        className="h-7 gap-1.5 px-2 text-xs"
+                        onClick={() => {
+                          setDescriptionValue(activeGroup.description)
+                          setShowDescription(true)
+                        }}
                       >
-                        <IconX className="h-3.5 w-3.5" />
+                        <IconNotes className="h-3.5 w-3.5" />
+                        {t(
+                          'userManagement.editGroupDescription',
+                          'Edit description'
+                        )}
                       </Button>
-                    ) : (
-                      <span />
                     )}
                   </div>
-                ))
-              )}
-            </div>
+                </div>
+                {!readOnly && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      disabled={isMutating}
+                      onClick={() => {
+                        setAddMemberSelection([])
+                        setShowAddMember(true)
+                      }}
+                    >
+                      <IconPlus className="h-4 w-4" />
+                      {t('userManagement.addMember', 'Add Members')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      // 目录同步过来的组（LDAP / OIDC）不能在控制台改名：
+                      // 改了下次登录或同步就会被目录里的名字覆盖，还会留下两边不一致的组。
+                      disabled={activeGroup.source !== 'local'}
+                      title={
+                        activeGroup.source === 'local'
+                          ? undefined
+                          : t(
+                              'userManagement.renameDirectoryGroupHint',
+                              'Groups synced from the directory can only be renamed there; a rename here would be overwritten by the next sync.'
+                            )
+                      }
+                      onClick={() => {
+                        setRenameValue(activeGroup.name)
+                        setShowRename(true)
+                      }}
+                    >
+                      <IconPencil className="h-4 w-4" />
+                      {t('userManagement.renameGroup', 'Rename group')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 text-destructive"
+                      onClick={() => setShowDelete(true)}
+                    >
+                      <IconTrash className="h-4 w-4" />
+                      {t('common.actions.delete', 'Delete')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <IconShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="text-muted-foreground">
+                    {t('userManagement.grantedRoles', 'Granted roles')}
+                  </span>
+                  {grantedRoles.length === 0 ? (
+                    <span className="text-muted-foreground">
+                      {t('userManagement.noGrantedRoles', 'None')}
+                    </span>
+                  ) : (
+                    grantedRoles.map((role) => (
+                      <Badge
+                        key={role.name}
+                        variant="outline"
+                        className="text-xs"
+                      >
+                        {role.name}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'userManagement.groupsInheritHint',
+                    'Members inherit the roles granted to this group in RBAC management.'
+                  )}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <IconUsers className="h-4 w-4" />
+                  {t('userManagement.members', 'Members')}
+                  <Badge variant="secondary" className="text-xs">
+                    {memberCount(activeGroup)}
+                  </Badge>
+                </div>
+                {renderMembers(activeGroup)}
+              </div>
+            </CardContent>
+          </>
+        ) : (
+          <>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <IconUsers className="h-5 w-5" />
+                  {t('userManagement.groupsTabTitle', 'User Groups')}
+                  <Badge variant="secondary">{groups.length}</Badge>
+                </CardTitle>
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  {sourceOptions.length > 0 && sourceColumn && (
+                    <Select
+                      value={(sourceColumn.getFilterValue() as string) || 'all'}
+                      onValueChange={(value) =>
+                        sourceColumn.setFilterValue(
+                          value === 'all' ? '' : value
+                        )
+                      }
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue
+                          placeholder={t(
+                            'common.values.allSources',
+                            'All sources'
+                          )}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">
+                          {t('common.values.allSources', 'All sources')}
+                        </SelectItem>
+                        {sourceOptions.map((source) => (
+                          <SelectItem key={source} value={source}>
+                            {source === 'local'
+                              ? t('userManagement.groupSourceLocal', 'Local')
+                              : source.toUpperCase()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <div className="relative">
+                    <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder={t(
+                        'common.placeholders.searchGroups',
+                        'Search user groups...'
+                      )}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-9 w-64"
+                    />
+                  </div>
+                  {!readOnly && (
+                    <Button
+                      className="gap-2"
+                      onClick={() => {
+                        setNewGroupName('')
+                        setNewGroupDescription('')
+                        setNewGroupMembers([])
+                        setShowAddGroup(true)
+                      }}
+                    >
+                      <IconPlus className="h-4 w-4" />
+                      {t('userManagement.addGroup', 'Add User Group')}
+                    </Button>
+                  )}
+                  {/* 与资源列表一致：最右侧的齿轮菜单用来勾选要显示的列。 */}
+                  <TableColumnToggle table={table} />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ResourceTableView
+                table={table}
+                columnCount={columns.length}
+                isLoading={isLoading}
+                data={filtered}
+                allPageSize={filtered.length}
+                emptyState={emptyState}
+                hasActiveFilters={Boolean(search) || columnFilters.length > 0}
+                filteredRowCount={table.getFilteredRowModel().rows.length}
+                totalRowCount={groups.length}
+                searchQuery={search}
+                pagination={pagination}
+                setPagination={setPagination}
+                maxBodyHeightClassName="max-h-[600px]"
+              />
+            </CardContent>
           </>
         )}
-      </div>
+      </Card>
 
       {showAddGroup && (
-        <Dialog open onOpenChange={(open) => !open && setShowAddGroup(false)}>
+        <Dialog open onOpenChange={addGroupGuard.handleOpenChange}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
@@ -657,13 +1124,29 @@ export function UserGroupsTab() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="group-description">
+                  {t('userManagement.groupDescription', 'Description')}
+                </Label>
+                <Textarea
+                  id="group-description"
+                  value={newGroupDescription}
+                  onChange={(e) => setNewGroupDescription(e.target.value)}
+                  placeholder={t(
+                    'userManagement.groupDescriptionPlaceholder',
+                    'Enter a description (optional)'
+                  )}
+                  rows={2}
+                  disabled={isCreating}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>
                   {t('userManagement.membersOptional', 'Members (optional)')}
                 </Label>
                 <MultiSelect
                   value={newGroupMembers}
                   onChange={setNewGroupMembers}
-                  options={nativeUserOptions}
+                  options={memberUserOptions}
                   selectAllMode="all"
                   allowAdd={false}
                   disabled={isCreating}
@@ -687,14 +1170,14 @@ export function UserGroupsTab() {
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setShowAddGroup(false)}
+                onClick={() => addGroupGuard.handleOpenChange(false)}
                 disabled={isCreating}
               >
                 {t('common.actions.cancel', 'Cancel')}
               </Button>
               <Button
                 onClick={() => void handleCreateGroup()}
-                disabled={isCreating || !newGroupName.trim()}
+                disabled={readOnly || isCreating || !newGroupName.trim()}
               >
                 {isCreating && <IconLoader2 className="h-4 w-4 animate-spin" />}
                 {isCreating
@@ -706,16 +1189,13 @@ export function UserGroupsTab() {
         </Dialog>
       )}
 
-      {showAddMember && selectedGroup && (
-        <Dialog
-          open
-          onOpenChange={(open) => !open && setShowAddMember(false)}
-        >
+      {showAddMember && activeGroup && (
+        <Dialog open onOpenChange={addMemberGuard.handleOpenChange}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
                 {t('userManagement.addMemberTitle', {
-                  name: selectedGroup.name,
+                  name: activeGroup.name,
                   defaultValue: 'Add members to {{name}}',
                 })}
               </DialogTitle>
@@ -739,20 +1219,25 @@ export function UserGroupsTab() {
                   'common.placeholders.selectUsers',
                   'Select users...'
                 )}
-                emptyText={t('common.messages.noOptionsFound', 'No options found')}
+                emptyText={t(
+                  'common.messages.noOptionsFound',
+                  'No options found'
+                )}
               />
             </div>
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setShowAddMember(false)}
+                onClick={() => addMemberGuard.handleOpenChange(false)}
                 disabled={isMutating}
               >
                 {t('common.actions.cancel', 'Cancel')}
               </Button>
               <Button
                 onClick={() => void handleAddMembers()}
-                disabled={addMemberSelection.length === 0 || isMutating}
+                disabled={
+                  readOnly || addMemberSelection.length === 0 || isMutating
+                }
               >
                 {isMutating && <IconLoader2 className="h-4 w-4 animate-spin" />}
                 {isMutating
@@ -763,16 +1248,13 @@ export function UserGroupsTab() {
           </DialogContent>
         </Dialog>
       )}
-      {showRename && selectedGroup && (
-        <Dialog
-          open
-          onOpenChange={(open) => !open && setShowRename(false)}
-        >
+      {showRename && activeGroup && (
+        <Dialog open onOpenChange={renameGuard.handleOpenChange}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
                 {t('userManagement.renameGroupTitle', {
-                  name: selectedGroup.name,
+                  name: activeGroup.name,
                   defaultValue: 'Rename group {{name}}',
                 })}
               </DialogTitle>
@@ -801,7 +1283,7 @@ export function UserGroupsTab() {
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setShowRename(false)}
+                onClick={() => renameGuard.handleOpenChange(false)}
                 disabled={isMutating}
               >
                 {t('common.actions.cancel', 'Cancel')}
@@ -809,9 +1291,10 @@ export function UserGroupsTab() {
               <Button
                 onClick={() => void handleRenameGroup()}
                 disabled={
+                  readOnly ||
                   isMutating ||
                   !renameValue.trim() ||
-                  renameValue.trim() === selectedGroup.name
+                  renameValue.trim() === activeGroup.name
                 }
               >
                 {isMutating && <IconLoader2 className="h-4 w-4 animate-spin" />}
@@ -824,23 +1307,83 @@ export function UserGroupsTab() {
         </Dialog>
       )}
 
-      {showDelete && selectedGroup && (
+      {showDescription && activeGroup && (
+        <Dialog open onOpenChange={descriptionGuard.handleOpenChange}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {t('userManagement.editGroupDescriptionTitle', {
+                  name: activeGroup.name,
+                  defaultValue: 'Edit the description of {{name}}',
+                })}
+              </DialogTitle>
+              <DialogDescription>
+                {t(
+                  'userManagement.editGroupDescriptionHint',
+                  'The description is a console note: it does not affect authorization and is not synced from the directory.'
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="group-description-edit">
+                {t('userManagement.groupDescription', 'Description')}
+              </Label>
+              <Textarea
+                id="group-description-edit"
+                value={descriptionValue}
+                onChange={(e) => setDescriptionValue(e.target.value)}
+                placeholder={t(
+                  'userManagement.groupDescriptionPlaceholder',
+                  'Enter a description (optional)'
+                )}
+                rows={3}
+                disabled={isMutating}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => descriptionGuard.handleOpenChange(false)}
+                disabled={isMutating}
+              >
+                {t('common.actions.cancel', 'Cancel')}
+              </Button>
+              <Button
+                onClick={() => void handleUpdateDescription()}
+                disabled={readOnly || isMutating}
+              >
+                {isMutating && <IconLoader2 className="h-4 w-4 animate-spin" />}
+                {isMutating
+                  ? t('common.actions.saving', 'Saving...')
+                  : t('common.actions.save', 'Save')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {showDelete && activeGroup && (
         <DeleteConfirmationDialog
           open
           onOpenChange={(open) => !open && setShowDelete(false)}
-          resourceName={selectedGroup.name}
+          resourceName={activeGroup.name}
           resourceType={t('userManagement.groupType', 'user group')}
           isDeleting={isMutating}
           onConfirm={() => void handleDeleteGroup()}
           additionalNote={t('userManagement.deleteGroupImpact', {
-            members: selectedGroup.editableMembers.length,
-            external: selectedGroup.externalMembers.length,
+            members: activeGroup.editableMembers.length,
+            external: activeGroup.externalMembers.length,
             grants: grantedRoles.length,
             defaultValue:
               '{{members}} local member(s) will be removed from this group, {{external}} external reference(s) and {{grants}} RBAC role grant(s) will be deleted.',
           })}
         />
       )}
+
+      <UnsavedChangesConfirmDialog {...addGroupGuard.confirmDialogProps} />
+      <UnsavedChangesConfirmDialog {...addMemberGuard.confirmDialogProps} />
+      <UnsavedChangesConfirmDialog {...renameGuard.confirmDialogProps} />
+      <UnsavedChangesConfirmDialog {...descriptionGuard.confirmDialogProps} />
     </div>
   )
 }

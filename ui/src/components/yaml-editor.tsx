@@ -18,25 +18,25 @@ import { useAppearance } from './appearance-provider'
 import { ErrorBoundary } from './error-boundary'
 
 interface YamlEditorProps<T extends ResourceType> {
-  /** The YAML content to edit */
+  /** 要编辑的 YAML 内容 */
   value: string
-  /** Whether the editor is in read-only mode by default */
+  /** 编辑器默认是否处于只读模式 */
   readOnly?: boolean
-  /** Whether to show the edit controls */
+  /** 是否显示编辑控件 */
   showControls?: boolean
-  /** Card title */
+  /** 卡片标题 */
   title?: string
-  /** Minimum height of the editor */
+  /** 编辑器的最小高度 */
   minHeight?: number
-  /** Callback when YAML content changes */
+  /** YAML 内容变化时的回调 */
   onChange?: (value: string) => void
-  /** Callback when save is clicked */
+  /** 点击保存时的回调 */
   onSave?: (value: ResourceTypeMap[T]) => void
-  /** Callback when cancel is clicked */
+  /** 点击取消时的回调 */
   onCancel?: () => void
-  /** Whether save operation is in progress */
+  /** 保存操作是否进行中 */
   isSaving?: boolean
-  /** Custom class name for the card */
+  /** 卡片的自定义类名 */
   className?: string
   fillHeight?: boolean
 }
@@ -70,14 +70,16 @@ export function YamlEditor<T extends ResourceType>({
     colorTheme
   )
 
-  // Update editor value when value prop changes
+  // 编辑中不要被外部 value 覆盖：详情页会定时刷新并把最新对象重新下发，
+  // 直接同步会把用户正在编辑（或刚粘贴）的内容冲掉。
   useEffect(() => {
+    if (isEditing) return
     setEditorValue(value)
-  }, [value])
+  }, [value, isEditing])
 
-  // Validate YAML on content change with debounce for error display
+  // 内容变化时防抖校验 YAML，用于展示错误
   useEffect(() => {
-    // Immediate validation for isValidYaml state
+    // 为 isValidYaml 状态做即时校验
     try {
       yaml.load(editorValue)
       setIsValidYaml(true)
@@ -85,12 +87,12 @@ export function YamlEditor<T extends ResourceType>({
     } catch (error) {
       setIsValidYaml(false) // Set invalid state immediately
 
-      // Clear previous timeout
+      // 清除先前的定时器
       if (validationTimeoutRef.current) {
         clearTimeout(validationTimeoutRef.current)
       }
 
-      // Delay showing the error message
+      // 延迟显示错误信息
       validationTimeoutRef.current = setTimeout(() => {
         setValidationError(
           error instanceof Error
@@ -100,7 +102,7 @@ export function YamlEditor<T extends ResourceType>({
       }, 1000) // 1 second delay only for error message display
     }
 
-    // Cleanup timeout on unmount
+    // 卸载时清理定时器
     return () => {
       if (validationTimeoutRef.current) {
         clearTimeout(validationTimeoutRef.current)
@@ -116,7 +118,7 @@ export function YamlEditor<T extends ResourceType>({
 
   const handleEdit = () => {
     setIsEditing(true)
-    // Focus the editor after setting editing mode
+    // 设置编辑模式后聚焦编辑器
     setTimeout(() => {
       if (editorRef.current) {
         editorRef.current.focus()

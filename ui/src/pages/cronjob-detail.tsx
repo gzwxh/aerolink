@@ -20,7 +20,8 @@ import {
   getJobStatusBadge,
   type JobStatusBadge,
 } from '@/lib/job-status'
-import { formatDate, getAge, translateError } from '@/lib/utils'
+import { formatDate, getAge } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -42,6 +43,10 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
   const [isTogglingSuspend, setIsTogglingSuspend] = useState(false)
   const [isRunningNow, setIsRunningNow] = useState(false)
   const { t } = useTranslation()
+  const can = useCan()
+  // 立即运行会创建 Job，暂停 / 恢复会更新 CronJob：只读角色不该看到入口。
+  const canUpdateCronJob = can('cronjobs', 'update', { namespace })
+  const canCreateJobs = can('jobs', 'create', { namespace })
 
   const {
     data: cronjob,
@@ -174,8 +179,8 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
         updated.spec?.suspend ? 'CronJob suspended' : 'CronJob resumed'
       )
       await Promise.all([refetchCronJob(), refetchJobs()])
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsTogglingSuspend(false)
     }
@@ -225,8 +230,8 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       await createResource('jobs', namespace, manualJob)
       toast.success('Job created successfully')
       await refetchJobs()
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsRunningNow(false)
     }
@@ -403,28 +408,32 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       }
       headerActions={
         <>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRunNow}
-            disabled={isRunningNow}
-          >
-            <IconPlayerPlayFilled className="w-4 h-4" />
-            Run Now
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleToggleSuspend}
-            disabled={isTogglingSuspend}
-          >
-            {cronjob?.spec?.suspend ? (
-              <IconPlayerPlay className="w-4 h-4" />
-            ) : (
-              <IconPlayerPause className="w-4 h-4" />
-            )}
-            {cronjob?.spec?.suspend ? 'Resume' : 'Suspend'}
-          </Button>
+          {canCreateJobs ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRunNow}
+              disabled={isRunningNow}
+            >
+              <IconPlayerPlayFilled className="w-4 h-4" />
+              Run Now
+            </Button>
+          ) : null}
+          {canUpdateCronJob ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToggleSuspend}
+              disabled={isTogglingSuspend}
+            >
+              {cronjob?.spec?.suspend ? (
+                <IconPlayerPlay className="w-4 h-4" />
+              ) : (
+                <IconPlayerPause className="w-4 h-4" />
+              )}
+              {cronjob?.spec?.suspend ? 'Resume' : 'Suspend'}
+            </Button>
+          ) : null}
         </>
       }
       preYamlTabs={extraTabs.filter((tab) =>

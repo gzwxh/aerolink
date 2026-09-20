@@ -23,8 +23,8 @@ interface NodeDeleteDialogProps {
   onDeleted: () => void | Promise<void>
 }
 
-// NodeDeleteDialog deletes one or more nodes. A single node requires typing its
-// name, mirroring the confirmation used elsewhere in the console.
+// NodeDeleteDialog 删除一个或多个节点。删除单个节点需要输入其
+// 名称，与控制台其它位置的确认方式一致。
 export function NodeDeleteDialog({
   open,
   onOpenChange,

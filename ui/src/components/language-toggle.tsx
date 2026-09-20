@@ -9,9 +9,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+// 中文放第一位（默认展示语言）
 const languages = [
-  { code: 'en', name: 'English' },
   { code: 'zh', name: '中文' },
+  { code: 'en', name: 'English' },
 ]
 
 export function LanguageToggle() {

@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button'
 
 interface Props {
   children: ReactNode
-  /** Rendered instead of the default fallback when provided */
+  /** 提供时替代默认兜底界面渲染 */
   fallback?: ReactNode
-  /** Called when an error is caught */
+  /** 捕获到错误时调用 */
   onError?: (error: Error, info: ErrorInfo) => void
 }
 

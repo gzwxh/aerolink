@@ -13,13 +13,27 @@ export interface BootstrapCapabilities {
   kubectlEnabled: boolean
 }
 
+/** 本次登录的会话：superseded 表示它把其他设备上的旧会话顶下线了（单点登录）。 */
+export interface BootstrapSession {
+  seq: number
+  superseded: boolean
+}
+
+/** 控制台外观：logoUrl 为空表示由前端使用内置图标。 */
+export interface BootstrapBranding {
+  logoUrl: string
+  /** 控制台名称；为空表示由前端使用默认名 “Kite”。 */
+  siteName: string
+}
+
 export interface AuthProviderCatalog {
   providers: string[]
   credentialProviders: CredentialProvider[]
   oauthProviders: string[]
   loginPrompt: string
   mfaEnabled: boolean
-  passkeyLoginEnabled: boolean
+  /** 来自安全设置的全局 MFA 策略：disabled / all / admin。 */
+  mfaPolicy: 'disabled' | 'all' | 'admin'
   loginCaptchaEnabled: boolean
 }
 
@@ -27,8 +41,9 @@ export interface BootstrapResponse {
   setup: BootstrapSetup
   auth: AuthProviderCatalog
   capabilities: BootstrapCapabilities
+  branding: BootstrapBranding
+  session: BootstrapSession
   user: AuthUser | null
-  hasGlobalSidebarPreference: boolean
   globalSidebarPreference: string
 }
 

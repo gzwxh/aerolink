@@ -1,9 +1,8 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { IconCopy, IconLoader2 } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
 
 import { ResourceType, ResourceTypeMap } from '@/types/api'
 import { applyResource, createResource, fetchResource } from '@/lib/api'
@@ -11,7 +10,12 @@ import {
   getResourceCatalogEntry,
   getResourceDetailPath,
 } from '@/lib/resource-catalog'
+import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { translateError } from '@/lib/utils'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 interface CloneResourceDialogProps {
   open: boolean
@@ -32,7 +37,7 @@ interface CloneResourceDialogProps {
   sourceName: string
   namespace?: string
   resource: unknown
-  /** Called with the cloned resource name after a successful create. */
+  /** 创建成功后以克隆出的资源名回调。 */
   onCloned?: (targetName: string) => Promise<void> | void
 }
 
@@ -229,32 +234,53 @@ export function CloneResourceDialog({
   resource,
   onCloned,
 }: CloneResourceDialogProps) {
+  // 草稿在条件挂载的内容组件里，关闭即丢弃，所以「有没有改动」上报到这一层，
+  // 由 useUnsavedChangesGuard 拦截遮罩点击 / Esc / 右上角 X。
+  const [isDraftDirty, setIsDraftDirty] = useState(false)
+  const close = useCallback(() => onOpenChange(false), [onOpenChange])
+  const guard = useUnsavedChangesGuard({ dirty: isDraftDirty, onClose: close })
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {open ? (
-        <CloneResourceDialogContent
-          onOpenChange={onOpenChange}
-          resourceType={resourceType}
-          resourceLabel={resourceLabel}
-          sourceName={sourceName}
-          namespace={namespace}
-          resource={resource}
-          onCloned={onCloned}
-        />
-      ) : null}
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={guard.handleOpenChange}>
+        {open ? (
+          <CloneResourceDialogContent
+            resourceType={resourceType}
+            resourceLabel={resourceLabel}
+            sourceName={sourceName}
+            namespace={namespace}
+            resource={resource}
+            onCloned={onCloned}
+            onDraftChange={setIsDraftDirty}
+            onRequestClose={() => guard.handleOpenChange(false)}
+            onClose={close}
+          />
+        ) : null}
+      </Dialog>
+
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }
 
 function CloneResourceDialogContent({
-  onOpenChange,
   resourceType,
   resourceLabel,
   sourceName,
   namespace,
   resource,
   onCloned,
-}: Omit<CloneResourceDialogProps, 'open'>) {
+  onDraftChange,
+  onRequestClose,
+  onClose,
+}: Omit<CloneResourceDialogProps, 'open' | 'onOpenChange'> & {
+  /** 上报是否有草稿，父级据此决定关闭时是否先弹确认。 */
+  onDraftChange: (hasDraft: boolean) => void
+  /** 需要用户确认的关闭请求（取消按钮）。 */
+  onRequestClose: () => void
+  /** 直接关闭（克隆成功，或已确认丢弃草稿）。 */
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [yamlContent, setYamlContent] = useState(() =>
@@ -265,6 +291,13 @@ function CloneResourceDialogContent({
   )
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
+  // 首帧的 YAML 作为草稿基线（父组件刷新不会重置它）；改过才算未保存。
+  const isDirty = useDraftDirty(yamlContent)
+  // 有草稿时切集群会先弹确认（见 ClusterProvider）；确认丢弃后关掉弹窗。
+  useUnsavedEdits(isDirty, onClose)
+  useEffect(() => {
+    onDraftChange(isDirty)
+  }, [isDirty, onDraftChange])
 
   const handleClone = async () => {
     setError('')
@@ -336,12 +369,12 @@ function CloneResourceDialogContent({
         await applyResource(yaml.dump(manifest, { indent: 2, noRefs: true }))
       }
 
-      onOpenChange(false)
+      onClose()
       if (onCloned) {
         try {
           await onCloned(targetName)
-        } catch (syncError) {
-          toast.error(translateError(syncError, t))
+        } catch {
+          // 操作失败已由 API 客户端统一写入站内信，不再弹窗
         }
       }
       navigate(
@@ -392,7 +425,7 @@ function CloneResourceDialogContent({
       <DialogFooter>
         <Button
           variant="outline"
-          onClick={() => onOpenChange(false)}
+          onClick={onRequestClose}
           disabled={isCreating}
         >
           {t('common.actions.cancel')}

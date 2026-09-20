@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { IconReload } from '@tabler/icons-react'
+import { IconNotes, IconReload, IconTag } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Deployment } from 'kubernetes-types/apps/v1'
@@ -17,6 +17,12 @@ import { formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { DeploymentRowActions } from '@/components/deployment-row-actions'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
 import {
@@ -31,6 +37,62 @@ const deploymentSearchFilter = createSearchFilter<Deployment>(
 
 const columnHelper = createColumnHelper<Deployment>()
 
+// 注解值可能很长（如 last-applied-configuration），tooltip 里按长度裁剪。
+const METADATA_VALUE_MAX_LENGTH = 60
+
+function toSortedEntries(record?: Record<string, string>): [string, string][] {
+  return Object.entries(record ?? {}).sort(([a], [b]) => a.localeCompare(b))
+}
+
+function truncateMetadataValue(value: string) {
+  return value.length > METADATA_VALUE_MAX_LENGTH
+    ? `${value.slice(0, METADATA_VALUE_MAX_LENGTH)}…`
+    : value
+}
+
+// 纯数字的 CPU 值（如 "1"）补上单位，带单位的（如 "500m"）保持原样。
+function formatCpuLimit(value: string, coresUnit: string) {
+  return /^[\d.]+$/.test(value) ? `${value} ${coresUnit}` : value
+}
+
+function EmptyValue() {
+  return <span className="text-muted-foreground text-sm">-</span>
+}
+
+// 标签、注解都用「图标 + 数量」，具体键值放在 tooltip 里，避免撑宽表格。
+function MetadataSummaryCell({
+  entries,
+  icon: Icon,
+}: {
+  entries: [string, string][]
+  icon: typeof IconTag
+}) {
+  if (entries.length === 0) {
+    return <EmptyValue />
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="text-muted-foreground inline-flex cursor-default items-center gap-1 text-sm">
+          <Icon className="size-4" />
+          {entries.length}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-sm">
+        <div className="space-y-0.5 text-xs">
+          {entries.map(([key, value]) => (
+            <div key={key} className="break-all">
+              <span className="font-medium">{key}</span>
+              {value ? `=${truncateMetadataValue(value)}` : ''}
+            </div>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function DeploymentListPage() {
   const { namespace: namespaceParam } = useParams()
   const { t } = useTranslation()
@@ -39,7 +101,7 @@ export function DeploymentListPage() {
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
   const [batchDeployments, setBatchDeployments] = useState<Deployment[]>([])
 
-  // Restarting patches the pod template, so it needs update permission.
+  // 重启会 patch pod 模板，因此需要 update 权限。
   const canUpdate = useCanAnyNamespace()('deployments', 'update')
   const batchActions = useMemo<ResourceTableBatchAction<Deployment>[]>(
     () => [
@@ -57,7 +119,7 @@ export function DeploymentListPage() {
     [t, canUpdate]
   )
 
-  // Define columns for the deployment table
+  // 定义 Deployment 表格的列
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
@@ -101,6 +163,111 @@ export function DeploymentListPage() {
           )
         },
       }),
+      columnHelper.accessor((row) => row.metadata?.labels, {
+        id: 'labels',
+        header: t('common.fields.labels'),
+        cell: ({ row }) => (
+          <MetadataSummaryCell
+            entries={toSortedEntries(row.original.metadata?.labels)}
+            icon={IconTag}
+          />
+        ),
+      }),
+      columnHelper.accessor((row) => row.metadata?.annotations, {
+        id: 'annotations',
+        header: t('common.fields.annotations'),
+        cell: ({ row }) => (
+          <MetadataSummaryCell
+            entries={toSortedEntries(row.original.metadata?.annotations)}
+            icon={IconNotes}
+          />
+        ),
+      }),
+      columnHelper.accessor(
+        (row) => row.spec?.template.spec?.containers ?? [],
+        {
+          id: 'containers_images',
+          enableSorting: false,
+          header: t('common.fields.containersAndImages'),
+          cell: ({ row }) => {
+            const containers =
+              row.original.spec?.template.spec?.containers ?? []
+            if (containers.length === 0) {
+              return <EmptyValue />
+            }
+            return (
+              <div className="flex flex-col items-center gap-0.5 text-xs">
+                {containers.map((container) => (
+                  <div key={container.name} className="max-w-72 break-all">
+                    <span className="text-muted-foreground">
+                      {container.name}:{' '}
+                    </span>
+                    <span className="font-mono">{container.image}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          },
+        }
+      ),
+      columnHelper.accessor(
+        (row) => row.spec?.template.spec?.containers ?? [],
+        {
+          id: 'resource_limits',
+          enableSorting: false,
+          header: t('common.fields.resourceLimits'),
+          cell: ({ row }) => {
+            const containers =
+              row.original.spec?.template.spec?.containers ?? []
+            const groups = containers.flatMap((container) => {
+              const limits = container.resources?.limits
+              const chips: string[] = []
+              if (limits?.cpu) {
+                chips.push(
+                  `${t('common.fields.cpu')}: ${formatCpuLimit(
+                    limits.cpu,
+                    t('common.units.cores', 'cores')
+                  )}`
+                )
+              }
+              if (limits?.memory) {
+                chips.push(`${t('common.fields.memory')}: ${limits.memory}`)
+              }
+              return chips.length > 0 ? [{ name: container.name, chips }] : []
+            })
+
+            if (groups.length === 0) {
+              return <EmptyValue />
+            }
+
+            return (
+              <div className="flex flex-col items-center gap-0.5">
+                {groups.map((group) => (
+                  <div
+                    key={group.name}
+                    className="flex flex-wrap items-center justify-center gap-1"
+                  >
+                    {containers.length > 1 && (
+                      <span className="text-muted-foreground text-xs">
+                        {group.name}
+                      </span>
+                    )}
+                    {group.chips.map((chip) => (
+                      <Badge
+                        key={chip}
+                        variant="secondary"
+                        className="font-normal"
+                      >
+                        {chip}
+                      </Badge>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )
+          },
+        }
+      ),
       columnHelper.accessor('metadata.creationTimestamp', {
         header: t('common.fields.created'),
         cell: ({ getValue }) => {
@@ -111,12 +278,23 @@ export function DeploymentListPage() {
           )
         },
       }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <DeploymentRowActions deployment={row.original} />
+          </div>
+        ),
+      }),
     ],
     [t]
   )
 
-  // Does the namespace from the URL exist in the current cluster? When the
-  // user switches clusters, the namespace in the URL may no longer exist.
+  // URL 中的命名空间在当前集群中是否存在？当用户
+  // 切换集群时，URL 里的命名空间可能已不存在。
   const { data: allNamespaces } = useResources('namespaces', undefined, {
     staleTime: 60_000,
   })
@@ -172,8 +350,8 @@ export function DeploymentListPage() {
   }
 
   const handleCreateClick = () => {
-    // The URL wins, then the table's persisted selection; a multi or
-    // "all namespaces" selection cannot host a new object.
+    // URL 优先，其次是表格持久化的选择；多选或
+    // "所有命名空间"的选择无法承载新对象。
     const ns = resolveCreateNamespace(
       namespaceParam,
       sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),
@@ -193,7 +371,7 @@ export function DeploymentListPage() {
         batchActions={batchActions}
         initialNamespace={namespaceParam}
         onNamespaceChange={(ns) => {
-          // Keep the URL in sync: /deployments/<ns> or /deployments for all.
+          // 保持 URL 同步：/deployments/<ns> 或 /deployments（表示全部）。
           navigate(
             ns && ns !== '_all'
               ? `/deployments/${encodeURIComponent(ns)}`

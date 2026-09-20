@@ -4,13 +4,13 @@ import { apiClient, authApiClient } from '../api-client'
 import { fetchBootstrap, useBootstrap } from './bootstrap'
 import { fetchAPI } from './shared'
 
-// Initialize API types
+// 初始化 API 类型
 export interface InitCheckResponse {
   initialized: boolean
   step: number
 }
 
-// Initialize API function
+// 初始化 API 函数
 export const fetchInitCheck = async (): Promise<InitCheckResponse> => {
   return (await fetchBootstrap()).setup
 }
@@ -23,7 +23,7 @@ export const useInitCheck = () => {
   }
 }
 
-// Version information
+// 版本信息
 export interface VersionInfo {
   version: string
   buildDate: string
@@ -45,7 +45,7 @@ export const useVersionInfo = () => {
   })
 }
 
-// User registration for initial setup
+// 首次安装时的用户注册
 export interface CreateUserRequest {
   username: string
   password: string
@@ -58,7 +58,7 @@ export const createSuperUser = async (
   await authApiClient.post('/auth/setup/create_super_user', userData)
 }
 
-// Cluster import for initial setup
+// 首次安装时的集群导入
 export interface ImportClustersRequest {
   config: string
   inCluster?: boolean

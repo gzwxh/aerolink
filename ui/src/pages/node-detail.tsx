@@ -31,7 +31,6 @@ import {
   formatCPU,
   formatDate,
   formatMemory,
-  translateError,
 } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
@@ -138,8 +137,8 @@ export function NodeDetail(props: { name: string }) {
       setIsDrainPopoverOpen(false)
       await refetch()
       await refetchRelated()
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -149,8 +148,8 @@ export function NodeDetail(props: { name: string }) {
       toast.success(t('detail.status.nodeCordoned', { name }))
       setIsCordonPopoverOpen(false)
       refetch()
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -160,8 +159,8 @@ export function NodeDetail(props: { name: string }) {
       toast.success(t('detail.status.nodeUncordoned', { name }))
       setIsCordonPopoverOpen(false)
       refetch()
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -176,8 +175,8 @@ export function NodeDetail(props: { name: string }) {
       setIsTaintPopoverOpen(false)
       setTaintData({ key: '', value: '', effect: 'NoSchedule' })
       refetch()
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -192,8 +191,8 @@ export function NodeDetail(props: { name: string }) {
       toast.success(t('detail.status.nodeTaintRemoved', { name }))
       if (!key) setUntaintKey('')
       refetch()
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -554,7 +553,7 @@ function NodeOverview({
 }: {
   node: Node
   podCount: number
-  /** Whether the current user may modify the node (taints, cordon, ...). */
+  /** 当前用户是否可以修改节点（污点、cordon 等）。 */
   canUpdate: boolean
   onUntaint: (key?: string) => void
 }) {

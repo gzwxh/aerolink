@@ -60,9 +60,9 @@ export interface ResourceTableProps<T> {
   showBatchDelete?: boolean // Render the built-in batch delete button
   onRowSelectionChange?: (rows: T[]) => void // Notified when the row selection changes
   /**
-   * Resource used for the permission checks (defaults to the resolved resource
-   * type). Create and bulk delete are hidden unless some namespace grants the
-   * verb; pass an empty string to skip gating entirely.
+   * 用于权限校验的资源（默认取解析出的资源
+   * 类型）。除非某个命名空间授予了相应 verb，否则创建与批量删除
+   * 会被隐藏；传空字符串可完全跳过该控制。
    */
   permissionResource?: string
 }
@@ -126,7 +126,7 @@ function ResourceTableContent<T>({
     initialNamespace,
   })
 
-  // Notify the parent (e.g. to sync the URL) after the built-in handler runs.
+  // 在内置处理器执行后通知父组件（例如同步 URL）。
   const handleNamespaceChangeWrapper = useCallback(
     (value: string) => {
       handleNamespaceChange(value)
@@ -135,8 +135,8 @@ function ResourceTableContent<T>({
     [handleNamespaceChange, onNamespaceChange]
   )
 
-  // When the query looks like a label selector, route it to the backend API
-  // instead of the client-side name filter.
+  // 当查询看起来像标签选择器时，把它转给后端 API，
+  // 而不是走客户端名称过滤。
   const isLabelSelector = searchQuery.includes('=') || searchQuery.includes(':')
   const effectiveLabelSelector =
     debouncedSearchQuery.includes('=') || debouncedSearchQuery.includes(':')
@@ -148,11 +148,13 @@ function ResourceTableContent<T>({
   }, [selectedNamespace])
   const namespaceDescription =
     selectedNamespace === '_all'
-      ? 'All Namespaces'
+      ? t('resourceTable.allNamespaces')
       : selectedNamespaces.length > 1
-        ? `${selectedNamespaces.length} namespaces`
+        ? t('resourceTable.namespaceCount', {
+            count: selectedNamespaces.length,
+          })
         : selectedNamespace
-          ? `namespace ${selectedNamespace}`
+          ? t('resourceTable.namespaceScoped', { name: selectedNamespace })
           : ''
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteProgress, setDeleteProgress] = useState({ done: 0, total: 0 })
@@ -172,9 +174,9 @@ function ResourceTableContent<T>({
     refreshInterval,
     labelSelector: effectiveLabelSelector,
   })
-  // The Create button and the bulk delete are not bound to one namespace, so
-  // they follow the "granted somewhere" rule. Resources Kite has no metadata
-  // for (pages passing a display name, e.g. "Helm Releases") are left alone.
+  // 创建按钮与批量删除不绑定单个命名空间，因此
+  // 遵循"某处已授权"规则。Kite 没有其元数据的资源
+  // （页面传入了展示名，例如 "Helm Releases"）不做处理。
   const canAnyNamespace = useCanAnyNamespace()
   const permissionTarget =
     permissionResource ??
@@ -199,7 +201,7 @@ function ResourceTableContent<T>({
     return resource.shortLabel || resource.pluralLabel || resourceName
   })()
 
-  // Add namespace column when showing all namespaces
+  // 在展示所有命名空间时加入命名空间列
   const enhancedColumns = useMemo(() => {
     const selectColumn: ColumnDef<T> = {
       id: 'select',
@@ -210,14 +212,14 @@ function ResourceTableContent<T>({
             (table.getIsSomePageRowsSelected() && 'indeterminate')
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label={t('resourceTable.selectAllRows')}
         />
       ),
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label={t('resourceTable.selectRow')}
         />
       ),
       enableSorting: false,
@@ -226,15 +228,15 @@ function ResourceTableContent<T>({
 
     const baseColumns = [selectColumn, ...columns]
 
-    // Only add namespace column if not cluster scope, showing all namespaces,
-    // and there isn't already a namespace column in the provided columns
+    // 只有在非集群范围、展示所有命名空间、
+    // 且传入的列里还没有命名空间列时，才加入命名空间列
     if (
       !clusterScope &&
       (selectedNamespace === '_all' || selectedNamespaces.length > 1)
     ) {
-      // Check if namespace column already exists in the provided columns
+      // 检查传入的列里是否已有命名空间列
       const hasNamespaceColumn = columns.some((col) => {
-        // Check if the column accesses namespace data
+        // 检查该列是否访问命名空间数据
         if ('accessorKey' in col && col.accessorKey === 'metadata.namespace') {
           return true
         }
@@ -244,13 +246,13 @@ function ResourceTableContent<T>({
         return false
       })
 
-      // Only add namespace column if it doesn't already exist
+      // 只有在尚不存在时才加入命名空间列
       if (!hasNamespaceColumn) {
         const namespaceColumn = {
           id: 'namespace',
           header: t('resourceTable.namespace'),
           accessorFn: (row: T) => {
-            // Try to get namespace from metadata.namespace
+            // 尝试从 metadata.namespace 取命名空间
             const metadata = (row as { metadata?: { namespace?: string } })
               ?.metadata
             return metadata?.namespace || '-'
@@ -262,7 +264,7 @@ function ResourceTableContent<T>({
           ),
         }
 
-        // Insert namespace column after select and first column (typically name)
+        // 把命名空间列插到 select 与第一列（通常是名称）之后
         const columnsWithNamespace = [...baseColumns]
         columnsWithNamespace.splice(2, 0, namespaceColumn)
         return columnsWithNamespace
@@ -294,7 +296,7 @@ function ResourceTableContent<T>({
     }
   }, [useSSE, error, effectiveLabelSelector, setRefreshInterval])
 
-  // Create table instance using TanStack Table
+  // 使用 TanStack Table 创建表格实例
   const table = useReactTable<T>({
     data: memoizedData,
     columns: enhancedColumns,
@@ -333,27 +335,27 @@ function ResourceTableContent<T>({
       columnVisibility,
     },
     onPaginationChange: setPagination,
-    // Let TanStack Table handle pagination automatically based on filtered data
+    // 让 TanStack Table 依据过滤后的数据自动处理分页
     manualPagination: false,
-    // Improve filtering performance and consistency
+    // 提升过滤性能与一致性
     globalFilterFn: (row, _columnId, value) => {
       if (searchQueryFilter) {
         return searchQueryFilter(row.original as T, String(value).toLowerCase())
       }
       const searchValue = String(value).toLowerCase()
 
-      // Search across all visible columns
+      // 在所有可见列中搜索
       return row.getVisibleCells().some((cell) => {
         const cellValue = String(cell.getValue() || '').toLowerCase()
         return cellValue.includes(searchValue)
       })
     },
-    // Add this to prevent unnecessary pagination resets
+    // 加上这个以避免不必要的分页重置
     autoResetPageIndex: false,
     enableRowSelection: true,
   })
 
-  // Surface the current selection to the parent (used to drive toolbar state).
+  // 把当前选中项暴露给父组件（用于驱动工具栏状态）。
   useEffect(() => {
     onRowSelectionChange?.(
       table.getSelectedRowModel().rows.map((row) => row.original)
@@ -361,7 +363,7 @@ function ResourceTableContent<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowSelection])
 
-  // Handle batch delete - must be after table is defined
+  // 处理批量删除——必须放在 table 定义之后
   const handleBatchDelete = useCallback(async () => {
     setIsDeleting(true)
     const selectedRows = table
@@ -391,19 +393,17 @@ function ResourceTableContent<T>({
         .catch((error) => {
           setDeleteProgress((prev) => ({ ...prev, done: prev.done + 1 }))
           console.error(`Failed to delete ${name}:`, error)
-          toast.error(
-            t('resourceTable.deleteFailed', { name, error: error.message })
-          )
+
           throw error
         })
     })
 
     try {
       await Promise.allSettled(deletePromises)
-      // Reset selection and close dialog
+      // 重置选择并关闭对话框
       setRowSelection({})
       setDeleteDialogOpen(false)
-      // Refetch data
+      // 重新拉取数据
       if (!useSSE) {
         refetch()
       }
@@ -420,7 +420,7 @@ function ResourceTableContent<T>({
     setRowSelection,
     setDeleteDialogOpen,
   ])
-  // Calculate total and filtered row counts
+  // 计算总行数与过滤后的行数
   const totalRowCount = useMemo(
     () => (namespaceFilteredData as T[] | undefined)?.length || 0,
     [namespaceFilteredData]
@@ -428,20 +428,20 @@ function ResourceTableContent<T>({
   const filteredRowCount = useMemo(() => {
     if (!namespaceFilteredData || (namespaceFilteredData as T[]).length === 0)
       return 0
-    // Force re-computation when filters change
+    // 过滤条件变化时强制重新计算
     void searchQuery // Ensure dependency is used
     void columnFilters // Ensure dependency is used
     return table.getFilteredRowModel().rows.length
   }, [table, namespaceFilteredData, searchQuery, columnFilters])
 
-  // Check if there are active filters
+  // 检查是否存在生效中的过滤条件
   const hasActiveFilters = useMemo(() => {
     return Boolean(searchQuery) || columnFilters.length > 0
   }, [searchQuery, columnFilters])
 
-  // Render empty state based on condition
+  // 依据条件渲染空状态
   const renderEmptyState = () => {
-    // Only show loading state if there's no existing data
+    // 只有在尚无数据时才显示加载状态
     if (
       isLoading &&
       (!namespaceFilteredData || (namespaceFilteredData as T[]).length === 0)
@@ -452,13 +452,16 @@ function ResourceTableContent<T>({
             <Database className="h-12 w-12 text-muted-foreground animate-pulse" />
           </div>
           <h3 className="text-lg font-medium mb-1">
-            Loading {displayResourceName}...
+            {t('resourceTable.loadingResource', {
+              resource: displayResourceName,
+            })}
           </h3>
           <p className="text-muted-foreground">
-            Retrieving data
             {!clusterScope && namespaceDescription
-              ? ` from ${namespaceDescription}`
-              : ''}
+              ? t('resourceTable.retrievingDataFrom', {
+                  scope: namespaceDescription,
+                })
+              : t('resourceTable.retrievingData')}
           </p>
         </div>
       )
@@ -481,16 +484,24 @@ function ResourceTableContent<T>({
             <Box className="h-12 w-12 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-medium mb-1">
-            No {displayResourceName} found
+            {t('resourceTable.emptyTitle', { resource: displayResourceName })}
           </h3>
           <p className="text-muted-foreground">
             {searchQuery
               ? isLabelSelector
-                ? `No ${displayResourceName} match labels: "${searchQuery}"`
-                : `No results match your search query: "${searchQuery}"`
+                ? t('resourceTable.emptyLabelSelector', {
+                    resource: displayResourceName,
+                    query: searchQuery,
+                  })
+                : t('resourceTable.emptySearch', { query: searchQuery })
               : clusterScope
-                ? `There are no ${displayResourceName} found`
-                : `There are no ${displayResourceName} in ${namespaceDescription}`}
+                ? t('resourceTable.emptyCluster', {
+                    resource: displayResourceName,
+                  })
+                : t('resourceTable.emptyNamespace', {
+                    resource: displayResourceName,
+                    namespace: namespaceDescription,
+                  })}
           </p>
           {searchQuery && (
             <Button
@@ -498,7 +509,7 @@ function ResourceTableContent<T>({
               className="mt-4"
               onClick={() => setSearchQuery('')}
             >
-              Clear Search
+              {t('resourceTable.clearSearch')}
             </Button>
           )}
         </div>
@@ -529,6 +540,7 @@ function ResourceTableContent<T>({
         refreshInterval={refreshInterval}
         onUseSSEChange={handleUseSSEChange}
         onRefreshIntervalChange={handleRefreshIntervalChange}
+        onRefresh={refetch}
         selectedRowCount={table.getSelectedRowModel().rows.length}
         onOpenDeleteDialog={() => setDeleteDialogOpen(true)}
         batchActions={batchActions}

@@ -469,36 +469,38 @@ export function ContainerInfoCard({
               container.readinessProbe ||
               container.startupProbe) && (
               <div className="border-t pt-3">
-                <Label className={sectionLabelClassName}>Health Checks</Label>
+                <Label className={sectionLabelClassName}>
+                  {t('containerAdv.healthTitle')}
+                </Label>
                 <div className="mt-2 space-y-1">
                   {[
                     {
-                      label: 'Liveness',
+                      labelKey: 'containerAdv.probe.liveness',
                       probe: container.livenessProbe,
                       color: 'bg-green-50 dark:bg-green-950',
                     },
                     {
-                      label: 'Readiness',
+                      labelKey: 'containerAdv.probe.readiness',
                       probe: container.readinessProbe,
                       color: 'bg-blue-50 dark:bg-blue-950',
                     },
                     {
-                      label: 'Startup',
+                      labelKey: 'containerAdv.probe.startup',
                       probe: container.startupProbe,
                       color: 'bg-yellow-50 dark:bg-yellow-950',
                     },
                   ]
                     .filter((p) => p.probe)
-                    .map(({ label, probe, color }) => (
+                    .map(({ labelKey, probe, color }) => (
                       <div
-                        key={label}
+                        key={labelKey}
                         className="flex items-center gap-2 text-xs"
                       >
                         <Badge
                           variant="outline"
                           className={cn('text-xs', color)}
                         >
-                          {label}
+                          {t(labelKey)}
                         </Badge>
                         <span className="text-muted-foreground">
                           {probe!.httpGet
@@ -507,11 +509,13 @@ export function ContainerInfoCard({
                               ? `TCP :${probe!.tcpSocket.port}`
                               : probe!.exec
                                 ? `Exec: ${probe!.exec.command?.join(' ')}`
-                                : 'Custom'}
+                                : t('containerAdv.probeCustom')}
                         </span>
                         <span className="text-muted-foreground tabular-nums">
-                          (initial: {probe!.initialDelaySeconds ?? 0}s, period:{' '}
-                          {probe!.periodSeconds ?? 10}s)
+                          {t('containerAdv.probeTiming', {
+                            initial: probe!.initialDelaySeconds ?? 0,
+                            period: probe!.periodSeconds ?? 10,
+                          })}
                         </span>
                       </div>
                     ))}

@@ -7,7 +7,10 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { applyResource } from '@/lib/api'
+import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { translateError } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -108,13 +111,26 @@ export function ServiceCreatePage() {
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const { namespace: namespaceParam } = useParams()
+  const can = useCan()
 
   const [formData, setFormData] = useState<ServiceFormData>(() => ({
     ...initialData,
     namespace: namespaceParam || searchParams.get('namespace') || 'default',
   }))
   const [editedYaml, setEditedYaml] = useState('')
+  // 表单或 YAML 草稿只要离开过初始快照就算「未保存」：切换集群前据此弹确认
+  // （登记处见 lib/unsaved-edits）。
+  const [formSnapshot] = useState(() =>
+    JSON.stringify({ formData, editedYaml })
+  )
+  useUnsavedEdits(JSON.stringify({ formData, editedYaml }) !== formSnapshot)
   const [isCreating, setIsCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+
+  const pageTitle = t('serviceCreate.pageTitle', 'Service: 创建')
+  usePageTitle(pageTitle)
+
+  const canCreate = can('services', 'create', { namespace: formData.namespace })
 
   const update = (updates: Partial<ServiceFormData>) =>
     setFormData((prev) => ({ ...prev, ...updates }))
@@ -176,17 +192,52 @@ export function ServiceCreatePage() {
 
   const handleCreate = async () => {
     if (!isValid) {
-      toast.error(t('serviceCreate.invalidForm', '请完善必填信息后再创建'))
+      // 明确指出缺失的字段，让提示条可操作，
+      // 而不是笼统地"请补全表单"。
+      const firstPortError =
+        formData.serviceType === 'ExternalName'
+          ? undefined
+          : [...portErrors.values()][0]
+      const missing: string[] = []
+      if (!formData.name.trim()) {
+        missing.push(t('serviceCreate.serviceName', '服务名称'))
+      }
+      if (!formData.namespace.trim()) {
+        missing.push(t('workloadWizard.namespace', '命名空间'))
+      }
+      if (
+        formData.serviceType === 'ExternalName' &&
+        !formData.externalName.trim()
+      ) {
+        missing.push(t('serviceCreate.externalName', '外部名称'))
+      }
+      if (
+        formData.serviceType !== 'ExternalName' &&
+        formData.ports.some((p) => !intOrNull(p.port))
+      ) {
+        missing.push(t('serviceCreate.portsTitle', '端口'))
+      }
+      const message =
+        firstPortError ||
+        (missing.length
+          ? t('workloadWizard.requiredFields', {
+              fields: missing.join('、'),
+              defaultValue: `「${missing.join('、')}」是必填项。`,
+            })
+          : t('serviceCreate.invalidForm', '请完善必填信息后再创建'))
+      setCreateError(message)
+      toast.error(message)
       return
     }
     setIsCreating(true)
+    setCreateError(null)
     try {
       await applyResource(finalYaml, formData.namespace)
       queryClient.invalidateQueries()
       toast.success(t('common.messages.applied', 'Applied successfully'))
       navigate(`/services/${formData.namespace}/${formData.name}`)
     } catch (err) {
-      toast.error(translateError(err, t))
+      setCreateError(translateError(err, t))
     } finally {
       setIsCreating(false)
     }
@@ -199,13 +250,13 @@ export function ServiceCreatePage() {
           variant="ghost"
           size="icon"
           className="h-8 w-8"
+          aria-label={t('common.actions.backToList', '返回列表')}
+          title={t('common.actions.backToList', '返回列表')}
           onClick={() => navigate('/services')}
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-xl font-semibold">
-          {t('serviceCreate.pageTitle', 'Service: 创建')}
-        </h1>
+        <h1 className="text-2xl font-bold">{pageTitle}</h1>
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
@@ -481,9 +532,9 @@ export function ServiceCreatePage() {
             <SimpleYamlEditor
               value={finalYaml}
               onChange={(value) => {
-                // Monaco echoes the controlled value back whenever the form
-                // regenerates the YAML; ignoring those echoes keeps the form
-                // authoritative instead of round-tripping through the parser.
+                // 表单重新生成 YAML 时 Monaco 会把受控 value
+                // 回传；忽略这些回传可以让表单保持权威，
+                // 而不是绕经解析器来回转换。
                 if (value === finalYaml) return
                 setEditedYaml(value || '')
                 if (value) {
@@ -498,8 +549,8 @@ export function ServiceCreatePage() {
                         unknown
                       >
                       const spec = (doc.spec || {}) as Record<string, unknown>
-                      // The selector lives in spec.selector — metadata.labels
-                      // are the Service's own labels and unrelated to it.
+                      // 选择器位于 spec.selector —— metadata.labels
+                      // 是 Service 自身的标签，与它无关。
                       const selectorObj = (spec.selector || {}) as Record<
                         string,
                         string
@@ -539,7 +590,7 @@ export function ServiceCreatePage() {
                       setEditedYaml('')
                     }
                   } catch {
-                    // keep raw editing on parse errors
+                    // 解析出错时保留原始编辑
                   }
                 }
               }}
@@ -549,11 +600,26 @@ export function ServiceCreatePage() {
         </div>
       </div>
 
+      {createError && (
+        <div className="rounded-md border border-destructive/40 border-l-4 border-l-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {createError}
+        </div>
+      )}
+
+      {!canCreate && (
+        <div className="rounded-md border border-destructive/40 border-l-4 border-l-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {t('serviceCreate.noCreatePermission', {
+            namespace: formData.namespace,
+            defaultValue: `你没有权限在命名空间 {{namespace}} 中创建 Service。`,
+          })}
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-2 border-t pt-3">
         <Button variant="outline" onClick={() => navigate('/services')}>
           {t('common.actions.cancel', '取消')}
         </Button>
-        <Button onClick={handleCreate} disabled={isCreating || !isValid}>
+        <Button onClick={handleCreate} disabled={isCreating || !canCreate}>
           {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {t('serviceCreate.createButton', '创建 Service')}
         </Button>

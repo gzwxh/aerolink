@@ -42,13 +42,13 @@ export function GlobalSearchProvider({ children }: GlobalSearchProviderProps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Command+K or Ctrl+K to open search
+      // Command+K 或 Ctrl+K 打开搜索
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         toggleSearch()
       }
 
-      // Escape to close search
+      // Escape 关闭搜索
       if (e.key === 'Escape' && isOpen) {
         closeSearch()
       }

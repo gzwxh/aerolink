@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import {
   APIKey,
   AuditLogResponse,
+  AuditSetting,
+  AuditSettingResponse,
   Cluster,
   FetchUserListResponse,
   LoginLogResponse,
@@ -13,7 +15,7 @@ import {
 } from '@/types/api'
 
 import { apiClient } from '../api-client'
-import { fetchAPI } from './shared'
+import { downloadFile, fetchAPI } from './shared'
 
 export interface ClusterCreateRequest {
   name: string
@@ -29,7 +31,7 @@ export interface ClusterUpdateRequest extends ClusterCreateRequest {
   enabled?: boolean
 }
 
-// Get cluster list for management
+// 获取用于管理的集群列表
 export const fetchClusterList = (): Promise<Cluster[]> => {
   return fetchAPI<Cluster[]>('/admin/clusters/')
 }
@@ -46,7 +48,7 @@ export const useClusterList = (options?: {
   })
 }
 
-// Create cluster
+// 创建集群
 export const createCluster = async (
   clusterData: ClusterCreateRequest
 ): Promise<{
@@ -67,7 +69,7 @@ export const createCluster = async (
   }>('/admin/clusters/', clusterData)
 }
 
-// Update cluster
+// 更新集群
 export const updateCluster = async (
   id: number,
   clusterData: ClusterUpdateRequest
@@ -78,14 +80,23 @@ export const updateCluster = async (
   )
 }
 
-// Delete cluster
+// 删除集群
+// 集群是权限隔离的第一层：删除时需选择是否一并删除该集群的权限绑定，
+// 默认保留（detached），保留的权限绑定不再参与授权，可在权限管理页重新绑定。
 export const deleteCluster = async (
-  id: number
-): Promise<{ message: string }> => {
-  return await apiClient.delete<{ message: string }>(`/admin/clusters/${id}`)
+  id: number,
+  options?: { deleteBindingGroups?: boolean }
+): Promise<{
+  message: string
+  bindingGroupTotal?: number
+  bindingGroupsDeleted?: number
+  bindingGroupsRetained?: number
+}> => {
+  const mode = options?.deleteBindingGroups ? 'delete' : 'keep'
+  return await apiClient.delete(`/admin/clusters/${id}?bindingGroups=${mode}`)
 }
 
-// OAuth Provider Management
+// OAuth 提供方管理
 export interface OAuthProviderCreateRequest {
   name: string
   clientId: string
@@ -108,7 +119,7 @@ export interface OAuthProviderUpdateRequest extends Omit<
   clientSecret?: string // Optional when updating
 }
 
-// Get OAuth provider list for management
+// 获取用于管理的 OAuth 提供方列表
 export const fetchOAuthProviderList = (): Promise<OAuthProvider[]> => {
   return fetchAPI<{ providers: OAuthProvider[] }>(
     '/admin/oauth-providers/'
@@ -123,7 +134,7 @@ export const useOAuthProviderList = (options?: { staleTime?: number }) => {
   })
 }
 
-// Create OAuth provider
+// 创建 OAuth 提供方
 export const createOAuthProvider = async (
   providerData: OAuthProviderCreateRequest
 ): Promise<{ provider: OAuthProvider }> => {
@@ -133,7 +144,7 @@ export const createOAuthProvider = async (
   )
 }
 
-// Update OAuth provider
+// 更新 OAuth 提供方
 export const updateOAuthProvider = async (
   id: number,
   providerData: OAuthProviderUpdateRequest
@@ -144,7 +155,7 @@ export const updateOAuthProvider = async (
   )
 }
 
-// Delete OAuth provider
+// 删除 OAuth 提供方
 export const deleteOAuthProvider = async (
   id: number
 ): Promise<{ success: boolean; message: string }> => {
@@ -153,7 +164,7 @@ export const deleteOAuthProvider = async (
   )
 }
 
-// Get single OAuth provider
+// 获取单个 OAuth 提供方
 export const fetchOAuthProvider = async (
   id: number
 ): Promise<OAuthProvider> => {
@@ -162,7 +173,7 @@ export const fetchOAuthProvider = async (
   ).then((response) => response.provider)
 }
 
-// RBAC API
+// RBAC 接口
 export const fetchRoleList = async (): Promise<Role[]> => {
   return fetchAPI<{ roles: Role[] }>(`/admin/roles/`).then((resp) => resp.roles)
 }
@@ -187,6 +198,56 @@ export const deleteRole = async (id: number) => {
   return await apiClient.delete<{ success: boolean }>(`/admin/roles/${id}`)
 }
 
+/**
+ * 清除某个账号的动态码绑定，让本人在下次登录时重新绑定。
+ * 「强制 MFA」策略的安全阀：身份验证器丢失时只能靠它重新绑定。
+ */
+export const resetUserMFA = async (id: number) => {
+  return await apiClient.post<{ success: boolean }>(
+    `/admin/users/${id}/reset_mfa`,
+    {}
+  )
+}
+
+/** 一个职责分离冲突的账号：它同时持有互斥的管理员角色。 */
+export interface RoleConflictSubject {
+  username: string
+  name?: string
+  enabled: boolean
+  /** 冲突的角色名（至少两个，均为内置三员角色）。 */
+  roles: string[]
+}
+
+/**
+ * 列出同时持有互斥管理员角色的账号（职责分离巡检）。后端只做读取，不会自动
+ * 改正——需要安全管理员解绑其中一个角色。
+ */
+export const fetchRoleConflicts = async (): Promise<RoleConflictSubject[]> => {
+  const response = await fetchAPI<{ conflicts: RoleConflictSubject[] }>(
+    '/admin/role-conflicts'
+  )
+  return response.conflicts ?? []
+}
+
+export const useRoleConflicts = () => {
+  return useQuery<RoleConflictSubject[], Error>({
+    queryKey: ['role-conflicts'],
+    queryFn: fetchRoleConflicts,
+    staleTime: 30000,
+  })
+}
+
+/**
+ * 把内置系统角色恢复成代码里的默认定义（等保三级三权分立的三员权限集）。
+ * 只对 isSystem 角色有效：自定义角色的规则不会被覆盖。
+ */
+export const restoreRoleDefaults = async (id: number) => {
+  return await apiClient.post<{ role: Role }>(
+    `/admin/roles/${id}/restore_defaults`,
+    {}
+  )
+}
+
 export const assignRole = async (
   id: number,
   data: { subjectType: 'user' | 'group' | 'apikey'; subject: string }
@@ -205,6 +266,133 @@ export const unassignRole = async (
   )
 }
 
+// ---------- 权限绑定（项目组）：命名空间 + 用户/用户组 + 角色 ----------
+
+export interface BindingGroup {
+  id: number
+  cluster: string
+  name: string
+  description?: string
+  // 所属集群已删除、配置被保留的权限绑定：不参与授权，等待重新绑定。
+  detached?: boolean
+  // 全局作用域：成员绑定的角色对所有集群、所有命名空间与集群级资源生效。
+  global?: boolean
+  // 初始化播种的超级管理员组：不可删除。
+  protected?: boolean
+  namespaces?: { id: number; namespace: string }[]
+  members?: BindingGroupMember[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BindingGroupMember {
+  id: number
+  subjectType: 'user' | 'group'
+  subject: string
+  // 角色绑定的生效命名空间；空字符串表示组内全部命名空间。
+  namespace: string
+  roleId: number
+  // 受保护成员（如初始化创建的超级管理员）：不能被全量设置接口移除。
+  protected?: boolean
+  role?: Role
+}
+
+export const createBindingGroup = async (data: {
+  cluster: string
+  name: string
+  description?: string
+  global?: boolean
+}) => {
+  return await apiClient.post<{ bindingGroup: BindingGroup }>(
+    '/admin/binding-groups',
+    data
+  )
+}
+
+// 当前登录用户可见的权限绑定（含命名空间，供导航分组）
+export const fetchUserBindingGroups = async () => {
+  const result = await apiClient.get<{ bindingGroups: BindingGroup[] }>(
+    '/projects'
+  )
+  return result.bindingGroups
+}
+
+// 列出权限绑定；options.detached 为 true 时只返回所属集群已删除、被保留的组。
+export const fetchBindingGroups = async (
+  cluster?: string,
+  options?: { detached?: boolean }
+) => {
+  const params = new URLSearchParams()
+  if (cluster) params.set('cluster', cluster)
+  if (options?.detached) params.set('detached', 'true')
+  const query = params.toString()
+  const result = await apiClient.get<{ bindingGroups: BindingGroup[] }>(
+    `/admin/binding-groups${query ? `?${query}` : ''}`
+  )
+  return result.bindingGroups
+}
+
+// 把保留（所属集群已删除）的权限绑定重新绑定到集群，绑定后恢复授权。
+export const bindBindingGroup = async (id: number, cluster: string) => {
+  return await apiClient.post<{ bindingGroup: BindingGroup }>(
+    `/admin/binding-groups/${id}/bind`,
+    { cluster }
+  )
+}
+
+export const updateBindingGroup = async (
+  id: number,
+  data: { name?: string; description?: string; global?: boolean }
+) => {
+  return await apiClient.put<{ bindingGroup: BindingGroup }>(
+    `/admin/binding-groups/${id}`,
+    data
+  )
+}
+
+export const deleteBindingGroup = async (id: number) => {
+  return await apiClient.delete<{ success: boolean }>(
+    `/admin/binding-groups/${id}`
+  )
+}
+
+export const setBindingGroupNamespaces = async (
+  id: number,
+  namespaces: string[]
+) => {
+  return await apiClient.put<{ success: boolean }>(
+    `/admin/binding-groups/${id}/namespaces`,
+    { namespaces }
+  )
+}
+
+// 在权限绑定所属集群内创建命名空间并归属到该组
+export const createBindingGroupNamespace = async (
+  id: number,
+  namespace: string
+) => {
+  return await apiClient.post<{ namespace: string; cluster: string }>(
+    `/admin/binding-groups/${id}/namespaces/create`,
+    { namespace }
+  )
+}
+
+export const setBindingGroupMembers = async (
+  id: number,
+  members: {
+    subjectType: 'user' | 'group'
+    subject: string
+    // 空字符串 = 组内全部命名空间。
+    namespace?: string
+    roleIds: number[]
+  }[]
+) => {
+  return await apiClient.put<{ success: boolean }>(
+    `/admin/binding-groups/${id}/members`,
+    { members }
+  )
+}
+
 export const fetchNodePortRange = async (
   clusterName: string
 ): Promise<{ min: number; max: number; source: string }> => {
@@ -213,8 +401,21 @@ export const fetchNodePortRange = async (
   )
 }
 
-export const createGroup = async (name: string) => {
-  return await apiClient.post<{ name: string }>('/admin/groups', { name })
+export const createGroup = async (name: string, description?: string) => {
+  return await apiClient.post<{ name: string }>('/admin/groups', {
+    name,
+    description: description ?? '',
+  })
+}
+
+export const updateGroupDescription = async (
+  name: string,
+  description: string
+) => {
+  return await apiClient.put<{ name: string; description: string }>(
+    `/admin/groups/${encodeURIComponent(name)}/description`,
+    { description }
+  )
 }
 
 export const renameGroup = async (oldName: string, newName: string) => {
@@ -230,13 +431,53 @@ export const deleteGroup = async (name: string) => {
   )
 }
 
+// 组成员的一条记录。source 决定这条成员关系由谁维护：
+// local = 在控制台加的（可在这里移除）；ldap / oidc = 目录同步带来的（只能在目录里改）。
+export interface GroupMemberItem {
+  username: string
+  name?: string
+  provider: string
+  source: string
+}
+
+export const fetchGroupMembers = async (
+  name: string
+): Promise<GroupMemberItem[]> => {
+  const result = await apiClient.get<{ members: GroupMemberItem[] }>(
+    `/admin/groups/${encodeURIComponent(name)}/members`
+  )
+  return result.members ?? []
+}
+
+// 添加成员对**任意来源**的账号都有效：目录账号（LDAP / OIDC）会被记为本地附加成员关系，
+// 目录同步不会把它移除。
+export const addGroupMember = async (name: string, username: string) => {
+  return await apiClient.post<{ success: boolean }>(
+    `/admin/groups/${encodeURIComponent(name)}/members`,
+    { username }
+  )
+}
+
+// 只移除本地附加的成员关系；目录带来的成员关系会返回 409（code:
+// group_member_directory_managed），调用方据此提示用户去目录里改。
+export const removeGroupMember = async (name: string, username: string) => {
+  return await apiClient.delete<{ success: boolean }>(
+    `/admin/groups/${encodeURIComponent(name)}/members/${encodeURIComponent(
+      username
+    )}`
+  )
+}
+
 export const fetchUserList = async (
   page = 1,
   size = 20,
   search = '',
   sortBy = '',
   sortOrder = '',
-  role = ''
+  role = '',
+  enabled = '',
+  provider = '',
+  group = ''
 ): Promise<FetchUserListResponse> => {
   const params = new URLSearchParams({
     page: String(page),
@@ -254,11 +495,26 @@ export const fetchUserList = async (
   if (role) {
     params.set('role', role)
   }
+  // enabled 取 'true' / 'false'；provider 是认证方式，group 是 LDAP / OIDC 用户组。
+  if (enabled) {
+    params.set('enabled', enabled)
+  }
+  if (provider) {
+    params.set('provider', provider)
+  }
+  if (group) {
+    params.set('group', group)
+  }
   return fetchAPI<FetchUserListResponse>(`/admin/users/?${params.toString()}`)
 }
 
-export const updateUser = async (id: number, data: Partial<UserItem>) => {
-  return apiClient.put<{ user: UserItem }>(`/admin/users/${id}`, data)
+export const updateUser = async (
+  id: number,
+  // 请求字段是 groups（用户列表返回里才叫 oidc_groups）。
+  data: Partial<UserItem> & { groups?: string[] }
+): Promise<UserItem> => {
+  // 后端直接返回更新后的用户对象（没有 { user } 包装）。
+  return apiClient.put<UserItem>(`/admin/users/${id}`, data)
 }
 
 export const deleteUser = async (id: number) => {
@@ -271,6 +527,16 @@ export const createPasswordUser = async (data: {
   username: string
   name?: string
   password: string
+  email?: string
+  phone?: string
+  remark?: string
+  enabled?: boolean
+  // ISO 时间戳；省略表示"永不过期"。
+  expiresAt?: string
+  // 创建时用户加入的本地组。
+  groups?: string[]
+  // true = 该账号不受全局 MFA 策略强制。
+  mfaDisabled?: boolean
 }) => {
   return apiClient.post<{ user: UserItem }>(`/admin/users/`, data)
 }
@@ -288,19 +554,74 @@ export const setUserEnabled = async (id: number, enabled: boolean) => {
   })
 }
 
+// 面板里的「立即检查」：按当前策略立刻跑一轮不活跃禁用，返回本次禁用的账号数。
+// 每日任务每小时才调度一次，没有这个入口就只能干等（或去通知管理页触发）。
+export const checkInactiveUsers = async () => {
+  return apiClient.post<{ disabled: number }>('/admin/users/disabled/check', {})
+}
+
+// 批量解禁面板里列出的自动禁用账号（整组/勾选共用）；不在列表中的 id 会被跳过。
+export const restoreDisabledUsers = async (ids: number[]) => {
+  return apiClient.post<{ restored: number; skipped: number }>(
+    '/admin/users/disabled/restore',
+    { ids }
+  )
+}
+
 export const useUserList = (
   page = 1,
   size = 20,
   search = '',
   sortBy = '',
   sortOrder = '',
-  role = ''
+  role = '',
+  enabled = '',
+  provider = '',
+  group = ''
 ) => {
   return useQuery<FetchUserListResponse, Error>({
-    queryKey: ['user-list', page, size, search, sortBy, sortOrder, role],
-    queryFn: () => fetchUserList(page, size, search, sortBy, sortOrder, role),
+    queryKey: [
+      'user-list',
+      page,
+      size,
+      search,
+      sortBy,
+      sortOrder,
+      role,
+      enabled,
+      provider,
+      group,
+    ],
+    queryFn: () =>
+      fetchUserList(
+        page,
+        size,
+        search,
+        sortBy,
+        sortOrder,
+        role,
+        enabled,
+        provider,
+        group
+      ),
     staleTime: 20000,
   })
+}
+
+// 审计日志的时间范围筛选（等保三级：按时间段核查与导出审计记录）。
+// 传 `YYYY-MM-DD` 时，`to` 含当天（后端按次日 0 点做开区间）。
+export interface AuditTimeRange {
+  from?: string
+  to?: string
+}
+
+function appendTimeRange(params: URLSearchParams, range: AuditTimeRange = {}) {
+  if (range.from) {
+    params.set('from', range.from)
+  }
+  if (range.to) {
+    params.set('to', range.to)
+  }
 }
 
 export const fetchAuditLogs = async (
@@ -312,7 +633,10 @@ export const fetchAuditLogs = async (
   cluster?: string,
   resourceType?: string,
   resourceName?: string,
-  namespace?: string
+  namespace?: string,
+  // 需要限定多个操作类型时使用（如容器文件的上传/下载/查看）。
+  operations?: string[],
+  range: AuditTimeRange = {}
 ): Promise<AuditLogResponse> => {
   const params = new URLSearchParams({
     page: String(page),
@@ -339,7 +663,55 @@ export const fetchAuditLogs = async (
   if (namespace) {
     params.set('namespace', namespace)
   }
+  if (operations?.length) {
+    params.set('operations', operations.join(','))
+  }
+  appendTimeRange(params, range)
   return fetchAPI<AuditLogResponse>(`/admin/audit-logs?${params.toString()}`)
+}
+
+// 导出与列表共用同一套筛选条件，所以「页面上看到的」和「导出的」永远一致。
+export const exportAuditLogs = (
+  operatorId?: number,
+  search?: string,
+  operation?: string,
+  cluster?: string,
+  resourceType?: string,
+  resourceName?: string,
+  namespace?: string,
+  operations?: string[],
+  range: AuditTimeRange = {}
+) => {
+  const params = new URLSearchParams()
+  if (operatorId) {
+    params.set('operatorId', String(operatorId))
+  }
+  if (search) {
+    params.set('search', search)
+  }
+  if (operation) {
+    params.set('operation', operation)
+  }
+  if (cluster) {
+    params.set('cluster', cluster)
+  }
+  if (resourceType) {
+    params.set('resourceType', resourceType)
+  }
+  if (resourceName) {
+    params.set('resourceName', resourceName)
+  }
+  if (namespace) {
+    params.set('namespace', namespace)
+  }
+  if (operations?.length) {
+    params.set('operations', operations.join(','))
+  }
+  appendTimeRange(params, range)
+  return downloadFile(
+    `/admin/audit-logs/export?${params.toString()}`,
+    'kite-audit-logs.csv'
+  )
 }
 
 export const useAuditLogs = (
@@ -351,7 +723,9 @@ export const useAuditLogs = (
   cluster?: string,
   resourceType?: string,
   resourceName?: string,
-  namespace?: string
+  namespace?: string,
+  operations?: string[],
+  range: AuditTimeRange = {}
 ) => {
   return useQuery<AuditLogResponse, Error>({
     queryKey: [
@@ -365,6 +739,9 @@ export const useAuditLogs = (
       resourceType,
       resourceName,
       namespace,
+      operations,
+      range.from,
+      range.to,
     ],
     queryFn: () =>
       fetchAuditLogs(
@@ -376,7 +753,9 @@ export const useAuditLogs = (
         cluster,
         resourceType,
         resourceName,
-        namespace
+        namespace,
+        operations,
+        range
       ),
     staleTime: 20000,
   })
@@ -386,7 +765,9 @@ export const fetchLoginLogs = async (
   page = 1,
   size = 20,
   userId?: number,
-  search?: string
+  search?: string,
+  outcome?: 'success' | 'failure',
+  range: AuditTimeRange = {}
 ): Promise<LoginLogResponse> => {
   const params = new URLSearchParams({
     page: String(page),
@@ -398,18 +779,56 @@ export const fetchLoginLogs = async (
   if (search) {
     params.set('search', search)
   }
+  if (outcome) {
+    params.set('outcome', outcome)
+  }
+  appendTimeRange(params, range)
   return fetchAPI<LoginLogResponse>(`/admin/login-logs?${params.toString()}`)
+}
+
+export const exportLoginLogs = async (
+  userId?: number,
+  search?: string,
+  outcome?: 'success' | 'failure',
+  range: AuditTimeRange = {}
+) => {
+  const params = new URLSearchParams()
+  if (userId) {
+    params.set('userId', String(userId))
+  }
+  if (search) {
+    params.set('search', search)
+  }
+  if (outcome) {
+    params.set('outcome', outcome)
+  }
+  appendTimeRange(params, range)
+  return downloadFile(
+    `/admin/login-logs/export?${params.toString()}`,
+    'kite-login-logs.csv'
+  )
 }
 
 export const useLoginLogs = (
   page = 1,
   size = 20,
   userId?: number,
-  search?: string
+  search?: string,
+  outcome?: 'success' | 'failure',
+  range: AuditTimeRange = {}
 ) => {
   return useQuery<LoginLogResponse, Error>({
-    queryKey: ['login-logs', page, size, userId, search],
-    queryFn: () => fetchLoginLogs(page, size, userId, search),
+    queryKey: [
+      'login-logs',
+      page,
+      size,
+      userId,
+      search,
+      outcome,
+      range.from,
+      range.to,
+    ],
+    queryFn: () => fetchLoginLogs(page, size, userId, search, outcome, range),
     staleTime: 20000,
   })
 }
@@ -418,7 +837,8 @@ export const fetchPasswordChangeLogs = async (
   page = 1,
   size = 20,
   userId?: number,
-  search?: string
+  search?: string,
+  range: AuditTimeRange = {}
 ): Promise<PasswordChangeLogResponse> => {
   const params = new URLSearchParams({
     page: String(page),
@@ -430,8 +850,28 @@ export const fetchPasswordChangeLogs = async (
   if (search) {
     params.set('search', search)
   }
+  appendTimeRange(params, range)
   return fetchAPI<PasswordChangeLogResponse>(
     `/admin/password-change-logs?${params.toString()}`
+  )
+}
+
+export const exportPasswordChangeLogs = async (
+  userId?: number,
+  search?: string,
+  range: AuditTimeRange = {}
+) => {
+  const params = new URLSearchParams()
+  if (userId) {
+    params.set('userId', String(userId))
+  }
+  if (search) {
+    params.set('search', search)
+  }
+  appendTimeRange(params, range)
+  return downloadFile(
+    `/admin/password-change-logs/export?${params.toString()}`,
+    'kite-password-change-logs.csv'
   )
 }
 
@@ -439,16 +879,40 @@ export const usePasswordChangeLogs = (
   page = 1,
   size = 20,
   userId?: number,
-  search?: string
+  search?: string,
+  range: AuditTimeRange = {}
 ) => {
   return useQuery<PasswordChangeLogResponse, Error>({
-    queryKey: ['password-change-logs', page, size, userId, search],
-    queryFn: () => fetchPasswordChangeLogs(page, size, userId, search),
+    queryKey: [
+      'password-change-logs',
+      page,
+      size,
+      userId,
+      search,
+      range.from,
+      range.to,
+    ],
+    queryFn: () => fetchPasswordChangeLogs(page, size, userId, search, range),
     staleTime: 20000,
   })
 }
 
-// API Key Management
+// 审计设置（保留策略 + syslog 外发）：审计管理员唯一可写的审计配置。
+export const fetchAuditSetting = (): Promise<AuditSettingResponse> =>
+  fetchAPI<AuditSettingResponse>('/admin/audit-setting/')
+
+export const useAuditSetting = () =>
+  useQuery<AuditSettingResponse, Error>({
+    queryKey: ['audit-setting'],
+    queryFn: fetchAuditSetting,
+  })
+
+export const updateAuditSetting = async (
+  setting: AuditSetting
+): Promise<{ setting: AuditSetting }> =>
+  apiClient.put<{ setting: AuditSetting }>('/admin/audit-setting/', setting)
+
+// API Key 管理
 export interface APIKeyCreateRequest {
   name: string
 }
@@ -465,12 +929,17 @@ export interface GeneralSetting {
   kubectlImage: string
   nodeTerminalImage: string
   clusterAgentImage: string
+  /** 普通用户新建命名空间后是否自动纳入其权限范围（优先归属其权限绑定）。 */
+  autoBindUserNamespace: boolean
   enableAnalytics: boolean
   enableVersionCheck: boolean
   passwordLoginDisabled: boolean
   enableMFA: boolean
-  enablePasskeyLogin: boolean
   loginPrompt: string
+  /** 自定义 logo（http(s) 或 data: 地址）；为空表示使用内置图标。 */
+  logoUrl: string
+  /** 控制台展示名称；为空表示使用默认名 Kite。 */
+  siteName: string
 }
 
 export interface GeneralSettingUpdateRequest {
@@ -484,12 +953,14 @@ export interface GeneralSettingUpdateRequest {
   kubectlImage?: string
   nodeTerminalImage?: string
   clusterAgentImage?: string
+  autoBindUserNamespace?: boolean
   enableAnalytics?: boolean
   enableVersionCheck?: boolean
   passwordLoginDisabled?: boolean
   enableMFA?: boolean
-  enablePasskeyLogin?: boolean
   loginPrompt?: string
+  logoUrl?: string
+  siteName?: string
 }
 
 export interface LDAPSetting {
@@ -554,9 +1025,12 @@ export type MFAPolicy = 'disabled' | 'all' | 'admin'
 export interface SecuritySetting {
   loginCaptchaEnabled: boolean
   inactiveUserDisableDays: number
+  defaultUserEnabled: boolean
+  defaultUserExpireDays: number
   remoteLoginNoticeEnabled: boolean
   mfaPolicy: MFAPolicy
   mfaThirdPartyEnabled: boolean
+  mfaStepUpEnabled: boolean
   mfaVerifyTtlSeconds: number
   otpIssuerName: string
   otpVerifyWindow: number
@@ -567,12 +1041,14 @@ export interface SecuritySetting {
   ipWhitelist: string[]
   ipBlacklist: string[]
   singleDeviceLogin: boolean
-  existingUserOnly: boolean
-  loginSourceRestricted: boolean
+  rejectUnknownUsers: boolean
+  loginSourceEnforced: boolean
+  loginSourceAllowlist: string[]
   passwordExpireDays: number
   passwordHistoryCount: number
   passwordMinLength: number
   adminPasswordMinLength: number
+  passwordMinClasses: number
   passwordRequireUppercase: boolean
   passwordRequireLowercase: boolean
   passwordRequireDigit: boolean
@@ -611,6 +1087,27 @@ export const fetchLockedLoginIPs = async (): Promise<{
 }> => {
   return fetchAPI<{ items: BlockedLoginIP[] }>(
     '/admin/security-setting/locked-ips'
+  )
+}
+
+// 重新导入集群后创建内置的默认授权配置（超级权限绑定）。
+export const ensureBindingGroupDefaults = async (
+  cluster: string
+): Promise<void> => {
+  await apiClient.post('/admin/binding-groups/defaults', { cluster })
+}
+
+// 管理员手动拉黑一个 IP（按策略中的 IP 锁定窗口），优先于白名单豁免。
+export const blockLoginIP = async (
+  ip: string
+): Promise<{ success: boolean; ip: string; blockedUntil: string }> => {
+  return await apiClient.post('/admin/security-setting/locked-ips', { ip })
+}
+
+// 解除某个 IP 的锁定（自动锁定与手动拉黑都会清除）。
+export const unblockLoginIP = async (ip: string): Promise<void> => {
+  await apiClient.delete(
+    `/admin/security-setting/locked-ips/${encodeURIComponent(ip)}`
   )
 }
 
@@ -713,10 +1210,13 @@ export const importLDAPUsers = async (
   usernames: string[],
   enableImported: boolean
 ): Promise<LDAPImportResult> => {
-  return await apiClient.post<LDAPImportResult>('/admin/ldap-setting/users/import', {
-    usernames,
-    enableImported,
-  })
+  return await apiClient.post<LDAPImportResult>(
+    '/admin/ldap-setting/users/import',
+    {
+      usernames,
+      enableImported,
+    }
+  )
 }
 
 export const fetchClusterNamespaces = async (
@@ -731,6 +1231,44 @@ export const fetchClusterNamespaces = async (
 export const fetchKnownGroups = async (): Promise<string[]> => {
   const res = await apiClient.get<{ groups: string[] }>('/admin/groups')
   return res.groups || []
+}
+
+// 用户组来源：local = 控制台创建；ldap / oidc = 目录同步发现。
+export type GroupSource = 'local' | 'ldap' | 'oidc'
+
+export interface KnownGroupDetail {
+  source: GroupSource
+  /** 控制台本地备注（描述），空串表示未填写。 */
+  description: string
+}
+
+export const fetchKnownGroupDetails = async (): Promise<
+  Record<string, KnownGroupDetail>
+> => {
+  const res = await apiClient.get<{
+    groups: string[]
+    sources?: Record<string, GroupSource>
+    descriptions?: Record<string, string>
+  }>('/admin/groups')
+  const details: Record<string, KnownGroupDetail> = {}
+  for (const name of res.groups || []) {
+    details[name] = {
+      source: res.sources?.[name] ?? 'local',
+      description: res.descriptions?.[name] ?? '',
+    }
+  }
+  return details
+}
+
+// 所有用户组及其成员用户名（group -> usernames），用于把「用户组」主体连同
+// 它覆盖的用户一起展示。
+export const fetchAllGroupMembers = async (): Promise<
+  Record<string, string[]>
+> => {
+  const res = await apiClient.get<{ groups: Record<string, string[]> }>(
+    '/admin/group-members'
+  )
+  return res.groups || {}
 }
 
 export const fetchAPIKeyList = async (): Promise<APIKey[]> => {

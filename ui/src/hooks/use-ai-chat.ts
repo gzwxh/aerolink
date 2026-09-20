@@ -61,6 +61,16 @@ export function useAIChat() {
     isLoadingRef.current = state.isLoading
   }, [state.isLoading])
 
+  // 卸载（例如关闭 AI 面板）时中止还在进行的流：否则 SSE reader 会继续读，
+  // finally 里的保存还会把半截会话写进本地历史。
+  useEffect(
+    () => () => {
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
+    },
+    []
+  )
+
   useEffect(() => {
     const nextHistory = loadHistoryFromStorage(username)
     historyRef.current = nextHistory

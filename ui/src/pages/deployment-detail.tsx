@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { IconNetwork, IconReload, IconScale } from '@tabler/icons-react'
+import {
+  IconEdit,
+  IconNetwork,
+  IconReload,
+  IconScale,
+  IconTerminal2,
+} from '@tabler/icons-react'
 import { Deployment } from 'kubernetes-types/apps/v1'
 import type { Container, Service } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -16,8 +23,7 @@ import {
   useResourcesWatch,
 } from '@/lib/api'
 import { getDeploymentStatus, toSimpleContainer } from '@/lib/k8s'
-import { WorkloadServiceYamlTab } from '@/components/workload-service-yaml-tab'
-import { translateError } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -27,6 +33,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -52,6 +59,7 @@ import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { Terminal } from '@/components/terminal'
 import { VolumeTable } from '@/components/volume-table'
 import { WorkloadHistoryTabs } from '@/components/workload-history-tabs'
+import { WorkloadServiceYamlTab } from '@/components/workload-service-yaml-tab'
 
 import {
   ResourceDetailShell,
@@ -71,8 +79,17 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     useState<ExposeServiceType>('ClusterIP')
   const [isScalePopoverOpen, setIsScalePopoverOpen] = useState(false)
   const [isRestartPopoverOpen, setIsRestartPopoverOpen] = useState(false)
+  const [isTerminalDialogOpen, setIsTerminalDialogOpen] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const can = useCan()
+  // 扩缩容 / 重启（PATCH 模板）是写操作，暴露服务则会创建 Service。
+  const canUpdate = can('deployments', 'update', { namespace })
+  const canCreateService = can('services', 'create', { namespace })
+  const canExec = can('pods', 'exec', { namespace })
+  // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
+  const canLog = can('pods', 'log', { namespace })
 
   const {
     data: deployment,
@@ -104,9 +121,9 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   const { data: relatedResources, refetch: refetchRelatedResources } =
     useRelatedResources('deployments', name, namespace)
 
-  // Services associated with this workload (name match or selector match) —
-  // used by the Endpoints card; unrelated services in the same namespace are
-  // not the concern of this deployment's overview.
+  // 与该工作负载关联的 Service（名称匹配或选择器匹配）——
+  // 由 Endpoints 卡片使用；同一命名空间中不相关的 Service
+  // 不是该 Deployment 概览需要关心的。
   const associatedServices = useMemo(() => {
     const matchLabels = deployment?.spec?.selector?.matchLabels || {}
     return (relatedServices || []).filter((svc) => {
@@ -128,6 +145,16 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
 
     return containerPort || 80
   }, [deployment])
+
+  // 终端弹窗与 containers 标签页共用同一份容器列表。
+  const containers = useMemo(
+    () => deployment?.spec?.template.spec?.containers || [],
+    [deployment]
+  )
+  const initContainers = useMemo(
+    () => deployment?.spec?.template.spec?.initContainers || [],
+    [deployment]
+  )
 
   useEffect(() => {
     if (deployment) {
@@ -178,8 +205,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       )
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }, [t, deployment, name, namespace])
 
@@ -197,8 +224,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       )
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }, [t, deployment, name, namespace, scaleReplicas])
 
@@ -248,8 +275,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       toast.success(t('deployments.exposed', { service: name }))
       setIsExposeDialogOpen(false)
       await refetchRelatedResources()
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsExposing(false)
     }
@@ -293,8 +320,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
           })
         )
         setRefreshInterval(1000)
-      } catch (err) {
-        toast.error(translateError(err, t))
+      } catch {
+        // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       }
     },
     [deployment, name, namespace, t]
@@ -304,8 +331,6 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     const tabs: ResourceDetailShellTab<Deployment>[] = []
     const relatedServiceList = associatedServices || []
     const pods = relatedPods || []
-    const containers = deployment?.spec?.template.spec?.containers || []
-    const initContainers = deployment?.spec?.template.spec?.initContainers || []
 
     if (relatedServiceList.length > 0) {
       tabs.push({
@@ -362,8 +387,11 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
                     key={container.name}
                     container={container}
                     init
-                    onContainerUpdate={(updatedContainer) =>
-                      handleContainerUpdate(updatedContainer, true)
+                    onContainerUpdate={
+                      canUpdate
+                        ? (updatedContainer) =>
+                            handleContainerUpdate(updatedContainer, true)
+                        : undefined
                     }
                   />
                 ))}
@@ -374,8 +402,11 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
                 <ContainerInfoCard
                   key={container.name}
                   container={container}
-                  onContainerUpdate={(updatedContainer) =>
-                    handleContainerUpdate(updatedContainer, false)
+                  onContainerUpdate={
+                    canUpdate
+                      ? (updatedContainer) =>
+                          handleContainerUpdate(updatedContainer, false)
+                      : undefined
                   }
                 />
               ))}
@@ -492,7 +523,10 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
 
     return tabs
   }, [
+    canUpdate,
+    containers,
     deployment,
+    initContainers,
     isLoading,
     isLoadingPods,
     labelSelector,
@@ -532,7 +566,52 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       }
       headerActions={
         <>
-          {relatedResources && !hasRelatedService ? (
+          {canUpdate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/deployments/${namespace}/${name}/edit`)}
+            >
+              <IconEdit className="w-4 h-4" />
+              {t('common.actions.edit')}
+            </Button>
+          ) : null}
+          {canExec ? (
+            <Dialog
+              open={isTerminalDialogOpen}
+              onOpenChange={setIsTerminalDialogOpen}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <IconTerminal2 className="w-4 h-4" />
+                  {t('common.tabs.terminal')}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-5xl">
+                <DialogHeader className="sr-only">
+                  <DialogTitle>{t('common.tabs.terminal')}</DialogTitle>
+                  <DialogDescription>
+                    {t('common.messages.terminalDialogDescription')}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="h-[70vh] min-h-0">
+                  {relatedPods && relatedPods.length > 0 ? (
+                    <Terminal
+                      namespace={namespace}
+                      pods={relatedPods}
+                      containers={containers}
+                      initContainers={initContainers}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      {t('common.messages.noPods')}
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          ) : null}
+          {canCreateService && relatedResources && !hasRelatedService ? (
             <Button
               variant="outline"
               size="sm"
@@ -543,111 +622,115 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
               {t('common.actions.expose')}
             </Button>
           ) : null}
-          <Popover
-            open={isScalePopoverOpen}
-            onOpenChange={setIsScalePopoverOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <IconScale className="w-4 h-4" />
-                {t('common.actions.scale')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium">
-                    {t('detail.dialogs.scaleDeployment.title')}
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    {t('detail.dialogs.scaleDeployment.description')}
-                  </p>
+          {canUpdate ? (
+            <Popover
+              open={isScalePopoverOpen}
+              onOpenChange={setIsScalePopoverOpen}
+            >
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <IconScale className="w-4 h-4" />
+                  {t('common.actions.scale')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium">
+                      {t('detail.dialogs.scaleDeployment.title')}
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      {t('detail.dialogs.scaleDeployment.description')}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="replicas">
+                      {t('common.fields.replicas')}
+                    </Label>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="size-9 p-0"
+                        onClick={() =>
+                          setScaleReplicas(Math.max(0, scaleReplicas - 1))
+                        }
+                        disabled={scaleReplicas <= 0}
+                      >
+                        -
+                      </Button>
+                      <Input
+                        id="replicas"
+                        type="number"
+                        min="0"
+                        value={scaleReplicas}
+                        onChange={(e) =>
+                          setScaleReplicas(parseInt(e.target.value) || 0)
+                        }
+                        className="text-center"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="size-9 p-0"
+                        onClick={() => setScaleReplicas(scaleReplicas + 1)}
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
+                  <Button onClick={handleScale} className="w-full">
+                    <IconScale className="w-4 h-4 mr-2" />
+                    {t('common.actions.scale')}
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="replicas">
-                    {t('common.fields.replicas')}
-                  </Label>
-                  <div className="flex items-center gap-1">
+              </PopoverContent>
+            </Popover>
+          ) : null}
+          {canUpdate ? (
+            <Popover
+              open={isRestartPopoverOpen}
+              onOpenChange={setIsRestartPopoverOpen}
+            >
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <IconReload className="w-4 h-4" />
+                  {t('common.actions.restart')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium">
+                      {t('detail.dialogs.restartDeployment.title')}
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      {t('detail.dialogs.restartDeployment.description')}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      size="sm"
-                      className="size-9 p-0"
-                      onClick={() =>
-                        setScaleReplicas(Math.max(0, scaleReplicas - 1))
-                      }
-                      disabled={scaleReplicas <= 0}
+                      onClick={() => setIsRestartPopoverOpen(false)}
+                      className="flex-1"
                     >
-                      -
+                      {t('common.actions.cancel')}
                     </Button>
-                    <Input
-                      id="replicas"
-                      type="number"
-                      min="0"
-                      value={scaleReplicas}
-                      onChange={(e) =>
-                        setScaleReplicas(parseInt(e.target.value) || 0)
-                      }
-                      className="text-center"
-                    />
                     <Button
-                      variant="outline"
-                      size="sm"
-                      className="size-9 p-0"
-                      onClick={() => setScaleReplicas(scaleReplicas + 1)}
+                      onClick={() => {
+                        handleRestart()
+                        setIsRestartPopoverOpen(false)
+                      }}
+                      className="flex-1"
                     >
-                      +
+                      <IconReload className="w-4 h-4 mr-2" />
+                      {t('common.actions.restart')}
                     </Button>
                   </div>
                 </div>
-                <Button onClick={handleScale} className="w-full">
-                  <IconScale className="w-4 h-4 mr-2" />
-                  {t('common.actions.scale')}
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <Popover
-            open={isRestartPopoverOpen}
-            onOpenChange={setIsRestartPopoverOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <IconReload className="w-4 h-4" />
-                {t('common.actions.restart')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium">
-                    {t('detail.dialogs.restartDeployment.title')}
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    {t('detail.dialogs.restartDeployment.description')}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsRestartPopoverOpen(false)}
-                    className="flex-1"
-                  >
-                    {t('common.actions.cancel')}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      handleRestart()
-                      setIsRestartPopoverOpen(false)
-                    }}
-                    className="flex-1"
-                  >
-                    <IconReload className="w-4 h-4 mr-2" />
-                    {t('common.actions.restart')}
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverContent>
+            </Popover>
+          ) : null}
           <Dialog
             open={isExposeDialogOpen}
             onOpenChange={setIsExposeDialogOpen}
@@ -744,7 +827,10 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
         ['pods', 'containers'].includes(tab.value)
       )}
       extraTabs={extraTabs.filter(
-        (tab) => !['pods', 'containers'].includes(tab.value)
+        (tab) =>
+          !['pods', 'containers'].includes(tab.value) &&
+          (tab.value !== 'terminal' || canExec) &&
+          (tab.value !== 'logs' || canLog)
       )}
     />
   )

@@ -5,8 +5,12 @@
       "apply": "Apply",
       "assign": "Assign",
       "assignRoles": "Assign Roles",
+      "backToOverview": "Back to overview",
       "backToList": "Back to list",
+      "goBack": "Go back",
+      "goForward": "Go forward",
       "clearAll": "Clear all",
+      "deselectAllOptions": "Clear all",
       "addItem": "Add “{{value}}”",
       "cancel": "Cancel",
       "close": "Close",
@@ -17,6 +21,7 @@
       "cordon": "Cordon",
       "createGroup": "Create New Group",
       "create": "Create",
+      "createNewResource": "Create new resource",
       "customizeSidebar": "Customize Sidebar",
       "delete": "Delete",
       "describe": "Describe",
@@ -24,6 +29,7 @@
       "done": "Done",
       "drain": "Drain",
       "edit": "Edit",
+      "view": "View",
       "editYaml": "Edit YAML",
       "downloadYaml": "Download YAML",
       "enable": "Enable",
@@ -36,6 +42,8 @@
       "moveUp": "Move up",
       "newChat": "New Chat",
       "patch": "Patch",
+      "toggleSidebar": "Toggle Sidebar",
+      "toggleKubectlTerminal": "Toggle Kubectl Terminal",
       "refresh": "Refresh",
       "remove": "Remove",
       "readFromFile": "Read from file",
@@ -62,7 +70,11 @@
       "update": "Update",
       "viewDiff": "View Diff",
       "viewError": "View Error",
-      "watch": "Watch"
+      "watch": "Watch",
+      "actions": "Actions",
+      "continue": "Continue",
+      "creating": "Creating...",
+      "deleting": "Deleting..."
     },
     "fields": {
       "accessModes": "Access Modes",
@@ -96,8 +108,10 @@
       "completed": "Completed",
       "config": "Configuration",
       "container": "Container",
+      "initContainer": "Init container",
       "containerRuntime": "Container Runtime",
       "containers": "Containers",
+      "containersAndImages": "Containers & Images",
       "count": "Count",
       "cpu": "CPU",
       "created": "Created",
@@ -156,6 +170,7 @@
       "observedGeneration": "Observed Generation",
       "operator": "Operator",
       "operation": "Operation",
+      "result": "Result",
       "os": "OS",
       "osImage": "OS Image",
       "owner": "Owner",
@@ -186,6 +201,7 @@
       "replicas": "Replicas",
       "resource": "Resource",
       "resources": "Resources",
+      "resourceLimits": "Resource Limits",
       "resourceVersion": "Resource Version",
       "restart": "Restart",
       "restartCount": "Restart Count",
@@ -234,7 +250,13 @@
       "passwordChangeLogs": "Password Change Logs",
       "yamlConfiguration": "YAML Configuration",
       "yamlContent": "YAML Content",
-      "yamlDiff": "YAML Diff"
+      "yamlDiff": "YAML Diff",
+      "system": "System",
+      "disabled": "Disabled",
+      "email": "Email",
+      "error": "Error",
+      "phone": "Phone",
+      "remark": "Remarks"
     },
     "messages": {
       "addNewItem": "Add a new {{resource}}",
@@ -243,10 +265,11 @@
       "applying": "Applying...",
       "assigned": "Assigned",
       "auditLogsDescription": "Track who changed resources and review YAML diffs",
-      "loginLogsDescription": "Review every successful sign-in and its source IP",
+      "loginLogsDescription": "Review every sign-in attempt, successful or rejected, and its source IP",
       "passwordChangeLogsDescription": "Review who changed a password and when",
       "confirmRemoveOwnRole": "You are removing your own role assignment. This may affect your permissions. Are you sure?",
       "copied": "Copied to clipboard",
+      "copyFailed": "Copy failed. Select the text and copy it manually.",
       "createApiKeyDescription": "Create a new API key for programmatic access.",
       "created": "{{resource}} created successfully",
       "createFirstItem": "Create a {{resource}} to get started",
@@ -266,6 +289,8 @@
       "invalidYaml": "Invalid YAML",
       "issuerOrOAuthUrlRequired": "Please fill in either Issuer or OAuth URL (Authorization, Token, User Info)",
       "keepCurrentConfiguration": "Leave empty to keep current configuration",
+      "viewCurrentConfig": "View current config",
+      "configLoaded": "Current config loaded; saving will overwrite with this content",
       "loading": "Loading...",
       "loadingEditor": "Loading editor...",
       "loadingPods": "Loading pods...",
@@ -278,6 +303,7 @@
       "neverUsed": "Never",
       "noChatHistory": "No chat history yet",
       "noData": "No data",
+      "noContainersFound": "No containers found.",
       "noErrorMessage": "No error message",
       "noItemsConfigured": "No {{resource}} configured",
       "noItemsFound": "No {{resource}} found",
@@ -291,7 +317,7 @@
       "notReady": "Not Ready",
       "notStarted": "Not started",
       "passwordLoginDescription": "Allow users to sign in with a username and password.",
-      "passwordLoginWarningDescription": "Verify that your LDAP、OAuth Provider、Passkey provider is working before saving. Without a working alternative login method, you will be locked out and can only recover by resetting the database.",
+      "passwordLoginWarningDescription": "Verify that your LDAP、OAuth Provider is working before saving. Without a working alternative login method, you will be locked out and can only recover by resetting the database.",
       "passwordLoginWarningTitle": "Warning: You may lose access!",
       "passwordReset": "Password reset",
       "resourceNotFound": "{{resource}} not found",
@@ -305,7 +331,12 @@
       "yamlSaved": "YAML saved successfully",
       "namespaceNotFoundOnCluster": "Namespace {{namespace}} does not exist in the current cluster. It may belong to another cluster.",
       "namespaceNotFoundHint": "Pick one of the namespaces below, or view resources across all namespaces.",
-      "createFailed": "Create failed"
+      "createFailed": "Create failed",
+      "terminalDialogDescription": "Pick a pod and container, then run commands inside the dialog.",
+      "containerUpdated": "Container updated successfully",
+      "disabled": "Disabled",
+      "enabled": "Enabled",
+      "noResults": "No matching results"
     },
     "tabs": {
       "containers": "Containers",
@@ -324,12 +355,18 @@
       "serviceYaml": "Related Services"
     },
     "units": {
-      "pods": "pods"
+      "pods": "pods",
+      "cores": "cores"
     },
     "values": {
+      "disabled": "Disabled",
       "allClusters": "All clusters",
       "allOperations": "All operations",
       "allRoles": "All roles",
+      "allStatus": "All statuses",
+      "allProviders": "All providers",
+      "allGroups": "All groups",
+      "allSources": "All sources",
       "allUsers": "All users",
       "passwordChangeSelf": "Self",
       "passwordChangeAdmin": "Admin reset",
@@ -349,10 +386,13 @@
       "groupsClaim": "e.g., memberOf",
       "issuer": "https://provider.com (auto discovery)",
       "scopes": "openid,profile,email",
+      "searchContainers": "Search containers...",
+      "selectContainer": "Select container...",
       "searchResourceName": "Search resource name...",
       "searchUsernameOrIP": "Search username or IP...",
       "searchUsers": "Search users...",
       "searchGroups": "Search groups...",
+      "searchRoles": "Search roles...",
       "selectTemplate": "Select a template",
       "selectUser": "Select user",
       "selectUsers": "Select users...",
@@ -373,6 +413,17 @@
       "previous": "Previous",
       "next": "Next",
       "page": "Page {{current}} of {{total}}"
+    },
+    "namespaceSelector": {
+      "all": "All Namespaces",
+      "many": "{{total}} Namespaces",
+      "select": "Select namespace...",
+      "selectMultiple": "Select namespaces...",
+      "other": "Other namespaces",
+      "search": "Search...",
+      "loading": "Loading...",
+      "noResults": "No results",
+      "toggle": "Toggle namespace {{name}}"
     }
   },
   "globalSearch": {
@@ -392,6 +443,7 @@
   },
   "sidebar": {
     "groups": {
+      "cluster": "Cluster",
       "traffic": "traffic",
       "storage": "storage",
       "config": "config",
@@ -419,7 +471,7 @@
     "menuGroups": "Menu Groups",
     "resetToDefault": "Reset to Default",
     "setAsGlobal": "Set as global sidebar",
-    "setAsGlobalDescription": "Apply the current layout to all non-admin users and admins without a personal sidebar configuration. Admins with a personal configuration keep their own layout.",
+    "setAsGlobalDescription": "Apply the current layout to everyone who has not customized their own sidebar yet. Anyone with a personal layout keeps it.",
     "setAsGlobalSuccess": "Global sidebar updated successfully",
     "setAsGlobalError": "Failed to update global sidebar",
     "unsetGlobal": "Unset global sidebar",
@@ -429,7 +481,24 @@
     "customize": "Customize Sidebar",
     "customizeTitle": "Customize Sidebar",
     "expand": "Expand",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "unpin": "Unpin",
+    "pinToTop": "Pin to top",
+    "hideGroup": "Hide group",
+    "showGroup": "Show group",
+    "hideItem": "Hide item",
+    "showItem": "Show item",
+    "deleteGroup": "Delete group",
+    "removeFromGroup": "Remove from group",
+    "customGroup": "Custom",
+    "addCRDToGroup": "Add to group",
+    "crdPlaceholder": "Select CRD...",
+    "crdToAddPlaceholder": "Select a CRD to add...",
+    "crdSearch": "Search CRDs...",
+    "crdEmpty": "No CRDs found.",
+    "crdLoading": "Loading CRDs...",
+    "crdLoadFailed": "Failed to load CRDs",
+    "saveFailed": "Failed to save the sidebar configuration; please try again later"
   },
   "nav": {
     "rbac": "RBAC",
@@ -515,8 +584,43 @@
     "clusterStats": "Cluster Statistics",
     "recentEvents": "Recent Events",
     "resourceCharts": "Resource Charts",
+    "scopedHint": "Showing the namespaces you have access to; cluster capacity is not included.",
     "failedToLoad": "Failed to load overview data",
     "unknownError": "Unknown error occurred"
+  },
+  "loginLog": {
+    "copyClient": "Copy client info",
+    "clickToCopy": "Click to copy"
+  },
+  "podFiles": {
+    "title": "Pod files",
+    "upload": "Upload",
+    "uploadSuccess": "Uploaded {{name}}",
+    "uploadDenied": "No permission to upload container files",
+    "loading": "Loading files...",
+    "empty": "No files found",
+    "goToParent": "Go to parent directory",
+    "goToRoot": "Go to home directory",
+    "currentPath": "Current path",
+    "refresh": "Refresh file list",
+    "enterDirectory": "Enter directory {{name}}",
+    "preview": "Preview file",
+    "download": "Download file",
+    "downloadDirectory": "Download directory as .tar archive",
+    "fields": {
+      "name": "Name",
+      "uid": "UID",
+      "gid": "GID",
+      "size": "Size",
+      "mode": "Mode",
+      "modified": "Modified"
+    },
+    "errors": {
+      "pod_files_unsupported": "File browsing is not supported for container {{container}} (missing 'ls' command)",
+      "pod_files_path_required": "File path is required",
+      "pod_files_path_invalid": "Invalid file path",
+      "pod_files_path_traversal": "Path must not contain '..'"
+    }
   },
   "pods": {
     "title": "Pods",
@@ -563,7 +667,8 @@
     "loadingRelatedResources": "Loading related resources...",
     "noRelatedResources": "No related resources",
     "openContainerDetails": "Open {{name}}",
-    "lastState": "last: {{state}}"
+    "lastState": "last: {{state}}",
+    "ready": "Ready"
   },
   "deployments": {
     "title": "Deployments",
@@ -575,6 +680,29 @@
     "targetPort": "Target Port",
     "exposeInvalidPort": "Port must be between 1 and 65535",
     "exposeNoSelector": "No Deployment selector labels found to expose"
+  },
+  "deploymentActions": {
+    "viewYaml": "View YAML",
+    "viewYamlDescription": "Current YAML of {{name}} (read-only).",
+    "editImage": "Edit image",
+    "editImageDescription": "Update container images of {{name}}; only changed images are submitted.",
+    "imageUnchanged": "No image changes",
+    "imageUpdated": "Updated images of {{name}}",
+    "pause": "Pause rollout",
+    "resume": "Resume rollout",
+    "paused": "Paused rollout of {{name}}",
+    "resumed": "Resumed rollout of {{name}}",
+    "rollingRestart": "Rolling restart",
+    "rollingRestarted": "Triggered a rolling restart of {{name}}",
+    "manageLabels": "Manage labels",
+    "manageAnnotations": "Manage annotations",
+    "labelsDescription": "Manage labels of {{name}}; removed rows delete the key on save.",
+    "annotationsDescription": "Manage annotations of {{name}}; removed rows delete the key on save.",
+    "addLabel": "Add label",
+    "addAnnotation": "Add annotation",
+    "metadataSaved": "Updated {{field}} of {{name}}",
+    "rollbackTitle": "Roll back {{name}}",
+    "rollbackDescription": "Pick a revision to roll back to; rolling back triggers a rollout."
   },
   "workloads": {
     "actions": {
@@ -695,10 +823,19 @@
   },
   "dialog": {
     "createResource": "Create Resource",
+    "createResourceDescription": "Paste one or more Kubernetes resource YAML documents and apply them to the cluster",
     "editResource": "Edit Resource",
     "deleteConfirmation": "Delete Confirmation",
     "deleteMessage": "Are you sure you want to delete this resource? This action cannot be undone.",
-    "containerEdit": "Edit Container"
+    "containerEdit": "Edit Container",
+    "createResourceUnsavedTitle": "Close without applying?",
+    "createResourceUnsavedMessage": "You have edited the YAML in this dialog.<br/><bold>Closing now <red>discards</red> those edits</bold>. Close anyway?",
+    "createResourceUnsavedCancel": "Keep editing",
+    "createResourceUnsavedConfirm": "Discard and close",
+    "unsavedChangesTitle": "Discard unsaved edits?",
+    "unsavedChangesMessage": "This dialog has edits that have not been saved yet.<br/><bold>Closing now <red>discards</red> them</bold>. Close anyway?",
+    "unsavedChangesCancel": "Keep editing",
+    "unsavedChangesConfirm": "Discard and close"
   },
   "status": {
     "active": "Active",
@@ -770,6 +907,12 @@
     "tolerationsTitle": "Tolerations",
     "opEqual": "Equal",
     "opExists": "Exists",
+    "opIn": "In",
+    "opNotIn": "NotIn",
+    "opDoesNotExist": "DoesNotExist",
+    "opGt": "Gt",
+    "opLt": "Lt",
+    "effectAll": "All",
     "tolerationSeconds": "Toleration (s)",
     "addToleration": "Add Toleration",
     "priorityTitle": "Priority",
@@ -779,7 +922,6 @@
   "login": {
     "title": "Sign In",
     "subtitle": "Access your Kubernetes dashboard",
-    "kubernetesDashboard": "Kubernetes Dashboard",
     "signIn": "Sign In",
     "enterUsername": "Enter your username",
     "enterPassword": "Enter your password",
@@ -791,7 +933,6 @@
     "signInWithLdap": "Sign In with LDAP",
     "useLocalAccount": "Sign in with a local account",
     "useLdapAccount": "Sign in with LDAP",
-    "signInWithPasskey": "Sign in with a passkey",
     "success": "Login successful",
     "tabs": {
       "ldap": "LDAP"
@@ -802,8 +943,7 @@
     "tryAgainHint": "You can try logging in with a different account that has the required permissions.",
     "noLoginMethods": "No login methods configured",
     "configureAuth": "Please configure authentication providers in your environment",
-    "footer": "© {{year}} Kite. All rights reserved.",
-    "documentation": "Documentation",
+    "footer": "© {{year}} Kite · {{company}}. All rights reserved.",
     "errors": {
       "accessDenied": "Access Denied",
       "authenticationFailed": "Authentication Failed",
@@ -826,6 +966,10 @@
       "generalError": "An unexpected error occurred during authentication.",
       "contactSupport": "Please try again or contact support if the issue persists.",
       "invalidCredentials": "Invalid username or password",
+      "login_invalid_credentials": "Invalid username or password",
+      "login_too_many_attempts": "Too many login attempts, please try again later",
+      "login_failed": "Login failed, please try again later",
+      "login_ip_denied": "Login from this IP is not allowed",
       "invalidMfaCode": "Invalid MFA code",
       "invalid_captcha": "Incorrect verification code",
       "captcha_required": "Please enter the verification code",
@@ -833,17 +977,50 @@
       "userDisabled": "User Disabled",
       "userDisabledMessage": "Your user account has been disabled. Please contact your administrator for more information.",
       "notInAllowedGroups": "Authentication succeeded, but your account is not a member of the allowed groups in {{provider}}.",
-      "notInAllowedGroupsDetails": "Please contact your administrator to be added to an allowed group."
+      "notInAllowedGroupsDetails": "Please contact your administrator to be added to an allowed group.",
+      "userExpired": "Account Expired",
+      "userExpiredMessage": "Your account has expired. Please contact an administrator.",
+      "userNotProvisioned": "Account Not Provisioned",
+      "userNotProvisionedMessage": "Account {{user}} has not been provisioned in the console. Please contact an administrator.",
+      "loginSourceDenied": "Login Source Not Allowed",
+      "loginSourceDeniedMessage": "Your network is not among the allowed login sources. Please connect from a managed network and try again."
+    },
+    "hidePassword": "Hide password",
+    "showPassword": "Show password",
+    "mfaPending": {
+      "title": "MFA code required",
+      "description": "Your identity is confirmed. Enter the 6-digit code from your authenticator app to finish signing in.",
+      "codeLabel": "MFA code",
+      "codePlaceholder": "Enter the 6-digit code",
+      "submit": "Verify and sign in",
+      "expired": "This sign-in attempt has expired. Please sign in again.",
+      "restart": "Sign in again"
     }
+  },
+  "session": {
+    "supersededTitle": "Signed in on another device",
+    "supersededMessage": "Your account was just used to sign in on another device, so this session has been signed out for safety.\n\nIf this was you, sign in again to continue. If it was not you, your password may be compromised: change it right away and tell an administrator.",
+    "takeoverNotice": "This sign-in signed out your other devices. If this was not you, change your password immediately.",
+    "signInAgain": "Sign in again"
   },
   "cluster": {
     "loading": "Loading clusters...",
     "error": "Error loading clusters: {{error}}",
-    "error403": "You do not have permission to access this cluster. Please contact your administrator for more information."
+    "error403": "You do not have permission to access this cluster. Please contact your administrator for more information.",
+    "switched": "Switched to cluster: {{name}}",
+    "unsavedSwitchConfirmTitle": "Switch clusters?",
+    "unsavedSwitchConfirm": "This page has unsaved edits (create form or YAML).<br/><bold>Switching clusters <red>discards</red> them</bold> and returns you to the resource list. Switch anyway?",
+    "unsavedSwitchConfirmAction": "Switch cluster",
+    "select": "Select cluster",
+    "switching": "Switching cluster...",
+    "switchingShort": "Switching...",
+    "default": "Default",
+    "syncError": "Sync error"
   },
   "resourceTable": {
     "errorLoading": "Error loading {{resourceName}}",
     "tryAgain": "Try Again",
+    "toggleColumns": "Toggle columns",
     "delete": "Delete",
     "deleteSelected": "Delete ({{count}})",
     "selectAll": "Select All ({{count}})",
@@ -872,41 +1049,35 @@
       "restartResourcesDescription": "This updates each {{resource}} Pod template and triggers a rollout. Paused or OnDelete strategies may not restart immediately, and rollout health is not monitored."
     },
     "watch": "Watch",
-    "namespace": "Namespace"
+    "refreshWatch": "Reconnect and fetch",
+    "namespace": "Namespace",
+    "allNamespaces": "All Namespaces",
+    "namespaceCount": "{{count}} namespaces",
+    "namespaceScoped": "namespace {{name}}",
+    "loadingResource": "Loading {{resource}}...",
+    "retrievingData": "Retrieving data",
+    "retrievingDataFrom": "Retrieving data from {{scope}}",
+    "emptyTitle": "No {{resource}} found",
+    "emptyLabelSelector": "No {{resource}} match labels: \"{{query}}\"",
+    "emptySearch": "No results match your search query: \"{{query}}\"",
+    "emptyCluster": "There are no {{resource}} found",
+    "emptyNamespace": "There are no {{resource}} in {{namespace}}",
+    "clearSearch": "Clear Search",
+    "selectAllRows": "Select all",
+    "selectRow": "Select row"
   },
   "errors": {
     "crdNotInstalledTitle": "Resource Type Not Available",
     "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature."
   },
-  "userGrants": {
-    "subjectsTitle": "Users & Groups",
-    "usersTitle": "Users",
-    "groupsPageTitle": "Groups",
-    "noSubjects": "No granted users or groups.",
-    "noGroups": "No granted groups.",
-    "selectSubjectHint": "Select a user or group to view its granted clusters and namespaces.",
-    "selectGroupHint": "Select a group to view its members and granted clusters and namespaces.",
-    "noGrants": "This subject has no role grants.",
-    "rolesCount": "{{count}} role(s)",
-    "groupsTitle": "Member of groups",
-    "openGroupHint": "Open group grants",
-    "membersTitle": "Members",
-    "noMembersSeen": "No members found in synced users.",
-    "clustersTitle": "Granted Clusters",
-    "namespacesTitle": "Namespaces on {{cluster}}",
-    "allNamespacesGranted": "All namespaces on this cluster are granted (*).",
-    "noNamespacesOnCluster": "No granted namespaces exist on this cluster."
-  },
   "nsActions": {
-    "permissions": "Permissions",
     "moreActions": "More actions",
     "editConfig": "Edit Configuration",
     "editYaml": "Edit YAML",
     "editYamlTitle": "Edit YAML - {{name}}",
     "clone": "Clone",
     "downloadYaml": "Download YAML",
-    "deleted": "Namespace {{name}} deleted",
-    "permissionsCloned": "Cloned permissions from {{count}} role(s)"
+    "deleted": "Namespace {{name}} deleted"
   },
   "nsEdit": {
     "title": "Edit {{name}}",
@@ -935,21 +1106,6 @@
     "workloadsTab": "Workloads",
     "podsTab": "Pods"
   },
-  "namespaceGrants": {
-    "namespaceLabel": "Namespace",
-    "title": "Grants for {{namespace}}",
-    "selectNamespaceHint": "Select a cluster and namespace to view its grants.",
-    "noGrants": "No role grants cover this namespace.",
-    "noNamespacedGrants": "No namespaced role grants cover this namespace.",
-    "includesClusterScoped": "incl. cluster-scoped",
-    "clusterScopedTitle": "Cluster-scoped grants",
-    "clusterScopedHint": "These roles grant cluster-scoped resources (nodes, persistent volumes, storage classes, ...) and are not limited by the selected namespace.",
-    "grantAccess": "Grant access",
-    "editRole": "Edit",
-    "editRoleTitle": "Edit role - {{name}}",
-    "editRoleHint": "Changes apply to every namespace and subject this role covers.",
-    "unassigned": "No subject assigned"
-  },
   "nodeEdit": {
     "title": "Edit node: {{name}}",
     "saved": "Node {{name}} updated",
@@ -967,14 +1123,16 @@
   },
   "nsCreate": {
     "title": "Create Namespace",
-    "description": "Create a namespace with container resource limits and optional grants.",
+    "description": "Create a namespace with container resource limits.",
     "namePlaceholder": "Enter namespace name",
     "descriptionLabel": "Description",
     "descPlaceholder": "Enter an optional description",
     "invalidName": "Name may only contain lowercase letters, numbers and dashes.",
-    "grantSection": "Authorization (optional)",
-    "grantHint": "Selected users/groups will be granted access to this namespace after creation.",
-    "created": "Namespace {{name}} created"
+    "grantMovedHint": "Authorization is configured in Permission Binding: assign this namespace to a group and bind its members to roles there.",
+    "created": "Namespace {{name}} created",
+    "boundToBinding": "Automatically bound to permission binding \"{{name}}\"",
+    "boundToRoles": "Added to the namespace scope of role(s) \"{{roles}}\"",
+    "notBound": "Not assigned automatically. Ask an administrator to allocate it."
   },
   "workloadCreate": {
     "title": "Create {{kind}}",
@@ -1042,6 +1200,9 @@
     "created": "{{kind}} \"{{name}}\" created successfully in namespace \"{{namespace}}\"",
     "failedToCreate": "Failed to create workload:",
     "pageTitle": "{{kind}}: Create",
+    "editPageTitle": "{{kind}}: Edit",
+    "noCreatePermission": "You do not have permission to create {{kind}} in namespace {{namespace}}.",
+    "noUpdatePermission": "You do not have permission to update {{kind}} in namespace {{namespace}}.",
     "namePlaceholder": "unique-name",
     "description": "Description",
     "descriptionPlaceholder": "Enter a description for this resource",
@@ -1197,36 +1358,76 @@
     "lastSchedule": "Last Schedule",
     "lastSuccess": "Last Success"
   },
+  "superAdminMFA": {
+    "title": "Bind MFA to the super administrator account",
+    "description": "The super administrator holds every permission in the system. Binding an authenticator app is the recommended protection: sign-in and sensitive operations will then require a code. To retire the account instead, first make sure another enabled account can open the console administration surface, then disable it.",
+    "action": "Bind now"
+  },
   "accessDenied": {
     "title": "Access Denied",
     "message": "You do not have permission to view this page. Contact an administrator if you believe this is a mistake.",
+    "roleConflictTitle": "Conflicting administrator roles",
+    "roleConflictMessage": "This account holds mutually exclusive administrator roles ({{roles}}). Separation of duties requires those roles to be held by different people, so the administration surfaces are closed to it. Ask a security administrator to remove one of the roles and try again.",
     "backToHome": "Back to Home"
   },
-  "nsPerm": {
-    "title": "Namespace permissions - {{name}}",
-    "description": "Grant roles to users or groups for this namespace. Group members inherit the group grants automatically.",
-    "currentGrants": "Current grants",
-    "noGrants": "No grants for this namespace yet.",
-    "addGrant": "Add grant",
-    "autoRoleHint": "A role named after the selected user/group will be used or created automatically.",
-    "autoRoleOption": "Auto (named after subject)",
-    "existingRoleHint": "The namespace and selected resources/verbs will be applied to this role.",
-    "roleNotFound": "Role not found.",
-    "autoRoleDescription": "Namespace grant for {{namespace}}",
-    "systemRoleConflict": "System roles cannot be modified.",
-    "grant": "Grant",
-    "grantSaved": "Granted {{count}} subject(s)",
-    "groupInheritHint": "Users in the group inherit this grant automatically.",
-    "viewInRbac": "Open in RBAC management",
-    "unsavedConfirm": "The current selection has not been saved yet. Leave anyway?"
-  },
   "rbac": {
-    "title": "RBAC Management",
+    "empty": "No roles yet",
     "rolesTitle": "Roles",
-    "roleType": "Role Type",
-    "roleTypeUser": "User Role",
-    "roleTypeGroup": "Group Role",
-    "roleTypeHint": "A user role grants a single user; a group role grants one or more LDAP / OIDC groups.",
+    "rolesSubtitle": "Manage role permissions and inherited roles",
+    "createRole": "Create Role",
+    "filterPlaceholder": "Filter",
+    "roleId": "Role ID",
+    "roleIdReadonlyHint": "The role ID is what authorization is evaluated against and cannot be changed after creation.",
+    "privilegesTitle": "Privileges",
+    "privilegesSubtitle": "Permissions are prefixed by source: Kubernetes resources use k8s and console-owned settings use kite, in the form <source>:<resource>:<action>. This page is view and search only.",
+    "privilegeId": "Privilege ID",
+    "privilegeType": "Type",
+    "privilegeName": "Name",
+    "privilegePermission": "Permission",
+    "privilegeFilterPlaceholder": "Filter (e.g. pods)",
+    "privilegeAllVerbs": "All verbs",
+    "privilegeHint": "Privileges come from the Privileges tab: one operation on one resource is one privilege. The settings family (settings / settings.<section>, i.e. kite:settings*) is carried by the built-in roles (system, security and audit administrators manage it fully; the read-only administrator only has get) and is not offered here.",
+    "editRoleTitle": "Edit role: {{name}}",
+    "viewRoleTitle": "View role: {{name}}",
+    "protectedRoleReadonlyHint": "Protected built-in role: its rules are maintained in code and can only be viewed, not modified or deleted.",
+    "protectedRolePrivilegesHint": "These built-in privileges are maintained in code and are read-only.",
+    "available": "Available",
+    "grantAll": "Grant all",
+    "grantSelected": "Grant selected",
+    "revokeSelected": "Revoke selected",
+    "revokeAll": "Revoke all",
+    "noAvailablePermissions": "No permissions available.",
+    "noGrantedPermissions": "No permissions granted yet.",
+    "saveRole": "Save Role",
+    "badgeWildcard": "WILDCARD",
+    "badgeNamespaced": "NAMESPACED",
+    "badgeCluster": "CLUSTER",
+    "badgeSettings": "SETTINGS",
+    "assigned": "Assigned",
+    "included": "Included",
+    "filterResources": "Filter resources...",
+    "filterOperations": "Filter operations...",
+    "noAssignedResources": "No resources assigned",
+    "noIncludedOperations": "No operations included",
+    "operationsHint": "Common operations (view / create / update / delete) apply to every assigned resource; operations named after a feature (view nodes, pod shell, ...) only apply to the resource they name.",
+    "roleNameHint": "The name is display-only and can be customized. Leave it empty to show the built-in name of a built-in role, or the role ID of a custom role.",
+    "roleDisplayNamePlaceholder": "Defaults to the role ID",
+    "operationScopeShared": "Applies to {{count}} resources",
+    "operationScopeSingle": "Only for {{resource}}",
+    "roleFormHint": "A role only defines clusters, resources and verbs; namespace scope comes from permission bindings.",
+    "rolesHint": "A role only defines clusters, resources and verbs; which namespaces a user or group can reach is decided by permission bindings.",
+    "deleteRoleConfirm": "Delete the role \"{{name}}\"?",
+    "subjects": "Assigned to",
+    "subjectsEmpty": "No users or user groups use this role.",
+    "subjectTypeGroup": "User group",
+    "roleType": "Type",
+    "roleTypeAll": "All types",
+    "roleTypeBuiltin": "Built-in",
+    "roleTypeCustom": "Custom",
+    "deleteRoleImpact": "{{count}} user(s) or user group(s) currently use this role; deleting it also removes those grants.",
+    "rolePermissionsEmpty": "No permissions configured.",
+    "noRoleDescription": "No description yet.",
+    "legacyPermissionsHint": "This role uses the legacy model: every resource shares the same union of verbs.",
     "subjectsSection": "Users & Groups",
     "subjectsSaveHint": "Selected users/groups will be granted this role when saved.",
     "grantOnSaveUser": "The selected user will be granted this role when saved.",
@@ -1239,14 +1440,11 @@
     "grantsViewTab": "User Grants",
     "addRole": "Add Role",
     "newRole": "New Role",
-    "selectRoleHint": "Select a role from the list on the left, or create a new role.",
-    "permissionsSection": "Permissions",
-    "permissionsHint": "Pick clusters on the left, then grant namespaces on the right. Namespace options follow the selected cluster.",
+    "permissionsHint": "Pick privileges on the left — one operation on one resource is one privilege. Roles are global — where they apply (which clusters, which namespaces) is defined by permission bindings. Note: \"Create namespaces\" is not granted by roles — an administrator creates the namespace and then assigns it to users through a permission binding.",
+    "podExecRequiresView": "\"Pod terminal\" is selected without \"View pods\": also select \"View pods\", otherwise the terminal cannot connect.",
     "grantHint": "Check to grant",
     "managePermissions": "Permissions",
     "managePermissionsHint": "Manage permissions for namespace {{namespace}}",
-    "allClustersGrantedInfo": "All clusters granted",
-    "grantedClustersInfo": "{{granted}}/{{total}} clusters granted",
     "namespaceClusterHint": "Namespaces below belong to cluster {{cluster}}",
     "grantStatus": "Grant Status",
     "granted": "Granted",
@@ -1255,12 +1453,10 @@
     "filterUngranted": "Not granted",
     "namespaceTotalInfo": "{{total}} namespaces · {{granted}} granted",
     "grantCluster": "Grant cluster",
-    "allClustersWildcard": "All clusters (*)",
     "allNamespacesWildcard": "All namespaces (*)",
     "allResourcesWildcard": "All resources (*)",
     "allVerbsWildcard": "All verbs (*)",
     "selectClusterHint": "Select a cluster on the left to view its namespaces.",
-    "noClusters": "No clusters configured.",
     "description": "Manage roles, permissions and members",
     "membersTitle": "Members",
     "membersHint": "Users and LDAP / OIDC groups assigned to this role.",
@@ -1269,7 +1465,41 @@
     "noMembers": "No members assigned yet.",
     "addMember": "Add",
     "roleColumn": "Role",
-    "systemRoleHint": "System role is read-only. You can still manage its members.",
+    "systemRoleHint": "System role: the role ID is fixed; the display name and permissions can be adjusted.",
+    "systemRoles": {
+      "admin": "System Administrator",
+      "auditor": "Audit Administrator",
+      "security-admin": "Security Administrator",
+      "viewer": "Read-only Administrator"
+    },
+    "systemRoleDescriptions": {
+      "admin": "System administrator: unrestricted console and cluster administration",
+      "auditor": "Audit administrator: read-only access to audit logs, plus the audit retention policy",
+      "security-admin": "Security administrator: identity, authorization and security policy",
+      "viewer": "Read-only administrator: read access to Kubernetes resources, pod logs and console settings"
+    },
+    "settingsResources": {
+      "all": "All settings sections"
+    },
+    "settingsSections": {
+      "general": "General",
+      "clusters": "Clusters",
+      "notification": "Notifications",
+      "templates": "Resource templates",
+      "apikeys": "API keys",
+      "authentication": "Authentication",
+      "users": "Users & groups",
+      "rbac": "Roles & permission binding",
+      "security": "Security policy",
+      "audit": "Audit logs"
+    },
+    "restoreDefaults": "Restore defaults",
+    "builtinRolesManagedElsewhere": "This subject also holds the built-in role(s) {{roles}}; they can only be maintained on the System Administrator / Audit Administrator / Security Administrator tabs, not here.",
+    "restoreDefaultsConfirm": "Restore role \"{{name}}\" to its built-in default permissions? Any manual changes to it will be lost.",
+    "restoreDefaultsDone": "Restored to the built-in default permissions. Ask affected users to sign in again.",
+    "separationOfDutiesHint": "Separation of duties: the system administrator (configuration), security administrator (authorization) and audit administrator (audit) roles have disjoint permissions and must not be held by the same account — such an account loses its administration surfaces until one of the roles is removed. Console settings are granted per section, and the bare \"*\" resource wildcard does NOT cover them, so each section has to be granted explicitly.",
+    "roleConflictsTitle": "Separation-of-duties conflicts",
+    "roleConflictsHint": "These accounts hold mutually exclusive administrator roles, so their administration surfaces are rejected. Remove one of the roles (or fix the binding-group membership that grants it) and ask them to try again.",
     "noPermissionCluster": "User {{user}} does not have permission to {{verb}} {{resource}} on cluster {{cluster}}",
     "noPermissionNamespace": "User {{user}} does not have permission to {{verb}} {{resource}} in namespace {{namespace}} on cluster {{cluster}}",
     "accessDenied": "Access Denied",
@@ -1278,25 +1508,22 @@
     "anyUser": "Any user",
     "confirmRemoveOwnRoleTitle": "Remove your role?",
     "deleteOwnRoleWarning": "This role is assigned to your current user. Deleting it may affect your permissions.",
-    "permissionPreviewTitle": "Permission Preview",
-    "permissionPreview": "Allows {{verbs}} on {{resources}} in namespaces {{namespaces}} on clusters {{clusters}}.",
+    "grantsRequired": "Pick at least one privilege.",
+    "noResourcesSelected": "Move resources to the right first, then move their operations in.",
     "resourceHint": "Use plural resource names. Type to filter suggestions. For CRDs and custom resources, enter the CRD name from the URL, for example widgets.example.com.",
     "loadNamespacesFrom": "Load namespace suggestions from",
     "namespaceCount": "{{count}} namespaces found",
     "namespaceLoadPartial": "{{failed}} cluster(s) could not be loaded.",
-    "allClusters": "All clusters ({{count}})",
     "noMatchingGroups": "No matching groups. Groups only include names that have been synced from LDAP/OIDC or assigned to users.",
     "namespaceScopeHint": "Namespace restrictions apply only to namespaced resources. Cluster-scoped resources (nodes, persistent volumes, storage classes, CRDs, ...) are not limited by the namespace list.",
     "namespacedResources": "Namespaced resources",
     "clusterScopedResources": "Cluster-scoped resources",
-    "clusterScopedResourceHint": "Cluster-scoped resources are not limited by the namespace list.",
+    "clusterScopedResourceHint": "Cluster-scoped resources are not namespaced.",
     "clusterScopedNotSelectable": "This role is limited to the selected namespaces, so cluster-scoped resources (nodes, persistent volumes, ...) are not offered here. Grant them with a role that applies to all namespaces.",
     "nodePermissionHint": "Buttons on the node pages are shown only when the matching permission is granted.",
-    "roleNameConflict": "A role with this name already exists. Role names must be unique.",
-    "namePrefixHint": "Role names start with \"{{prefix}}\" automatically.",
-    "nameFixedHint": "Role names are fixed and cannot be changed.",
-    "allPermissions": "All permissions",
-    "clusterOnlyPermissionsHint": "Select the clusters to grant. This role only manages cluster-scoped resources, so no namespace selection is needed.",
+    "roleNameConflict": "A role with this name already exists. Role names are unique across the whole console.",
+    "permissionRequired": "Required",
+    "clusterOnlyPermissionsHint": "Pick privileges on the left — one operation on one resource is one privilege. This role only manages cluster-scoped resources.",
     "nodePermissions": {
       "panelTitle": "Node permissions",
       "view": "View nodes",
@@ -1309,6 +1536,31 @@
       "deleteHint": "Delete nodes.",
       "exec": "Node terminal",
       "execHint": "Open a terminal session on a node."
+    },
+    "podPermissions": {
+      "panelTitle": "Pod permissions",
+      "view": "View pods",
+      "viewHint": "View the pod list and details, describe pods, download YAML.",
+      "create": "Create pods",
+      "createHint": "Create pods.",
+      "update": "Edit pods",
+      "updateHint": "Edit pods, adjust resources, attach debug containers.",
+      "delete": "Delete pods",
+      "deleteHint": "Delete pods.",
+      "logHint": "View pod logs.",
+      "exec": "Pod terminal",
+      "execHint": "Open a terminal session in a pod (also requires View pods).",
+      "viewFileHint": "Browse files in a pod.",
+      "downloadFileHint": "Download files from a pod.",
+      "uploadFileHint": "Upload files to a pod."
+    },
+    "podPermissionHint": "Buttons on the pod pages are shown only when the matching permission is granted.",
+    "settingsPermissions": {
+      "panelTitle": "Settings permissions",
+      "view": "View settings",
+      "viewHint": "Read the console system settings and permission configuration.",
+      "manage": "Manage settings",
+      "manageHint": "Change the console system settings and permissions (create, edit, delete)."
     },
     "verb": {
       "get": "Get",
@@ -1329,9 +1581,21 @@
       "viewFile": "View files",
       "downloadFile": "Download files",
       "uploadFile": "Upload files"
-    }
+    },
+    "protectedRoleHint": "Required by the three-way separation of duties: its rules are maintained in code, so it cannot be modified or deleted and is viewable only.",
+    "topRoleHint": "The highest-privilege role is protected: its permissions cannot be modified and the role cannot be deleted; it is viewable only.",
+    "viewerRoleHint": "The read-only administrator's rules are maintained in code: its permissions cannot be modified and the role cannot be deleted; it is viewable only.",
+    "protectedRoleBadge": "Protected",
+    "builtinRoleBadge": "Built-in",
+    "builtinRoleHint": "Built-in role: the name is fixed, its permissions can be adjusted, and the role itself can be deleted.",
+    "roles": "Roles",
+    "namespacePermissions": {
+      "panelTitle": "Namespace permissions"
+    },
+    "namespacePermissionHint": "Creating namespaces is an administrator action and is not granted by roles: ask an administrator to create the namespace, then assign it to users in Settings → Permission Bindings. Only view / update / delete are listed here."
   },
   "notifications": {
+    "operationFailed": "Operation failed",
     "tabs": {
       "email": "Mail",
       "templates": "Templates",
@@ -1350,12 +1614,23 @@
       "password_expiring": "Password expiring soon",
       "password_expired": "Password expired",
       "inactive_user_disabled": "Inactive account disabled",
+      "password_reset_by_admin": "Password reset by admin",
+      "mfa_reset_by_admin": "MFA reset by admin",
+      "account_disabled": "Account disabled",
+      "account_enabled": "Account enabled",
+      "account_expiring": "Account expiring soon",
+      "role_assigned": "Role assigned",
+      "role_unassigned": "Role removed",
+      "mail_delivery_failed": "Mail delivery failed",
+      "session_takeover": "Signed in on another device",
       "test": "Test mail"
     },
     "inbox": {
       "title": "Notifications",
       "empty": "No notifications",
       "markAllRead": "Mark all read",
+      "clearAll": "Clear all",
+      "confirmClear": "Confirm clear?",
       "unread": "Unread"
     },
     "actions": {
@@ -1364,34 +1639,129 @@
       "add": "Add",
       "delete": "Delete",
       "sendTest": "Send test mail",
-      "sending": "Sending..."
+      "sending": "Sending...",
+      "runDaily": "Run daily check now",
+      "running": "Running..."
     },
     "messages": {
       "saved": "Saved",
       "saveFailed": "Failed to save",
       "testSent": "Test mail sent",
-      "testFailed": "Failed to send test mail"
+      "testFailed": "Failed to send test mail",
+      "dailyRan": "Daily check completed"
+    },
+    "email": {
+      "title": "Notification Channels",
+      "description": "When the master switch is off no notifications are produced; in-app and email can be enabled separately."
+    },
+    "fields": {
+      "body": "Body",
+      "emailEnabled": "Email notifications",
+      "inAppEnabled": "In-app messages",
+      "smtpFrom": "From address",
+      "smtpHost": "SMTP server",
+      "smtpPassword": "Password / app password",
+      "smtpPort": "Port",
+      "smtpSenderName": "Sender name",
+      "smtpSkipVerify": "Skip certificate verification",
+      "smtpTls": "Encryption",
+      "smtpTlsNone": "None",
+      "smtpUsername": "Username",
+      "subject": "Subject",
+      "templateEnabled": "Enabled",
+      "testRecipient": "Recipient",
+      "username": "Username",
+      "emailEnabledHint": "Send email through the SMTP server",
+      "inAppEnabledHint": "Show messages in the notification center at the top right",
+      "passwordExpireNoticeDays": "Password expiry reminder lead time (days)",
+      "passwordExpireNoticeDaysHint": "Works with the password expiry days in Security settings; checked once a day",
+      "smtpPasswordKeep": "Configured; leave blank to keep it unchanged",
+      "smtpSkipVerifyHint": "Only for test environments with self-signed certificates"
+    },
+    "smtp": {
+      "title": "Mail Server",
+      "description": "SMTP settings; save first, then you can send a test email"
+    },
+    "subscriptions": {
+      "add": "Add subscription",
+      "empty": "No subscriptions configured",
+      "existing": "Configured subscriptions",
+      "description": "Choose the events and recipients to notify; users need an email address configured under Users to receive email"
+    },
+    "templates": {
+      "empty": "No templates",
+      "variables": "Available variables"
+    },
+    "test": {
+      "title": "Send Test Email",
+      "description": "Save the settings first, then send a test email to the given address"
+    },
+    "title": "Notification Settings"
+  },
+  "createUser": {
+    "title": "New user",
+    "accountHint": "The login name must be unique across all sources",
+    "sections": {
+      "account": "Account",
+      "authentication": "Authentication",
+      "other": "Other"
+    },
+    "selectGroups": "Select groups (multiple)",
+    "noGroups": "No groups available",
+    "groupsHint": "The new user joins the selected groups; groups can contain both local and LDAP / OIDC accounts.",
+    "randomPassword": "Generate random password",
+    "passwordInvalid": "Password requirements are not met. Adjust the password as prompted.",
+    "fields": {
+      "mfaLevel": "MFA level"
+    },
+    "mfaLevels": {
+      "enabled": "Enabled (follow global policy)",
+      "disabled": "Disabled"
+    },
+    "mfaLevelHint": "Current global policy: ",
+    "mfaLevelHintSuffix": "; accounts set to Disabled ignore the policy",
+    "mfaPolicy": {
+      "required": "Required",
+      "optional": "Enabled (optional)",
+      "disabled": "Disabled"
     }
   },
   "settings": {
     "title": "System Settings",
+    "readOnlyNotice": "Your roles grant read access to this section only, so the actions that change anything are hidden or disabled. Contact the administrator responsible for this section if you need a change.",
     "description": "Manage clusters and system settings",
+    "descriptions": {
+      "general": "Manage console-wide switches: AI assistant, kubectl and node terminal, cluster agent and runtime settings.",
+      "navigation": "Configure which groups and items the left navigation shows: reorder them, hide items or create new groups. Publishing the layout as the global sidebar applies it to users without a personal navigation setup.",
+      "clusters": "Import Kubernetes clusters, enable or disable them, and remove the ones no longer in use.",
+      "apikeys": "Create and revoke the API keys used to call the Kite API.",
+      "templates": "Maintain the templates offered when creating resources.",
+      "user": "Manage console users and user groups: add or edit accounts, enable or disable sign-in, reset passwords, assign roles and maintain group membership.",
+      "rbac": "Define roles (clusters, resources, actions) and permission bindings that bind users or groups to those roles.",
+      "audit": "Review audit logs: sign-ins, console operations and resource changes.",
+      "security": "Manage how users sign in and harden it: LDAP / OAuth / OIDC authentication providers, password policy, login limits, MFA policy and session settings.",
+      "notification": "Configure notification channels, event subscriptions and test delivery."
+    },
     "tabs": {
       "clusters": "Cluster",
       "general": "General",
-      "oauth": "Authentication",
-      "rbac": "RBAC",
-      "user": "Users & Groups",
+      "navigation": "Sidebar Navigation",
+      "bindingGroups": "Permission Binding",
+      "user": "User Management",
       "users": "User",
       "group": "User Groups",
       "apikeys": "API Keys",
       "templates": "Templates",
-      "audit": "Log Audit",
-      "security": "Security",
-      "notification": "Notification"
+      "audit": "Audit Management",
+      "security": "Security Management",
+      "notification": "Notification Management"
     },
     "subTabs": {
       "rbacRoles": "Roles",
+      "rbacPrivileges": "Privileges",
+      "rbacAdministrators": "System Administrator",
+      "rbacAuditors": "Audit Administrator",
+      "rbacSecurityAdmins": "Security Administrator",
       "rbacUsers": "Users",
       "rbacGroups": "User Groups",
       "rbacNamespaces": "Namespace Grants",
@@ -1441,6 +1811,13 @@
         "enableVersionCheck": "Enable version check"
       }
     },
+    "autoBindNamespace": {
+      "title": "Namespace auto-binding",
+      "description": "When a regular user creates a namespace, it is automatically added to their existing authorization (preferring their permission binding group). Namespaces created by an administrator stay unassigned so the administrator can allocate them deliberately.",
+      "form": {
+        "enabled": "Auto-assign a user-created namespace to their permissions"
+      }
+    },
     "loginPrompt": {
       "title": "Login Prompt",
       "description": "Show a custom message on the login page.",
@@ -1449,11 +1826,26 @@
         "placeholder": "Leave empty to hide the login prompt"
       }
     },
+    "branding": {
+      "title": "Branding",
+      "description": "Customize the console appearance: the name and logo are used in the sidebar, the login page, the setup page and the browser tab. Leave them empty for the defaults (Kite + built-in icon). Administrators only.",
+      "nameLabel": "Name",
+      "namePlaceholder": "Kite",
+      "nameHint": "Shown in the sidebar, on the login page and in the browser tab; leave empty to keep the default name Kite.",
+      "preview": "Logo preview",
+      "upload": "Choose image",
+      "reset": "Use default",
+      "urlLabel": "Logo URL",
+      "urlPlaceholder": "https://example.com/logo.png",
+      "urlHint": "An image URL or a data: URL. A square icon under 180 KiB is recommended (the logo is sent on every console load); changes apply after saving."
+    },
     "errors": {
       "modelRequired": "Model is required",
       "apiKeyRequired": "API Key is required when AI Agent is enabled",
       "kubectlImageRequired": "Kubectl image is required when kubectl is enabled",
-      "nodeTerminalImageRequired": "Node terminal image is required"
+      "nodeTerminalImageRequired": "Node terminal image is required",
+      "logoNotImage": "Please choose an image file",
+      "logoTooLarge": "The image must be at most {{size}} KiB. Use a smaller logo or link to an image URL instead."
     },
     "messages": {
       "updated": "General settings updated"
@@ -1461,14 +1853,6 @@
   },
   "authenticationManagement": {
     "title": "Authentication",
-    "mfa": {
-      "title": "MFA",
-      "description": "Allow users to configure authenticator app MFA."
-    },
-    "passkey": {
-      "title": "Passkey Login",
-      "description": "Allow users to register passkeys and sign in with a passkey."
-    },
     "ldap": {
       "title": "LDAP",
       "description": "Enable LDAP username/password login and sync groups into RBAC.",
@@ -1544,34 +1928,110 @@
     "addGroup": "Add User Group",
     "addGroupTitle": "Add User Group",
     "addGroupDescription": "Creates a local group and optionally adds members. Members inherit the roles granted to this group.",
-    "groupName": "Group Name *",
+    "groupName": "Group Name",
     "groupNamePlaceholder": "Enter group name",
+    "groupDescription": "Description",
+    "groupDescriptionPlaceholder": "Enter a description (optional)",
+    "noGroupDescription": "No description yet.",
+    "groupSource": "Source",
+    "groupSourceLocal": "Local",
     "membersOptional": "Members (optional)",
-    "localMembersOnlyHint": "Only local (password) users can be added; external users are managed by the directory.",
+    "localMembersOnlyHint": "Any user can be added, including LDAP / OIDC directory accounts: they are recorded as local additions and are not affected by directory sync.",
     "groupCreated": "User group {{name}} created",
     "groupExists": "Group already exists",
     "addMember": "Add Members",
     "addMemberTitle": "Add members to {{name}}",
-    "addMemberDescription": "Only local (password) users can be added; external users are managed by the directory.",
+    "addMemberDescription": "Any user can be added, including LDAP / OIDC directory accounts: they are recorded as local additions and keep their directory groups.",
     "memberAdded": "Members added",
     "removeMember": "Remove",
     "memberRemoved": "Member removed",
+    "memberSourceLocal": "Added locally",
+    "memberSourceDirectory": "From directory",
+    "memberDirectoryManaged": "{{username}}'s group membership comes from the directory; remove it there.",
+    "members": "Members",
+    "membersBreakdown": "{{local}} local account(s) · {{external}} directory account(s)",
+    "grantedRoles": "Granted roles",
+    "noGrantedRoles": "No roles granted.",
+    "manageMembers": "Manage members",
+    "groupRenamed": "Group renamed to {{newName}}",
+    "groupDescriptionUpdated": "Description updated",
+    "groupDeleted": "Group {{name}} deleted",
+    "groupType": "user group",
+    "editGroupDescription": "Edit description",
+    "editGroupDescriptionTitle": "Edit the description of {{name}}",
+    "editGroupDescriptionHint": "The description is a console note: it does not affect authorization and is not synced from the directory, so directory groups can carry one too.",
+    "renameGroupTitle": "Rename group {{name}}",
+    "renameGroup": "Rename group",
+    "renameDirectoryGroupHint": "Groups synced from the directory can only be renamed there: a rename here would be overwritten by the next sync.",
+    "renameGroupDescription": "The new name is applied to this group's members and its RBAC role grants.",
+    "deleteGroupImpact": "{{members}} local member(s) will be removed from this group, {{external}} external reference(s) and {{grants}} RBAC role grant(s) will be deleted.",
     "externalMemberHint": "Managed by the directory",
     "fields": {
-      "groups": "Groups",
-      "groupsHint": "Comma-separated group names. Users inherit the roles assigned to these groups."
+      "groups": "Groups"
     },
     "status": {
       "pendingDeletion": "Pending Deletion"
     },
+    "detail": {
+      "title": "User Details",
+      "superAdmin": "Super administrator",
+      "contact": "Contact",
+      "contactHintLocal": "The email address receives notifications and is format-checked; clearing any of the three fields clears it.",
+      "contactHintDirectory": "This account is maintained by directory sync; the console can only change the avatar.",
+      "directory": "Directory sync",
+      "provider": {
+        "password": "Local password",
+        "ldap": "LDAP directory"
+      },
+      "fields": {
+        "userId": "User ID",
+        "avatarUrl": "Avatar URL",
+        "updatedAt": "Profile updated",
+        "passwordUpdatedAt": "Password updated",
+        "expiresAt": "Account expires",
+        "neverExpires": "Never",
+        "disabledAt": "Disabled at",
+        "disabledReasonInactive": "{{time}} (disabled automatically after a long period without signing in)",
+        "mfa": "MFA",
+        "mfaBound": "Bound",
+        "mfaDisabledLevel": "MFA enforcement is disabled for this account",
+        "email": "Email",
+        "phone": "Phone",
+        "remark": "Remark",
+        "groups": "Groups",
+        "disabledReasonExpired": "{{time}} (account expired; disabled by the daily check)"
+      },
+      "ldap": {
+        "managedHint": "This account is created and maintained by LDAP sync: display name, email, phone and groups follow the directory (the account's “Profile updated” time is the last refresh), and the console can only change the avatar.",
+        "lastSync": "Last LDAP sync",
+        "neverSynced": "Never synced",
+        "autoSync": "Auto sync",
+        "autoSyncInterval": "Every {{minutes}} minutes",
+        "lastResult": "Last sync result",
+        "lastResultSummary": "{{total}} accounts: {{created}} created, {{updated}} updated, {{failed}} failed, {{purged}} purged"
+      },
+      "oidc": {
+        "managedHint": "This account is created and refreshed when signing in with the OIDC provider {{provider}}: display name, email and groups come from the identity provider claims, and the console can only change the avatar."
+      },
+      "groups": {
+        "sourceLocalHint": "“Local” marks a group added by an administrator in the console; directory sync does not remove it.",
+        "editableHint": "The user inherits the roles granted to these groups; clearing them removes the user from every group.",
+        "directoryHint": "Group membership of a directory account is maintained by the directory; to add a local extra group, add the member on the User Groups tab."
+      }
+    },
     "messages": {
       "ldapDeleteNote": "This only removes the account from Kite. The user remains in the LDAP directory and can be imported again later.",
-      "externalEditHint": "This user is managed by an external source. Only the avatar can be edited here.",
-      "ldapDeleted": "User deleted."
+      "ldapDeleted": "User deleted.",
+      "mfaNotBound": "MFA not bound",
+      "superAdminDisableHint": "The super administrator can be disabled, but only while another enabled account holds the administrator role. Binding MFA is the recommended protection instead.",
+      "superAdminNotDeletable": "The built-in super administrator cannot be deleted; disable the account instead (disabling requires another enabled account holding the administrator role).",
+      "lastAdministratorNeedsManager": "No other enabled account holds the administrator role right now, so this action would leave nobody able to take over the administration surface. Grant the administrator role to another enabled account first.",
+      "mfaResetConfirm": "Remove the MFA binding of \"{{username}}\"? That account will have to bind an authenticator again on the next sign-in.",
+      "mfaResetDone": "MFA binding removed. Ask the account owner to bind an authenticator again."
     },
-    "title": "User Management",
     "actions": {
-      "add": "Add User"
+      "add": "Add User",
+      "resetMFA": "Reset MFA"
     },
     "dialog": {
       "editTitle": "Edit User",
@@ -1581,7 +2041,8 @@
     "empty": {
       "title": "No users yet",
       "description": "Add your first user to get started"
-    }
+    },
+    "title": "User Management"
   },
   "settingsHint": {
     "title": "Complete Your Setup",
@@ -1599,7 +2060,15 @@
   },
   "clusterManagement": {
     "title": "Cluster Management",
+    "currentBadge": "Current",
+    "hints": {
+      "currentCluster": "This cluster is already in use",
+      "switchUnavailable": "Sync error: this cluster cannot be selected"
+    },
+    "deleteBindingGroups": "Also delete the {{count}} permission binding(s) of this cluster",
+    "keepBindingGroupsHint": "If unchecked, this authorization config (permission bindings) is kept but stops applying; after re-importing the cluster, the permission page asks whether to reuse it or create fresh defaults.",
     "actions": {
+      "switch": "Switch to this cluster",
       "add": "Add Cluster",
       "import": "Import Clusters",
       "importing": "Importing..."
@@ -1642,7 +2111,8 @@
       "createError": "Failed to create cluster",
       "updateError": "Failed to update cluster",
       "deleteError": "Failed to delete cluster",
-      "fileReadError": "Failed to read kubeconfig file"
+      "fileReadError": "Failed to read kubeconfig file",
+      "bindingGroupsRetained": "Kept {{count}} permission binding group(s); rebind them after re-importing the cluster."
     },
     "errors": {
       "loadFailed": "Failed to load clusters"
@@ -1666,7 +2136,10 @@
       "prometheusUrlPlaceholder": "https://prometheus.example.com",
       "clusterAgentDescription": "Create the cluster first, then run the generated command inside the target cluster.",
       "enabled": "Enabled",
-      "isDefault": "Set as Default"
+      "isDefault": "Set as Default",
+      "configLoadFailed": "Failed to load the current configuration",
+      "configLoaded": "Current configuration loaded",
+      "viewCurrentConfig": "View current configuration"
     }
   },
   "oauthManagement": {
@@ -1897,8 +2370,7 @@
       "deleted": "API key deleted successfully",
       "createError": "Failed to create API key",
       "deleteError": "Failed to delete API key",
-      "copied": "Copied to clipboard",
-      "copyError": "Copy failed"
+      "copied": "Copied to clipboard"
     },
     "errors": {
       "loadFailed": "Failed to load API keys"
@@ -2088,6 +2560,8 @@
       "liveness": "Liveness Probe",
       "startup": "Startup Probe"
     },
+    "probeCustom": "Custom",
+    "probeTiming": "(initial: {{initial}}s, period: {{period}}s)",
     "probeType": "Type",
     "probeNone": "None",
     "probeHttp": "HTTP request returns success (200-399)",
@@ -2149,6 +2623,23 @@
     "addHost": "Add Host IP",
     "nodePortRangeError": "Listening port must be within {{min}}-{{max}}"
   },
+  "containerEdit": {
+    "title": "Edit Container: {{name}}",
+    "description": "More complex changes can be made by modifying the YAML directly.",
+    "tabImage": "Image",
+    "tabResources": "Resources",
+    "tabEnvironment": "Environment",
+    "resourceRequests": "Resource Requests",
+    "resourceLimits": "Resource Limits",
+    "cpuRequest": "CPU Request",
+    "cpuRequestHint": "e.g., 100m (0.1 CPU), 1 (1 CPU)",
+    "cpuLimit": "CPU Limit",
+    "cpuLimitHint": "e.g., 500m (0.5 CPU), 2 (2 CPUs)",
+    "memoryRequest": "Memory Request",
+    "memoryRequestHint": "e.g., 128Mi, 1Gi, 512M",
+    "memoryLimit": "Memory Limit",
+    "memoryLimitHint": "e.g., 512Mi, 2Gi, 1G"
+  },
   "configmapCreate": {
     "pageTitle": "ConfigMap: Create",
     "namePlaceholder": "Enter a name",
@@ -2176,6 +2667,56 @@
     "noCreatePermission": "You do not have permission to create ConfigMaps in namespace {{namespace}}.",
     "createButton": "Create ConfigMap"
   },
+  "secretCreate": {
+    "pageTitle": "Secret: Create",
+    "namePlaceholder": "Enter a name",
+    "tabData": "Data",
+    "tabBinary": "Binary data",
+    "tabMeta": "Labels & Annotations",
+    "chooseFile": "Choose file",
+    "binaryLoaded": "Base64 data loaded",
+    "dataHint": "Plain values are submitted as stringData and base64-encoded by the API server.",
+    "binaryHint": "File contents are stored base64-encoded in data — use this for certificates, keystores and other binary values.",
+    "typeLabel": "Type",
+    "typeOpaque": "Opaque (default)",
+    "typeCustom": "Custom",
+    "customTypeLabel": "Custom type",
+    "customTypePlaceholder": "e.g. example.com/my-type",
+    "customTypeRequired": "Enter a custom type.",
+    "recommendedKeysHint": "This type commonly uses these keys (optional): {{keys}}",
+    "immutableLabel": "Immutable",
+    "immutableHint": "Cannot be changed after creation",
+    "requiredKeysHint": "This type requires these keys (they cannot be empty): {{keys}}",
+    "requiredKeyEmpty": "\"{{key}}\" is required by this Secret type and cannot be empty.",
+    "labelsHint": "Key/value pairs used to identify and select this Secret.",
+    "annotationsHint": "Key/value pairs for non-identifying metadata.",
+    "addLabel": "Add label",
+    "addAnnotation": "Add annotation",
+    "namespaceRequired": "Select a namespace first.",
+    "invalidName": "Name may only contain lowercase letters, numbers and dashes.",
+    "reservedName": "\"{{name}}\" is used by the create page URL, please pick another name.",
+    "overlappingKeys": "\"{{key}}\" is already used by the plain-text data; data and stringData must not share keys.",
+    "keyRequired": "Every entry needs a key.",
+    "invalidKey": "Key \"{{key}}\" may only contain letters, numbers, \"-\", \"_\" and \".\"",
+    "invalidMetaKey": "Label / annotation key \"{{key}}\" is not a valid Kubernetes key",
+    "duplicateKey": "Duplicate key \"{{key}}\"",
+    "binaryValueRequired": "Choose a file for \"{{key}}\"",
+    "invalidYaml": "The YAML is not a valid Secret or is missing name / namespace.",
+    "noCreatePermission": "You do not have permission to create Secrets in namespace {{namespace}}.",
+    "createButton": "Create Secret"
+  },
+  "keyValueDataViewer": {
+    "entryCount": "{{total}} entry(s)",
+    "hideAll": "Hide All",
+    "revealAll": "Reveal All",
+    "noEntries": "No entries",
+    "noDataEntries": "No data entries",
+    "noBinaryDataEntries": "No binary data entries"
+  },
+  "secretDetail": {
+    "showBase64": "Show Base64",
+    "decodeValues": "Decode Values"
+  },
   "labelMatch": {
     "loading": "Matching existing Pods...",
     "matched": "{{matched}} of {{total}} Pods match.",
@@ -2191,6 +2732,7 @@
   },
   "serviceCreate": {
     "pageTitle": "Service: Create",
+    "noCreatePermission": "You do not have permission to create Services in namespace {{namespace}}.",
     "serviceName": "Service Name",
     "serviceType": "Service Type",
     "externalName": "External Name",
@@ -2255,6 +2797,20 @@
     "jumpToBottom": "Jump to bottom"
   },
   "passwordPolicy": {
+    "title": "Password requirements",
+    "length": "At least {{min}} characters",
+    "rulesLength": "{{min}} ~ {{max}} characters (12+ recommended)",
+    "rulesNoSpace": "No spaces",
+    "rulesNoSlashStart": "Must not start with \"/\"",
+    "rulesMinClasses": "At least {{count}} of the following 4",
+    "classLower": "Lowercase letters a ~ z",
+    "classUpper": "Uppercase letters A ~ Z",
+    "classDigit": "Digits 0 ~ 9",
+    "classSpecial": "Special characters ()`~!@#$%^&*-+=_|{}[]:;'<>,.?/",
+    "lowercase": "Contains a lowercase letter",
+    "uppercase": "Contains an uppercase letter",
+    "number": "Contains a digit",
+    "special": "Contains a special character",
     "errors": {
       "password_too_short": "Password must be at least {{min}} characters",
       "password_too_long": "Password must be at most {{max}} characters",
@@ -2262,8 +2818,12 @@
       "password_missing_lowercase": "Password must contain a lowercase letter",
       "password_missing_digit": "Password must contain a digit",
       "password_missing_special": "Password must contain a special character",
-      "password_reused": "Password cannot repeat any of the last {{count}} passwords"
-    }
+      "password_reused": "Password cannot repeat any of the last {{count}} passwords",
+      "password_contains_space": "Password must not contain spaces",
+      "password_invalid_start": "Password must not start with \"/\"",
+      "password_too_few_classes": "Password must contain at least {{count}} of the character classes (lowercase / uppercase / digit / special)"
+    },
+    "strength": "Strength"
   },
   "mfaPrompt": {
     "title": "MFA verification required",
@@ -2275,6 +2835,7 @@
   "mfaEnrollment": {
     "title": "Multi-factor authentication is required",
     "description": "An administrator requires MFA for your account. Bind an authenticator app to continue.",
+    "passwordStepHint": "To protect this session, verify your current password first. A QR code for binding will appear once verified — scan it with your authenticator app to finish.",
     "passwordLabel": "Current password",
     "continue": "Continue",
     "scanHint": "Scan the QR code with your authenticator app, then enter the 6-digit code it shows.",
@@ -2295,7 +2856,8 @@
       "authentication": "Authentication",
       "loginPolicy": "Login Policy",
       "password": "Password",
-      "session": "Session"
+      "session": "Session",
+      "authProviders": "Authentication Configuration"
     },
     "groups": {
       "basic": "Basic",
@@ -2304,10 +2866,37 @@
       "ipLoginLimit": "IP Login Limits",
       "other": "Other",
       "passwordRules": "Password Rules",
+      "inactiveAutoDisable": "Inactivity Auto-Disable",
       "session": "Session"
     },
+    "userStatus": {
+      "title": "User Status",
+      "description": "Accounts disabled by the inactivity policy are listed newest first, with username search and pagination; restore them individually or in bulk via selection. Restored accounts have to sign in again.",
+      "check": "Check now",
+      "checkResult": "This check disabled {{count}} inactive account(s)",
+      "checkNone": "Check complete: no accounts needed to be disabled",
+      "empty": "No auto-disabled accounts",
+      "searchPlaceholder": "Search usernames",
+      "selectAllOnPage": "Select page",
+      "rowsPerPage": "Rows per page",
+      "pageOf": "Page {{page}} of {{total}}",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "totalAccounts": "{{count}} account(s)",
+      "restore": "Restore",
+      "restored": "Restored {{name}}",
+      "restoreSelected": "Restore selected ({{count}})",
+      "restoreConfirm": "Restore these {{count}} auto-disabled accounts? They will have to sign in again.",
+      "restoredCount": "Restored {{count}} account(s); they have to sign in again",
+      "restoreSkipped": "{{count}} account(s) were no longer in the auto-disabled list and were left untouched",
+      "reason": "Reason",
+      "reasons": {
+        "inactive": "No sign-in for a long time (auto-disabled)",
+        "expired": "Account expired (auto-disabled)"
+      }
+    },
     "mfaPolicy": {
-      "disabled": "Disabled",
+      "disabled": "Nobody",
       "all": "All users",
       "admin": "Admins only"
     },
@@ -2315,12 +2904,15 @@
       "loginCaptchaEnabled": "Enable login captcha",
       "loginCaptchaEnabledHint": "Require a captcha to keep bots from signing in.",
       "inactiveUserDisableDays": "Disable inactive users (days)",
-      "inactiveUserDisableDaysHint": "Checked once a day; users that have not signed in within this period are disabled automatically.",
+      "inactiveUserDisableDaysHint": "Checked once a day; accounts that have not signed in within this period are disabled automatically. Use “Check now” in the User status card below to verify the policy immediately.",
       "remoteLoginNoticeEnabled": "Remote login notification",
       "remoteLoginNoticeEnabledHint": "Users are notified when they sign in from an unusual city.",
-      "mfaPolicy": "Enable MFA globally",
-      "mfaThirdPartyEnabled": "Enable MFA for third-party login",
-      "mfaThirdPartyEnabledHint": "Applies to third-party login methods such as OIDC, CAS and SAML2.",
+      "mfaPolicy": "Require MFA enrollment",
+      "mfaPolicyHint": "Decides who must enroll in time-based codes. Accounts that have already enrolled are always challenged at login, regardless of this choice.",
+      "mfaThirdPartyEnabled": "Require LDAP admins to enroll in MFA",
+      "mfaThirdPartyEnabledHint": "When on, LDAP administrators are asked for a code even if they have not enrolled yet; unenrolled admins cannot sign in until another administrator helps them enroll or this is turned off.",
+      "mfaStepUpEnabled": "Require MFA for sensitive operations",
+      "mfaStepUpEnabledHint": "Ask MFA-enrolled users to re-verify before deletes and interactive shells.",
       "mfaVerifyTtlSeconds": "MFA verification validity",
       "mfaVerifyTtlSecondsHint": "In seconds. Currently only used when MFA is verified together with the account password.",
       "otpIssuerName": "OTP issuer name",
@@ -2338,16 +2930,14 @@
       "lockedIPsHint": "List of IPs that are currently blocked.",
       "singleDeviceLogin": "Single device login",
       "singleDeviceLoginHint": "Signed-in devices are logged out automatically when the user signs in from a new device.",
-      "existingUserOnly": "Existing users only",
-      "existingUserOnlyHint": "When enabled, unknown users cannot sign in; when disabled, users from other authentication methods are allowed to sign in and are created automatically when they do not exist.",
-      "loginSourceRestricted": "Restrict login source",
-      "loginSourceRestrictedHint": "When enabled, the login source IP is validated; when disabled, every authentication method configured for the user is tried until one of them succeeds.",
       "passwordExpireDays": "Password expiry (days)",
       "passwordExpireDaysHint": "Users that do not update their password within this period are notified by email two days before it expires.",
       "passwordHistoryCount": "Password history",
       "passwordHistoryCountHint": "Passwords used by the user within this count cannot be reused.",
       "passwordMinLength": "Minimum password length",
       "adminPasswordMinLength": "Minimum admin password length",
+      "passwordMinClasses": "Minimum character classes",
+      "passwordMinClassesHint": "0 = require every enabled class below; 1-4 = require at least N of lowercase / uppercase / digit / special.",
       "passwordRequireUppercase": "Require uppercase letters",
       "passwordRequireLowercase": "Require lowercase letters",
       "passwordRequireDigit": "Require digits",
@@ -2357,34 +2947,384 @@
       "sessionMaxIdleMinutes": "Connection max idle time (minutes)",
       "sessionMaxIdleMinutesHint": "The connection is closed when there is no activity for longer than this.",
       "sessionMaxHours": "Connection max lifetime (hours)",
-      "sessionMaxHoursHint": "The connection is closed when it lasts longer than this."
+      "sessionMaxHoursHint": "The connection is closed when it lasts longer than this.",
+      "rejectUnknownUsers": "Existing users only",
+      "rejectUnknownUsersHint": "Only accounts that already exist in Kite can sign in. Third-party sign-in matches an existing account by username and binds the identity to it on first sign-in.",
+      "loginSourceEnforced": "Restrict login source",
+      "loginSourceEnforcedHint": "When enabled, only the addresses listed below can reach the console: sign-in and every subsequent request are rejected from elsewhere.",
+      "loginSourceAllowlist": "Allowed login sources",
+      "loginSourceAllowlistHint": "Required when the switch above is on. Supports CIDR, single addresses and ranges, e.g. 10.0.0.0/8 or 192.168.10.1-192.168.10.20."
     },
     "placeholders": {
       "ipList": "Press Enter to add"
     },
     "lockedIPs": {
       "title": "Locked IPs",
-      "description": "Client IPs that are temporarily blocked after too many failed sign-in attempts.",
+      "description": "Client IPs that are temporarily blocked after too many failed sign-in attempts. You can unblock or block an IP here.",
       "empty": "No IP is currently locked.",
-      "until": "Until {{time}}"
+      "until": "Until {{time}}",
+      "addPlaceholder": "IP address to block",
+      "block": "Block",
+      "unblock": "Unblock",
+      "blocked": "IP blocked",
+      "unblocked": "IP unblocked",
+      "manualHint": "Addresses on the allow list are never locked by failed attempts; add an IP to the deny list for a permanent block. A manual block is cleared when the server restarts."
     },
     "actions": {
       "viewLockedIPs": "View locked IPs ({{count}})"
     },
     "messages": {
-      "updated": "Security settings updated"
+      "updated": "Security Management updated",
+      "loginSourceAllowlistRequired": "Add at least one allowed address before enabling this switch."
+    },
+    "newUserDefaults": {
+      "enabled": "Enabled by default",
+      "enabledHint": "When off, newly created users are disabled by default and must be enabled by an administrator",
+      "expireDays": "Default expiry (days)",
+      "expireDaysHint": "0 means never expires",
+      "title": "New user defaults"
     }
   },
   "audit": {
-    "operations": {
-      "viewFile": "View file",
-      "downloadFile": "Download file",
-      "uploadFile": "Upload file"
+    "timeRange": {
+      "label": "Time range",
+      "from": "From date",
+      "to": "To date",
+      "clear": "Clear time range"
+    },
+    "export": {
+      "button": "Export CSV",
+      "success": "Exported {{count}} record(s)",
+      "failed": "Export failed",
+      "resultTitle": "Export complete",
+      "resultDescription": "The file has been saved locally. The fingerprints below let you verify it offline.",
+      "fileName": "File name",
+      "rowCount": "Rows",
+      "timeRange": "Time range",
+      "sha256": "SHA-256 (file content digest)",
+      "hmac": "Server signature (HMAC-SHA256)",
+      "verifyHint": "To verify: run sha256sum on the downloaded file — it must match the SHA-256 above. The signature is produced with a server-side key, so it also proves the file came from this server."
     },
     "tabs": {
       "login": "Login Logs",
       "operation": "Operation Logs",
-      "password": "Password Change Logs"
+      "file": "File Operations",
+      "password": "Password Change Logs",
+      "setting": "Audit Settings"
+    },
+    "setting": {
+      "title": "Audit Settings",
+      "description": "Configure how long audit records are kept and where they are forwarded. Audit records can only be viewed, never deleted by hand.",
+      "messages": {
+        "updated": "Audit settings saved"
+      },
+      "retention": {
+        "title": "Retention policy",
+        "description": "Expired audit records roll off automatically by age; every prune leaves its own audit record.",
+        "keepForever": "Keep forever",
+        "keepForeverHint": "On by default: nothing is ever deleted automatically.",
+        "keepForeverValue": "Never prune audit records",
+        "days": "Retention days",
+        "daysHint": "At least {{min}} days; compliance reviews usually expect {{recommended}} days.",
+        "daysUnit": "days",
+        "tooShort": "Retention must be 0 (keep forever) or at least {{min}} days.",
+        "belowRecommended": "This is below the recommended {{recommended}} days and may not pass a compliance review."
+      },
+      "syslog": {
+        "title": "Log forwarding (syslog)",
+        "description": "Forward audit records to an external syslog server as well. Forwarding is best effort and never affects local audit storage.",
+        "enabled": "Enable forwarding",
+        "network": "Network",
+        "address": "Server address",
+        "addressHint": "Format host:port",
+        "addressRequired": "A server address is required when forwarding is enabled.",
+        "tag": "Tag (APP-NAME)",
+        "tagHint": "Application name in forwarded messages, so the log server can tell sources apart.",
+        "facility": "Facility",
+        "facilityHint": "Defaults to 13 (log audit); range 0-23.",
+        "skipVerify": "Skip certificate verification",
+        "skipVerifyHint": "TLS only. Enable when the server uses a self-signed certificate.",
+        "skipVerifyValue": "Do not verify the server certificate"
+      }
+    },
+    "fileOperations": {
+      "title": "File Operation Logs",
+      "description": "Records view, download and upload actions on the Pod files page, including the container and file path."
+    },
+    "groups": {
+      "fileOperations": "File Operations"
+    },
+    "operations": {
+      "downloadFile": "Download file",
+      "read": "Read",
+      "uploadFile": "Upload file",
+      "viewFile": "View file"
+    },
+    "loginResult": {
+      "invalid_credentials": "Invalid username or password",
+      "mfa_invalid": "Invalid verification code",
+      "ip_denied": "Source IP denied",
+      "too_many_attempts": "Too many attempts; the account or IP is locked",
+      "not_provisioned": "Directory user is not provisioned in the console",
+      "no_permission": "Account disabled, or it has no permissions",
+      "captcha_invalid": "Invalid captcha",
+      "account_expired": "Account expired",
+      "source_denied": "Source address is not in the allowlist"
+    }
+  },
+  "bindingGroup": {
+    "title": "Permission Binding",
+    "create": "Create permission binding",
+    "created": "Permission binding created",
+    "createFailed": "Failed to create",
+    "deleted": "Permission binding deleted",
+    "deleteFailed": "Failed to delete",
+    "saveFailed": "Failed to save",
+    "nameConflict": "A permission binding with this name already exists in the cluster.",
+    "empty": "No permission bindings in the current cluster",
+    "selectHint": "Select or create a permission binding",
+    "namePlaceholder": "Group name",
+    "descPlaceholder": "Description (optional)",
+    "summary": "{{ns}} namespaces · {{members}} members",
+    "members": "Members",
+    "noNamespaces": "No namespaces available in the current cluster",
+    "roles": "Bind roles",
+    "addMember": "Add member",
+    "userPlaceholder": "Username",
+    "groupPlaceholder": "Group name",
+    "allClusters": "All clusters",
+    "add": "Add",
+    "subjects": "Subjects",
+    "cluster": "Cluster",
+    "editTitle": "Edit permission binding",
+    "createTitle": "New permission binding",
+    "membersHint": "users / groups + roles",
+    "moduleGrants": "Grants (users / groups + roles)",
+    "addGrantRow": "Add row",
+    "removeGrantRow": "Remove this row",
+    "grantRowsHint": "Each row pairs one user or group with the roles they hold; a subject can only appear once, so subjects already used in other rows are not offered again. Leave Scope namespaces untouched to follow the namespaces selected below (including ones added later); narrow it by ticking specific namespaces.",
+    "allUsersPicked": "All users are already used",
+    "allGroupsPicked": "All user groups are already used",
+    "grantSubjectsRequired": "Select at least one user or group to grant",
+    "moduleNamespaces": "Namespaces",
+    "scopeLabel": "Scope namespaces",
+    "scopeAllNamespaces": "All namespaces",
+    "scopeAllShort": "All",
+    "scopeAllFollowsBottom": "All namespaces (the {{count}} selected below)",
+    "scopeNoNamespaces": "Pick this group's namespaces under Namespaces first",
+    "selectUser": "Select a user",
+    "selectGroup": "Select a user group",
+    "noUsers": "No users available",
+    "noGroups": "No user groups available",
+    "memberProtected": "Protected",
+    "memberProtectedHint": "A protected member (the super administrator) cannot be removed from the group, and the account cannot be deleted either. Adjust its roles or disable the account instead.",
+    "superGroupHint": "The super administrator's permission binding is maintained by the system: it cannot be deleted, always keeps the global scope, and its protected member is never removed. You can still add members or change member roles.",
+    "memberRolesRequired": "Select at least one role for the selected users/groups",
+    "moduleSubjects": "Users / Groups",
+    "subjectsHint": "Filter the available list by user or group. When a group is granted, its members inherit these roles.",
+    "subjectFilterPlaceholder": "Filter by {{kind}} name",
+    "noAvailableUsers": "No more users to pick.",
+    "noAvailableGroups": "No more groups to pick.",
+    "noSelectedSubjects": "No users or groups selected yet.",
+    "unifiedHint": "Every selected user/group gets all the selected roles, scoped to the namespaces owned by this binding.",
+    "globalBadge": "Global",
+    "superBadge": "Super admins",
+    "authPromptTitle": "Retained authorization config found for this cluster",
+    "authPromptDescription": "The last time cluster {{cluster}} was deleted, {{count}} permission binding(s) were kept. Choose how to continue.",
+    "authAdopt": "Reuse the previous authorization",
+    "authAdoptHint": "Reuse the retained permission bindings; member and role authorizations apply again immediately.",
+    "authCreateDefaults": "Create new defaults",
+    "authCreateDefaultsHint": "Discard the retained config and create the built-in defaults (the super permission binding).",
+    "authLater": "Decide later",
+    "authAdopted": "Previous authorization config reused",
+    "authDefaultsCreated": "Default authorization config created",
+    "newNamespacePlaceholder": "New namespace name (created in cluster and bound to this group)",
+    "createNamespace": "Create",
+    "namespaceCreated": "Namespace {{name}} created",
+    "nsAfterCreate": "Namespaces can be bound or created after the permission binding is saved.",
+    "nsExclusiveHint": "A namespace can belong to only one permission binding at a time. Unbind it in its current binding before it shows up here again.",
+    "nsTakenTitle": "These namespaces belong to another permission binding and were removed from the list",
+    "nsTakenSubjects": "granted to",
+    "nsTakenRoles": "roles",
+    "nsTakenHint": "To use one of them here, first save the owning permission binding without that namespace, then pick it here.",
+    "nsConflictOnSave": "Namespace {{namespace}} belongs to the permission binding \"{{group}}\". Unbind it there before saving.",
+    "saveBeforeCreateNs": "Save the permission binding before creating a namespace",
+    "nsFilterPlaceholder": "Filter (namespace name)",
+    "noSelectedNamespaces": "No namespaces selected yet.",
+    "noAvailableRoles": "No assignable roles.",
+    "noSelectedRoles": "No roles selected yet.",
+    "roleFilterPlaceholder": "Filter (role name)",
+    "notFound": "Permission binding not found. It may have been deleted or belongs to another cluster.",
+    "saved": "Saved",
+    "rolesPlaceholder": "Select roles",
+    "consoleRolesHint": "System admin / read-only admin / audit admin / security admin are maintained in their own tabs and cannot be assigned here; existing bindings stay untouched.",
+    "noRoles": "No roles available",
+    "nsPlaceholder": "Select namespaces",
+    "deleteConfirm": "Delete this permission binding? Namespaces will not be deleted.",
+    "superManagedHint": "The super administrator's permission binding is maintained by the system and cannot be deleted. View and add members on the System Administrator tab.",
+    "bindAll": "Bind all",
+    "bindFailed": "Bind failed",
+    "bindTitle": "Bind to cluster",
+    "bindToCluster": "Bind to cluster",
+    "bound": "Bound to cluster {{cluster}}",
+    "retainedBadge": "Retained",
+    "showRetained": "Retained binding groups ({{count}})",
+    "bindHint": "After binding, the namespaces, members and role grants under this binding group take effect again immediately.",
+    "retainedHint": "Binding reuses the retained grants; to re-plan, skip binding and create a new binding group instead.",
+    "retainedTitle": "Cluster {{cluster}} has {{count}} retained binding group(s)"
+  },
+  "consoleRoles": {
+    "protectedBadge": "System-managed",
+    "globalHint": "Globally enforced: this list is independent of the cluster selected in the top bar, and changes apply to every cluster.",
+    "notBindableHint": "The system administrator, read-only administrator, audit administrator and security administrator roles are maintained in code, so they are not offered in Permission Binding and can only be maintained here.",
+    "empty": "No members",
+    "subject": "Subject",
+    "role": "Role",
+    "subjectUser": "User",
+    "subjectGroup": "User group",
+    "memberProtected": "Protected",
+    "memberProtectedHint": "The super administrator created during initialization cannot be removed from this group. To revoke its access, disable the account on the User Management page.",
+    "selectUsers": "Select users",
+    "selectGroups": "Select user groups",
+    "selectRoles": "Roles",
+    "noUsers": "No users available",
+    "noGroups": "No user groups available",
+    "remove": "Remove",
+    "removeTitle": "Remove {{member}}",
+    "removeDescription": "After removing \"{{subject}}\", this subject no longer has {{member}} permissions.",
+    "saved": "Updated",
+    "saveFailed": "Failed to save",
+    "loadFailed": "Failed to load the role members. Please try again later.",
+    "groupMissing": "No system-managed super permission binding exists yet; it is normally created automatically on server startup.",
+    "roleConflict": "This change would make an account hold mutually exclusive administrator roles (separation-of-duties conflict). Adjust its roles and try again.",
+    "admin": {
+      "title": "System Administrator",
+      "member": "administrator",
+      "description": "Maintains the System Administrator and Read-only Administrator console roles: the system administrator holds every cluster permission and every settings section; the read-only administrator may only read every resource (except secrets) and the console. Both are maintained in code, so members can only be added or removed here.",
+      "add": "Add administrator",
+      "addDescription": "Pick the users or user groups and their role: the system administrator gets every permission, the read-only administrator only read access."
+    },
+    "auditor": {
+      "title": "Audit Administrator",
+      "member": "audit administrator",
+      "description": "Maintains the Audit Administrator role: members can read audit logs and configure the retention policy and syslog forwarding, while the audit records themselves stay read-only with no manual deletion entry.",
+      "add": "Add audit administrator",
+      "addDescription": "The selected users or user groups receive the audit administrator (auditor) role."
+    },
+    "securityAdmin": {
+      "title": "Security Administrator",
+      "member": "security administrator",
+      "description": "Maintains the Security Administrator role: members own identity and authorization (users and groups, roles and permission bindings, security policy, authentication sources) plus the cluster subjects and authorization objects, without touching workloads or audit logs.",
+      "add": "Add security administrator",
+      "addDescription": "The selected users or user groups receive the security administrator (security-admin) role."
+    }
+  },
+  "accountSettings": {
+    "title": "Account Settings",
+    "profile": {
+      "nickname": "Nickname",
+      "saveButton": "Save",
+      "saved": "Saved",
+      "error": "Failed to save",
+      "email": "Email",
+      "emailHint": "Used for email notifications — enter an address that can receive mail.",
+      "phone": "Phone"
+    },
+    "password": {
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "confirmNewPassword": "Confirm new password",
+      "changeButton": "Change password",
+      "changed": "Password changed",
+      "mismatch": "The two passwords do not match",
+      "error": "Failed to change password"
+    },
+    "security": {
+      "confirmPassword": {
+        "title": "Confirm password",
+        "description": "Enter your current password to confirm your identity"
+      },
+      "mfa": {
+        "authCode": "Authentication code",
+        "setupButton": "Bind MFA",
+        "setupError": "Failed to bind",
+        "enableButton": "Enable MFA",
+        "enabled": "Enabled",
+        "enableError": "Failed to enable",
+        "disableButton": "Disable MFA",
+        "disabled": "Disabled",
+        "disableError": "Failed to disable",
+        "qrCodeAlt": "MFA QR code",
+        "otpauthUrl": "otpauth URL",
+        "description": "Once an authenticator is bound, sign-in and sensitive operations ask for a one-time code.",
+        "policyDisabled": "The current security policy has authenticator codes turned off; enable them in Security Management before binding."
+      }
+    },
+    "mfa": "MFA",
+    "authenticationCode": "Authentication code",
+    "enabled": "Enabled",
+    "disableMfa": "Disable MFA",
+    "enableMfa": "Enable MFA",
+    "tabs": {
+      "profile": "Profile",
+      "password": "Password",
+      "security": "Security",
+      "appearance": "Appearance"
+    },
+    "pageTitle": "Account",
+    "pageDescription": "View and update your account details, password and sign-in security.",
+    "info": {
+      "groups": "Groups",
+      "passwordUpdatedAt": "Password updated",
+      "externalHint": "Your account is managed by {{provider}}: the nickname, email and similar fields follow the directory, so only the avatar can be changed here."
+    }
+  },
+  "userMenu": {
+    "accountSettings": "Account Settings",
+    "colorTheme": "Theme",
+    "font": "Font",
+    "displayScale": "Display Scale",
+    "logout": "Log out",
+    "via": "via",
+    "role": "Role",
+    "fonts": {
+      "system": "System",
+      "maple": "Maple",
+      "jetbrains": "JetBrains Mono"
+    },
+    "accountInfo": "Account"
+  },
+  "serviceYaml": {
+    "deleteTitle": "Delete Service {{name}}?",
+    "deleted": "Service {{name}} deleted",
+    "invalidYaml": "Invalid YAML",
+    "saved": "Service {{name}} updated",
+    "deleteDescription": "Deleting this Service immediately cuts off external access through it, and cannot be undone."
+  },
+  "logViewer": {
+    "title": "Logs",
+    "lineCount": "{{count}} lines",
+    "filtered": "(filtered)",
+    "reconnecting": "Reconnecting...",
+    "tailLines": "Tail Lines",
+    "allLines": "All",
+    "showTimestamps": "Show Timestamps",
+    "previousContainer": "Previous Container",
+    "wordWrap": "Word Wrap",
+    "showLineNumbers": "Show Line Numbers",
+    "logTheme": "Log Theme",
+    "fontSize": "Font Size",
+    "keyboardShortcuts": "Keyboard Shortcuts",
+    "clearLogs": "Clear logs",
+    "exitFullscreen": "Exit fullscreen (ESC)",
+    "enterFullscreen": "Enter fullscreen",
+    "shortcuts": {
+      "openSearch": "Open Search",
+      "toggleFullscreen": "Toggle Fullscreen",
+      "toggleWordWrap": "Toggle Word Wrap",
+      "increaseFontSize": "Increase Font Size",
+      "decreaseFontSize": "Decrease Font Size",
+      "resetFontSize": "Reset Font Size"
     }
   }
 }

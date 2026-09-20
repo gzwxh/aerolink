@@ -21,9 +21,7 @@ import {
   usePodFiles,
 } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
-import { roleCanAccessAnyNamespace } from '@/lib/rbac-permissions'
-import { useAuth } from '@/contexts/auth-context'
-import { translateError } from '@/lib/utils'
+import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -61,23 +59,12 @@ export function PodFileBrowser({
   )
   const [currentPath, setCurrentPath] = useState<string>('/')
   const [isUploading, setIsUploading] = useState(false)
-  const { user } = useAuth()
-  // 容器文件权限：与 exec 分离，可在角色中单独勾选。
-  const canViewFiles = roleCanAccessAnyNamespace(
-    user?.roles,
-    'pods',
-    'view-file'
-  )
-  const canDownloadFiles = roleCanAccessAnyNamespace(
-    user?.roles,
-    'pods',
-    'download-file'
-  )
-  const canUploadFiles = roleCanAccessAnyNamespace(
-    user?.roles,
-    'pods',
-    'upload-file'
-  )
+  // 容器文件权限：与 exec 分离，可在角色中单独勾选。用 useCanAnyNamespace，
+  // 与页面其它权限判定共用一套角色（含权限绑定组下发的角色）。
+  const can = useCanAnyNamespace()
+  const canViewFiles = can('pods', 'view-file')
+  const canDownloadFiles = can('pods', 'download-file')
+  const canUploadFiles = can('pods', 'upload-file')
   const { t } = useTranslation()
 
   const {
@@ -137,9 +124,14 @@ export function PodFileBrowser({
         file
       )
       refetch()
-      toast.success(`Uploaded ${file.name} successfully`)
-    } catch (error) {
-      toast.error(translateError(error, t))
+      toast.success(
+        t('podFiles.uploadSuccess', {
+          name: file.name,
+          defaultValue: '已上传 {{name}}',
+        })
+      )
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsUploading(false)
       e.target.value = ''
@@ -159,7 +151,7 @@ export function PodFileBrowser({
           <Button
             variant="outline"
             size="icon"
-            aria-label="Go to parent directory"
+            aria-label={t('podFiles.goToParent', '返回上级目录')}
             onClick={handleGoUp}
             disabled={currentPath === '/'}
           >
@@ -168,7 +160,7 @@ export function PodFileBrowser({
           <Button
             variant="outline"
             size="icon"
-            aria-label="Go to home directory"
+            aria-label={t('podFiles.goToRoot', '回到根目录')}
             onClick={() => handleNavigate('/')}
             disabled={currentPath === '/'}
           >
@@ -176,7 +168,7 @@ export function PodFileBrowser({
           </Button>
           <Input
             value={currentPath}
-            aria-label="Current path"
+            aria-label={t('podFiles.currentPath', '当前路径')}
             onChange={(e) => setCurrentPath(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -186,7 +178,7 @@ export function PodFileBrowser({
             className="font-mono"
           />
           <Button
-            aria-label="Refresh file list"
+            aria-label={t('podFiles.refresh', '刷新文件列表')}
             variant="outline"
             size="icon"
             onClick={() => refetch()}
@@ -200,12 +192,20 @@ export function PodFileBrowser({
             id="file-upload"
             className="hidden"
             onChange={handleUpload}
-            disabled={isUploading}
+            disabled={isUploading || !canUploadFiles}
           />
           <Label
             htmlFor="file-upload"
-            className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 cursor-pointer ${
-              isUploading ? 'opacity-50 cursor-not-allowed' : ''
+            aria-disabled={!canUploadFiles || isUploading}
+            title={
+              canUploadFiles
+                ? undefined
+                : t('podFiles.uploadDenied', '无容器文件上传权限')
+            }
+            className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground h-10 px-4 py-2 ${
+              canUploadFiles && !isUploading
+                ? 'cursor-pointer hover:bg-primary/90'
+                : 'pointer-events-none opacity-50'
             }`}
           >
             {isUploading ? (
@@ -213,14 +213,14 @@ export function PodFileBrowser({
             ) : (
               <IconUpload className="w-4 h-4 mr-2" />
             )}
-            Upload
+            {t('podFiles.upload', '上传')}
           </Label>
         </div>
       </div>
 
       {error ? (
         <ErrorMessage
-          resourceName={'pod files'}
+          resourceName={t('podFiles.title', 'Pod 文件')}
           error={error}
           refetch={refetch}
         />
@@ -230,13 +230,25 @@ export function PodFileBrowser({
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]"></TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead className="w-[100px]">UID</TableHead>
-                <TableHead className="w-[100px]">GID</TableHead>
-                <TableHead className="w-[100px]">Size</TableHead>
-                <TableHead className="w-[150px]">Mode</TableHead>
-                <TableHead className="w-[200px]">Modified</TableHead>
-                <TableHead className="w-[120px]">Actions</TableHead>
+                <TableHead>{t('podFiles.fields.name', '名称')}</TableHead>
+                <TableHead className="w-[100px]">
+                  {t('podFiles.fields.uid', 'UID')}
+                </TableHead>
+                <TableHead className="w-[100px]">
+                  {t('podFiles.fields.gid', 'GID')}
+                </TableHead>
+                <TableHead className="w-[100px]">
+                  {t('podFiles.fields.size', '大小')}
+                </TableHead>
+                <TableHead className="w-[150px]">
+                  {t('podFiles.fields.mode', '权限')}
+                </TableHead>
+                <TableHead className="w-[200px]">
+                  {t('podFiles.fields.modified', '修改时间')}
+                </TableHead>
+                <TableHead className="w-[120px]">
+                  {t('common.fields.actions', '操作')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -245,14 +257,14 @@ export function PodFileBrowser({
                   <TableCell colSpan={8} className="h-24 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <IconLoader className="animate-spin" />
-                      <span>Loading files...</span>
+                      <span>{t('podFiles.loading', '正在加载文件...')}</span>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (files ?? []).length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="h-24 text-center">
-                    No files found
+                    {t('podFiles.empty', '未找到文件')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -272,7 +284,10 @@ export function PodFileBrowser({
                           variant="link"
                           className="text-foreground font-medium hover:underline text-left p-0 h-auto"
                           onClick={() => handleEnterDirectory(file.name)}
-                          aria-label={`Enter directory ${file.name}`}
+                          aria-label={t('podFiles.enterDirectory', {
+                            name: file.name,
+                            defaultValue: '进入目录 {{name}}',
+                          })}
                         >
                           {file.name}
                         </Button>
@@ -301,8 +316,8 @@ export function PodFileBrowser({
                           <Button
                             variant="ghost"
                             size="sm"
-                            title="Preview file"
-                            aria-label="Preview file"
+                            title={t('podFiles.preview', '预览文件')}
+                            aria-label={t('podFiles.preview', '预览文件')}
                             disabled={!canViewFiles}
                             onClick={() => handlePreview(file.name)}
                           >
@@ -315,13 +330,19 @@ export function PodFileBrowser({
                           disabled={!canDownloadFiles}
                           title={
                             file.isDir
-                              ? 'Download directory as .tar archive'
-                              : 'Download file'
+                              ? t(
+                                  'podFiles.downloadDirectory',
+                                  '打包下载目录 (.tar)'
+                                )
+                              : t('podFiles.download', '下载文件')
                           }
                           aria-label={
                             file.isDir
-                              ? 'Download directory as .tar archive'
-                              : 'Download file'
+                              ? t(
+                                  'podFiles.downloadDirectory',
+                                  '打包下载目录 (.tar)'
+                                )
+                              : t('podFiles.download', '下载文件')
                           }
                           onClick={() => handleDownload(file.name)}
                         >

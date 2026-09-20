@@ -1,17 +1,18 @@
 import { useMemo } from 'react'
 import { IconCopy, IconNetwork } from '@tabler/icons-react'
-import { Button } from '@/components/ui/button'
-import { toast } from 'sonner'
-import type { Service } from 'kubernetes-types/core/v1'
 import { Deployment } from 'kubernetes-types/apps/v1'
+import type { Service } from 'kubernetes-types/core/v1'
 import { Event as KubernetesEvent, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { useRelatedResources } from '@/lib/api'
+import { copyToClipboard } from '@/lib/clipboard'
 import { getDeploymentStatus, getEventTime, getOwnerInfo } from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import {
@@ -111,7 +112,6 @@ export function DeploymentOverview({
   )
 }
 
-
 /** 网络入口: how to reach the workload from outside/inside the cluster. */
 function ServiceEndpointsCard({ services }: { services: Service[] }) {
   const { t } = useTranslation()
@@ -164,11 +164,12 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
   if (entries.length === 0) return null
 
   const copy = async (value: string) => {
-    try {
-      await navigator.clipboard.writeText(value)
+    if (await copyToClipboard(value)) {
       toast.success(t('deploymentOverview.copied', '已复制'))
-    } catch {
-      // clipboard unavailable
+    } else {
+      toast.error(
+        t('common.messages.copyFailed', '复制失败，请手动选择文本后复制')
+      )
     }
   }
 

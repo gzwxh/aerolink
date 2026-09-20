@@ -28,7 +28,7 @@ export function DynamicBreadcrumb() {
       return breadcrumbs
     }
 
-    // Helper function to create breadcrumb item
+    // 创建面包屑项的辅助函数
     const createResourceBreadcrumb = (
       label: string,
       href?: string
@@ -60,19 +60,19 @@ export function DynamicBreadcrumb() {
       }
     }
 
-    // Helper function to get safe link for segments
+    // 为各路径段获取安全链接的辅助函数
     const getSafeLink = (index: number): string | undefined => {
       const isLastSegment = index === pathSegments.length - 1
       if (isLastSegment) return undefined
 
-      // Handle different path patterns
+      // 处理不同的路径模式
       if (pathSegments[0] === 'crds') {
         if (index === 0) return '/crds'
         if (index === 1) return `/crds/${pathSegments[1]}`
         if (index === 2) return `/crds/${pathSegments[1]}` // namespace links back to CRD list
         return undefined
       } else {
-        // Regular resources: namespace should link back to resource list
+        // 普通资源：命名空间应链接回资源列表
         const isNamespace = pathSegments.length === 3 && index === 1
         if (isNamespace) return `/${pathSegments[0]}`
         return `/${pathSegments.slice(0, index + 1).join('/')}`
@@ -87,7 +87,7 @@ export function DynamicBreadcrumb() {
       ? pathSegments.slice(0, -1)
       : pathSegments
 
-    // Generate breadcrumbs for each visible path segment
+    // 为每个可见的路径段生成面包屑
     visibleSegments.forEach((segment, index) => {
       const href = getSafeLink(index)
       breadcrumbs.push(

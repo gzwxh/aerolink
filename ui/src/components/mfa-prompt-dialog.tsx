@@ -2,10 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { verifyCurrentUserMFA } from '@/lib/api'
-import {
-  MFA_PROMPT_EVENT,
-  resolveMFAVerification,
-} from '@/lib/mfa-prompt'
+import { MFA_PROMPT_EVENT, resolveMFAVerification } from '@/lib/mfa-prompt'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -19,9 +16,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 /**
- * Step-up prompt for sensitive operations. The API client opens it when the
- * backend answers `mfa_verification_required` and replays the request once the
- * code is accepted.
+ * 敏感操作的二次验证提示。API 客户端在后端返回
+ * `mfa_verification_required` 时打开它，并在验证码被接受后
+ * 重放该请求。
  */
 export function MFAPromptDialog() {
   const { t } = useTranslation()

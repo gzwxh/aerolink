@@ -19,15 +19,16 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordInput } from '@/components/password-input'
 
 /**
- * Blocks the app while the security policy requires the signed-in user to enroll
- * in MFA. The backend rejects other requests with `mfa_setup_required` until the
- * enrollment is finished, so the gate must not be dismissable.
+ * 当安全策略要求已登录用户注册 MFA 时阻塞应用。
+ * 在注册完成之前，后端会以 `mfa_setup_required` 拒绝其它请求，
+ * 因此该关卡不可关闭。
  */
 export function MFAEnrollmentGate({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
-  const { user, checkAuth } = useAuth()
+  const { user } = useAuth()
   const [setup, setSetup] = useState<MFASetupResponse | null>(null)
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
@@ -74,7 +75,9 @@ export function MFAEnrollmentGate({ children }: { children: ReactNode }) {
     try {
       await enableCurrentUserMFA(code)
       toast.success(t('mfaEnrollment.success', 'MFA enabled'))
-      await checkAuth()
+      // 绑定生效的瞬间，页面上其他在途请求仍可能被 mfa_setup_required
+      // 拒绝；整页重载以确保以最新身份状态干净加载。
+      window.location.reload()
     } catch (err) {
       setError(
         err instanceof Error
@@ -110,13 +113,18 @@ export function MFAEnrollmentGate({ children }: { children: ReactNode }) {
         <CardContent className="space-y-4">
           {!setup ? (
             <form className="space-y-4" onSubmit={handleStart}>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'mfaEnrollment.passwordStepHint',
+                  '为防止会话被盗用，请先验证当前密码；验证通过后将显示绑定二维码，用身份验证器 App 扫码即可完成绑定。'
+                )}
+              </p>
               <div className="space-y-2">
                 <Label htmlFor="mfa-enroll-password">
                   {t('mfaEnrollment.passwordLabel', 'Current password')}
                 </Label>
-                <Input
+                <PasswordInput
                   id="mfa-enroll-password"
-                  type="password"
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}

@@ -1,10 +1,8 @@
-import { useCallback, useMemo, useState } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useMemo, useState } from 'react'
 import {
   IconCopy,
   IconDownload,
   IconPencil,
-  IconShieldCheck,
   IconTrash,
 } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -16,20 +14,17 @@ import { toast } from 'sonner'
 
 import {
   deleteResource,
-  fetchRoleList,
   updateResource,
-  updateRole,
   useResource,
   useResources,
 } from '@/lib/api'
 import { getPodStatus } from '@/lib/k8s'
 import { getResourceDetailPath } from '@/lib/resource-catalog'
-import { getAge, translateError } from '@/lib/utils'
-import { useCluster } from '@/hooks/use-cluster'
+import { getAge } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CloneResourceDialog } from '@/components/clone-resource-dialog'
-import { NamespacePermissionDialog } from '@/components/namespace-permission-dialog'
 import {
   DeleteNamespaceDialog,
   EditNamespaceDialog,
@@ -95,6 +90,11 @@ export function NamespaceDetailPage({ name }: { name: string }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const can = useCan()
+  // 克隆 / 编辑 / 删除命名空间都是写操作；只读角色只保留下载 YAML。
+  const canCreateNamespace = can('namespaces', 'create')
+  const canUpdateNamespace = can('namespaces', 'update')
+  const canDeleteNamespace = can('namespaces', 'delete')
 
   const {
     data: ns,
@@ -119,34 +119,7 @@ export function NamespaceDetailPage({ name }: { name: string }) {
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showClone, setShowClone] = useState(false)
-  const [showPermissions, setShowPermissions] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const { currentCluster } = useCluster()
-  const { user } = useAuth()
-  const isAdmin = user?.isAdmin() ?? false
-
-  // After cloning, carry over role grants referencing this namespace so the
-  // clone keeps the same permissions.
-  const handleCloned = useCallback(
-    async (targetName: string) => {
-      const roles = await fetchRoleList()
-      const affected = (roles || []).filter((r) => r.namespaces?.includes(name))
-      for (const role of affected) {
-        await updateRole(role.id, {
-          namespaces: [...(role.namespaces || []), targetName],
-        })
-      }
-      if (affected.length > 0) {
-        toast.success(
-          t('nsActions.permissionsCloned', {
-            count: affected.length,
-            defaultValue: 'Cloned permissions from {{count}} role(s)',
-          })
-        )
-      }
-    },
-    [name, t]
-  )
 
   const podStats = useMemo(() => {
     const counts = new Map<string, number>()
@@ -244,8 +217,8 @@ export function NamespaceDetailPage({ name }: { name: string }) {
       )
       queryClient.invalidateQueries()
       navigate('/namespaces')
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       setDeleting(false)
     }
   }
@@ -470,32 +443,26 @@ export function NamespaceDetailPage({ name }: { name: string }) {
         ]}
         headerActions={
           <>
-            {isAdmin && (
+            {canCreateNamespace && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowPermissions(true)}
+                onClick={() => setShowClone(true)}
               >
-                <IconShieldCheck className="h-4 w-4" />
-                {t('nsActions.permissions', 'Permissions')}
+                <IconCopy className="h-4 w-4" />
+                {t('nsActions.clone', 'Clone')}
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowClone(true)}
-            >
-              <IconCopy className="h-4 w-4" />
-              {t('nsActions.clone', 'Clone')}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowEdit(true)}
-            >
-              <IconPencil className="h-4 w-4" />
-              {t('common.actions.edit', 'Edit')}
-            </Button>
+            {canUpdateNamespace && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowEdit(true)}
+              >
+                <IconPencil className="h-4 w-4" />
+                {t('common.actions.edit', 'Edit')}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -507,25 +474,19 @@ export function NamespaceDetailPage({ name }: { name: string }) {
               <IconDownload className="h-4 w-4" />
               {t('nsActions.downloadYaml', 'Download YAML')}
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDelete(true)}
-            >
-              <IconTrash className="h-4 w-4" />
-              {t('common.actions.delete', 'Delete')}
-            </Button>
+            {canDeleteNamespace && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDelete(true)}
+              >
+                <IconTrash className="h-4 w-4" />
+                {t('common.actions.delete', 'Delete')}
+              </Button>
+            )}
           </>
         }
       />
-
-      {showPermissions && (
-        <NamespacePermissionDialog
-          name={name}
-          cluster={currentCluster ?? undefined}
-          onClose={() => setShowPermissions(false)}
-        />
-      )}
 
       {showEdit && (
         <EditNamespaceDialog
@@ -552,7 +513,6 @@ export function NamespaceDetailPage({ name }: { name: string }) {
           resourceLabel={t('common.fields.namespace', 'Namespace')}
           sourceName={name}
           resource={ns}
-          onCloned={handleCloned}
         />
       )}
     </>

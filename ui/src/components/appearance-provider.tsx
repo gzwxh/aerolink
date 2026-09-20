@@ -9,16 +9,16 @@ import { ThemeProvider, useTheme } from './theme-provider'
 
 type AppearanceProviderProps = {
   children: ReactNode
-  // Theme
+  // 主题
   defaultTheme?: 'dark' | 'light' | 'system'
   themeStorageKey?: string
-  // Color theme
+  // 配色主题
   defaultColorTheme?: ColorTheme
   colorThemeStorageKey?: string
-  // Font
+  // 字体
   defaultFont?: 'system' | 'maple' | 'jetbrains'
   fontStorageKey?: string
-  // Display scale
+  // 显示缩放
   defaultDisplayScale?: number
   displayScaleStorageKey?: string
 }
@@ -55,7 +55,7 @@ export function AppearanceProvider({
 
 export default AppearanceProvider
 
-// Unified hook for reading/updating all appearance settings in one place.
+// 统一读取/更新所有外观设置的 hook。
 export function useAppearance() {
   const { theme, actualTheme, setTheme } = useTheme()
   const { colorTheme, setColorTheme } = useColorTheme()

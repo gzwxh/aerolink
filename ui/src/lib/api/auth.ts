@@ -1,10 +1,4 @@
 import { authApiClient } from '../api-client'
-import type {
-  WebAuthnAssertionResponseJSON,
-  WebAuthnCreationOptionsJSON,
-  WebAuthnRegistrationResponseJSON,
-  WebAuthnRequestOptionsJSON,
-} from '../webauthn'
 
 export type CredentialProvider = 'password' | 'ldap'
 
@@ -24,8 +18,27 @@ export interface AuthUser {
   provider: string
   mfa_enabled?: boolean
   mfa_required?: boolean
+  /** 初始化创建的超级管理员账号（不可停用，保护手段是绑定 MFA）。 */
+  isSuperAdmin?: boolean
   roles?: AuthRole[]
+  /**
+   * 命名空间级权限绑定组带来的角色（含组内集群与命名空间范围，见后端
+   * rbac.NamespaceScopedBindingGroupRoles）。只参与资源权限判定，
+   * 不参与 isAdmin 与设置章节判定——与后端的 IsAdministrator / CanAccess 保持一致。
+   */
+  namespaceScopedRoles?: AuthRole[]
   sidebar_preference?: string
+  // 以下字段由 bootstrap 返回的用户对象提供（为空时后端会省略，所以都是可选的）。
+  /** 通知邮件的收件地址。 */
+  email?: string
+  phone?: string
+  /** 所属用户组（来自 LDAP / OIDC 同步或本地配置）。 */
+  oidc_groups?: string[]
+  enabled?: boolean
+  createdAt?: string
+  lastLoginAt?: string
+  /** 密码最后一次修改时间（用于过期策略展示）。 */
+  password_updated_at?: string
 }
 
 export interface OAuthLoginResponse {
@@ -45,9 +58,9 @@ export const initiateOAuthLogin = async (
 }
 
 export interface LoginCaptchaChallenge {
-  /** Signed id of the challenge, sent back together with the answer. */
+  /** 验证码挑战的签名 id，与答案一起回传。 */
   idKey: string
-  /** PNG data URL rendered by the server. */
+  /** 服务端渲染出的 PNG data URL。 */
   image: string
 }
 
@@ -83,6 +96,23 @@ export const loginWithCredentials = async (
   )
 }
 
+/**
+ * 第三方登录补验动态码。
+ *
+ * OIDC 这类重定向流没法在回调里收动态码，回调会跳回登录页并带上 `mfa_pending` 票据；
+ * 票据只证明身份源认证通过，换不到任何权限，必须配上动态码才能换到会话。
+ */
+export const verifyPendingMFA = async (
+  ticket: string,
+  code: string
+): Promise<void> => {
+  await authApiClient.post<void>(
+    '/auth/mfa/verify',
+    { mfa_pending: ticket, mfa_code: code },
+    { retryOnUnauthorized: false }
+  )
+}
+
 export const refreshAuthToken = async (): Promise<void> => {
   await authApiClient.post<void>('/auth/refresh', undefined, {
     retryOnUnauthorized: false,
@@ -95,8 +125,13 @@ export const logout = async (): Promise<void> => {
   })
 }
 
+// 修改当前登录用户自己的资料。目录用户（LDAP / OIDC）只有 avatar_url 会被接受，
+// 其余字段由身份源管辖（后端静默忽略，不是错误）。
 export const updateCurrentUser = async (data: {
-  name: string
+  name?: string
+  email?: string
+  phone?: string
+  avatar_url?: string
 }): Promise<AuthUser> => {
   return authApiClient.put<AuthUser>('/users/me', data)
 }
@@ -115,14 +150,6 @@ export interface MFASetupResponse {
   secret: string
   otpauth_url: string
   qr_code: string
-}
-
-export interface PasskeyCredential {
-  id: number
-  name: string
-  credential_id: string
-  createdAt: string
-  last_used_at?: string
 }
 
 export const setupCurrentUserMFA = async (
@@ -145,58 +172,4 @@ export const disableCurrentUserMFA = async (
   code: string
 ): Promise<AuthUser> => {
   return authApiClient.post<AuthUser>('/users/me/mfa/disable', { code })
-}
-
-export const listCurrentUserPasskeys = async (): Promise<
-  PasskeyCredential[]
-> => {
-  const result = await authApiClient.get<{ passkeys: PasskeyCredential[] }>(
-    '/users/me/passkeys'
-  )
-  return result.passkeys
-}
-
-export const beginCurrentUserPasskeyRegistration = async (
-  name: string,
-  currentPassword: string,
-  mfaCode?: string
-): Promise<WebAuthnCreationOptionsJSON> => {
-  return authApiClient.post<WebAuthnCreationOptionsJSON>(
-    '/users/me/passkeys/begin',
-    {
-      name,
-      current_password: currentPassword,
-      ...(mfaCode ? { mfa_code: mfaCode } : {}),
-    }
-  )
-}
-
-export const finishCurrentUserPasskeyRegistration = async (
-  credential: WebAuthnRegistrationResponseJSON
-): Promise<PasskeyCredential> => {
-  return authApiClient.post<PasskeyCredential>(
-    '/users/me/passkeys/finish',
-    credential
-  )
-}
-
-export const deleteCurrentUserPasskey = async (id: number): Promise<void> => {
-  await authApiClient.delete<void>(`/users/me/passkeys/${id}`)
-}
-
-export const beginPasskeyLogin =
-  async (): Promise<WebAuthnRequestOptionsJSON> => {
-    return authApiClient.post<WebAuthnRequestOptionsJSON>(
-      '/auth/passkey/login/begin',
-      undefined,
-      { retryOnUnauthorized: false }
-    )
-  }
-
-export const finishPasskeyLogin = async (
-  credential: WebAuthnAssertionResponseJSON
-): Promise<void> => {
-  await authApiClient.post<void>('/auth/passkey/login/finish', credential, {
-    retryOnUnauthorized: false,
-  })
 }

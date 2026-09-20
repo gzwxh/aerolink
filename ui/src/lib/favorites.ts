@@ -4,7 +4,7 @@ import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 const FAVORITES_STORAGE_KEY = 'kite-favorites'
 
 /**
- * Get favorites from localStorage
+ * 从 localStorage 读取收藏
  */
 export const getFavorites = (): SearchResult[] => {
   try {
@@ -18,7 +18,7 @@ export const getFavorites = (): SearchResult[] => {
 }
 
 /**
- * Save favorites to localStorage
+ * 把收藏保存到 localStorage
  */
 export const saveFavorites = (favorites: SearchResult[]) => {
   try {
@@ -32,7 +32,7 @@ export const saveFavorites = (favorites: SearchResult[]) => {
 }
 
 /**
- * Add a resource to favorites
+ * 把一个资源加入收藏
  */
 export const addToFavorites = (resource: SearchResult) => {
   const favorites = getFavorites()
@@ -44,7 +44,7 @@ export const addToFavorites = (resource: SearchResult) => {
     createdAt: resource.createdAt,
   }
 
-  // Check if already exists
+  // 检查是否已存在
   if (!favorites.some((fav) => fav.id === favorite.id)) {
     favorites.push(favorite)
     saveFavorites(favorites)
@@ -52,7 +52,7 @@ export const addToFavorites = (resource: SearchResult) => {
 }
 
 /**
- * Remove a resource from favorites
+ * 从一个资源的收藏中移除
  */
 export const removeFromFavorites = (resourceId: string) => {
   const favorites = getFavorites()
@@ -61,7 +61,7 @@ export const removeFromFavorites = (resourceId: string) => {
 }
 
 /**
- * Check if a resource is in favorites
+ * 检查某个资源是否在收藏中
  */
 export const isFavorite = (resourceId: string): boolean => {
   const favorites = getFavorites()
@@ -69,7 +69,7 @@ export const isFavorite = (resourceId: string): boolean => {
 }
 
 /**
- * Toggle favorite status of a resource
+ * 切换某个资源的收藏状态
  */
 export const toggleFavorite = (resource: SearchResult): boolean => {
   if (isFavorite(resource.id)) {

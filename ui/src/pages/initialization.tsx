@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import Logo from '@/assets/icon.svg'
 import { useAuth } from '@/contexts/auth-context'
+import { useBranding } from '@/contexts/branding-context'
 import {
   IconCheck,
   IconLoader,
@@ -12,6 +12,9 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { createSuperUser, importClusters, useInitCheck } from '@/lib/api'
+import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
+import { translateError } from '@/lib/utils'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,6 +29,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Footer } from '@/components/footer'
 import { LanguageToggle } from '@/components/language-toggle'
+import { PasswordInput } from '@/components/password-input'
+import { PasswordRulesPanel } from '@/components/password-rules-panel'
 
 interface InitStepProps {
   step: number
@@ -99,19 +104,31 @@ function InitStep({
 
 export function InitializationPage() {
   const { t } = useTranslation()
+  const { logoUrl, siteName } = useBranding()
+  // 初始化页没有子页面标题：浏览器标签只展示控制台名称。
+  usePageTitle('')
   const navigate = useNavigate()
   const { data: initCheck, isLoading, refetch } = useInitCheck()
   const { checkAuth, user, isLoading: isAuthLoading } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // User form state
+  // 用户表单状态
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [name, setName] = useState('')
 
-  // Cluster form state
+  // 初始化页只在「从未初始化」时出现，此时安全设置一定是默认值，
+  // 直接使用默认策略构建规则清单。
+  const passwordRules = buildPasswordRules(password, t)
+  const passwordValid = isPasswordRulesValid(passwordRules)
+  const passwordTouched = password.length > 0
+  const confirmMismatch =
+    confirmPassword.length > 0 && confirmPassword !== password
+  const [passwordFocused, setPasswordFocused] = useState(false)
+
+  // 集群表单状态
   const [kubeconfig, setKubeconfig] = useState('')
   const [isFileMode, setIsFileMode] = useState(false)
   const [isInCluster, setIsInCluster] = useState(false)
@@ -128,7 +145,7 @@ export function InitializationPage() {
     }
   }
 
-  // If loading, show spinner
+  // 加载中则展示 spinner
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -137,7 +154,7 @@ export function InitializationPage() {
     )
   }
 
-  // If already initialized, redirect to home
+  // 已初始化则重定向到首页
   if (initCheck?.initialized) {
     return <Navigate to="/" replace />
   }
@@ -161,8 +178,8 @@ export function InitializationPage() {
     e.preventDefault()
     setError(null)
 
-    if (password !== confirmPassword) {
-      setError(t('initialization.step1.passwordMismatch'))
+    // 密码要求与两次一致性均由输入框下方实时提示，不再使用顶部横幅。
+    if (!passwordValid || confirmMismatch) {
       return
     }
 
@@ -183,11 +200,7 @@ export function InitializationPage() {
       }
       await refetch()
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t('initialization.step1.createError')
-      )
+      setError(translateError(err, t))
     } finally {
       setIsSubmitting(false)
     }
@@ -207,7 +220,7 @@ export function InitializationPage() {
       await importClusters({ config: kubeconfig, inCluster: isInCluster })
       toast.success(t('initialization.step2.importSuccess'))
       await refetch()
-      // Will redirect to home page when initialized becomes true
+      // initialized 变为 true 后会重定向到首页
     } catch (err) {
       setError(
         err instanceof Error
@@ -229,8 +242,8 @@ export function InitializationPage() {
         <div className="w-full max-w-2xl">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center space-x-2 mb-4">
-              <img src={Logo} className="h-10 w-10" />{' '}
-              <h1 className="text-2xl font-bold">Kite</h1>
+              <img src={logoUrl} alt={siteName} className="h-10 w-10" />{' '}
+              <h1 className="text-2xl font-bold">{siteName}</h1>
             </div>
           </div>
 
@@ -290,35 +303,61 @@ export function InitializationPage() {
                       onChange={(e) => setName(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="relative space-y-2">
                     <Label htmlFor="password">
                       {t('initialization.step1.passwordRequired')}
                     </Label>
-                    <Input
+                    <PasswordInput
+                      showLock
                       id="password"
-                      type="password"
                       placeholder={t(
                         'initialization.step1.passwordPlaceholder'
                       )}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onFocus={() => setPasswordFocused(true)}
+                      onBlur={() => setPasswordFocused(false)}
+                      aria-invalid={passwordTouched && !passwordValid}
+                      className={
+                        passwordTouched && !passwordValid
+                          ? 'border-red-500 focus-visible:ring-red-500'
+                          : undefined
+                      }
                       required
+                    />
+                    {/* 密码要求浮层：普通文本可直接选中复制；鼠标悬停面板时保持显示 */}
+                    <PasswordRulesPanel
+                      rules={passwordRules}
+                      touched={passwordTouched}
+                      focused={passwordFocused}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword">
                       {t('initialization.step1.confirmPasswordRequired')}
                     </Label>
-                    <Input
+                    <PasswordInput
+                      showLock
                       id="confirmPassword"
-                      type="password"
                       placeholder={t(
                         'initialization.step1.confirmPasswordPlaceholder'
                       )}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
+                      aria-invalid={confirmMismatch}
+                      className={
+                        confirmMismatch
+                          ? 'border-red-500 focus-visible:ring-red-500'
+                          : undefined
+                      }
                       required
                     />
+                    {/* 两次密码不一致：内联提示在确认密码框正下方 */}
+                    {confirmMismatch && (
+                      <p className="text-xs text-red-600">
+                        {t('initialization.step1.passwordMismatch')}
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="submit"

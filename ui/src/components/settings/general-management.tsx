@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react'
+import DefaultLogo from '@/assets/icon.svg'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
   IconLink,
   IconMessage,
+  IconPhoto,
   IconRobot,
   IconSettings,
+  IconShieldLock,
   IconTerminal2,
+  IconUpload,
+  IconX,
 } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -15,7 +21,8 @@ import {
   updateGeneralSetting,
   useGeneralSetting,
 } from '@/lib/api'
-import { translateError } from '@/lib/utils'
+import { reportOperationFailure } from '@/lib/error-reporter'
+import { cn, translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -29,12 +36,19 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { PasswordInput } from '@/components/password-input'
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5'
-const DEFAULT_KUBECTL_IMAGE = 'zzde/kubectl:latest'
-const DEFAULT_NODE_TERMINAL_IMAGE = 'busybox:latest'
-const DEFAULT_CLUSTER_AGENT_IMAGE = 'ghcr.io/kite-org/kite:latest'
+// 与后端 maxLogoURLLength 对齐：bootstrap 是公开接口，logo 会在每次打开控制台时下发，
+// 所以限制在 256 KiB 以内；数据 URL 会膨胀约 1/3，文件选择处再留一点余量。
+const MAX_LOGO_BYTES = 180 * 1024
+const DEFAULT_KUBECTL_IMAGE =
+  'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'
+const DEFAULT_NODE_TERMINAL_IMAGE =
+  'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'
+const DEFAULT_CLUSTER_AGENT_IMAGE =
+  'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'
 
 interface GeneralSettingsFormData {
   aiAgentEnabled: boolean
@@ -48,14 +62,19 @@ interface GeneralSettingsFormData {
   kubectlImage: string
   nodeTerminalImage: string
   clusterAgentImage: string
+  autoBindUserNamespace: boolean
   enableAnalytics: boolean
   enableVersionCheck: boolean
   loginPrompt: string
+  logoUrl: string
+  siteName: string
 }
 
 export function GeneralManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  // 只读章节（只有 settings.general 的读权限）时禁用保存。
+  const { readOnly } = useSettingsSectionAccess()
   const { data, isLoading } = useGeneralSetting()
   const [formData, setFormData] = useState<GeneralSettingsFormData>({
     aiAgentEnabled: false,
@@ -69,9 +88,12 @@ export function GeneralManagement() {
     kubectlImage: DEFAULT_KUBECTL_IMAGE,
     nodeTerminalImage: DEFAULT_NODE_TERMINAL_IMAGE,
     clusterAgentImage: DEFAULT_CLUSTER_AGENT_IMAGE,
+    autoBindUserNamespace: true,
     enableAnalytics: true,
     enableVersionCheck: true,
     loginPrompt: '',
+    logoUrl: '',
+    siteName: '',
   })
 
   useEffect(() => {
@@ -88,9 +110,12 @@ export function GeneralManagement() {
       kubectlImage: data.kubectlImage || DEFAULT_KUBECTL_IMAGE,
       nodeTerminalImage: data.nodeTerminalImage || DEFAULT_NODE_TERMINAL_IMAGE,
       clusterAgentImage: data.clusterAgentImage || DEFAULT_CLUSTER_AGENT_IMAGE,
+      autoBindUserNamespace: data.autoBindUserNamespace ?? true,
       enableAnalytics: data.enableAnalytics ?? false,
       enableVersionCheck: data.enableVersionCheck ?? true,
       loginPrompt: data.loginPrompt || '',
+      logoUrl: data.logoUrl || '',
+      siteName: data.siteName || '',
     })
   }, [data])
 
@@ -109,9 +134,37 @@ export function GeneralManagement() {
       )
     },
     onError: (error) => {
-      toast.error(translateError(error, t))
+      // 操作失败不再使用弹窗：写入当前用户的站内信，服务器不可达时
+      // 本地排队，恢复后自动补报（见 reportOperationFailure）。
+      reportOperationFailure(translateError(error, t))
     },
   })
+
+  const handleLogoFile = (file: File | undefined) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('generalManagement.errors.logoNotImage', '请选择图片文件'))
+      return
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      toast.error(
+        t('generalManagement.errors.logoTooLarge', {
+          defaultValue:
+            '图片不能超过 {{size}} KiB，建议改用更小的 logo 或直接填图片地址',
+          size: Math.round(MAX_LOGO_BYTES / 1024),
+        })
+      )
+      return
+    }
+    // 管理员手里通常是图片文件而不是已有地址：转成 data: URL 直接存进设置，
+    // 省掉自己找地方托管图标的步骤。
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      if (result) setFormData((prev) => ({ ...prev, logoUrl: result }))
+    }
+    reader.readAsDataURL(file)
+  }
 
   const handleSave = () => {
     const defaultModel =
@@ -169,9 +222,14 @@ export function GeneralManagement() {
         formData.nodeTerminalImage.trim() || DEFAULT_NODE_TERMINAL_IMAGE,
       clusterAgentImage:
         formData.clusterAgentImage.trim() || DEFAULT_CLUSTER_AGENT_IMAGE,
+      autoBindUserNamespace: formData.autoBindUserNamespace,
       enableAnalytics: formData.enableAnalytics,
       enableVersionCheck: formData.enableVersionCheck,
       loginPrompt: formData.loginPrompt.trim(),
+      // 显式传空串 = 恢复内置图标（后端同一套「出现即处理」语义）。
+      logoUrl: formData.logoUrl.trim(),
+      // 空串 = 用默认名 Kite。
+      siteName: formData.siteName.trim(),
     }
     if (formData.aiApiKey.trim()) {
       payload.aiApiKey = formData.aiApiKey.trim()
@@ -278,9 +336,8 @@ export function GeneralManagement() {
                 <Label htmlFor="general-ai-api-key">
                   {t('generalManagement.aiAgent.form.apiKey', 'API Key')}
                 </Label>
-                <Input
+                <PasswordInput
                   id="general-ai-api-key"
-                  type="password"
                   value={formData.aiApiKey}
                   onChange={(e) =>
                     setFormData((prev) => ({
@@ -449,6 +506,43 @@ export function GeneralManagement() {
           </div>
         </div>
 
+        <div className="rounded-lg border p-3">
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2 text-sm font-medium">
+              <IconShieldLock className="h-4 w-4" />
+              {t(
+                'generalManagement.autoBindNamespace.title',
+                '命名空间自动归属'
+              )}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'generalManagement.autoBindNamespace.description',
+                '普通用户在权限范围内新建命名空间时，自动把它纳入自己已有的授权（优先归属其权限绑定组）；管理员创建的命名空间不自动归属，便于管理员手动分配。'
+              )}
+            </p>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between">
+            <Label htmlFor="general-auto-bind-namespace" className="text-sm">
+              {t(
+                'generalManagement.autoBindNamespace.form.enabled',
+                '用户创建命名空间时自动归属其权限'
+              )}
+            </Label>
+            <Switch
+              id="general-auto-bind-namespace"
+              checked={formData.autoBindUserNamespace}
+              onCheckedChange={(checked) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  autoBindUserNamespace: checked,
+                }))
+              }
+            />
+          </div>
+        </div>
+
         <div className="rounded-lg border">
           <div className="p-3">
             <Label className="text-sm font-medium">
@@ -533,8 +627,126 @@ export function GeneralManagement() {
           </div>
         </div>
 
+        <div className="rounded-lg border p-3">
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2 text-sm font-medium">
+              <IconPhoto className="h-4 w-4" />
+              {t('generalManagement.branding.title', '品牌')}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'generalManagement.branding.description',
+                '自定义控制台外观：名称与 logo 会用在侧边栏、登录页、初始化页与浏览器标签上；留空则用默认值（Kite + 内置图标）。仅管理员可改。'
+              )}
+            </p>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <Label htmlFor="general-site-name">
+              {t('generalManagement.branding.nameLabel', '名称')}
+            </Label>
+            <Input
+              id="general-site-name"
+              value={formData.siteName}
+              disabled={readOnly}
+              maxLength={100}
+              onChange={(event) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  siteName: event.target.value,
+                }))
+              }
+              placeholder={t(
+                'generalManagement.branding.namePlaceholder',
+                'Kite'
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'generalManagement.branding.nameHint',
+                '展示在侧边栏、登录页与浏览器标签上；留空则使用默认名称 Kite。'
+              )}
+            </p>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <img
+              src={formData.logoUrl.trim() || DefaultLogo}
+              alt={t('generalManagement.branding.preview', 'Logo 预览')}
+              className={cn(
+                'h-10 w-10 shrink-0 rounded border object-contain p-1',
+                !formData.logoUrl.trim() && 'dark:invert'
+              )}
+            />
+            <label
+              className={cn(
+                'inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm transition-colors hover:bg-accent',
+                readOnly && 'pointer-events-none opacity-50'
+              )}
+            >
+              <IconUpload className="h-4 w-4" />
+              {t('generalManagement.branding.upload', '选择图片')}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={readOnly}
+                onChange={(event) => {
+                  handleLogoFile(event.target.files?.[0])
+                  // 允许连续两次选择同一个文件。
+                  event.target.value = ''
+                }}
+              />
+            </label>
+            {formData.logoUrl.trim() !== '' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={readOnly}
+                onClick={() =>
+                  setFormData((prev) => ({ ...prev, logoUrl: '' }))
+                }
+              >
+                <IconX className="h-4 w-4" />
+                {t('generalManagement.branding.reset', '恢复默认')}
+              </Button>
+            )}
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <Label htmlFor="general-logo-url">
+              {t('generalManagement.branding.urlLabel', 'Logo 地址')}
+            </Label>
+            <Input
+              id="general-logo-url"
+              value={formData.logoUrl}
+              disabled={readOnly}
+              onChange={(event) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  logoUrl: event.target.value,
+                }))
+              }
+              placeholder={t(
+                'generalManagement.branding.urlPlaceholder',
+                'https://example.com/logo.png'
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'generalManagement.branding.urlHint',
+                '支持图片地址或 data: URL；建议方形图标且小于 180 KiB（logo 会在每次打开控制台时下发），保存后生效。'
+              )}
+            </p>
+          </div>
+        </div>
+
         <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={mutation.isPending}>
+          <Button
+            onClick={handleSave}
+            disabled={readOnly || mutation.isPending}
+          >
             {t('common.actions.save', 'Save')}
           </Button>
         </div>

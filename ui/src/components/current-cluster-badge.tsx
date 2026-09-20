@@ -3,9 +3,9 @@ import { IconServer } from '@tabler/icons-react'
 import { useCluster } from '@/hooks/use-cluster'
 
 /**
- * Compact badge for the site header that always shows which cluster the user
- * is operating on, along with its custom description, to avoid accidental
- * actions against the wrong cluster.
+ * 站点顶栏上的紧凑徽标，始终显示用户正在操作哪个集群
+ * 及其自定义描述，避免误操作到
+ * 错误的集群。
  */
 export function CurrentClusterBadge() {
   const { clusters, currentCluster, isLoading, isSwitching } = useCluster()

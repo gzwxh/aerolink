@@ -68,14 +68,14 @@ export function useWebSocket(
     totalDownloaded: 0,
   })
 
-  // Refs for WebSocket and timers
+  // WebSocket 与定时器的 ref
   const wsRef = useRef<WebSocket | null>(null)
   const speedUpdateTimerRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const isMountedRef = useRef(true)
 
-  // Network stats tracking
+  // 网络统计跟踪
   const networkStatsRef = useRef({
     lastReset: Date.now(),
     bytesUploaded: 0,
@@ -84,7 +84,7 @@ export function useWebSocket(
     totalDownloaded: 0,
   })
 
-  // Update network stats
+  // 更新网络统计
   const updateNetworkStats = useCallback((bytes: number, isSent: boolean) => {
     const stats = networkStatsRef.current
     if (isSent) {
@@ -96,7 +96,7 @@ export function useWebSocket(
     }
   }, [])
 
-  // Clean up all resources
+  // 清理所有资源
   const cleanupResources = useCallback(() => {
     if (wsRef.current) {
       wsRef.current.onopen = null
@@ -123,7 +123,7 @@ export function useWebSocket(
     }
   }, [])
 
-  // Start speed update timer
+  // 启动速率更新定时器
   const startSpeedUpdateTimer = useCallback(() => {
     if (speedUpdateTimerRef.current) return
 
@@ -156,7 +156,7 @@ export function useWebSocket(
           }
         })
 
-        // Reset counters after specified interval
+        // 在指定间隔后重置计数
         const currentOpts = optsRef.current
         if (timeDiff >= currentOpts.speedResetInterval / 1000) {
           stats.lastReset = now
@@ -167,13 +167,13 @@ export function useWebSocket(
     }, optsRef.current.speedUpdateInterval)
   }, [])
 
-  // Store callbacks in refs to avoid recreating connect function
+  // 把回调存入 ref，避免重复创建 connect 函数
   const callbacksRef = useRef(callbacks)
   const optsRef = useRef(opts)
   callbacksRef.current = callbacks
   optsRef.current = opts
 
-  // Connect to WebSocket
+  // 连接 WebSocket
   const connect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
       return // Already connecting
@@ -201,7 +201,7 @@ export function useWebSocket(
         setError(null)
         reconnectAttemptsRef.current = 0
 
-        // Reset network stats
+        // 重置网络统计
         networkStatsRef.current = {
           lastReset: Date.now(),
           bytesUploaded: 0,
@@ -210,7 +210,7 @@ export function useWebSocket(
           totalDownloaded: networkStatsRef.current.totalDownloaded,
         }
 
-        // Start timers
+        // 启动定时器
         startSpeedUpdateTimer()
 
         callbacksRef.current.onOpen?.()
@@ -223,7 +223,7 @@ export function useWebSocket(
         setIsConnected(false)
         setIsConnecting(false)
 
-        // Clean up timers
+        // 清理定时器
         if (speedUpdateTimerRef.current) {
           clearInterval(speedUpdateTimerRef.current)
           speedUpdateTimerRef.current = null
@@ -240,7 +240,7 @@ export function useWebSocket(
 
         callbacksRef.current.onClose?.(event)
 
-        // Handle reconnection
+        // 处理重连
         const currentOptsForReconnect = optsRef.current
         if (
           currentOptsForReconnect.reconnectOnClose &&
@@ -274,20 +274,20 @@ export function useWebSocket(
         if (!isMountedRef.current) return
 
         try {
-          // Track download bytes
+          // 统计下载字节数
           const dataSize = new Blob([event.data]).size
           updateNetworkStats(dataSize, false)
 
-          // Parse message
+          // 解析消息
           let message: WebSocketMessage
           try {
             message = JSON.parse(event.data)
           } catch {
-            // If not JSON, treat as plain text message
+            // 如果不是 JSON，按纯文本消息处理
             message = { type: 'data', data: event.data }
           }
 
-          // Handle internal message types
+          // 处理内部消息类型
           if (message.type === 'pong') {
             return // Ignore pong responses
           }
@@ -306,7 +306,7 @@ export function useWebSocket(
     }
   }, [url, cleanupResources, startSpeedUpdateTimer, updateNetworkStats])
 
-  // Send message
+  // 发送消息
   const send = useCallback(
     (message: WebSocketMessage | string): boolean => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -328,7 +328,7 @@ export function useWebSocket(
     [updateNetworkStats]
   )
 
-  // Disconnect
+  // 断开连接
   const disconnect = useCallback(() => {
     reconnectAttemptsRef.current = optsRef.current.maxReconnectAttempts // Prevent reconnection
     cleanupResources()
@@ -336,19 +336,19 @@ export function useWebSocket(
     setIsConnecting(false)
   }, [cleanupResources])
 
-  // Manual reconnect
+  // 手动重连
   const reconnect = useCallback(() => {
     reconnectAttemptsRef.current = 0
     connect()
   }, [connect])
 
-  // Main effect for connection lifecycle
+  // 连接生命周期的主 effect
   useEffect(() => {
     isMountedRef.current = true
     let timer: ReturnType<typeof setTimeout> | undefined
 
     if (optsRef.current.enabled) {
-      // Add a small delay to prevent rapid reconnections
+      // 加一点延迟，避免快速反复重连
       timer = setTimeout(() => {
         if (isMountedRef.current && optsRef.current.enabled) {
           connect()
@@ -365,7 +365,7 @@ export function useWebSocket(
     }
   }, [connect, cleanupResources])
 
-  // Effect to handle enabled option changes
+  // 处理 enabled 选项变化的 effect
   useEffect(() => {
     if (opts.enabled && !isConnected && !isConnecting) {
       const timer = setTimeout(() => {
@@ -381,7 +381,7 @@ export function useWebSocket(
     }
   }, [opts.enabled, isConnected, isConnecting, connect, cleanupResources])
 
-  // Return state and actions
+  // 返回状态与操作
   return [
     {
       isConnected,

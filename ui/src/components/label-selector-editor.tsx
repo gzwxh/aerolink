@@ -22,7 +22,7 @@ export interface LabelPair {
   value: string
 }
 
-/** Matched pod names shown before the rest collapse into a "+N" badge. */
+/** 在其余匹配折叠为 "+N" 徽标之前展示的已匹配 pod 名称。 */
 const MAX_VISIBLE_MATCHES = 10
 
 const WARNING_BANNER =
@@ -31,8 +31,8 @@ const MATCH_BANNER =
   'rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400'
 
 /**
- * Parses label pairs from an imported file: a JSON object, or plain
- * `key=value` / `key: value` lines (blank lines and `#` comments ignored).
+ * 从导入的文件中解析标签对：可以是 JSON 对象，或纯文本
+ * `key=value` / `key: value` 行（空行与 `#` 注释会被忽略）。
  */
 function parsePairsFromText(text: string): LabelPair[] {
   try {
@@ -45,7 +45,7 @@ function parsePairsFromText(text: string): LabelPair[] {
         .map(([key, value]) => ({ key: key.trim(), value: String(value) }))
     }
   } catch {
-    // Not JSON, fall through to the line based format.
+    // 不是 JSON，退回到按行解析的格式。
   }
   const pairs: LabelPair[] = []
   for (const raw of text.split(/\r?\n/)) {
@@ -61,9 +61,9 @@ function parsePairsFromText(text: string): LabelPair[] {
 }
 
 /**
- * Label key/value editor with the pod-match readout the console shows for
- * selectors: it counts the pods of the namespace whose labels cover every
- * filled-in pair and lists the matches.
+ * 标签键值编辑器，带控制台为选择器展示的 pod 匹配读数：
+ * 它统计该命名空间中标签覆盖了每一个已填写键值对的 pod 数量，
+ * 并列出这些匹配项。
  */
 export function LabelSelectorEditor({
   title,
@@ -76,7 +76,7 @@ export function LabelSelectorEditor({
 }: {
   title: string
   hint?: string
-  /** Extra sentence appended when no pair is filled in yet (selector case). */
+  /** 尚未填写任何键值对时追加的额外说明（选择器场景）。 */
   emptyNote?: string
   pairs: LabelPair[]
   addLabel: string
@@ -104,7 +104,7 @@ export function LabelSelectorEditor({
     [pairs]
   )
 
-  // Every filled-in pair has to match; without pairs nothing can match.
+  // 每个已填写的键值对都必须匹配；没有键值对时什么都匹配不上。
   const matched = useMemo(() => {
     if (isError || selector.length === 0) return []
     return pods.filter((pod) =>
@@ -115,8 +115,8 @@ export function LabelSelectorEditor({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerSearch, setPickerSearch] = useState('')
 
-  // Distinct key=value pairs already present on the Pods of this namespace,
-  // most common first, so a selector can be filled without typing.
+  // 该命名空间 Pod 上已存在的、互不相同的 key=value 对，
+  // 按出现频率由高到低，这样不输入也能填好选择器。
   const existingLabels = useMemo(() => {
     const counts = new Map<
       string,
@@ -152,7 +152,7 @@ export function LabelSelectorEditor({
         pair.value.trim() === label.value.trim()
     )
 
-  /** Appends a pair, dropping the blank starter rows on the way. */
+  /** 追加一个键值对，同时去掉空白的起始行。 */
   const addPair = (label: LabelPair) => {
     const pair = { key: label.key.trim(), value: label.value.trim() }
     if (isPairSelected(pair)) return
@@ -175,8 +175,8 @@ export function LabelSelectorEditor({
         )
         return
       }
-      // Merge by key: an imported pair replaces a row with the same key, and
-      // blank starter rows are dropped.
+      // 按键合并：导入的键值对会替换同 key 的行，
+      // 并去掉空白的起始行。
       const merged = pairs.filter((pair) => pair.key.trim())
       for (const pair of imported) {
         const existing = merged.findIndex(

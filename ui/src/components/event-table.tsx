@@ -35,7 +35,7 @@ export function EventTable(props: {
     })
   }, [events])
 
-  // Event table columns
+  // 事件表格列
   const eventColumns = useMemo(
     (): Column<Event>[] => [
       {

@@ -40,7 +40,7 @@ export function ThemeProvider({
       : theme
   )
 
-  // Watch for system theme changes when theme is 'system'
+  // 当主题为 'system' 时监听系统主题变化
   useEffect(() => {
     if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')

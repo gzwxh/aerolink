@@ -16,7 +16,8 @@ import {
   getResourceDetailPath,
   getResourceQueryKey,
 } from '@/lib/resource-metadata'
-import { isVersionAtLeast, translateError } from '@/lib/utils'
+import { isVersionAtLeast } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { useCluster } from '@/hooks/use-cluster'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -62,6 +63,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
 
   const { t } = useTranslation()
   const { clusters, currentCluster } = useCluster()
+  const can = useCan()
 
   const {
     data: pod,
@@ -142,8 +144,8 @@ export function PodDetail(props: { namespace: string; name: string }) {
       toast.success(t('pods.resizeResourcesSuccess'))
       await refetch()
       setIsResizeDialogOpen(false)
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsResizing(false)
     }
@@ -157,9 +159,16 @@ export function PodDetail(props: { namespace: string; name: string }) {
     () => isVersionAtLeast(clusterVersion, '1.35.0'),
     [clusterVersion]
   )
+  // 调整资源（PATCH Pod）与调试（临时容器，后端要求 exec）都是写操作，
+  // 只读角色不该看到入口，否则点下去只会被后端拒绝。
+  const canUpdate = can('pods', 'update', { namespace })
+  const canExec = can('pods', 'exec', { namespace })
+  // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
+  const canLog = can('pods', 'log', { namespace })
   const resizeAvailable =
-    resizeSupported && (pod?.spec?.containers?.length ?? 0) > 0
+    canUpdate && resizeSupported && (pod?.spec?.containers?.length ?? 0) > 0
   const debugAvailable =
+    canExec &&
     !!pod &&
     !pod.metadata?.deletionTimestamp &&
     pod.spec?.os?.name !== 'windows' &&
@@ -377,7 +386,12 @@ export function PodDetail(props: { namespace: string; name: string }) {
           </>
         }
         preYamlTabs={extraTabs.filter((tab) => tab.value === 'containers')}
-        extraTabs={extraTabs.filter((tab) => tab.value !== 'containers')}
+        extraTabs={extraTabs.filter(
+          (tab) =>
+            tab.value !== 'containers' &&
+            (tab.value !== 'terminal' || canExec) &&
+            (tab.value !== 'logs' || canLog)
+        )}
       />
       {isDebugDialogOpen && debugAvailable && (
         <PodDebugDialog

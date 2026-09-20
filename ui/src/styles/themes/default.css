@@ -1,4 +1,4 @@
-/* Default Theme */
+/* 默认主题 */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
@@ -68,5 +68,5 @@
 }
 
 .color-default {
-  /* Default theme uses root variables - no changes needed */
+  /* 默认主题使用根变量——无需改动 */
 }

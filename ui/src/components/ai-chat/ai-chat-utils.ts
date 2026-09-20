@@ -45,7 +45,7 @@ export function describeAction(
             return `Restart ${target}`
           }
         } catch {
-          // ignore
+          // 忽略
         }
         return `Patch ${target}: ${patch.length > 80 ? `${patch.slice(0, 80)}...` : patch}`
       }

@@ -4,10 +4,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react'
 import * as React from 'react'
 import { type Icon, type IconProps } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { SidebarConfig, SidebarGroup, SidebarItem } from '@/types/sidebar'
 import { withSubPath } from '@/lib/subpath'
@@ -90,6 +93,14 @@ export const SidebarConfigProvider: React.FC<SidebarConfigProviderProps> = ({
   const [isLoading, setIsLoading] = useState(true)
   const [hasUpdate, setHasUpdate] = useState(false)
   const { user } = useAuth()
+  const { t } = useTranslation()
+
+  // 事件处理里要拿「最新的」配置：写回是异步的，若等它成功再更新本地状态，
+  // 连续两次操作会都基于同一份旧状态计算，前一次改动被后一次覆盖。
+  const configRef = useRef<SidebarConfig | null>(null)
+  useEffect(() => {
+    configRef.current = config
+  }, [config])
 
   const loadConfig = useCallback(async () => {
     if (user && user.sidebar_preference && user.sidebar_preference != '') {
@@ -103,53 +114,69 @@ export const SidebarConfigProvider: React.FC<SidebarConfigProviderProps> = ({
     setConfig(buildDefaultSidebarConfig())
   }, [user])
 
-  const saveConfig = useCallback(
-    async (newConfig: SidebarConfig) => {
-      if (!user) {
-        setConfig(newConfig)
-        return
-      }
+  // 串行化写回：先发出的保存先落库，最后一次改动才是最终状态；
+  // 否则两次请求的响应乱序会让服务端停在旧配置上。
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
 
-      try {
-        const configToSave = {
-          ...newConfig,
-          lastUpdated: Date.now(),
-          version: SIDEBAR_CONFIG_VERSION,
-        }
-
-        const response = await fetch(
-          withSubPath('/api/users/sidebar_preference'),
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              sidebar_preference: JSON.stringify(configToSave),
-            }),
+  const persistConfig = useCallback(
+    (configToSave: SidebarConfig) => {
+      if (!user) return
+      saveQueueRef.current = saveQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            const response = await fetch(
+              withSubPath('/api/users/sidebar_preference'),
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                  sidebar_preference: JSON.stringify(configToSave),
+                }),
+              }
+            )
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`)
+            }
+          } catch (error) {
+            // 之前只写 console：界面既没有提示，用户也无从知道改动没保存。
+            console.error('Failed to save sidebar config to server:', error)
+            toast.error(
+              t('sidebar.saveFailed', {
+                defaultValue: '保存侧边栏配置失败，请稍后重试',
+              })
+            )
           }
-        )
-
-        if (response.ok) {
-          setConfig(configToSave)
-        } else {
-          console.error('Failed to save sidebar config to server')
-        }
-      } catch (error) {
-        console.error('Failed to save sidebar config to server:', error)
-      }
+        })
     },
-    [user]
+    [t, user]
+  )
+
+  // 统一的写入路径：先更新本地状态（乐观），再写回服务端。
+  const applyConfig = useCallback(
+    (next: SidebarConfig) => {
+      const stamped = {
+        ...next,
+        lastUpdated: Date.now(),
+        version: SIDEBAR_CONFIG_VERSION,
+      }
+      configRef.current = stamped
+      setConfig(stamped)
+      persistConfig(stamped)
+    },
+    [persistConfig]
   )
 
   const updateConfig = useCallback(
     (updates: Partial<SidebarConfig>) => {
-      if (!config) return
-      const newConfig = { ...config, ...updates }
-      saveConfig(newConfig)
+      const current = configRef.current
+      if (!current) return
+      applyConfig({ ...current, ...updates })
     },
-    [config, saveConfig]
+    [applyConfig]
   )
 
   const toggleItemVisibility = useCallback(
@@ -226,7 +253,7 @@ export const SidebarConfigProvider: React.FC<SidebarConfigProviderProps> = ({
 
       const groupId = `custom-${groupName.toLowerCase().replace(/\s+/g, '-')}`
 
-      // Check if group already exists
+      // 检查该分组是否已存在
       if (config.groups.find((g) => g.id === groupId)) {
         return
       }
@@ -255,7 +282,7 @@ export const SidebarConfigProvider: React.FC<SidebarConfigProviderProps> = ({
         if (group.id === groupId) {
           const url = `/crds/${crdName}`
 
-          // Check if CRD already exists in this group
+          // 检查该分组中是否已存在该 CRD
           if (
             group.items.some(
               (item) => item.type === 'customResource' && item.url === url
@@ -440,10 +467,9 @@ export const SidebarConfigProvider: React.FC<SidebarConfigProviderProps> = ({
   )
 
   const resetConfig = useCallback(() => {
-    const newConfig = buildDefaultSidebarConfig()
-    saveConfig(newConfig)
+    applyConfig(buildDefaultSidebarConfig())
     setHasUpdate(false)
-  }, [saveConfig])
+  }, [applyConfig])
 
   useEffect(() => {
     const loadData = async () => {

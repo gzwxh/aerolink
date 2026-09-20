@@ -1,4 +1,4 @@
-// API types for Custom Resources
+// 自定资源的 API 类型
 
 import {
   CustomResourceDefinition,
@@ -329,7 +329,7 @@ export interface KubernetesResourceList {
   metadata?: listMetadataType
 }
 
-// Define resource type mappings
+// 定义资源类型映射
 export interface ResourcesTypeMap {
   pods: {
     items: PodWithMetrics[]
@@ -560,7 +560,7 @@ export interface ResourceUsageHistory {
   diskWrite: UsageDataPoint[]
 }
 
-// Pod monitoring types
+// Pod 监控类型
 export interface PodMetrics {
   cpu: UsageDataPoint[]
   memory: UsageDataPoint[]
@@ -579,6 +579,8 @@ export interface OverviewData {
   totalNamespaces: number
   totalServices: number
   prometheusEnabled: boolean
+  // 仅统计了授权命名空间的数据（无集群容量）。
+  scoped: boolean
   resource: {
     cpu: {
       allocatable: number
@@ -593,7 +595,7 @@ export interface OverviewData {
   }
 }
 
-// Pagination types
+// 分页类型
 export interface PaginationInfo {
   hasNextPage: boolean
   nextContinueToken?: string
@@ -605,7 +607,7 @@ export interface PaginationOptions {
   continueToken?: string
 }
 
-// Pod current metrics types
+// Pod 当前指标类型
 export interface PodCurrentMetrics {
   podName: string
   namespace: string
@@ -670,17 +672,35 @@ export interface RoleAssignment {
   updatedAt: string
 }
 
+export interface ResourceGrant {
+  resource: string
+  verbs: string[]
+}
+
 export interface Role {
   id: number
+  /** 角色 ID：权限判定与权限绑定的依据，全局唯一，创建后不可修改。 */
   name: string
+  /**
+   * 界面展示用的「名称」，可自定义；为空表示未自定义——内置角色显示内置名（随语言
+   * 切换），自定义角色显示角色 ID（见 lib/system-roles.ts）。
+   */
+  displayName?: string
   description?: string
   isSystem?: boolean
-  /** 'user' or 'group'; legacy roles without a type behave as 'user'. */
-  roleType?: 'user' | 'group' | ''
   clusters: string[]
+  /**
+   * 旧模型的角色级命名空间限制：新建角色不再写入，但存量角色仍受其约束
+   * （见 ui/src/lib/rbac-permissions.ts 的镜像判定）。
+   */
   namespaces: string[]
   resources: string[]
   verbs: string[]
+  /**
+   * 按资源保存的操作集合（资源 × 操作一一对应）。新版角色用它判定；
+   * 为空时退回 resources × verbs 的笛卡尔积（存量角色）。
+   */
+  grants?: ResourceGrant[]
   assignments?: RoleAssignment[]
   createdAt: string
   updatedAt: string
@@ -699,6 +719,27 @@ export interface UserItem {
   name?: string
   oidc_groups?: string[]
   roles?: Role[]
+  /** 联系方式。LDAP 账号从目录获取。 */
+  email?: string
+  phone?: string
+  remark?: string
+  /** 资料更新时间：LDAP 账号每次目录同步都会刷新。 */
+  updatedAt?: string
+  /** 账号到期时间；缺省表示不过期。 */
+  expiresAt?: string
+  /** 停用原因（inactive = 由「不活跃用户自动禁用」任务关闭）。 */
+  disabledReason?: string
+  disabledAt?: string
+  /** 密码最后一次修改时间。 */
+  password_updated_at?: string
+  /**
+   * 初始化创建的超级管理员账号：不可删除、不允许停用（保护手段是绑定 MFA）。
+   */
+  isSuperAdmin?: boolean
+  /** 是否已绑定动态码（MFA）。 */
+  mfa_enabled?: boolean
+  /** 创建时选择「MFA 级别：禁用」的账号不受全局策略强制。 */
+  mfaDisabled?: boolean
 }
 
 export interface FetchUserListResponse {
@@ -718,7 +759,7 @@ export interface APIKey {
   roles?: Role[]
 }
 
-// Resource History types
+// 资源历史类型
 export interface ResourceHistory {
   id: number
   clusterName: string
@@ -731,7 +772,14 @@ export interface ResourceHistory {
   previousYaml: string
   success: boolean
   errorMessage: string
-  operatorId: number
+  /** 事件来源：发起请求的客户端 IP（等保三级要求审计记录含来源）。 */
+  clientIp: string
+  /** 事件来源：请求的 User-Agent。 */
+  userAgent: string
+  /** 账号被删除后为 null（审计记录保留，操作者以 operatorName 快照为准）。 */
+  operatorId: number | null
+  /** 写入时的操作者用户名快照，账号删除/改名后仍可追溯。 */
+  operatorName: string
   operator: {
     username: string
     provider: string
@@ -783,6 +831,12 @@ export interface LoginRecord {
   provider: string
   ip: string
   userAgent: string
+  /**
+   * 空字符串 = 登录成功；非空 = 失败原因码（invalid_credentials /
+   * mfa_invalid / ip_denied / too_many_attempts / not_provisioned /
+   * no_permission / captcha_invalid）。历史行可能为 null。
+   */
+  result?: string | null
   createdAt: string
 }
 
@@ -808,6 +862,39 @@ export interface PasswordChangeLogResponse {
   total: number
   page: number
   size: number
+}
+
+/** syslog 外发的网络类型（tls 为加密外发）。 */
+export type SyslogNetwork = 'udp' | 'tcp' | 'tls'
+
+export interface SyslogSetting {
+  enabled: boolean
+  network: SyslogNetwork
+  /** host:port 形式 */
+  address: string
+  /** RFC5424 的 APP-NAME 字段。 */
+  tag: string
+  facility: number
+  /** 仅 tls 生效：跳过服务端证书校验（自签证书场景）。 */
+  insecureSkipVerify: boolean
+}
+
+/**
+ * 审计章节配置：保留策略 + syslog 外发。
+ *
+ * retentionDays 为 0 = 永久保留；非 0 时后端强制不低于 minRetentionDays。
+ */
+export interface AuditSetting {
+  retentionDays: number
+  syslog: SyslogSetting
+}
+
+export interface AuditSettingResponse {
+  setting: AuditSetting
+  /** 后端强制的保留天数下限（30）。 */
+  minRetentionDays: number
+  /** 等保 / 网安法通常核查的最低保留期（180），仅作提示。 */
+  recommendedRetention: number
 }
 export interface ResourceTemplate {
   id: number

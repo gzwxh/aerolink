@@ -18,7 +18,7 @@ const searchQueryFilter = createSearchFilter<CustomResourceDefinition>(
 const columnHelper = createColumnHelper<CustomResourceDefinition>()
 
 export function CRDListPage() {
-  // Define columns for the CRD table
+  // 定义 CRD 表格的列
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {

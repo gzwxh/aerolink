@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '@/contexts/auth-context'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import { IconAlertTriangle, IconKey } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -21,9 +23,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { PasswordInput } from '@/components/password-input'
 
-import { OAuthProviderManagement } from './oauth-provider-management'
 import { LDAPImportDialog } from './ldap-import-dialog'
+import { OAuthProviderManagement } from './oauth-provider-management'
 
 type AuthenticationFormData = LDAPSetting
 
@@ -74,14 +77,15 @@ function toFormData(data?: LDAPSetting): AuthenticationFormData {
 export function AuthenticationManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  // 只读章节（只有 settings.authentication 的读权限）时禁用保存，并收起同步 / 导入入口。
+  const { readOnly } = useSettingsSectionAccess()
   const { data, error, isError, isLoading, refetch } = useLDAPSetting()
   const { data: generalSetting } = useGeneralSetting()
   const [formData, setFormData] = useState<AuthenticationFormData>(
     createDefaultSettings
   )
   const [passwordLoginEnabled, setPasswordLoginEnabled] = useState(true)
-  const [mfaEnabled, setMFAEnabled] = useState(true)
-  const [passkeyLoginEnabled, setPasskeyLoginEnabled] = useState(true)
 
   useEffect(() => {
     setFormData(toFormData(data))
@@ -90,26 +94,30 @@ export function AuthenticationManagement() {
   useEffect(() => {
     if (generalSetting) {
       setPasswordLoginEnabled(!generalSetting.passwordLoginDisabled)
-      setMFAEnabled(generalSetting.enableMFA ?? true)
-      setPasskeyLoginEnabled(generalSetting.enablePasskeyLogin ?? true)
     }
   }, [generalSetting])
+
+  // 「密码登录」开关落在通用设置（settings.general）上：只有能改通用设置的人才能改它。
+  const canManageGeneral = user?.canManageSettingsSection('general') ?? false
 
   const mutation = useMutation({
     mutationFn: (params: {
       ldap: LDAPSettingUpdateRequest
       passwordLoginDisabled: boolean
-      enableMFA: boolean
-      enablePasskeyLogin: boolean
     }) => {
-      const promises: Promise<unknown>[] = [
-        updateGeneralSetting({
-          passwordLoginDisabled: params.passwordLoginDisabled,
-          enableMFA: params.enableMFA,
-          enablePasskeyLogin: params.enablePasskeyLogin,
-        }),
-        updateLDAPSetting(params.ldap),
-      ]
+      const promises: Promise<unknown>[] = []
+      // 「密码登录」开关存在通用设置里（settings.general），而 LDAP 属于认证源
+      // （settings.authentication）。三权分立下这两个章节可能属于不同的管理员，
+      // 所以只提交自己有权修改的部分——否则安全管理员保存 LDAP 会被
+      // settings.general 的门禁拒绝，整个保存一起失败。
+      if (canManageGeneral) {
+        promises.push(
+          updateGeneralSetting({
+            passwordLoginDisabled: params.passwordLoginDisabled,
+          })
+        )
+      }
+      promises.push(updateLDAPSetting(params.ldap))
       return Promise.all(promises)
     },
     onSuccess: () => {
@@ -125,8 +133,8 @@ export function AuthenticationManagement() {
         )
       )
     },
-    onError: (error) => {
-      toast.error(translateError(error, t))
+    onError: () => {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
   })
 
@@ -165,8 +173,6 @@ export function AuthenticationManagement() {
     mutation.mutate({
       ldap: payload,
       passwordLoginDisabled: !passwordLoginEnabled,
-      enableMFA: mfaEnabled,
-      enablePasskeyLogin: passkeyLoginEnabled,
     })
   }
 
@@ -231,13 +237,10 @@ export function AuthenticationManagement() {
       setLdapSyncResult(status.lastResult ?? null)
       setLdapSyncAt(status.lastSyncAt)
       toast.success(
-        t(
-          'authenticationManagement.ldap.sync.started',
-          'LDAP sync started'
-        )
+        t('authenticationManagement.ldap.sync.started', 'LDAP sync started')
       )
-    } catch (err) {
-      toast.error(translateError(err as Error, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -299,7 +302,7 @@ export function AuthenticationManagement() {
               <Switch
                 checked={passwordLoginEnabled}
                 onCheckedChange={setPasswordLoginEnabled}
-                disabled={!generalSetting}
+                disabled={!generalSetting || !canManageGeneral}
               />
             </div>
 
@@ -326,52 +329,10 @@ export function AuthenticationManagement() {
             )}
           </div>
 
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between p-3">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">
-                  {t('authenticationManagement.mfa.title', 'MFA')}
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {t(
-                    'authenticationManagement.mfa.description',
-                    'Allow users to configure authenticator app MFA.'
-                  )}
-                </p>
-              </div>
-              <Switch
-                checked={mfaEnabled}
-                onCheckedChange={setMFAEnabled}
-                disabled={!generalSetting}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between p-3">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">
-                  {t('authenticationManagement.passkey.title', 'Passkey Login')}
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {t(
-                    'authenticationManagement.passkey.description',
-                    'Allow users to register passkeys and sign in with a passkey.'
-                  )}
-                </p>
-              </div>
-              <Switch
-                checked={passkeyLoginEnabled}
-                onCheckedChange={setPasskeyLoginEnabled}
-                disabled={!generalSetting}
-              />
-            </div>
-          </div>
-
           <div className="flex justify-end">
             <Button
               onClick={handleSave}
-              disabled={mutation.isPending || !generalSetting}
+              disabled={readOnly || mutation.isPending || !generalSetting}
             >
               {t('common.actions.save', 'Save')}
             </Button>
@@ -490,9 +451,8 @@ export function AuthenticationManagement() {
                         'Bind Password'
                       )}
                     </Label>
-                    <Input
+                    <PasswordInput
                       id="ldap-bind-password"
-                      type="password"
                       value={formData.bindPassword}
                       onChange={(e) =>
                         setFormData((prev) => ({
@@ -668,7 +628,10 @@ export function AuthenticationManagement() {
                         id="ldap-auto-sync"
                         checked={formData.autoSync}
                         onCheckedChange={(checked) =>
-                          setFormData((prev) => ({ ...prev, autoSync: checked }))
+                          setFormData((prev) => ({
+                            ...prev,
+                            autoSync: checked,
+                          }))
                         }
                       />
                     </div>
@@ -722,31 +685,35 @@ export function AuthenticationManagement() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => setLdapImportOpen(true)}
-                        disabled={mutation.isPending}
-                      >
-                        {t(
-                          'authenticationManagement.ldap.sync.importUsers',
-                          'Import Users'
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={handleSyncNow}
-                        disabled={ldapSyncRunning || mutation.isPending}
-                      >
-                        {ldapSyncRunning
-                          ? t(
-                              'authenticationManagement.ldap.sync.running',
-                              'Syncing...'
-                            )
-                          : t(
-                              'authenticationManagement.ldap.sync.now',
-                              'Sync Now'
-                            )}
-                      </Button>
+                      {!readOnly && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setLdapImportOpen(true)}
+                          disabled={mutation.isPending}
+                        >
+                          {t(
+                            'authenticationManagement.ldap.sync.importUsers',
+                            'Import Users'
+                          )}
+                        </Button>
+                      )}
+                      {!readOnly && (
+                        <Button
+                          variant="outline"
+                          onClick={handleSyncNow}
+                          disabled={ldapSyncRunning || mutation.isPending}
+                        >
+                          {ldapSyncRunning
+                            ? t(
+                                'authenticationManagement.ldap.sync.running',
+                                'Syncing...'
+                              )
+                            : t(
+                                'authenticationManagement.ldap.sync.now',
+                                'Sync Now'
+                              )}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -757,7 +724,7 @@ export function AuthenticationManagement() {
           <div className="flex justify-end">
             <Button
               onClick={handleSave}
-              disabled={mutation.isPending || !generalSetting}
+              disabled={readOnly || mutation.isPending || !generalSetting}
             >
               {t('common.actions.save', 'Save')}
             </Button>

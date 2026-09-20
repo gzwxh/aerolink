@@ -22,7 +22,7 @@ const columnHelper = createColumnHelper<PersistentVolume>()
 export function PVListPage() {
   const { t } = useTranslation()
 
-  // Define columns for the PV table
+  // 定义 PV 表格的列
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {

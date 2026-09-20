@@ -36,7 +36,7 @@ export function PodListPage() {
   const navigate = useNavigate()
   const { namespace: namespaceParam } = useParams()
 
-  // Define columns for the pod table - moved outside render cycle for better performance
+  // 定义 Pod 表格的列——移到渲染周期之外以提升性能
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
@@ -149,8 +149,8 @@ export function PodListPage() {
   )
 
   const handleCreateClick = () => {
-    // The URL wins, then the table's persisted selection; a multi or
-    // "all namespaces" selection cannot host a new object.
+    // URL 优先，其次是表格持久化的选择；多选或
+    // "所有命名空间"的选择无法承载新对象。
     const ns = resolveCreateNamespace(
       namespaceParam,
       sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')),

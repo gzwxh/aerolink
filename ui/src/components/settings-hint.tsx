@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '@/contexts/auth-context'
 import {
   IconCheck,
   IconKey,
@@ -31,6 +32,7 @@ interface SettingsHintProps {
 
 export function SettingsHint({ onDismiss }: SettingsHintProps) {
   const { t } = useTranslation()
+  const { user } = useAuth()
   const [isDismissed, setIsDismissed] = useState(
     () => localStorage.getItem('settings-hint-dismissed') === 'true'
   )
@@ -63,21 +65,26 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
       icon: IconServer,
       completed: hasP8S,
       href: '/settings/clusters',
+      section: 'clusters',
     },
     {
       key: 'oauth',
-      title: t('settings.tabs.oauth', 'Authentication'),
+      title: t(
+        'securitySettings.tabs.authProviders',
+        'Authentication Configuration'
+      ),
       description: t(
         'settingsHint.oauth.description',
         'Set up LDAP or OAuth authentication'
       ),
       icon: IconKey,
       completed: hasOAuthProviders,
-      href: '/settings/oauth',
+      href: '/settings/security?tab=authProviders',
+      section: 'authentication',
     },
     {
       key: 'rbac',
-      title: t('settings.tabs.rbac', 'RBAC'),
+      title: t('nav.rbac', 'RBAC'),
       description: t(
         'settingsHint.rbac.description',
         'Configure roles and permissions'
@@ -85,8 +92,15 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
       icon: IconShieldCheck,
       completed: hasRoles,
       href: '/settings/rbac',
+      section: 'rbac',
     },
-  ]
+    // 三权分立后每个管理员只能打开自己的章节：只列出他真能进入的条目，
+    // 避免清单里出现点进去就 403 的死链。
+  ].filter((item) => user?.canViewSettingsSection(item.section) ?? false)
+
+  if (settingsItems.length === 0) {
+    return null
+  }
 
   const completedCount = settingsItems.filter((item) => item.completed).length
 

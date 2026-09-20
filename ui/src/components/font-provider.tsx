@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
-type FontOption = 'system' | 'maple' | 'jetbrains'
+export type FontOption = 'system' | 'maple' | 'jetbrains'
 
 type FontProviderProps = {
   children: React.ReactNode

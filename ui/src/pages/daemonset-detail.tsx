@@ -11,7 +11,7 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
-import { translateError } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,6 +40,12 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
   const [isRestartPopoverOpen, setIsRestartPopoverOpen] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
+  const can = useCan()
+  // 重启会改写 Pod 模板，是写操作：只读角色看不到入口，容器编辑同理。
+  const canUpdate = can('daemonsets', 'update', { namespace })
+  const canExec = can('pods', 'exec', { namespace })
+  // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
+  const canLog = can('pods', 'log', { namespace })
 
   const {
     data: daemonset,
@@ -98,8 +104,8 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
       toast.success('DaemonSet restart initiated')
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -132,8 +138,8 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
           })
         )
         setRefreshInterval(1000)
-      } catch (err) {
-        toast.error(translateError(err, t))
+      } catch {
+        // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       }
     },
     [daemonset, name, namespace, t]
@@ -182,8 +188,11 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
                     key={container.name}
                     container={container}
                     init
-                    onContainerUpdate={(updatedContainer) =>
-                      handleContainerUpdate(updatedContainer, true)
+                    onContainerUpdate={
+                      canUpdate
+                        ? (updatedContainer) =>
+                            handleContainerUpdate(updatedContainer, true)
+                        : undefined
                     }
                   />
                 ))}
@@ -194,8 +203,11 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
                 <ContainerInfoCard
                   key={container.name}
                   container={container}
-                  onContainerUpdate={(updatedContainer) =>
-                    handleContainerUpdate(updatedContainer, false)
+                  onContainerUpdate={
+                    canUpdate
+                      ? (updatedContainer) =>
+                          handleContainerUpdate(updatedContainer, false)
+                      : undefined
                   }
                 />
               ))}
@@ -301,6 +313,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
 
     return tabs
   }, [
+    canUpdate,
     daemonset,
     handleContainerUpdate,
     isLoading,
@@ -338,53 +351,58 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
         ) : null
       }
       headerActions={
-        <Popover
-          open={isRestartPopoverOpen}
-          onOpenChange={setIsRestartPopoverOpen}
-        >
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              <IconReload className="w-4 h-4" />
-              Restart
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80" align="end">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h4 className="font-medium">Restart DaemonSet</h4>
-                <p className="text-sm text-muted-foreground">
-                  This will restart all pods managed by this DaemonSet. This
-                  action cannot be undone.
-                </p>
+        canUpdate ? (
+          <Popover
+            open={isRestartPopoverOpen}
+            onOpenChange={setIsRestartPopoverOpen}
+          >
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm">
+                <IconReload className="w-4 h-4" />
+                Restart
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium">Restart DaemonSet</h4>
+                  <p className="text-sm text-muted-foreground">
+                    This will restart all pods managed by this DaemonSet. This
+                    action cannot be undone.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsRestartPopoverOpen(false)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      handleRestart()
+                      setIsRestartPopoverOpen(false)
+                    }}
+                    className="flex-1"
+                  >
+                    <IconReload className="w-4 h-4 mr-2" />
+                    Restart
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsRestartPopoverOpen(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    handleRestart()
-                    setIsRestartPopoverOpen(false)
-                  }}
-                  className="flex-1"
-                >
-                  <IconReload className="w-4 h-4 mr-2" />
-                  Restart
-                </Button>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+            </PopoverContent>
+          </Popover>
+        ) : null
       }
       preYamlTabs={extraTabs.filter((tab) =>
         ['pods', 'containers'].includes(tab.value)
       )}
       extraTabs={extraTabs.filter(
-        (tab) => !['pods', 'containers'].includes(tab.value)
+        (tab) =>
+          !['pods', 'containers'].includes(tab.value) &&
+          (tab.value !== 'terminal' || canExec) &&
+          (tab.value !== 'logs' || canLog)
       )}
     />
   )

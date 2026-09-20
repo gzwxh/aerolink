@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Namespace } from 'kubernetes-types/core/v1'
 import { Check, ChevronDown, Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
-import { useResources } from '@/lib/api'
+import { fetchUserBindingGroups, useResources } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -37,6 +39,7 @@ export function NamespaceSelector({
   multiple?: boolean
   modal?: boolean
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const { data, isLoading } = useResources('namespaces')
   const selectedNamespaces = useMemo(() => {
@@ -53,12 +56,89 @@ export function NamespaceSelector({
     })
   }, [data])
 
+  // 权限绑定：当前用户可见的组及其命名空间，用于下拉分组展示
+  const { data: bindingGroups = [] } = useQuery({
+    queryKey: ['user-binding-groups'],
+    queryFn: fetchUserBindingGroups,
+    staleTime: 60_000,
+  })
+
+  const namespaceGroups = useMemo(() => {
+    const owner = new Map<string, string>()
+    bindingGroups.forEach((g) =>
+      (g.namespaces ?? []).forEach((n) => owner.set(n.namespace, g.name))
+    )
+    const grouped = new Map<string, Namespace[]>()
+    const loose: Namespace[] = []
+    sortedNamespaces.forEach((ns) => {
+      const name = ns.metadata?.name || ''
+      const groupName = owner.get(name)
+      if (groupName) {
+        if (!grouped.has(groupName)) grouped.set(groupName, [])
+        grouped.get(groupName)!.push(ns)
+      } else {
+        loose.push(ns)
+      }
+    })
+    return { grouped: Array.from(grouped.entries()), loose }
+  }, [sortedNamespaces, bindingGroups])
+
+  const renderNamespaceItem = (ns: Namespace) => {
+    const name = ns.metadata?.name || ''
+    const selected = multiple
+      ? selectedNamespaces.includes(name)
+      : selectedNamespace === name
+
+    return (
+      <CommandItem
+        key={name}
+        value={name}
+        onSelect={() => handleNamespaceSelect(name)}
+        className="flex items-center"
+      >
+        {multiple ? (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => toggleNamespace(name)}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            aria-label={t('common.namespaceSelector.toggle', {
+              name,
+              defaultValue: 'Toggle namespace {{name}}',
+            })}
+            className="mr-2"
+          />
+        ) : (
+          <Check
+            className={cn(
+              'mr-2 h-4 w-4 shrink-0',
+              selected ? 'opacity-100' : 'opacity-0'
+            )}
+          />
+        )}
+        <span className="truncate flex-1 min-w-0" title={name}>
+          {name}
+        </span>
+      </CommandItem>
+    )
+  }
+
   const triggerLabel =
     selectedNamespace === '_all'
-      ? 'All Namespaces'
+      ? t('common.namespaceSelector.all', 'All Namespaces')
       : multiple && selectedNamespaces.length > 1
-        ? `${selectedNamespaces.length} Namespaces`
-        : selectedNamespace || `Select namespace${multiple ? 's' : ''}...`
+        ? t('common.namespaceSelector.many', {
+            total: selectedNamespaces.length,
+            defaultValue: '{{total}} Namespaces',
+          })
+        : selectedNamespace ||
+          t(
+            multiple
+              ? 'common.namespaceSelector.selectMultiple'
+              : 'common.namespaceSelector.select',
+            multiple ? 'Select namespaces...' : 'Select namespace...'
+          )
 
   const selectNamespace = (namespace: string) => {
     handleNamespaceChange(namespace)
@@ -112,16 +192,21 @@ export function NamespaceSelector({
         align="start"
       >
         <Command>
-          <CommandInput placeholder="Search..." className="h-9" />
+          <CommandInput
+            placeholder={t('common.namespaceSelector.search', 'Search...')}
+            className="h-9"
+          />
           <CommandList className="max-h-[min(50dvh,300px)] overflow-x-hidden overflow-y-auto overscroll-contain">
             {isLoading ? (
               <div className="flex items-center justify-center p-6 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Loading...
+                {t('common.namespaceSelector.loading', 'Loading...')}
               </div>
             ) : (
               <>
-                <CommandEmpty>No results.</CommandEmpty>
+                <CommandEmpty>
+                  {t('common.namespaceSelector.noResults', 'No results')}
+                </CommandEmpty>
                 <CommandGroup>
                   {showAll && (
                     <CommandItem
@@ -139,47 +224,31 @@ export function NamespaceSelector({
                             : 'opacity-0'
                         )}
                       />
-                      <span className="truncate">All Namespaces</span>
+                      <span className="truncate">
+                        {t('common.namespaceSelector.all', 'All Namespaces')}
+                      </span>
                     </CommandItem>
                   )}
 
-                  {sortedNamespaces.map((ns: Namespace) => {
-                    const name = ns.metadata?.name || ''
-                    const selected = multiple
-                      ? selectedNamespaces.includes(name)
-                      : selectedNamespace === name
-
-                    return (
-                      <CommandItem
-                        key={name}
-                        value={name}
-                        onSelect={() => handleNamespaceSelect(name)}
-                        className="flex items-center"
-                      >
-                        {multiple ? (
-                          <Checkbox
-                            checked={selected}
-                            onCheckedChange={() => toggleNamespace(name)}
-                            onClick={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => event.stopPropagation()}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            aria-label={`Toggle namespace ${name}`}
-                            className="mr-2"
-                          />
-                        ) : (
-                          <Check
-                            className={cn(
-                              'mr-2 h-4 w-4 shrink-0',
-                              selected ? 'opacity-100' : 'opacity-0'
-                            )}
-                          />
-                        )}
-                        <span className="truncate flex-1 min-w-0" title={name}>
-                          {name}
-                        </span>
-                      </CommandItem>
-                    )
-                  })}
+                  {namespaceGroups.grouped.map(([groupName, list]) => (
+                    <CommandGroup key={groupName} heading={groupName}>
+                      {list.map(renderNamespaceItem)}
+                    </CommandGroup>
+                  ))}
+                  {namespaceGroups.loose.length > 0 && (
+                    <CommandGroup
+                      heading={
+                        namespaceGroups.grouped.length > 0
+                          ? t(
+                              'common.namespaceSelector.other',
+                              'Other namespaces'
+                            )
+                          : undefined
+                      }
+                    >
+                      {namespaceGroups.loose.map(renderNamespaceItem)}
+                    </CommandGroup>
+                  )}
                 </CommandGroup>
               </>
             )}

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '@/contexts/auth-context'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Role } from '@/types/api'
 import { assignRole, unassignRole, useRoleList } from '@/lib/api'
+import { isProtectedRole, systemRoleLabel } from '@/lib/system-roles'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -27,12 +29,28 @@ interface Props {
 export function UserRoleAssignment({ open, onOpenChange, subject }: Props) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  // 这里写的是角色分配（settings.rbac），而本组件被「用户管理」（settings.users）和
+  // 「API Key」（settings.apikeys）两处复用。按「当前页面」的章节判定会出错：
+  // 例如只有 settings.apikeys 写权限的系统管理员能打开这个弹窗，但提交会被后端
+  // 按 settings.rbac 拒绝——所以固定按 rbac 章节判定。
+  // 只读时勾选框保留（仍显示已分配的角色）但不可改动。
+  const readOnly = !(user?.canManageSettingsSection('rbac') ?? false)
 
   const { data: roles = [] } = useRoleList()
   const [selected, setSelected] = useState<Record<number, boolean>>({})
 
   const subjectType = subject?.type || 'user'
   const subjectName = subject?.name
+
+  // 四种内置角色（系统管理员 / 只读管理员 / 审计管理员 / 安全管理员）只能从
+  // 「系统管理员 / 审计管理员 / 安全管理员」页签授予：这里不提供勾选。
+  const assignableRoles = roles.filter((role) => !isProtectedRole(role))
+  // 存量数据里已经直接分配的内置角色（例如初始化时的超级管理员）不在这里调整，
+  // 但要说清楚它们的去向，避免看上去像“权限凭空消失了”。
+  const managedRoleLabels = roles
+    .filter((role) => isProtectedRole(role) && selected[role.id])
+    .map((role) => systemRoleLabel(t, role))
 
   useEffect(() => {
     if (!subjectName || !roles) return
@@ -63,11 +81,8 @@ export function UserRoleAssignment({ open, onOpenChange, subject }: Props) {
       queryClient.invalidateQueries({ queryKey: ['apikey-list'] })
       queryClient.invalidateQueries({ queryKey: ['role-list'] })
       setSelected((s) => ({ ...s, [roleId]: !s[roleId] }))
-    } catch (err: unknown) {
-      toast.error(
-        (err as Error).message ||
-          t('common.messages.failedToAssign', 'Failed to assign')
-      )
+    } catch {
+      // 失败已由 API 客户端统一写入站内信
     }
   }
 
@@ -80,7 +95,7 @@ export function UserRoleAssignment({ open, onOpenChange, subject }: Props) {
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-2 py-2">
-          {roles.map((r: Role) => (
+          {assignableRoles.map((r: Role) => (
             <div key={r.id} className="flex items-center justify-between">
               <div>
                 <div className="font-medium">{r.name}</div>
@@ -93,11 +108,21 @@ export function UserRoleAssignment({ open, onOpenChange, subject }: Props) {
               <div>
                 <Checkbox
                   checked={!!selected[r.id]}
+                  disabled={readOnly}
                   onCheckedChange={() => toggle(r.id)}
                 />
               </div>
             </div>
           ))}
+          {managedRoleLabels.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'rbac.builtinRolesManagedElsewhere',
+                '该主体还持有内置角色 {{roles}}；这类角色只能在「系统管理员 / 审计管理员 / 安全管理员」页签维护，不在这里调整。',
+                { roles: managedRoleLabels.join('、') }
+              )}
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)}>

@@ -6,10 +6,18 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { LoginRecord } from '@/types/api'
-import { useLoginLogs, useUserList } from '@/lib/api'
+import {
+  AuditTimeRange,
+  exportLoginLogs,
+  useLoginLogs,
+  useUserList,
+} from '@/lib/api'
+import { copyToClipboard } from '@/lib/clipboard'
 import { formatDate } from '@/lib/utils'
+import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -20,7 +28,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { ResourceTableView } from '@/components/resource-table-view'
+import { TableColumnToggle } from '@/components/table-column-toggle'
+
+import { AuditExportButton, AuditTimeRangePicker } from './audit-filters'
 
 export function LoginLog() {
   const { t } = useTranslation()
@@ -28,8 +44,17 @@ export function LoginLog() {
     pageIndex: 0,
     pageSize: 20,
   })
+  // 列显示偏好：与资源列表（/deployments 等）一致，齿轮菜单勾选 + 持久化。
+  // 日志是全局数据，键不带集群前缀。
+  const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
+    'kite-login-logs-columnVisibility'
+  )
   const [userId, setUserId] = useState<number | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState('')
+  const [outcome, setOutcome] = useState<'success' | 'failure' | undefined>(
+    undefined
+  )
+  const [timeRange, setTimeRange] = useState<AuditTimeRange>({})
 
   const { data: usersData } = useUserList(1, 200)
   const {
@@ -40,8 +65,19 @@ export function LoginLog() {
     pagination.pageIndex + 1,
     pagination.pageSize,
     userId,
-    searchQuery
+    searchQuery,
+    outcome,
+    timeRange
   )
+
+  const handleOutcomeFilterChange = useCallback((value: string) => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    if (value === 'all') {
+      setOutcome(undefined)
+      return
+    }
+    setOutcome(value === 'failure' ? 'failure' : 'success')
+  }, [])
 
   const handleUserFilterChange = useCallback((value: string) => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }))
@@ -58,8 +94,40 @@ export function LoginLog() {
     setSearchQuery(value)
   }, [])
 
-  const columns = useMemo<ColumnDef<LoginRecord>[]>(
-    () => [
+  const handleTimeRangeChange = useCallback((value: AuditTimeRange) => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    setTimeRange(value)
+  }, [])
+
+  const handleExport = useCallback(
+    () => exportLoginLogs(userId, searchQuery, outcome, timeRange),
+    [outcome, searchQuery, timeRange, userId]
+  )
+
+  // 客户端信息通常很长，列表里截断展示；点一下复制完整内容。
+  const copyClient = useCallback(
+    async (value: string) => {
+      if (await copyToClipboard(value)) {
+        toast.success(t('common.messages.copied', '已复制到剪贴板'))
+      } else {
+        toast.error(
+          t('common.messages.copyFailed', '复制失败，请手动选择文本后复制')
+        )
+      }
+    },
+    [t]
+  )
+
+  const columns = useMemo<ColumnDef<LoginRecord>[]>(() => {
+    // 失败原因码 → 文案。空/缺失 = 成功登录（result 列是后加的，历史行为空）。
+    const failureReason = (result: string | null | undefined) => {
+      if (!result) {
+        return null
+      }
+      return t(`audit.loginResult.${result}`, result)
+    }
+
+    return [
       {
         id: 'time',
         header: t('common.fields.time', 'Time'),
@@ -68,6 +136,23 @@ export function LoginLog() {
             {formatDate(row.original.createdAt)}
           </span>
         ),
+      },
+      {
+        id: 'result',
+        header: t('common.fields.result', 'Result'),
+        cell: ({ row }) => {
+          const reason = failureReason(row.original.result)
+          if (!reason) {
+            return (
+              <Badge variant="default">{t('status.success', 'Success')}</Badge>
+            )
+          }
+          return (
+            <Badge variant="destructive" title={row.original.result ?? ''}>
+              {reason}
+            </Badge>
+          )
+        },
       },
       {
         id: 'username',
@@ -93,25 +178,47 @@ export function LoginLog() {
       {
         id: 'userAgent',
         header: t('common.fields.userAgent', 'Client'),
-        cell: ({ row }) => (
-          <span
-            className="text-muted-foreground block max-w-[420px] truncate text-xs"
-            title={row.original.userAgent}
-          >
-            {row.original.userAgent || '-'}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const userAgent = row.original.userAgent
+          if (!userAgent) {
+            return <span className="text-muted-foreground">-</span>
+          }
+          return (
+            // inline-block 才能跟随列的居中（block 会占满单元格而偏左）。
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void copyClient(userAgent)}
+                  aria-label={t('loginLog.copyClient', '复制客户端信息')}
+                  className="inline-block max-w-[420px] cursor-pointer truncate rounded bg-transparent px-1 text-left align-middle text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  {userAgent}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                className="max-h-72 max-w-96 overflow-y-auto whitespace-normal break-all border bg-popover text-xs text-popover-foreground shadow-md"
+              >
+                <div>{userAgent}</div>
+                <div className="mt-1 text-muted-foreground">
+                  {t('loginLog.clickToCopy', '点击复制')}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )
+        },
       },
-    ],
-    [t]
-  )
+    ]
+  }, [copyClient, t])
 
   const table = useReactTable({
     data: loginData?.data ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
-    state: { pagination },
+    state: { pagination, columnVisibility },
     onPaginationChange: setPagination,
+    onColumnVisibilityChange: setColumnVisibility,
     manualPagination: true,
     pageCount: Math.ceil((loginData?.total ?? 0) / pagination.pageSize) || 0,
   })
@@ -156,17 +263,21 @@ export function LoginLog() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <CardTitle>{t('common.fields.loginLogs', 'Login Logs')}</CardTitle>
             <p className="text-muted-foreground text-sm">
               {t(
                 'common.messages.loginLogsDescription',
-                'Review every successful sign-in and its source IP'
+                'Review every sign-in attempt, successful or rejected, and its source IP'
               )}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <AuditTimeRangePicker
+              value={timeRange}
+              onChange={handleTimeRangeChange}
+            />
             <Input
               placeholder={t(
                 'common.placeholders.searchUsernameOrIP',
@@ -176,6 +287,25 @@ export function LoginLog() {
               onChange={(event) => handleSearchChange(event.target.value)}
               className="w-64"
             />
+            <Select
+              value={outcome ?? 'all'}
+              onValueChange={handleOutcomeFilterChange}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder={t('common.values.all', '全部')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t('common.values.all', '全部')}
+                </SelectItem>
+                <SelectItem value="success">
+                  {t('status.success', 'Success')}
+                </SelectItem>
+                <SelectItem value="failure">
+                  {t('status.failed', 'Failed')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
             <Select
               value={userId ? String(userId) : 'all'}
               onValueChange={handleUserFilterChange}
@@ -196,6 +326,9 @@ export function LoginLog() {
                 ))}
               </SelectContent>
             </Select>
+            <AuditExportButton onExport={handleExport} />
+            {/* 与资源列表一致：最右侧的齿轮菜单用来勾选要显示的列。 */}
+            <TableColumnToggle table={table} />
           </div>
         </div>
       </CardHeader>
@@ -207,7 +340,12 @@ export function LoginLog() {
           data={loginData?.data}
           allPageSize={totalRowCount}
           emptyState={emptyState}
-          hasActiveFilters={Boolean(userId) || Boolean(searchQuery)}
+          hasActiveFilters={
+            Boolean(userId) ||
+            Boolean(searchQuery) ||
+            Boolean(outcome) ||
+            Boolean(timeRange.from || timeRange.to)
+          }
           filteredRowCount={filteredRowCount}
           totalRowCount={totalRowCount}
           searchQuery={searchQuery}

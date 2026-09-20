@@ -1,14 +1,9 @@
-import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
+import type { Container, Probe } from 'kubernetes-types/core/v1'
+import { useTranslation } from 'react-i18next'
+
 import { fetchNodePortRange } from '@/lib/api'
 import { useCluster } from '@/hooks/use-cluster'
-
-
-import type { Container, Probe } from 'kubernetes-types/core/v1'
-import type {
-  PortForm,
-  PortServiceType,
-} from '@/components/editors/deployment-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,6 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { CommandListInput } from '@/components/command-list-input'
+import type {
+  PortForm,
+  PortServiceType,
+} from '@/components/editors/deployment-form'
 
 type OnUpdate = (updates: Partial<Container>) => void
 
@@ -36,7 +36,7 @@ export function PortsEditor({
 }: {
   ports: PortForm[]
   onUpdate: (ports: PortForm[]) => void
-  /** Workload name, used to preview the auto-generated Service name. */
+  /** 工作负载名，用于预览自动生成的 Service 名称。 */
   workloadName?: string
 }) {
   const { t } = useTranslation()
@@ -48,8 +48,8 @@ export function PortsEditor({
     staleTime: 10 * 60 * 1000,
     retry: false,
   })
-  // The range is configurable via kube-apiserver's --service-node-port-range;
-  // fall back to the Kubernetes default when it cannot be fetched.
+  // 该范围可通过 kube-apiserver 的 --service-node-port-range 配置；
+  // 无法获取时回退到 Kubernetes 默认值。
   const nodePortMin = nodePortRange?.min ?? 30000
   const nodePortMax = nodePortRange?.max ?? 32767
 
@@ -57,8 +57,8 @@ export function PortsEditor({
     onUpdate(ports.map((p, i) => (i === index ? { ...p, ...patch } : p)))
   }
 
-  // Mirrors buildServiceDocuments: an empty Service name falls back to the
-  // workload name (ClusterIP) or "<workload>-<type>" for the other types.
+  // 与 buildServiceDocuments 一致：Service 名称为空时回退到
+  // 工作负载名（ClusterIP），其它类型则回退为 "<workload>-<type>"。
   const autoServiceName = (type: PortServiceType) => {
     const base = workloadName.trim()
     if (!base || type === 'none') return ''
@@ -69,7 +69,7 @@ export function PortsEditor({
     if (!p.containerPort || p.containerPort < 1 || p.containerPort > 65535)
       return t('containerAdv.portRangeError', '容器端口必须为 1-65535 的数字')
     if (p.serviceType === 'NodePort') {
-      // An empty nodePort is valid: the cluster allocates one automatically.
+      // nodePort 为空是合法的：集群会自动分配一个。
       if (p.nodePort && (p.nodePort < nodePortMin || p.nodePort > nodePortMax))
         return t('containerAdv.nodePortRangeError', {
           min: nodePortMin,
@@ -84,9 +84,7 @@ export function PortsEditor({
       const valid = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.test(ip)
       if (
         !valid ||
-        ip
-          .split('.')
-          .some((oct) => Number(oct) < 0 || Number(oct) > 255)
+        ip.split('.').some((oct) => Number(oct) < 0 || Number(oct) > 255)
       ) {
         return t(
           'containerAdv.clusterIPFormatError',
@@ -313,9 +311,7 @@ export function PortsEditor({
                 {t('containerAdv.remove', '移除')}
               </button>
             </div>
-            {error && (
-              <p className="pl-1 text-xs text-destructive">{error}</p>
-            )}
+            {error && <p className="pl-1 text-xs text-destructive">{error}</p>}
           </div>
         )
       })}
@@ -368,22 +364,18 @@ export function CommandEditor({
       <div className="grid grid-cols-1 items-start gap-x-6 gap-y-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label className="text-xs">{t('containerAdv.command', '命令')}</Label>
-          <Input
-            value={(container.command || []).join(' ')}
-            onChange={(e) =>
-              onUpdate({ command: e.target.value.split(' ').filter(Boolean) })
-            }
+          <CommandListInput
+            value={container.command || []}
+            onChange={(command) => onUpdate({ command })}
             placeholder={t('containerAdv.commandPlaceholder', '例如: /bin/sh')}
             className="h-9"
           />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">{t('containerAdv.args', '参数')}</Label>
-          <Input
-            value={(container.args || []).join(' ')}
-            onChange={(e) =>
-              onUpdate({ args: e.target.value.split(' ').filter(Boolean) })
-            }
+          <CommandListInput
+            value={container.args || []}
+            onChange={(args) => onUpdate({ args })}
             placeholder={t(
               'containerAdv.argsPlaceholder',
               '例如: /usr/sbin/httpd -f httpd.conf'
@@ -392,16 +384,22 @@ export function CommandEditor({
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">{t('containerAdv.workingDir', '工作目录')}</Label>
+          <Label className="text-xs">
+            {t('containerAdv.workingDir', '工作目录')}
+          </Label>
           <Input
             value={container.workingDir || ''}
-            onChange={(e) => onUpdate({ workingDir: e.target.value || undefined })}
+            onChange={(e) =>
+              onUpdate({ workingDir: e.target.value || undefined })
+            }
             placeholder="/myapp"
             className="h-9"
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">{t('containerAdv.stdin', '标准输入')}</Label>
+          <Label className="text-xs">
+            {t('containerAdv.stdin', '标准输入')}
+          </Label>
           <Select
             value={container.stdin ? 'yes' : 'no'}
             onValueChange={(v) => onUpdate({ stdin: v === 'yes' })}
@@ -411,7 +409,9 @@ export function CommandEditor({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="no">{t('common.values.no', '否')}</SelectItem>
-              <SelectItem value="yes">{t('common.values.yes', '是')}</SelectItem>
+              <SelectItem value="yes">
+                {t('common.values.yes', '是')}
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -425,8 +425,7 @@ type ProbeType = 'none' | 'http' | 'https' | 'tcp' | 'exec'
 
 function probeTypeOf(probe?: Probe): ProbeType {
   if (!probe) return 'none'
-  if (probe.httpGet)
-    return probe.httpGet.scheme === 'HTTPS' ? 'https' : 'http'
+  if (probe.httpGet) return probe.httpGet.scheme === 'HTTPS' ? 'https' : 'http'
   if (probe.tcpSocket) return 'tcp'
   if (probe.exec) return 'exec'
   return 'none'
@@ -472,7 +471,8 @@ function ProbeField({
               return setProbe({
                 httpGet: { path: '/', port: 443, scheme: 'HTTPS' },
               } as never)
-            if (next === 'tcp') return setProbe({ tcpSocket: { port: 80 } as never })
+            if (next === 'tcp')
+              return setProbe({ tcpSocket: { port: 80 } as never })
             return setProbe({ exec: { command: [] } })
           }}
         >
@@ -507,7 +507,9 @@ function ProbeField({
           {probe.httpGet && (
             <>
               <div className="space-y-1.5">
-                <Label className="text-xs">{t('containerAdv.probePath', '路径')}</Label>
+                <Label className="text-xs">
+                  {t('containerAdv.probePath', '路径')}
+                </Label>
                 <Input
                   value={probe.httpGet.path || ''}
                   onChange={(e) =>
@@ -521,10 +523,16 @@ function ProbeField({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">{t('containerAdv.probePort', '端口')}</Label>
+                <Label className="text-xs">
+                  {t('containerAdv.probePort', '端口')}
+                </Label>
                 <Input
                   type="number"
-                  value={typeof probe.httpGet.port === 'number' ? probe.httpGet.port : ''}
+                  value={
+                    typeof probe.httpGet.port === 'number'
+                      ? probe.httpGet.port
+                      : ''
+                  }
                   onChange={(e) =>
                     setProbe({
                       ...probe,
@@ -541,10 +549,16 @@ function ProbeField({
           )}
           {probe.tcpSocket && (
             <div className="space-y-1.5">
-              <Label className="text-xs">{t('containerAdv.probePort', '端口')}</Label>
+              <Label className="text-xs">
+                {t('containerAdv.probePort', '端口')}
+              </Label>
               <Input
                 type="number"
-                value={typeof probe.tcpSocket.port === 'number' ? probe.tcpSocket.port : ''}
+                value={
+                  typeof probe.tcpSocket.port === 'number'
+                    ? probe.tcpSocket.port
+                    : ''
+                }
                 onChange={(e) =>
                   setProbe({
                     ...probe,
@@ -563,13 +577,10 @@ function ProbeField({
               <Label className="text-xs">
                 {t('containerAdv.probeCommand', '命令（空格分隔）')}
               </Label>
-              <Input
-                value={(probe.exec.command || []).join(' ')}
-                onChange={(e) =>
-                  setProbe({
-                    ...probe,
-                    exec: { command: e.target.value.split(' ').filter(Boolean) },
-                  } as Probe)
+              <CommandListInput
+                value={probe.exec.command || []}
+                onChange={(command) =>
+                  setProbe({ ...probe, exec: { command } } as Probe)
                 }
                 placeholder="cat /tmp/ready"
                 className="h-9"
@@ -577,32 +588,44 @@ function ProbeField({
             </div>
           )}
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('containerAdv.probeDelay', '初始延迟(秒)')}</Label>
+            <Label className="text-xs">
+              {t('containerAdv.probeDelay', '初始延迟(秒)')}
+            </Label>
             <Input
               type="number"
               min={0}
               value={probe.initialDelaySeconds ?? ''}
-              onChange={(e) => patch({ initialDelaySeconds: intOrUndefined(e.target.value) })}
+              onChange={(e) =>
+                patch({ initialDelaySeconds: intOrUndefined(e.target.value) })
+              }
               className="h-9"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('containerAdv.probePeriod', '检查间隔(秒)')}</Label>
+            <Label className="text-xs">
+              {t('containerAdv.probePeriod', '检查间隔(秒)')}
+            </Label>
             <Input
               type="number"
               min={1}
               value={probe.periodSeconds ?? ''}
-              onChange={(e) => patch({ periodSeconds: intOrUndefined(e.target.value) })}
+              onChange={(e) =>
+                patch({ periodSeconds: intOrUndefined(e.target.value) })
+              }
               className="h-9"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{t('containerAdv.probeThreshold', '失败阈值')}</Label>
+            <Label className="text-xs">
+              {t('containerAdv.probeThreshold', '失败阈值')}
+            </Label>
             <Input
               type="number"
               min={1}
               value={probe.failureThreshold ?? ''}
-              onChange={(e) => patch({ failureThreshold: intOrUndefined(e.target.value) })}
+              onChange={(e) =>
+                patch({ failureThreshold: intOrUndefined(e.target.value) })
+              }
               className="h-9"
             />
           </div>
@@ -622,7 +645,8 @@ export function ProbesEditor({
 }) {
   const { t } = useTranslation()
   const renderProbe = (kind: ProbeKind) => {
-    const key = `${kind}Probe` as 'readinessProbe' | 'livenessProbe' | 'startupProbe'
+    const key = `${kind}Probe` as
+      'readinessProbe' | 'livenessProbe' | 'startupProbe'
     const probe = (container[key] as Probe | undefined) || undefined
     return (
       <ProbeField

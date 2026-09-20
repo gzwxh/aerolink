@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -9,6 +9,10 @@ import {
   useHelmReleaseAutoUpgrade,
 } from '@/lib/api'
 import { formatDate, translateError } from '@/lib/utils'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -22,6 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 import { useHelmReleaseChartSelection } from './helmrelease-chart-selection'
 import { HelmReleaseChartSelector } from './helmrelease-chart-selector'
@@ -49,6 +54,25 @@ export function HelmReleaseAutoUpgradeDialog({
   const [timeoutMinutes, setTimeoutMinutes] = useState('5')
   const [rollbackOnFailure, setRollbackOnFailure] = useState(true)
   const [selectedRepository, setSelectedRepository] = useState('')
+  // 打开时按服务端数据重填表单，基线随之一起更新：这里的数据是异步装载的，
+  // 若用首帧基线，刚加载出来的配置会被误判成有改动。
+  const [baseline, setBaseline] = useState<{
+    enabled: boolean
+    scheduleType: 'interval' | 'daily'
+    intervalMinutes: string
+    scheduleTime: string
+    timeoutMinutes: string
+    rollbackOnFailure: boolean
+    repository: string
+  }>({
+    enabled: false,
+    scheduleType: 'interval',
+    intervalMinutes: '60',
+    scheduleTime: '03:00',
+    timeoutMinutes: '5',
+    rollbackOnFailure: true,
+    repository: '',
+  })
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const configQuery = useHelmReleaseAutoUpgrade(
@@ -79,21 +103,45 @@ export function HelmReleaseAutoUpgradeDialog({
         !!activeChart &&
         !isChartSourceLoading))
 
+  // 表单草稿：任一可编辑字段被改动都算未保存，关闭前由 guard 拦一次确认。
+  const isDirty = useDraftDirty(
+    {
+      enabled,
+      scheduleType,
+      intervalMinutes,
+      scheduleTime,
+      timeoutMinutes,
+      rollbackOnFailure,
+      repository: selectedRepository,
+    },
+    baseline
+  )
+  const close = useCallback(() => onOpenChange(false), [onOpenChange])
+  const guard = useUnsavedChangesGuard({ dirty: isDirty, onClose: close })
+
   useEffect(() => {
     if (!open || !configQuery.data) {
       return
     }
-    setEnabled(configQuery.data.enabled)
-    setScheduleType(configQuery.data.scheduleType)
-    setIntervalMinutes(String(configQuery.data.intervalMinutes || 60))
-    setScheduleTime(configQuery.data.scheduleTime || '03:00')
-    setTimeoutMinutes(String(configQuery.data.timeoutMinutes))
-    setRollbackOnFailure(configQuery.data.rollbackOnFailure)
-    setSelectedRepository(
-      configQuery.data.repositoryName
+    const loadedForm = {
+      enabled: configQuery.data.enabled,
+      scheduleType: configQuery.data.scheduleType,
+      intervalMinutes: String(configQuery.data.intervalMinutes || 60),
+      scheduleTime: configQuery.data.scheduleTime || '03:00',
+      timeoutMinutes: String(configQuery.data.timeoutMinutes),
+      rollbackOnFailure: configQuery.data.rollbackOnFailure,
+      repository: configQuery.data.repositoryName
         ? `${configQuery.data.source || 'repository'}:${configQuery.data.repositoryName}`
-        : ''
-    )
+        : '',
+    }
+    setEnabled(loadedForm.enabled)
+    setScheduleType(loadedForm.scheduleType)
+    setIntervalMinutes(loadedForm.intervalMinutes)
+    setScheduleTime(loadedForm.scheduleTime)
+    setTimeoutMinutes(loadedForm.timeoutMinutes)
+    setRollbackOnFailure(loadedForm.rollbackOnFailure)
+    setSelectedRepository(loadedForm.repository)
+    setBaseline(loadedForm)
     setError('')
   }, [configQuery.data, open])
 
@@ -146,7 +194,7 @@ export function HelmReleaseAutoUpgradeDialog({
       toast.success(t('helm.messages.autoUpgradeSaved'))
       await configQuery.refetch()
       await onSaved?.()
-      onOpenChange(false)
+      close()
     } catch (err) {
       setError(translateError(err, t))
     } finally {
@@ -155,253 +203,261 @@ export function HelmReleaseAutoUpgradeDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 p-0 sm:!max-w-4xl">
-        <form
-          onSubmit={handleSave}
-          className="flex max-h-[calc(100dvh-2rem)] flex-col"
-        >
-          <DialogHeader className="px-6 pt-6 pb-4">
-            <DialogTitle className="text-balance">
-              {t('helm.actions.autoUpgrade')}
-            </DialogTitle>
-            <DialogDescription className="truncate">
-              {release.metadata.namespace}/{release.metadata.name}
-            </DialogDescription>
-          </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={guard.handleOpenChange}>
+        <DialogContent className="gap-0 p-0 sm:!max-w-4xl">
+          <form
+            onSubmit={handleSave}
+            className="flex max-h-[calc(100dvh-2rem)] flex-col"
+          >
+            <DialogHeader className="px-6 pt-6 pb-4">
+              <DialogTitle className="text-balance">
+                {t('helm.actions.autoUpgrade')}
+              </DialogTitle>
+              <DialogDescription className="truncate">
+                {release.metadata.namespace}/{release.metadata.name}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-6">
-            {error ? (
-              <div
-                role="alert"
-                className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-              >
-                {error}
-              </div>
-            ) : null}
-
-            <section className="rounded-lg border p-4">
-              <div className="grid items-center gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
-                <Label
-                  htmlFor="helm-auto-upgrade-enabled"
-                  className="text-base font-semibold"
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-6">
+              {error ? (
+                <div
+                  role="alert"
+                  className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
                 >
-                  {t('helm.fields.autoUpgrade')}
-                </Label>
-                <p className="text-pretty text-sm text-muted-foreground">
-                  {t('helm.messages.autoUpgradeDescription')}
-                </p>
-                <Switch
-                  id="helm-auto-upgrade-enabled"
-                  checked={enabled}
-                  onCheckedChange={(value) => setEnabled(value)}
-                  disabled={isSaving || configQuery.isLoading}
-                />
-              </div>
-            </section>
-
-            <section className="rounded-lg border p-4">
-              <div className="grid gap-4 md:grid-cols-[16rem_minmax(0,1fr)]">
-                <div className="space-y-2">
-                  <h3 className="text-balance text-base font-semibold">
-                    {t('helm.fields.chart')}
-                  </h3>
-                  <p className="text-pretty text-sm text-muted-foreground">
-                    {t('helm.messages.autoUpgradeChartDescription')}
-                  </p>
+                  {error}
                 </div>
+              ) : null}
 
-                <HelmReleaseChartSelector
-                  selection={chartSelection}
-                  label={t('helm.fields.chartRepository')}
-                  disabled={!enabled || isSaving || configQuery.isLoading}
-                  onSelectedRepositoryChange={setSelectedRepository}
-                />
-              </div>
-            </section>
+              <section className="rounded-lg border p-4">
+                <div className="grid items-center gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
+                  <Label
+                    htmlFor="helm-auto-upgrade-enabled"
+                    className="text-base font-semibold"
+                  >
+                    {t('helm.fields.autoUpgrade')}
+                  </Label>
+                  <p className="text-pretty text-sm text-muted-foreground">
+                    {t('helm.messages.autoUpgradeDescription')}
+                  </p>
+                  <Switch
+                    id="helm-auto-upgrade-enabled"
+                    checked={enabled}
+                    onCheckedChange={(value) => setEnabled(value)}
+                    disabled={isSaving || configQuery.isLoading}
+                  />
+                </div>
+              </section>
 
-            <section className="rounded-lg border p-4">
-              <div className="grid gap-5 lg:grid-cols-[12rem_minmax(0,1fr)]">
-                <h3 className="text-balance text-base font-semibold">
-                  {t('helm.fields.upgradeSettings')}
-                </h3>
-
-                <div className="space-y-5">
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
-                    <div className="space-y-1.5">
-                      <Label>{t('helm.fields.schedule')}</Label>
-                      <p className="text-pretty text-sm text-muted-foreground">
-                        {t('helm.messages.autoUpgradeScheduleDescription')}
-                      </p>
-                    </div>
-                    <Tabs
-                      value={scheduleType}
-                      onValueChange={(value) =>
-                        setScheduleType(value as 'interval' | 'daily')
-                      }
-                      className="w-full"
-                    >
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger
-                          value="interval"
-                          disabled={
-                            !enabled || isSaving || configQuery.isLoading
-                          }
-                        >
-                          {t('helm.fields.scheduleInterval')}
-                        </TabsTrigger>
-                        <TabsTrigger
-                          value="daily"
-                          disabled={
-                            !enabled || isSaving || configQuery.isLoading
-                          }
-                        >
-                          {t('helm.fields.scheduleDaily')}
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
+              <section className="rounded-lg border p-4">
+                <div className="grid gap-4 md:grid-cols-[16rem_minmax(0,1fr)]">
+                  <div className="space-y-2">
+                    <h3 className="text-balance text-base font-semibold">
+                      {t('helm.fields.chart')}
+                    </h3>
+                    <p className="text-pretty text-sm text-muted-foreground">
+                      {t('helm.messages.autoUpgradeChartDescription')}
+                    </p>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      {scheduleType === 'interval' ? (
-                        <>
-                          <Label htmlFor="helm-auto-upgrade-interval">
-                            {t('helm.fields.intervalMinutes')}
-                          </Label>
-                          <p className="text-pretty text-sm text-muted-foreground">
-                            {t('helm.messages.autoUpgradeIntervalDescription')}
-                          </p>
-                          <Input
-                            id="helm-auto-upgrade-interval"
-                            type="number"
-                            min={1}
-                            value={intervalMinutes}
-                            onChange={(event) =>
-                              setIntervalMinutes(event.target.value)
-                            }
+                  <HelmReleaseChartSelector
+                    selection={chartSelection}
+                    label={t('helm.fields.chartRepository')}
+                    disabled={!enabled || isSaving || configQuery.isLoading}
+                    onSelectedRepositoryChange={setSelectedRepository}
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-lg border p-4">
+                <div className="grid gap-5 lg:grid-cols-[12rem_minmax(0,1fr)]">
+                  <h3 className="text-balance text-base font-semibold">
+                    {t('helm.fields.upgradeSettings')}
+                  </h3>
+
+                  <div className="space-y-5">
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
+                      <div className="space-y-1.5">
+                        <Label>{t('helm.fields.schedule')}</Label>
+                        <p className="text-pretty text-sm text-muted-foreground">
+                          {t('helm.messages.autoUpgradeScheduleDescription')}
+                        </p>
+                      </div>
+                      <Tabs
+                        value={scheduleType}
+                        onValueChange={(value) =>
+                          setScheduleType(value as 'interval' | 'daily')
+                        }
+                        className="w-full"
+                      >
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger
+                            value="interval"
                             disabled={
                               !enabled || isSaving || configQuery.isLoading
                             }
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <Label htmlFor="helm-auto-upgrade-schedule-time">
-                            {t('helm.fields.scheduleTime')}
-                          </Label>
-                          <p className="text-pretty text-sm text-muted-foreground">
-                            {t(
-                              'helm.messages.autoUpgradeScheduleTimeDescription'
-                            )}
-                          </p>
-                          <Input
-                            id="helm-auto-upgrade-schedule-time"
-                            type="time"
-                            value={scheduleTime}
-                            onChange={(event) =>
-                              setScheduleTime(event.target.value)
-                            }
+                          >
+                            {t('helm.fields.scheduleInterval')}
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="daily"
                             disabled={
                               !enabled || isSaving || configQuery.isLoading
                             }
-                          />
-                        </>
-                      )}
+                          >
+                            {t('helm.fields.scheduleDaily')}
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
                     </div>
 
-                    <div className="grid gap-2">
-                      <Label htmlFor="helm-auto-upgrade-timeout">
-                        {t('helm.fields.timeoutMinutes')}
-                      </Label>
-                      <p className="text-pretty text-sm text-muted-foreground">
-                        {t('helm.messages.autoUpgradeTimeoutDescription')}
-                      </p>
-                      <Input
-                        id="helm-auto-upgrade-timeout"
-                        type="number"
-                        min={1}
-                        value={timeoutMinutes}
-                        onChange={(event) =>
-                          setTimeoutMinutes(event.target.value)
-                        }
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        {scheduleType === 'interval' ? (
+                          <>
+                            <Label htmlFor="helm-auto-upgrade-interval">
+                              {t('helm.fields.intervalMinutes')}
+                            </Label>
+                            <p className="text-pretty text-sm text-muted-foreground">
+                              {t(
+                                'helm.messages.autoUpgradeIntervalDescription'
+                              )}
+                            </p>
+                            <Input
+                              id="helm-auto-upgrade-interval"
+                              type="number"
+                              min={1}
+                              value={intervalMinutes}
+                              onChange={(event) =>
+                                setIntervalMinutes(event.target.value)
+                              }
+                              disabled={
+                                !enabled || isSaving || configQuery.isLoading
+                              }
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <Label htmlFor="helm-auto-upgrade-schedule-time">
+                              {t('helm.fields.scheduleTime')}
+                            </Label>
+                            <p className="text-pretty text-sm text-muted-foreground">
+                              {t(
+                                'helm.messages.autoUpgradeScheduleTimeDescription'
+                              )}
+                            </p>
+                            <Input
+                              id="helm-auto-upgrade-schedule-time"
+                              type="time"
+                              value={scheduleTime}
+                              onChange={(event) =>
+                                setScheduleTime(event.target.value)
+                              }
+                              disabled={
+                                !enabled || isSaving || configQuery.isLoading
+                              }
+                            />
+                          </>
+                        )}
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="helm-auto-upgrade-timeout">
+                          {t('helm.fields.timeoutMinutes')}
+                        </Label>
+                        <p className="text-pretty text-sm text-muted-foreground">
+                          {t('helm.messages.autoUpgradeTimeoutDescription')}
+                        </p>
+                        <Input
+                          id="helm-auto-upgrade-timeout"
+                          type="number"
+                          min={1}
+                          value={timeoutMinutes}
+                          onChange={(event) =>
+                            setTimeoutMinutes(event.target.value)
+                          }
+                          disabled={
+                            !enabled || isSaving || configQuery.isLoading
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="helm-auto-upgrade-rollback-on-failure">
+                          {t('helm.fields.rollbackOnFailure')}
+                        </Label>
+                      </div>
+                      <Switch
+                        id="helm-auto-upgrade-rollback-on-failure"
+                        checked={rollbackOnFailure}
+                        onCheckedChange={(value) => setRollbackOnFailure(value)}
                         disabled={!enabled || isSaving || configQuery.isLoading}
                       />
                     </div>
                   </div>
+                </div>
+              </section>
 
-                  <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="helm-auto-upgrade-rollback-on-failure">
-                        {t('helm.fields.rollbackOnFailure')}
-                      </Label>
+              <section className="rounded-lg border p-4">
+                <h3 className="mb-4 text-balance text-sm font-semibold">
+                  {t('helm.fields.status')}
+                </h3>
+                <div className="grid gap-4 text-sm md:grid-cols-3">
+                  <div className="min-w-0">
+                    <div className="text-muted-foreground">
+                      {t('helm.fields.lastChecked')}
                     </div>
-                    <Switch
-                      id="helm-auto-upgrade-rollback-on-failure"
-                      checked={rollbackOnFailure}
-                      onCheckedChange={(value) => setRollbackOnFailure(value)}
-                      disabled={!enabled || isSaving || configQuery.isLoading}
-                    />
+                    <div className="truncate font-medium tabular-nums">
+                      {configQuery.data?.lastCheckedAt
+                        ? formatDate(configQuery.data.lastCheckedAt)
+                        : '-'}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 md:border-l md:pl-4">
+                    <div className="text-muted-foreground">
+                      {t('helm.fields.lastUpgraded')}
+                    </div>
+                    <div className="truncate font-medium tabular-nums">
+                      {configQuery.data?.lastUpgradedAt
+                        ? formatDate(configQuery.data.lastUpgradedAt)
+                        : '-'}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 md:border-l md:pl-4">
+                    <div className="text-muted-foreground">
+                      {t('helm.fields.lastError')}
+                    </div>
+                    <div className="truncate font-medium">
+                      {configQuery.data?.lastError || '-'}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            </div>
 
-            <section className="rounded-lg border p-4">
-              <h3 className="mb-4 text-balance text-sm font-semibold">
-                {t('helm.fields.status')}
-              </h3>
-              <div className="grid gap-4 text-sm md:grid-cols-3">
-                <div className="min-w-0">
-                  <div className="text-muted-foreground">
-                    {t('helm.fields.lastChecked')}
-                  </div>
-                  <div className="truncate font-medium tabular-nums">
-                    {configQuery.data?.lastCheckedAt
-                      ? formatDate(configQuery.data.lastCheckedAt)
-                      : '-'}
-                  </div>
-                </div>
+            <DialogFooter className="border-t bg-muted/20 px-6 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => guard.handleOpenChange(false)}
+                disabled={isSaving}
+              >
+                {t('common.actions.cancel')}
+              </Button>
+              <Button type="submit" disabled={!canSave}>
+                {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+                {t('common.actions.save')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-                <div className="min-w-0 md:border-l md:pl-4">
-                  <div className="text-muted-foreground">
-                    {t('helm.fields.lastUpgraded')}
-                  </div>
-                  <div className="truncate font-medium tabular-nums">
-                    {configQuery.data?.lastUpgradedAt
-                      ? formatDate(configQuery.data.lastUpgradedAt)
-                      : '-'}
-                  </div>
-                </div>
-
-                <div className="min-w-0 md:border-l md:pl-4">
-                  <div className="text-muted-foreground">
-                    {t('helm.fields.lastError')}
-                  </div>
-                  <div className="truncate font-medium">
-                    {configQuery.data?.lastError || '-'}
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <DialogFooter className="border-t bg-muted/20 px-6 py-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSaving}
-            >
-              {t('common.actions.cancel')}
-            </Button>
-            <Button type="submit" disabled={!canSave}>
-              {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
-              {t('common.actions.save')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }

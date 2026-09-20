@@ -10,7 +10,7 @@ import { getWebSocketUrl } from '../subpath'
 import useWebSocket, { WebSocketMessage } from '../useWebSocket'
 import { fetchAPI } from './shared'
 
-// Overview API
+// 概览 API
 const fetchOverview = (): Promise<OverviewData> => {
   return fetchAPI<OverviewData>('/overview')
 }
@@ -24,7 +24,7 @@ export const useOverview = (options?: { staleTime?: number }) => {
   })
 }
 
-// Resource Usage History API
+// 资源用量历史 API
 export const fetchResourceUsageHistory = (
   duration: string,
   instance?: string
@@ -53,7 +53,7 @@ export const useResourceUsageHistory = (
   })
 }
 
-// Pod monitoring API functions
+// Pod 监控 API 函数
 export const fetchPodMetrics = (
   namespace: string,
   podName: string,
@@ -106,7 +106,7 @@ export const usePodMetrics = (
     placeholderData: (prevData) => prevData,
   })
 }
-// Logs API functions
+// 日志 API 函数
 export interface LogsResponse {
   logs: string[]
   container?: string
@@ -114,7 +114,7 @@ export interface LogsResponse {
   namespace: string
 }
 
-// Function to fetch static logs (follow=false)
+// 获取静态日志的函数（follow=false）
 export const fetchPodLogs = (
   namespace: string,
   podName: string,
@@ -149,7 +149,7 @@ export const fetchPodLogs = (
   return fetchAPI<LogsResponse>(endpoint)
 }
 
-// Function to create SSE-based logs connection (follow=true)
+// 创建基于 SSE 的日志连接的函数（follow=true）
 export const createLogsSSEStream = (
   namespace: string,
   podName: string,
@@ -191,7 +191,7 @@ export const createLogsSSEStream = (
     withCredentials: true,
   })
 
-  // Handle SSE open event
+  // 处理 SSE open 事件
   eventSource.onopen = () => {
     console.log('SSE connection opened')
     if (onOpen) {
@@ -199,19 +199,19 @@ export const createLogsSSEStream = (
     }
   }
 
-  // Handle connection established
+  // 处理连接已建立
   eventSource.addEventListener('connected', (event: MessageEvent) => {
     console.log('SSE connection established:', event.data)
   })
 
-  // Handle log messages
+  // 处理日志消息
   eventSource.addEventListener('log', (event: MessageEvent) => {
     if (onMessage) {
       onMessage(event.data)
     }
   })
 
-  // Handle errors from server
+  // 处理来自服务端的错误
   eventSource.addEventListener('error', (event: MessageEvent) => {
     try {
       const errorData = JSON.parse(event.data)
@@ -219,12 +219,12 @@ export const createLogsSSEStream = (
         onError(new Error(errorData.error))
       }
     } catch {
-      // This is not a server error event, likely a connection error
+      // 这不是服务端错误事件，更可能是连接错误
       console.warn('SSE error event without valid JSON data')
     }
   })
 
-  // Handle connection close
+  // 处理连接关闭
   eventSource.addEventListener('close', () => {
     eventSource.close()
     if (onClose) {
@@ -232,7 +232,7 @@ export const createLogsSSEStream = (
     }
   })
 
-  // Handle generic SSE errors (connection issues)
+  // 处理通用 SSE 错误（连接问题）
   eventSource.onerror = (event) => {
     console.error('SSE connection error:', event)
     if (eventSource.readyState === EventSource.CLOSED) {
@@ -252,7 +252,7 @@ export const createLogsSSEStream = (
   return eventSource
 }
 
-// Pod File Browser API
+// Pod 文件浏览器 API
 
 export const useLogsStream = (
   namespace: string,
@@ -285,7 +285,7 @@ export const useLogsStream = (
       eventSourceRef.current = null
     }
 
-    // Clear speed update timer
+    // 清除速率更新定时器
     if (speedUpdateTimerRef.current) {
       clearInterval(speedUpdateTimerRef.current)
       speedUpdateTimerRef.current = null
@@ -299,7 +299,7 @@ export const useLogsStream = (
   const startStreaming = useCallback(async () => {
     if (!namespace || !podName || options?.enabled === false) return
 
-    // Close any existing connection first to prevent race conditions
+    // 先关闭已有连接，避免竞态
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
       eventSourceRef.current = null
@@ -311,7 +311,7 @@ export const useLogsStream = (
       setLogs([]) // Clear previous logs when starting new stream
 
       if (options?.follow) {
-        // Use SSE for follow mode
+        // follow 模式使用 SSE
         const eventSource = createLogsSSEStream(
           namespace,
           podName,
@@ -322,40 +322,40 @@ export const useLogsStream = (
             previous: options?.previous,
             sinceSeconds: options?.sinceSeconds,
           },
-          // onMessage callback
+          // onMessage 回调
           (logLine: string) => {
-            // Calculate data size for network speed tracking
+            // 计算数据量，用于跟踪网络速率
             const dataSize = new Blob([logLine]).size
             networkStatsRef.current.bytesReceived += dataSize
 
             setLogs((prev) => [...prev, logLine])
           },
-          // onError callback
+          // onError 回调
           (err: Error) => {
             console.error('SSE error:', err)
             setError(err)
             setIsLoading(false)
             setIsConnected(false)
           },
-          // onClose callback
+          // onClose 回调
           () => {
             setIsLoading(false)
             setIsConnected(false)
           },
-          // onOpen callback
+          // onOpen 回调
           () => {
             setIsLoading(false)
             setIsConnected(true)
             setError(null)
 
-            // Reset network stats and start speed tracking
+            // 重置网络统计并开始速率跟踪
             networkStatsRef.current = {
               lastReset: Date.now(),
               bytesReceived: 0,
             }
             setDownloadSpeed(0)
 
-            // Start periodic speed update timer
+            // 启动周期性速率更新定时器
             if (speedUpdateTimerRef.current) {
               clearInterval(speedUpdateTimerRef.current)
             }
@@ -368,7 +368,7 @@ export const useLogsStream = (
                 const downloadSpeedValue = stats.bytesReceived / timeDiff
                 setDownloadSpeed(downloadSpeedValue)
 
-                // Reset counters every 3 seconds
+                // 每 3 秒重置计数
                 if (timeDiff >= 3) {
                   stats.lastReset = now
                   stats.bytesReceived = 0
@@ -380,7 +380,7 @@ export const useLogsStream = (
 
         eventSourceRef.current = eventSource
       } else {
-        // Use static fetch for non-follow mode
+        // 非 follow 模式改用静态 fetch
         const response = await fetchPodLogs(namespace, podName, {
           container: options?.container,
           tailLines: options?.tailLines,
@@ -428,7 +428,7 @@ export const useLogsStream = (
     }
   }, [startStreaming, stopStreaming, options?.enabled])
 
-  // Cleanup on unmount
+  // 卸载时清理
   useEffect(() => {
     return stopStreaming
   }, [stopStreaming])
@@ -461,7 +461,7 @@ export const useLogsWebSocket = (
   const { currentCluster } = useCluster()
   const onClear = options?.onClear
 
-  // Build WebSocket URL
+  // 构造 WebSocket URL
   const buildWebSocketUrl = useCallback(() => {
     if (!options?.enabled || !namespace || !podName) return ''
 
@@ -503,7 +503,7 @@ export const useLogsWebSocket = (
     currentCluster,
   ])
 
-  // WebSocket event handlers
+  // WebSocket 事件处理器
   const handleMessage = useCallback(
     (message: WebSocketMessage) => {
       switch (message.type) {
@@ -525,12 +525,12 @@ export const useLogsWebSocket = (
 
   const handleOpen = useCallback(() => {
     console.debug('WebSocket connection opened')
-    // Intentionally do NOT call options.onClear here.
-    // The historical log buffer (tailLines) is delivered by the server right
-    // after the WebSocket opens. Clearing on every onopen races with that
-    // delivery and wipes out the tail history (especially on reconnects).
-    // The component is responsible for explicitly clearing the editor when
-    // the user changes pod / container / tailLines parameters.
+    // 这里有意不调用 options.onClear。
+    // 历史日志缓冲（tailLines）由服务端在 WebSocket 打开后
+    // 立即下发。若每次 onopen 都清空，会与这次下发产生竞态，
+    // 把 tail 历史抹掉（重连时尤其明显）。
+    // 组件应在用户切换 pod / 容器 / tailLines 参数时
+    // 显式清空编辑器。
   }, [])
 
   const handleClose = useCallback(() => {
@@ -541,7 +541,7 @@ export const useLogsWebSocket = (
     console.debug('WebSocket error:', event)
   }, [])
 
-  // Use the generic WebSocket hook
+  // 使用通用的 WebSocket hook
   const [wsState, wsActions] = useWebSocket(
     buildWebSocketUrl,
     {

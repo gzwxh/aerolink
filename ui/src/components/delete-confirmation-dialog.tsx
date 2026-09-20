@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -25,6 +25,8 @@ interface DeleteConfirmationDialogProps {
   namespace?: string
   additionalNote?: string
   showAdditionalOptions?: boolean
+  // 额外的删除选项（例如集群删除时是否一并删除权限绑定）。
+  extraContent?: ReactNode
 }
 
 export function DeleteConfirmationDialog({
@@ -37,6 +39,7 @@ export function DeleteConfirmationDialog({
   namespace,
   additionalNote,
   showAdditionalOptions = false,
+  extraContent,
 }: DeleteConfirmationDialogProps) {
   const { t } = useTranslation()
   const [confirmationInput, setConfirmationInput] = useState('')
@@ -82,6 +85,7 @@ export function DeleteConfirmationDialog({
           {additionalNote && (
             <p className="mt-2 text-muted-foreground">{additionalNote}</p>
           )}
+          {extraContent}
           <div className="rounded-lg bg-destructive/5 p-4 border border-destructive/20">
             <div className="text-sm">
               <p className="font-medium text-destructive mb-2">

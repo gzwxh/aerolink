@@ -35,12 +35,14 @@ export function CRDSelector({
   onCRDChange,
   onAPIGroupAdd,
   addedAPIGroups = [],
-  placeholder = 'Select CRD...',
+  placeholder,
   disabled = false,
 }: CRDSelectorProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const placeholderText =
+    placeholder ?? t('sidebar.crdPlaceholder', 'Select CRD...')
 
   const {
     data: crdsData,
@@ -96,7 +98,7 @@ export function CRDSelector({
   if (crdsLoading) {
     return (
       <Button variant="outline" disabled className="justify-between">
-        Loading CRDs...
+        {t('sidebar.crdLoading', 'Loading CRDs...')}
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>
     )
@@ -105,7 +107,7 @@ export function CRDSelector({
   if (crdsError) {
     return (
       <Button variant="outline" disabled className="justify-between">
-        Failed to load CRDs
+        {t('sidebar.crdLoadFailed', 'Failed to load CRDs')}
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>
     )
@@ -134,7 +136,7 @@ export function CRDSelector({
               selectedCRD ? 'text-foreground' : 'text-muted-foreground'
             }`}
           >
-            {selectedCRDData ? selectedCRDData.name : placeholder}
+            {selectedCRDData ? selectedCRDData.name : placeholderText}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -142,7 +144,7 @@ export function CRDSelector({
       <PopoverContent className="w-[calc(100vw-1rem)] max-w-[400px] p-0 md:w-[400px]">
         <div className="p-2 border-b">
           <Input
-            placeholder="Search CRDs..."
+            placeholder={t('sidebar.crdSearch', 'Search CRDs...')}
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             autoFocus
@@ -155,7 +157,7 @@ export function CRDSelector({
         >
           {Object.keys(filteredCRDGroups).length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">
-              No CRDs found.
+              {t('sidebar.crdEmpty', 'No CRDs found.')}
             </div>
           ) : (
             Object.entries(filteredCRDGroups).map(([groupName, crds]) => (

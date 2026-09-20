@@ -13,6 +13,7 @@ import type {
 } from '@/types/api'
 import { useHelmChart, useHelmChartContent } from '@/lib/api'
 import { cn, formatDate } from '@/lib/utils'
+import { useCanAnyNamespace } from '@/hooks/use-can'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -388,6 +389,8 @@ export function HelmChartDetailPage() {
   const { repository, name } = useParams()
   const [searchParams] = useSearchParams()
   const { t } = useTranslation()
+  // 安装会创建 HelmRelease，是写操作；只读角色不该看到入口。
+  const canCreateRelease = useCanAnyNamespace()('helmrelease', 'create')
   const [installDialogOpen, setInstallDialogOpen] = useState(false)
   const version = searchParams.get('version') || undefined
   const source =
@@ -516,14 +519,16 @@ export function HelmChartDetailPage() {
               </div>
             </div>
             <div className="flex w-full flex-wrap gap-2 md:w-auto md:justify-end">
-              <Button
-                disabled={!data.chartUrl}
-                size="sm"
-                onClick={() => setInstallDialogOpen(true)}
-              >
-                <Download className="size-4" />
-                {t('helmCharts.actions.install', { defaultValue: 'Install' })}
-              </Button>
+              {canCreateRelease && (
+                <Button
+                  disabled={!data.chartUrl}
+                  size="sm"
+                  onClick={() => setInstallDialogOpen(true)}
+                >
+                  <Download className="size-4" />
+                  {t('helmCharts.actions.install', { defaultValue: 'Install' })}
+                </Button>
+              )}
             </div>
           </div>
         }
@@ -535,7 +540,7 @@ export function HelmChartDetailPage() {
         )}
         tabs={tabs}
       />
-      {installDialogOpen ? (
+      {canCreateRelease && installDialogOpen ? (
         <HelmInstallDialog
           chart={data}
           open={installDialogOpen}

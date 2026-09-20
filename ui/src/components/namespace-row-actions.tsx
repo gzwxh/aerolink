@@ -5,11 +5,10 @@ import {
   IconDownload,
   IconLoader2,
   IconPencil,
-  IconShieldCheck,
   IconTrash,
 } from '@tabler/icons-react'
-import * as yaml from 'js-yaml'
 import { useQueryClient } from '@tanstack/react-query'
+import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -17,13 +16,14 @@ import {
   createResource,
   deleteResource,
   fetchResources,
-  fetchRoleList,
   updateResource,
-  updateRole,
 } from '@/lib/api'
-import { useCluster } from '@/hooks/use-cluster'
-import { useAuth } from '@/contexts/auth-context'
 import { translateError } from '@/lib/utils'
+import { useCanAnyNamespace } from '@/hooks/use-can'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,17 +43,17 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 import { Textarea } from '@/components/ui/textarea'
-import { NamespacePermissionDialog } from '@/components/namespace-permission-dialog'
 import { CloneResourceDialog } from '@/components/clone-resource-dialog'
+import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 type MutableResource = Record<string, unknown> & {
   metadata?: Record<string, unknown>
   spec?: Record<string, unknown>
 }
 
-// Resource kinds counted when confirming a namespace deletion.
+// 确认删除命名空间时统计的资源类型。
 const DELETE_WORKLOAD_TYPES = [
   'deployments',
   'statefulsets',
@@ -64,7 +64,7 @@ const DELETE_WORKLOAD_TYPES = [
   'services',
 ] as const
 
-// ----- ResourceQuota helpers (container resource limits) -----
+// ----- ResourceQuota 辅助函数（容器资源上限） -----
 
 const QUOTA_KEYS = {
   cpuRequests: 'requests.cpu',
@@ -91,7 +91,7 @@ const emptyQuota: QuotaFormValues = {
   gpuLimits: '',
 }
 
-// "1000m" -> "1000", "1" -> "1000"
+// "1000m" -> "1000"，"1" -> "1000"
 function parseCpu(value: unknown): string {
   if (typeof value !== 'string' || !value) return ''
   if (value.endsWith('m')) return value.slice(0, -1)
@@ -99,7 +99,7 @@ function parseCpu(value: unknown): string {
   return Number.isNaN(cores) ? '' : String(Math.round(cores * 1000))
 }
 
-// "128Mi" -> "128", "1Gi" -> "1024"
+// "128Mi" -> "128"，"1Gi" -> "1024"
 function parseMemory(value: unknown): string {
   if (typeof value !== 'string' || !value) return ''
   const units: Array<[string, number]> = [
@@ -117,7 +117,9 @@ function parseMemory(value: unknown): string {
   return Number.isNaN(bytes) ? '' : String(Math.round(bytes / (1024 * 1024)))
 }
 
-function quotaToForm(hard: Record<string, unknown> | undefined): QuotaFormValues {
+function quotaToForm(
+  hard: Record<string, unknown> | undefined
+): QuotaFormValues {
   if (!hard) return { ...emptyQuota }
   return {
     cpuRequests: parseCpu(hard[QUOTA_KEYS.cpuRequests]),
@@ -135,7 +137,8 @@ function buildQuotaHard(values: QuotaFormValues): Record<string, string> {
   const hard: Record<string, string> = {}
   const { cpuRequests, cpuLimits, memoryRequests, memoryLimits, gpuLimits } =
     values
-  if (cpuRequests.trim()) hard[QUOTA_KEYS.cpuRequests] = `${cpuRequests.trim()}m`
+  if (cpuRequests.trim())
+    hard[QUOTA_KEYS.cpuRequests] = `${cpuRequests.trim()}m`
   if (cpuLimits.trim()) hard[QUOTA_KEYS.cpuLimits] = `${cpuLimits.trim()}m`
   if (memoryRequests.trim())
     hard[QUOTA_KEYS.memoryRequests] = `${memoryRequests.trim()}Mi`
@@ -167,19 +170,9 @@ function textToPairs(text: string): Record<string, string> | null {
   return result
 }
 
-// After cloning a namespace, carry over role grants that reference the source
-// namespace so the clone keeps the same permissions.
-async function syncRoleNamespaces(source: string, target: string) {
-  const roles = await fetchRoleList()
-  const affected = (roles || []).filter((r) => r.namespaces?.includes(source))
-  for (const role of affected) {
-    await updateRole(role.id, {
-      namespaces: [...(role.namespaces || []), target],
-    })
-  }
-  return affected.length
-}
-
+// 克隆出来的命名空间不会复制原命名空间的授权：授权由权限绑定组按命名空间逐条表达。
+// 克隆体只按「新建命名空间自动归属」规则处理：非管理员且恰好属于一个权限绑定组时
+// 自动归属，其余情况留给管理员分配（见 pkg/bindinggroups/auto_bind.go）。
 function downloadNamespaceYaml(resource: unknown, name: string) {
   const content = yaml.dump(resource, { indent: 2, noRefs: true })
   const blob = new Blob([content], { type: 'application/x-yaml' })
@@ -200,28 +193,17 @@ export function NamespaceRowActions({
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const can = useCanAnyNamespace()
+  // 编辑 / 克隆 / 删除都是写操作；只读角色只保留「下载 YAML」。
+  const canUpdateNamespace = can('namespaces', 'update')
+  const canCreateNamespace = can('namespaces', 'create')
+  const canDeleteNamespace = can('namespaces', 'delete')
 
   const [showEdit, setShowEdit] = useState(false)
   const [showYaml, setShowYaml] = useState(false)
   const [showClone, setShowClone] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
-  const [showPermissions, setShowPermissions] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const { currentCluster } = useCluster()
-  const { user } = useAuth()
-  const isAdmin = user?.isAdmin() ?? false
-
-  const handleClone = async (targetName: string) => {
-    const synced = await syncRoleNamespaces(name, targetName)
-    if (synced > 0) {
-      toast.success(
-        t('nsActions.permissionsCloned', {
-          count: synced,
-          defaultValue: 'Cloned permissions from {{count}} role(s)',
-        })
-      )
-    }
-  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -235,32 +217,19 @@ export function NamespaceRowActions({
       )
       setShowDelete(false)
       queryClient.invalidateQueries()
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setDeleting(false)
     }
   }
 
-  return (
-    <div className="flex items-center justify-end gap-1">
-      {isAdmin && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-primary"
-          title={t('nsActions.permissions', 'Manage permissions')}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            setShowPermissions(true)
-          }}
-        >
-          <IconShieldCheck className="h-3.5 w-3.5" />
-          {t('nsActions.permissions', 'Permissions')}
-        </Button>
-      )}
+  if (!canUpdateNamespace && !canCreateNamespace && !canDeleteNamespace) {
+    return null
+  }
 
+  return (
+    <div className="flex items-center justify-center gap-1">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -274,42 +243,42 @@ export function NamespaceRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem onClick={() => setShowEdit(true)}>
-            <IconPencil className="mr-2 h-4 w-4" />
-            {t('nsActions.editConfig', 'Edit Configuration')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setShowYaml(true)}>
-            <IconDeviceFloppy className="mr-2 h-4 w-4" />
-            {t('nsActions.editYaml', 'Edit YAML')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setShowClone(true)}>
-            <IconCopy className="mr-2 h-4 w-4" />
-            {t('nsActions.clone', 'Clone')}
-          </DropdownMenuItem>
+          {canUpdateNamespace && (
+            <DropdownMenuItem onClick={() => setShowEdit(true)}>
+              <IconPencil className="mr-2 h-4 w-4" />
+              {t('nsActions.editConfig', 'Edit Configuration')}
+            </DropdownMenuItem>
+          )}
+          {canUpdateNamespace && (
+            <DropdownMenuItem onClick={() => setShowYaml(true)}>
+              <IconDeviceFloppy className="mr-2 h-4 w-4" />
+              {t('nsActions.editYaml', 'Edit YAML')}
+            </DropdownMenuItem>
+          )}
+          {canCreateNamespace && (
+            <DropdownMenuItem onClick={() => setShowClone(true)}>
+              <IconCopy className="mr-2 h-4 w-4" />
+              {t('nsActions.clone', 'Clone')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onClick={() => downloadNamespaceYaml(resource, name)}
           >
             <IconDownload className="mr-2 h-4 w-4" />
             {t('nsActions.downloadYaml', 'Download YAML')}
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            onClick={() => setShowDelete(true)}
-          >
-            <IconTrash className="mr-2 h-4 w-4" />
-            {t('common.actions.delete', 'Delete')}
-          </DropdownMenuItem>
+          {canDeleteNamespace && <DropdownMenuSeparator />}
+          {canDeleteNamespace && (
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => setShowDelete(true)}
+            >
+              <IconTrash className="mr-2 h-4 w-4" />
+              {t('common.actions.delete', 'Delete')}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
-
-      {showPermissions && (
-        <NamespacePermissionDialog
-          name={name}
-          cluster={currentCluster ?? undefined}
-          onClose={() => setShowPermissions(false)}
-        />
-      )}
 
       {showEdit && (
         <EditNamespaceDialog
@@ -335,7 +304,6 @@ export function NamespaceRowActions({
           resourceLabel={t('common.fields.namespace', 'Namespace')}
           sourceName={name}
           resource={resource}
-          onCloned={handleClone}
         />
       )}
 
@@ -351,7 +319,7 @@ export function NamespaceRowActions({
   )
 }
 
-// ----- Edit configuration: metadata + container resource limits -----
+// ----- 编辑配置：元数据 + 容器资源上限 -----
 
 export function EditNamespaceDialog({
   name,
@@ -375,6 +343,17 @@ export function EditNamespaceDialog({
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
   const [loadingQuota, setLoadingQuota] = useState(true)
+  // 配额是打开后异步装载的，不能拿首帧的空值当基线，否则一装载就被判成「有改动」；
+  // 这里显式保存一份基线，并在装载完成的同一个 effect 里跟着更新。
+  const [baseline, setBaseline] = useState(() => ({
+    labels: pairsToText(resource.metadata?.labels as Record<string, unknown>),
+    annotations: pairsToText(
+      resource.metadata?.annotations as Record<string, unknown>
+    ),
+    quota: emptyQuota,
+  }))
+  const isDirty = useDraftDirty({ labels, annotations, quota }, baseline)
+  const guard = useUnsavedChangesGuard({ dirty: isDirty, onClose })
 
   useEffect(() => {
     let cancelled = false
@@ -390,10 +369,15 @@ export function EditNamespaceDialog({
         if (existing) {
           setQuotaName(String(existing.metadata?.name || ''))
           setQuotaBase(existing)
-          setQuota(quotaToForm(existing.spec?.hard as Record<string, unknown>))
+          const nextQuota = quotaToForm(
+            existing.spec?.hard as Record<string, unknown>
+          )
+          setQuota(nextQuota)
+          // 装载出来的这份配额就是基线，修改它才算未保存。
+          setBaseline((prev) => ({ ...prev, quota: nextQuota }))
         }
       } catch {
-        // No quota is fine; treat as empty.
+        // 没有配额也没问题；按空处理。
       } finally {
         if (!cancelled) setLoadingQuota(false)
       }
@@ -497,116 +481,124 @@ export function EditNamespaceDialog({
   ]
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            {t('nsEdit.title', { name, defaultValue: 'Edit {{name}}' })}
-          </DialogTitle>
-          <DialogDescription>
-            {t(
-              'nsEdit.description',
-              'Update namespace metadata and container resource limits.'
-            )}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open onOpenChange={guard.handleOpenChange}>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {t('nsEdit.title', { name, defaultValue: 'Edit {{name}}' })}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'nsEdit.description',
+                'Update namespace metadata and container resource limits.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>{t('nsEdit.labels', 'Labels')}</Label>
-              <Textarea
-                rows={4}
-                value={labels}
-                onChange={(e) => setLabels(e.target.value)}
-                placeholder={'app=my-app\nteam=devops'}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t('nsEdit.pairsHint', 'One key=value pair per line')}
-              </p>
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t('nsEdit.labels', 'Labels')}</Label>
+                <Textarea
+                  rows={4}
+                  value={labels}
+                  onChange={(e) => setLabels(e.target.value)}
+                  placeholder={'app=my-app\nteam=devops'}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('nsEdit.pairsHint', 'One key=value pair per line')}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('nsEdit.annotations', 'Annotations')}</Label>
+                <Textarea
+                  rows={4}
+                  value={annotations}
+                  onChange={(e) => setAnnotations(e.target.value)}
+                  placeholder={'owner=devops@example.com'}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>{t('nsEdit.annotations', 'Annotations')}</Label>
-              <Textarea
-                rows={4}
-                value={annotations}
-                onChange={(e) => setAnnotations(e.target.value)}
-                placeholder={'owner=devops@example.com'}
-              />
-            </div>
-          </div>
 
-          <div className="space-y-3 rounded-md border p-3">
-            <div>
-              <div className="font-medium">
-                {t('nsEdit.quotaTitle', 'Container Resource Limits')}
+            <div className="space-y-3 rounded-md border p-3">
+              <div>
+                <div className="font-medium">
+                  {t('nsEdit.quotaTitle', 'Container Resource Limits')}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    'nsEdit.quotaDescription',
+                    'Configure the default resource quota for workloads in this namespace.'
+                  )}
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  'nsEdit.quotaDescription',
-                  'Configure the default resource quota for workloads in this namespace.'
-                )}
-              </p>
-            </div>
-            {loadingQuota ? (
-              <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-                <IconLoader2 className="h-4 w-4 animate-spin" />
-                {t('common.messages.loading', 'Loading...')}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {quotaFields.map((field) => (
-                  <div key={field.key} className="space-y-1">
-                    <Label htmlFor={`quota-${field.key}`} className="text-xs">
-                      {field.label}
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id={`quota-${field.key}`}
-                        value={quota[field.key]}
-                        onChange={(e) =>
-                          setQuota((prev) => ({
-                            ...prev,
-                            [field.key]: e.target.value,
-                          }))
-                        }
-                        inputMode="numeric"
-                        placeholder="0"
-                      />
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {field.unit}
-                      </span>
+              {loadingQuota ? (
+                <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                  <IconLoader2 className="h-4 w-4 animate-spin" />
+                  {t('common.messages.loading', 'Loading...')}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {quotaFields.map((field) => (
+                    <div key={field.key} className="space-y-1">
+                      <Label htmlFor={`quota-${field.key}`} className="text-xs">
+                        {field.label}
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={`quota-${field.key}`}
+                          value={quota[field.key]}
+                          onChange={(e) =>
+                            setQuota((prev) => ({
+                              ...prev,
+                              [field.key]: e.target.value,
+                            }))
+                          }
+                          inputMode="numeric"
+                          placeholder="0"
+                        />
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {field.unit}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
           </div>
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-        </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => guard.handleOpenChange(false)}
+              disabled={isSaving}
+            >
+              {t('common.actions.cancel', 'Cancel')}
+            </Button>
+            <Button onClick={() => void handleSave()} disabled={isSaving}>
+              {isSaving && <IconLoader2 className="h-4 w-4 animate-spin" />}
+              {isSaving
+                ? t('common.actions.saving', 'Saving...')
+                : t('common.actions.save', 'Save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
-            {t('common.actions.cancel', 'Cancel')}
-          </Button>
-          <Button onClick={() => void handleSave()} disabled={isSaving}>
-            {isSaving && <IconLoader2 className="h-4 w-4 animate-spin" />}
-            {isSaving
-              ? t('common.actions.saving', 'Saving...')
-              : t('common.actions.save', 'Save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }
 
-// ----- Edit YAML -----
+// ----- 编辑 YAML -----
 
 function EditNamespaceYamlDialog({
   name,
@@ -623,6 +615,9 @@ function EditNamespaceYamlDialog({
   )
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
+  // 首帧 dump 出的 YAML 作基线；草稿只在关闭时丢弃，由 guard 拦住误关闭。
+  const isDirty = useDraftDirty(yamlContent)
+  const guard = useUnsavedChangesGuard({ dirty: isDirty, onClose })
 
   const handleSave = async () => {
     setError('')
@@ -652,48 +647,56 @@ function EditNamespaceYamlDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>
-            {t('nsActions.editYamlTitle', {
-              name,
-              defaultValue: 'Edit YAML - {{name}}',
-            })}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <SimpleYamlEditor
-            value={yamlContent}
-            onChange={(value) => {
-              setYamlContent(value || '')
-              setError('')
-            }}
-            height="400px"
-          />
-        </div>
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
-            {t('common.actions.cancel', 'Cancel')}
-          </Button>
-          <Button onClick={() => void handleSave()} disabled={isSaving}>
-            {isSaving && <IconLoader2 className="h-4 w-4 animate-spin" />}
-            {isSaving
-              ? t('common.actions.saving', 'Saving...')
-              : t('common.actions.save', 'Save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open onOpenChange={guard.handleOpenChange}>
+        <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              {t('nsActions.editYamlTitle', {
+                name,
+                defaultValue: 'Edit YAML - {{name}}',
+              })}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <SimpleYamlEditor
+              value={yamlContent}
+              onChange={(value) => {
+                setYamlContent(value || '')
+                setError('')
+              }}
+              height="400px"
+            />
+          </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => guard.handleOpenChange(false)}
+              disabled={isSaving}
+            >
+              {t('common.actions.cancel', 'Cancel')}
+            </Button>
+            <Button onClick={() => void handleSave()} disabled={isSaving}>
+              {isSaving && <IconLoader2 className="h-4 w-4 animate-spin" />}
+              {isSaving
+                ? t('common.actions.saving', 'Saving...')
+                : t('common.actions.save', 'Save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }
 
-// ----- Delete with workload summary -----
+// ----- 带工作负载概要的删除 -----
 
 export function DeleteNamespaceDialog({
   name,

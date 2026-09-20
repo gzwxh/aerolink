@@ -11,7 +11,7 @@ export function ServiceTable(props: {
 }) {
   const { services, isLoading } = props
 
-  // Service table columns
+  // Service 表格列
   const serviceColumns = useMemo(
     (): Column<Service>[] => [
       {

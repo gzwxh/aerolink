@@ -139,7 +139,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     }
   }, [])
 
-  // Simple theme toggle function
+  // 简易主题切换函数
   const toggleTheme = useCallback(() => {
     if (actualTheme === 'dark') {
       setTheme('light')
@@ -184,22 +184,25 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
             },
             {
               id: 'oauth',
-              title: t('settings.tabs.oauth', 'Authentication'),
-              url: '/settings/oauth',
+              title: t(
+                'securitySettings.tabs.authProviders',
+                'Authentication Configuration'
+              ),
+              url: '/settings/security?tab=authProviders',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:
-                `${t('settings.tabs.oauth', 'Authentication')} settings authentication ldap oauth admin`.toLowerCase(),
+                `${t('securitySettings.tabs.authProviders', 'Authentication Configuration')} settings authentication ldap oauth admin`.toLowerCase(),
               isPinned: false,
             },
             {
               id: 'rbac',
-              title: t('settings.tabs.rbac', 'RBAC'),
+              title: t('nav.rbac', 'RBAC'),
               url: '/settings/rbac',
               Icon: IconSettings,
               groupLabel: 'Settings',
               searchText:
-                `${t('settings.tabs.rbac', 'RBAC')} settings rbac admin`.toLowerCase(),
+                `${t('nav.rbac', 'RBAC')} settings rbac admin`.toLowerCase(),
               isPinned: false,
             },
             {
@@ -317,7 +320,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     toggleTheme,
   ])
 
-  // Filter theme option based on query
+  // 依据查询过滤主题选项
   const actionResults = useMemo(() => {
     const trimmedQuery = query.trim().toLowerCase()
     if (!trimmedQuery) {
@@ -327,7 +330,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     return actionItems.filter((item) => item.searchText.includes(trimmedQuery))
   }, [actionItems, query])
 
-  // Use favorites hook
+  // 使用收藏 hook
   const {
     favorites,
     isFavorite,
@@ -440,7 +443,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     return () => clearTimeout(timeoutId)
   }, [query, performSearch])
 
-  // Handle item selection
+  // 处理条目选择
   const handleSelect = useCallback(
     (path: string) => {
       navigate(path)
@@ -450,7 +453,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     [navigate, onOpenChange]
   )
 
-  // Clear state when dialog closes
+  // 对话框关闭时清空状态
   useEffect(() => {
     if (!open) {
       searchRequestIdRef.current += 1

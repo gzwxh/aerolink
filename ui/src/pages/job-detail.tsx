@@ -9,6 +9,7 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { EventTable } from '@/components/event-table'
@@ -29,6 +30,10 @@ import {
 export function JobDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
+  const can = useCan()
+  // 终端需要 pods:exec，日志需要 pods:log；只读管理员两者都有。
+  const canExec = can('pods', 'exec', { namespace })
+  const canLog = can('pods', 'log', { namespace })
 
   const {
     data: job,
@@ -272,7 +277,10 @@ export function JobDetail(props: { namespace: string; name: string }) {
         ['pods', 'containers'].includes(tab.value)
       )}
       extraTabs={tabs.filter(
-        (tab) => !['pods', 'containers'].includes(tab.value)
+        (tab) =>
+          !['pods', 'containers'].includes(tab.value) &&
+          (tab.value !== 'terminal' || canExec) &&
+          (tab.value !== 'logs' || canLog)
       )}
     />
   )

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+
 import { useResources } from '@/lib/api'
 import { Label } from '@/components/ui/label'
 import {
@@ -11,8 +12,8 @@ import {
 } from '@/components/ui/select'
 
 /**
- * StatefulSet requires a governing (headless) service. Lists the services
- * available in the selected namespace.
+ * StatefulSet 需要一个治理用的（headless）Service。这里列出
+ * 所选命名空间中可用的 Service。
  */
 export function StatefulServiceSelector({
   namespace,

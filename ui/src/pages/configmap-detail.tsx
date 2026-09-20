@@ -17,8 +17,8 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
 
-  // The detail shell gates the clone / delete / YAML actions with the current
-  // user's permissions for `resourceType` (configmaps).
+  // 详情外壳用当前用户对 resourceType（configmaps）的权限
+  // 对克隆 / 删除 / YAML 操作做门控。
 
   const { data, isLoading, isError, error, refetch } = useResource(
     'configmaps',
@@ -31,7 +31,7 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
 
   const handleSaveYaml = async (content: ConfigMap) => {
     await updateResource('configmaps', name, namespace, content)
-    toast.success('YAML saved successfully')
+    toast.success(t('common.messages.yamlSaved'))
     await refetch()
   }
 
@@ -41,7 +41,7 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
         value: 'data',
         label: (
           <>
-            Data
+            {t('common.fields.data')}
             {totalCount > 0 ? (
               <Badge variant="secondary">{totalCount}</Badge>
             ) : null}
@@ -52,13 +52,16 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
             {dataCount > 0 && (
               <KeyValueDataViewer
                 entries={data.data!}
-                emptyMessage="No data entries"
+                emptyMessage={t(
+                  'keyValueDataViewer.noDataEntries',
+                  '暂无数据条目'
+                )}
               />
             )}
             {binaryDataCount > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Binary Data
+                  {t('common.fields.binaryData')}
                 </p>
                 <KeyValueDataViewer
                   entries={Object.fromEntries(
@@ -66,7 +69,10 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
                       ([key, value]) => [key, atob(value)]
                     )
                   )}
-                  emptyMessage="No binary data entries"
+                  emptyMessage={t(
+                    'keyValueDataViewer.noBinaryDataEntries',
+                    '暂无二进制数据条目'
+                  )}
                 />
               </div>
             )}
@@ -74,11 +80,11 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
         ) : null,
       },
     ],
-    [binaryDataCount, data, dataCount, totalCount]
+    [binaryDataCount, data, dataCount, t, totalCount]
   )
 
-  // The shell only renders the YAML tab when a save handler is present, so it
-  // is always passed; `yamlEditable` decides whether saving is allowed.
+  // 只有存在保存处理器时外壳才渲染 YAML 标签页，因此
+  // 它总是被传入；yamlEditable 决定是否允许保存。
   return (
     <ResourceDetailShell
       resourceType="configmaps"

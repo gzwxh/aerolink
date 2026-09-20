@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { ResourceHistory, ResourceType, ResourceTypeMap } from '@/types/api'
 import { applyResource, useResourceHistory } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 
 import { Column, SimpleTable } from './simple-table'
 import { Badge } from './ui/badge'
@@ -29,6 +30,9 @@ export function ResourceHistoryTable<T extends ResourceType>({
   currentResource,
 }: ResourceHistoryTableProps<T>) {
   const { t } = useTranslation()
+  const can = useCan()
+  // 回滚本质是一次 apply，属于写操作：只读角色只能查看差异。
+  const canRollback = can(resourceType, 'update', { namespace })
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
   const [selectedHistory, setSelectedHistory] =
@@ -54,7 +58,7 @@ export function ResourceHistoryTable<T extends ResourceType>({
   const history = historyResponse?.data || []
   // const pagination = historyResponse?.pagination
 
-  // Convert current resource to YAML
+  // 把当前资源转换为 YAML
   const currentYaml = useMemo(() => {
     if (!currentResource) return ''
     try {
@@ -75,27 +79,23 @@ export function ResourceHistoryTable<T extends ResourceType>({
     setIsErrorDialogOpen(true)
   }
 
-  // Handle rollback operations
+  // 处理回滚操作
   const handleRollback = async (yamlContent: string) => {
     try {
       setIsRollingBack(true)
       await applyResource(yamlContent)
 
-      // Show success toast
+      // 展示成功 toast
       toast.success(t('resourceHistory.rollback.success'))
 
-      // Close the dialog after successful rollback
+      // 回滚成功后关闭对话框
       setIsDiffOpen(false)
       refetchHistory()
-      // Refresh the history data
-      // You might want to add a refetch function here if available
+      // 刷新历史数据
+      // 如果存在 refetch 函数，可以在这里调用
     } catch (error) {
       console.error('Failed to rollback resource:', error)
-
-      // Show error toast
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error occurred'
-      toast.error(`${t('resourceHistory.rollback.error')}: ${errorMessage}`)
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsRollingBack(false)
     }
@@ -134,7 +134,7 @@ export function ResourceHistoryTable<T extends ResourceType>({
     [t]
   )
 
-  // History table columns
+  // 历史表格列
   const historyColumns = useMemo(
     (): Column<ResourceHistory>[] => [
       {
@@ -287,7 +287,7 @@ export function ResourceHistoryTable<T extends ResourceType>({
           current={currentYaml}
           open={isDiffOpen}
           onOpenChange={setIsDiffOpen}
-          onRollback={handleRollback}
+          onRollback={canRollback ? handleRollback : undefined}
           isRollingBack={isRollingBack}
           title={`${t('resourceHistory.yamlDiff')}`}
         />

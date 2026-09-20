@@ -11,7 +11,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Simple debounce function for string input handlers with cancel support
+// 面向字符串输入处理器的简易防抖函数，支持取消
 export function debounce(fn: (value: string) => void, delay: number) {
   let timeout: NodeJS.Timeout | null = null
 
@@ -108,7 +108,7 @@ export function formatChartXTicks(
   return new Date(timestamp).toLocaleString(undefined, options)
 }
 
-// Format bytes to human readable format
+// 把字节数格式化为易读形式
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
 
@@ -138,7 +138,7 @@ export function parseBytes(capacity: string): number {
   return parseInt(capacity, 10)
 }
 
-// Format CPU cores
+// 格式化 CPU 核数
 export function formatCPU(cores: string | number): string {
   if (typeof cores === 'string') {
     if (cores.endsWith('m')) {
@@ -150,7 +150,7 @@ export function formatCPU(cores: string | number): string {
   return `${cores} cores`
 }
 
-// Format memory
+// 格式化内存
 export function formatMemory(memory: string | number): string {
   if (typeof memory === 'number') {
     return formatBytes(memory)
@@ -174,7 +174,7 @@ export function formatMemory(memory: string | number): string {
     }
   }
 
-  // If no unit, assume bytes
+  // 没有单位时按字节处理
   const numValue = parseFloat(memory)
   if (!isNaN(numValue)) {
     return formatBytes(numValue)
@@ -252,14 +252,27 @@ export function translateError(error: Error | unknown, t: TFunction): string {
     })
   }
 
-  // Backend password policy failures carry a machine readable code (plus
-  // parameters such as the minimum length) so they can be localized.
+  // 后端的密码策略失败会带一个机器可读的错误码（以及
+  // 最小长度之类的参数），以便做本地化。
   const policyError = error as {
     code?: string
     params?: Record<string, unknown>
   }
   if (policyError.code?.startsWith('password_')) {
     return t(`passwordPolicy.errors.${policyError.code}`, {
+      ...policyError.params,
+      defaultValue: error.message,
+    })
+  }
+  // 登录类错误（凭据错误 / 尝试次数超限 / IP 拒绝等）同样按码本地化。
+  if (policyError.code?.startsWith('login_')) {
+    return t(`login.errors.${policyError.code}`, {
+      defaultValue: error.message,
+    })
+  }
+  // 容器文件浏览/下载/上传的错误同样按码本地化（缺 ls 命令、路径非法等）。
+  if (policyError.code?.startsWith('pod_files_')) {
+    return t(`podFiles.errors.${policyError.code}`, {
       ...policyError.params,
       defaultValue: error.message,
     })
@@ -297,11 +310,11 @@ export function translateError(error: Error | unknown, t: TFunction): string {
 }
 
 /**
- * Enrich Node Conditions with computed health status
+ * 为节点状态补充计算出的健康状态
  *
- * Adds an `health` field with normalized semantics:
- * - `True` = healthy state
- * - `False` = unhealthy state
+ * 增加一个语义统一的 `health` 字段：
+ * - `True` = 健康状态
+ * - `False` = 不健康状态
  */
 export function enrichNodeConditionsWithHealth(data: NodeCondition[]) {
   return data.map((item) => {

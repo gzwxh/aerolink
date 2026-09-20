@@ -60,11 +60,21 @@ const DRAG_SCROLL_MAX_STEP = 12
 
 export function SidebarCustomizer({
   onOpenChange,
+  trigger,
+  inline,
+  canPublishGlobal,
 }: {
   onOpenChange?: (open: boolean) => void
+  /** 自定义触发元素；不传时用头像菜单里的菜单项（默认形态）。 */
+  trigger?: React.ReactNode
+  /** 内嵌形态：直接铺开内容（设置页用），不套对话框与触发元素。 */
+  inline?: boolean
+  /** 是否显示「设为全局 / 取消全局」按钮（需要 settings.general 写权限）；默认按内置管理员判断。 */
+  canPublishGlobal?: boolean
 }) {
   const { t } = useTranslation()
   const { user, globalSidebarPreference } = useAuth()
+  const canPublish = canPublishGlobal ?? Boolean(user?.isAdmin())
   const [open, setOpen] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [isPublishingGlobal, setIsPublishingGlobal] = useState(false)
@@ -256,7 +266,7 @@ export function SidebarCustomizer({
   }, [globalSidebarPreference])
 
   const handleSetAsGlobalSidebar = async () => {
-    if (!config || !user?.isAdmin()) {
+    if (!config || !canPublish) {
       return
     }
 
@@ -269,16 +279,13 @@ export function SidebarCustomizer({
       )
     } catch (error) {
       console.error('Failed to update global sidebar:', error)
-      toast.error(
-        t('sidebar.setAsGlobalError', 'Failed to update global sidebar')
-      )
     } finally {
       setIsPublishingGlobal(false)
     }
   }
 
   const handleUnsetGlobalSidebar = async () => {
-    if (!user?.isAdmin()) {
+    if (!canPublish) {
       return
     }
 
@@ -291,9 +298,6 @@ export function SidebarCustomizer({
       )
     } catch (error) {
       console.error('Failed to clear global sidebar:', error)
-      toast.error(
-        t('sidebar.unsetGlobalError', 'Failed to disable global sidebar')
-      )
     } finally {
       setIsClearingGlobal(false)
     }
@@ -308,24 +312,453 @@ export function SidebarCustomizer({
     onOpenChange?.(nextOpen)
   }
 
+  // 对话框形态（头像菜单里弹出）与内嵌形态（设置页）共用同一份内容。
+  const content = (
+    <>
+      <div
+        ref={scrollContainerRef}
+        className={`flex-1 overflow-y-auto px-4 sm:px-6 ${
+          inline ? 'max-h-[60vh]' : 'max-h-[calc(100dvh-10rem)]'
+        }`}
+      >
+        <div className="space-y-6 pb-6">
+          {pinnedItems.length > 0 && (
+            <>
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Pin className="h-4 w-4" />
+                  {t('sidebar.pinnedItems', 'Pinned Items')} (
+                  {pinnedItems.length})
+                </Label>
+                <div className="space-y-2">
+                  {pinnedItems.map((item) => {
+                    const IconComponent = getIconComponent(item.icon)
+                    const title = item.titleKey
+                      ? t(item.titleKey, { defaultValue: item.titleKey })
+                      : ''
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-col gap-3 rounded-md border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <IconComponent className="h-4 w-4 text-sidebar-primary" />
+                          <span className="text-sm">{title}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {t('sidebar.pinned', 'Pinned')}
+                          </Badge>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleItemPin(item.id)}
+                          className="h-8 w-8 p-0"
+                          title={t('sidebar.unpin', 'Unpin')}
+                          aria-label={t('sidebar.unpin', 'Unpin')}
+                        >
+                          <PinOff className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <Separator />
+            </>
+          )}
+
+          <div className="space-y-4">
+            <Label className="text-sm font-medium">
+              {t('sidebar.menuGroups', 'Menu Groups')}
+            </Label>
+
+            {sortedGroups.map((group, index) => (
+              <div
+                key={group.id}
+                className={cn(
+                  '-m-2 space-y-3 rounded-md border border-transparent p-2',
+                  dragOverGroupId === group.id && 'border-primary bg-muted/30'
+                )}
+                onDragOver={(event) => handleGroupDragOver(event, group.id)}
+                onDragLeave={(event) => handleGroupDragLeave(event, group.id)}
+                onDrop={(event) => handleGroupDrop(event, group.id)}
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-sm font-medium">
+                      {group.nameKey
+                        ? t(group.nameKey, { defaultValue: group.nameKey })
+                        : ''}
+                    </h4>
+                    {group.isCustom && (
+                      <Badge variant="outline" className="text-xs">
+                        {t('sidebar.customGroup', 'Custom')}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs">
+                      {
+                        group.items.filter(
+                          (item) => !config.hiddenItems.includes(item.id)
+                        ).length
+                      }
+                      /{group.items.length}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleGroupCollapse(group.id)}
+                      className="h-8 px-2 text-xs"
+                    >
+                      {group.collapsed
+                        ? t('common.actions.expand', 'Expand')
+                        : t('common.actions.collapse', 'Collapse')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleGroupVisibility(group.id)}
+                      className="h-8 w-8 p-0"
+                      title={
+                        group.visible
+                          ? t('sidebar.hideGroup', 'Hide group')
+                          : t('sidebar.showGroup', 'Show group')
+                      }
+                      aria-label={
+                        group.visible
+                          ? t('sidebar.hideGroup', 'Hide group')
+                          : t('sidebar.showGroup', 'Show group')
+                      }
+                    >
+                      {!group.visible ? (
+                        <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => moveGroup(group.id, 'up')}
+                      className="h-8 w-8 p-0"
+                      title={t('common.actions.moveUp', 'Move up')}
+                      disabled={index === 0}
+                      aria-label={t('common.actions.moveUp', 'Move up')}
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => moveGroup(group.id, 'down')}
+                      className="h-8 w-8 p-0"
+                      title={t('common.actions.moveDown', 'Move down')}
+                      disabled={index === sortedGroups.length - 1}
+                      aria-label={t('common.actions.moveDown', 'Move down')}
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    {group.isCustom && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeCustomGroup(group.id)}
+                        className="h-8 w-8 p-0"
+                        title={t('sidebar.deleteGroup', 'Delete group')}
+                        aria-label={t('sidebar.deleteGroup', 'Delete group')}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  className={`grid gap-2 pl-4 ${group.collapsed ? 'hidden' : ''} ${!group.visible ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  {group.items.map((item, itemIndex) => {
+                    const IconComponent = getIconComponent(item.icon)
+                    const isHidden = config.hiddenItems.includes(item.id)
+                    const isPinned = config.pinnedItems.includes(item.id)
+                    const isRemovable =
+                      item.type === 'apiGroup' || item.type === 'customResource'
+                    const title = item.titleKey
+                      ? t(item.titleKey, { defaultValue: item.titleKey })
+                      : ''
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          'flex flex-col gap-3 rounded border p-2 transition-colors sm:flex-row sm:items-center sm:justify-between',
+                          isHidden ? 'bg-muted/10 opacity-50' : 'bg-background',
+                          draggedItemId === item.id && 'opacity-60'
+                        )}
+                        onDragOver={(event) =>
+                          handleItemDragOver(event, group.id)
+                        }
+                        onDrop={(event) =>
+                          handleItemDrop(event, group.id, itemIndex)
+                        }
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            draggable
+                            onDragStart={(event) =>
+                              handleItemDragStart(event, item.id)
+                            }
+                            onDragEnd={handleItemDragEnd}
+                            className="size-8 cursor-grab p-0 text-muted-foreground active:cursor-grabbing"
+                            title={t('sidebar.dragItem', 'Drag item')}
+                            aria-label={t('sidebar.dragItem', 'Drag item')}
+                          >
+                            <GripVertical className="h-3.5 w-3.5" />
+                          </Button>
+                          <IconComponent className="h-4 w-4 text-sidebar-primary" />
+                          <span className="text-sm">{title}</span>
+                          {item.type === 'apiGroup' && (
+                            <Badge variant="outline" className="text-xs">
+                              {t('sidebar.apiGroup', 'API Group')}
+                            </Badge>
+                          )}
+                          {isPinned && (
+                            <Badge variant="secondary" className="text-xs">
+                              <Pin className="h-3 w-3 mr-1" />
+                              {t('sidebar.pinned', 'Pinned')}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1 self-end sm:self-auto">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleItemPin(item.id)}
+                            className={`h-8 w-8 p-0 ${isPinned ? 'text-primary' : 'text-muted-foreground'}`}
+                            title={
+                              isPinned
+                                ? t('sidebar.unpin', 'Unpin')
+                                : t('sidebar.pinToTop', 'Pin to top')
+                            }
+                            aria-label={
+                              isPinned
+                                ? t('sidebar.unpin', 'Unpin')
+                                : t('sidebar.pinToTop', 'Pin to top')
+                            }
+                          >
+                            {isPinned ? (
+                              <PinOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Pin className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                          {isRemovable ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                removeItemFromGroup(group.id, item.id)
+                              }
+                              className="h-8 w-8 p-0"
+                              title={t(
+                                'sidebar.removeFromGroup',
+                                'Remove from group'
+                              )}
+                              aria-label={t(
+                                'sidebar.removeFromGroup',
+                                'Remove from group'
+                              )}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleItemVisibility(item.id)}
+                              className="h-8 w-8 p-0"
+                              title={
+                                isHidden
+                                  ? t('common.actions.show', 'Show')
+                                  : t('common.actions.hide', 'Hide')
+                              }
+                              aria-label={
+                                isHidden
+                                  ? t('sidebar.showItem', 'Show item')
+                                  : t('sidebar.hideItem', 'Hide item')
+                              }
+                            >
+                              {isHidden ? (
+                                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {group.isCustom && (
+                    <div className="flex flex-col gap-2 rounded border bg-muted/5 p-2 sm:flex-row">
+                      <CRDSelector
+                        selectedCRD={selectedCRD?.name || ''}
+                        onCRDChange={(crdName, kind) =>
+                          setSelectedCRD({
+                            name: crdName,
+                            kind: kind,
+                          })
+                        }
+                        onAPIGroupAdd={(groupName) =>
+                          addAPIGroupToGroup(group.id, groupName)
+                        }
+                        addedAPIGroups={group.items.flatMap((item) =>
+                          item.type === 'apiGroup' ? [item.apiGroup] : []
+                        )}
+                        placeholder={t(
+                          'sidebar.crdToAddPlaceholder',
+                          'Select a CRD to add...'
+                        )}
+                      />
+                      <Button
+                        onClick={() => handleAddCRDToGroup(group.id)}
+                        disabled={!selectedCRD}
+                        size="sm"
+                        className="gap-2"
+                        title={t('sidebar.addCRDToGroup', 'Add to group')}
+                      >
+                        <Plus className="h-4 w-4" />
+                        {t('common.actions.add', 'Add')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div className="space-y-3 p-4 border rounded-md bg-muted/10">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <FolderPlus className="h-4 w-4" />
+                {t('common.actions.createGroup', 'Create New Group')}
+              </Label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  placeholder={t('sidebar.groupNamePlaceholder', 'Group name')}
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleCreateGroup()
+                    }
+                  }}
+                />
+                <Button
+                  onClick={handleCreateGroup}
+                  disabled={!newGroupName.trim()}
+                  aria-label={t(
+                    'common.actions.createGroup',
+                    'Create New Group'
+                  )}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 border-t bg-muted/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6 sm:pt-4">
+        <Button variant="outline" onClick={resetConfig} className="gap-2">
+          <RotateCcw className="h-4 w-4" />
+          {t('sidebar.resetToDefault', 'Reset to Default')}
+        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {canPublish && hasPublishedGlobalSidebarPreference && (
+            <Button
+              variant="outline"
+              onClick={handleUnsetGlobalSidebar}
+              disabled={isPublishingGlobal || isClearingGlobal}
+            >
+              {t('sidebar.unsetGlobal', 'Unset global sidebar')}
+            </Button>
+          )}
+          {canPublish && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="inline-flex"
+                  tabIndex={isSetAsGlobalDisabled ? 0 : undefined}
+                >
+                  <Button
+                    variant="outline"
+                    onClick={handleSetAsGlobalSidebar}
+                    disabled={isSetAsGlobalDisabled}
+                    aria-describedby="set-global-sidebar-description"
+                  >
+                    {t('sidebar.setAsGlobal', 'Set as global sidebar')}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent
+                id="set-global-sidebar-description"
+                side="top"
+                className="max-w-xs text-pretty"
+              >
+                {t(
+                  'sidebar.setAsGlobalDescription',
+                  'Apply the current layout to everyone who has not customized their own sidebar yet. Anyone with a personal layout keeps it.'
+                )}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {/* 内嵌形态没有对话框可关，隐藏「完成」按钮（改动即时保存）。 */}
+          {!inline && (
+            <Button
+              onClick={() => {
+                handleOpenChange(false)
+              }}
+            >
+              {t('common.actions.done', 'Done')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </>
+  )
+
+  if (inline) {
+    return <div className="rounded-lg border">{content}</div>
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <DropdownMenuItem
-          className="cursor-pointer"
-          onSelect={(e) => {
-            e.preventDefault()
-            setOpen(true)
-          }}
-        >
-          <PanelLeftOpen className="h-4 w-4" />
-          <span>
-            {t('common.actions.customizeSidebar', 'Customize Sidebar')}
-          </span>
-          {hasUpdate && (
-            <span className="ml-auto size-2 rounded-full bg-red-500" />
-          )}
-        </DropdownMenuItem>
+        {trigger ?? (
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onSelect={(e) => {
+              e.preventDefault()
+              setOpen(true)
+            }}
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+            <span>
+              {t('common.actions.customizeSidebar', 'Customize Sidebar')}
+            </span>
+            {hasUpdate && (
+              <span className="ml-auto size-2 rounded-full bg-red-500" />
+            )}
+          </DropdownMenuItem>
+        )}
       </DialogTrigger>
 
       <DialogContent className="!max-w-4xl max-h-[calc(100dvh-1rem)] p-0">
@@ -335,393 +768,7 @@ export function SidebarCustomizer({
             {t('common.actions.customizeSidebar', 'Customize Sidebar')}
           </DialogTitle>
         </DialogHeader>
-
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto px-4 max-h-[calc(100dvh-10rem)] sm:px-6"
-        >
-          <div className="space-y-6 pb-6">
-            {pinnedItems.length > 0 && (
-              <>
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <Pin className="h-4 w-4" />
-                    {t('sidebar.pinnedItems', 'Pinned Items')} (
-                    {pinnedItems.length})
-                  </Label>
-                  <div className="space-y-2">
-                    {pinnedItems.map((item) => {
-                      const IconComponent = getIconComponent(item.icon)
-                      const title = item.titleKey
-                        ? t(item.titleKey, { defaultValue: item.titleKey })
-                        : ''
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex flex-col gap-3 rounded-md border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <IconComponent className="h-4 w-4 text-sidebar-primary" />
-                            <span className="text-sm">{title}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {t('sidebar.pinned', 'Pinned')}
-                            </Badge>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleItemPin(item.id)}
-                            className="h-8 w-8 p-0"
-                            aria-label="Unpin"
-                          >
-                            <PinOff className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-                <Separator />
-              </>
-            )}
-
-            <div className="space-y-4">
-              <Label className="text-sm font-medium">
-                {t('sidebar.menuGroups', 'Menu Groups')}
-              </Label>
-
-              {sortedGroups.map((group, index) => (
-                <div
-                  key={group.id}
-                  className={cn(
-                    '-m-2 space-y-3 rounded-md border border-transparent p-2',
-                    dragOverGroupId === group.id && 'border-primary bg-muted/30'
-                  )}
-                  onDragOver={(event) => handleGroupDragOver(event, group.id)}
-                  onDragLeave={(event) => handleGroupDragLeave(event, group.id)}
-                  onDrop={(event) => handleGroupDrop(event, group.id)}
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-sm font-medium">
-                        {group.nameKey
-                          ? t(group.nameKey, { defaultValue: group.nameKey })
-                          : ''}
-                      </h4>
-                      {group.isCustom && (
-                        <Badge variant="outline" className="text-xs">
-                          Custom
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className="text-xs">
-                        {
-                          group.items.filter(
-                            (item) => !config.hiddenItems.includes(item.id)
-                          ).length
-                        }
-                        /{group.items.length}
-                      </Badge>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleGroupCollapse(group.id)}
-                        className="h-8 px-2 text-xs"
-                      >
-                        {group.collapsed
-                          ? t('common.actions.expand', 'Expand')
-                          : t('common.actions.collapse', 'Collapse')}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleGroupVisibility(group.id)}
-                        className="h-8 w-8 p-0"
-                        title={group.visible ? 'Hide' : 'Show'}
-                        aria-label={group.visible ? 'Hide group' : 'Show group'}
-                      >
-                        {!group.visible ? (
-                          <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                        ) : (
-                          <Eye className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => moveGroup(group.id, 'up')}
-                        className="h-8 w-8 p-0"
-                        title={t('common.actions.moveUp', 'Move up')}
-                        disabled={index === 0}
-                        aria-label={t('common.actions.moveUp', 'Move up')}
-                      >
-                        <ArrowUp className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => moveGroup(group.id, 'down')}
-                        className="h-8 w-8 p-0"
-                        title={t('common.actions.moveDown', 'Move down')}
-                        disabled={index === sortedGroups.length - 1}
-                        aria-label={t('common.actions.moveDown', 'Move down')}
-                      >
-                        <ArrowDown className="h-3.5 w-3.5" />
-                      </Button>
-                      {group.isCustom && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeCustomGroup(group.id)}
-                          className="h-8 w-8 p-0"
-                          title="Delete custom group"
-                          aria-label="Delete custom group"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div
-                    className={`grid gap-2 pl-4 ${group.collapsed ? 'hidden' : ''} ${!group.visible ? 'opacity-50 pointer-events-none' : ''}`}
-                  >
-                    {group.items.map((item, itemIndex) => {
-                      const IconComponent = getIconComponent(item.icon)
-                      const isHidden = config.hiddenItems.includes(item.id)
-                      const isPinned = config.pinnedItems.includes(item.id)
-                      const isRemovable =
-                        item.type === 'apiGroup' ||
-                        item.type === 'customResource'
-                      const title = item.titleKey
-                        ? t(item.titleKey, { defaultValue: item.titleKey })
-                        : ''
-
-                      return (
-                        <div
-                          key={item.id}
-                          className={cn(
-                            'flex flex-col gap-3 rounded border p-2 transition-colors sm:flex-row sm:items-center sm:justify-between',
-                            isHidden
-                              ? 'bg-muted/10 opacity-50'
-                              : 'bg-background',
-                            draggedItemId === item.id && 'opacity-60'
-                          )}
-                          onDragOver={(event) =>
-                            handleItemDragOver(event, group.id)
-                          }
-                          onDrop={(event) =>
-                            handleItemDrop(event, group.id, itemIndex)
-                          }
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              draggable
-                              onDragStart={(event) =>
-                                handleItemDragStart(event, item.id)
-                              }
-                              onDragEnd={handleItemDragEnd}
-                              className="size-8 cursor-grab p-0 text-muted-foreground active:cursor-grabbing"
-                              title={t('sidebar.dragItem', 'Drag item')}
-                              aria-label={t('sidebar.dragItem', 'Drag item')}
-                            >
-                              <GripVertical className="h-3.5 w-3.5" />
-                            </Button>
-                            <IconComponent className="h-4 w-4 text-sidebar-primary" />
-                            <span className="text-sm">{title}</span>
-                            {item.type === 'apiGroup' && (
-                              <Badge variant="outline" className="text-xs">
-                                {t('sidebar.apiGroup', 'API Group')}
-                              </Badge>
-                            )}
-                            {isPinned && (
-                              <Badge variant="secondary" className="text-xs">
-                                <Pin className="h-3 w-3 mr-1" />
-                                {t('sidebar.pinned', 'Pinned')}
-                              </Badge>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1 self-end sm:self-auto">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleItemPin(item.id)}
-                              className={`h-8 w-8 p-0 ${isPinned ? 'text-primary' : 'text-muted-foreground'}`}
-                              title={isPinned ? 'Unpin' : 'Pin to top'}
-                              aria-label={isPinned ? 'Unpin' : 'Pin to top'}
-                            >
-                              {isPinned ? (
-                                <PinOff className="h-3.5 w-3.5" />
-                              ) : (
-                                <Pin className="h-3.5 w-3.5" />
-                              )}
-                            </Button>
-                            {isRemovable ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  removeItemFromGroup(group.id, item.id)
-                                }
-                                className="h-8 w-8 p-0"
-                                title="Remove from group"
-                                aria-label="Remove from group"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleItemVisibility(item.id)}
-                                className="h-8 w-8 p-0"
-                                title={isHidden ? 'Show' : 'Hide'}
-                                aria-label={
-                                  isHidden ? 'Show item' : 'Hide item'
-                                }
-                              >
-                                {isHidden ? (
-                                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-
-                    {group.isCustom && (
-                      <div className="flex flex-col gap-2 rounded border bg-muted/5 p-2 sm:flex-row">
-                        <CRDSelector
-                          selectedCRD={selectedCRD?.name || ''}
-                          onCRDChange={(crdName, kind) =>
-                            setSelectedCRD({
-                              name: crdName,
-                              kind: kind,
-                            })
-                          }
-                          onAPIGroupAdd={(groupName) =>
-                            addAPIGroupToGroup(group.id, groupName)
-                          }
-                          addedAPIGroups={group.items.flatMap((item) =>
-                            item.type === 'apiGroup' ? [item.apiGroup] : []
-                          )}
-                          placeholder="Select CRD to add..."
-                        />
-                        <Button
-                          onClick={() => handleAddCRDToGroup(group.id)}
-                          disabled={!selectedCRD}
-                          size="sm"
-                          className="gap-2"
-                          title="Add CRD to group"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Add
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <Separator />
-
-            <div className="space-y-4">
-              <div className="space-y-3 p-4 border rounded-md bg-muted/10">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <FolderPlus className="h-4 w-4" />
-                  {t('common.actions.createGroup', 'Create New Group')}
-                </Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    placeholder={t(
-                      'sidebar.groupNamePlaceholder',
-                      'Group name'
-                    )}
-                    value={newGroupName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleCreateGroup()
-                      }
-                    }}
-                  />
-                  <Button
-                    onClick={handleCreateGroup}
-                    disabled={!newGroupName.trim()}
-                    aria-label={t(
-                      'common.actions.createGroup',
-                      'Create New Group'
-                    )}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 border-t bg-muted/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6 sm:pt-4">
-          <Button variant="outline" onClick={resetConfig} className="gap-2">
-            <RotateCcw className="h-4 w-4" />
-            {t('sidebar.resetToDefault', 'Reset to Default')}
-          </Button>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {user?.isAdmin() && hasPublishedGlobalSidebarPreference && (
-              <Button
-                variant="outline"
-                onClick={handleUnsetGlobalSidebar}
-                disabled={isPublishingGlobal || isClearingGlobal}
-              >
-                {t('sidebar.unsetGlobal', 'Unset global sidebar')}
-              </Button>
-            )}
-            {user?.isAdmin() && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="inline-flex"
-                    tabIndex={isSetAsGlobalDisabled ? 0 : undefined}
-                  >
-                    <Button
-                      variant="outline"
-                      onClick={handleSetAsGlobalSidebar}
-                      disabled={isSetAsGlobalDisabled}
-                      aria-describedby="set-global-sidebar-description"
-                    >
-                      {t('sidebar.setAsGlobal', 'Set as global sidebar')}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent
-                  id="set-global-sidebar-description"
-                  side="top"
-                  className="max-w-xs text-pretty"
-                >
-                  {t(
-                    'sidebar.setAsGlobalDescription',
-                    'Apply the current layout to all non-admin users and admins without a personal sidebar configuration. Admins with a personal configuration keep their own layout.'
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            <Button
-              onClick={() => {
-                handleOpenChange(false)
-              }}
-            >
-              {t('common.actions.done', 'Done')}
-            </Button>
-          </div>
-        </div>
+        {content}
       </DialogContent>
     </Dialog>
   )

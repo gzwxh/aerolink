@@ -1,42 +1,42 @@
 import { ObjectMeta } from 'kubernetes-types/meta/v1'
 
 export interface Gateway {
-  /** APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources */
+  /** APIVersion 定义该对象表示的版本化 schema。服务器应把可识别的 schema 转换为最新的内部值，并可能拒绝不可识别的值。更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources */
   apiVersion?: 'gateway.networking.k8s.io/v1'
-  /** Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds */
+  /** Kind 是表示该对象所对应 REST 资源的字符串值。服务器可以从客户端提交请求的端点推断出来。不可更新。使用驼峰命名。更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds */
   kind?: 'Gateway'
-  /** Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata */
+  /** 标准的对象元数据。更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata */
   metadata?: ObjectMeta
-  /** spec is the desired state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status */
+  /** spec 是 Ingress 的期望状态。更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status */
   spec?: GatewaySpec
 }
 
 export interface GatewaySpec {
-  /** gatewayClassName is the name of the GatewayClass that this Gateway is using. This field is immutable. */
+  /** gatewayClassName 是该 Gateway 使用的 GatewayClass 名称。该字段不可变。 */
   gatewayClassName?: string
 }
 
 export interface HTTPRoute {
-  /** APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources */
+  /** APIVersion 定义该对象表示的版本化 schema。服务器应把可识别的 schema 转换为最新的内部值，并可能拒绝不可识别的值。更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources */
   apiVersion?: 'gateway.networking.k8s.io/v1'
-  /** Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds */
+  /** Kind 是表示该对象所对应 REST 资源的字符串值。服务器可以从客户端提交请求的端点推断出来。不可更新。使用驼峰命名。更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds */
   kind?: 'HTTPRoute'
-  /** Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata */
+  /** 标准的对象元数据。更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata */
   metadata?: ObjectMeta
-  /** spec is the desired state of the HTTPRoute. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status */
+  /** spec 是 HTTPRoute 的期望状态。更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status */
   spec?: HTTPRouteSpec
 }
 
 export interface HTTPRouteSpec {
-  /** hostnames is a list of hostnames that this HTTPRoute matches. If empty, the HTTPRoute matches all hostnames. */
+  /** hostnames 是该 HTTPRoute 匹配的主机名列表。为空时，该 HTTPRoute 匹配所有主机名。 */
   hostnames?: string[]
-  /** parentRefs is a list of references to Gateways that this HTTPRoute is attached to. */
+  /** parentRefs 是该 HTTPRoute 所挂载到的 Gateway 引用列表。 */
   parentRefs?: {
-    /** name is the name of the Gateway that this HTTPRoute is attached to. */
+    /** name 是该 HTTPRoute 所挂载到的 Gateway 名称。 */
     name: string
-    /** namespace is the namespace of the Gateway that this HTTPRoute is attached to. If not specified, the Gateway is assumed to be in the same namespace as the HTTPRoute. */
+    /** namespace 是该 HTTPRoute 所挂载到的 Gateway 所在命名空间。未指定时，假定 Gateway 与该 HTTPRoute 在同一命名空间。 */
     namespace?: string
-    /** sectionName is the name of the section within the Gateway that this HTTPRoute is attached to. If not specified, the HTTPRoute is attached to the default section of the Gateway. */
+    /** sectionName 是该 HTTPRoute 所挂载到的 Gateway 内部区段名称。未指定时，该 HTTPRoute 挂载到 Gateway 的默认区段。 */
     sectionName?: string
   }[]
 }

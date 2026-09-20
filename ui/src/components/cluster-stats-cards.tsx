@@ -44,15 +44,21 @@ export function ClusterStatsCards({
   }
 
   const statsConfig = [
-    {
-      label: t('nav.nodes'),
-      value: stats.totalNodes,
-      subValue: stats.readyNodes,
-      icon: IconServer,
-      color: 'text-blue-600 dark:text-blue-400',
-      bgColor: 'bg-blue-50 dark:bg-blue-950/50',
-      routePath: '/nodes',
-    },
+    // 受限账号（只统计得到授权命名空间）不展示节点卡片：节点数属于集群级容量数据，
+    // 后端在这种情况下也不会返回它。
+    ...(stats.scoped
+      ? []
+      : [
+          {
+            label: t('nav.nodes'),
+            value: stats.totalNodes,
+            subValue: stats.readyNodes,
+            icon: IconServer,
+            color: 'text-blue-600 dark:text-blue-400',
+            bgColor: 'bg-blue-50 dark:bg-blue-950/50',
+            routePath: '/nodes',
+          },
+        ]),
     {
       label: t('nav.pods'),
       value: stats.totalPods,
@@ -81,52 +87,62 @@ export function ClusterStatsCards({
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-      {statsConfig.map((stat) => {
-        const Icon = stat.icon
-        return (
-          <Card key={stat.label} className="@container/card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                    <Icon className={`size-6 ${stat.color}`} />
-                  </div>
-                  <div>
-                    <CardDescription>{stat.label}</CardDescription>
-                    <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                      {stat.routePath ? (
-                        <Link
-                          to={stat.routePath}
-                          className="hover:text-primary/80 hover:underline transition-colors cursor-pointer"
-                        >
-                          {stat.value}
-                        </Link>
-                      ) : (
-                        stat.value
-                      )}
-                    </CardTitle>
-                    <div className="text-sm text-muted-foreground">
-                      {stat.subValue === undefined ||
-                      stat.subValue === stat.value ? (
-                        <div className="flex items-center gap-1">
-                          <IconCircleCheckFilled className="size-4 text-green-600 flex-shrink-0" />
-                          All ready
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <IconAlertCircleFilled className="size-4 text-red-600 flex-shrink-0" />
-                          {stat.value - (stat.subValue || 0)} Not Ready
-                        </div>
-                      )}
+    <div className="flex flex-col gap-3">
+      {stats.scoped && (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            'overview.scopedHint',
+            'Showing the namespaces you have access to; cluster capacity is not included.'
+          )}
+        </p>
+      )}
+      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+        {statsConfig.map((stat) => {
+          const Icon = stat.icon
+          return (
+            <Card key={stat.label} className="@container/card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                      <Icon className={`size-6 ${stat.color}`} />
+                    </div>
+                    <div>
+                      <CardDescription>{stat.label}</CardDescription>
+                      <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                        {stat.routePath ? (
+                          <Link
+                            to={stat.routePath}
+                            className="hover:text-primary/80 hover:underline transition-colors cursor-pointer"
+                          >
+                            {stat.value}
+                          </Link>
+                        ) : (
+                          stat.value
+                        )}
+                      </CardTitle>
+                      <div className="text-sm text-muted-foreground">
+                        {stat.subValue === undefined ||
+                        stat.subValue === stat.value ? (
+                          <div className="flex items-center gap-1">
+                            <IconCircleCheckFilled className="size-4 text-green-600 flex-shrink-0" />
+                            All ready
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <IconAlertCircleFilled className="size-4 text-red-600 flex-shrink-0" />
+                            {stat.value - (stat.subValue || 0)} Not Ready
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </CardHeader>
-          </Card>
-        )
-      })}
+              </CardHeader>
+            </Card>
+          )
+        })}
+      </div>
     </div>
   )
 }

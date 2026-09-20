@@ -5,11 +5,22 @@ import { fetchAPI } from './shared'
 
 export type NotificationChannel = 'inapp' | 'email'
 export type NotificationReceiverType = 'user' | 'email'
+// NotificationEvent 与后端 model.NotificationEventList() 保持一致；事件列表不在前端硬编码，
+// 订阅下拉直接取「通知模板」接口返回的事件（见 SubscriptionList）。
 export type NotificationEvent =
   | 'remote_login'
   | 'password_expiring'
   | 'password_expired'
   | 'inactive_user_disabled'
+  | 'password_reset_by_admin'
+  | 'mfa_reset_by_admin'
+  | 'account_disabled'
+  | 'account_enabled'
+  | 'account_expiring'
+  | 'role_assigned'
+  | 'role_unassigned'
+  | 'session_takeover'
+  | 'mail_delivery_failed'
   | 'test'
 
 export interface NotificationSetting {
@@ -70,14 +81,7 @@ export interface NotificationListPayload {
   size: number
 }
 
-export const notificationEvents: NotificationEvent[] = [
-  'remote_login',
-  'password_expiring',
-  'password_expired',
-  'inactive_user_disabled',
-]
-
-/* ------------------------------------------------------------------ setting */
+/* ------------------------------------------------------------- 设置 */
 
 export const fetchNotificationSetting = async () => {
   return fetchAPI<NotificationSettingPayload>('/admin/notification-setting/')
@@ -91,8 +95,7 @@ export const useNotificationSetting = () => {
   })
 }
 
-export interface UpdateNotificationSettingPayload
-  extends Partial<NotificationSetting> {
+export interface UpdateNotificationSettingPayload extends Partial<NotificationSetting> {
   smtpPassword?: string
   clearSmtpPassword?: boolean
 }
@@ -119,7 +122,7 @@ export const runDailyNotificationChecks = async () => {
   )
 }
 
-/* ---------------------------------------------------------------- templates */
+/* ------------------------------------------------------------- 模板 */
 
 export const useNotificationTemplates = () => {
   return useQuery({
@@ -156,7 +159,7 @@ export const useUpdateNotificationTemplate = () => {
   })
 }
 
-/* ------------------------------------------------------------ subscriptions */
+/* --------------------------------------------------------- 订阅关系 */
 
 export const fetchNotificationSubscriptions = async (event?: string) => {
   const query = event ? `?event=${encodeURIComponent(event)}` : ''
@@ -196,7 +199,9 @@ export const useCreateNotificationSubscription = () => {
   return useMutation({
     mutationFn: createNotificationSubscription,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-subscriptions'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notification-subscriptions'],
+      })
     },
   })
 }
@@ -210,7 +215,9 @@ export const useUpdateNotificationSubscription = () => {
         { enabled }
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-subscriptions'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notification-subscriptions'],
+      })
     },
   })
 }
@@ -221,12 +228,14 @@ export const useDeleteNotificationSubscription = () => {
     mutationFn: (id: number) =>
       apiClient.delete<void>(`/admin/notification-subscriptions/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-subscriptions'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notification-subscriptions'],
+      })
     },
   })
 }
 
-/* -------------------------------------------------------------------- inbox */
+/* ------------------------------------------------------------- 收件箱 */
 
 export const fetchNotifications = async (page = 1, size = 20) => {
   return fetchAPI<NotificationListPayload>(
@@ -234,7 +243,11 @@ export const fetchNotifications = async (page = 1, size = 20) => {
   )
 }
 
-export const useNotifications = (page: number, size: number, enabled: boolean) => {
+export const useNotifications = (
+  page: number,
+  size: number,
+  enabled: boolean
+) => {
   return useQuery({
     queryKey: ['notifications', page, size],
     queryFn: () => fetchNotifications(page, size),
@@ -264,13 +277,32 @@ export const markNotificationsRead = async (payload: {
   return apiClient.post<{ message: string }>('/notifications/read', payload)
 }
 
+export const clearNotifications = async () => {
+  return apiClient.post<{ message: string }>('/notifications/clear')
+}
+
+export const useClearNotifications = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: clearNotifications,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notifications-unread-count'],
+      })
+    },
+  })
+}
+
 export const useMarkNotificationsRead = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: markNotificationsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({
+        queryKey: ['notifications-unread-count'],
+      })
     },
   })
 }

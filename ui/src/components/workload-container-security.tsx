@@ -1,7 +1,7 @@
 import { useId } from 'react'
+import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 
-import type { Container } from 'kubernetes-types/core/v1'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { CommandListInput } from '@/components/command-list-input'
 
 type OnUpdate = (updates: Partial<Container>) => void
 
@@ -23,7 +24,10 @@ const intOrUndefined = (value: string) => {
 }
 
 const splitList = (value: string) =>
-  value.split(',').map((s) => s.trim()).filter(Boolean)
+  value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
 
 /** 资源: GPU limit (nvidia.com/gpu). */
 export function GpuEditor({
@@ -48,7 +52,9 @@ export function GpuEditor({
           placeholder="1"
           className="h-9"
         />
-        <span className="flex items-center text-xs text-muted-foreground">GPU</span>
+        <span className="flex items-center text-xs text-muted-foreground">
+          GPU
+        </span>
       </div>
     </div>
   )
@@ -67,9 +73,9 @@ function BoolGroup({
   yesLabel: string
   disabled?: boolean
 }) {
-  // Each BoolGroup needs its own radio group name: deriving it from the label
-  // made every group share one name, so the browser treated them as a single
-  // group and the choices interfered with each other.
+  // 每个 BoolGroup 需要各自的单选组名：从标签推导会让
+  // 所有组共用一个名字，于是浏览器把它们当成同一个
+  // 组，各选项互相干扰。
   const groupName = useId()
   const current = value === true ? 'yes' : 'no'
   return (
@@ -125,20 +131,25 @@ export function SecurityContextEditor({
       </h4>
       <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
         <div className="min-h-[88px] space-y-1.5">
-          <Label className="text-xs font-normal text-muted-foreground">Privileged</Label>
+          <Label className="text-xs font-normal text-muted-foreground">
+            Privileged
+          </Label>
           <BoolGroup
             value={sc.privileged}
             onChange={(v) =>
               patch({
                 privileged: v,
-                // A privileged container already has unrestricted access, so
-                // allowPrivilegeEscalation is meaningless: clear it instead of
-                // emitting a conflicting security context.
+                // 特权容器本就拥有不受限的访问权限，因此
+                // allowPrivilegeEscalation 没有意义：清掉它，
+                // 而不是输出一个自相矛盾的安全上下文。
                 ...(v ? { allowPrivilegeEscalation: undefined } : {}),
               })
             }
             noLabel={t('containerAdv.no', '否')}
-            yesLabel={t('containerAdv.privilegedYes', '是：容器可以完全访问主机')}
+            yesLabel={t(
+              'containerAdv.privilegedYes',
+              '是：容器可以完全访问主机'
+            )}
           />
         </div>
         <div className="min-h-[88px] space-y-1.5">
@@ -149,7 +160,10 @@ export function SecurityContextEditor({
             value={privileged ? undefined : sc.allowPrivilegeEscalation}
             onChange={(v) => patch({ allowPrivilegeEscalation: v })}
             noLabel={t('containerAdv.no', '否')}
-            yesLabel={t('containerAdv.escalationYes', '是：容器可以获得比其父进程更多的权限')}
+            yesLabel={t(
+              'containerAdv.escalationYes',
+              '是：容器可以获得比其父进程更多的权限'
+            )}
             disabled={privileged}
           />
           {privileged && (
@@ -169,7 +183,10 @@ export function SecurityContextEditor({
             value={sc.runAsNonRoot}
             onChange={(v) => patch({ runAsNonRoot: v })}
             noLabel={t('containerAdv.no', '否')}
-            yesLabel={t('containerAdv.nonRootYes', '是：容器必须以非 Root 用户的身份运行')}
+            yesLabel={t(
+              'containerAdv.nonRootYes',
+              '是：容器必须以非 Root 用户的身份运行'
+            )}
           />
         </div>
         <div className="min-h-[88px] space-y-1.5">
@@ -180,16 +197,23 @@ export function SecurityContextEditor({
             value={sc.readOnlyRootFilesystem}
             onChange={(v) => patch({ readOnlyRootFilesystem: v })}
             noLabel={t('containerAdv.no', '否')}
-            yesLabel={t('containerAdv.readOnlyYes', '是：容器只有一个只读的根文件系统')}
+            yesLabel={t(
+              'containerAdv.readOnlyYes',
+              '是：容器只有一个只读的根文件系统'
+            )}
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs font-normal text-muted-foreground">{t('containerAdv.runAsUser', '以用户 ID 运行')}</Label>
+          <Label className="text-xs font-normal text-muted-foreground">
+            {t('containerAdv.runAsUser', '以用户 ID 运行')}
+          </Label>
           <Input
             type="number"
             min={0}
             value={sc.runAsUser ?? ''}
-            onChange={(e) => patch({ runAsUser: intOrUndefined(e.target.value) })}
+            onChange={(e) =>
+              patch({ runAsUser: intOrUndefined(e.target.value) })
+            }
             className="h-9"
           />
         </div>
@@ -255,7 +279,9 @@ export function StorageMountsEditor({
 
   const updateMount = (index: number, patch: Record<string, unknown>) => {
     onUpdate({
-      volumeMounts: mounts.map((m, i) => (i === index ? { ...m, ...patch } : m)),
+      volumeMounts: mounts.map((m, i) =>
+        i === index ? { ...m, ...patch } : m
+      ),
     })
   }
 
@@ -274,9 +300,14 @@ export function StorageMountsEditor({
           key={index}
           className="grid grid-cols-[150px_minmax(0,1fr)_120px_70px_auto] items-center gap-2"
         >
-          <Select value={mount.name} onValueChange={(v) => updateMount(index, { name: v })}>
+          <Select
+            value={mount.name}
+            onValueChange={(v) => updateMount(index, { name: v })}
+          >
             <SelectTrigger className="h-9">
-              <SelectValue placeholder={t('workloadWizard.volumeName', '卷名称')} />
+              <SelectValue
+                placeholder={t('workloadWizard.volumeName', '卷名称')}
+              />
             </SelectTrigger>
             <SelectContent>
               {volumes.map((v) => (
@@ -294,7 +325,9 @@ export function StorageMountsEditor({
           />
           <Input
             value={mount.subPath || ''}
-            onChange={(e) => updateMount(index, { subPath: e.target.value || undefined })}
+            onChange={(e) =>
+              updateMount(index, { subPath: e.target.value || undefined })
+            }
             placeholder={t('containerAdv.subPath', '子路径')}
             className="h-9"
           />
@@ -303,7 +336,9 @@ export function StorageMountsEditor({
               type="checkbox"
               className="h-3.5 w-3.5 accent-primary"
               checked={!!mount.readOnly}
-              onChange={(e) => updateMount(index, { readOnly: e.target.checked })}
+              onChange={(e) =>
+                updateMount(index, { readOnly: e.target.checked })
+              }
             />
             {t('containerAdv.readOnly', '只读')}
           </label>
@@ -312,7 +347,9 @@ export function StorageMountsEditor({
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={() => onUpdate({ volumeMounts: mounts.filter((_, i) => i !== index) })}
+            onClick={() =>
+              onUpdate({ volumeMounts: mounts.filter((_, i) => i !== index) })
+            }
           >
             ✕
           </Button>
@@ -356,7 +393,6 @@ export function LifecycleEditor({
       httpGet?: { path?: string; port?: number }
     }
     const handler = (lifecycle[kind] as HookHandler | undefined) || undefined
-    const execCommand = (handler?.exec?.command || []).join(' ')
     const httpPath = handler?.httpGet?.path || ''
     const httpPort =
       typeof handler?.httpGet?.port === 'number' ? handler.httpGet.port : ''
@@ -379,7 +415,10 @@ export function LifecycleEditor({
             ['http', t('containerAdv.hookHttp', '创建 HTTP 请求')],
           ] as const
         ).map(([value, label]) => (
-          <label key={value} className="flex cursor-pointer items-center gap-2 text-xs">
+          <label
+            key={value}
+            className="flex cursor-pointer items-center gap-2 text-xs"
+          >
             <input
               type="radio"
               name={`lifecycle-${kind}`}
@@ -387,7 +426,8 @@ export function LifecycleEditor({
               checked={type === value}
               onChange={() => {
                 if (value === 'none') return setHandler(undefined)
-                if (value === 'exec') return setHandler({ exec: { command: [] } })
+                if (value === 'exec')
+                  return setHandler({ exec: { command: [] } })
                 return setHandler({ httpGet: { path: '/', port: 80 } })
               }}
             />
@@ -395,11 +435,9 @@ export function LifecycleEditor({
           </label>
         ))}
         {handler?.exec && (
-          <Input
-            value={execCommand}
-            onChange={(e) =>
-              setHandler({ exec: { command: e.target.value.split(' ').filter(Boolean) } })
-            }
+          <CommandListInput
+            value={handler?.exec?.command || []}
+            onChange={(command) => setHandler({ exec: { command } })}
             placeholder="echo hello"
             className="h-8 max-w-md"
           />

@@ -29,14 +29,14 @@ export interface PortForm {
   serviceType: PortServiceType
   servicePort?: number
   nodePort?: number
-  /** Static ClusterIP (must be inside the service CIDR). */
+  /** 静态 ClusterIP（必须位于 Service CIDR 内）。 */
   clusterIP?: string
 }
 
 export interface ContainerConfig {
   name: string
   image: string
-  /** Init containers run before app containers. */
+  /** init 容器在应用容器之前运行。 */
   isInit?: boolean
   port?: number
   ports: PortForm[]
@@ -46,12 +46,12 @@ export interface ContainerConfig {
     limits: { cpu: string; memory: string }
   }
   volumeMounts?: VolumeMountForm[]
-  /** NVIDIA GPU limit (nvidia.com/gpu). */
+  /** NVIDIA GPU 上限（nvidia.com/gpu）。 */
   gpu?: string
   container: Container
 }
 
-/** Node scheduling panel state (Tencent-cloud style). */
+/** 节点调度面板状态（腾讯云风格）。 */
 export interface SchedulingRule {
   id: number
   key: string
@@ -89,7 +89,7 @@ export const defaultSchedulingConfig = (): SchedulingConfig => ({
   priorityClassName: '',
 })
 
-/** Row ids for scheduling entries rebuilt by the YAML parser. */
+/** YAML 解析器重建的调度条目的行 id。 */
 let schedulingFormIdSeq = 0
 const nextSchedulingFormId = () => ++schedulingFormIdSeq
 
@@ -111,12 +111,7 @@ export const emptyToleration = (): TolerationForm => ({
 })
 
 export type SchedulingOperator =
-  | 'In'
-  | 'NotIn'
-  | 'Exists'
-  | 'DoesNotExist'
-  | 'Gt'
-  | 'Lt'
+  'In' | 'NotIn' | 'Exists' | 'DoesNotExist' | 'Gt' | 'Lt'
 
 export const SCHEDULING_OPERATORS: Array<{
   value: SchedulingOperator
@@ -131,7 +126,7 @@ export const SCHEDULING_OPERATORS: Array<{
 ]
 
 export interface StrategyForm {
-  /** Deployment: RollingUpdate | Recreate; StatefulSet: RollingUpdate | OnDelete (mapped to Recreate). */
+  /** Deployment：RollingUpdate | Recreate；StatefulSet：RollingUpdate | OnDelete（映射为 Recreate）。 */
   type: 'RollingUpdate' | 'Recreate'
   maxSurge: string
   maxSurgeUnit: 'count' | 'percent'
@@ -140,7 +135,7 @@ export interface StrategyForm {
   minReadySeconds: string
   revisionHistoryLimit: string
   progressDeadlineSeconds: string
-  /** StatefulSet rolling update partition. */
+  /** StatefulSet 滚动更新 partition。 */
   partition: string
 }
 
@@ -160,15 +155,15 @@ export interface NetworkForm {
   dnsPolicy: string
   hostname: string
   subdomain: string
-  /** podSpec.hostNetwork — "host network" mode. */
+  /** podSpec.hostNetwork —— "host network" 模式。 */
   hostNetwork: boolean
-  /** podSpec.dnsConfig */
+  /** podSpec.dnsConfig（DNS 配置） */
   dnsConfig: {
     nameservers: string[]
     searches: string[]
     options: Array<{ name: string; value: string }>
   }
-  /** podSpec.hostAliases (hostnames kept as a comma-separated string). */
+  /** podSpec.hostAliases（主机名保持为逗号分隔的字符串）。 */
   hostAliases: Array<{ ip: string; hostnames: string }>
 }
 
@@ -188,9 +183,9 @@ export interface PodSpecForm {
   /** Simple nodeSelector key/value pairs (Pod 调度). */
   nodeSelectorPairs: Array<{ key: string; value: string }>
   terminationGracePeriodSeconds: string
-  /** securityContext.fsGroup */
+  /** securityContext.fsGroup（文件系统组） */
   fsGroup: string
-  /** podSpec.imagePullSecrets (secret names). */
+  /** podSpec.imagePullSecrets（secret 名称）。 */
   imagePullSecrets?: string[]
 }
 
@@ -199,7 +194,7 @@ export interface DeploymentFormData {
   namespace: string
   description: string
   replicas: number
-  /** Headless service name, required by StatefulSet. */
+  /** Headless Service 名称，StatefulSet 必需。 */
   serviceName?: string
 
   labels: Array<{ key: string; value: string }>
@@ -209,17 +204,12 @@ export interface DeploymentFormData {
   strategy: StrategyForm
   podSpec: PodSpecForm
   containers: ContainerConfig[]
-  /** Cron expression, only used when generating a CronJob. */
+  /** Cron 表达式，仅在生成 CronJob 时使用。 */
   schedule?: string
 }
 
 export type WorkloadResourceType =
-  | 'deployments'
-  | 'pods'
-  | 'daemonsets'
-  | 'statefulsets'
-  | 'jobs'
-  | 'cronjobs'
+  'deployments' | 'pods' | 'daemonsets' | 'statefulsets' | 'jobs' | 'cronjobs'
 
 export const createDefaultContainer = (index: number): ContainerConfig => ({
   name: `container-${index + 1}`,
@@ -421,7 +411,7 @@ const parseValues = (raw: string): string[] =>
     .map((v) => v.trim())
     .filter(Boolean)
 
-/** Build the pod-spec scheduling fields from the panel state. */
+/** 依据面板状态构造 pod spec 的调度字段。 */
 export function buildSchedulingPodSpec(
   scheduling: SchedulingConfig
 ): Record<string, unknown> {
@@ -485,7 +475,7 @@ const formatQuantity = (value: string, unit: 'count' | 'percent') => {
   return unit === 'percent' ? `${num}%` : num
 }
 
-/** Build Service document(s) from port rows that requested a Service. */
+/** 依据请求创建 Service 的端口行，构造 Service 文档。 */
 export function buildServiceDocuments(
   formData: DeploymentFormData
 ): Array<Record<string, unknown>> {
@@ -498,7 +488,7 @@ export function buildServiceDocuments(
   )
   if (!labelsObj.app && formData.name) labelsObj.app = formData.name
 
-  // Group service-exposing port rows by their service type.
+  // 按 service 类型对需要暴露 Service 的端口行分组。
   const groups = new Map<
     Exclude<PortServiceType, 'none'>,
     Array<Record<string, unknown>>
@@ -507,9 +497,7 @@ export function buildServiceDocuments(
     for (const p of c.ports) {
       if (p.serviceType === 'none' || !p.containerPort) continue
       const group = groups.get(p.serviceType) || []
-      const exists = group.some(
-        (gp) => gp.containerPort === p.containerPort
-      )
+      const exists = group.some((gp) => gp.containerPort === p.containerPort)
       if (exists) continue
       group.push({
         ...(p.name && { name: p.name }),
@@ -537,8 +525,8 @@ export function buildServiceDocuments(
       selector: labelsObj,
       ports: portsOut,
     }
-    // Static ClusterIP allocation (kubernetes.io cluster-ip-allocation):
-    // users may pin a specific IP inside the service CIDR.
+    // 静态 ClusterIP 分配（kubernetes.io cluster-ip-allocation）：
+    // 用户可以在 Service CIDR 内指定一个具体 IP。
     if (type === 'ClusterIP') {
       const staticIP = ports.find(
         (p) => typeof p.clusterIP === 'string' && p.clusterIP.trim()
@@ -609,7 +597,9 @@ export function generateWorkloadYaml(
   const scheduling = formData.podSpec?.scheduling
   const network = formData.podSpec?.network
   const schedulingFields = scheduling ? buildSchedulingPodSpec(scheduling) : {}
-  const nodeSelectorObj = pairsToRecord(formData.podSpec?.nodeSelectorPairs || [])
+  const nodeSelectorObj = pairsToRecord(
+    formData.podSpec?.nodeSelectorPairs || []
+  )
   const gracePeriod = Number(formData.podSpec?.terminationGracePeriodSeconds)
   const fsGroup = Number(formData.podSpec?.fsGroup)
   const initContainerConfigs = formData.containers.filter((c) => c.isInit)
@@ -673,6 +663,12 @@ export function generateWorkloadYaml(
     metadata: podMeta,
     spec: podSpec,
   }
+  // Job / CronJob 的 Pod 模板不接受默认的 Always：不显式声明 restartPolicy 时
+  // API 会以 `restartPolicy: Required value: valid values: "OnFailure", "Never"` 拒绝创建。
+  const batchPodTemplate = {
+    ...podTemplate,
+    spec: { ...podSpec, restartPolicy: 'OnFailure' },
+  }
 
   let manifest: Record<string, unknown>
   switch (resourceType) {
@@ -680,8 +676,8 @@ export function generateWorkloadYaml(
       manifest = {
         apiVersion: 'v1',
         kind: 'Pod',
-        // A bare Pod has no pod template, so the Pod-level labels/annotations
-        // configured in the panel apply to the Pod metadata itself.
+        // 裸 Pod 没有 pod 模板，因此面板中配置的 Pod 级标签/注解
+        // 会直接作用于 Pod 自身的元数据。
         metadata: {
           ...metadata,
           labels: {
@@ -712,7 +708,7 @@ export function generateWorkloadYaml(
     case 'statefulsets': {
       const ssStrategy = formData.strategy
       const partition = Number(ssStrategy?.partition)
-      // The panel reuses `Recreate` for StatefulSet's OnDelete.
+      // 面板复用 Recreate 来表达 StatefulSet 的 OnDelete。
       const updateType =
         ssStrategy?.type === 'Recreate' ? 'OnDelete' : 'RollingUpdate'
       manifest = {
@@ -741,7 +737,7 @@ export function generateWorkloadYaml(
         apiVersion: 'batch/v1',
         kind: 'Job',
         metadata,
-        spec: { template: podTemplate },
+        spec: { template: batchPodTemplate },
       }
       break
     case 'cronjobs':
@@ -751,7 +747,7 @@ export function generateWorkloadYaml(
         metadata,
         spec: {
           schedule: formData.schedule || '*/5 * * * *',
-          jobTemplate: { spec: { template: podTemplate } },
+          jobTemplate: { spec: { template: batchPodTemplate } },
         },
       }
       break
@@ -766,7 +762,10 @@ export function generateWorkloadYaml(
         if (strategy.type === 'Recreate') {
           spec.strategy = { type: 'Recreate' }
         } else {
-          const maxSurge = formatQuantity(strategy.maxSurge, strategy.maxSurgeUnit)
+          const maxSurge = formatQuantity(
+            strategy.maxSurge,
+            strategy.maxSurgeUnit
+          )
           const maxUnavailable = formatQuantity(
             strategy.maxUnavailable,
             strategy.maxUnavailableUnit
@@ -812,8 +811,8 @@ export function generateWorkloadYaml(
     }
   }
 
-  // When a Service is requested, emit a multi-document YAML:
-  // the Service first, then the workload, applied in one shot.
+  // 请求 Service 时输出多文档 YAML：
+  // 先是 Service，然后才是工作负载，一次性应用。
   const serviceDocs = buildServiceDocuments(formData)
   if (serviceDocs.length > 0) {
     const dumpOpts = { indent: 2, noRefs: true, lineWidth: -1 }
@@ -824,7 +823,7 @@ export function generateWorkloadYaml(
 
   return yaml.dump(manifest, { indent: 2, noRefs: true })
 }
-/** Best-effort reverse parse: workload YAML (+ Service docs) -> form state. */
+/** 尽力而为的反向解析：工作负载 YAML（+ Service 文档）-> 表单状态。 */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function parseYamlToFormData(
   content: string,
@@ -847,7 +846,10 @@ export function parseYamlToFormData(
 
     const metadata = (workload.metadata || {}) as Record<string, unknown>
     const labelsObj = (metadata.labels || {}) as Record<string, string>
-    const annotationsObj = (metadata.annotations || {}) as Record<string, string>
+    const annotationsObj = (metadata.annotations || {}) as Record<
+      string,
+      string
+    >
     const toPairs = (obj: Record<string, string>) =>
       Object.entries(obj).map(([key, value]) => ({ key, value }))
 
@@ -872,8 +874,14 @@ export function parseYamlToFormData(
         })),
         pullPolicy: c.imagePullPolicy || 'IfNotPresent',
         resources: {
-          requests: { cpu: res.requests?.cpu || '', memory: res.requests?.memory || '' },
-          limits: { cpu: res.limits?.cpu || '', memory: res.limits?.memory || '' },
+          requests: {
+            cpu: res.requests?.cpu || '',
+            memory: res.requests?.memory || '',
+          },
+          limits: {
+            cpu: res.limits?.cpu || '',
+            memory: res.limits?.memory || '',
+          },
         },
         gpu:
           res.limits?.['nvidia.com/gpu'] === undefined ||
@@ -914,7 +922,7 @@ export function parseYamlToFormData(
       ),
     ]
 
-    // Deployment.spec.strategy / StatefulSet.spec.updateStrategy -> panel.
+    // Deployment.spec.strategy / StatefulSet.spec.updateStrategy -> 面板。
     const rawStrategy = (spec.strategy || spec.updateStrategy) as
       | {
           type?: string
@@ -969,7 +977,7 @@ export function parseYamlToFormData(
       scheduling.mode = 'specific'
       scheduling.nodeName = String(podSpecDoc.nodeName)
     } else {
-      // Node scheduling rules (nodeAffinity) -> panel terms.
+      // 节点调度规则（nodeAffinity）-> 面板条目。
       const nodeAffinity = podSpecDoc.affinity?.nodeAffinity as
         | {
             requiredDuringSchedulingIgnoredDuringExecution?: {
@@ -1002,12 +1010,13 @@ export function parseYamlToFormData(
         scheduling.terms = terms
       }
     }
-    // Tolerations + priority apply to every scheduling mode.
+    // 容忍与优先级适用于所有调度模式。
     scheduling.tolerations = ((podSpecDoc.tolerations as Array<any>) || []).map(
       (tol) => ({
         id: nextSchedulingFormId(),
         key: tol.key || '',
-        operator: tol.operator === 'Exists' ? ('Exists' as const) : ('Equal' as const),
+        operator:
+          tol.operator === 'Exists' ? ('Exists' as const) : ('Equal' as const),
         value: tol.value || '',
         effect: (tol.effect || '') as TolerationForm['effect'],
         tolerationSeconds:
@@ -1018,7 +1027,8 @@ export function parseYamlToFormData(
             : String(tol.tolerationSeconds),
       })
     )
-    scheduling.priorityClassName = (podSpecDoc.priorityClassName as string) || ''
+    scheduling.priorityClassName =
+      (podSpecDoc.priorityClassName as string) || ''
 
     const base: DeploymentFormData = {
       ...fallback,
@@ -1106,7 +1116,7 @@ export function parseYamlToFormData(
     if (resourceType === 'cronjobs' && spec.schedule)
       base.schedule = String(spec.schedule)
 
-    // Map Service docs back onto port rows.
+    // 把 Service 文档映射回端口行。
     for (const svc of docs.filter((d) => d.kind === 'Service')) {
       const svcSpec = (svc.spec || {}) as Record<string, any>
       const svcType = (svcSpec.type as PortServiceType) || 'ClusterIP'
@@ -1129,4 +1139,81 @@ export function parseYamlToFormData(
   } catch {
     return fallback
   }
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** 递归地把 overlay 叠加到 base 上；数组与标量直接替换。 */
+function overlayObject(
+  base: Record<string, unknown>,
+  overlay: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...base }
+  for (const [key, value] of Object.entries(overlay)) {
+    const current = result[key]
+    result[key] =
+      isPlainObject(value) && isPlainObject(current)
+        ? overlayObject(current, value)
+        : value
+  }
+  return result
+}
+
+/**
+ * 把表单生成的 manifest 叠加到正在编辑的线上对象之上，
+ * 使可视化表单未建模的字段（serviceAccountName、Pod 级
+ * securityContext 扩展项、topologySpreadConstraints 等）在更新后保留下来。
+ * spec.selector 在工作负载上是不可变的：它从线上对象恢复，
+ * 并让 pod 模板标签重新与它匹配。
+ */
+export function mergeEditedManifest(
+  generated: Record<string, unknown>,
+  original: Record<string, unknown>
+): Record<string, unknown> {
+  const merged = overlayObject(original, generated)
+  // Update 两者都会忽略，它们只会让 YAML 标签页显得杂乱。
+  delete merged.status
+  if (isPlainObject(merged.metadata)) delete merged.metadata.managedFields
+
+  const spec = isPlainObject(merged.spec) ? merged.spec : null
+  const selector = isPlainObject(original.spec)
+    ? original.spec.selector
+    : undefined
+  if (!spec || !isPlainObject(selector)) return merged
+
+  const template = isPlainObject(spec.template) ? spec.template : {}
+  const templateMetadata = isPlainObject(template.metadata)
+    ? template.metadata
+    : {}
+  spec.selector = selector
+  spec.template = {
+    ...template,
+    metadata: {
+      ...templateMetadata,
+      labels: {
+        ...(isPlainObject(templateMetadata.labels)
+          ? templateMetadata.labels
+          : {}),
+        ...(isPlainObject(selector.matchLabels) ? selector.matchLabels : {}),
+      },
+    },
+  }
+  return merged
+}
+
+/**
+ * 可选地把生成 manifest 的第一个文档与线上对象合并，
+ * 其余文档（例如生成的 Service）保持原样。
+ */
+export function applyEditedManifest(
+  content: string,
+  original: Record<string, unknown>
+): string {
+  const docs = yaml.loadAll(content)
+  if (docs.length === 0 || !isPlainObject(docs[0])) return content
+  return [
+    yaml.dump(mergeEditedManifest(docs[0], original)),
+    ...docs.slice(1).map((doc) => yaml.dump(doc)),
+  ].join('---\n')
 }

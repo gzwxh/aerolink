@@ -33,7 +33,7 @@ function getNodeStatus(node: NodeWithMetrics): string {
   const conditions = node.status?.conditions || []
   const isUnschedulable = node.spec?.unschedulable || false
 
-  // Check if node is ready first
+  // 先检查节点是否就绪
   const readyCondition = conditions.find((c) => c.type === 'Ready')
   const isReady = readyCondition?.status === 'True'
 
@@ -78,7 +78,7 @@ function getNodeRoles(node: NodeWithMetrics): string[] {
   const labels = node.metadata?.labels || {}
   const roles: string[] = []
 
-  // Check for common node role labels
+  // 检查常见的节点角色标签
   if (
     labels['node-role.kubernetes.io/master'] !== undefined ||
     labels['node-role.kubernetes.io/control-plane'] !== undefined
@@ -109,7 +109,7 @@ function getNodeRoles(node: NodeWithMetrics): string[] {
   return roles // Do not assume a default role if none are found
 }
 
-// Prefer Internal IP, then External IP, then fallback to hostname
+// 优先 Internal IP，其次 External IP，最后回退到主机名
 function getNodeIP(node: NodeWithMetrics): string {
   const addresses = node.status?.addresses || []
 
@@ -142,14 +142,14 @@ function formatNodeTaint(taint: {
   return `${taint.key}${value}:${taint.effect ?? ''}`
 }
 
-// NodeLabelsAndTaints renders the node's taints and labels in a full-width
-// details row. Labels beyond the display limit collapse behind "Show more".
+// NodeLabelsAndTaints 在全宽详情行中渲染节点的污点与标签。
+// 超出展示上限的标签会折叠到"显示更多"之后。
 function NodeLabelsAndTaints({ node }: { node: NodeWithMetrics }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
 
-  // System-managed keys (kubernetes.io/...) are created automatically and are
-  // noise for operators, so they are hidden from this summary.
+  // 系统管理的键（kubernetes.io/...）是自动创建的，对运维来说是
+  // 噪音，因此在这个摘要中隐藏。
   const isSystemKey = (key: string) => key.includes('kubernetes.io')
 
   const taints = (node.spec?.taints ?? []).filter(
@@ -348,13 +348,13 @@ export function NodeListPage() {
     ]
   )
 
-  // Row-level drain opens the same options dialog as the toolbar action.
+  // 行级 drain 打开与工具栏操作相同的选项对话框。
   const handleRowDrain = useCallback((node: NodeWithMetrics) => {
     setDrainTargets([node])
     setShowDrainDialog(true)
   }, [])
 
-  // Define columns for the node table
+  // 定义节点表格的列
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {

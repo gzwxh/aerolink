@@ -75,7 +75,7 @@ export const fetchResources = <T>(
   return fetchAPI<T>(endpoint)
 }
 
-// Search API types
+// 搜索 API 类型
 export interface SearchResult {
   id: string
   name: string
@@ -89,7 +89,7 @@ export interface SearchResponse {
   total: number
 }
 
-// Global search API
+// 全局搜索 API
 export const globalSearch = async (
   query: string,
   options?: {
@@ -119,7 +119,7 @@ export const globalSearch = async (
     total: response.total ?? results.length,
   }
 }
-// Scale deployment API
+// 扩缩容 Deployment API
 export const scaleDeployment = async (
   namespace: string,
   name: string,
@@ -442,7 +442,7 @@ export const useHelmChartContent = (
   })
 }
 
-// Node operation APIs
+// 节点操作 API
 export const drainNode = async (
   nodeName: string,
   options: {
@@ -450,7 +450,7 @@ export const drainNode = async (
     gracePeriod: number
     deleteLocalData: boolean
     ignoreDaemonsets: boolean
-    /** Abort the drain after this many seconds (0 = no timeout). */
+    /** 超过这么多秒后中止 drain（0 = 不超时）。 */
     timeout?: number
   }
 ): Promise<{
@@ -602,13 +602,32 @@ export const restartWorkload = async (
   })
 }
 
+/**
+ * 服务端在创建命名空间后回传的「自动归属」结论（见 pkg/bindinggroups/auto_bind.go）。
+ * 只有命名空间的创建响应会带这个字段。
+ */
+export interface NamespaceBindingOutcome {
+  /** 是否已把该命名空间纳入创建者的授权范围。 */
+  bound: boolean
+  method?: 'binding_group' | 'role_namespaces'
+  bindingId?: number
+  bindingName?: string
+  roles?: string[]
+  reason?:
+    'administrator' | 'no_candidates' | 'multiple_binding_groups' | 'conflict'
+}
+
 export const createResource = async <T extends ResourceType>(
   resource: T,
   namespace: string | undefined,
   body: ResourceTypeMap[T]
-): Promise<ResourceTypeMap[T]> => {
+): Promise<
+  ResourceTypeMap[T] & { namespaceBinding?: NamespaceBindingOutcome }
+> => {
   const endpoint = `/${resource}/${namespace || '_all'}`
-  return await apiClient.post<ResourceTypeMap[T]>(`${endpoint}`, body)
+  return await apiClient.post<
+    ResourceTypeMap[T] & { namespaceBinding?: NamespaceBindingOutcome }
+  >(`${endpoint}`, body)
 }
 
 export const deleteResource = async <T extends ResourceType>(
@@ -631,7 +650,7 @@ export const deleteResource = async <T extends ResourceType>(
   await apiClient.delete(endpoint)
 }
 
-// Apply resource from YAML
+// 从 YAML 应用资源
 export interface ApplyResourceRequest {
   yaml: string
   namespace?: string
@@ -721,7 +740,7 @@ export const useResources = <T extends ResourceType>(
   })
 }
 
-// Hook: SSE watch for resource lists (initial snapshot + ADDED/MODIFIED/DELETED)
+// Hook：资源列表的 SSE watch（初始快照 + ADDED/MODIFIED/DELETED）
 export function useResourcesWatch<T extends ResourceType>(
   resource: T,
   namespace?: string,
@@ -737,6 +756,8 @@ export function useResourcesWatch<T extends ResourceType>(
   const [error, setError] = useState<Error | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const eventSourceRef = useRef<EventSource | null>(null)
+  // refetch 的重连定时器：不记下来就可能在组件卸载后又建一条连接。
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const buildUrl = useCallback(() => {
     const ns = namespace || '_all'
@@ -759,6 +780,10 @@ export function useResourcesWatch<T extends ResourceType>(
   ])
 
   const disconnect = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
       eventSourceRef.current = null
@@ -769,6 +794,8 @@ export function useResourcesWatch<T extends ResourceType>(
     disconnect()
     setData(undefined)
     if (options?.enabled === false) return
+    // 快照要等 watch 的首批事件才会到，这之前保持加载态（否则首屏会先闪一下空状态）。
+    setIsLoading(true)
     const url = buildUrl()
     setError(null)
     setIsConnected(false)
@@ -789,6 +816,7 @@ export function useResourcesWatch<T extends ResourceType>(
 
       const upsert = (obj: string) => {
         const object = JSON.parse(obj) as ResourceTypeMap[T]
+        setIsLoading(false)
         setData((prev) => {
           const arr = prev ? [...prev] : []
           const key = getKey(object)
@@ -803,6 +831,7 @@ export function useResourcesWatch<T extends ResourceType>(
 
       const remove = (obj: string) => {
         const object = JSON.parse(obj) as ResourceTypeMap[T]
+        setIsLoading(false)
         setData((prev) => {
           const arr = prev ? [...prev] : []
           const key = getKey(object)
@@ -838,6 +867,8 @@ export function useResourcesWatch<T extends ResourceType>(
       })
 
       es.onerror = () => {
+        // 连接失败时也要收起加载态，否则会一直停在「加载中」。
+        setIsLoading(false)
         setIsConnected(false)
       }
     } catch (err) {
@@ -849,13 +880,14 @@ export function useResourcesWatch<T extends ResourceType>(
 
   const refetch = useCallback(() => {
     disconnect()
-    setTimeout(connect, 100)
+    reconnectTimerRef.current = setTimeout(connect, 100)
   }, [disconnect, connect])
 
   useEffect(() => {
     if (options?.enabled === false) return
     connect()
     return () => {
+      // disconnect 会一并清掉尚在等待的重连定时器。
       disconnect()
     }
   }, [connect, disconnect, options?.enabled])
@@ -897,7 +929,7 @@ export const useResource = <T extends keyof ResourceTypeMap>(
     staleTime: options?.staleTime || 1000,
   })
 }
-// Pod describe API
+// Pod describe 接口
 export const fetchDescribe = async (
   resourceType: ResourceType,
   name: string,
@@ -1069,7 +1101,7 @@ export function useRelatedResources(
     placeholderData: (prev) => prev,
   })
 }
-// Resource History API
+// 资源历史 API
 export const fetchResourceHistory = (
   resourceType: string,
   namespace: string,

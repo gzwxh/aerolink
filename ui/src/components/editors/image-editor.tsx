@@ -13,14 +13,11 @@ interface ImageEditorProps {
   onUpdate: (updates: Partial<Container>) => void
 }
 
-export function ImageEditor({
-  container,
-  onUpdate,
-}: ImageEditorProps) {
+export function ImageEditor({ container, onUpdate }: ImageEditorProps) {
   const { t } = useTranslation()
   const [showTagDropdown, setShowTagDropdown] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  // Unique per instance: several containers render an ImageEditor at once.
+  // 每个实例唯一：同时会有多个容器渲染 ImageEditor。
   const inputId = useId()
 
   const getImagePrefix = useCallback((image: string) => {

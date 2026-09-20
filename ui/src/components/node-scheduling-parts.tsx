@@ -2,18 +2,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { useResources } from '@/lib/api'
-import {
-  SchedulingConfig,
-  SchedulingTerm,
-  TolerationForm,
-  emptySchedulingTerm,
-  emptyToleration,
-  genSchedulingId,
-} from '@/components/editors/deployment-form'
-import {
-  SCHEDULING_OPERATORS,
-  type SchedulingOperator,
-} from '@/components/editors/deployment-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  emptySchedulingTerm,
+  emptyToleration,
+  genSchedulingId,
+  SCHEDULING_OPERATORS,
+  SchedulingConfig,
+  SchedulingTerm,
+  TolerationForm,
+  type SchedulingOperator,
+} from '@/components/editors/deployment-form'
 
 type SchedulingRuleOp = SchedulingOperator
 
@@ -36,7 +34,7 @@ const EFFECTS: Array<{ value: TolerationForm['effect']; label: string }> = [
   { value: 'NoExecute', label: 'NoExecute' },
 ]
 
-/** Shared hook: sorted node names of the current cluster. */
+/** 共享 hook：当前集群排序后的节点名。 */
 function useNodeNames(): string[] {
   const { data: nodes = [] } = useResources<'nodes'>('nodes', undefined, {
     staleTime: 60_000,
@@ -188,7 +186,10 @@ export function NodeSchedulingBasic({
                                   expressions: tm.expressions.map((ex) =>
                                     ex.id !== expr.id
                                       ? ex
-                                      : { ...ex, operator: v as SchedulingRuleOp }
+                                      : {
+                                          ...ex,
+                                          operator: v as SchedulingRuleOp,
+                                        }
                                   ),
                                 }
                           ),
@@ -379,9 +380,7 @@ export function TolerationsEditor({
               onChange({
                 ...config,
                 tolerations: config.tolerations.map((item) =>
-                  item.id !== tol.id
-                    ? item
-                    : { ...item, value: e.target.value }
+                  item.id !== tol.id ? item : { ...item, value: e.target.value }
                 ),
               })
             }
@@ -402,7 +401,8 @@ export function TolerationsEditor({
                     ? item
                     : {
                         ...item,
-                        effect: v === 'all' ? '' : (v as TolerationForm['effect']),
+                        effect:
+                          v === 'all' ? '' : (v as TolerationForm['effect']),
                       }
                 ),
               })

@@ -67,7 +67,7 @@ export interface LogViewerProps {
 }
 
 const ANSI_CSS = generateAnsiCss()
-// Monaco's NeverGrowsWhenTypingAtEdges value, kept numeric to avoid importing Monaco at runtime.
+// Monaco 的 NeverGrowsWhenTypingAtEdges 取值，保持为数字以避免在运行时引入 Monaco。
 const NEVER_GROWS_WHEN_TYPING_AT_EDGES: editor.TrackedRangeStickiness = 1
 const TERMINAL_THEME_KEYS = Object.keys(TERMINAL_THEMES) as TerminalTheme[]
 const TERMINAL_THEME_ENTRIES = Object.entries(TERMINAL_THEMES) as Array<
@@ -199,19 +199,19 @@ export function LogViewer({
     })
   }, [containers, selectedContainerName])
 
-  // Handle theme change and persist to localStorage
+  // 处理主题变更并持久化到 localStorage
   const handleThemeChange = useCallback((theme: TerminalTheme) => {
     setLogTheme(theme)
     localStorage.setItem('log-viewer-theme', theme)
   }, [])
 
-  // Handle font size change and persist to localStorage
+  // 处理字号变更并持久化到 localStorage
   const handleFontSizeChange = useCallback((size: number) => {
     setFontSize(size)
     localStorage.setItem('log-viewer-font-size', size.toString())
   }, [])
 
-  // Handle tail lines change and persist to localStorage
+  // 处理 tail 行数变更并持久化到 localStorage
   const handleTailLinesChange = useCallback((lines: number) => {
     setTailLines(lines)
     if (lines !== -1) {
@@ -219,7 +219,7 @@ export function LogViewer({
     }
   }, [])
 
-  // Quick theme cycling function
+  // 快速循环切换主题的函数
   const cycleTheme = useCallback(() => {
     const currentIndex = TERMINAL_THEME_KEYS.indexOf(logTheme)
     const nextIndex = (currentIndex + 1) % TERMINAL_THEME_KEYS.length
@@ -271,7 +271,7 @@ export function LogViewer({
 
     const newDecorations: editor.IModelDeltaDecoration[] = []
 
-    // Starting position for decorations
+    // 装饰的起始位置
     let currentLine = lineCount
     let currentColumn = lineMaxColumn
 
@@ -324,12 +324,12 @@ export function LogViewer({
     setLogCount((count) => count + 1)
   }, [])
 
-  // Handle editor mount
+  // 处理编辑器挂载
   const handleEditorMount: OnMount = useCallback(
     (editor) => {
       editorRef.current = editor
 
-      // Configure search widget
+      // 配置搜索组件
       editor.updateOptions({
         find: {
           addExtraSpaceOnTop: false,
@@ -389,7 +389,7 @@ export function LogViewer({
     ]
   )
 
-  // Use the new WebSocket logs hook
+  // 使用新的 WebSocket 日志 hook
   const {
     isLoading,
     isConnected,
@@ -402,7 +402,7 @@ export function LogViewer({
   const stopStreamingRef = useRef<() => void>(stopStreaming)
   stopStreamingRef.current = stopStreaming
 
-  // Clean up WebSocket connection when component unmounts
+  // 组件卸载时清理 WebSocket 连接
   useEffect(() => {
     return () => {
       if (stopStreamingRef.current) {
@@ -411,15 +411,15 @@ export function LogViewer({
     }
   }, [])
 
-  // Stop previous stream when critical parameters change
+  // 关键参数变化时停止上一条流
   useEffect(() => {
-    // Clear the editor BEFORE the new stream starts. We deliberately
-    // clear here (in response to a real parameter change) instead of on
-    // every WebSocket onopen, so that the historical tail buffer delivered
-    // by the server immediately after connect is preserved.
+    // 在新流开始之前清空编辑器。这里有意
+    // 在真实的参数变化时清空，而不是在每次
+    // WebSocket onopen 时清空，这样服务端在连接后
+    // 立即下发的历史 tail 缓冲才能被保留。
     cleanLog()
 
-    // Show reconnecting state when parameters change
+    // 参数变化时显示重连状态
     setIsReconnecting(true)
   }, [
     selectedContainer,
@@ -430,7 +430,7 @@ export function LogViewer({
     cleanLog,
   ])
 
-  // Hide reconnecting state when loading completes
+  // 加载完成后隐藏重连状态
   useEffect(() => {
     if (!isLoading) {
       const timer = setTimeout(() => setIsReconnecting(false), 200)
@@ -465,7 +465,7 @@ export function LogViewer({
     }
   }, [])
 
-  // Handle fullscreen toggle
+  // 处理全屏切换
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen((prev) => !prev)
   }, [])
@@ -484,10 +484,10 @@ export function LogViewer({
     })
   }, [])
 
-  // Handle keyboard shortcuts
+  // 处理快捷键
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + F to open Monaco search
+      // Ctrl/Cmd + F 打开 Monaco 搜索
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault()
         editorRef.current?.getAction('actions.find')?.run()
@@ -495,12 +495,12 @@ export function LogViewer({
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         toggleFullscreen()
       }
-      // Alt/Option + Z to toggle word wrap
+      // Alt/Option + Z 切换自动换行
       if (e.altKey && (e.key === 'z' || e.key === 'Z' || e.key === 'Ω')) {
         e.preventDefault()
         toggleWordWrap()
       }
-      // Font size shortcuts
+      // 字号快捷键
       if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
         e.preventDefault()
         handleFontSizeChange(Math.min(24, fontSize + 1))
@@ -527,11 +527,12 @@ export function LogViewer({
       <CardHeader>
         <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-lg">Logs</CardTitle>
+            <CardTitle className="text-lg">{t('logViewer.title')}</CardTitle>
             <CardDescription>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span>
-                  {logCount} lines {filterTerm.length > 0 && `(filtered)`}
+                  {t('logViewer.lineCount', { count: logCount })}{' '}
+                  {filterTerm.length > 0 && t('logViewer.filtered')}
                 </span>
                 <ConnectionIndicator
                   isConnected={isConnected}
@@ -541,9 +542,11 @@ export function LogViewer({
                   downloadSpeed={downloadSpeed}
                   uploadSpeed={0}
                 />
-                {isLoading && <span>Loading...</span>}
+                {isLoading && <span>{t('common.messages.loading')}</span>}
                 {isReconnecting && (
-                  <span className="text-blue-600">Reconnecting...</span>
+                  <span className="text-blue-600">
+                    {t('logViewer.reconnecting')}
+                  </span>
                 )}
               </div>
             </CardDescription>
@@ -606,7 +609,9 @@ export function LogViewer({
               <PopoverContent className="w-80" align="end">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="tail-lines">Tail Lines</Label>
+                    <Label htmlFor="tail-lines">
+                      {t('logViewer.tailLines')}
+                    </Label>
                     <Select
                       value={tailLines.toString()}
                       onValueChange={(value) =>
@@ -622,13 +627,17 @@ export function LogViewer({
                         <SelectItem value="200">200</SelectItem>
                         <SelectItem value="500">500</SelectItem>
                         <SelectItem value="1000">1000</SelectItem>
-                        <SelectItem value="-1">All</SelectItem>
+                        <SelectItem value="-1">
+                          {t('logViewer.allLines')}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="timestamps">Show Timestamps</Label>
+                    <Label htmlFor="timestamps">
+                      {t('logViewer.showTimestamps')}
+                    </Label>
                     <Switch
                       id="timestamps"
                       checked={timestamps}
@@ -637,7 +646,9 @@ export function LogViewer({
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="previous">Previous Container</Label>
+                    <Label htmlFor="previous">
+                      {t('logViewer.previousContainer')}
+                    </Label>
                     <Switch
                       id="previous"
                       checked={previous && !selectedContainerIsEphemeral}
@@ -647,7 +658,7 @@ export function LogViewer({
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="word-wrap">Word Wrap</Label>
+                    <Label htmlFor="word-wrap">{t('logViewer.wordWrap')}</Label>
                     <Switch
                       id="word-wrap"
                       checked={wordWrap}
@@ -656,7 +667,9 @@ export function LogViewer({
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="show-line-numbers">Show Line Numbers</Label>
+                    <Label htmlFor="show-line-numbers">
+                      {t('logViewer.showLineNumbers')}
+                    </Label>
                     <Switch
                       id="show-line-numbers"
                       checked={showLineNumbers}
@@ -667,7 +680,9 @@ export function LogViewer({
                   {/* Log Theme Selector */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="log-theme">Log Theme</Label>
+                      <Label htmlFor="log-theme">
+                        {t('logViewer.logTheme')}
+                      </Label>
                       <Select
                         value={logTheme}
                         onValueChange={handleThemeChange}
@@ -691,7 +706,9 @@ export function LogViewer({
                   {/* Font Size Selector */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="font-size">Font Size</Label>
+                      <Label htmlFor="font-size">
+                        {t('logViewer.fontSize')}
+                      </Label>
                       <Select
                         value={fontSize.toString()}
                         onValueChange={(value) =>
@@ -721,41 +738,41 @@ export function LogViewer({
                   {/* Keyboard Shortcuts */}
                   <div className="space-y-2 pt-2 border-t">
                     <Label className="text-xs font-medium text-muted-foreground">
-                      Keyboard Shortcuts
+                      {t('logViewer.keyboardShortcuts')}
                     </Label>
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <div className="flex justify-between">
-                        <span>Open Search</span>
+                        <span>{t('logViewer.shortcuts.openSearch')}</span>
                         <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
                           Ctrl+F
                         </kbd>
                       </div>
                       <div className="flex justify-between">
-                        <span>Toggle Fullscreen</span>
+                        <span>{t('logViewer.shortcuts.toggleFullscreen')}</span>
                         <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
                           Ctrl+Enter
                         </kbd>
                       </div>
                       <div className="flex justify-between">
-                        <span>Toggle Word Wrap</span>
+                        <span>{t('logViewer.shortcuts.toggleWordWrap')}</span>
                         <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
                           Alt+Z
                         </kbd>
                       </div>
                       <div className="flex justify-between">
-                        <span>Increase Font Size</span>
+                        <span>{t('logViewer.shortcuts.increaseFontSize')}</span>
                         <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
                           Ctrl++
                         </kbd>
                       </div>
                       <div className="flex justify-between">
-                        <span>Decrease Font Size</span>
+                        <span>{t('logViewer.shortcuts.decreaseFontSize')}</span>
                         <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
                           Ctrl+-
                         </kbd>
                       </div>
                       <div className="flex justify-between">
-                        <span>Reset Font Size</span>
+                        <span>{t('logViewer.shortcuts.resetFontSize')}</span>
                         <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
                           Ctrl+0
                         </kbd>
@@ -771,7 +788,7 @@ export function LogViewer({
               variant="outline"
               size="sm"
               onClick={clearLogs}
-              title="Clear logs"
+              title={t('logViewer.clearLogs')}
             >
               <IconClearAll className="h-4 w-4" />
             </Button>
@@ -792,7 +809,9 @@ export function LogViewer({
               size="sm"
               onClick={toggleFullscreen}
               title={
-                isFullscreen ? 'Exit fullscreen (ESC)' : 'Enter fullscreen'
+                isFullscreen
+                  ? t('logViewer.exitFullscreen')
+                  : t('logViewer.enterFullscreen')
               }
             >
               {isFullscreen ? (
@@ -818,7 +837,9 @@ export function LogViewer({
           theme={`log-theme-${logTheme}`}
           loading={
             <div className="flex h-full items-center justify-center">
-              <div className="text-center opacity-60">Loading editor...</div>
+              <div className="text-center opacity-60">
+                {t('common.messages.loadingEditor')}
+              </div>
             </div>
           }
           beforeMount={(monaco) => {

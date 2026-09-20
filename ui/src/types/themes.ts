@@ -1,4 +1,4 @@
-// Log theme definitions
+// 日志主题定义
 export type LogTheme =
   'classic' | 'matrix' | 'cyberpunk' | 'solarized' | 'monokai' | 'github'
 
@@ -63,7 +63,7 @@ export const LOG_THEMES: Record<
   },
 }
 
-// Terminal theme definitions
+// 终端主题定义
 export type TerminalTheme =
   'classic' | 'matrix' | 'cyberpunk' | 'solarized' | 'monokai' | 'github'
 

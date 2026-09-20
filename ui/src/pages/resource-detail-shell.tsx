@@ -1,4 +1,11 @@
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   IconCopy,
   IconLoader,
@@ -8,12 +15,12 @@ import {
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
 
 import { type ResourceType } from '@/types/api'
 import { getResourceListPath } from '@/lib/resource-catalog'
 import { getResourceMetadata } from '@/lib/resource-metadata'
-import { cn, translateError } from '@/lib/utils'
+import { useUnsavedEdits } from '@/lib/unsaved-edits'
+import { cn } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
@@ -63,15 +70,15 @@ interface ResourceDetailShellProps<T> {
   showDelete?: boolean
   showClone?: boolean
   /**
-   * Whether the YAML tab offers editing and saving. Read-only users still get
-   * the tab so they can inspect the manifest.
+   * YAML 标签页是否提供编辑与保存。只读用户仍能看到该标签页，
+   * 以便查看 manifest。
    */
   yamlEditable?: boolean
   defaultTab?: string
   /**
-   * Resource used for the permission checks; defaults to `resourceType`.
-   * Actions are gated automatically for resources Kite knows about, pass a
-   * value to force gating for others (e.g. CRDs).
+   * 用于权限校验的资源；默认为 `resourceType`。
+   * 对 Kite 已知的资源会自动做操作门控，传一个值
+   * 可以为其它资源（例如 CRD）强制开启门控。
    */
   permissionResource?: string
 }
@@ -103,6 +110,13 @@ export function ResourceDetailShell<T>({
 }: ResourceDetailShellProps<T>) {
   const { t } = useTranslation()
   const [yamlContent, setYamlContent] = useState('')
+  const [yamlDirty, setYamlDirty] = useState(false)
+  // 最近一次从服务端数据同步出来的 YAML：编辑器可能把程序化更新也回抛给
+  // onChange，只有与这份基线不同才算用户改过。
+  const syncedYamlRef = useRef('')
+  // 「有未保存草稿」的同步镜像：下面是 effect 里要同步读取它，
+  // 直接用 state 会逼着 effect 把标记放进 deps，反而让同步在草稿存在时重跑。
+  const yamlDirtyRef = useRef(false)
   const [isSavingYaml, setIsSavingYaml] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -113,9 +127,9 @@ export function ResourceDetailShell<T>({
   const navigate = useNavigate()
   const listPath = getResourceListPath(resourceType)
 
-  // Every action used to default to visible, which left read-only users with
-  // buttons the backend rejects. They are gated by default for the resources
-  // Kite knows about; unknown CRs keep the previous behaviour.
+  // 过去所有操作默认可见，导致只读用户看到后端本会拒绝的
+  // 按钮。现在对 Kite 已知的资源默认做门控；
+  // 未知的 CR 保持原有行为。
   const can = useCan()
   const permissionTarget = permissionResource ?? resourceType
   const gatePermissions =
@@ -136,10 +150,25 @@ export function ResourceDetailShell<T>({
   usePageTitle(name ? `${name} (${resourceLabel})` : resourceLabel)
 
   useEffect(() => {
-    if (data) {
-      setYamlContent(yaml.dump(data, { indent: 2 }))
-    }
+    if (!data) return
+    const dumped = yaml.dump(data, { indent: 2 })
+    syncedYamlRef.current = dumped
+    // 详情页会定时刷新数据（滚动更新期间甚至每秒一次），每次都会换掉 data。
+    // 有未保存草稿时不能把实时对象写回编辑器：那会静默冲掉正在编辑的内容，
+    // 保存下去的也变成旧对象，而且顺手清掉的「未保存」标记会让切集群确认也失效。
+    if (yamlDirtyRef.current) return
+    setYamlContent(dumped)
   }, [data])
+
+  const handleYamlChange = useCallback((value: string) => {
+    setYamlContent(value)
+    const dirty = value !== syncedYamlRef.current
+    yamlDirtyRef.current = dirty
+    setYamlDirty(dirty)
+  }, [])
+
+  // 集群切换入口据此弹「未保存」确认（见 ClusterProvider）。
+  useUnsavedEdits(yamlDirty)
 
   const handleRefresh = useCallback(async () => {
     setRefreshKey((prev) => prev + 1)
@@ -160,13 +189,16 @@ export function ResourceDetailShell<T>({
       setIsSavingYaml(true)
       try {
         await onSaveYaml(content)
-      } catch (saveError) {
-        toast.error(translateError(saveError, t))
+        // 保存成功后 data 刷新会重置基线；这里先清掉，避免刷新失败时草稿标记残留。
+        yamlDirtyRef.current = false
+        setYamlDirty(false)
+      } catch {
+        // 操作失败已由 API 客户端统一写入站内信
       } finally {
         setIsSavingYaml(false)
       }
     },
-    [onSaveYaml, t]
+    [onSaveYaml]
   )
 
   const shellContext = useMemo<ResourceDetailShellContext<T>>(
@@ -218,7 +250,7 @@ export function ResourceDetailShell<T>({
                     }
                   : undefined
               }
-              onChange={setYamlContent}
+              onChange={handleYamlChange}
               isSaving={isSavingYaml}
               fillHeight
             />
@@ -231,6 +263,7 @@ export function ResourceDetailShell<T>({
   }, [
     extraTabs,
     handleSaveYaml,
+    handleYamlChange,
     isSavingYaml,
     preYamlTabs,
     onSaveYaml,
@@ -279,8 +312,8 @@ export function ResourceDetailShell<T>({
       )
     }
 
-    // Resource deleted (or never existed): offer a way back to the list
-    // instead of a dead "retry" screen.
+    // 资源已删除（或从未存在）：提供返回列表的入口，
+    // 而不是一个死的"重试"页面。
     const errorMessage = String(
       (error as { response?: { data?: { error?: string } } })?.response?.data
         ?.error ??

@@ -40,9 +40,14 @@ interface ResourceTableViewProps<T> {
   pagination: PaginationState
   setPagination: React.Dispatch<React.SetStateAction<PaginationState>>
   shrinkFirstColumn?: boolean
+  /**
+   * 按列定义里的 `size` 固定列宽（`table-fixed`）：列宽稳定、长内容靠截断显示，
+   * 而不是由最长的那个单元格把整张表撑宽。配合单元格里的 `truncate` 使用。
+   */
+  columnSizing?: boolean
   showAllPageSize?: boolean
   pageSizeOptions?: number[]
-  /** Optional full-width details rendered in an extra row below each data row. */
+  /** 可选的全宽详情，渲染在每一行数据下方的一行里。 */
   renderRowDetails?: (row: T) => React.ReactNode
 }
 
@@ -63,6 +68,7 @@ export function ResourceTableView<T>({
   pagination,
   setPagination,
   shrinkFirstColumn = true,
+  columnSizing = false,
   showAllPageSize = true,
   pageSizeOptions = [10, 20, 50, 100],
   renderRowDetails,
@@ -193,7 +199,7 @@ export function ResourceTableView<T>({
                   : undefined
               }
             >
-              <Table>
+              <Table className={columnSizing ? 'table-fixed' : undefined}>
                 <TableHeader className="bg-muted">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
@@ -201,6 +207,11 @@ export function ResourceTableView<T>({
                         <TableHead
                           key={header.id}
                           className={index <= 1 ? 'text-left' : 'text-center'}
+                          style={
+                            columnSizing
+                              ? { width: header.getSize() }
+                              : undefined
+                          }
                         >
                           {header.isPlaceholder ? null : header.column.getCanSort() ? (
                             <Button

@@ -52,6 +52,8 @@ function SecretYamlToolbar({
   showDecodedYaml: boolean
   onToggle: (next: boolean) => void
 }) {
+  const { t } = useTranslation()
+
   useEffect(() => {
     setYamlContent(getDecodedYamlContent(secret, showDecodedYaml))
   }, [secret, setYamlContent, showDecodedYaml])
@@ -66,7 +68,9 @@ function SecretYamlToolbar({
       size="sm"
       onClick={() => onToggle(!showDecodedYaml)}
     >
-      {showDecodedYaml ? 'Show Base64' : 'Decode Values'}
+      {showDecodedYaml
+        ? t('secretDetail.showBase64', '显示 Base64')
+        : t('secretDetail.decodeValues', '解码明文')}
     </Button>
   )
 }
@@ -91,7 +95,7 @@ export function SecretDetail(props: { namespace: string; name: string }) {
 
   const handleSaveYaml = async (content: Secret) => {
     await updateResource('secrets', name, namespace, content)
-    toast.success('YAML saved successfully')
+    toast.success(t('common.messages.yamlSaved'))
     await refetch()
   }
 
@@ -101,7 +105,7 @@ export function SecretDetail(props: { namespace: string; name: string }) {
         value: 'data',
         label: (
           <>
-            Data
+            {t('common.fields.data')}
             {data && <Badge variant="secondary">{dataCount}</Badge>}
           </>
         ),
@@ -110,13 +114,13 @@ export function SecretDetail(props: { namespace: string; name: string }) {
             entries={data.data || {}}
             sensitive
             base64Encoded
-            emptyMessage="No data entries"
+            emptyMessage={t('keyValueDataViewer.noDataEntries', '暂无数据条目')}
           />
         ) : null,
       },
       {
         value: 'related',
-        label: 'Related',
+        label: t('common.tabs.related'),
         content: (
           <RelatedResourcesTable
             resource="secrets"
@@ -127,14 +131,14 @@ export function SecretDetail(props: { namespace: string; name: string }) {
       },
       {
         value: 'events',
-        label: 'Events',
+        label: t('common.tabs.events'),
         content: (
           <EventTable resource="secrets" name={name} namespace={namespace} />
         ),
       },
       {
         value: 'history',
-        label: 'History',
+        label: t('common.tabs.history'),
         content: data ? (
           <ResourceHistoryTable
             resourceType="secrets"
@@ -145,7 +149,7 @@ export function SecretDetail(props: { namespace: string; name: string }) {
         ) : null,
       },
     ],
-    [data, dataCount, name, namespace]
+    [data, dataCount, name, namespace, t]
   )
 
   return (

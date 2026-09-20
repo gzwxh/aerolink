@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -9,7 +8,6 @@ import {
   getResourceListPath,
   getResourceSingularLabel,
 } from '@/lib/resource-metadata'
-import { translateError } from '@/lib/utils'
 
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
 
@@ -32,7 +30,6 @@ export function ResourceDeleteConfirmationDialog({
 }: ResourceDeleteConfirmationDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const navigate = useNavigate()
-  const { t } = useTranslation()
 
   const handleDelete = async (force?: boolean, wait?: boolean) => {
     setIsDeleting(true)
@@ -46,9 +43,9 @@ export function ResourceDeleteConfirmationDialog({
       )
       navigate(getResourceListPath(resourceType))
     } catch (error) {
-      toast.error(translateError(error, t))
-      // The resource may already be gone (deleted concurrently or force
-      // deleted): don't leave the user on a broken detail page.
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      // 资源可能已经不存在（被并发删除或强制删除）：
+      // 不要把用户留在损坏的详情页上。
       const message = String(
         (error as { response?: { data?: { error?: string } } })?.response?.data
           ?.error ?? error
@@ -67,7 +64,8 @@ export function ResourceDeleteConfirmationDialog({
       open={open}
       onOpenChange={onOpenChange}
       resourceName={resourceName}
-      resourceType={resourceType}
+      // 用可读的 singular 标签（Helm Release 而不是 helmrelease）。
+      resourceType={getResourceSingularLabel(resourceType) || resourceType}
       onConfirm={handleDelete}
       isDeleting={isDeleting}
       namespace={namespace}

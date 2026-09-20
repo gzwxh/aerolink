@@ -27,6 +27,7 @@ import {
 } from '@tabler/icons-react'
 
 type SidebarGroupKey =
+  | 'sidebar.groups.cluster'
   | 'sidebar.groups.workloads'
   | 'sidebar.groups.traffic'
   | 'sidebar.groups.storage'
@@ -71,6 +72,8 @@ interface ResourceCatalogEntryBase {
   singular: string
   singularLabel: string
   pluralLabel: string
+  /** YAML 里的 kind。仅当它无法由 singular / singularLabel 推导时填写。 */
+  kind?: string
   shortLabel?: string
   clusterScope: boolean
   titleKey?: string
@@ -84,7 +87,8 @@ interface ResourceCatalogEntryBase {
 }
 
 export const sidebarGroupOrder = [
-  'sidebar.groups.application',
+  // 「集群」放最前：节点 / 命名空间 / 事件是集群级通用入口，比业务资源更常用。
+  'sidebar.groups.cluster',
   'sidebar.groups.workloads',
   'sidebar.groups.traffic',
   'sidebar.groups.storage',
@@ -92,6 +96,8 @@ export const sidebarGroupOrder = [
   'sidebar.groups.infrastructure',
   'sidebar.groups.security',
   'sidebar.groups.other',
+  // 「应用」（Helm）放到最底下。
+  'sidebar.groups.application',
 ] as const satisfies readonly SidebarGroupKey[]
 
 export const resourceCatalog = [
@@ -237,12 +243,14 @@ export const resourceCatalog = [
     clusterScope: true,
     titleKey: 'nav.namespaces',
     icon: 'IconBoxMultiple',
-    sidebar: { groupKey: 'sidebar.groups.infrastructure', order: 0 },
+    sidebar: { groupKey: 'sidebar.groups.cluster', order: 1 },
   },
   {
     type: 'crds',
     singular: 'crd',
     singularLabel: 'CRD',
+    // 反查作用域要用 YAML 里真正的 kind，而不是缩写。
+    kind: 'CustomResourceDefinition',
     pluralLabel: 'CRDs',
     clusterScope: true,
     titleKey: 'nav.crds',
@@ -842,7 +850,7 @@ export const resourceCatalog = [
     clusterScope: true,
     titleKey: 'nav.nodes',
     icon: 'IconServer2',
-    sidebar: { groupKey: 'sidebar.groups.infrastructure', order: 1 },
+    sidebar: { groupKey: 'sidebar.groups.cluster', order: 0 },
   },
   {
     type: 'events',
@@ -852,7 +860,7 @@ export const resourceCatalog = [
     clusterScope: false,
     titleKey: 'nav.events',
     icon: 'IconBell',
-    sidebar: { groupKey: 'sidebar.groups.other', order: 2 },
+    sidebar: { groupKey: 'sidebar.groups.cluster', order: 2 },
   },
   {
     type: 'persistentvolumes',
@@ -1072,16 +1080,39 @@ export function isClusterScopedResource(resource?: string | null) {
   return getResourceMetadata(resource)?.clusterScope ?? false
 }
 
+/**
+ * 集群级资源的 Kind（YAML 里的 kind）集合。列表页按资源类型（复数）判定作用域，
+ * 但通用 YAML apply 只能看到 Kind，所以从目录里按 singular / singularLabel 反查，
+ * 缩写与 Kind 不一致的条目由 kind 显式给出（如 CRD）。
+ * 目录里没有的 Kind 一律当作命名空间级：绝大多数 CR 都是，判错也只是多写一行
+ * metadata.namespace（后端会按自己的 RESTMapping 清掉）。
+ *
+ * 目录是 as const（保留字面量类型），这里按基础类型读才能访问可选的 kind。
+ */
+const catalogEntries: readonly ResourceCatalogEntryBase[] = resourceCatalog
+
+const clusterScopedKinds = new Set(
+  catalogEntries
+    .filter((item) => item.clusterScope)
+    .flatMap((item) => [item.singular, item.singularLabel, item.kind ?? ''])
+    .map((kind) => kind.toLowerCase())
+    .filter((kind) => kind !== '')
+)
+
+export function isClusterScopedKind(kind?: string | null) {
+  return !!kind && clusterScopedKinds.has(kind.toLowerCase())
+}
+
 export interface ResourceScopeSplit {
   namespaced: string[]
   clusterScoped: string[]
   hasWildcard: boolean
 }
 
-// splitResourcesByScope separates granted resource patterns into namespaced and
-// cluster-scoped groups so UI surfaces (namespace grants, role editor) can draw
-// the boundary that the backend applies: only namespaced resources are limited
-// by a role's namespace list.
+// splitResourcesByScope 把已授权的资源模式分成命名空间级与
+// 集群级两组，便于界面（命名空间授权、角色编辑器）画出
+// 后端所施加的边界：只有命名空间级资源会受到
+// 角色命名空间列表的限制。
 export function splitResourcesByScope(resources: string[]): ResourceScopeSplit {
   const namespaced: string[] = []
   const clusterScoped: string[] = []

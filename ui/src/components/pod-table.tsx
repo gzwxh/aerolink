@@ -22,7 +22,7 @@ export function PodTable(props: {
 }) {
   const { pods, isLoading } = props
 
-  // Pod table columns
+  // Pod 表格列
   const podColumns = useMemo(
     (): Column<PodWithMetrics>[] => [
       {

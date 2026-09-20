@@ -44,12 +44,12 @@ export function ColorThemeProvider({
   useEffect(() => {
     const root = window.document.documentElement
 
-    // Remove all color themes
+    // 移除所有配色主题
     root.classList.remove(
       ...Object.keys(colorThemes).map((theme) => `color-${theme}`)
     )
 
-    // Add the current color theme
+    // 加入当前配色主题
     root.classList.add(`color-${colorTheme}`)
   }, [colorTheme])
 

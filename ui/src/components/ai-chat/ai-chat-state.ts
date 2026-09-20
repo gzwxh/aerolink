@@ -53,11 +53,11 @@ export function saveHistoryToStorage(
     const key = `${HISTORY_STORAGE_KEY_PREFIX}${username || 'anonymous'}`
     localStorage.setItem(key, JSON.stringify(sessions))
   } catch {
-    // ignore storage errors
+    // 忽略存储错误
   }
 }
 
-// TODO: generate session title with AI to better summarize the conversation, instead of just using the first user message
+// TODO: 用 AI 生成会话标题以更好地概括对话，而不是直接使用第一条用户消息
 export function generateSessionTitle(messages: ChatMessage[]): string {
   const firstUserMessage = messages.find((message) => message.role === 'user')
   if (!firstUserMessage) return 'New Chat'

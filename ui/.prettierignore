@@ -7,3 +7,4 @@ components.json
 index.html
 src/components/ui
 *.yaml
+.vite

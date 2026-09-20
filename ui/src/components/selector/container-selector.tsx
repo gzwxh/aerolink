@@ -32,11 +32,12 @@ export function ContainerSelector({
   selectedContainer,
   onContainerChange,
   showAllOption = true,
-  placeholder = 'Select container...',
+  placeholder,
 }: ContainerSelectorProps) {
   const [open, setOpen] = useState(false)
   const { t } = useTranslation()
 
+  // 哨兵项的名字只用于内部比较，展示时统一本地化。
   const allOption: SimpleContainer[number] = {
     name: 'All Containers',
     image: '',
@@ -48,6 +49,19 @@ export function ContainerSelector({
     ? containers.find((c) => c.name === selectedContainer)
     : allOption
 
+  const triggerLabel = (() => {
+    if (selectedOption && selectedOption !== allOption) {
+      return selectedOption.name
+    }
+    if (selectedOption === allOption && showAllOption) {
+      return t('common.fields.allContainers', 'All containers')
+    }
+    return (
+      placeholder ??
+      t('common.placeholders.selectContainer', 'Select container...')
+    )
+  })()
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -58,7 +72,7 @@ export function ContainerSelector({
           className="w-full min-w-0 justify-between md:w-auto md:min-w-[12rem] md:max-w-[300px]"
         >
           <span className="truncate">
-            {selectedOption ? selectedOption.name : placeholder}
+            {triggerLabel}
             {selectedOption?.ephemeral && ` (${t('pods.debug')})`}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -66,9 +80,16 @@ export function ContainerSelector({
       </PopoverTrigger>
       <PopoverContent className="w-[max(var(--radix-popover-trigger-width),18rem)] max-w-[min(300px,calc(100vw-1rem))] p-0">
         <Command>
-          <CommandInput placeholder="Search containers..." />
+          <CommandInput
+            placeholder={t(
+              'common.placeholders.searchContainers',
+              'Search containers...'
+            )}
+          />
           <CommandList>
-            <CommandEmpty>No containers found.</CommandEmpty>
+            <CommandEmpty>
+              {t('common.messages.noContainersFound', 'No containers found.')}
+            </CommandEmpty>
             <CommandGroup>
               {options.map((container) => (
                 <CommandItem
@@ -96,7 +117,7 @@ export function ContainerSelector({
                       {container.name}
                       {container.init && (
                         <span className="text-xs text-muted-foreground ml-1">
-                          (init)
+                          ({t('common.fields.initContainer', 'init')})
                         </span>
                       )}
                       {container.ephemeral && (

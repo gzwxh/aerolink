@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -12,6 +13,10 @@ const { mockUseAuth } = vi.hoisted(() => ({
 
 vi.mock('./auth-context', () => ({
   useAuth: mockUseAuth,
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
 }))
 
 const workloadsGroupId = 'sidebar-groups-workloads'
@@ -211,7 +216,7 @@ describe('SidebarConfigProvider', () => {
 
     expect(screen.getByTestId('group-order')).toHaveTextContent(
       [
-        applicationGroupId,
+        'sidebar-groups-cluster',
         workloadsGroupId,
         trafficGroupId,
         'sidebar-groups-storage',
@@ -219,6 +224,7 @@ describe('SidebarConfigProvider', () => {
         'sidebar-groups-infrastructure',
         'sidebar-groups-security',
         'sidebar-groups-other',
+        applicationGroupId,
       ].join(',')
     )
 
@@ -227,13 +233,14 @@ describe('SidebarConfigProvider', () => {
       expect(screen.getByTestId('group-order')).toHaveTextContent(
         [
           workloadsGroupId,
-          applicationGroupId,
+          'sidebar-groups-cluster',
           trafficGroupId,
           'sidebar-groups-storage',
           'sidebar-groups-config',
           'sidebar-groups-infrastructure',
           'sidebar-groups-security',
           'sidebar-groups-other',
+          applicationGroupId,
         ].join(',')
       )
     )
@@ -242,7 +249,7 @@ describe('SidebarConfigProvider', () => {
     await waitFor(() =>
       expect(screen.getByTestId('group-order')).toHaveTextContent(
         [
-          applicationGroupId,
+          'sidebar-groups-cluster',
           workloadsGroupId,
           trafficGroupId,
           'sidebar-groups-storage',
@@ -250,6 +257,7 @@ describe('SidebarConfigProvider', () => {
           'sidebar-groups-infrastructure',
           'sidebar-groups-security',
           'sidebar-groups-other',
+          applicationGroupId,
         ].join(',')
       )
     )
@@ -258,7 +266,7 @@ describe('SidebarConfigProvider', () => {
     await waitFor(() =>
       expect(screen.getByTestId('group-order')).toHaveTextContent(
         [
-          applicationGroupId,
+          'sidebar-groups-cluster',
           trafficGroupId,
           workloadsGroupId,
           'sidebar-groups-storage',
@@ -266,6 +274,7 @@ describe('SidebarConfigProvider', () => {
           'sidebar-groups-infrastructure',
           'sidebar-groups-security',
           'sidebar-groups-other',
+          applicationGroupId,
         ].join(',')
       )
     )
@@ -352,5 +361,48 @@ describe('SidebarConfigProvider', () => {
         customGroupItemId
       )
     })
+  })
+})
+
+// 改动先落本地状态（乐观）再串行写回：否则连续两次操作都会基于同一份旧状态
+// 计算，前一次改动会被后一次覆盖掉。
+describe('SidebarConfigProvider 写回服务端', () => {
+  const signedInUser = { username: 'alice', sidebar_preference: '' }
+
+  it('连续两次改动都会写回，后一次不会覆盖前一次', async () => {
+    mockUseAuth.mockReturnValue({ user: signedInUser })
+    const payloads: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        payloads.push(String(JSON.parse(String(init?.body)).sidebar_preference))
+        return { ok: true, status: 200 } as Response
+      })
+    )
+
+    await renderProvider()
+
+    fireEvent.click(screen.getByRole('button', { name: 'toggle default pin' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'toggle default visibility' })
+    )
+
+    await waitFor(() => expect(payloads.length).toBeGreaterThanOrEqual(2))
+    const lastSaved = JSON.parse(payloads[payloads.length - 1])
+    expect(lastSaved.pinnedItems).toContain(workloadsPodsItemId)
+    expect(lastSaved.hiddenItems).toContain(workloadsPodsItemId)
+  })
+
+  it('写回失败时提示用户，而不是只写 console', async () => {
+    mockUseAuth.mockReturnValue({ user: signedInUser })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 500 }) as Response)
+    )
+
+    await renderProvider()
+    fireEvent.click(screen.getByRole('button', { name: 'toggle default pin' }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
   })
 })

@@ -1,7 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { IconUpload } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 interface ClusterImportDialogProps {
   open: boolean
@@ -30,29 +35,51 @@ export function ClusterImportDialog({
   isSubmitting,
   error,
 }: ClusterImportDialogProps) {
+  // 草稿在条件挂载的内容组件里，关闭即丢弃；「有没有改动」上报到这一层，
+  // 由 useUnsavedChangesGuard 拦截遮罩点击 / Esc / 右上角 X。
+  const [isDraftDirty, setIsDraftDirty] = useState(false)
+  const close = useCallback(() => onOpenChange(false), [onOpenChange])
+  const guard = useUnsavedChangesGuard({ dirty: isDraftDirty, onClose: close })
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {open ? (
-        <ClusterImportDialogContent
-          onOpenChange={onOpenChange}
-          onSubmit={onSubmit}
-          isSubmitting={isSubmitting}
-          error={error}
-        />
-      ) : null}
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={guard.handleOpenChange}>
+        {open ? (
+          <ClusterImportDialogContent
+            onSubmit={onSubmit}
+            isSubmitting={isSubmitting}
+            error={error}
+            onDraftChange={setIsDraftDirty}
+            onRequestClose={() => guard.handleOpenChange(false)}
+          />
+        ) : null}
+      </Dialog>
+
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }
 
 function ClusterImportDialogContent({
-  onOpenChange,
   onSubmit,
   isSubmitting,
   error,
-}: Omit<ClusterImportDialogProps, 'open'>) {
+  onDraftChange,
+  onRequestClose,
+}: Omit<ClusterImportDialogProps, 'open' | 'onOpenChange'> & {
+  /** 上报是否有草稿，父级据此决定关闭时是否先弹确认。 */
+  onDraftChange: (hasDraft: boolean) => void
+  /** 需要用户确认的关闭请求（取消按钮）。 */
+  onRequestClose: () => void
+}) {
   const { t } = useTranslation()
   const [config, setConfig] = useState('')
   const [fileError, setFileError] = useState('')
+  // 初始为空串：粘贴或选文件写入的任何 kubeconfig 都视为未保存草稿。
+  const isDirty = useDraftDirty(config)
+  useEffect(() => {
+    onDraftChange(isDirty)
+  }, [isDirty, onDraftChange])
 
   const handleFileSelect = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -139,11 +166,7 @@ function ClusterImportDialogContent({
         )}
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
+          <Button type="button" variant="outline" onClick={onRequestClose}>
             {t('common.actions.cancel', 'Cancel')}
           </Button>
           <Button type="submit" disabled={isSubmitting || !config.trim()}>

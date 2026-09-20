@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IconSearch, IconUserPlus } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -10,6 +10,10 @@ import {
   LDAPImportCandidate,
 } from '@/lib/api'
 import { translateError } from '@/lib/utils'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -24,6 +28,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 interface LDAPImportDialogProps {
   open: boolean
@@ -44,6 +49,13 @@ export function LDAPImportDialog({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [enableImported, setEnableImported] = useState(false)
   const [importing, setImporting] = useState(false)
+
+  // 草稿就是「勾了哪些账号」：搜索词只是筛选条件，开关是跨次保留的偏好，
+  // 关掉弹窗都不会丢，所以都不计入；有改动时由 useUnsavedChangesGuard
+  // 拦截遮罩点击 / Esc / 右上角 X。Set 不能直接 JSON 比较，排序后按数组比。
+  const isDraftDirty = useDraftDirty([...selected].sort(), [])
+  const close = useCallback(() => onOpenChange(false), [onOpenChange])
+  const guard = useUnsavedChangesGuard({ dirty: isDraftDirty, onClose: close })
 
   useEffect(() => {
     if (!open) return
@@ -118,10 +130,7 @@ export function LDAPImportDialog({
     }
     setImporting(true)
     try {
-      const result = await importLDAPUsers(
-        Array.from(selected),
-        enableImported
-      )
+      const result = await importLDAPUsers(Array.from(selected), enableImported)
       const refreshed = await fetchLDAPImportCandidates()
       setUsers(refreshed)
       setSelected(new Set())
@@ -138,187 +147,195 @@ export function LDAPImportDialog({
       )
       queryClient.invalidateQueries({ queryKey: ['user-list'] })
       queryClient.invalidateQueries({ queryKey: ['ldap-setting'] })
-    } catch (err) {
-      toast.error(translateError(err as Error, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setImporting(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <IconUserPlus className="h-5 w-5" />
-            <DialogTitle>
-              {t(
-                'authenticationManagement.ldap.import.title',
-                'Import LDAP Users'
-              )}
-            </DialogTitle>
-          </div>
-          <DialogDescription>
-            {t(
-              'authenticationManagement.ldap.import.description',
-              'Select directory users to provision. Imported users are created locally and kept in sync afterwards by the periodic sync.'
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t(
-                  'authenticationManagement.ldap.import.searchPlaceholder',
-                  'Search username or name...'
+    <>
+      <Dialog open={open} onOpenChange={guard.handleOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <IconUserPlus className="h-5 w-5" />
+              <DialogTitle>
+                {t(
+                  'authenticationManagement.ldap.import.title',
+                  'Import LDAP Users'
                 )}
-                className="pl-9"
+              </DialogTitle>
+            </div>
+            <DialogDescription>
+              {t(
+                'authenticationManagement.ldap.import.description',
+                'Select directory users to provision. Imported users are created locally and kept in sync afterwards by the periodic sync.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t(
+                    'authenticationManagement.ldap.import.searchPlaceholder',
+                    'Search username or name...'
+                  )}
+                  className="pl-9"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={selectAllSelectable}
+                disabled={selectableCount === 0}
+              >
+                {t('authenticationManagement.ldap.import.selectAll', {
+                  defaultValue: 'Select all ({{count}})',
+                  count: selectableCount,
+                })}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={clearSelection}
+                disabled={selected.size === 0}
+              >
+                {t('authenticationManagement.ldap.import.clear', {
+                  defaultValue: 'Clear',
+                })}
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div>
+                <Label className="text-sm">
+                  {t('authenticationManagement.ldap.import.enableImported', {
+                    defaultValue: 'Enable imported users',
+                  })}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'authenticationManagement.ldap.import.enableImportedHint',
+                    {
+                      defaultValue: 'New users are disabled by default.',
+                    }
+                  )}
+                </p>
+              </div>
+              <Switch
+                checked={enableImported}
+                onCheckedChange={setEnableImported}
               />
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={selectAllSelectable}
-              disabled={selectableCount === 0}
-            >
-              {t('authenticationManagement.ldap.import.selectAll', {
-                defaultValue: 'Select all ({{count}})',
-                count: selectableCount,
-              })}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={clearSelection}
-              disabled={selected.size === 0}
-            >
-              {t('authenticationManagement.ldap.import.clear', {
-                defaultValue: 'Clear',
-              })}
-            </Button>
-          </div>
 
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <div>
-              <Label className="text-sm">
-                {t('authenticationManagement.ldap.import.enableImported', {
-                  defaultValue: 'Enable imported users',
+            {loading && (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                {t('common.messages.loading', 'Loading...')}
+              </div>
+            )}
+            {!loading && loadError && (
+              <div className="text-center py-8 text-sm text-destructive">
+                {loadError}
+              </div>
+            )}
+            {!loading && !loadError && filtered.length === 0 && (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                {t('authenticationManagement.ldap.import.noCandidates', {
+                  defaultValue: 'No directory users found.',
                 })}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'authenticationManagement.ldap.import.enableImportedHint',
-                  { defaultValue: 'New users are disabled by default.' }
-                )}
-              </p>
-            </div>
-            <Switch
-              checked={enableImported}
-              onCheckedChange={setEnableImported}
-            />
-          </div>
+              </div>
+            )}
 
-          {loading && (
-            <div className="text-center py-8 text-sm text-muted-foreground">
-              {t('common.messages.loading', 'Loading...')}
-            </div>
-          )}
-          {!loading && loadError && (
-            <div className="text-center py-8 text-sm text-destructive">
-              {loadError}
-            </div>
-          )}
-          {!loading && !loadError && filtered.length === 0 && (
-            <div className="text-center py-8 text-sm text-muted-foreground">
-              {t('authenticationManagement.ldap.import.noCandidates', {
-                defaultValue: 'No directory users found.',
-              })}
-            </div>
-          )}
-
-          {!loading && !loadError && filtered.length > 0 && (
-            <div className="max-h-80 overflow-auto rounded-md border divide-y">
-              {filtered.map((u) => {
-                const disabled = u.imported || u.conflict
-                const checked = selected.has(u.username)
-                return (
-                  <label
-                    key={u.username}
-                    className={`flex items-center gap-3 px-3 py-2 ${
-                      disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                    }`}
-                  >
-                    <Checkbox
-                      checked={checked}
-                      disabled={disabled}
-                      onCheckedChange={() => toggle(u)}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {u.username}
-                      </p>
-                      {u.displayName && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {u.displayName}
+            {!loading && !loadError && filtered.length > 0 && (
+              <div className="max-h-80 overflow-auto rounded-md border divide-y">
+                {filtered.map((u) => {
+                  const disabled = u.imported || u.conflict
+                  const checked = selected.has(u.username)
+                  return (
+                    <label
+                      key={u.username}
+                      className={`flex items-center gap-3 px-3 py-2 ${
+                        disabled
+                          ? 'opacity-60 cursor-not-allowed'
+                          : 'cursor-pointer'
+                      }`}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        disabled={disabled}
+                        onCheckedChange={() => toggle(u)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {u.username}
                         </p>
+                        {u.displayName && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {u.displayName}
+                          </p>
+                        )}
+                      </div>
+                      {u.imported && (
+                        <Badge variant="secondary">
+                          {t('authenticationManagement.ldap.import.imported', {
+                            defaultValue: 'Imported',
+                          })}
+                        </Badge>
                       )}
-                    </div>
-                    {u.imported && (
-                      <Badge variant="secondary">
-                        {t('authenticationManagement.ldap.import.imported', {
-                          defaultValue: 'Imported',
-                        })}
-                      </Badge>
-                    )}
-                    {u.conflict && (
-                      <Badge variant="outline">
-                        {t('authenticationManagement.ldap.import.conflict', {
-                          defaultValue: 'Username taken by another source',
-                        })}
-                      </Badge>
-                    )}
-                  </label>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        <DialogFooter className="items-center">
-          <span className="mr-auto text-xs text-muted-foreground">
-            {t('authenticationManagement.ldap.import.selectedCount', {
-              count: selected.size,
-              defaultValue: '{{count}} selected',
-            })}
-          </span>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={importing}
-          >
-            {t('common.actions.cancel', 'Cancel')}
-          </Button>
-          <Button
-            onClick={handleImport}
-            disabled={importing || selected.size === 0}
-          >
-            {importing
-              ? t('authenticationManagement.ldap.import.importing', {
-                  defaultValue: 'Importing...',
-                })
-              : t('authenticationManagement.ldap.import.import', {
-                  defaultValue: 'Import',
+                      {u.conflict && (
+                        <Badge variant="outline">
+                          {t('authenticationManagement.ldap.import.conflict', {
+                            defaultValue: 'Username taken by another source',
+                          })}
+                        </Badge>
+                      )}
+                    </label>
+                  )
                 })}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="items-center">
+            <span className="mr-auto text-xs text-muted-foreground">
+              {t('authenticationManagement.ldap.import.selectedCount', {
+                count: selected.size,
+                defaultValue: '{{count}} selected',
+              })}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => guard.handleOpenChange(false)}
+              disabled={importing}
+            >
+              {t('common.actions.cancel', 'Cancel')}
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={importing || selected.size === 0}
+            >
+              {importing
+                ? t('authenticationManagement.ldap.import.importing', {
+                    defaultValue: 'Importing...',
+                  })
+                : t('authenticationManagement.ldap.import.import', {
+                    defaultValue: 'Import',
+                  })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }

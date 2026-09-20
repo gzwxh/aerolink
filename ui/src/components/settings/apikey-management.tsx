@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
   IconCopy,
   IconEye,
@@ -15,6 +16,7 @@ import { toast } from 'sonner'
 
 import { APIKey } from '@/types/api'
 import { createAPIKey, deleteAPIKey, useAPIKeyList } from '@/lib/api'
+import { copyToClipboard } from '@/lib/clipboard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,6 +29,8 @@ import UserRoleAssignment from './user-role-assignment'
 export function APIKeyManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  // 只读章节（只有 settings.apikeys 的读权限）时不渲染写入口。
+  const { readOnly } = useSettingsSectionAccess()
 
   const { data: apiKeys = [], isLoading, error } = useAPIKeyList()
 
@@ -47,10 +51,18 @@ export function APIKeyManagement() {
     })
   }, [])
 
-  const copyToClipboard = useCallback(
-    (text: string) => {
-      navigator.clipboard.writeText(text)
-      toast.success(t('common.messages.copied', 'Copied to clipboard'))
+  const copyText = useCallback(
+    async (text: string) => {
+      if (await copyToClipboard(text)) {
+        toast.success(t('common.messages.copied', 'Copied to clipboard'))
+      } else {
+        toast.error(
+          t(
+            'common.messages.copyFailed',
+            'Failed to copy. Select the text and copy it manually.'
+          )
+        )
+      }
     },
     [t]
   )
@@ -92,7 +104,7 @@ export function APIKeyManagement() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => copyToClipboard(apiKey.apiKey)}
+                onClick={() => void copyText(apiKey.apiKey)}
               >
                 <IconCopy className="h-4 w-4" />
               </Button>
@@ -133,11 +145,11 @@ export function APIKeyManagement() {
         ),
       },
     ],
-    [t, visibleKeys, toggleKeyVisibility, copyToClipboard]
+    [t, visibleKeys, toggleKeyVisibility, copyText]
   )
 
-  const actions = useMemo<Action<APIKey>[]>(
-    () => [
+  const actions = useMemo<Action<APIKey>[]>(() => {
+    const items: Action<APIKey>[] = [
       {
         label: (
           <>
@@ -147,7 +159,10 @@ export function APIKeyManagement() {
         ),
         onClick: (apiKey) => setAssigningKey(apiKey),
       },
-      {
+    ]
+    // 只读章节时不渲染删除入口；指派入口保留（弹窗内只读展示已分配角色）。
+    if (!readOnly) {
+      items.push({
         label: (
           <div className="inline-flex items-center gap-2 text-destructive">
             <IconTrash className="h-4 w-4" />
@@ -155,10 +170,10 @@ export function APIKeyManagement() {
           </div>
         ),
         onClick: (apiKey) => setDeletingKey(apiKey),
-      },
-    ],
-    [t]
-  )
+      })
+    }
+    return items
+  }, [readOnly, t])
 
   const createMutation = useMutation({
     mutationFn: createAPIKey,
@@ -173,14 +188,7 @@ export function APIKeyManagement() {
         })
       )
     },
-    onError: () => {
-      toast.error(
-        t('common.messages.failedToCreate', {
-          resource: t('common.fields.apiKey', 'API Key'),
-          defaultValue: 'Failed to create API Key. Please try again.',
-        })
-      )
-    },
+    onError: () => {},
   })
 
   const deleteMutation = useMutation({
@@ -195,14 +203,7 @@ export function APIKeyManagement() {
         })
       )
     },
-    onError: () => {
-      toast.error(
-        t('common.messages.failedToDelete', {
-          resource: t('common.fields.apiKey', 'API Key'),
-          defaultValue: 'Failed to delete API Key. Please try again.',
-        })
-      )
-    },
+    onError: () => {},
   })
 
   const handleCreate = useCallback(
@@ -250,10 +251,12 @@ export function APIKeyManagement() {
                 )}
               </p>
             </div>
-            <Button onClick={() => setShowDialog(true)}>
-              <IconPlus className="mr-2 h-4 w-4" />
-              {t('apikeyManagement.actions.add', 'Add API Key')}
-            </Button>
+            {!readOnly && (
+              <Button onClick={() => setShowDialog(true)}>
+                <IconPlus className="mr-2 h-4 w-4" />
+                {t('apikeyManagement.actions.add', 'Add API Key')}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>

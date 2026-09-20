@@ -55,7 +55,7 @@ export interface TerminalProps {
   ephemeralContainers?: EphemeralContainer[]
   attachContainerName?: string
   selectedContainerName?: string
-  /** When true, hides the internal toolbar and fills parent container */
+  /** 为 true 时隐藏内部工具栏并填满父容器 */
   embedded?: boolean
 }
 
@@ -115,7 +115,7 @@ export function Terminal({
   const { t } = useTranslation()
   const { currentCluster } = useCluster()
 
-  // Keep user selection unless the current pod is no longer available.
+  // 保持用户的选择，除非当前 pod 已不可用。
   useEffect(() => {
     if (podName) {
       setSelectedPod(podName)
@@ -160,11 +160,11 @@ export function Terminal({
     })
   }, [containers, selectedContainerName])
 
-  // Handle theme change and persist to localStorage
+  // 处理主题变更并持久化到 localStorage
   const handleThemeChange = useCallback((theme: TerminalTheme) => {
     setTerminalTheme(theme)
     localStorage.setItem('terminal-theme', theme)
-    // Update terminal theme without recreating the instance
+    // 在不重建实例的情况下更新终端主题
     if (xtermRef.current) {
       const currentTheme = TERMINAL_THEMES[theme]
       xtermRef.current.options.theme = {
@@ -189,19 +189,19 @@ export function Terminal({
         brightCyan: currentTheme.brightCyan,
         brightWhite: currentTheme.brightWhite,
       }
-      // Force refresh to apply the new theme
+      // 强制刷新以应用新主题
       xtermRef.current.refresh(0, xtermRef.current.rows - 1)
     }
   }, [])
 
-  // Handle font size change and persist to localStorage
+  // 处理字号变更并持久化到 localStorage
   const handleFontSizeChange = useCallback((size: number) => {
     setFontSize(size)
     localStorage.setItem('log-viewer-font-size', size.toString()) // 与 log viewer 共用同一个 key
-    // Update terminal font size without recreating the instance
+    // 在不重建实例的情况下更新终端字号
     if (xtermRef.current && fitAddonRef.current) {
       xtermRef.current.options.fontSize = size
-      // Delay fit to ensure font size has been applied
+      // 延迟 fit，确保字号已经生效
       setTimeout(() => {
         if (fitAddonRef.current) {
           fitAddonRef.current.fit()
@@ -221,7 +221,7 @@ export function Terminal({
     []
   )
 
-  // Quick theme cycling function
+  // 快速循环切换主题的函数
   const cycleTheme = useCallback(() => {
     const themes = Object.keys(TERMINAL_THEMES) as TerminalTheme[]
     const currentIndex = themes.indexOf(terminalTheme)
@@ -246,7 +246,7 @@ export function Terminal({
     setSelectedPod(podName || '')
   }, [])
 
-  // Calculate network speed
+  // 计算网络速率
   const updateNetworkStats = useCallback(
     (dataSize: number, isOutgoing: boolean) => {
       const stats = networkStatsRef.current
@@ -260,7 +260,7 @@ export function Terminal({
     []
   )
 
-  // Unified terminal and websocket lifecycle
+  // 统一的终端与 WebSocket 生命周期
   useEffect(() => {
     if (type === 'pod') {
       if (!pods || pods.length === 0) if (!selectedPod) return
@@ -268,7 +268,7 @@ export function Terminal({
     }
     if (type === 'node' && !nodeName) return
     if (type === 'kubectl') {
-      // kubectl type needs no pod/container selection
+      // kubectl 类型不需要选择 pod/容器
     }
     if (!terminalRef.current) return
 
@@ -317,7 +317,7 @@ export function Terminal({
     xtermRef.current = terminal
     fitAddonRef.current = fitAddon
 
-    // Apply additional styles to prevent scroll bubbling
+    // 应用额外样式，避免滚动冒泡
     if (terminal.element) {
       terminal.element.style.overscrollBehavior = 'none'
       terminal.element.style.touchAction = 'none'
@@ -334,7 +334,7 @@ export function Terminal({
     const handleResize = () => fitAddon.fit()
     window.addEventListener('resize', handleResize)
 
-    // WebSocket connection
+    // WebSocket 连接
     setIsConnected(false)
     const clusterParams = new URLSearchParams()
     appendCurrentClusterParam(clusterParams, currentCluster)
@@ -453,7 +453,7 @@ export function Terminal({
 
     let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null
     const handleTerminalResize = () => {
-      // Debounce: wait for CSS transition to finish before fitting/resizing
+      // 防抖：等待 CSS 过渡结束后再做 fit / 尺寸调整
       if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer)
       resizeDebounceTimer = setTimeout(() => {
         if (!fitAddonRef.current || websocket.readyState !== WebSocket.OPEN) {
@@ -515,14 +515,14 @@ export function Terminal({
     reconnectFlag,
   ])
 
-  // Clear terminal
+  // 清空终端
   const clearTerminal = useCallback(() => {
     if (xtermRef.current) {
       xtermRef.current.clear()
     }
   }, [])
 
-  // Shared terminal div (the actual xterm canvas)
+  // 共享的终端 div（真正的 xterm 画布）
   const terminalDiv = (
     <div
       ref={terminalRef}
@@ -538,7 +538,7 @@ export function Terminal({
     />
   )
 
-  // Embedded mode: no header, fills parent completely
+  // 内嵌模式：没有头部，完全填满父容器
   if (embedded) {
     return (
       <div className="flex flex-col h-full w-full min-h-0">{terminalDiv}</div>

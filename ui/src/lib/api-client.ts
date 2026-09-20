@@ -1,6 +1,8 @@
-// API client with authentication support
+// 带认证支持的 API 客户端
 import { appendCurrentClusterHeader } from './current-cluster'
+import { reportOperationFailure } from './error-reporter'
 import { requestMFAVerification } from './mfa-prompt'
+import { notifySessionSuperseded } from './session-events'
 import { withSubPath } from './subpath'
 
 export interface ApiRequestOptions extends RequestInit {
@@ -8,9 +10,25 @@ export interface ApiRequestOptions extends RequestInit {
 }
 
 /**
- * Error thrown for non-2xx API responses. Keeps the HTTP status and the
- * optional machine-readable `code` so callers can react to specific failures
- * (e.g. 409 + role_name_conflict) instead of matching on the message text.
+ * 会话失效后跳转登录页。必须防重入：登录页 mount 时仍会发起认证请求
+ * （checkAuth / bootstrap），若每次 401 都整页跳转 /login，就会形成
+ * "跳转 → 登录页请求 401 → 再跳转" 的无限刷新循环（典型场景：后端重启
+ * 后旧的会话 Cookie 全部失效）。已在登录页时不再跳转，让登录表单正常
+ * 渲染给用户。
+ */
+let redirectingToLogin = false
+
+export function redirectToLogin() {
+  if (redirectingToLogin) return
+  if (window.location.pathname.endsWith('/login')) return
+  redirectingToLogin = true
+  window.location.href = withSubPath('/login')
+}
+
+/**
+ * 针对非 2xx API 响应抛出的错误。它保留 HTTP 状态码与
+ * 可选的机器可读 `code`，这样调用方可以针对具体失败做处理
+ * （例如 409 + role_name_conflict），而不必去匹配提示文本。
  */
 export class ApiError extends Error {
   readonly status: number
@@ -73,7 +91,7 @@ class ApiClient {
       ...(options.headers as Record<string, string>),
     }
 
-    // Only set default Content-Type to application/json if not already set and body is not FormData
+    // 仅在尚未设置且 body 不是 FormData 时，才把默认 Content-Type 设为 application/json
     if (!headers['Content-Type'] && !(options.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json'
     }
@@ -95,12 +113,29 @@ class ApiClient {
           .json()
           .catch(() => null)
         if (payload?.error === 'mfa_verification_required') {
-          // Sensitive operation: ask for a code, then replay the request. The
-          // backend remembers the verification for this browser.
+          // 敏感操作：请求验证码，然后重放该请求。
+          // 后端会为这个浏览器记住这次验证。
           const verified = await requestMFAVerification()
           if (verified) {
             response = await fetch(fullUrl, defaultOptions)
           }
+        }
+      }
+
+      if (
+        response.status === 401 &&
+        !window.location.pathname.endsWith('/login')
+      ) {
+        const payload = await response
+          .clone()
+          .json()
+          .catch(() => null)
+        if (payload?.code === 'session_superseded') {
+          // 单点登录把该会话顶下线：不刷新、也不静默跳登录页，否则用户看不到任何
+          // 解释；交给全局提示弹窗接管（见 lib/session-events.ts）。直接返回响应，
+          // 让调用方照常拿到带 code 的 ApiError。
+          notifySessionSuperseded()
+          return response
         }
       }
 
@@ -110,7 +145,7 @@ class ApiClient {
           response = await fetch(fullUrl, defaultOptions)
         } catch (refreshError) {
           console.error('Token refresh failed:', refreshError)
-          window.location.href = withSubPath('/login')
+          redirectToLogin()
           throw new Error('Authentication failed', { cause: refreshError })
         }
       }
@@ -126,12 +161,32 @@ class ApiClient {
     url: string,
     options: ApiRequestOptions = {}
   ): Promise<T> {
-    const response = await this.request(url, options)
+    let response: Response
+    try {
+      response = await this.request(url, options)
+    } catch (error) {
+      // 网络层失败（服务器不可达 / 连接被重置等）：写入当前用户的站内信。
+      reportOperationFailure(
+        `${methodOf(options)} ${url} 请求失败: ${errorText(error)}`
+      )
+      throw error
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      const message =
+        errorData.error || `HTTP error! status: ${response.status}`
+      // 401 由刷新/跳登录流程接管；MFA 校验取消是用户主动行为，均不记站内信。
+      if (
+        response.status !== 401 &&
+        errorData.code !== 'mfa_verification_required'
+      ) {
+        reportOperationFailure(
+          `${methodOf(options)} ${url} 失败 (HTTP ${response.status}): ${message}`
+        )
+      }
       throw new ApiError(
-        errorData.error || `HTTP error! status: ${response.status}`,
+        message,
         response.status,
         errorData.code,
         errorData.params
@@ -144,6 +199,62 @@ class ApiClient {
     }
 
     return (await response.text()) as T
+  }
+
+  /**
+   * 下载附件（如审计日志导出的 CSV）。列表接口返回 JSON，导出接口返回文件流，
+   * 所以不能走 makeRequest：这里返回 Blob 与响应头，错误处理保持一致（失败同样
+   * 写入站内信）。
+   */
+  async download(
+    url: string,
+    options: ApiRequestOptions = {}
+  ): Promise<{
+    blob: Blob
+    filename: string
+    rowCount?: number
+    timeRange?: string
+    sha256?: string
+    hmac?: string
+  }> {
+    let response: Response
+    try {
+      response = await this.request(url, { ...options, method: 'GET' })
+    } catch (error) {
+      reportOperationFailure(
+        `${methodOf(options)} ${url} 请求失败: ${errorText(error)}`
+      )
+      throw error
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      const message =
+        errorData.error || `HTTP error! status: ${response.status}`
+      reportOperationFailure(
+        `${methodOf(options)} ${url} 失败 (HTTP ${response.status}): ${message}`
+      )
+      throw new ApiError(
+        message,
+        response.status,
+        errorData.code,
+        errorData.params
+      )
+    }
+
+    const blob = await response.blob()
+    const rowCount = response.headers.get('x-audit-row-count')
+    return {
+      blob,
+      filename: filenameFromDisposition(
+        response.headers.get('content-disposition')
+      ),
+      rowCount: rowCount === null ? undefined : Number.parseInt(rowCount, 10),
+      // 导出的完整性指纹与覆盖范围（见 pkg/audit/export.go）：界面展示给用户留档。
+      timeRange: response.headers.get('x-audit-time-range') ?? undefined,
+      sha256: response.headers.get('x-audit-content-sha256') ?? undefined,
+      hmac: response.headers.get('x-audit-content-hmac') ?? undefined,
+    }
   }
 
   async get<T>(url: string, options?: ApiRequestOptions): Promise<T> {
@@ -208,6 +319,25 @@ class ApiClient {
 
 export const API_BASE_URL = '/api/v1'
 
-// Create a singleton instance
+function methodOf(options: ApiRequestOptions): string {
+  return (options.method || 'GET').toUpperCase()
+}
+
+// 从 `attachment; filename="kite-audit-logs-20260101-120000.csv"` 里取出文件名。
+function filenameFromDisposition(header: string | null): string {
+  if (!header) return 'download'
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header)
+  const name = match?.[1]?.trim()
+  return name ? decodeURIComponent(name) : 'download'
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message || error.name
+  }
+  return String(error)
+}
+
+// 创建单例实例
 export const apiClient = new ApiClient(API_BASE_URL)
 export const authApiClient = new ApiClient('/api')

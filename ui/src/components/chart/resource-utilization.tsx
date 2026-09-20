@@ -47,10 +47,10 @@ const ResourceUtilizationChart = React.memo(
     const chartData = React.useMemo(() => {
       if (!cpu || !memory) return []
 
-      // Combine CPU and Memory data by timestamp
+      // 按时间戳合并 CPU 与内存数据
       const combinedData = new Map()
 
-      // Add CPU data
+      // 加入 CPU 数据
       cpu.forEach((point) => {
         const timestamp = new Date(point.timestamp).getTime()
         combinedData.set(timestamp, {
@@ -60,7 +60,7 @@ const ResourceUtilizationChart = React.memo(
         })
       })
 
-      // Add Memory data
+      // 加入内存数据
       memory.forEach((point) => {
         const timestamp = new Date(point.timestamp).getTime()
         const existing = combinedData.get(timestamp) || {
@@ -71,11 +71,11 @@ const ResourceUtilizationChart = React.memo(
         combinedData.set(timestamp, existing)
       })
 
-      // Convert to array and sort by timestamp
+      // 转换为数组并按时间戳排序
       return Array.from(combinedData.values()).sort((a, b) => a.time - b.time)
     }, [cpu, memory])
 
-    // Show loading skeleton
+    // 展示加载骨架
     if (isLoading) {
       return (
         <Card className="@container/card">
@@ -94,7 +94,7 @@ const ResourceUtilizationChart = React.memo(
       )
     }
 
-    // Show error state
+    // 展示错误状态
     if (error) {
       return (
         <Card className="@container/card">
@@ -111,7 +111,7 @@ const ResourceUtilizationChart = React.memo(
       )
     }
 
-    // Show empty state
+    // 展示空状态
     if (!cpu || !memory || (cpu.length === 0 && memory.length === 0)) {
       return (
         <Card className="@container/card">

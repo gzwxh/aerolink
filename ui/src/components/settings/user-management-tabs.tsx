@@ -1,19 +1,15 @@
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
-import { UserGroupsTab } from './user-groups-tab'
-import { UserManagement } from './user-management'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 
+import { UserGroupsTab } from './user-groups-tab'
+import { UserManagement } from './user-management'
+
 /**
- * 用户与用户组合并后的容器：/settings/user?tab=users | ?tab=group
- * 子导航在左侧侧边栏的「用户与用户组」下，内容区只渲染当前页签。
+ * 用户管理容器：/settings/user?tab=users | ?tab=group
+ * 子导航在左侧侧边栏的「用户管理」下，内容区只渲染当前页签。
  */
 export function UserManagementTabs() {
   const { t } = useTranslation()
@@ -24,7 +20,7 @@ export function UserManagementTabs() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          {t('settings.tabs.user', '用户与用户组')}
+          {t('settings.tabs.user', 'User Management')}
         </CardTitle>
       </CardHeader>
       <CardContent>

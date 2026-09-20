@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import { IconEdit, IconKey, IconPlus, IconTrash } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ColumnDef } from '@tanstack/react-table'
@@ -25,8 +26,10 @@ import { OAuthProviderDialog } from './oauth-provider-dialog'
 export function OAuthProviderManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  // 只读章节（只有 settings.authentication 的读权限）时不渲染写入口。
+  const { readOnly } = useSettingsSectionAccess()
 
-  // Use real API to fetch OAuth providers
+  // 使用真实 API 获取 OAuth 提供方
   const { data: providers = [], isLoading, error } = useOAuthProviderList()
 
   const [showProviderDialog, setShowProviderDialog] = useState(false)
@@ -125,7 +128,7 @@ export function OAuthProviderManagement() {
     [t]
   )
 
-  // Create provider mutation
+  // 创建提供方的 mutation
   const createMutation = useMutation({
     mutationFn: createOAuthProvider,
     onSuccess: () => {
@@ -139,18 +142,10 @@ export function OAuthProviderManagement() {
       )
       setShowProviderDialog(false)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'oauthManagement.messages.createError',
-            'Failed to create OAuth provider'
-          )
-      )
-    },
+    onError: () => {},
   })
 
-  // Update provider mutation
+  // 更新提供方的 mutation
   const updateMutation = useMutation({
     mutationFn: ({
       id,
@@ -171,18 +166,10 @@ export function OAuthProviderManagement() {
       setShowProviderDialog(false)
       setEditingProvider(null)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'oauthManagement.messages.updateError',
-            'Failed to update OAuth provider'
-          )
-      )
-    },
+    onError: () => {},
   })
 
-  // Delete provider mutation
+  // 删除提供方的 mutation
   const deleteMutation = useMutation({
     mutationFn: deleteOAuthProvider,
     onSuccess: () => {
@@ -196,23 +183,15 @@ export function OAuthProviderManagement() {
       )
       setDeletingProvider(null)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'oauthManagement.messages.deleteError',
-            'Failed to delete OAuth provider'
-          )
-      )
-    },
+    onError: () => {},
   })
 
   const handleSubmitProvider = (providerData: OAuthProviderCreateRequest) => {
     if (editingProvider) {
-      // Update existing provider
+      // 更新已有提供方
       const updateData: OAuthProviderUpdateRequest = {
         ...providerData,
-        // If clientSecret is empty in edit mode, don't send it
+        // 编辑模式下 clientSecret 为空时不发送它
         ...(providerData.clientSecret
           ? { clientSecret: providerData.clientSecret }
           : {}),
@@ -222,7 +201,7 @@ export function OAuthProviderManagement() {
         data: updateData,
       })
     } else {
-      // Create new provider
+      // 创建新的提供方
       createMutation.mutate(providerData)
     }
   }
@@ -266,20 +245,27 @@ export function OAuthProviderManagement() {
                 {t('oauthManagement.title', 'OAuth Provider Management')}
               </CardTitle>
             </div>
-            <Button
-              onClick={() => {
-                setEditingProvider(null)
-                setShowProviderDialog(true)
-              }}
-              className="gap-2"
-            >
-              <IconPlus className="h-4 w-4" />
-              {t('oauthManagement.actions.add', 'Add Provider')}
-            </Button>
+            {!readOnly && (
+              <Button
+                onClick={() => {
+                  setEditingProvider(null)
+                  setShowProviderDialog(true)
+                }}
+                className="gap-2"
+              >
+                <IconPlus className="h-4 w-4" />
+                {t('oauthManagement.actions.add', 'Add Provider')}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable actions={actions} data={providers} columns={columns} />
+          {/* 只读时传空操作列表：行动作下拉（编辑 / 删除）整块不渲染。 */}
+          <ActionTable
+            actions={readOnly ? [] : actions}
+            data={providers}
+            columns={columns}
+          />
 
           {providers.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">

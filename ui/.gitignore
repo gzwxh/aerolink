@@ -28,3 +28,6 @@ package-lock.json
 
 .lh/
 node_modules/
+
+# Vite 依赖预构建缓存（`vite dev` 生成，不进版本库）
+.vite

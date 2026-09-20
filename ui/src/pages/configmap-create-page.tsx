@@ -3,63 +3,44 @@ import { IconAlertCircle } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as YAML from 'js-yaml'
 import { ConfigMap } from 'kubernetes-types/core/v1'
-import { ArrowLeft, Loader2, Plus, Upload } from 'lucide-react'
+import { ArrowLeft, Loader2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { applyResource } from '@/lib/api'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
-import { DESCRIPTION_ANNOTATION, resolveCreateNamespace } from '@/lib/k8s'
+import {
+  DESCRIPTION_ANNOTATION,
+  K8S_DATA_KEY_PATTERN,
+  K8S_META_KEY_PATTERN,
+  K8S_RESOURCE_NAME_PATTERN,
+  RESERVED_CREATE_NAMES,
+  resolveCreateNamespace,
+} from '@/lib/k8s'
+import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { cn, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsTrigger } from '@/components/ui/tabs'
+import {
+  AddButton,
+  readAsBase64,
+  readAsText,
+  toRecord,
+  ValueRows,
+  type DataRow,
+} from '@/components/key-value-rows'
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
-
-// ConfigMap names follow the DNS subdomain rules; data / binaryData keys are
-// restricted to alphanumerics plus '-', '_' and '.'.
-const NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/
-const KEY_PATTERN = /^[-._a-zA-Z0-9]+$/
-// Label / annotation keys: an optional DNS subdomain prefix, then a name part
-// that may also carry uppercase letters.
-const META_KEY_PATTERN =
-  /^(?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?\/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$/
-
-// ConfigMap names that would collide with the create / detail routes.
-const RESERVED_NAMES = new Set(['create'])
-
-interface DataRow {
-  key: string
-  /** Plain text value, or the base64 payload for the binary tab. */
-  value: string
-  /** Source file name, only used by the binary tab. */
-  fileName?: string
-}
+import { TabStrip } from '@/components/tab-strip'
 
 type EditorTab = 'data' | 'binary' | 'meta' | 'yaml'
 
 const EDITOR_TABS: EditorTab[] = ['data', 'binary', 'meta', 'yaml']
-
-const readAsText = (file: File) => file.text()
-
-/**
- * Reads a file as bare base64 (without the `data:` URL prefix) because that is
- * the format the API server expects in ConfigMap.binaryData.
- */
-const readAsBase64 = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = String(reader.result || '')
-      const comma = result.indexOf(',')
-      resolve(comma >= 0 ? result.slice(comma + 1) : result)
-    }
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
 
 const parseConfigMapYaml = (text: string): ConfigMap | null => {
   try {
@@ -73,103 +54,6 @@ const parseConfigMapYaml = (text: string): ConfigMap | null => {
   }
 }
 
-/** Keeps the last value for every non-blank key, dropping empty rows. */
-function toRecord(rows: DataRow[]) {
-  const record: Record<string, string> = {}
-  for (const row of rows) {
-    const key = row.key.trim()
-    if (key) record[key] = row.value
-  }
-  return record
-}
-
-/** Shared key/value row editor used by the data, binary, labels and annotations forms. */
-function ValueRows({
-  rows,
-  mode,
-  keyPlaceholder,
-  valuePlaceholder,
-  chooseFileLabel,
-  binaryLoadedLabel,
-  removeLabel,
-  onKeyChange,
-  onValueChange,
-  onRemove,
-  onPickFile,
-}: {
-  rows: DataRow[]
-  mode: 'text' | 'binary'
-  keyPlaceholder: string
-  valuePlaceholder: string
-  chooseFileLabel: string
-  binaryLoadedLabel: string
-  removeLabel: string
-  onKeyChange: (index: number, key: string) => void
-  onValueChange: (index: number, value: string) => void
-  onRemove: (index: number) => void
-  onPickFile: (index: number) => void
-}) {
-  return (
-    <div className="space-y-2">
-      {rows.map((row, index) => (
-        <div key={index} className="flex items-center gap-3">
-          <Input
-            value={row.key}
-            onChange={(e) => onKeyChange(index, e.target.value)}
-            placeholder={keyPlaceholder}
-            className="h-9 min-w-0 flex-1"
-          />
-          {mode === 'text' ? (
-            <Input
-              value={row.value}
-              onChange={(e) => onValueChange(index, e.target.value)}
-              placeholder={valuePlaceholder}
-              className="h-9 min-w-0 flex-1"
-            />
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 min-w-0 flex-1 justify-start font-normal"
-              onClick={() => onPickFile(index)}
-            >
-              <Upload className="mr-2 h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">
-                {row.fileName ||
-                  (row.value ? binaryLoadedLabel : chooseFileLabel)}
-              </span>
-            </Button>
-          )}
-          <button
-            type="button"
-            className="shrink-0 text-sm text-primary transition-colors hover:underline"
-            onClick={() => onRemove(index)}
-          >
-            {removeLabel}
-          </button>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-/** Console-style "add" button shared by every key/value section. */
-function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="h-8 border-primary/40 bg-primary/5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
-      onClick={onClick}
-    >
-      <Plus className="mr-1 h-3.5 w-3.5" />
-      {label}
-    </Button>
-  )
-}
-
 export function ConfigMapCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -177,6 +61,9 @@ export function ConfigMapCreatePage() {
   const { namespace: namespaceParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const can = useCan()
+
+  const pageTitle = t('configmapCreate.pageTitle', 'ConfigMap: 创建')
+  usePageTitle(pageTitle)
 
   const [namespace, setNamespace] = useState(() =>
     resolveCreateNamespace(
@@ -200,20 +87,44 @@ export function ConfigMapCreatePage() {
   const [annotations, setAnnotations] = useState<DataRow[]>([
     { key: '', value: '' },
   ])
-  /** YAML edited by hand; when set it wins over the generated manifest. */
+  /** 手工编辑的 YAML；设置后优先于生成的 manifest。 */
   const [editedYaml, setEditedYaml] = useState('')
+  // 表单内容（不含命名空间选择）只要离开过初始快照就算「未保存」，
+  // 切换集群前据此弹确认（登记处见 lib/unsaved-edits）。
+  const [formSnapshot] = useState(() =>
+    JSON.stringify({
+      name,
+      description,
+      dataRows,
+      binaryRows,
+      labels,
+      annotations,
+      editedYaml,
+    })
+  )
+  useUnsavedEdits(
+    JSON.stringify({
+      name,
+      description,
+      dataRows,
+      binaryRows,
+      labels,
+      annotations,
+      editedYaml,
+    }) !== formSnapshot
+  )
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  // Hidden inputs backing the "read from file" / "choose file" actions.
+  // 支撑"从文件读取" / "选择文件"操作的隐藏 input。
   const dataFileInputRef = useRef<HTMLInputElement>(null)
   const binaryBulkInputRef = useRef<HTMLInputElement>(null)
   const binaryRowInputRef = useRef<HTMLInputElement>(null)
   const binaryRowIndexRef = useRef<number | null>(null)
 
   const yamlOverrides = editedYaml.trim().length > 0
-  // A hand-edited manifest may name its own namespace, and that is where the
-  // object gets created, so the permission check follows it.
+  // 手工编辑的 manifest 可能自带命名空间，而对象就会创建在
+  // 那个命名空间下，因此权限校验跟随它。
   const targetNamespace =
     (yamlOverrides
       ? parseConfigMapYaml(editedYaml)?.metadata?.namespace?.trim()
@@ -253,26 +164,26 @@ export function ConfigMapCreatePage() {
     }
   }
 
-  // Regenerated on every render: the manifest is small and keeping it derived
-  // means the YAML tab always mirrors the form.
+  // 每次渲染重新生成：manifest 很小，保持派生
+  // 可以让 YAML 标签页始终与表单一致。
   const generatedYaml = YAML.dump(buildConfigMap(), { indent: 2, noRefs: true })
   const finalYaml = yamlOverrides ? editedYaml : generatedYaml
 
-  /** Returns the first blocking form problem, or null when the form is valid. */
+  /** 返回第一个阻塞性的表单问题，表单合法时返回 null。 */
   const formIssue = (): string | null => {
     if (!namespace) {
       return t('configmapCreate.namespaceRequired', 'Select a namespace first.')
     }
     const trimmedName = name.trim()
-    if (!trimmedName || !NAME_PATTERN.test(trimmedName)) {
+    if (!trimmedName || !K8S_RESOURCE_NAME_PATTERN.test(trimmedName)) {
       return t(
         'configmapCreate.invalidName',
         'Name may only contain lowercase letters, numbers and dashes.'
       )
     }
-    // "/configmaps/<ns>/create" is the create route itself, so a ConfigMap
-    // called "create" could never be opened again.
-    if (RESERVED_NAMES.has(trimmedName)) {
+    // "/configmaps/<ns>/create" 本身就是创建路由，因此名为
+    // "create" 的 ConfigMap 将永远无法再次打开。
+    if (RESERVED_CREATE_NAMES.has(trimmedName)) {
       return t('configmapCreate.reservedName', {
         name: trimmedName,
         defaultValue:
@@ -286,7 +197,7 @@ export function ConfigMapCreatePage() {
       if (!key) {
         return t('configmapCreate.keyRequired', 'Every entry needs a key.')
       }
-      if (!KEY_PATTERN.test(key)) {
+      if (!K8S_DATA_KEY_PATTERN.test(key)) {
         return t('configmapCreate.invalidKey', {
           key,
           defaultValue:
@@ -308,7 +219,7 @@ export function ConfigMapCreatePage() {
       if (!key) {
         return t('configmapCreate.keyRequired', 'Every entry needs a key.')
       }
-      if (!KEY_PATTERN.test(key)) {
+      if (!K8S_DATA_KEY_PATTERN.test(key)) {
         return t('configmapCreate.invalidKey', {
           key,
           defaultValue:
@@ -328,7 +239,7 @@ export function ConfigMapCreatePage() {
           { key }
         )
       }
-      // The API server rejects a key that exists in both data and binaryData.
+      // API Server 会拒绝在 data 与 binaryData 中同时存在的键。
       if (dataKeys.has(key)) {
         return t('configmapCreate.overlappingKeys', {
           key,
@@ -346,7 +257,7 @@ export function ConfigMapCreatePage() {
         if (!key) {
           return t('configmapCreate.keyRequired', 'Every entry needs a key.')
         }
-        if (!META_KEY_PATTERN.test(key)) {
+        if (!K8S_META_KEY_PATTERN.test(key)) {
           return t('configmapCreate.invalidMetaKey', {
             key,
             defaultValue:
@@ -366,8 +277,8 @@ export function ConfigMapCreatePage() {
   }
 
   const switchTab = (next: EditorTab) => {
-    // Returning to a form tab regenerates the manifest, so the hand-written
-    // YAML is dropped (matches the hint shown on the YAML tab).
+    // 回到表单标签页会重新生成 manifest，因此手写的
+    // YAML 会被丢弃（与 YAML 标签页上的提示一致）。
     if (tab === 'yaml' && next !== 'yaml') {
       setEditedYaml('')
     }
@@ -382,7 +293,7 @@ export function ConfigMapCreatePage() {
     )
   }
 
-  /** Appends imported files: the file name becomes the key, content the value. */
+  /** 追加导入的文件：文件名作为 key，内容作为 value。 */
   const importFiles = async (
     files: FileList | null,
     mode: 'text' | 'binary'
@@ -397,18 +308,13 @@ export function ConfigMapCreatePage() {
           mode === 'text' ? await readAsText(file) : await readAsBase64(file)
         imported.push({ key: file.name, value, fileName: file.name })
       } catch {
-        toast.error(
-          t('configmapCreate.fileReadFailed', {
-            name: file.name,
-            defaultValue: 'Failed to read {{name}}',
-          })
-        )
+        // 文件读取失败时跳过这一个文件，继续导入其余文件
       }
     }
     if (imported.length === 0) return
 
-    // Merge by key: an imported file replaces a row with the same key, blank
-    // starter rows are dropped so the list stays clean.
+    // 按 key 合并：导入的文件会替换同 key 的行，空白的
+    // 起始行会被丢弃，使列表保持整洁。
     const merged = rows.filter((row) => row.key.trim() || row.value)
     for (const row of imported) {
       const existing = merged.findIndex(
@@ -440,12 +346,7 @@ export function ConfigMapCreatePage() {
         )
       )
     } catch {
-      toast.error(
-        t('configmapCreate.fileReadFailed', {
-          name: file.name,
-          defaultValue: 'Failed to read {{name}}',
-        })
-      )
+      // 文件读取失败时跳过本次赋值，保持该行不变
     }
   }
 
@@ -495,7 +396,6 @@ export function ConfigMapCreatePage() {
     } catch (err) {
       const message = translateError(err, t)
       setCreateError(message)
-      toast.error(message)
     } finally {
       setIsCreating(false)
     }
@@ -522,13 +422,13 @@ export function ConfigMapCreatePage() {
           variant="ghost"
           size="icon"
           className="h-8 w-8"
+          aria-label={t('common.actions.backToList', '返回列表')}
+          title={t('common.actions.backToList', '返回列表')}
           onClick={() => navigate('/configmaps')}
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-xl font-semibold">
-          {t('configmapCreate.pageTitle', 'ConfigMap: Create')}
-        </h1>
+        <h1 className="text-2xl font-bold">{pageTitle}</h1>
       </div>
 
       {/* Scrollable content */}
@@ -589,22 +489,18 @@ export function ConfigMapCreatePage() {
         </div>
 
         {/* Main tabs */}
-        <div className="flex flex-wrap items-center gap-1 border-b">
-          {tabs.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => switchTab(key)}
-              className={`rounded-t-md border-b-2 px-4 py-2 text-sm transition-colors ${
-                tab === key
-                  ? 'border-primary font-medium text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          value={tab}
+          onValueChange={(next) => switchTab(next as EditorTab)}
+        >
+          <TabStrip>
+            {tabs.map(({ key, label }) => (
+              <TabsTrigger key={key} value={key}>
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabStrip>
+        </Tabs>
 
         {/* Tab content */}
         <div className="pb-4">
@@ -858,8 +754,8 @@ export function ConfigMapCreatePage() {
                   value={finalYaml}
                   onChange={(value) => {
                     const next = value || ''
-                    // Ignore the echoes Monaco sends back for the controlled
-                    // value so the form stays authoritative until edited.
+                    // 忽略 Monaco 为受控 value 回传的
+                    // 回声，使表单在被编辑之前保持权威。
                     if (next === finalYaml) return
                     setEditedYaml(next)
                   }}

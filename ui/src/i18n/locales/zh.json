@@ -5,8 +5,12 @@
       "apply": "应用",
       "assign": "分配",
       "assignRoles": "分配角色",
+      "backToOverview": "返回概览",
       "backToList": "返回列表",
+      "goBack": "后退",
+      "goForward": "前进",
       "clearAll": "全部清空",
+      "deselectAllOptions": "取消全选",
       "addItem": "添加“{{value}}”",
       "cancel": "取消",
       "close": "关闭",
@@ -17,6 +21,7 @@
       "cordon": "停止调度",
       "createGroup": "创建新分组",
       "create": "创建",
+      "createNewResource": "创建资源",
       "customizeSidebar": "自定义侧边栏",
       "delete": "删除",
       "describe": "描述",
@@ -24,6 +29,7 @@
       "done": "完成",
       "drain": "驱逐",
       "edit": "编辑",
+      "view": "查看",
       "editYaml": "编辑 YAML",
       "downloadYaml": "下载 YAML",
       "enable": "启用",
@@ -36,6 +42,8 @@
       "moveUp": "上移",
       "newChat": "新对话",
       "patch": "Patch",
+      "toggleSidebar": "折叠或展开侧边栏",
+      "toggleKubectlTerminal": "打开或关闭 Kubectl 终端",
       "refresh": "刷新",
       "remove": "移除",
       "readFromFile": "从文件读取",
@@ -62,7 +70,11 @@
       "update": "更新",
       "viewDiff": "查看差异",
       "viewError": "查看错误",
-      "watch": "监听"
+      "watch": "监听",
+      "actions": "操作",
+      "continue": "继续",
+      "creating": "创建中...",
+      "deleting": "删除中..."
     },
     "fields": {
       "accessModes": "Access Modes",
@@ -96,8 +108,10 @@
       "completed": "完成时间",
       "config": "配置",
       "container": "容器",
+      "initContainer": "初始化容器",
       "containerRuntime": "容器运行时",
       "containers": "容器",
+      "containersAndImages": "容器与镜像",
       "count": "次数",
       "cpu": "CPU",
       "created": "创建时间",
@@ -159,6 +173,7 @@
       "oidcGroups": "LDAP / OIDC 用户组",
       "operator": "操作人",
       "operation": "操作",
+      "result": "结果",
       "os": "操作系统",
       "osImage": "操作系统镜像",
       "owner": "所有者",
@@ -186,6 +201,7 @@
       "replicas": "副本数",
       "resource": "资源",
       "resources": "资源",
+      "resourceLimits": "资源限制",
       "resourceVersion": "资源版本",
       "restart": "重启",
       "restartCount": "重启次数",
@@ -234,7 +250,13 @@
       "passwordChangeLogs": "改密日志",
       "yamlConfiguration": "YAML 配置",
       "yamlContent": "YAML 内容",
-      "yamlDiff": "YAML Diff"
+      "yamlDiff": "YAML Diff",
+      "system": "系统",
+      "disabled": "已禁用",
+      "email": "邮箱",
+      "error": "错误",
+      "phone": "手机",
+      "remark": "备注"
     },
     "messages": {
       "addNewItem": "添加新的{{resource}}",
@@ -243,10 +265,11 @@
       "applying": "应用中...",
       "assigned": "已分配",
       "auditLogsDescription": "追踪资源变更操作并查看 YAML 差异",
-      "loginLogsDescription": "查看每一次成功登录及其来源 IP",
+      "loginLogsDescription": "查看每一次登录尝试（含被拒绝的尝试）及其来源 IP",
       "passwordChangeLogsDescription": "查看密码修改人与修改时间",
       "confirmRemoveOwnRole": "你正在移除自己的角色分配，这可能会影响你的权限。确定继续吗？",
       "copied": "已复制到剪贴板",
+      "copyFailed": "复制失败，请手动选择文本后复制。",
       "createApiKeyDescription": "创建新的 API 密钥用于程序化访问。",
       "created": "{{resource}}创建成功",
       "createFirstItem": "创建第一个{{resource}}开始使用",
@@ -266,6 +289,8 @@
       "invalidYaml": "YAML 无效",
       "issuerOrOAuthUrlRequired": "请填写 Issuer，或填写 OAuth URL（Authorization、Token、User Info）",
       "keepCurrentConfiguration": "留空则保持当前配置不变",
+      "viewCurrentConfig": "查看当前配置",
+      "configLoaded": "当前配置已加载，保存后将以该内容覆盖",
       "loading": "加载中...",
       "loadingEditor": "编辑器加载中...",
       "loadingPods": "Pods 加载中...",
@@ -278,6 +303,7 @@
       "neverUsed": "从未使用",
       "noChatHistory": "暂无对话历史",
       "noData": "暂无数据",
+      "noContainersFound": "未找到容器",
       "noErrorMessage": "没有错误信息",
       "noItemsConfigured": "暂无{{resource}}",
       "noItemsFound": "暂无{{resource}}",
@@ -291,7 +317,7 @@
       "notReady": "未就绪",
       "notStarted": "未启动",
       "passwordLoginDescription": "允许用户使用用户名和密码登录。",
-      "passwordLoginWarningDescription": "保存前请确认 LDAP、OAuth Provider、Passkey 可用。没有可用的替代登录方式时，你将无法登录，只能通过重置数据库恢复。",
+      "passwordLoginWarningDescription": "保存前请确认 LDAP、OAuth Provider 可用。没有可用的替代登录方式时，你将无法登录，只能通过重置数据库恢复。",
       "passwordLoginWarningTitle": "警告：你可能会失去访问权限！",
       "passwordReset": "密码已重置",
       "resourceNotFound": "未找到{{resource}}",
@@ -305,7 +331,12 @@
       "yamlSaved": "YAML 保存成功",
       "namespaceNotFoundOnCluster": "命名空间 {{namespace}} 在当前集群中不存在，可能来自其他集群。",
       "namespaceNotFoundHint": "请选择下方的一个命名空间，或查看全部命名空间的资源。",
-      "createFailed": "创建失败"
+      "createFailed": "创建失败",
+      "terminalDialogDescription": "选择 Pod 与容器后，在弹窗内直接执行命令。",
+      "containerUpdated": "容器更新成功",
+      "disabled": "已禁用",
+      "enabled": "已启用",
+      "noResults": "没有匹配的结果"
     },
     "tabs": {
       "containers": "容器",
@@ -324,12 +355,18 @@
       "serviceYaml": "关联 Service"
     },
     "units": {
-      "pods": "pods"
+      "pods": "pods",
+      "cores": "核"
     },
     "values": {
+      "disabled": "已禁用",
       "allClusters": "所有集群",
       "allOperations": "所有操作",
       "allRoles": "所有角色",
+      "allStatus": "所有状态",
+      "allProviders": "所有认证方式",
+      "allGroups": "所有用户组",
+      "allSources": "所有来源",
       "allUsers": "所有用户",
       "passwordChangeSelf": "本人修改",
       "passwordChangeAdmin": "管理员重置",
@@ -349,10 +386,13 @@
       "groupsClaim": "例如：memberOf",
       "issuer": "https://provider.com（自动发现）",
       "scopes": "openid,profile,email",
+      "searchContainers": "搜索容器...",
+      "selectContainer": "选择容器",
       "searchResourceName": "搜索资源名称...",
       "searchUsernameOrIP": "搜索用户名或 IP...",
       "searchUsers": "搜索用户...",
       "searchGroups": "搜索用户组...",
+      "searchRoles": "搜索角色...",
       "selectTemplate": "选择模板",
       "selectUser": "选择用户",
       "selectUsers": "请选择用户...",
@@ -373,6 +413,17 @@
       "previous": "上一页",
       "next": "下一页",
       "page": "第 {{current}} / {{total}} 页"
+    },
+    "namespaceSelector": {
+      "all": "所有 Namespace",
+      "many": "{{total}} 个 Namespace",
+      "select": "选择 Namespace...",
+      "selectMultiple": "选择 Namespace...",
+      "other": "其他 Namespace",
+      "search": "搜索...",
+      "loading": "加载中...",
+      "noResults": "没有匹配结果",
+      "toggle": "切换 Namespace {{name}}"
     }
   },
   "globalSearch": {
@@ -392,6 +443,7 @@
   },
   "sidebar": {
     "groups": {
+      "cluster": "集群",
       "traffic": "流量",
       "storage": "存储",
       "config": "配置",
@@ -421,7 +473,7 @@
     "menuGroups": "菜单分组",
     "resetToDefault": "恢复默认",
     "setAsGlobal": "设为全局侧边栏",
-    "setAsGlobalDescription": "将当前布局应用给所有非管理员用户，以及没有个人侧边栏配置的管理员；已有个人配置的管理员仍保留自己的布局。",
+    "setAsGlobalDescription": "将当前布局应用给还没有自己配置过侧边栏的账号；已经自己配置过的账号（含管理员）仍保留自己的布局。",
     "setAsGlobalSuccess": "全局侧边栏已更新",
     "setAsGlobalError": "设置全局侧边栏失败",
     "unsetGlobal": "取消全局侧边栏",
@@ -429,7 +481,24 @@
     "unsetGlobalError": "取消全局侧边栏失败",
     "expand": "展开",
     "collapse": "收起",
-    "updateAvailable": "有新的 Kite 版本可用"
+    "unpin": "取消置顶",
+    "pinToTop": "置顶",
+    "hideGroup": "隐藏分组",
+    "showGroup": "显示分组",
+    "hideItem": "隐藏条目",
+    "showItem": "显示条目",
+    "deleteGroup": "删除分组",
+    "removeFromGroup": "从分组移除",
+    "customGroup": "自定义",
+    "addCRDToGroup": "添加到分组",
+    "crdPlaceholder": "选择 CRD...",
+    "crdToAddPlaceholder": "选择要添加的 CRD...",
+    "crdSearch": "搜索 CRD...",
+    "crdEmpty": "未找到 CRD",
+    "crdLoading": "CRD 加载中...",
+    "crdLoadFailed": "CRD 加载失败",
+    "updateAvailable": "有新的 Kite 版本可用",
+    "saveFailed": "保存侧边栏配置失败，请稍后重试"
   },
   "nav": {
     "rbac": "权限管理",
@@ -515,8 +584,43 @@
     "clusterStats": "集群统计",
     "recentEvents": "最近事件",
     "resourceCharts": "资源图表",
+    "scopedHint": "当前账号只能看到已授权命名空间的数据，不包含集群容量。",
     "failedToLoad": "加载概览数据失败",
     "unknownError": "未知错误"
+  },
+  "loginLog": {
+    "copyClient": "复制客户端信息",
+    "clickToCopy": "点击复制"
+  },
+  "podFiles": {
+    "title": "Pod 文件",
+    "upload": "上传",
+    "uploadSuccess": "已上传 {{name}}",
+    "uploadDenied": "无容器文件上传权限",
+    "loading": "正在加载文件...",
+    "empty": "未找到文件",
+    "goToParent": "返回上级目录",
+    "goToRoot": "回到根目录",
+    "currentPath": "当前路径",
+    "refresh": "刷新文件列表",
+    "enterDirectory": "进入目录 {{name}}",
+    "preview": "预览文件",
+    "download": "下载文件",
+    "downloadDirectory": "打包下载目录 (.tar)",
+    "fields": {
+      "name": "名称",
+      "uid": "UID",
+      "gid": "GID",
+      "size": "大小",
+      "mode": "权限",
+      "modified": "修改时间"
+    },
+    "errors": {
+      "pod_files_unsupported": "容器 {{container}} 不支持文件浏览（缺少 ls 命令）",
+      "pod_files_path_required": "请填写文件路径",
+      "pod_files_path_invalid": "文件路径无效",
+      "pod_files_path_traversal": "路径不能包含 \"..\""
+    }
   },
   "pods": {
     "title": "Pods",
@@ -563,7 +667,8 @@
     "loadingRelatedResources": "相关资源加载中...",
     "noRelatedResources": "暂无相关资源",
     "openContainerDetails": "打开 {{name}}",
-    "lastState": "上次状态：{{state}}"
+    "lastState": "上次状态：{{state}}",
+    "ready": "就绪"
   },
   "deployments": {
     "title": "Deployments",
@@ -575,6 +680,29 @@
     "targetPort": "目标端口",
     "exposeInvalidPort": "端口必须在 1 到 65535 之间",
     "exposeNoSelector": "Deployment 没有可用于暴露的 selector 标签"
+  },
+  "deploymentActions": {
+    "viewYaml": "查看 YAML",
+    "viewYamlDescription": "{{name}} 的当前 YAML 配置（只读）。",
+    "editImage": "修改镜像版本",
+    "editImageDescription": "更新 {{name}} 的容器镜像，只有被改动的镜像会被提交。",
+    "imageUnchanged": "镜像没有变化",
+    "imageUpdated": "已更新 {{name}} 的镜像",
+    "pause": "暂停编排",
+    "resume": "恢复编排",
+    "paused": "已暂停 {{name}} 的编排",
+    "resumed": "已恢复 {{name}} 的编排",
+    "rollingRestart": "滚动重启",
+    "rollingRestarted": "已触发 {{name}} 的滚动重启",
+    "manageLabels": "管理标签",
+    "manageAnnotations": "管理注解",
+    "labelsDescription": "维护 {{name}} 的标签，删除的行会在保存时移除对应的键。",
+    "annotationsDescription": "维护 {{name}} 的注解，删除的行会在保存时移除对应的键。",
+    "addLabel": "添加标签",
+    "addAnnotation": "添加注解",
+    "metadataSaved": "已更新 {{name}} 的{{field}}",
+    "rollbackTitle": "回滚 {{name}}",
+    "rollbackDescription": "选择要回滚到的历史版本，回滚会触发一次滚动重启。"
   },
   "workloads": {
     "actions": {
@@ -695,10 +823,19 @@
   },
   "dialog": {
     "createResource": "创建资源",
+    "createResourceDescription": "粘贴一个或多个 Kubernetes 资源的 YAML，直接下发到集群",
     "editResource": "编辑资源",
     "deleteConfirmation": "删除确认",
     "deleteMessage": "确定要删除此资源吗？此操作不可撤销。",
-    "containerEdit": "编辑容器"
+    "containerEdit": "编辑容器",
+    "createResourceUnsavedTitle": "关闭创建资源？",
+    "createResourceUnsavedMessage": "当前弹窗里的 YAML 已经编辑过。<br/><bold>关闭会<red>丢弃</red>这些内容</bold>，确定关闭吗？",
+    "createResourceUnsavedCancel": "继续编辑",
+    "createResourceUnsavedConfirm": "丢弃并关闭",
+    "unsavedChangesTitle": "丢弃未保存的修改？",
+    "unsavedChangesMessage": "当前弹窗里还有未保存的修改。<br/><bold>关闭会<red>丢弃</red>这些修改</bold>，确定关闭吗？",
+    "unsavedChangesCancel": "继续编辑",
+    "unsavedChangesConfirm": "丢弃并关闭"
   },
   "status": {
     "active": "活跃",
@@ -770,6 +907,12 @@
     "tolerationsTitle": "容忍度",
     "opEqual": "等于",
     "opExists": "存在",
+    "opIn": "在列表中",
+    "opNotIn": "不在列表中",
+    "opDoesNotExist": "不存在",
+    "opGt": "大于",
+    "opLt": "小于",
+    "effectAll": "全部",
     "tolerationSeconds": "容忍(秒)",
     "addToleration": "添加容忍度",
     "priorityTitle": "优先级",
@@ -779,7 +922,6 @@
   "login": {
     "title": "登录",
     "subtitle": "访问 Kubernetes 控制台",
-    "kubernetesDashboard": "Kubernetes Dashboard",
     "signIn": "登录",
     "enterUsername": "请输入用户名",
     "enterPassword": "请输入密码",
@@ -791,7 +933,6 @@
     "signInWithLdap": "LDAP 登录",
     "useLocalAccount": "使用本地账号登录",
     "useLdapAccount": "使用 LDAP 账号登录",
-    "signInWithPasskey": "使用 Passkey 登录",
     "success": "登录成功",
     "tabs": {
       "ldap": "LDAP"
@@ -802,8 +943,7 @@
     "tryAgainHint": "请尝试使用有权限的其他账号登录。",
     "noLoginMethods": "未配置登录方式",
     "configureAuth": "请先配置认证方式",
-    "footer": "© {{year}} Kite. All rights reserved.",
-    "documentation": "文档",
+    "footer": "© {{year}} Kite · {{company}} 版权所有",
     "errors": {
       "accessDenied": "访问被拒绝",
       "authenticationFailed": "认证失败",
@@ -826,6 +966,10 @@
       "generalError": "认证过程中发生未知错误。",
       "contactSupport": "请重试，如问题持续请联系管理员。",
       "invalidCredentials": "用户名或密码错误",
+      "login_invalid_credentials": "用户名或密码错误",
+      "login_too_many_attempts": "登录尝试次数过多，请稍后再试",
+      "login_failed": "登录失败，请稍后再试",
+      "login_ip_denied": "当前 IP 不允许登录",
       "invalidMfaCode": "MFA 验证码错误",
       "invalid_captcha": "验证码错误，请重新输入",
       "captcha_required": "请输入验证码",
@@ -833,17 +977,50 @@
       "userDisabled": "账号已禁用",
       "userDisabledMessage": "你的账号已被禁用，请联系管理员。",
       "notInAllowedGroups": "认证成功，但账号不属于 {{provider}} 的允许群组。",
-      "notInAllowedGroupsDetails": "请联系管理员将你加入允许的群组。"
+      "notInAllowedGroupsDetails": "请联系管理员将你加入允许的群组。",
+      "userExpired": "账号已过期",
+      "userExpiredMessage": "账号已超过有效期，请联系管理员。",
+      "userNotProvisioned": "账号未开通",
+      "userNotProvisionedMessage": "账号 {{user}} 尚未在控制台开通，请联系管理员。",
+      "loginSourceDenied": "来源地址不允许登录",
+      "loginSourceDeniedMessage": "当前网络不在允许的登录来源内，请换到受控网络后重试。"
+    },
+    "hidePassword": "隐藏密码",
+    "showPassword": "显示密码",
+    "mfaPending": {
+      "title": "需要输入动态码",
+      "description": "身份已确认。请输入认证器中的 6 位动态码以完成登录。",
+      "codeLabel": "动态码",
+      "codePlaceholder": "请输入 6 位动态码",
+      "submit": "验证并登录",
+      "expired": "这次登录已超时，请重新登录。",
+      "restart": "重新登录"
     }
+  },
+  "session": {
+    "supersededTitle": "账号已在其他设备登录",
+    "supersededMessage": "你的账号刚刚在其他设备登录，出于安全考虑，当前页面的登录状态已自动退出。\n\n如果这是你本人的操作，重新登录即可继续使用；如果不是你本人操作，说明密码可能已经泄露，请立即修改密码并联系管理员。",
+    "takeoverNotice": "本次登录已让其他设备上的会话退出。如果这不是你本人的操作，请立即修改密码。",
+    "signInAgain": "重新登录"
   },
   "cluster": {
     "loading": "加载集群中...",
     "error": "加载集群失败：{{error}}",
-    "error403": "你没有权限访问此集群，请联系管理员。"
+    "error403": "你没有权限访问此集群，请联系管理员。",
+    "switched": "已切换到集群：{{name}}",
+    "unsavedSwitchConfirmTitle": "切换集群？",
+    "unsavedSwitchConfirm": "当前页面有未保存的内容（创建表单或 YAML 编辑）。<br/><bold>切换集群会<red>丢弃</red>这些内容</bold>并返回资源列表页，确定切换吗？",
+    "unsavedSwitchConfirmAction": "切换集群",
+    "select": "选择集群",
+    "switching": "切换集群中...",
+    "switchingShort": "切换中...",
+    "default": "默认",
+    "syncError": "同步异常"
   },
   "resourceTable": {
     "errorLoading": "加载 {{resourceName}} 失败",
     "tryAgain": "重试",
+    "toggleColumns": "显示列",
     "delete": "删除",
     "deleteSelected": "删除 ({{count}})",
     "selectAll": "全选 ({{count}})",
@@ -872,41 +1049,35 @@
       "restartResourcesDescription": "此操作会更新每个 {{resource}} 的 Pod 模板并触发滚动更新。Paused 或 OnDelete 策略可能不会立即重启，且不会等待滚动更新健康完成。"
     },
     "watch": "监听",
-    "namespace": "Namespace"
+    "refreshWatch": "重新连接并拉取",
+    "namespace": "Namespace",
+    "allNamespaces": "全部命名空间",
+    "namespaceCount": "{{count}} 个命名空间",
+    "namespaceScoped": "命名空间 {{name}}",
+    "loadingResource": "{{resource}}加载中...",
+    "retrievingData": "正在获取数据",
+    "retrievingDataFrom": "正在从{{scope}}获取数据",
+    "emptyTitle": "未找到{{resource}}",
+    "emptyLabelSelector": "没有{{resource}}匹配标签：'{{query}}'",
+    "emptySearch": "没有结果匹配搜索条件：\"{{query}}\"",
+    "emptyCluster": "没有找到{{resource}}",
+    "emptyNamespace": "{{namespace}}中没有{{resource}}",
+    "clearSearch": "清除搜索",
+    "selectAllRows": "全选",
+    "selectRow": "选择该行"
   },
   "errors": {
     "crdNotInstalledTitle": "资源类型不可用",
     "crdNotInstalled": "此集群未安装 {{kind}} ({{version}})。请先安装对应的 CRD。"
   },
-  "userGrants": {
-    "subjectsTitle": "用户与用户组",
-    "usersTitle": "用户",
-    "groupsPageTitle": "用户组",
-    "noSubjects": "暂无授权用户或用户组。",
-    "noGroups": "暂无授权用户组。",
-    "selectSubjectHint": "选择左侧用户或用户组，查看其被授权的集群与命名空间。",
-    "selectGroupHint": "选择左侧用户组，查看其成员及被授权的集群与命名空间。",
-    "noGrants": "该主体暂无角色授权。",
-    "rolesCount": "{{count}} 个角色",
-    "groupsTitle": "所属用户组",
-    "openGroupHint": "查看用户组授权",
-    "membersTitle": "组成员",
-    "noMembersSeen": "已同步用户中未找到组成员。",
-    "clustersTitle": "已授权集群",
-    "namespacesTitle": "{{cluster}} 上的命名空间",
-    "allNamespacesGranted": "已授权该集群的全部命名空间 (*)。",
-    "noNamespacesOnCluster": "该集群上不存在已授权的命名空间。"
-  },
   "nsActions": {
-    "permissions": "权限",
     "moreActions": "更多操作",
     "editConfig": "编辑配置",
     "editYaml": "编辑 YAML",
     "editYamlTitle": "编辑 YAML - {{name}}",
     "clone": "克隆",
     "downloadYaml": "下载 YAML",
-    "deleted": "命名空间 {{name}} 已删除",
-    "permissionsCloned": "已从 {{count}} 个角色克隆权限"
+    "deleted": "命名空间 {{name}} 已删除"
   },
   "nsEdit": {
     "title": "编辑 {{name}}",
@@ -917,11 +1088,11 @@
     "invalidPairs": "每行必须是 key=value 格式",
     "quotaTitle": "容器资源限制",
     "quotaDescription": "配置该命名空间下工作负载可使用的默认资源配额。",
-    "cpuRequests": "CPU 预警",
-    "cpuLimits": "CPU 限制",
-    "memoryRequests": "内存预警",
-    "memoryLimits": "内存限制",
-    "gpuLimits": "GPU 限制",
+    "cpuRequests": "CPU Requests",
+    "cpuLimits": "CPU Limits",
+    "memoryRequests": "Memory Requests",
+    "memoryLimits": "Memory Limits",
+    "gpuLimits": "GPU Limits",
     "saved": "命名空间已更新"
   },
   "nsDelete": {
@@ -934,21 +1105,6 @@
     "podStatsTitle": "Pod 状态",
     "workloadsTab": "工作负载",
     "podsTab": "Pod"
-  },
-  "namespaceGrants": {
-    "namespaceLabel": "命名空间",
-    "title": "{{namespace}} 的授权情况",
-    "selectNamespaceHint": "请选择集群和命名空间以查看其授权。",
-    "noGrants": "没有角色授权覆盖该命名空间。",
-    "noNamespacedGrants": "没有命名空间级资源授权覆盖该命名空间。",
-    "includesClusterScoped": "含集群级资源",
-    "clusterScopedTitle": "集群级资源授权",
-    "clusterScopedHint": "这些角色授予集群级资源（节点、持久卷、存储类等），不受所选命名空间限制。",
-    "grantAccess": "添加权限",
-    "editRole": "编辑",
-    "editRoleTitle": "编辑角色 - {{name}}",
-    "editRoleHint": "改动会影响该角色覆盖的所有命名空间与主体。",
-    "unassigned": "未分配主体"
   },
   "nodeEdit": {
     "title": "编辑节点：{{name}}",
@@ -967,14 +1123,16 @@
   },
   "nsCreate": {
     "title": "创建命名空间",
-    "description": "创建命名空间，并可配置容器资源限制与授权。",
+    "description": "创建命名空间，并可配置容器资源限制。",
     "namePlaceholder": "请输入名称",
     "descriptionLabel": "描述",
     "descPlaceholder": "请输入可选的描述",
     "invalidName": "名称只能包含小写字母、数字和中划线。",
-    "grantSection": "授权（可选）",
-    "grantHint": "创建完成后，将把该命名空间的访问权限授予所选用户/用户组。",
-    "created": "命名空间 {{name}} 创建成功"
+    "grantMovedHint": "授权统一在「权限管理 → 权限绑定」中配置：把该命名空间归属到某个权限绑定，并把用户或用户组作为成员绑定角色。",
+    "created": "命名空间 {{name}} 创建成功",
+    "boundToBinding": "已自动归属到权限绑定「{{name}}」",
+    "boundToRoles": "已把该命名空间加入角色「{{roles}}」的命名空间范围",
+    "notBound": "未自动归属，请联系管理员分配"
   },
   "workloadCreate": {
     "title": "创建 {{kind}}",
@@ -1042,6 +1200,9 @@
     "created": "{{kind}} \"{{name}}\" 已在命名空间 \"{{namespace}}\" 中创建",
     "failedToCreate": "创建工作负载失败：",
     "pageTitle": "{{kind}}: 创建",
+    "editPageTitle": "{{kind}}: 编辑",
+    "noCreatePermission": "你没有权限在命名空间 {{namespace}} 中创建 {{kind}}。",
+    "noUpdatePermission": "你没有权限在命名空间 {{namespace}} 中更新 {{kind}}。",
     "namePlaceholder": "独特的名称",
     "description": "描述",
     "descriptionPlaceholder": "输入可以描述该资源的文本",
@@ -1197,35 +1358,76 @@
     "lastSchedule": "上次调度",
     "lastSuccess": "上次成功"
   },
+  "superAdminMFA": {
+    "title": "请为超级管理员账号绑定 MFA（多因素认证）",
+    "description": "超级管理员拥有系统的全部权限。为保护这个最高权限账号，建议绑定身份验证器；绑定后登录与敏感操作需要动态码。如果需要回收它，请先确保还有别的启用账号能进入控制台管理面，再停用。",
+    "action": "立即绑定"
+  },
   "accessDenied": {
     "title": "无权限访问",
     "message": "您没有权限查看此页面。如果您认为这是误判，请联系管理员。",
+    "roleConflictTitle": "管理员角色冲突",
+    "roleConflictMessage": "当前账号同时持有互斥的管理员角色（{{roles}}）。职责分离要求这三个角色由不同人员担任，因此管理面已整体关闭；请由安全管理员移除其中一个角色后再试。",
     "backToHome": "返回首页"
   },
-  "nsPerm": {
-    "title": "命名空间权限 - {{name}}",
-    "description": "为该命名空间向用户或用户组授予角色，用户组成员自动继承组授权。",
-    "currentGrants": "当前授权",
-    "noGrants": "该命名空间暂无授权。",
-    "addGrant": "新增授权",
-    "autoRoleHint": "将自动使用或创建与所选用户/用户组同名的角色。",
-    "autoRoleOption": "自动（与主体同名）",
-    "existingRoleHint": "所选命名空间与操作/操作权限将应用到该角色。",
-    "roleNotFound": "角色不存在。",
-    "autoRoleDescription": "命名空间 {{namespace}} 授权",
-    "systemRoleConflict": "不能修改系统角色。",
-    "grant": "授权",
-    "grantSaved": "已为 {{count}} 个主体授权",
-    "groupInheritHint": "组内用户将自动继承此授权。",
-    "viewInRbac": "前往 RBAC 管理查看",
-    "unsavedConfirm": "当前配置尚未保存，确定要跳转吗？"
-  },
   "rbac": {
+    "empty": "暂无角色",
     "rolesTitle": "角色",
-    "roleType": "角色类型",
-    "roleTypeUser": "用户角色",
-    "roleTypeGroup": "用户组角色",
-    "roleTypeHint": "用户角色只能授予一个用户；用户组角色可授予一个或多个 LDAP / OIDC 用户组。",
+    "rolesSubtitle": "管理角色权限和继承角色",
+    "createRole": "创建角色",
+    "filterPlaceholder": "过滤",
+    "roleId": "角色 ID",
+    "roleIdReadonlyHint": "角色 ID 是权限判定的依据，创建后不可修改。",
+    "privilegesTitle": "权限",
+    "privilegesSubtitle": "权限按来源加前缀：Kubernetes 资源用 k8s，控制台自身（设置族）用 kite，格式为 <来源>:<资源>:<操作>。本页仅支持查看与搜索。",
+    "privilegeId": "权限 ID",
+    "privilegeType": "类型",
+    "privilegeName": "名称",
+    "privilegePermission": "权限",
+    "privilegeFilterPlaceholder": "过滤（例如 pods）",
+    "privilegeAllVerbs": "全部操作",
+    "privilegeHint": "权限来自「权限一览」页：一个资源上的一个操作就是一条权限。设置族（settings / settings.<章节>，即 kite:settings*）由内置角色承担（系统管理员 / 安全管理员 / 审计管理员完整管理，只读管理员只有 get），不在这里提供。",
+    "editRoleTitle": "编辑角色：{{name}}",
+    "viewRoleTitle": "查看角色：{{name}}",
+    "protectedRoleReadonlyHint": "受保护的内置角色：规则由代码维护，只能查看，不能修改或删除。",
+    "protectedRolePrivilegesHint": "内置权限由代码维护，只能查看，不能调整。",
+    "available": "可用",
+    "grantAll": "全部授权",
+    "grantSelected": "授权所选",
+    "revokeSelected": "取消所选",
+    "revokeAll": "全部取消",
+    "noAvailablePermissions": "没有可用的权限。",
+    "noGrantedPermissions": "尚未赋予任何权限。",
+    "saveRole": "保存角色",
+    "badgeWildcard": "WILDCARD",
+    "badgeNamespaced": "命名空间",
+    "badgeCluster": "集群",
+    "badgeSettings": "SETTINGS",
+    "assigned": "已赋予",
+    "included": "已包含",
+    "filterResources": "过滤资源...",
+    "filterOperations": "过滤操作...",
+    "noAssignedResources": "没有已赋予资源",
+    "noIncludedOperations": "没有已包含操作",
+    "operationsHint": "通用的查看 / 创建 / 更新 / 删除同时作用于所有已赋予的资源；按功能命名的操作（查看节点、Pod 终端……）只对标注的资源生效。",
+    "roleNameHint": "「名称」只用于界面展示，可自定义；留空时内置角色显示内置名称，自定义角色与角色 ID 相同。",
+    "roleDisplayNamePlaceholder": "留空则与角色 ID 相同",
+    "operationScopeShared": "同时作用于 {{count}} 个资源",
+    "operationScopeSingle": "仅对 {{resource}} 生效",
+    "roleFormHint": "角色只定义集群、资源与操作；命名空间范围由「权限绑定」决定。",
+    "rolesHint": "角色只定义「集群 + 资源 + 操作」；某个用户或用户组能访问哪些命名空间，由「权限绑定」决定。",
+    "deleteRoleConfirm": "确定删除角色「{{name}}」？",
+    "subjects": "使用者",
+    "subjectsEmpty": "暂无用户或用户组使用该角色。",
+    "subjectTypeGroup": "用户组",
+    "roleType": "类型",
+    "roleTypeAll": "全部类型",
+    "roleTypeBuiltin": "内置",
+    "roleTypeCustom": "自定义",
+    "deleteRoleImpact": "{{count}} 个用户或用户组正在使用该角色，删除会同时移除这些授权。",
+    "rolePermissionsEmpty": "未配置任何权限。",
+    "noRoleDescription": "暂无描述。",
+    "legacyPermissionsHint": "该角色按旧模型保存：每一行资源可用同一组操作（并集）。",
     "subjectsSection": "用户与用户组",
     "subjectsSaveHint": "保存角色后，将把该角色授予所选的用户/用户组。",
     "grantOnSaveUser": "保存角色后，将把该角色授予所选的用户。",
@@ -1238,14 +1440,11 @@
     "grantsViewTab": "用户授权",
     "addRole": "添加角色",
     "newRole": "新建角色",
-    "selectRoleHint": "请从左侧列表选择角色，或创建新角色。",
-    "permissionsSection": "权限配置",
-    "permissionsHint": "在左侧勾选授权集群，再在右侧为所选集群勾选命名空间。命名空间列表跟随所选集群。",
+    "permissionsHint": "在「可用」里选权限，一条权限 = 一个资源上的一个操作。角色是全局的；在哪些集群、哪些命名空间生效由权限绑定决定。注意：「创建命名空间」不由角色授权，统一由管理员创建后再在「权限绑定」里分配给用户使用。",
+    "podExecRequiresView": "已勾选「Pod 终端」，但缺少「查看 Pod」：请补选「查看 Pod」，否则终端无法连接。",
     "grantHint": "勾选即授权",
     "managePermissions": "权限",
     "managePermissionsHint": "管理命名空间 {{namespace}} 的权限",
-    "allClustersGrantedInfo": "已授权全部集群",
-    "grantedClustersInfo": "已授权 {{granted}}/{{total}} 个集群",
     "namespaceClusterHint": "以下命名空间属于集群 {{cluster}}",
     "grantStatus": "授权状态",
     "granted": "已授权",
@@ -1254,12 +1453,10 @@
     "filterUngranted": "未授权",
     "namespaceTotalInfo": "共 {{total}} 个命名空间 · 已授权 {{granted}} 个",
     "grantCluster": "授权集群",
-    "allClustersWildcard": "全部集群 (*)",
     "allNamespacesWildcard": "全部命名空间 (*)",
-    "allResourcesWildcard": "全部资源 (*)",
+    "allResourcesWildcard": "全部资源（*）",
     "allVerbsWildcard": "全部操作 (*)",
     "selectClusterHint": "在左侧选择集群，查看其命名空间。",
-    "noClusters": "暂无集群。",
     "description": "管理角色、权限与成员",
     "membersTitle": "成员",
     "membersHint": "已分配该角色的用户和 LDAP / OIDC 组。",
@@ -1268,8 +1465,41 @@
     "noMembers": "暂无成员。",
     "addMember": "添加",
     "roleColumn": "角色",
-    "systemRoleHint": "系统角色为只读，但仍可管理其成员。",
-    "title": "RBAC 管理",
+    "systemRoleHint": "系统角色：角色 ID 固定，名称与权限可以调整。",
+    "systemRoles": {
+      "admin": "系统管理员",
+      "auditor": "审计管理员",
+      "security-admin": "安全管理员",
+      "viewer": "只读管理员"
+    },
+    "systemRoleDescriptions": {
+      "admin": "系统管理员：控制台与集群的全部管理权限",
+      "auditor": "审计管理员：只读查看审计日志，并可配置审计记录的存储策略",
+      "security-admin": "安全管理员：身份、授权与安全策略",
+      "viewer": "只读管理员：只读查看全部 Kubernetes 资源（不含 secrets）、容器日志与控制台设置"
+    },
+    "settingsResources": {
+      "all": "全部设置章节"
+    },
+    "settingsSections": {
+      "general": "通用设置",
+      "clusters": "集群管理",
+      "notification": "通知管理",
+      "templates": "资源模板",
+      "apikeys": "API Key",
+      "authentication": "认证源",
+      "users": "用户与用户组",
+      "rbac": "角色与权限绑定",
+      "security": "安全策略",
+      "audit": "审计管理"
+    },
+    "restoreDefaults": "恢复默认",
+    "builtinRolesManagedElsewhere": "该主体还持有内置角色 {{roles}}；这类角色只能在「系统管理员 / 审计管理员 / 安全管理员」页签维护，不在这里调整。",
+    "restoreDefaultsConfirm": "将角色「{{name}}」恢复为内置默认权限？对该角色做过的手工调整会丢失。",
+    "restoreDefaultsDone": "已恢复为内置默认权限，请让相关用户重新登录。",
+    "separationOfDutiesHint": "职责分离（等保三级）：系统管理员（配置）、安全管理员（授权）、审计管理员（审计）三个内置角色的权限互不相交，且不得由同一账号兼任——否则该账号的管理面会被整体拒绝，需要先解绑其中一个角色。角色控制台设置章节（settings.<章节>）时，通配 * 不覆盖它们，必须逐个显式勾选。",
+    "roleConflictsTitle": "职责分离冲突",
+    "roleConflictsHint": "这些账号同时持有互斥的管理员角色，其管理面已被整体拒绝。请解绑其中一个角色（或调整对应权限绑定组的成员角色）后再让本人重试。",
     "noPermissionCluster": "用户 {{user}} 没有权限在集群 {{cluster}} 上 {{verb}} {{resource}}",
     "noPermissionNamespace": "用户 {{user}} 没有权限在集群 {{cluster}} 的 Namespace {{namespace}} 中 {{verb}} {{resource}}",
     "accessDenied": "访问被拒绝",
@@ -1279,25 +1509,22 @@
     "anyUser": "任意用户",
     "confirmRemoveOwnRoleTitle": "移除自己的角色？",
     "deleteOwnRoleWarning": "这个角色已分配给当前用户，删除后可能影响你的权限。",
-    "permissionPreviewTitle": "权限预览",
-    "permissionPreview": "允许在集群 {{clusters}} 的 Namespace {{namespaces}} 中，对 {{resources}} 执行 {{verbs}}。",
+    "grantsRequired": "请至少选择一条权限。",
+    "noResourcesSelected": "请先把资源搬到「已赋予」，再搬入操作。",
     "resourceHint": "内置资源使用复数资源名，可输入内容过滤建议。CRD 和自定义资源请输入 URL 中的 CRD 名称，例如 widgets.example.com。",
     "loadNamespacesFrom": "从以下位置加载命名空间建议",
     "namespaceCount": "找到 {{count}} 个命名空间",
     "namespaceLoadPartial": "{{failed}} 个集群加载失败。",
-    "allClusters": "全部集群 ({{count}})",
     "noMatchingGroups": "没有匹配的用户组。组列表只包含已从 LDAP/OIDC 同步或已分配给用户的组名。",
     "namespaceScopeHint": "命名空间限制只对命名空间级资源生效；集群级资源（nodes、PV、StorageClass、CRD 等）不受命名空间列表限制。",
     "namespacedResources": "命名空间级资源",
     "clusterScopedResources": "集群级资源",
-    "clusterScopedResourceHint": "集群级资源不受命名空间列表限制。",
+    "clusterScopedResourceHint": "集群级资源不属于任何命名空间。",
     "clusterScopedNotSelectable": "该角色仅授权所选命名空间，因此集群级资源（如 nodes、PersistentVolume）不在此处提供。如需授权集群级资源，请使用不受命名空间限制的角色。",
     "nodePermissionHint": "只有在授予对应权限后，节点页面上的相应按钮才会显示。",
-    "roleNameConflict": "已存在同名角色，角色名称必须唯一。",
-    "namePrefixHint": "角色名称会自动以「{{prefix}}」开头。",
-    "nameFixedHint": "角色名称固定，不可修改。",
-    "allPermissions": "全选",
-    "clusterOnlyPermissionsHint": "选择要授权的集群。该角色只管理集群级资源，无需选择命名空间。",
+    "roleNameConflict": "已存在同名角色。角色名称全局唯一（不区分集群）。",
+    "permissionRequired": "必选",
+    "clusterOnlyPermissionsHint": "在「可用」里选权限，一条权限 = 一个资源上的一个操作。该角色只管理集群级资源。",
     "nodePermissions": {
       "panelTitle": "节点权限",
       "view": "查看节点",
@@ -1310,6 +1537,31 @@
       "deleteHint": "删除节点。",
       "exec": "节点终端",
       "execHint": "登录节点终端。"
+    },
+    "podPermissions": {
+      "panelTitle": "Pod 权限",
+      "view": "查看 Pod",
+      "viewHint": "查看 Pod 列表与详情、描述 Pod、下载 YAML。",
+      "create": "创建 Pod",
+      "createHint": "创建 Pod。",
+      "update": "编辑 Pod",
+      "updateHint": "编辑 Pod、调整资源、挂载调试容器。",
+      "delete": "删除 Pod",
+      "deleteHint": "删除 Pod。",
+      "logHint": "查看 Pod 日志。",
+      "exec": "Pod 终端",
+      "execHint": "登录 Pod 终端（需同时具备「查看 Pod」）。",
+      "viewFileHint": "浏览 Pod 中的文件。",
+      "downloadFileHint": "从 Pod 下载文件。",
+      "uploadFileHint": "向 Pod 上传文件。"
+    },
+    "podPermissionHint": "只有在授予对应权限后，Pod 页面上的相应按钮才会显示。",
+    "settingsPermissions": {
+      "panelTitle": "设置权限",
+      "view": "查看系统设置",
+      "viewHint": "查看控制台的系统设置与权限配置。",
+      "manage": "管理设置",
+      "manageHint": "修改控制台的系统设置与权限（含新建 / 编辑 / 删除）。"
     },
     "actions": {
       "add": "添加角色"
@@ -1329,9 +1581,21 @@
       "viewFile": "容器文件浏览",
       "downloadFile": "容器文件下载",
       "uploadFile": "容器文件上传"
-    }
+    },
+    "protectedRoleHint": "等保三级三权分立要求的角色，由代码维护，不可修改或删除，只能查看。",
+    "topRoleHint": "最高权限角色受保护：权限不可修改、角色不可删除，只能查看。",
+    "viewerRoleHint": "只读管理员的规则由代码维护：权限不可修改、角色不可删除，只能查看。",
+    "protectedRoleBadge": "受保护",
+    "builtinRoleBadge": "内置",
+    "builtinRoleHint": "内置角色：名称固定，权限可调，也可以删除。",
+    "roles": "角色",
+    "namespacePermissions": {
+      "panelTitle": "命名空间权限"
+    },
+    "namespacePermissionHint": "创建命名空间是管理员专属动作，不由角色授权：请让管理员创建新命名空间后，在「权限管理 → 权限绑定」里分配给用户使用。这里只列查看 / 修改 / 删除。"
   },
   "notifications": {
+    "operationFailed": "操作失败",
     "tabs": {
       "email": "邮件设置",
       "templates": "消息模板",
@@ -1350,12 +1614,23 @@
       "password_expiring": "密码即将过期提醒",
       "password_expired": "密码已过期提醒",
       "inactive_user_disabled": "不活跃账号禁用提醒",
+      "password_reset_by_admin": "密码被管理员重置",
+      "mfa_reset_by_admin": "动态码绑定被管理员重置",
+      "account_disabled": "账号已被禁用",
+      "account_enabled": "账号已启用",
+      "account_expiring": "账号即将过期提醒",
+      "role_assigned": "角色分配通知",
+      "role_unassigned": "角色移除通知",
+      "mail_delivery_failed": "邮件发送失败告警",
+      "session_takeover": "账号在其他设备登录提醒",
       "test": "测试邮件"
     },
     "inbox": {
       "title": "通知",
       "empty": "暂无通知",
       "markAllRead": "全部已读",
+      "clearAll": "清空全部",
+      "confirmClear": "确认清空？",
       "unread": "未读"
     },
     "actions": {
@@ -1364,34 +1639,129 @@
       "add": "添加",
       "delete": "删除",
       "sendTest": "发送测试邮件",
-      "sending": "发送中..."
+      "sending": "发送中...",
+      "runDaily": "立即执行每日检查",
+      "running": "执行中..."
     },
     "messages": {
       "saved": "已保存",
       "saveFailed": "保存失败",
       "testSent": "测试邮件已发送",
-      "testFailed": "测试邮件发送失败"
+      "testFailed": "测试邮件发送失败",
+      "dailyRan": "每日检查已执行"
+    },
+    "email": {
+      "title": "通知渠道",
+      "description": "总开关关闭后不再产生任何通知；站内信与邮件可分别启用。"
+    },
+    "fields": {
+      "body": "内容",
+      "emailEnabled": "邮件通知",
+      "inAppEnabled": "站内信",
+      "smtpFrom": "发件人邮箱",
+      "smtpHost": "SMTP 服务器",
+      "smtpPassword": "密码 / 授权码",
+      "smtpPort": "端口",
+      "smtpSenderName": "发件人名称",
+      "smtpSkipVerify": "跳过证书校验",
+      "smtpTls": "加密方式",
+      "smtpTlsNone": "不加密",
+      "smtpUsername": "账号",
+      "subject": "标题",
+      "templateEnabled": "启用",
+      "testRecipient": "收件人",
+      "username": "用户名",
+      "emailEnabledHint": "通过 SMTP 服务器发送邮件",
+      "inAppEnabledHint": "在右上角通知中心展示消息",
+      "passwordExpireNoticeDays": "密码过期提前提醒（天）",
+      "passwordExpireNoticeDaysHint": "与「安全管理」中的密码过期天数配合使用，每天检查一次",
+      "smtpPasswordKeep": "已配置，留空则不修改",
+      "smtpSkipVerifyHint": "仅在自签名证书的测试环境使用"
+    },
+    "smtp": {
+      "title": "邮件服务器",
+      "description": "SMTP 配置，保存后可发送测试邮件"
+    },
+    "subscriptions": {
+      "add": "新增订阅",
+      "empty": "暂无订阅",
+      "existing": "已配置订阅",
+      "description": "选择需要通知的事件与接收人；用户需先在「用户」中配置邮箱才能用邮件接收"
+    },
+    "templates": {
+      "empty": "暂无模板",
+      "variables": "可用变量"
+    },
+    "test": {
+      "title": "发送测试邮件",
+      "description": "先保存配置，再向指定邮箱发送一封测试邮件"
+    },
+    "title": "通知管理"
+  },
+  "createUser": {
+    "title": "新建用户",
+    "accountHint": "登录名在全部来源中必须唯一",
+    "sections": {
+      "account": "账户",
+      "authentication": "认证",
+      "other": "其它"
+    },
+    "selectGroups": "选择用户组（可多选）",
+    "noGroups": "暂无可选用户组",
+    "groupsHint": "新用户会加入所选用户组；用户组可同时包含本地与 LDAP / OIDC 账号。",
+    "randomPassword": "随机生成",
+    "passwordInvalid": "密码要求未满足，请按提示调整密码。",
+    "fields": {
+      "mfaLevel": "MFA 级别"
+    },
+    "mfaLevels": {
+      "enabled": "启用（跟随全局策略）",
+      "disabled": "禁用"
+    },
+    "mfaLevelHint": "当前全局策略：",
+    "mfaLevelHintSuffix": "；选择「禁用」的账号不受策略强制",
+    "mfaPolicy": {
+      "required": "强制",
+      "optional": "启用（可选）",
+      "disabled": "禁用"
     }
   },
   "settings": {
     "title": "系统设置",
+    "readOnlyNotice": "当前角色只有本章节的查看权限，因此修改类操作已被隐藏或禁用。如需修改，请联系对应的管理员。",
     "description": "管理集群和系统设置",
+    "descriptions": {
+      "general": "管理控制台全局开关：AI 助手、kubectl / 节点终端、集群代理与运行时配置。",
+      "navigation": "配置左侧导航显示哪些分组与条目：可以调整顺序、隐藏条目或新建分组；发布为全局导航后对没有自定义导航的用户生效。",
+      "clusters": "导入 Kubernetes 集群、启用或禁用集群，以及删除不再使用的集群。",
+      "apikeys": "创建与吊销用于调用 Kite API 的密钥。",
+      "templates": "维护创建资源时可选的模板。",
+      "user": "管理控制台用户与用户组：新增/编辑账号、启用或禁用登录、重置密码、分配角色以及维护用户组成员。",
+      "rbac": "定义角色（集群、资源、动作）以及把用户或用户组与角色关联的权限绑定。",
+      "audit": "查看审计日志：登录记录、控制台操作与资源变更。",
+      "security": "管理登录方式与登录加固：LDAP / OAuth / OIDC 认证源、密码策略、登录限制、MFA 策略与会话设置。",
+      "notification": "配置通知渠道、事件订阅与测试发送。"
+    },
     "tabs": {
       "clusters": "集群",
       "general": "通用",
-      "oauth": "认证",
-      "rbac": "RBAC",
-      "user": "用户与用户组",
+      "navigation": "侧边栏导航",
+      "bindingGroups": "权限绑定",
+      "user": "用户管理",
       "users": "用户",
       "group": "用户组",
       "apikeys": "API 密钥",
       "templates": "模板",
-      "audit": "日志审计",
-      "security": "安全设置",
-      "notification": "通知设置"
+      "audit": "审计管理",
+      "security": "安全管理",
+      "notification": "通知管理"
     },
     "subTabs": {
       "rbacRoles": "角色管理",
+      "rbacPrivileges": "权限",
+      "rbacAdministrators": "系统管理员",
+      "rbacAuditors": "审计管理员",
+      "rbacSecurityAdmins": "安全管理员",
       "rbacUsers": "用户",
       "rbacGroups": "用户组",
       "rbacNamespaces": "命名空间授权",
@@ -1441,6 +1811,13 @@
         "enableVersionCheck": "启用版本检查"
       }
     },
+    "autoBindNamespace": {
+      "title": "命名空间自动归属",
+      "description": "普通用户在权限范围内新建命名空间时，自动把它纳入自己已有的授权（优先归属其权限绑定组）；管理员创建的命名空间不自动归属，便于管理员手动分配。",
+      "form": {
+        "enabled": "用户创建命名空间时自动归属其权限"
+      }
+    },
     "loginPrompt": {
       "title": "登录提示",
       "description": "在登录页展示自定义提示。",
@@ -1449,11 +1826,26 @@
         "placeholder": "留空则不展示登录提示"
       }
     },
+    "branding": {
+      "title": "品牌",
+      "description": "自定义控制台外观：名称与 logo 会用在侧边栏、登录页、初始化页与浏览器标签上；留空则用默认值（Kite + 内置图标）。仅管理员可改。",
+      "nameLabel": "名称",
+      "namePlaceholder": "Kite",
+      "nameHint": "展示在侧边栏、登录页与浏览器标签上；留空则使用默认名称 Kite。",
+      "preview": "Logo 预览",
+      "upload": "选择图片",
+      "reset": "恢复默认",
+      "urlLabel": "Logo 地址",
+      "urlPlaceholder": "https://example.com/logo.png",
+      "urlHint": "支持图片地址或 data: URL；建议方形图标且小于 180 KiB（logo 会在每次打开控制台时下发），保存后生效。"
+    },
     "errors": {
-      "modelRequired": "模型不能为空",
-      "apiKeyRequired": "启用 AI Agent 时必须配置 API Key",
-      "kubectlImageRequired": "启用 kubectl 时必须配置镜像",
-      "nodeTerminalImageRequired": "节点终端镜像不能为空"
+      "modelRequired": "请填写模型",
+      "apiKeyRequired": "启用 AI 助手时必须填写 API Key",
+      "kubectlImageRequired": "启用 kubectl 时必须填写镜像",
+      "nodeTerminalImageRequired": "节点终端镜像不能为空",
+      "logoNotImage": "请选择图片文件",
+      "logoTooLarge": "图片不能超过 {{size}} KiB，建议改用更小的 logo 或直接填图片地址"
     },
     "messages": {
       "updated": "通用设置已更新"
@@ -1461,14 +1853,6 @@
   },
   "authenticationManagement": {
     "title": "认证设置",
-    "mfa": {
-      "title": "MFA",
-      "description": "允许用户配置认证器 App MFA。"
-    },
-    "passkey": {
-      "title": "Passkey 登录",
-      "description": "允许用户注册 Passkey 并使用 Passkey 登录。"
-    },
     "ldap": {
       "title": "LDAP",
       "description": "启用 LDAP 登录，并同步 LDAP 组到 RBAC。",
@@ -1542,16 +1926,21 @@
     "groupsInheritHint": "成员会继承该用户组在 RBAC 中授予的角色。",
     "groupGrantsLink": "查看用户组授权",
     "fields": {
-      "groups": "用户组",
-      "groupsHint": "多个组名以逗号分隔。用户会继承这些组被授予的角色。"
+      "groups": "用户组"
     },
     "messages": {
-      "externalEditHint": "该用户由外部源管理，此处仅可编辑头像。",
       "ldapDeleteNote": "此操作仅从 Kite 中移除该账号，用户仍存在于 LDAP 目录中，之后可再次导入。",
-      "ldapDeleted": "用户已删除"
+      "ldapDeleted": "用户已删除",
+      "mfaNotBound": "未绑定 MFA",
+      "superAdminDisableHint": "超级管理员可以停用，但系统里必须还有另一个启用、且持有系统管理员角色的账号。更推荐的做法是给它绑定 MFA。",
+      "superAdminNotDeletable": "超级管理员账号不支持删除，请改用停用（停用前需要另有启用账号持有系统管理员角色）。",
+      "lastAdministratorNeedsManager": "当前没有其他启用账号持有「系统管理员」角色，操作后没人能接管管理面。请先把该角色分配给另一个启用账号，再继续。",
+      "mfaResetConfirm": "解除「{{username}}」的 MFA 绑定？本人在下次登录时需要重新绑定身份验证器。",
+      "mfaResetDone": "已解除该账号的 MFA 绑定，请让本人重新绑定。"
     },
     "actions": {
-      "add": "添加用户"
+      "add": "添加用户",
+      "resetMFA": "重置 MFA"
     },
     "dialog": {
       "editTitle": "编辑用户",
@@ -1565,22 +1954,94 @@
     "addGroup": "添加用户组",
     "addGroupTitle": "添加用户组",
     "addGroupDescription": "创建本地用户组，并可选择添加成员。组成员继承授予该组的角色权限。",
-    "groupName": "组名 *",
+    "groupName": "组名",
     "groupNamePlaceholder": "请输入组名",
+    "groupDescription": "描述",
+    "groupDescriptionPlaceholder": "请输入描述（可选）",
+    "noGroupDescription": "暂未填写描述",
+    "groupSource": "来源",
+    "groupSourceLocal": "本地",
     "membersOptional": "成员（可选）",
-    "localMembersOnlyHint": "仅可添加本地（密码）用户；外部用户由目录管理。",
+    "localMembersOnlyHint": "可添加任意用户，包括 LDAP / OIDC 目录账号：目录账号会被记为本地附加成员，不受目录同步影响。",
     "groupCreated": "用户组 {{name}} 创建成功",
     "groupExists": "用户组已存在",
     "addMemberTitle": "向 {{name}} 添加成员",
-    "addMemberDescription": "仅可添加本地（密码）用户；外部用户由目录管理。",
+    "addMemberDescription": "可添加任意用户，包括 LDAP / OIDC 目录账号：目录账号会被记为本地附加成员，其目录用户组不受影响。",
     "memberAdded": "成员已添加",
     "removeMember": "移除",
     "memberRemoved": "已从组中移除",
+    "memberSourceLocal": "本地添加",
+    "memberSourceDirectory": "目录同步",
+    "memberDirectoryManaged": "{{username}} 的组成员关系来自目录，请在该目录里移除。",
     "externalMemberHint": "由目录管理",
     "usersTab": "用户",
     "groupsTab": "用户组",
+    "members": "成员",
+    "membersBreakdown": "本地账号 {{local}} · 目录账号 {{external}}",
+    "grantedRoles": "已授权角色",
+    "noGrantedRoles": "暂无授权角色",
+    "manageMembers": "管理成员",
+    "groupRenamed": "用户组已重命名为 {{newName}}",
+    "groupDescriptionUpdated": "用户组描述已更新",
+    "groupDeleted": "用户组 {{name}} 已删除",
+    "groupType": "用户组",
+    "editGroupDescription": "修改描述",
+    "editGroupDescriptionTitle": "修改用户组 {{name}} 的描述",
+    "editGroupDescriptionHint": "描述只是控制台里的备注：不影响授权，也不参与目录同步，目录来源的用户组同样可以填写。",
+    "renameGroupTitle": "重命名用户组 {{name}}",
+    "renameGroup": "重命名用户组",
+    "renameDirectoryGroupHint": "目录同步的用户组只能在目录里改名：在控制台改名不会生效，下一次同步会被目录里的名字覆盖。",
+    "renameGroupDescription": "新名称会同步到该用户组的成员与 RBAC 角色授权。",
+    "deleteGroupImpact": "将从该组移除 {{members}} 个本地成员，并删除 {{external}} 个外部引用与 {{grants}} 条 RBAC 角色授权。",
     "status": {
       "pendingDeletion": "待删除"
+    },
+    "detail": {
+      "title": "用户详情",
+      "superAdmin": "超级管理员",
+      "contact": "联系方式",
+      "contactHintLocal": "邮箱用于接收通知，会做格式校验；三项留空即清空。",
+      "contactHintDirectory": "该账号由目录同步维护，控制台只能修改头像。",
+      "directory": "目录同步",
+      "provider": {
+        "password": "本地密码登录",
+        "ldap": "LDAP 目录"
+      },
+      "fields": {
+        "userId": "用户 ID",
+        "avatarUrl": "头像 URL",
+        "updatedAt": "资料更新时间",
+        "passwordUpdatedAt": "密码更新时间",
+        "expiresAt": "账号有效期",
+        "neverExpires": "永不过期",
+        "disabledAt": "停用时间",
+        "disabledReasonInactive": "{{time}}（长期未登录，由「不活跃用户自动禁用」任务停用）",
+        "mfa": "MFA",
+        "mfaBound": "已绑定",
+        "mfaDisabledLevel": "该账号已关闭 MFA 强制",
+        "email": "邮箱",
+        "phone": "手机",
+        "remark": "备注",
+        "groups": "用户组",
+        "disabledReasonExpired": "{{time}}（账号已过期，由每日检查自动停用）"
+      },
+      "ldap": {
+        "managedHint": "该账号由 LDAP 目录同步创建与维护：昵称、邮箱、手机与用户组以目录为准（账号的「资料更新时间」即最近一次刷新），控制台只能修改头像。",
+        "lastSync": "LDAP 最近同步",
+        "neverSynced": "尚未同步过",
+        "autoSync": "自动同步",
+        "autoSyncInterval": "每 {{minutes}} 分钟",
+        "lastResult": "上次同步结果",
+        "lastResultSummary": "共 {{total}} 个账号，新增 {{created}}、更新 {{updated}}、失败 {{failed}}、清理 {{purged}}"
+      },
+      "oidc": {
+        "managedHint": "该账号由 OIDC 提供商 {{provider}} 在登录时创建与更新：昵称、邮箱与用户组来自身份源声明，控制台只能修改头像。"
+      },
+      "groups": {
+        "sourceLocalHint": "「本地」表示由管理员在控制台追加的附加组，不受目录同步影响。",
+        "editableHint": "用户会继承这些用户组在 RBAC 中获得的角色；清空表示不属于任何用户组。",
+        "directoryHint": "目录账号的用户组由目录同步维护；需要追加本地附加组时，请到「用户组」页签添加成员。"
+      }
     }
   },
   "settingsHint": {
@@ -1599,7 +2060,15 @@
   },
   "clusterManagement": {
     "title": "集群管理",
+    "currentBadge": "当前",
+    "hints": {
+      "currentCluster": "当前正在使用该集群",
+      "switchUnavailable": "该集群同步异常，暂不可切换"
+    },
+    "deleteBindingGroups": "同时删除该集群的 {{count}} 个权限绑定",
+    "keepBindingGroupsHint": "不勾选则保留这些授权管理配置（权限绑定）但暂不生效；重新导入该集群后，首次进入权限管理页面时会提示是沿用之前的授权还是新建默认授权。",
     "actions": {
+      "switch": "切换到此集群",
       "add": "添加集群",
       "import": "导入集群",
       "importing": "导入中..."
@@ -1642,7 +2111,8 @@
       "createError": "创建集群失败",
       "updateError": "更新集群失败",
       "deleteError": "删除集群失败",
-      "fileReadError": "无法读取 kubeconfig 文件"
+      "fileReadError": "无法读取 kubeconfig 文件",
+      "bindingGroupsRetained": "保留了 {{count}} 个权限绑定组；重新导入集群后需要重新绑定。"
     },
     "errors": {
       "loadFailed": "加载集群失败"
@@ -1666,7 +2136,10 @@
       "prometheusUrlPlaceholder": "https://prometheus.example.com",
       "clusterAgentDescription": "先创建集群，然后在目标集群内运行生成的命令。",
       "enabled": "启用",
-      "isDefault": "设为默认"
+      "isDefault": "设为默认",
+      "configLoadFailed": "加载当前配置失败",
+      "configLoaded": "当前配置已加载",
+      "viewCurrentConfig": "查看当前配置"
     }
   },
   "oauthManagement": {
@@ -1786,8 +2259,7 @@
       "deleted": "API 密钥删除成功",
       "createError": "创建 API 密钥失败",
       "deleteError": "删除 API 密钥失败",
-      "copied": "已复制到剪贴板",
-      "copyError": "复制失败"
+      "copied": "已复制到剪贴板"
     },
     "errors": {
       "loadFailed": "加载 API 密钥失败"
@@ -2140,6 +2612,8 @@
       "liveness": "存活检查",
       "startup": "启动检查"
     },
+    "probeCustom": "自定义",
+    "probeTiming": "（初始延迟 {{initial}}s，检查间隔 {{period}}s）",
     "probeType": "类型",
     "probeNone": "无",
     "probeHttp": "HTTP 请求返回成功的状态（200-399）",
@@ -2179,6 +2653,23 @@
     "networkHint": "定义容器监听的端口，稍后通过 Service 暴露。",
     "addPort": "添加端口"
   },
+  "containerEdit": {
+    "title": "编辑容器：{{name}}",
+    "description": "更复杂的改动可以直接到 YAML 里修改。",
+    "tabImage": "镜像",
+    "tabResources": "资源",
+    "tabEnvironment": "环境变量",
+    "resourceRequests": "资源请求（requests）",
+    "resourceLimits": "资源上限（limits）",
+    "cpuRequest": "CPU 请求",
+    "cpuRequestHint": "例如 100m（0.1 核）、1（1 核）",
+    "cpuLimit": "CPU 上限",
+    "cpuLimitHint": "例如 500m（0.5 核）、2（2 核）",
+    "memoryRequest": "内存请求",
+    "memoryRequestHint": "例如 128Mi、1Gi、512M",
+    "memoryLimit": "内存上限",
+    "memoryLimitHint": "例如 512Mi、2Gi、1G"
+  },
   "configmapCreate": {
     "pageTitle": "ConfigMap: 创建",
     "namePlaceholder": "请输入名称",
@@ -2206,6 +2697,56 @@
     "noCreatePermission": "你没有权限在命名空间 {{namespace}} 中创建 ConfigMap。",
     "createButton": "创建 ConfigMap"
   },
+  "secretCreate": {
+    "pageTitle": "Secret: 创建",
+    "namePlaceholder": "请输入名称",
+    "tabData": "数据",
+    "tabBinary": "二进制数据",
+    "tabMeta": "标签 & 注释",
+    "chooseFile": "选择文件",
+    "binaryLoaded": "已载入 base64 数据",
+    "dataHint": "明文值会以 stringData 提交，由 API Server 编码为 base64 后存入 data。",
+    "binaryHint": "文件内容会以 base64 编码写入 data，适合证书、密钥库等二进制内容。",
+    "typeLabel": "类型",
+    "typeOpaque": "Opaque（默认）",
+    "typeCustom": "Custom",
+    "customTypeLabel": "自定义类型",
+    "customTypePlaceholder": "例如 example.com/my-type",
+    "customTypeRequired": "请填写自定义类型。",
+    "recommendedKeysHint": "该类型常用键（可选）：{{keys}}",
+    "immutableLabel": "不可变",
+    "immutableHint": "创建后不允许再修改",
+    "requiredKeysHint": "该类型必须包含这些键（且不能为空）：{{keys}}",
+    "requiredKeyEmpty": "该类型要求的键「{{key}}」不能为空",
+    "labelsHint": "用于标识与筛选该 Secret 的键值对。",
+    "annotationsHint": "用于存放非标识性元数据的键值对。",
+    "addLabel": "添加标签",
+    "addAnnotation": "添加注释",
+    "namespaceRequired": "请先选择命名空间。",
+    "invalidName": "名称只能包含小写字母、数字和 '-'。",
+    "reservedName": "「{{name}}」与创建页地址冲突，请换一个名称。",
+    "overlappingKeys": "键「{{key}}」已在明文数据中使用，data 与 stringData 不能使用相同的键。",
+    "keyRequired": "每一项都需要填写键名。",
+    "invalidKey": "键「{{key}}」只能包含字母、数字、'-'、'_' 和 '.'",
+    "invalidMetaKey": "标签/注释键「{{key}}」不是合法的 Kubernetes 键",
+    "duplicateKey": "存在重复的键「{{key}}」",
+    "binaryValueRequired": "请为「{{key}}」选择文件",
+    "invalidYaml": "YAML 不是合法的 Secret，或缺少 name / namespace。",
+    "noCreatePermission": "你没有权限在命名空间 {{namespace}} 中创建 Secret。",
+    "createButton": "创建 Secret"
+  },
+  "keyValueDataViewer": {
+    "entryCount": "{{total}} 个条目",
+    "hideAll": "隐藏全部",
+    "revealAll": "显示全部",
+    "noEntries": "暂无条目",
+    "noDataEntries": "暂无数据条目",
+    "noBinaryDataEntries": "暂无二进制数据条目"
+  },
+  "secretDetail": {
+    "showBase64": "显示 Base64",
+    "decodeValues": "解码明文"
+  },
   "labelMatch": {
     "loading": "正在匹配现有 Pod…",
     "matched": "与 {{total}} 个 Pod 中的 {{matched}} 个匹配。",
@@ -2221,6 +2762,7 @@
   },
   "serviceCreate": {
     "pageTitle": "Service: 创建",
+    "noCreatePermission": "你没有权限在命名空间 {{namespace}} 中创建 Service。",
     "serviceName": "服务名称",
     "serviceType": "服务类型",
     "externalName": "外部名称 (External Name)",
@@ -2255,6 +2797,20 @@
     "copy": "复制"
   },
   "passwordPolicy": {
+    "title": "密码要求",
+    "length": "长度至少 {{min}} 位",
+    "rulesLength": "长度在 {{min}} ~ {{max}} 位字符以内（推荐 12 位以上）",
+    "rulesNoSpace": "不能包含空格",
+    "rulesNoSlashStart": "不能以 \"/\" 开头",
+    "rulesMinClasses": "至少包含以下四项中的 {{count}} 项",
+    "classLower": "小写字母 a ~ z",
+    "classUpper": "大写字母 A ~ Z",
+    "classDigit": "数字 0 ~ 9",
+    "classSpecial": "特殊字符 ()`~!@#$%^&*-+=_|{}[]:;'<>,.?/",
+    "lowercase": "包含小写字母",
+    "uppercase": "包含大写字母",
+    "number": "包含数字",
+    "special": "包含特殊字符",
     "errors": {
       "password_too_short": "密码长度不足，至少需要 {{min}} 位",
       "password_too_long": "密码长度超出限制，最多 {{max}} 位",
@@ -2262,8 +2818,12 @@
       "password_missing_lowercase": "密码必须包含小写字母",
       "password_missing_digit": "密码必须包含数字",
       "password_missing_special": "密码必须包含特殊字符",
-      "password_reused": "密码不能与前 {{count}} 次使用过的密码重复"
-    }
+      "password_reused": "密码不能与前 {{count}} 次使用过的密码重复",
+      "password_contains_space": "密码不能包含空格",
+      "password_invalid_start": "密码不能以 \"/\" 开头",
+      "password_too_few_classes": "密码至少需要包含 {{count}} 类字符（小写/大写/数字/特殊字符）"
+    },
+    "strength": "强度"
   },
   "mfaPrompt": {
     "title": "需要 MFA 二次校验",
@@ -2275,6 +2835,7 @@
   "mfaEnrollment": {
     "title": "需要完成 MFA 绑定",
     "description": "管理员已要求你的账号启用 MFA，请先绑定身份验证器后继续使用。",
+    "passwordStepHint": "为防止会话被盗用，请先验证当前密码；验证通过后将显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
     "passwordLabel": "当前密码",
     "continue": "继续",
     "scanHint": "请使用身份验证器扫描二维码，并输入其显示的 6 位动态码。",
@@ -2290,12 +2851,13 @@
     }
   },
   "securitySettings": {
-    "title": "安全设置",
+    "title": "安全管理",
     "tabs": {
       "authentication": "认证安全",
       "loginPolicy": "登录限制",
       "password": "密码安全",
-      "session": "会话安全"
+      "session": "会话安全",
+      "authProviders": "认证配置"
     },
     "groups": {
       "basic": "基本",
@@ -2304,10 +2866,37 @@
       "ipLoginLimit": "IP 登录限制",
       "other": "其他",
       "passwordRules": "密码规则",
+      "inactiveAutoDisable": "不活跃自动禁用",
       "session": "会话"
     },
+    "userStatus": {
+      "title": "用户状态",
+      "description": "被「不活跃用户自动禁用」关闭的账号按停用时间排列，可搜索、分页浏览，单个或勾选批量恢复；恢复后用户需要重新登录。",
+      "check": "立即检查",
+      "checkResult": "本次检查禁用了 {{count}} 个长期未登录的账号",
+      "checkNone": "检查完成：没有需要禁用的账号",
+      "empty": "暂无被自动禁用的账号",
+      "searchPlaceholder": "搜索用户名",
+      "selectAllOnPage": "本页全选",
+      "rowsPerPage": "每页行数",
+      "pageOf": "第 {{page}} / {{total}} 页",
+      "prevPage": "上一页",
+      "nextPage": "下一页",
+      "totalAccounts": "共 {{count}} 个账号",
+      "restore": "恢复",
+      "restored": "已恢复 {{name}}",
+      "restoreSelected": "恢复所选 ({{count}})",
+      "restoreConfirm": "确定恢复这 {{count}} 个被自动禁用的账号？恢复后他们需要重新登录。",
+      "restoredCount": "已恢复 {{count}} 个账号，他们需要重新登录",
+      "restoreSkipped": "{{count}} 个账号已不在自动禁用列表中，未做处理",
+      "reason": "原因",
+      "reasons": {
+        "inactive": "长期未登录（自动禁用）",
+        "expired": "账号已过期（自动停用）"
+      }
+    },
     "mfaPolicy": {
-      "disabled": "未启用",
+      "disabled": "不强制",
       "all": "所有用户",
       "admin": "仅管理员"
     },
@@ -2315,12 +2904,15 @@
       "loginCaptchaEnabled": "启用登录验证码",
       "loginCaptchaEnabledHint": "开启验证码，防止机器人登录",
       "inactiveUserDisableDays": "不活跃用户自动禁用（天）",
-      "inactiveUserDisableDaysHint": "每天检测一次，超过期限未登录的用户自动禁用",
+      "inactiveUserDisableDaysHint": "每天检测一次，超过期限未登录的账号会被自动禁用；也可用下方「用户状态」卡片的「立即检查」当场验证",
       "remoteLoginNoticeEnabled": "异地登录通知",
       "remoteLoginNoticeEnabledHint": "根据登录 IP 是否属于常用登录城市进行判断，若在非常用城市登录，会发送异地登录提醒",
-      "mfaPolicy": "全局启用 MFA 认证",
-      "mfaThirdPartyEnabled": "第三方认证开启 MFA",
-      "mfaThirdPartyEnabledHint": "第三方登录方式包括：OIDC、CAS、SAML2",
+      "mfaPolicy": "强制绑定 MFA",
+      "mfaPolicyHint": "只决定谁必须绑定动态验证码；已绑定 MFA 的账号登录时一律验码，与这里的选择无关",
+      "mfaThirdPartyEnabled": "LDAP 管理员强制绑定动态码",
+      "mfaThirdPartyEnabledHint": "开启后，用 LDAP 登录的管理员即使还没绑定动态码也会被要求输码；因此未绑定的管理员将无法登录，需要其他管理员协助绑定或关闭此项",
+      "mfaStepUpEnabled": "敏感操作要求 MFA 校验",
+      "mfaStepUpEnabledHint": "已启用 MFA 的用户在执行删除类操作或打开交互终端前需重新校验动态码",
       "mfaVerifyTtlSeconds": "MFA 校验有效期",
       "mfaVerifyTtlSecondsHint": "单位：秒，目前仅在需要账号密码校验 MFA 时生效",
       "otpIssuerName": "OTP 扫描后的名称",
@@ -2338,16 +2930,14 @@
       "lockedIPsHint": "查看已被锁定的 IP 列表",
       "singleDeviceLogin": "仅一处设备登录",
       "singleDeviceLoginHint": "用户在新设备登录时，其他已登录的设备自动退出",
-      "existingUserOnly": "仅存在用户登录",
-      "existingUserOnlyHint": "如果开启，不存在的用户不能进行登录；如果关闭，取本地认证方式，其他认证方式的用户被允许登录并且自动创建用户（如果用户不存在）",
-      "loginSourceRestricted": "仅从用户登录来源登录",
-      "loginSourceRestrictedHint": "如果开启，用户登录时会检查登录来源 IP 是否合法；如果关闭，用户登录时会检查该用户所有已创建的认证方式进行鉴权验证，只要有一个认证方式可以直接登录",
       "passwordExpireDays": "用户密码过期时间（天）",
       "passwordExpireDaysHint": "如果用户在此期间内没有更新密码，密码将过期失效；密码过期提醒在密码过期前两天内由系统每天自动发送给用户",
       "passwordHistoryCount": "不能重复前几次密码",
       "passwordHistoryCountHint": "提示：用户重置密码时，不能为该用户前几次使用过的密码",
       "passwordMinLength": "密码最小长度",
       "adminPasswordMinLength": "管理员密码最小长度",
+      "passwordMinClasses": "至少包含字符类别数",
+      "passwordMinClassesHint": "0 = 要求包含下方勾选的所有字符类；1~4 = 小写/大写/数字/特殊字符至少包含 N 类",
       "passwordRequireUppercase": "必须包含大写字符",
       "passwordRequireLowercase": "必须包含小写字符",
       "passwordRequireDigit": "必须包含数字",
@@ -2357,22 +2947,42 @@
       "sessionMaxIdleMinutes": "连接最大空闲时间（分）",
       "sessionMaxIdleMinutesHint": "提示：如果超过该配置没有操作，连接会被断开",
       "sessionMaxHours": "会话连接最大时间（时）",
-      "sessionMaxHoursHint": "提示：如果会话连接超过该配置，连接会被断开"
+      "sessionMaxHoursHint": "提示：如果会话连接超过该配置，连接会被断开",
+      "rejectUnknownUsers": "仅存在用户登录",
+      "rejectUnknownUsersHint": "只允许控制台里已存在的账号登录。第三方登录按用户名匹配已有账号，并在首次登录时把身份绑定到该账号。",
+      "loginSourceEnforced": "仅从指定来源登录",
+      "loginSourceEnforcedHint": "开启后只有下方列表内的来源地址能访问控制台：登录与后续请求都会被拒绝。",
+      "loginSourceAllowlist": "允许的登录来源",
+      "loginSourceAllowlistHint": "上方开关开启时必填。支持 CIDR、单地址与地址区间，例如 10.0.0.0/8 或 192.168.10.1-192.168.10.20。"
     },
     "placeholders": {
       "ipList": "按下 Enter 键输入"
     },
     "lockedIPs": {
       "title": "已锁定 IP",
-      "description": "因登录失败次数过多而被临时禁止登录的客户端 IP。",
+      "description": "因登录失败次数过多而被临时禁止登录的客户端 IP，可在此手动解除或手动拉黑。",
       "empty": "当前没有被锁定的 IP。",
-      "until": "解除时间 {{time}}"
+      "until": "解除时间 {{time}}",
+      "addPlaceholder": "输入要拉黑的 IP",
+      "block": "拉黑",
+      "unblock": "解除锁定",
+      "blocked": "已拉黑该 IP",
+      "unblocked": "已解除锁定",
+      "manualHint": "白名单中的地址不会被失败次数自动锁定；需要长期拒绝请写入「IP 登录黑名单」。手动拉黑在服务重启后失效。"
     },
     "actions": {
       "viewLockedIPs": "查看 已锁定 IP（{{count}}）"
     },
     "messages": {
-      "updated": "安全设置已更新"
+      "updated": "安全管理已更新",
+      "loginSourceAllowlistRequired": "启用前请先填写至少一个允许的来源地址。"
+    },
+    "newUserDefaults": {
+      "enabled": "默认激活",
+      "enabledHint": "关闭后新建用户默认禁用，需要管理员手动启用",
+      "expireDays": "默认失效天数",
+      "expireDaysHint": "0 表示永不过期",
+      "title": "新建用户默认状态"
     }
   },
   "accountSettings": {
@@ -2381,7 +2991,10 @@
       "nickname": "昵称",
       "saveButton": "保存",
       "saved": "已保存",
-      "error": "保存失败"
+      "error": "保存失败",
+      "email": "邮箱",
+      "emailHint": "用于接收邮件通知，请填写可正常收信的地址。",
+      "phone": "手机"
     },
     "password": {
       "currentPassword": "当前密码",
@@ -2408,21 +3021,9 @@
         "disabled": "已停用",
         "disableError": "停用失败",
         "qrCodeAlt": "MFA 二维码",
-        "otpauthUrl": "otpauth 链接"
-      },
-      "passkeys": {
-        "title": "Passkeys",
-        "addButton": "添加 Passkey",
-        "added": "Passkey 已添加",
-        "addedOn": "添加于",
-        "addError": "添加失败",
-        "deleteAriaLabel": "删除 Passkey",
-        "deleted": "Passkey 已删除",
-        "deleteError": "删除失败",
-        "empty": "暂无 Passkey",
-        "lastUsed": "最近使用",
-        "loadError": "加载失败",
-        "namePlaceholder": "Passkey 名称"
+        "otpauthUrl": "otpauth 链接",
+        "description": "绑定动态码后，登录与敏感操作会要求输入一次动态码。",
+        "policyDisabled": "当前安全策略已关闭动态码，需要在「安全管理」里启用后才能绑定。"
       }
     },
     "mfa": "MFA",
@@ -2430,14 +3031,18 @@
     "enabled": "已启用",
     "disableMfa": "停用 MFA",
     "enableMfa": "启用 MFA",
-    "passkeys": "Passkeys",
-    "addPasskey": "添加 Passkey",
-    "passkeyName": "Passkey 名称",
-    "noPasskeys": "暂无 Passkey",
     "tabs": {
       "profile": "个人资料",
       "password": "修改密码",
-      "security": "安全"
+      "security": "安全",
+      "appearance": "外观"
+    },
+    "pageTitle": "用户信息",
+    "pageDescription": "查看并修改你的账号信息、密码与登录安全设置。",
+    "info": {
+      "groups": "所属用户组",
+      "passwordUpdatedAt": "密码修改时间",
+      "externalHint": "你的账号由 {{provider}} 管理：昵称、邮箱等字段以目录为准，这里只能修改头像。"
     }
   },
   "userMenu": {
@@ -2452,18 +3057,274 @@
       "system": "系统",
       "maple": "Maple",
       "jetbrains": "JetBrains Mono"
-    }
+    },
+    "accountInfo": "用户信息"
   },
   "audit": {
-    "operations": {
-      "viewFile": "查看文件",
-      "downloadFile": "下载文件",
-      "uploadFile": "上传文件"
+    "timeRange": {
+      "label": "时间范围",
+      "from": "开始日期",
+      "to": "结束日期",
+      "clear": "清除时间范围"
+    },
+    "export": {
+      "button": "导出 CSV",
+      "success": "已导出 {{count}} 条记录",
+      "failed": "导出失败",
+      "resultTitle": "导出完成",
+      "resultDescription": "文件已保存到本机。下面的指纹可用于离线核对。",
+      "fileName": "文件名",
+      "rowCount": "记录条数",
+      "timeRange": "时间范围",
+      "sha256": "SHA-256（文件内容指纹）",
+      "hmac": "服务端签名（HMAC-SHA256）",
+      "verifyHint": "校验方法：对下载的文件执行 sha256sum，结果应与上面的 SHA-256 一致；签名由服务端密钥生成，可确认该文件出自本服务器。"
     },
     "tabs": {
       "login": "登录日志",
       "operation": "操作日志",
-      "password": "改密日志"
+      "file": "文件操作",
+      "password": "改密日志",
+      "setting": "审计设置"
+    },
+    "setting": {
+      "title": "审计设置",
+      "description": "配置审计记录的保留策略与外部外发。审计记录只能查看，不能手工删除。",
+      "messages": {
+        "updated": "审计设置已保存"
+      },
+      "retention": {
+        "title": "保留策略",
+        "description": "按时间自动滚动清理过期的审计记录；每次清理都会留下一条审计记录。",
+        "keepForever": "永久保留",
+        "keepForeverHint": "默认开启：不做任何自动删除。",
+        "keepForeverValue": "不自动清理审计记录",
+        "days": "保留天数",
+        "daysHint": "不低于 {{min}} 天；等保与《网络安全法》通常按 {{recommended}} 天核查。",
+        "daysUnit": "天",
+        "tooShort": "保留天数必须为 0（永久保留）或不低于 {{min}} 天。",
+        "belowRecommended": "当前保留天数低于建议的 {{recommended}} 天，可能无法通过等保核查。"
+      },
+      "syslog": {
+        "title": "日志外发（syslog）",
+        "description": "把审计记录同时外发到外部 syslog 服务器。外发是尽力而为，失败不会影响本地审计记录的落库。",
+        "enabled": "启用外发",
+        "network": "网络协议",
+        "address": "服务器地址",
+        "addressHint": "格式 host:port",
+        "addressRequired": "启用外发时必须填写服务器地址。",
+        "tag": "标签（APP-NAME）",
+        "tagHint": "外发消息里的应用名，便于在日志服务器上区分来源。",
+        "facility": "设施（facility）",
+        "facilityHint": "默认 13（log audit），取值范围 0-23。",
+        "skipVerify": "跳过证书校验",
+        "skipVerifyHint": "仅 tls 生效。服务端使用自签证书时开启。",
+        "skipVerifyValue": "不校验服务端证书"
+      }
+    },
+    "fileOperations": {
+      "title": "文件操作日志",
+      "description": "记录 Pod 文件页的查看、下载与上传操作，包含容器与文件路径。"
+    },
+    "groups": {
+      "fileOperations": "文件操作"
+    },
+    "operations": {
+      "downloadFile": "下载文件",
+      "read": "查询",
+      "uploadFile": "上传文件",
+      "viewFile": "查看文件"
+    },
+    "loginResult": {
+      "invalid_credentials": "用户名或密码错误",
+      "mfa_invalid": "动态码错误",
+      "ip_denied": "来源 IP 被拒绝",
+      "too_many_attempts": "尝试次数过多，账号或 IP 已被锁定",
+      "not_provisioned": "目录用户尚未在控制台开通",
+      "no_permission": "账号被禁用，或没有任何权限",
+      "captcha_invalid": "验证码错误",
+      "account_expired": "账号已过期",
+      "source_denied": "来源地址不在允许列表内"
+    }
+  },
+  "bindingGroup": {
+    "title": "权限绑定",
+    "create": "创建权限绑定",
+    "created": "权限绑定已创建",
+    "createFailed": "创建失败",
+    "deleted": "权限绑定已删除",
+    "deleteFailed": "删除失败",
+    "saveFailed": "保存失败",
+    "nameConflict": "同集群已存在同名权限绑定，请换一个名称。",
+    "empty": "当前集群暂无权限绑定",
+    "selectHint": "选择或创建一个权限绑定",
+    "namePlaceholder": "组名称",
+    "descPlaceholder": "描述（可选）",
+    "summary": "{{ns}} 个命名空间 · {{members}} 个成员",
+    "members": "成员",
+    "noNamespaces": "当前集群没有可用的命名空间",
+    "roles": "绑定角色",
+    "addMember": "添加成员",
+    "userPlaceholder": "用户名",
+    "groupPlaceholder": "用户组名",
+    "allClusters": "所有集群",
+    "add": "添加",
+    "subjects": "主体",
+    "cluster": "集群",
+    "editTitle": "编辑权限绑定",
+    "createTitle": "新建权限绑定",
+    "membersHint": "用户 / 用户组 + 角色",
+    "moduleGrants": "授权（用户 / 用户组 + 角色）",
+    "addGrantRow": "添加一组",
+    "removeGrantRow": "删除这一组授权",
+    "grantRowsHint": "每一组 = 一个用户或用户组 + 他拥有的角色；同一个用户/用户组只能出现在一组里，已在其它组选过的不会再出现在下拉里。“作用命名空间”不选时默认跟随下方已选的命名空间（含以后加入的），需要收窄再在里面勾选具体命名空间。",
+    "allUsersPicked": "用户已全部被选完",
+    "allGroupsPicked": "用户组已全部被选完",
+    "grantSubjectsRequired": "请选择要授权的用户或用户组",
+    "moduleNamespaces": "命名空间",
+    "scopeLabel": "作用命名空间",
+    "scopeAllNamespaces": "全部命名空间",
+    "scopeAllShort": "全部",
+    "scopeAllFollowsBottom": "全部命名空间（跟随下方已选的 {{count}} 个）",
+    "scopeNoNamespaces": "请先在下方「命名空间」中选择本组的命名空间",
+    "selectUser": "选择用户",
+    "selectGroup": "选择用户组",
+    "noUsers": "暂无用户",
+    "noGroups": "暂无用户组",
+    "memberProtected": "受保护",
+    "memberProtectedHint": "受保护成员（超级管理员）不能从组里移除，其账号也不能删除；如需收回权限可以调整角色或禁用账号。",
+    "superGroupHint": "超级管理员的权限绑定由系统维护：不可删除，始终保持全局作用域，受保护成员不会被移除；可以新增成员或调整成员角色。",
+    "memberRolesRequired": "请至少为选中的用户/用户组选择一个角色",
+    "moduleSubjects": "用户 / 用户组",
+    "subjectsHint": "可用列表可按「用户 / 用户组」切换查看；用户组被授权时，其成员会一并获得这些角色。",
+    "subjectFilterPlaceholder": "过滤（{{kind}}名称）",
+    "noAvailableUsers": "没有更多可选的用户。",
+    "noAvailableGroups": "没有更多可选的用户组。",
+    "noSelectedSubjects": "尚未选择任何用户或用户组。",
+    "unifiedHint": "选中的用户/用户组都会获得所选中角色的权限，生效范围就是本组名下的命名空间。",
+    "globalBadge": "全局",
+    "superBadge": "超级管理员",
+    "authPromptTitle": "检测到该集群保留的授权配置",
+    "authPromptDescription": "集群 {{cluster}} 上次删除时保留了 {{count}} 个权限绑定，请选择如何处理。",
+    "authAdopt": "沿用之前的授权",
+    "authAdoptHint": "沿用保留的权限绑定，成员与角色授权立即恢复。",
+    "authCreateDefaults": "新建默认授权",
+    "authCreateDefaultsHint": "丢弃保留的配置，并创建内置的默认授权（超级权限绑定）。",
+    "authLater": "稍后处理",
+    "authAdopted": "已沿用之前的授权配置",
+    "authDefaultsCreated": "已创建默认授权配置",
+    "newNamespacePlaceholder": "新命名空间名称（在集群中创建并归属本组）",
+    "createNamespace": "创建",
+    "namespaceCreated": "命名空间 {{name}} 已创建",
+    "nsAfterCreate": "命名空间可在创建权限绑定后再绑定或直接创建。",
+    "nsExclusiveHint": "每个命名空间同一时间只能归属一个权限绑定；已被占用的要先到那个绑定里解绑，才会重新出现在这里。",
+    "nsTakenTitle": "以下命名空间已被其它权限绑定占用，已从可选列表中移除",
+    "nsTakenSubjects": "已授权",
+    "nsTakenRoles": "角色",
+    "nsTakenHint": "需要改用这些命名空间时，请先在上面对应的权限绑定里保存（去掉该命名空间）解绑，再回到这里选择。",
+    "nsConflictOnSave": "命名空间 {{namespace}} 已被权限绑定「{{group}}」占用，请先到那个绑定里解绑后再保存。",
+    "saveBeforeCreateNs": "请先保存权限绑定后再创建命名空间",
+    "nsFilterPlaceholder": "过滤（命名空间名称）",
+    "noSelectedNamespaces": "尚未选择任何命名空间。",
+    "noAvailableRoles": "没有可分配的角色。",
+    "noSelectedRoles": "尚未选择任何角色。",
+    "roleFilterPlaceholder": "过滤（角色名称）",
+    "notFound": "找不到该权限绑定，可能已被删除或不属于当前集群。",
+    "saved": "已保存",
+    "rolesPlaceholder": "选择角色",
+    "consoleRolesHint": "系统管理员 / 只读管理员 / 审计管理员 / 安全管理员由各自的页签维护，不在这里分配；已绑定的会保留。",
+    "noRoles": "暂无角色",
+    "nsPlaceholder": "选择命名空间",
+    "deleteConfirm": "确定删除该权限绑定？命名空间不会被删除。",
+    "superManagedHint": "超级管理员的权限绑定由系统维护，不可删除；请到「系统管理员」页签查看和添加成员。",
+    "bindAll": "全部绑定",
+    "bindFailed": "绑定失败",
+    "bindTitle": "绑定到集群",
+    "bindToCluster": "绑定到集群",
+    "bound": "已绑定到集群 {{cluster}}",
+    "retainedBadge": "保留",
+    "showRetained": "保留的权限绑定（{{count}}）",
+    "bindHint": "绑定后该权限绑定下的命名空间、成员与角色授权立即恢复生效。",
+    "retainedHint": "绑定后沿用保留的授权；如需重新规划，不绑定并新建权限绑定即可。",
+    "retainedTitle": "集群 {{cluster}} 有 {{count}} 个保留的权限绑定"
+  },
+  "consoleRoles": {
+    "protectedBadge": "系统维护",
+    "globalHint": "全局生效：与顶栏所选集群无关，这里的增删对所有集群都生效。",
+    "notBindableHint": "系统管理员、只读管理员、审计管理员与安全管理员这四个内置角色的规则由代码维护，不在「权限绑定」里分配，只能在这里维护。",
+    "empty": "暂无成员",
+    "subject": "主体",
+    "role": "角色",
+    "subjectUser": "用户",
+    "subjectGroup": "用户组",
+    "memberProtected": "受保护",
+    "memberProtectedHint": "初始化创建的超级管理员不能被移出该组；如需收回权限可以停用该账号（在用户管理页）。",
+    "selectUsers": "选择用户",
+    "selectGroups": "选择用户组",
+    "selectRoles": "角色",
+    "noUsers": "暂无用户",
+    "noGroups": "暂无用户组",
+    "remove": "移除",
+    "removeTitle": "移除{{member}}",
+    "removeDescription": "移除「{{subject}}」后，该主体将不再拥有{{member}}权限。",
+    "saved": "已更新",
+    "saveFailed": "保存失败",
+    "loadFailed": "加载角色成员失败，请稍后重试。",
+    "groupMissing": "系统里还没有系统维护的超级权限绑定，通常由服务端在启动时自动创建。",
+    "roleConflict": "该变更会让某个账号同时持有互斥的管理员角色（职责分离冲突），请先调整其角色后再试。",
+    "admin": {
+      "title": "系统管理员",
+      "member": "管理员",
+      "description": "维护「系统管理员」与「只读管理员」两个控制台角色：系统管理员拥有全部集群与全部设置章节；只读管理员只能只读查看全部资源（不含 secrets）与控制台。两者的规则都由代码维护，所以只能在这里增删成员、不能改权限。",
+      "add": "添加管理员",
+      "addDescription": "选择用户或用户组并指定角色：系统管理员拥有全部权限，只读管理员只有只读权限。"
+    },
+    "auditor": {
+      "title": "审计管理员",
+      "member": "审计管理员",
+      "description": "维护「审计管理员」角色：成员只能查看审计日志，并配置审计记录的保留策略与 syslog 外发；审计记录本身只读，没有任何手工删除入口。",
+      "add": "添加审计管理员",
+      "addDescription": "选中的用户或用户组将获得审计管理员（auditor）角色。"
+    },
+    "securityAdmin": {
+      "title": "安全管理员",
+      "member": "安全管理员",
+      "description": "维护「安全管理员」角色：成员负责身份与授权（用户与用户组、角色与权限绑定、安全策略、认证源）以及集群里的主体与授权对象，不碰业务资源与审计日志。",
+      "add": "添加安全管理员",
+      "addDescription": "选中的用户或用户组将获得安全管理员（security-admin）角色。"
+    }
+  },
+  "serviceYaml": {
+    "deleteTitle": "删除 Service {{name}}？",
+    "deleted": "Service {{name}} 已删除",
+    "invalidYaml": "YAML 格式不正确",
+    "saved": "Service {{name}} 已更新",
+    "deleteDescription": "删除后通过该 Service 的外部访问将立即中断，且无法恢复。"
+  },
+  "logViewer": {
+    "title": "日志",
+    "lineCount": "{{count}} 行",
+    "filtered": "（已筛选）",
+    "reconnecting": "重连中...",
+    "tailLines": "末尾行数",
+    "allLines": "全部",
+    "showTimestamps": "显示时间戳",
+    "previousContainer": "上一个容器",
+    "wordWrap": "自动换行",
+    "showLineNumbers": "显示行号",
+    "logTheme": "日志主题",
+    "fontSize": "字号",
+    "keyboardShortcuts": "快捷键",
+    "clearLogs": "清空日志",
+    "exitFullscreen": "退出全屏（ESC）",
+    "enterFullscreen": "进入全屏",
+    "shortcuts": {
+      "openSearch": "打开搜索",
+      "toggleFullscreen": "切换全屏",
+      "toggleWordWrap": "切换自动换行",
+      "increaseFontSize": "增大字号",
+      "decreaseFontSize": "减小字号",
+      "resetFontSize": "重置字号"
     }
   }
 }

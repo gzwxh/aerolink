@@ -13,17 +13,17 @@ export function useFavorites() {
   const [favorites, setFavorites] = useState<SearchResult[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
 
-  // Load favorites on mount
+  // 挂载时加载收藏
   useEffect(() => {
     setFavorites(getFavoritesFromStorage())
   }, [refreshKey])
 
-  // Refresh favorites list
+  // 刷新收藏列表
   const refreshFavorites = useCallback(() => {
     setRefreshKey((prev) => prev + 1)
   }, [])
 
-  // Add to favorites
+  // 加入收藏
   const addToFavorites = useCallback(
     (resource: SearchResult) => {
       addToFavoritesStorage(resource)
@@ -32,7 +32,7 @@ export function useFavorites() {
     [refreshFavorites]
   )
 
-  // Remove from favorites
+  // 从收藏中移除
   const removeFromFavorites = useCallback(
     (resourceId: string) => {
       removeFromFavoritesStorage(resourceId)
@@ -41,12 +41,12 @@ export function useFavorites() {
     [refreshFavorites]
   )
 
-  // Check if resource is favorite
+  // 检查资源是否已收藏
   const isFavorite = useCallback((resourceId: string) => {
     return isFavoriteStorage(resourceId)
   }, []) // No dependencies needed as we always check current storage state
 
-  // Toggle favorite status
+  // 切换收藏状态
   const toggleFavorite = useCallback(
     (resource: SearchResult) => {
       const isFavorite = toggleFavoriteStorage(resource)

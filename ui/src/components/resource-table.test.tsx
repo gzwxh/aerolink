@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { ResourceTable } from './resource-table'
 
-// --- mocks ---
+// --- mock ---
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -20,6 +20,8 @@ vi.mock('react-i18next', () => ({
         'common.actions.cancel': 'Cancel',
         'common.actions.delete': 'Delete',
         'resourceTable.namespace': 'Namespace',
+        'resourceTable.selectAllRows': 'Select all',
+        'resourceTable.selectRow': 'Select row',
       }
       return map[key] ?? key
     },
@@ -57,15 +59,15 @@ vi.mock('@/hooks/use-cluster', () => ({
   useCluster: () => ({ currentCluster: 'test-cluster' }),
 }))
 
-// The table gates its actions with these hooks; the tests below only exercise
-// the delete progress, so every permission is granted.
+// 表格用这些 hook 控制操作入口；下面的测试只覆盖
+// 删除进度，因此所有权限都授予。
 vi.mock('@/hooks/use-can', () => ({
   useCan: () => () => true,
   useCanAnyNamespace: () => () => true,
 }))
 
-// fakeRows is defined inside the factory via vi.hoisted so it is available
-// when vi.mock is hoisted before variable declarations
+// fakeRows 通过 vi.hoisted 定义在工厂内部，这样当 vi.mock 被提升到
+// 变量声明之前时它仍然可用
 const { fakeRows } = vi.hoisted(() => {
   type Row = { metadata: { name: string; namespace?: string; uid?: string } }
   return {
@@ -89,7 +91,7 @@ vi.mock('@/hooks/use-resource-table-data', () => ({
   }),
 }))
 
-// --- helpers ---
+// --- 辅助工具 ---
 
 type Row = { metadata: { name: string; namespace?: string; uid?: string } }
 
@@ -106,7 +108,7 @@ function renderTable() {
   )
 }
 
-// --- tests ---
+// --- 测试 ---
 
 describe('ResourceTable batch delete progress', () => {
   it('shows Deleting... (0/N) immediately when delete starts and promises are pending', async () => {

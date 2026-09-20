@@ -28,17 +28,17 @@ export const PodStatusIcon = ({
   showAnimation = true,
 }: StatusIconProps) => {
   const getStatusType = (status: string): StatusType => {
-    // Success states
+    // 成功状态
     if (status === 'Running') {
       return 'success'
     }
 
-    // Completed/Success states
+    // 已完成 / 成功状态
     if (status === 'Succeeded' || status === 'Completed') {
       return 'success'
     }
 
-    // Failed/Error states
+    // 失败 / 错误状态
     if (
       status === 'Failed' ||
       status.startsWith('Init:ExitCode:') ||
@@ -53,12 +53,12 @@ export const PodStatusIcon = ({
       return 'error'
     }
 
-    // Terminating states
+    // 终止中状态
     if (status === 'Terminating') {
       return 'terminating'
     }
 
-    // Warning states
+    // 告警状态
     if (
       status === 'Unknown' ||
       status === 'NotReady' ||
@@ -68,7 +68,7 @@ export const PodStatusIcon = ({
       return 'warning'
     }
 
-    // Pending/Waiting states
+    // 等待 / 未就绪状态
     if (
       status === 'Pending' ||
       status === 'ContainerCreating' ||
@@ -82,7 +82,7 @@ export const PodStatusIcon = ({
       return 'pending'
     }
 
-    // Loading states for ongoing processes
+    // 进行中流程的加载状态
     if (
       status.includes('Pulling') ||
       status.includes('Starting') ||
@@ -91,7 +91,7 @@ export const PodStatusIcon = ({
       return 'loading'
     }
 
-    // Default for any unmatched status
+    // 任何未匹配状态的默认值
     return 'default'
   }
 
@@ -108,7 +108,7 @@ export const PodStatusIcon = ({
             />
           )
         }
-        // Completed/Succeeded states
+        // 已完成 / 成功状态
         return (
           <IconCircleCheckFilled
             className={`fill-blue-500 dark:fill-blue-400 ${className}`}

@@ -11,7 +11,7 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
-import { translateError } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,6 +44,12 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
   const [scaleReplicas, setScaleReplicas] = useState(0)
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
+  const can = useCan()
+  // 扩缩容 / 重启会改写 Pod 模板，是写操作：只读角色不该看到入口。
+  const canUpdate = can('statefulsets', 'update', { namespace })
+  const canExec = can('pods', 'exec', { namespace })
+  // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
+  const canLog = can('pods', 'log', { namespace })
 
   const {
     data: statefulset,
@@ -110,8 +116,8 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       toast.success(`StatefulSet scaled to ${scaleReplicas} replicas`)
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -142,8 +148,8 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       toast.success('StatefulSet restart initiated')
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     }
   }
 
@@ -176,8 +182,8 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
           })
         )
         setRefreshInterval(1000)
-      } catch (err) {
-        toast.error(translateError(err, t))
+      } catch {
+        // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       }
     },
     [name, namespace, statefulset, t]
@@ -229,8 +235,11 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
                     key={container.name}
                     container={container}
                     init
-                    onContainerUpdate={(updatedContainer) =>
-                      handleContainerUpdate(updatedContainer, true)
+                    onContainerUpdate={
+                      canUpdate
+                        ? (updatedContainer) =>
+                            handleContainerUpdate(updatedContainer, true)
+                        : undefined
                     }
                   />
                 ))}
@@ -241,8 +250,11 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
                 <ContainerInfoCard
                   key={container.name}
                   container={container}
-                  onContainerUpdate={(updatedContainer) =>
-                    handleContainerUpdate(updatedContainer, false)
+                  onContainerUpdate={
+                    canUpdate
+                      ? (updatedContainer) =>
+                          handleContainerUpdate(updatedContainer, false)
+                      : undefined
                   }
                 />
               ))}
@@ -344,6 +356,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       },
     ]
   }, [
+    canUpdate,
     handleContainerUpdate,
     isLoading,
     isLoadingPods,
@@ -381,97 +394,102 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
         ) : null
       }
       headerActions={
-        <>
-          <Popover
-            open={isScalePopoverOpen}
-            onOpenChange={setIsScalePopoverOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <IconScale className="w-4 h-4" />
-                Scale
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium">Scale StatefulSet</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Adjust the number of replicas for this StatefulSet.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="replicas">Replicas</Label>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 w-9 p-0"
-                      onClick={() =>
-                        setScaleReplicas(Math.max(0, scaleReplicas - 1))
-                      }
-                      disabled={scaleReplicas <= 0}
-                    >
-                      -
-                    </Button>
-                    <Input
-                      id="replicas"
-                      type="number"
-                      min="0"
-                      value={scaleReplicas}
-                      onChange={(e) =>
-                        setScaleReplicas(parseInt(e.target.value) || 0)
-                      }
-                      className="text-center"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 w-9 p-0"
-                      onClick={() => setScaleReplicas(scaleReplicas + 1)}
-                    >
-                      +
-                    </Button>
+        canUpdate ? (
+          <>
+            <Popover
+              open={isScalePopoverOpen}
+              onOpenChange={setIsScalePopoverOpen}
+            >
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <IconScale className="w-4 h-4" />
+                  Scale
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Scale StatefulSet</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Adjust the number of replicas for this StatefulSet.
+                    </p>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="replicas">Replicas</Label>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 p-0"
+                        onClick={() =>
+                          setScaleReplicas(Math.max(0, scaleReplicas - 1))
+                        }
+                        disabled={scaleReplicas <= 0}
+                      >
+                        -
+                      </Button>
+                      <Input
+                        id="replicas"
+                        type="number"
+                        min="0"
+                        value={scaleReplicas}
+                        onChange={(e) =>
+                          setScaleReplicas(parseInt(e.target.value) || 0)
+                        }
+                        className="text-center"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 p-0"
+                        onClick={() => setScaleReplicas(scaleReplicas + 1)}
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
+                  <Button onClick={handleScale} className="w-full">
+                    Scale StatefulSet
+                  </Button>
                 </div>
-                <Button onClick={handleScale} className="w-full">
-                  Scale StatefulSet
+              </PopoverContent>
+            </Popover>
+            <Popover
+              open={isRestartPopoverOpen}
+              onOpenChange={setIsRestartPopoverOpen}
+            >
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <IconReload className="w-4 h-4" />
+                  Restart
                 </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <Popover
-            open={isRestartPopoverOpen}
-            onOpenChange={setIsRestartPopoverOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <IconReload className="w-4 h-4" />
-                Restart
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80">
-              <div className="space-y-2">
-                <p className="text-sm">
-                  This will restart all pods managed by this StatefulSet.
-                </p>
-                <Button
-                  onClick={handleRestart}
-                  className="w-full"
-                  variant="outline"
-                >
-                  Confirm Restart
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </>
+              </PopoverTrigger>
+              <PopoverContent className="w-80">
+                <div className="space-y-2">
+                  <p className="text-sm">
+                    This will restart all pods managed by this StatefulSet.
+                  </p>
+                  <Button
+                    onClick={handleRestart}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    Confirm Restart
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </>
+        ) : null
       }
       preYamlTabs={extraTabs.filter((tab) =>
         ['pods', 'containers'].includes(tab.value)
       )}
       extraTabs={extraTabs.filter(
-        (tab) => !['pods', 'containers'].includes(tab.value)
+        (tab) =>
+          !['pods', 'containers'].includes(tab.value) &&
+          (tab.value !== 'terminal' || canExec) &&
+          (tab.value !== 'logs' || canLog)
       )}
     />
   )

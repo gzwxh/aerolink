@@ -36,17 +36,17 @@ interface MultiSelectProps {
   disabled?: boolean
   allowAdd?: boolean
   /**
-   * How the dedicated "select all" row behaves.
-   * - "wildcard": selecting all collapses the value to ['*'] (the "*" option
-   *   must be present in the caller-supplied options, e.g. role grants).
-   * - "all": selecting all ticks every concrete option in the list (used by
-   *   subject pickers where a literal "*" is not a valid choice).
+   * 专用"全选"行的行为。
+   * - "wildcard"：全选会把值折叠为 ['*']（"*" 选项
+   *   必须存在于调用方提供的选项中，例如角色授权）。
+   * - "all"：全选会勾选列表中的每一个具体选项（用于
+   *   那些字面量 "*" 不是合法取值的主体选择器）。
    */
   selectAllMode?: 'wildcard' | 'all'
   /**
-   * Upper bound on the number of selections. When the limit is reached, picking
-   * a new option evicts the oldest one, so max=1 behaves like a single select.
-   * Bulk actions (select all / select page) are hidden while a limit is set.
+   * 选中数量的上限。达到上限后，再选择新选项会
+   * 淘汰最旧的一个，因此 max=1 等同于单选。
+   * 设置了上限时，批量操作（全选 / 选择本页）会被隐藏。
    */
   max?: number
 }
@@ -100,22 +100,22 @@ export function MultiSelect({
   const allSelected = value.includes('*')
   const searching = search.trim().length > 0
 
-  // Options that can be picked individually (the "*" wildcard, when present in
-  // the list, is represented by the dedicated select-all row instead).
+  // 可以单独选中的选项（当列表中存在 "*" 通配时，
+  // 由专用的全选行来代表它）。
   const concreteOptions = useMemo(
     () => dedupedOptions.filter((opt) => opt !== '*'),
     [dedupedOptions]
   )
 
-  // Appends an option while honouring `max`: the oldest selection is dropped
-  // once the limit is reached so the newest pick always wins.
+  // 在遵守 `max` 的前提下追加选项：达到上限后淘汰最旧的
+  // 选择，使最新的一次选择总是生效。
   const withAdded = (option: string) => {
     if (max === undefined || value.length < max) return [...value, option]
     return [...value.slice(value.length - max + 1), option]
   }
 
-  // Selecting "*" means "all": it is exclusive, so it replaces any concrete
-  // items, and picking a concrete item while "*" is active narrows to it.
+  // 选择 "*" 意味着"全部"：它是排他的，因此会替换掉所有具体
+  // 选项；而在 "*" 生效时选择某个具体项，会把范围收窄到它。
   const toggle = (option: string) => {
     if (option === '*') {
       onChange(allSelected ? [] : ['*'])
@@ -147,17 +147,17 @@ export function MultiSelect({
     setSearch('')
   }
 
-  // Wildcard select-all: ['*'] toggles with [].
+  // 通配全选：['*'] 与 [] 之间切换。
   const toggleWildcardAll = () => toggle('*')
 
-  // Concrete select-all (subject pickers): ticks every real option.
+  // 具体全选（主体选择器）：勾选每一个真实选项；当所有项都已勾选时
+  // 清空整个选择（同一行即开关）。
   const allConcreteSelected =
     concreteOptions.length > 0 &&
     concreteOptions.every((opt) => value.includes(opt))
   const toggleSelectAllOptions = () => {
-    if (allSelected) return
-    if (allConcreteSelected) {
-      onChange(value.filter((v) => v !== '*'))
+    if (allSelected || allConcreteSelected) {
+      onChange([])
       return
     }
     const merged = value.filter((v) => v !== '*')
@@ -167,8 +167,12 @@ export function MultiSelect({
     onChange(merged)
   }
 
-  // Page-level select: toggle every option rendered on the current page. This
-  // is how large lists are filled page by page without switching to "*".
+  // 全选「已全部选上」时（通配或全部具体项）再点一次就是取消全选。
+  const allEverythingSelected =
+    selectAllMode === 'wildcard' ? allSelected : allConcreteSelected
+
+  // 页级选择：切换当前页渲染的每一个选项。这是
+  // 大列表逐页填充的方式，无需切到 "*"。
   const pageSelectable = useMemo(
     () => pageOptions.filter((opt) => opt !== '*'),
     [pageOptions]
@@ -199,7 +203,8 @@ export function MultiSelect({
     max === undefined &&
     !allSelected &&
     totalPages > 1 &&
-    pageSelectable.length > 0
+    pageSelectable.length > 0 &&
+    !allConcreteSelected
 
   const displayValue = allSelected
     ? t('common.values.all', 'All')
@@ -299,24 +304,24 @@ export function MultiSelect({
                   >
                     <div
                       className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border ${
-                        (selectAllMode === 'wildcard' && allSelected) ||
-                        (selectAllMode === 'all' && allConcreteSelected)
+                        allEverythingSelected
                           ? 'bg-primary text-primary-foreground'
                           : 'border-muted-foreground/30'
                       }`}
                     >
-                      {((selectAllMode === 'wildcard' && allSelected) ||
-                        (selectAllMode === 'all' && allConcreteSelected)) && (
-                        <Check className="h-3 w-3" />
-                      )}
+                      {allEverythingSelected && <Check className="h-3 w-3" />}
                     </div>
                     <span className="min-w-0 truncate font-medium">
-                      {selectAllMode === 'wildcard'
-                        ? t('common.actions.selectAll', 'Select all (*)')
-                        : t('common.actions.selectAllOptions', {
-                            count: concreteOptions.length,
-                            defaultValue: 'Select all ({{count}})',
-                          })}
+                      {allEverythingSelected
+                        ? t('common.actions.deselectAllOptions', {
+                            defaultValue: 'Clear all',
+                          })
+                        : selectAllMode === 'wildcard'
+                          ? t('common.actions.selectAll', 'Select all (*)')
+                          : t('common.actions.selectAllOptions', {
+                              count: concreteOptions.length,
+                              defaultValue: 'Select all ({{count}})',
+                            })}
                     </span>
                   </CommandItem>
                 )}
@@ -345,8 +350,8 @@ export function MultiSelect({
                 )}
                 {pageOptions.map((option) => {
                   if (option === '*') return null
-                  // In wildcard mode a "*" value means every concrete option
-                  // is covered, so render them as checked as well.
+                  // 在通配模式下，"*" 值意味着覆盖了每个具体选项，
+                  // 因此也要把它们渲染为已勾选。
                   const selected =
                     (allSelected && selectAllMode === 'wildcard') ||
                     value.includes(option)
@@ -401,19 +406,6 @@ export function MultiSelect({
                 >
                   {t('common.pagination.next', 'Next')}
                   <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            {value.length > 0 && (
-              <div className="border-t p-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => onChange([])}
-                >
-                  {t('common.actions.clearAll', 'Clear all')}
                 </Button>
               </div>
             )}

@@ -8,7 +8,8 @@ import { toast } from 'sonner'
 
 import { patchResource, useResources } from '@/lib/api'
 import { createSearchFilter } from '@/lib/k8s'
-import { formatDate, translateError } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
+import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ResourceTable } from '@/components/resource-table'
@@ -36,6 +37,8 @@ const columnHelper = createColumnHelper<StorageClass>()
 export function StorageClassListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  // 设为默认需要改写 annotation，是写操作。
+  const canUpdateStorageClass = useCanAnyNamespace()('storageclasses', 'update')
   const { data: storageClasses = [] } = useResources(
     'storageclasses',
     undefined,
@@ -81,8 +84,8 @@ export function StorageClassListPage() {
         })
       )
     },
-    onError: (error) => {
-      toast.error(translateError(error, t))
+    onError: () => {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: ['storageclasses'] }),
@@ -144,6 +147,9 @@ export function StorageClassListPage() {
         id: 'actions',
         header: t('common.fields.actions'),
         cell: ({ row }) => {
+          if (!canUpdateStorageClass) {
+            return '-'
+          }
           if (
             isDefaultStorageClass(row.original) &&
             defaultStorageClassCount === 1
@@ -171,7 +177,7 @@ export function StorageClassListPage() {
         },
       }),
     ],
-    [defaultStorageClassCount, setDefaultMutation, t]
+    [canUpdateStorageClass, defaultStorageClassCount, setDefaultMutation, t]
   )
 
   return (

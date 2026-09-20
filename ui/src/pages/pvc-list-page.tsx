@@ -22,7 +22,7 @@ const columnHelper = createColumnHelper<PersistentVolumeClaim>()
 export function PVCListPage() {
   const { t } = useTranslation()
 
-  // Define columns for the pvc table
+  // 定义 PVC 表格的列
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {

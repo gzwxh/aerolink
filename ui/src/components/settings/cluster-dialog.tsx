@@ -1,9 +1,15 @@
-import { useState } from 'react'
-import { IconEdit, IconServer } from '@tabler/icons-react'
+import { useCallback, useEffect, useState } from 'react'
+import { IconEdit, IconEye, IconServer } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { Cluster } from '@/types/api'
 import { ClusterCreateRequest } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -23,6 +29,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 interface ClusterDialogProps {
   open: boolean
@@ -50,29 +57,74 @@ export function ClusterDialog({
   cluster,
   onSubmit,
 }: ClusterDialogProps) {
+  // 草稿在条件挂载的内容组件里，关闭即丢弃；「有没有改动」上报到这一层，
+  // 由 useUnsavedChangesGuard 拦截遮罩点击 / Esc / 右上角 X。
+  const [isDraftDirty, setIsDraftDirty] = useState(false)
+  const close = useCallback(() => onOpenChange(false), [onOpenChange])
+  const guard = useUnsavedChangesGuard({ dirty: isDraftDirty, onClose: close })
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {open ? (
-        <ClusterDialogContent
-          key={cluster?.id ?? 'new'}
-          cluster={cluster}
-          onOpenChange={onOpenChange}
-          onSubmit={onSubmit}
-        />
-      ) : null}
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={guard.handleOpenChange}>
+        {open ? (
+          <ClusterDialogContent
+            key={cluster?.id ?? 'new'}
+            cluster={cluster}
+            onSubmit={onSubmit}
+            onDraftChange={setIsDraftDirty}
+            onRequestClose={() => guard.handleOpenChange(false)}
+          />
+        ) : null}
+      </Dialog>
+
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }
 
 function ClusterDialogContent({
   cluster,
-  onOpenChange,
   onSubmit,
-}: Omit<ClusterDialogProps, 'open'>) {
+  onDraftChange,
+  onRequestClose,
+}: Omit<ClusterDialogProps, 'open' | 'onOpenChange'> & {
+  /** 上报是否有草稿，父级据此决定关闭时是否先弹确认。 */
+  onDraftChange: (hasDraft: boolean) => void
+  /** 需要用户确认的关闭请求（取消按钮）。 */
+  onRequestClose: () => void
+}) {
   const { t } = useTranslation()
   const isEditMode = !!cluster
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false)
+
+  // 查看已存的 kubeconfig：属于凭据暴露操作，后端受 MFA step-up 保护——
+  // 开启 MFA 且已绑定的管理员会先弹出动态码验证，验证通过后自动重放请求。
+  const handleViewConfig = async () => {
+    if (!cluster?.id) return
+    setIsLoadingConfig(true)
+    try {
+      const data = await apiClient.get<{ config: string }>(
+        `/admin/clusters/${encodeURIComponent(cluster.name)}/kubeconfig`
+      )
+      handleChange('config', data.config)
+      toast.success(
+        t('clusterManagement.dialog.configLoaded', '当前配置已加载')
+      )
+    } catch {
+      toast.error(
+        t('clusterManagement.dialog.configLoadFailed', '加载当前配置失败')
+      )
+    } finally {
+      setIsLoadingConfig(false)
+    }
+  }
 
   const [formData, setFormData] = useState(() => createClusterFormData(cluster))
+  // 首帧表单（编辑时为集群当前值，新建为空）即基线；改过才算未保存。
+  const isDirty = useDraftDirty(formData)
+  useEffect(() => {
+    onDraftChange(isDirty)
+  }, [isDirty, onDraftChange])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -178,10 +230,26 @@ function ClusterDialogContent({
 
         {!formData.inCluster && !formData.clusterAgent && (
           <div className="space-y-2">
-            <Label htmlFor="cluster-config">
-              {t('clusterManagement.dialog.config', 'Kubeconfig')}
-              {!isEditMode && ' *'}
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="cluster-config">
+                {t('clusterManagement.dialog.config', 'Kubeconfig')}
+                {!isEditMode && ' *'}
+              </Label>
+              {isEditMode && cluster?.id && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+                  disabled={isLoadingConfig}
+                  onClick={handleViewConfig}
+                >
+                  <IconEye className="h-3.5 w-3.5" />
+                  {t(
+                    'clusterManagement.dialog.viewCurrentConfig',
+                    '查看当前配置'
+                  )}
+                </button>
+              )}
+            </div>
             {isEditMode && (
               <p className="text-xs text-muted-foreground">
                 {t(
@@ -277,11 +345,7 @@ function ClusterDialogContent({
           </div>
         )}
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
+          <Button type="button" variant="outline" onClick={onRequestClose}>
             {t('common.actions.cancel', 'Cancel')}
           </Button>
           <Button

@@ -19,7 +19,9 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    fallbackLng: 'en',
+    // 首次访问（本地无语言偏好）时默认显示中文；用户切换语言后会写入
+    // localStorage（i18nextLng），之后始终跟随用户的选择。
+    fallbackLng: 'zh',
     debug: false,
 
     interpolation: {

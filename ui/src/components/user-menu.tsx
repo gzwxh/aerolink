@@ -1,17 +1,10 @@
-import { useTranslation } from 'react-i18next'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
-import {
-  CaseSensitive,
-  Check,
-  LogOut,
-  Minus,
-  Palette,
-  Plus,
-  UserCog,
-  ZoomIn,
-} from 'lucide-react'
+import { LogOut, UserCog } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 
+import { MFA_SETUP_REQUEST_EVENT } from '@/lib/mfa-prompt'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,37 +12,34 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
-import { useAppearance } from '@/components/appearance-provider'
-import { ColorTheme, colorThemes } from '@/components/color-theme-provider'
 
-import { AccountSettingsDialog } from './account-settings-dialog'
 import { SidebarCustomizer } from './sidebar-customizer'
 
-const DISPLAY_SCALE_MIN = 80
-const DISPLAY_SCALE_MAX = 120
-const DISPLAY_SCALE_STEP = 5
-
+/**
+ * 头像菜单：只保留「我是谁」和两个入口（用户信息、退出登录）。
+ *
+ * 原来这里的主题 / 字体 / 显示缩放，以及「账号设置」弹窗里的资料 / 密码 / 安全，
+ * 都已经搬进用户信息页 `/account`（那页才有地方展示账号的只读信息）。
+ */
 export function UserMenu() {
   const { t } = useTranslation()
-  const { user, logout, hasGlobalSidebarPreference } = useAuth()
-  const {
-    colorTheme,
-    setColorTheme,
-    displayScale,
-    setDisplayScale,
-    font,
-    setFont,
-  } = useAppearance()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
-  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false)
-  const [scaleInput, setScaleInput] = useState(String(displayScale))
-  const isPasswordUser = !user?.provider || user.provider === 'password'
+
+  // 其它地方（例如概览页的超级管理员 MFA 引导）通过事件请求打开绑定流程：
+  // 现在改为跳到用户信息页的「安全」页签。
+  useEffect(() => {
+    const openSecurityTab = () => {
+      setOpen(false)
+      navigate('/account?tab=security')
+    }
+    window.addEventListener(MFA_SETUP_REQUEST_EVENT, openSecurityTab)
+    return () =>
+      window.removeEventListener(MFA_SETUP_REQUEST_EVENT, openSecurityTab)
+  }, [navigate])
 
   if (!user) return null
 
@@ -70,246 +60,71 @@ export function UserMenu() {
     }
   }
 
-  const handleDisplayScaleChange = (nextDisplayScale: number) => {
-    const clampedDisplayScale = Math.min(
-      DISPLAY_SCALE_MAX,
-      Math.max(DISPLAY_SCALE_MIN, nextDisplayScale)
-    )
-    const normalizedDisplayScale =
-      Math.round(clampedDisplayScale / DISPLAY_SCALE_STEP) * DISPLAY_SCALE_STEP
-    setScaleInput(String(normalizedDisplayScale))
-    setDisplayScale(normalizedDisplayScale)
-  }
-
-  const commitScaleInput = () => {
-    if (scaleInput.trim() === '') {
-      setScaleInput(String(displayScale))
-      return
-    }
-
-    const nextDisplayScale = Number(scaleInput)
-
-    if (!Number.isFinite(nextDisplayScale)) {
-      setScaleInput(String(displayScale))
-      return
-    }
-
-    handleDisplayScaleChange(nextDisplayScale)
-  }
-
   return (
-    <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            aria-label="User menu"
-            variant="ghost"
-            className="relative h-10 w-10 rounded-full"
-          >
-            <Avatar className="size-sm">
-              <AvatarImage
-                src={user.avatar_url}
-                alt={user.name || user.username}
-              />
-              <AvatarFallback className="bg-primary text-primary-foreground">
-                {getInitials(user.name || user.username)}
-              </AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56" align="end" forceMount>
-          <div className="flex items-center justify-start gap-2 p-2">
-            <div className="flex flex-col space-y-1 leading-none">
-              {user.name && <p className="font-medium">{user.name}</p>}
-              <p className="text-xs text-muted-foreground">{user.username}</p>
-              {user.provider && (
-                <p className="text-xs text-muted-foreground capitalize">
-                  {t('userMenu.via', 'via')} {user.provider}
-                </p>
-              )}
-              {user.roles && user.roles.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {t('userMenu.role', 'Role')}: {user.roles.map((role) => role.name).join(', ')}
-                </p>
-              )}
-            </div>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          aria-label="User menu"
+          variant="ghost"
+          className="relative h-10 w-10 rounded-full"
+        >
+          <Avatar className="size-sm">
+            <AvatarImage
+              src={user.avatar_url}
+              alt={user.name || user.username}
+            />
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              {getInitials(user.name || user.username)}
+            </AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56" align="end" forceMount>
+        <div className="flex items-center justify-start gap-2 p-2">
+          <div className="flex flex-col space-y-1 leading-none">
+            {user.name && <p className="font-medium">{user.name}</p>}
+            <p className="text-xs text-muted-foreground">{user.username}</p>
+            {user.provider && (
+              <p className="text-xs text-muted-foreground capitalize">
+                {t('userMenu.via', 'via')} {user.provider}
+              </p>
+            )}
+            {user.roles && user.roles.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t('userMenu.role', 'Role')}:{' '}
+                {user.roles.map((role) => role.name).join(', ')}
+              </p>
+            )}
           </div>
+        </div>
 
-          <DropdownMenuSeparator />
+        <DropdownMenuSeparator />
 
-          {isPasswordUser && (
-            <>
-              <DropdownMenuItem
-                onSelect={() => {
-                  setAccountSettingsOpen(true)
-                }}
-                className="cursor-pointer"
-              >
-                <UserCog className="h-4 w-4" />
-                <span>{t('userMenu.accountSettings', 'Account Settings')}</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
+        <DropdownMenuItem
+          onSelect={() => navigate('/account')}
+          className="cursor-pointer"
+        >
+          <UserCog className="h-4 w-4" />
+          <span>{t('userMenu.accountInfo', '用户信息')}</span>
+        </DropdownMenuItem>
 
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Palette className="mr-2 h-4 w-4" />
-              <span>{t('userMenu.colorTheme', 'Color Theme')}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {Object.entries(colorThemes).map(([key]) => {
-                const isSelected = key === colorTheme
+        {/* 侧边栏自定义入口对所有登录用户可见：个人布局优先于管理员发布的全局布局，
+            因此设了全局布局也不该藏掉这个入口。 */}
+        <SidebarCustomizer onOpenChange={(d) => setOpen(d)} />
 
-                return (
-                  <DropdownMenuItem
-                    key={key}
-                    onClick={() => setColorTheme(key as ColorTheme)}
-                    role="menuitemradio"
-                    aria-checked={isSelected}
-                    className={`flex items-center justify-between gap-2 cursor-pointer ${
-                      isSelected ? 'font-medium text-foreground' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="capitalize">{key}</span>
-                    </div>
-                    {isSelected && <Check className="h-4 w-4 text-primary" />}
-                  </DropdownMenuItem>
-                )
-              })}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <CaseSensitive className="mr-2 h-4 w-4" />
-              <span>{t('userMenu.font', 'Font')}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem
-                onClick={() => setFont('system')}
-                role="menuitemradio"
-                aria-checked={font === 'system'}
-                className={`flex items-center justify-between gap-2 cursor-pointer ${
-                  font === 'system' ? 'font-medium text-foreground' : ''
-                }`}
-              >
-                {t('userMenu.fonts.system', 'System')}
-                {font === 'system' && (
-                  <Check className="h-4 w-4 text-primary" />
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setFont('maple')}
-                role="menuitemradio"
-                aria-checked={font === 'maple'}
-                className={`flex items-center justify-between gap-2 cursor-pointer ${
-                  font === 'maple' ? 'font-medium text-foreground' : ''
-                }`}
-              >
-                {t('userMenu.fonts.maple', 'Maple')}
-                {font === 'maple' && <Check className="h-4 w-4 text-primary" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setFont('jetbrains')}
-                role="menuitemradio"
-                aria-checked={font === 'jetbrains'}
-                className={`flex items-center justify-between gap-2 cursor-pointer ${
-                  font === 'jetbrains' ? 'font-medium text-foreground' : ''
-                }`}
-              >
-                {t('userMenu.fonts.jetbrains', 'JetBrains Mono')}
-                {font === 'jetbrains' && (
-                  <Check className="h-4 w-4 text-primary" />
-                )}
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <ZoomIn className="mr-2 h-4 w-4" />
-              <span>{t('userMenu.displayScale', 'Display Scale')}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-56 p-3">
-              <div
-                className="flex items-center gap-2"
-                onKeyDown={(event) => event.stopPropagation()}
-              >
-                <Button
-                  aria-label="Decrease display scale"
-                  className="size-8"
-                  disabled={displayScale <= DISPLAY_SCALE_MIN}
-                  size="icon"
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    handleDisplayScaleChange(displayScale - DISPLAY_SCALE_STEP)
-                  }
-                >
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <Input
-                  aria-label="Display scale percent"
-                  className="h-8 text-center tabular-nums"
-                  type="number"
-                  min={DISPLAY_SCALE_MIN}
-                  max={DISPLAY_SCALE_MAX}
-                  step={DISPLAY_SCALE_STEP}
-                  value={scaleInput}
-                  onBlur={commitScaleInput}
-                  onChange={(event) => setScaleInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    event.stopPropagation()
-                    if (event.key === 'Enter') {
-                      commitScaleInput()
-                      event.currentTarget.blur()
-                    }
-                  }}
-                />
-                <Button
-                  aria-label="Increase display scale"
-                  className="size-8"
-                  disabled={displayScale >= DISPLAY_SCALE_MAX}
-                  size="icon"
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    handleDisplayScaleChange(displayScale + DISPLAY_SCALE_STEP)
-                  }
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-
-          {(user.isAdmin() || !hasGlobalSidebarPreference) && (
-            <SidebarCustomizer onOpenChange={(d) => setOpen(d)} />
-          )}
-
-          {user.provider !== 'Anonymous' && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="cursor-pointer text-red-600 focus:text-red-600"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>{t('userMenu.logout', 'Log out')}</span>
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {isPasswordUser && (
-        <AccountSettingsDialog
-          open={accountSettingsOpen}
-          onOpenChange={setAccountSettingsOpen}
-        />
-      )}
-    </>
+        {user.provider !== 'Anonymous' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="cursor-pointer text-red-600 focus:text-red-600"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>{t('userMenu.logout', '退出登录')}</span>
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

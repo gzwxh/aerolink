@@ -28,8 +28,8 @@ export function ConfigMapListPage() {
   const { namespace: namespaceParam } = useParams()
   const { t } = useTranslation()
 
-  // New ConfigMaps are created in the namespace currently in view: the URL
-  // wins, then the namespace picker's persisted selection.
+  // 新 ConfigMap 创建在当前查看的命名空间中：URL
+  // 优先，其次是命名空间选择器持久化的选择。
   const handleCreateClick = () => {
     const ns = resolveCreateNamespace(
       namespaceParam,
@@ -39,7 +39,7 @@ export function ConfigMapListPage() {
     navigate(`/configmaps/${encodeURIComponent(ns)}/create`)
   }
 
-  // Define columns for the configmap table
+  // 定义 ConfigMap 表格的列
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
@@ -94,7 +94,7 @@ export function ConfigMapListPage() {
     [t]
   )
 
-  // Create and bulk delete are gated by ResourceTable itself.
+  // 创建与批量删除由 ResourceTable 本身做门控。
   return (
     <ResourceTable
       resourceName="ConfigMaps"

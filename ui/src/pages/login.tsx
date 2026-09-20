@@ -1,6 +1,13 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react'
-import Logo from '@/assets/icon.svg'
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react'
+import LoginBanner from '@/assets/login-banner.svg'
 import { useAuth } from '@/contexts/auth-context'
+import { useBranding } from '@/contexts/branding-context'
 import {
   IconEye,
   IconEyeOff,
@@ -12,15 +19,15 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, useSearchParams } from 'react-router-dom'
 
 import {
-  beginPasskeyLogin,
   fetchLoginCaptcha,
-  finishPasskeyLogin,
+  verifyPendingMFA,
   type CredentialProvider,
   type LoginCaptchaChallenge,
 } from '@/lib/api'
+import { shouldLeaveLoginPage } from '@/lib/login-flow'
 import { withSubPath } from '@/lib/subpath'
-import { getPasskeyCredential } from '@/lib/webauthn'
-import { markLoginSucceeded } from '@/contexts/auth-context'
+import { cn } from '@/lib/utils'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,17 +43,48 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Footer } from '@/components/footer'
 import { LanguageToggle } from '@/components/language-toggle'
 
+// 登录页背景：横幅插画 + 上下两条轻渐变。
+//
+// 插画（900×320）的主体云端商城在画面右上角，所以用 object-cover object-right-bottom
+// 锚在右下：窗口宽高比与插画不同时裁掉的是左上角的天空，而不是商城和购物袋。
+//
+// 这里不再整幅压蒙层（会把整个插画的颜色冲淡），只在两条文字带上留一点点背景色：
+// 站点标题与语言切换落在深蓝天空上、页脚落在绿色草甸上，纯靠背景色垫一下才能
+// 在浅色/深色两种主题下都读得清。中间画面保持插画原色。登录卡片本身不透明，
+// 不受影响。
+//
+// 插画里的云漂移、包裹飞行等都是 SVG SMIL 动画——SMIL 只在图像上下文（img）
+// 中播放，CSS background-image 里会被浏览器按静态帧渲染，因此这里用 <img>
+// 铺底而不是 backgroundImage。
+function LoginBackground({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      <img
+        src={LoginBanner}
+        alt=""
+        aria-hidden
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-right-bottom"
+      />
+      {/* 只在下缘垫一条很薄的背景色，页脚（灰色小字）压在绿色草甸上才读得清；
+          上方标题区不用蒙层，改由标题自身的阴影护读（见下面的 text-shadow）。 */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/80 to-transparent" />
+      <div className="relative flex flex-1 flex-col">{children}</div>
+    </div>
+  )
+}
+
 export function LoginPage() {
   const { t } = useTranslation()
+  const { logoUrl, isCustomLogo, siteName } = useBranding()
+  // 登录页没有子页面标题：浏览器标签只展示控制台名称（同样受品牌配置控制）。
+  usePageTitle('')
   const {
     user,
     login,
     loginWithCredentials,
-    checkAuth,
     credentialProviders,
     oauthProviders,
     loginPrompt,
-    passkeyLoginEnabled,
     loginCaptchaEnabled,
     isLoading,
   } = useAuth()
@@ -57,29 +95,35 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [mfaCode, setMfaCode] = useState('')
   const [mfaRequired, setMfaRequired] = useState(false)
+  // 第三方登录（OIDC）回调会把「待验证」票据带到这里：身份已经在身份源确认过，
+  // 只差动态码。票据本身换不到任何权限，见 verifyPendingMFA。
+  const [pendingMfaCode, setPendingMfaCode] = useState('')
+  const [pendingMfaError, setPendingMfaError] = useState<string | null>(null)
+  const [pendingMfaLoading, setPendingMfaLoading] = useState(false)
+  const [pendingMfaRestart, setPendingMfaRestart] = useState(false)
   const [captcha, setCaptcha] = useState<LoginCaptchaChallenge | null>(null)
   const [captchaCode, setCaptchaCode] = useState('')
   const [captchaLoading, setCaptchaLoading] = useState(false)
   const [credentialError, setCredentialError] = useState<string | null>(null)
-  // LDAP is the primary credential method when enabled; the effect below falls
-  // back to the first available provider when it is not.
+  // 启用时 LDAP 是主要的凭据方式；下面的 effect 在未启用时
+  // 回退到第一个可用的提供方。
   const [credentialsProvider, setCredentialsProvider] =
     useState<CredentialProvider>('ldap')
 
   const error = searchParams.get('error')
   const redirectHref = searchParams.get('href') || ''
-  const passkeySupported =
-    passkeyLoginEnabled &&
-    typeof window !== 'undefined' &&
-    Boolean(window.PublicKeyCredential)
-  const totalProviders =
-    credentialProviders.length +
-    oauthProviders.length +
-    (passkeySupported ? 1 : 0)
-  const hasAlternativeLogin = oauthProviders.length > 0 || passkeySupported
-  // LDAP + local password coexist: LDAP is the primary form, the local
-  // account is reachable through a small link below the form (admin escape
-  // hatch) instead of a prominent tab.
+  const pendingMfaTicket = searchParams.get('mfa_pending') || ''
+  // 被顶下线后从提示弹窗点「重新登录」会带 forced=1：即使浏览器里还留着其它会话的
+  // cookie（同一浏览器开了两个标签就会这样），也要先落到登录页——默认行为是已登录
+  // 就跳回首页，会把用户直接弹回应用里，看起来像「点了没反应」。
+  const [forcedLogin, setForcedLogin] = useState(
+    () => searchParams.get('forced') === '1'
+  )
+  const totalProviders = credentialProviders.length + oauthProviders.length
+  const hasAlternativeLogin = oauthProviders.length > 0
+  // LDAP 与本地密码共存：LDAP 是主表单，本地
+  // 账号通过表单下方的小链接访问（管理员应急
+  // 通道），而不是一个显眼的标签页。
   const localEscapeMode =
     credentialProviders.includes('ldap') &&
     credentialProviders.includes('password')
@@ -115,7 +159,7 @@ export function LoginPage() {
     }
   }, [credentialProviders, credentialsProvider])
 
-  // The challenge is only requested when the security policy asks for it.
+  // 只有安全策略要求时才请求验证码。
   useEffect(() => {
     if (!loginCaptchaEnabled) {
       setCaptcha(null)
@@ -125,7 +169,16 @@ export function LoginPage() {
     void refreshCaptcha()
   }, [loginCaptchaEnabled, refreshCaptcha])
 
-  if (user && !isLoading) {
+  // 带着第三方登录的「待验证」票据时必须留在登录页完成动态码校验，
+  // 即使浏览器里还留着旧会话——否则这次登录会被旧登录态静默跳过。
+  if (
+    shouldLeaveLoginPage({
+      hasUser: !!user,
+      isLoading,
+      forcedLogin,
+      pendingMfaTicket,
+    })
+  ) {
     const storedHref = sessionStorage.getItem('loginRedirectHref')
     if (storedHref) {
       sessionStorage.removeItem('loginRedirectHref')
@@ -148,6 +201,40 @@ export function LoginPage() {
     }
   }
 
+  const handlePendingMfaSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setPendingMfaLoading(true)
+    setPendingMfaError(null)
+    try {
+      await verifyPendingMFA(pendingMfaTicket, pendingMfaCode)
+      // 会话 cookie 已由这个响应写入。整页跳转，让应用以已登录状态重新启动——
+      // 这里没有可复用的登录态（调用发生在登录页的守卫之外）。
+      const storedHref = sessionStorage.getItem('loginRedirectHref')
+      sessionStorage.removeItem('loginRedirectHref')
+      window.location.href = withSubPath(storedHref || '/')
+    } catch (err) {
+      const apiErr = err as { code?: string; message?: string }
+      if (apiErr.code === 'mfa_pending_invalid') {
+        // 票据过期或已被兑换：只能重新走一遍身份源登录。
+        setPendingMfaRestart(true)
+        setPendingMfaError(t('login.mfaPending.expired'))
+      } else if (apiErr.message === 'invalid_mfa_code') {
+        setPendingMfaCode('')
+        setPendingMfaError(t('login.errors.invalidMfaCode'))
+      } else {
+        setPendingMfaError(
+          apiErr.code
+            ? t(`login.errors.${apiErr.code}`, {
+                defaultValue: apiErr.message || t('login.errors.unknownError'),
+              })
+            : apiErr.message || t('login.errors.unknownError')
+        )
+      }
+    } finally {
+      setPendingMfaLoading(false)
+    }
+  }
+
   const handleCredentialLogin = async (e: FormEvent) => {
     e.preventDefault()
     setLoginLoading(credentialsProvider)
@@ -162,6 +249,8 @@ export function LoginPage() {
           ? { idKey: captcha.idKey, code: captchaCode }
           : undefined
       )
+      // 强制落到登录页的场景：登录成功后放开守卫，照常跳回原本要去的页面。
+      setForcedLogin(false)
     } catch (err) {
       if (err instanceof Error) {
         if (err.message === 'mfa_required') {
@@ -178,7 +267,7 @@ export function LoginPage() {
           return
         }
 
-        // A stale or mistyped code is replaced by a fresh challenge.
+        // 过期或输错的验证码会被新的挑战替换。
         if (
           err.message === 'invalid_captcha' ||
           err.message === 'captcha_required'
@@ -194,32 +283,16 @@ export function LoginPage() {
           void refreshCaptcha()
           return
         }
-        setCredentialError(
-          t(`login.errors.${err.message}`, {
-            defaultValue: err.message,
-          }) || t('login.errors.invalidCredentials')
-        )
+        // 优先用后端错误码（login_invalid_credentials / login_too_many_attempts
+        // 等）做本地化；老响应没有 code 时退回以 message 为 key 的兼容查找。
+        const apiErr = err as { code?: string }
+        const translated = apiErr.code
+          ? t(`login.errors.${apiErr.code}`, { defaultValue: err.message })
+          : t(`login.errors.${err.message}`, { defaultValue: err.message })
+        setCredentialError(translated || t('login.errors.invalidCredentials'))
       } else {
         setCredentialError(t('login.errors.unknownError'))
       }
-    } finally {
-      setLoginLoading(null)
-    }
-  }
-
-  const handlePasskeyLogin = async () => {
-    setLoginLoading('passkey')
-    setCredentialError(null)
-    try {
-      const options = await beginPasskeyLogin()
-      const credential = await getPasskeyCredential(options)
-      await finishPasskeyLogin(credential)
-      markLoginSucceeded()
-      await checkAuth()
-    } catch (error) {
-      setCredentialError(
-        error instanceof Error ? error.message : 'Passkey sign-in failed'
-      )
     } finally {
       setLoginLoading(null)
     }
@@ -238,7 +311,7 @@ export function LoginPage() {
   const getErrorMessage = (errorCode: string | null) => {
     if (!errorCode) return null
 
-    // Get additional parameters for more detailed error messages
+    // 获取额外参数以给出更详细的错误信息
     const provider = searchParams.get('provider') || 'OAuth provider'
     const user = searchParams.get('user')
     const reason = searchParams.get('reason') || errorCode
@@ -289,6 +362,27 @@ export function LoginPage() {
           title: t('login.errors.userDisabled', 'User Disabled'),
           message: t('login.errors.userDisabledMessage'),
         }
+      case 'user_expired':
+        return {
+          title: t('login.errors.userExpired', 'Account Expired'),
+          message: t('login.errors.userExpiredMessage'),
+        }
+      case 'user_not_provisioned':
+        return {
+          title: t(
+            'login.errors.userNotProvisioned',
+            'Account Not Provisioned'
+          ),
+          message: t('login.errors.userNotProvisionedMessage', { user }),
+        }
+      case 'login_source_denied':
+        return {
+          title: t(
+            'login.errors.loginSourceDenied',
+            'Login Source Not Allowed'
+          ),
+          message: t('login.errors.loginSourceDeniedMessage'),
+        }
       case 'not_in_allowed_groups':
         return {
           title: t('login.errors.accessDenied'),
@@ -306,16 +400,19 @@ export function LoginPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-      </div>
+      <LoginBackground>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+        </div>
+      </LoginBackground>
     )
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <LoginBackground>
       {/* Language Toggle - Top Right */}
-      <div className="absolute top-6 right-6 z-10">
+      {/* 右上角压在插画的光斑上，给个浅底以保证图标在两种主题下都看得见 */}
+      <div className="absolute top-6 right-6 z-10 rounded-full bg-background/50 backdrop-blur-sm">
         <LanguageToggle />
       </div>
 
@@ -323,18 +420,32 @@ export function LoginPage() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center space-x-2 mb-4">
-              <img src={Logo} className="h-10 w-10 dark:invert" />{' '}
-              <h1 className="text-2xl font-bold">Kite</h1>
+              <img
+                src={logoUrl}
+                alt={siteName}
+                className={cn(
+                  'h-10 w-10',
+                  !isCustomLogo && 'dark:invert',
+                  // 背景是插画（这一带是深蓝天空），用阴影把 logo 与标题托起来，
+                  // 这样不必再给整幅背景压蒙层。
+                  'drop-shadow-[0_1px_6px_rgba(255,255,255,0.9)] dark:drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]'
+                )}
+              />{' '}
+              <h1 className="text-2xl font-bold [text-shadow:0_1px_10px_rgba(255,255,255,0.9)] dark:[text-shadow:0_1px_10px_rgba(0,0,0,0.9)]">
+                {siteName}
+              </h1>
             </div>
-            <p className="text-gray-600">{t('login.kubernetesDashboard')}</p>
           </div>
 
-          <Card>
+          <Card className="shadow-lg">
             <CardHeader className="text-center">
               <CardTitle className="text-xl">{t('login.signIn')}</CardTitle>
-              <CardDescription className="text-gray-600">
-                {t('login.subtitle')}
-              </CardDescription>
+              {/* 默认说明与管理员自定义登录提示二选一，避免两段文案重复冲突 */}
+              {loginPromptLines.length === 0 && (
+                <CardDescription className="text-gray-600">
+                  {t('login.subtitle')}
+                </CardDescription>
+              )}
               {loginPromptLines.map((line, index) => (
                 <p
                   key={`${index}-${line}`}
@@ -384,12 +495,79 @@ export function LoginPage() {
                 </div>
               )}
 
-              {totalProviders === 0 ? (
+              {!pendingMfaTicket && totalProviders === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-gray-600">{t('login.noLoginMethods')}</p>
                   <p className="text-sm text-gray-500 mt-2">
                     {t('login.configureAuth')}
                   </p>
+                </div>
+              ) : pendingMfaTicket ? (
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {t('login.mfaPending.title')}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {t('login.mfaPending.description')}
+                    </p>
+                  </div>
+                  <form onSubmit={handlePendingMfaSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="pendingMfaCode">
+                        {t('login.mfaPending.codeLabel')}
+                      </Label>
+                      <Input
+                        id="pendingMfaCode"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        placeholder={t('login.mfaPending.codePlaceholder')}
+                        value={pendingMfaCode}
+                        onChange={(e) =>
+                          setPendingMfaCode(
+                            e.target.value.replace(/\D/g, '').slice(0, 6)
+                          )
+                        }
+                        autoFocus
+                        required
+                      />
+                    </div>
+                    {pendingMfaError && (
+                      <Alert variant="destructive">
+                        <AlertDescription>{pendingMfaError}</AlertDescription>
+                      </Alert>
+                    )}
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={
+                        pendingMfaLoading || pendingMfaCode.length !== 6
+                      }
+                    >
+                      {pendingMfaLoading ? (
+                        <span className="flex items-center space-x-2">
+                          <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></span>
+                          <span>{t('login.signingIn')}</span>
+                        </span>
+                      ) : (
+                        t('login.mfaPending.submit')
+                      )}
+                    </Button>
+                    {pendingMfaRestart && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          window.location.href = withSubPath('/login')
+                        }}
+                      >
+                        {t('login.mfaPending.restart')}
+                      </Button>
+                    )}
+                  </form>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -504,7 +682,9 @@ export function LoginPage() {
                                 value={captchaCode}
                                 onChange={(e) =>
                                   setCaptchaCode(
-                                    e.target.value.replace(/\D/g, '').slice(0, 4)
+                                    e.target.value
+                                      .replace(/\D/g, '')
+                                      .slice(0, 4)
                                   )
                                 }
                                 required
@@ -516,7 +696,10 @@ export function LoginPage() {
                                   'login.refreshCaptcha',
                                   'Refresh code'
                                 )}
-                                title={t('login.refreshCaptcha', 'Refresh code')}
+                                title={t(
+                                  'login.refreshCaptcha',
+                                  'Refresh code'
+                                )}
                                 className="flex h-[44px] w-[120px] shrink-0 items-center justify-center overflow-hidden rounded-md border bg-white"
                               >
                                 {captcha ? (
@@ -651,25 +834,6 @@ export function LoginPage() {
                             )}
                           </Button>
                         ))}
-
-                        {passkeySupported && (
-                          <Button
-                            type="button"
-                            onClick={handlePasskeyLogin}
-                            disabled={loginLoading !== null}
-                            className="w-full h-10 text-foreground"
-                            variant="outline"
-                          >
-                            {loginLoading === 'passkey' ? (
-                              <span className="flex items-center space-x-2">
-                                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></span>
-                                <span>{t('login.signingIn')}</span>
-                              </span>
-                            ) : (
-                              <span>{t('login.signInWithPasskey')}</span>
-                            )}
-                          </Button>
-                        )}
                         {credentialProviders.length === 0 &&
                           credentialError && (
                             <Alert variant="destructive">
@@ -690,6 +854,6 @@ export function LoginPage() {
 
       {/* Footer */}
       <Footer />
-    </div>
+    </LoginBackground>
   )
 }

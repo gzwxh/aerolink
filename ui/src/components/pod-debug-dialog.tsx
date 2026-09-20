@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Container, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 
 import { copyDebugPod, debugPod } from '@/lib/api'
 import { translateError } from '@/lib/utils'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -23,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 export function PodDebugDialog({
   namespace,
@@ -41,7 +46,9 @@ export function PodDebugDialog({
 }) {
   const { t } = useTranslation()
   const [mode, setMode] = useState(ephemeralAvailable ? 'ephemeral' : 'copy')
-  const [image, setImage] = useState('busybox:1.37')
+  const [image, setImage] = useState(
+    'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:1.37'
+  )
   const [copyImage, setCopyImage] = useState('')
   const [copyTo, setCopyTo] = useState(`${name}-debug`)
   const [program, setProgram] = useState('sh')
@@ -51,6 +58,26 @@ export function PodDebugDialog({
   )
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
+  // 表单草稿：任一字段改过都算未保存，关闭前由 guard 拦一次确认（组件随弹窗挂载）。
+  const isDirty = useDraftDirty({
+    mode,
+    image,
+    copyImage,
+    copyTo,
+    program,
+    argumentsText,
+    targetContainerName,
+  })
+  // 关闭收尾：沿用原有保护，创建过程中不允许关闭。
+  const close = useCallback(() => {
+    if (isCreating) return
+    onClose()
+  }, [isCreating, onClose])
+  const guard = useUnsavedChangesGuard({
+    // 创建过程中本来就不允许关闭（见 close），这时不必再弹一次没有出口的确认。
+    dirty: isDirty && !isCreating,
+    onClose: close,
+  })
   const isCopy = mode === 'copy'
   const targetImage = containers.find(
     (container) => container.name === targetContainerName
@@ -88,165 +115,180 @@ export function PodDebugDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && !isCreating && onClose()}>
-      <DialogContent
-        showCloseButton={false}
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
-      >
-        <DialogHeader>
-          <DialogTitle className="text-balance">
-            {t('pods.debugTitle')}
-          </DialogTitle>
-          <DialogDescription className="text-pretty">
-            {t(isCopy ? 'pods.debugCopyDescription' : 'pods.debugDescription', {
-              name,
-            })}
-            <span className="mt-2 block">
-              {t(isCopy ? 'pods.debugCopyNote' : 'pods.debugLifecycleNote')}
-            </span>
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="pod-debug-mode">{t('pods.debugMode')}</Label>
-            <Select
-              value={mode}
-              onValueChange={(value) => {
-                setMode(value)
-                setError('')
-              }}
-              disabled={isCreating}
-            >
-              <SelectTrigger id="pod-debug-mode" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ephemeral" disabled={!ephemeralAvailable}>
-                  {t('pods.debugModeEphemeral')}
-                </SelectItem>
-                <SelectItem value="copy">{t('pods.debugModeCopy')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {isCopy && (
+    <>
+      <Dialog open onOpenChange={guard.handleOpenChange}>
+        <DialogContent
+          showCloseButton={false}
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-balance">
+              {t('pods.debugTitle')}
+            </DialogTitle>
+            <DialogDescription className="text-pretty">
+              {t(
+                isCopy ? 'pods.debugCopyDescription' : 'pods.debugDescription',
+                {
+                  name,
+                }
+              )}
+              <span className="mt-2 block">
+                {t(isCopy ? 'pods.debugCopyNote' : 'pods.debugLifecycleNote')}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="pod-debug-copy-name">
-                {t('pods.debugCopyName')}
-              </Label>
-              <Input
-                id="pod-debug-copy-name"
-                value={copyTo}
-                onChange={(event) => setCopyTo(event.target.value)}
+              <Label htmlFor="pod-debug-mode">{t('pods.debugMode')}</Label>
+              <Select
+                value={mode}
+                onValueChange={(value) => {
+                  setMode(value)
+                  setError('')
+                }}
                 disabled={isCreating}
+              >
+                <SelectTrigger id="pod-debug-mode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ephemeral" disabled={!ephemeralAvailable}>
+                    {t('pods.debugModeEphemeral')}
+                  </SelectItem>
+                  <SelectItem value="copy">
+                    {t('pods.debugModeCopy')}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isCopy && (
+              <div className="space-y-2">
+                <Label htmlFor="pod-debug-copy-name">
+                  {t('pods.debugCopyName')}
+                </Label>
+                <Input
+                  id="pod-debug-copy-name"
+                  value={copyTo}
+                  onChange={(event) => setCopyTo(event.target.value)}
+                  disabled={isCreating}
+                  autoComplete="off"
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="pod-debug-target">{t('pods.debugTarget')}</Label>
+              <Select
+                value={targetContainerName}
+                onValueChange={setTargetContainerName}
+                disabled={isCreating}
+              >
+                <SelectTrigger id="pod-debug-target" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {containers.map((container) => (
+                    <SelectItem key={container.name} value={container.name}>
+                      {container.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pod-debug-image">{t('pods.debugImage')}</Label>
+              <Input
+                id="pod-debug-image"
+                value={isCopy ? copyImage : image}
+                onChange={(event) =>
+                  isCopy
+                    ? setCopyImage(event.target.value)
+                    : setImage(event.target.value)
+                }
+                placeholder={isCopy ? targetImage : undefined}
+                disabled={isCreating}
+                aria-describedby="pod-debug-image-hint"
                 autoComplete="off"
               />
+              <p
+                id="pod-debug-image-hint"
+                className="text-pretty text-sm text-muted-foreground"
+              >
+                {t(isCopy ? 'pods.debugCopyImageHint' : 'pods.debugImageHint')}
+              </p>
             </div>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="pod-debug-target">{t('pods.debugTarget')}</Label>
-            <Select
-              value={targetContainerName}
-              onValueChange={setTargetContainerName}
+            <div className="space-y-2">
+              <Label htmlFor="pod-debug-program">
+                {t('pods.debugProgram')}
+              </Label>
+              <Input
+                id="pod-debug-program"
+                value={program}
+                onChange={(event) => setProgram(event.target.value)}
+                disabled={isCreating}
+                aria-describedby="pod-debug-program-hint"
+                autoComplete="off"
+              />
+              <p
+                id="pod-debug-program-hint"
+                className="text-pretty text-sm text-muted-foreground"
+              >
+                {t(
+                  isCopy
+                    ? 'pods.debugProgramHint'
+                    : 'pods.debugProgramEphemeralHint'
+                )}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pod-debug-arguments">
+                {t('pods.debugArguments')}
+              </Label>
+              <Textarea
+                id="pod-debug-arguments"
+                value={argumentsText}
+                onChange={(event) => setArgumentsText(event.target.value)}
+                disabled={isCreating || !trimmedProgram}
+                aria-describedby="pod-debug-arguments-hint"
+                rows={2}
+              />
+              <p
+                id="pod-debug-arguments-hint"
+                className="text-pretty text-sm text-muted-foreground"
+              >
+                {t('pods.debugArgumentsHint')}
+              </p>
+            </div>
+            {error && (
+              <p role="alert" className="text-pretty text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => guard.handleOpenChange(false)}
               disabled={isCreating}
             >
-              <SelectTrigger id="pod-debug-target" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {containers.map((container) => (
-                  <SelectItem key={container.name} value={container.name}>
-                    {container.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="pod-debug-image">{t('pods.debugImage')}</Label>
-            <Input
-              id="pod-debug-image"
-              value={isCopy ? copyImage : image}
-              onChange={(event) =>
-                isCopy
-                  ? setCopyImage(event.target.value)
-                  : setImage(event.target.value)
+              {t('common.actions.cancel')}
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={
+                isCreating ||
+                !targetContainerName ||
+                (isCopy
+                  ? !copyTo.trim() || !trimmedProgram
+                  : !ephemeralAvailable || !image.trim())
               }
-              placeholder={isCopy ? targetImage : undefined}
-              disabled={isCreating}
-              aria-describedby="pod-debug-image-hint"
-              autoComplete="off"
-            />
-            <p
-              id="pod-debug-image-hint"
-              className="text-pretty text-sm text-muted-foreground"
             >
-              {t(isCopy ? 'pods.debugCopyImageHint' : 'pods.debugImageHint')}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="pod-debug-program">{t('pods.debugProgram')}</Label>
-            <Input
-              id="pod-debug-program"
-              value={program}
-              onChange={(event) => setProgram(event.target.value)}
-              disabled={isCreating}
-              aria-describedby="pod-debug-program-hint"
-              autoComplete="off"
-            />
-            <p
-              id="pod-debug-program-hint"
-              className="text-pretty text-sm text-muted-foreground"
-            >
-              {t(
-                isCopy
-                  ? 'pods.debugProgramHint'
-                  : 'pods.debugProgramEphemeralHint'
-              )}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="pod-debug-arguments">
-              {t('pods.debugArguments')}
-            </Label>
-            <Textarea
-              id="pod-debug-arguments"
-              value={argumentsText}
-              onChange={(event) => setArgumentsText(event.target.value)}
-              disabled={isCreating || !trimmedProgram}
-              aria-describedby="pod-debug-arguments-hint"
-              rows={2}
-            />
-            <p
-              id="pod-debug-arguments-hint"
-              className="text-pretty text-sm text-muted-foreground"
-            >
-              {t('pods.debugArgumentsHint')}
-            </p>
-          </div>
-          {error && (
-            <p role="alert" className="text-pretty text-sm text-destructive">
-              {error}
-            </p>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isCreating}>
-            {t('common.actions.cancel')}
-          </Button>
-          <Button
-            onClick={handleCreate}
-            disabled={
-              isCreating ||
-              !targetContainerName ||
-              (isCopy
-                ? !copyTo.trim() || !trimmedProgram
-                : !ephemeralAvailable || !image.trim())
-            }
-          >
-            {isCreating ? t('pods.debugCreating') : t('pods.debugCreate')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              {isCreating ? t('pods.debugCreating') : t('pods.debugCreate')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }

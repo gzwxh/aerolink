@@ -5,7 +5,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Settings2,
   Trash2,
   XCircle,
 } from 'lucide-react'
@@ -16,7 +15,6 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -33,16 +31,18 @@ import {
 } from '@/components/ui/select'
 import { Toggle } from '@/components/ui/toggle'
 
+import { RefreshButton } from './refresh-button'
 import { NamespaceSelector } from './selector/namespace-selector'
+import { TableColumnToggle } from './table-column-toggle'
 
 export interface ResourceTableBatchAction<T> {
   id: string
   label: string
   icon?: React.ReactNode
   onSelect: (rows: T[]) => void
-  /** Rendered but greyed out (e.g. not applicable to the current selection). */
+  /** 会被渲染但置灰（例如不适用于当前选择）。 */
   disabled?: boolean
-  /** Not rendered at all (e.g. an action that only appears for some rows). */
+  /** 完全不渲染（例如只对某些行出现的操作）。 */
   hidden?: boolean
 }
 
@@ -63,12 +63,14 @@ interface ResourceTableToolbarProps<T> {
   refreshInterval: number
   onUseSSEChange: (pressed: boolean) => void
   onRefreshIntervalChange: (value: number) => void
+  /** 立刻刷新；不传就不显示刷新按钮。 */
+  onRefresh?: () => void
   selectedRowCount: number
   onOpenDeleteDialog: () => void
   batchActions: ResourceTableBatchAction<T>[]
-  /** Keep batch buttons visible (disabled) even when nothing is selected. */
+  /** 即使没有任何选中项，也保持批量按钮可见（禁用态）。 */
   alwaysShowBatchActions?: boolean
-  /** Render the built-in batch delete button. */
+  /** 渲染内置的批量删除按钮。 */
   showBatchDelete?: boolean
 }
 
@@ -89,6 +91,7 @@ export function ResourceTableToolbar<T>({
   refreshInterval,
   onUseSSEChange,
   onRefreshIntervalChange,
+  onRefresh,
   selectedRowCount,
   onOpenDeleteDialog,
   batchActions,
@@ -106,8 +109,8 @@ export function ResourceTableToolbar<T>({
 
   const getSelectedRows = () =>
     table.getSelectedRowModel().rows.map((row) => row.original)
-  // Actions the caller explicitly hid (e.g. the caller lacks the permission)
-  // must not reappear in the overflow menu.
+  // 调用方显式隐藏的操作（例如调用方没有权限）
+  // 不得在溢出菜单里重新出现。
   const visibleBatchActions = batchActions.filter((action) => !action.hidden)
   const hasBatchActions = visibleBatchActions.length > 0 || showBatchDelete
   const showBatchActionsInline =
@@ -139,6 +142,17 @@ export function ResourceTableToolbar<T>({
               <span>{t('resourceTable.watch')}</span>
             </Toggle>
           )}
+          {onRefresh ? (
+            <RefreshButton
+              onClick={onRefresh}
+              // 监听模式下不是「再拉一次」，而是重连后重新拉取。
+              label={
+                useSSE
+                  ? t('resourceTable.refreshWatch', 'Reconnect and fetch')
+                  : t('common.actions.refresh', 'Refresh')
+              }
+            />
+          ) : null}
           <Select
             value={refreshInterval.toString()}
             onValueChange={(value) => onRefreshIntervalChange(Number(value))}
@@ -329,42 +343,7 @@ export function ResourceTableToolbar<T>({
               </Button>
             )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Toggle columns"
-                >
-                  <Settings2 className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {table
-                  .getAllLeafColumns()
-                  .filter((column) => column.getCanHide())
-                  .map((column) => {
-                    const header = column.columnDef.header
-                    const headerText =
-                      typeof header === 'string' ? header : column.id
-
-                    return (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        className="capitalize"
-                        checked={column.getIsVisible()}
-                        onCheckedChange={(value) =>
-                          column.toggleVisibility(!!value)
-                        }
-                      >
-                        {headerText}
-                      </DropdownMenuCheckboxItem>
-                    )
-                  })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <TableColumnToggle table={table} />
           </div>
         </div>
       </div>

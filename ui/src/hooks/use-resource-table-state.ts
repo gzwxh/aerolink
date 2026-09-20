@@ -12,7 +12,7 @@ interface UseResourceTableStateOptions {
   resourceName: string
   clusterScope: boolean
   defaultHiddenColumns: string[]
-  /** Optional namespace that wins over stored preferences (e.g. URL param). */
+  /** 可选的命名空间，优先于存储的偏好（例如 URL 参数）。 */
   initialNamespace?: string
 }
 
@@ -88,14 +88,14 @@ export function useResourceTableState({
     if (initialNamespace && !clusterScope) {
       return initialNamespace
     }
-    // Prefer tab-scoped sessionStorage to isolate namespace selection across tabs
+    // 优先使用按标签页隔离的 sessionStorage，以隔离各标签页的命名空间选择
     const tabNamespace = sessionStorage.getItem(
       getClusterScopedStorageKey('selectedNamespace')
     )
     if (tabNamespace) {
       return clusterScope ? undefined : tabNamespace
     }
-    // Fall back to localStorage for global preference (new tabs inherit last choice)
+    // 回退到 localStorage 作为全局偏好（新标签页继承上次选择）
     const globalNamespace = localStorage.getItem(
       getClusterScopedStorageKey('selectedNamespace')
     )
@@ -176,12 +176,12 @@ export function useResourceTableState({
   }, [columnFilters, searchQuery])
 
   const handleNamespaceChange = useCallback((value: string) => {
-    // Persist to sessionStorage for tab-level isolation
+    // 持久化到 sessionStorage，实现标签页级隔离
     sessionStorage.setItem(
       getClusterScopedStorageKey('selectedNamespace'),
       value
     )
-    // Also update localStorage as global preference for new tabs
+    // 同时更新 localStorage，作为新标签页的全局偏好
     localStorage.setItem(getClusterScopedStorageKey('selectedNamespace'), value)
     setSelectedNamespace(value)
     setPagination((prev) => ({ ...prev, pageIndex: 0 }))

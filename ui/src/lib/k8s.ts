@@ -20,8 +20,8 @@ import {
 } from './resource-metadata'
 import { getAge } from './utils'
 
-// This function retrieves the status of a Pod in Kubernetes.
-// @see https://github.com/kubernetes/kubernetes/blob/master/pkg/printers/internalversion/printers.go#L881
+// 该函数获取 Kubernetes 中 Pod 的状态。
+// @see 上游实现：https://github.com/kubernetes/kubernetes/blob/master/pkg/printers/internalversion/printers.go#L881
 export function getPodStatus(pod?: Pod): PodStatus {
   if (!pod || !pod.status) {
     return {
@@ -46,7 +46,7 @@ export function getPodStatus(pod?: Pod): PodStatus {
     reason = pod.status.reason
   }
 
-  // If the Pod carries {type:PodScheduled, reason:SchedulingGated}, set reason to 'SchedulingGated'.
+  // 如果 Pod 带有 {type:PodScheduled, reason:SchedulingGated}，把 reason 设为 'SchedulingGated'。
   if (pod.status?.conditions) {
     for (const condition of pod.status.conditions) {
       if (
@@ -112,7 +112,7 @@ export function getPodStatus(pod?: Pod): PodStatus {
         }
         continue
       } else if (container.state?.terminated) {
-        // initialization is failed
+        // 初始化失败
         if (!container.state.terminated.reason) {
           if (container.state.terminated.signal) {
             reason = `Init:Signal:${container.state.terminated.signal}`
@@ -263,7 +263,7 @@ export function getEventTime(event: KubernetesEvent) {
   return timestamp ? new Date(timestamp) : new Date(0)
 }
 
-// Helper function to check if pod phase is terminal
+// 辅助函数：判断 pod 阶段是否为终态
 function isPodPhaseTerminal(phase: string): boolean {
   return phase === 'Failed' || phase === 'Succeeded'
 }
@@ -374,17 +374,17 @@ export function getDeploymentStatus(
   const status = deployment.status
   const spec = deployment.spec
 
-  // Check if deployment is being deleted
+  // 检查 Deployment 是否正在被删除
   if (deployment.metadata?.deletionTimestamp) {
     return 'Terminating'
   }
 
-  // Check if deployment is paused
+  // 检查 Deployment 是否已暂停
   if (spec?.paused) {
     return 'Paused'
   }
 
-  // Get replica counts
+  // 获取副本数
   const replicas = status.replicas || 0
   if (replicas === 0) {
     return 'Scaled Down'
@@ -401,7 +401,7 @@ export function getDeploymentStatus(
     return 'Progressing'
   }
 
-  // All replicas are ready and available
+  // 所有副本都已就绪且可用
   if (
     readyReplicas === desiredReplicas &&
     availableReplicas === desiredReplicas
@@ -436,7 +436,7 @@ export function getCRDResourcePath(
     : `/crds/${kind}.${group}/${name}`
 }
 
-// Get owner reference information for a pod
+// 获取 pod 的属主引用信息
 export function getOwnerInfo(metadata?: ObjectMeta) {
   if (!metadata) {
     return null
@@ -474,7 +474,7 @@ export function getOwnerInfo(metadata?: ObjectMeta) {
   }
 }
 
-// @see https://github.com/kubernetes/kubernetes/blob/bd44685eadc64c8cd46a8259f027f57ba9724a85/pkg/printers/internalversion/printers.go#L1317-L1347
+// @see 上游实现：https://github.com/kubernetes/kubernetes/blob/bd44685eadc64c8cd46a8259f027f57ba9724a85/pkg/printers/internalversion/printers.go#L1317-L1347
 export function getServiceExternalIP(service: Service): string {
   switch (service.spec?.type) {
     case 'LoadBalancer':
@@ -498,7 +498,7 @@ export function getServiceExternalIP(service: Service): string {
   }
 }
 
-/** Tokens used by the Services list search (name/type/IP + port / nodePort / targetPort). */
+/** Services 列表搜索使用的 token（名称/类型/IP + port / nodePort / targetPort）。 */
 export function getServicePortSearchValues(service: Service): string[] {
   return (service.spec?.ports ?? []).map((port) => {
     const protocol = (port.protocol ?? 'TCP').toLowerCase()
@@ -508,12 +508,12 @@ export function getServicePortSearchValues(service: Service): string[] {
   })
 }
 
-// Helper function to check if pod has ready condition
+// 辅助函数：判断 pod 是否有 ready 条件
 function hasPodReadyCondition(conditions?: Array<{ type?: string }>): boolean {
   return conditions?.some((condition) => condition.type === 'Ready') ?? false
 }
 
-// Helper function to check if pod is initialized
+// 辅助函数：判断 pod 是否已初始化
 function isPodInitializedConditionTrue(status: Pod['status']): boolean {
   return (
     status?.conditions?.some(
@@ -523,7 +523,7 @@ function isPodInitializedConditionTrue(status: Pod['status']): boolean {
   )
 }
 
-// Helper function to check if container is restartable init container
+// 辅助函数：判断容器是否为可重启的 init 容器
 function isRestartableInitContainer(container: {
   restartPolicy?: string
 }): boolean {
@@ -570,17 +570,36 @@ export function createSearchFilter<T>(
 }
 
 /**
- * Annotation Kite writes when a create form captures a free-text description.
- * It is kept in annotations (never labels) so the description stays out of
- * label selectors while remaining readable from the object itself.
+ * Kite 在创建表单里记录自由文本描述时写入的注解。
+ * 它保存在 annotations（而绝不是 labels）中，这样描述不会进入
+ * 标签选择器，同时又能从对象本身读到。
  */
 export const DESCRIPTION_ANNOTATION = 'kite.io/description'
 
 /**
- * Picks the namespace a create form should open in. The table stores its
- * selection in sessionStorage (tab scoped) and localStorage (global), and a
- * multi selection ("a,b") or the "_all" sentinel cannot host a new object, so
- * those candidates degrade to the first concrete namespace, or "default".
+ * 创建表单（ConfigMap / Secret …）共用的校验模式。
+ *
+ * 名称遵循 DNS 子域规则；数据键仅限
+ * 字母数字以及 '-'、'_' 和 '.'；label / annotation 键允许可选的
+ * DNS 子域前缀，然后是也可以包含大写字母的名称部分。
+ */
+export const K8S_RESOURCE_NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/
+export const K8S_DATA_KEY_PATTERN = /^[-._a-zA-Z0-9]+$/
+export const K8S_META_KEY_PATTERN =
+  /^(?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?\/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$/
+
+/**
+ * 与创建页 URL 冲突的对象名
+ * （"/configmaps/<ns>/create"），因此使用这类名字的对象永远无法
+ * 跳回它的详情页。
+ */
+export const RESERVED_CREATE_NAMES = new Set(['create'])
+
+/**
+ * 挑选创建表单应打开的命名空间。表格把它的选择
+ * 保存在 sessionStorage（按标签页）与 localStorage（全局）中，而
+ * 多选（"a,b"）或 "_all" 哨兵无法承载新对象，
+ * 因此这些候选项会退化为第一个具体命名空间，或者 "default"。
  */
 export function resolveCreateNamespace(
   ...candidates: Array<string | null | undefined>

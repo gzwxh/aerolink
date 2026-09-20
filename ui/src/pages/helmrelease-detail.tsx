@@ -44,6 +44,7 @@ import {
   isVersionAtLeast,
   translateError,
 } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -488,7 +489,13 @@ function HelmReleaseRollbackButton({
   onRollback: (revision: number) => Promise<void>
 }) {
   const { t } = useTranslation()
+  const can = useCan()
   const [open, setOpen] = useState(false)
+
+  // 回滚会改写 HelmRelease，是写操作；只读角色只能查看历史。
+  if (!can('helmrelease', 'update', { namespace })) {
+    return null
+  }
 
   const handleConfirm = async () => {
     await onRollback(item.revision)
@@ -570,8 +577,8 @@ function HelmReleaseHistoryTable({
       await rollbackHelmRelease(namespace, name, revision)
       toast.success(t('helm.messages.rollbackStarted'))
       await Promise.all([refetchHistory(), onRollbackComplete()])
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setRollingBackRevision(null)
     }
@@ -1475,6 +1482,11 @@ function UpgradeHelmReleaseDialog({
 export function HelmReleaseDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
+  const can = useCan()
+  // 升级 / 自动升级会改写 HelmRelease，是写操作；只读角色不该看到入口。
+  const canUpdateRelease = can('helmrelease', 'update', { namespace })
+  // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
+  const canLog = can('pods', 'log', { namespace })
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [autoUpgradeDialogOpen, setAutoUpgradeDialogOpen] = useState(false)
   const { data, isLoading, error, refetch } = useResource(
@@ -1649,35 +1661,39 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
           />
         ) : null
       }
-      preYamlTabs={tabs}
+      preYamlTabs={canLog ? tabs : tabs.filter((tab) => tab.value !== 'logs')}
       showDescribe={false}
       showDelete
       headerActions={
         <>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!data}
-            title={autoUpgradeButtonTitle}
-            aria-label={autoUpgradeButtonTitle}
-            onClick={() => setAutoUpgradeDialogOpen(true)}
-          >
-            {autoUpgradeLastError ? (
-              <IconExclamationCircle className="size-4 fill-red-500 dark:fill-red-400" />
-            ) : isAutoUpgradeEnabled ? (
-              <IconCircleCheckFilled className="size-4 fill-green-500 dark:fill-green-400" />
-            ) : null}
-            {t('helm.actions.autoUpgrade')}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!data}
-            onClick={() => setUpgradeDialogOpen(true)}
-          >
-            {t('helm.actions.upgrade')}
-          </Button>
-          {data && upgradeDialogOpen ? (
+          {canUpdateRelease && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!data}
+              title={autoUpgradeButtonTitle}
+              aria-label={autoUpgradeButtonTitle}
+              onClick={() => setAutoUpgradeDialogOpen(true)}
+            >
+              {autoUpgradeLastError ? (
+                <IconExclamationCircle className="size-4 fill-red-500 dark:fill-red-400" />
+              ) : isAutoUpgradeEnabled ? (
+                <IconCircleCheckFilled className="size-4 fill-green-500 dark:fill-green-400" />
+              ) : null}
+              {t('helm.actions.autoUpgrade')}
+            </Button>
+          )}
+          {canUpdateRelease && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!data}
+              onClick={() => setUpgradeDialogOpen(true)}
+            >
+              {t('helm.actions.upgrade')}
+            </Button>
+          )}
+          {canUpdateRelease && data && upgradeDialogOpen ? (
             <UpgradeHelmReleaseDialog
               release={data}
               open={upgradeDialogOpen}
@@ -1685,7 +1701,7 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
               onComplete={refetch}
             />
           ) : null}
-          {data && autoUpgradeDialogOpen ? (
+          {canUpdateRelease && data && autoUpgradeDialogOpen ? (
             <HelmReleaseAutoUpgradeDialog
               release={data}
               open={autoUpgradeDialogOpen}

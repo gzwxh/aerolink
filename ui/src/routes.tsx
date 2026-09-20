@@ -4,6 +4,7 @@ import App, { StandaloneAIChatApp } from './App'
 import { InitCheckRoute } from './components/init-check-route'
 import { ProtectedRoute } from './components/protected-route'
 import { getSubPath } from './lib/subpath'
+import { AccountPage } from './pages/account-page'
 import { ConfigMapCreatePage } from './pages/configmap-create-page'
 import { CRListPage } from './pages/cr-list-page'
 import { CronJobListPage } from './pages/cronjob-list-page'
@@ -20,10 +21,10 @@ import { PodListPage } from './pages/pod-list-page'
 import { RBACRedirect } from './pages/rbac'
 import { ResourceDetail } from './pages/resource-detail'
 import { ResourceList } from './pages/resource-list'
+import { SecretCreatePage } from './pages/secret-create-page'
 import { ServiceCreatePage } from './pages/service-create-page'
 import { ServiceListPage } from './pages/service-list-page'
 import { SettingsPage, SettingsRedirect } from './pages/settings'
-import { UserCreatePage } from './pages/user-create'
 import { StatefulSetListPage } from './pages/statefulset-list-page'
 
 const subPath = getSubPath()
@@ -71,12 +72,13 @@ export const router = createBrowserRouter(
           element: <Overview />,
         },
         {
-          path: 'settings',
-          element: <SettingsRedirect />,
+          // 个人账号信息页：任何登录用户都能打开，不需要 settings 权限。
+          path: 'account',
+          element: <AccountPage />,
         },
         {
-          path: 'settings/users/create',
-          element: <UserCreatePage />,
+          path: 'settings',
+          element: <SettingsRedirect />,
         },
         {
           // 兼容旧链接：/settings/users → /settings/user?tab=users
@@ -87,6 +89,20 @@ export const router = createBrowserRouter(
           // 兼容旧链接：/settings/group → /settings/user?tab=group
           path: 'settings/group',
           element: <Navigate to="/settings/user?tab=group" replace />,
+        },
+        {
+          // 兼容旧链接：/settings/binding-groups → /settings/rbac?rbacTab=binding-groups
+          path: 'settings/binding-groups',
+          element: (
+            <Navigate to="/settings/rbac?rbacTab=binding-groups" replace />
+          ),
+        },
+        {
+          // 兼容旧链接：/settings/oauth → /settings/security?tab=authProviders
+          path: 'settings/oauth',
+          element: (
+            <Navigate to="/settings/security?tab=authProviders" replace />
+          ),
         },
         {
           path: 'settings/:section',
@@ -102,6 +118,10 @@ export const router = createBrowserRouter(
         },
         {
           path: 'deployments/:namespace/create',
+          element: <DeploymentCreatePage />,
+        },
+        {
+          path: 'deployments/:namespace/:name/edit',
           element: <DeploymentCreatePage />,
         },
         {
@@ -187,6 +207,14 @@ export const router = createBrowserRouter(
         {
           path: 'configmaps/:namespace/create',
           element: <ConfigMapCreatePage />,
+        },
+        {
+          path: 'secrets/create',
+          element: <SecretCreatePage />,
+        },
+        {
+          path: 'secrets/:namespace/create',
+          element: <SecretCreatePage />,
         },
         {
           path: 'crds/:crd',

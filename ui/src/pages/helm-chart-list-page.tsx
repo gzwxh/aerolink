@@ -65,6 +65,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { ErrorMessage } from '@/components/error-message'
 import { HelmChartIcon } from '@/components/helm-chart-icon'
+import { PasswordInput } from '@/components/password-input'
 import { ResourceTableView } from '@/components/resource-table-view'
 
 const allRepositories = 'all'
@@ -250,9 +251,8 @@ function AddRepositoryDialog({
                 <Label htmlFor="helm-repository-password">
                   {t('common.fields.password')}
                 </Label>
-                <Input
+                <PasswordInput
                   id="helm-repository-password"
-                  type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                 />
@@ -458,8 +458,8 @@ export function HelmChartListPage() {
       setRepositoryFilter(allRepositories)
       setRepositoryToDelete(null)
       await Promise.all([refetchRepositories(), localChartsQuery.refetch()])
-    } catch (err) {
-      toast.error(translateError(err, t))
+    } catch {
+      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
     } finally {
       setIsDeletingRepository(false)
     }

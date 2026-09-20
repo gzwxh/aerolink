@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
-  notificationEvents,
-  sendTestNotification,
   runDailyNotificationChecks,
+  sendTestNotification,
   updateNotificationSetting,
   useCreateNotificationSubscription,
   useDeleteNotificationSubscription,
@@ -38,10 +38,11 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { PasswordInput } from '@/components/password-input'
 
 /**
- * 通知设置：邮件服务器、消息模板与消息订阅。
- * 事件策略（异地登录 / 不活跃禁用 / 密码过期）复用「安全设置」里的开关。
+ * 通知管理：邮件服务器、消息模板与消息订阅。
+ * 事件策略（异地登录 / 不活跃禁用 / 密码过期）复用「安全管理」里的开关。
  */
 export function NotificationManagement() {
   const { t } = useTranslation()
@@ -55,7 +56,7 @@ export function NotificationManagement() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          {t('notifications.title', '通知设置')}
+          {t('notifications.title', '通知管理')}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -64,17 +65,16 @@ export function NotificationManagement() {
           onValueChange={(value) => setSearchParams({ tab: value })}
           className="flex flex-row gap-4 space-y-0 [&>[role=tabpanel]]:min-w-0 [&>[role=tabpanel]]:flex-1"
         >
-
-      <TabsContent value="email">
-        <MailSettings />
-      </TabsContent>
-      <TabsContent value="templates">
-        <TemplateList />
-      </TabsContent>
-      <TabsContent value="subscriptions">
-        <SubscriptionList />
-      </TabsContent>
-    </Tabs>
+          <TabsContent value="email">
+            <MailSettings />
+          </TabsContent>
+          <TabsContent value="templates">
+            <TemplateList />
+          </TabsContent>
+          <TabsContent value="subscriptions">
+            <SubscriptionList />
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   )
@@ -83,6 +83,8 @@ export function NotificationManagement() {
 function MailSettings() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  // 只读章节（只有 settings.notification 的读权限）时不渲染发送类入口。
+  const { readOnly } = useSettingsSectionAccess()
   const { data, isLoading } = useNotificationSetting()
   const [form, setForm] = useState<NotificationSetting | null>(null)
   const [smtpPassword, setSmtpPassword] = useState('')
@@ -108,7 +110,8 @@ function MailSettings() {
   const patch = <K extends keyof NotificationSetting>(
     key: K,
     value: NotificationSetting[K]
-  ) => setForm((previous) => (previous ? { ...previous, [key]: value } : previous))
+  ) =>
+    setForm((previous) => (previous ? { ...previous, [key]: value } : previous))
 
   const handleSave = async () => {
     setSaving(true)
@@ -118,14 +121,12 @@ function MailSettings() {
         smtpPassword: smtpPassword || undefined,
       })
       setSmtpPassword('')
-      await queryClient.invalidateQueries({ queryKey: ['notification-setting'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['notification-setting'],
+      })
       toast.success(t('notifications.messages.saved', '已保存'))
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t('notifications.messages.saveFailed', '保存失败')
-      )
+    } catch {
+      // 失败已由 API 客户端统一写入站内信
     } finally {
       setSaving(false)
     }
@@ -136,12 +137,8 @@ function MailSettings() {
     try {
       await sendTestNotification(testRecipient)
       toast.success(t('notifications.messages.testSent', '测试邮件已发送'))
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t('notifications.messages.testFailed', '测试邮件发送失败')
-      )
+    } catch {
+      // 失败已由 API 客户端统一写入站内信
     } finally {
       setTesting(false)
     }
@@ -185,7 +182,10 @@ function MailSettings() {
         <CardHeader>
           <CardTitle>{t('notifications.smtp.title', '邮件服务器')}</CardTitle>
           <CardDescription>
-            {t('notifications.smtp.description', 'SMTP 配置，保存后可发送测试邮件')}
+            {t(
+              'notifications.smtp.description',
+              'SMTP 配置，保存后可发送测试邮件'
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -231,13 +231,15 @@ function MailSettings() {
               <Label htmlFor="smtpPassword">
                 {t('notifications.fields.smtpPassword', '密码 / 授权码')}
               </Label>
-              <Input
+              <PasswordInput
                 id="smtpPassword"
-                type="password"
                 value={smtpPassword}
                 placeholder={
                   data?.smtpPasswordConfigured
-                    ? t('notifications.fields.smtpPasswordKeep', '已配置，留空则不修改')
+                    ? t(
+                        'notifications.fields.smtpPasswordKeep',
+                        '已配置，留空则不修改'
+                      )
                     : ''
                 }
                 onChange={(event) => setSmtpPassword(event.target.value)}
@@ -265,7 +267,9 @@ function MailSettings() {
                 id="smtpSenderName"
                 value={form.smtpSenderName}
                 placeholder="Kite"
-                onChange={(event) => patch('smtpSenderName', event.target.value)}
+                onChange={(event) =>
+                  patch('smtpSenderName', event.target.value)
+                }
               />
             </div>
             <div className="space-y-2">
@@ -313,44 +317,45 @@ function MailSettings() {
               className="sm:w-40"
               value={form.passwordExpireNoticeDays}
               onChange={(event) =>
-                patch('passwordExpireNoticeDays', Number(event.target.value) || 0)
+                patch(
+                  'passwordExpireNoticeDays',
+                  Number(event.target.value) || 0
+                )
               }
             />
             <p className="text-xs text-muted-foreground">
               {t(
                 'notifications.fields.passwordExpireNoticeDaysHint',
-                '与「安全设置」中的密码过期天数配合使用，每天检查一次'
+                '与「安全管理」中的密码过期天数配合使用，每天检查一次'
               )}
             </p>
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              disabled={running}
-              onClick={async () => {
-                setRunning(true)
-                try {
-                  await runDailyNotificationChecks()
-                  toast.success(
-                    t('notifications.messages.dailyRan', '每日检查已执行')
-                  )
-                } catch (error) {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : t('notifications.messages.dailyFailed', '执行失败')
-                  )
-                } finally {
-                  setRunning(false)
-                }
-              }}
-            >
-              {running
-                ? t('notifications.actions.running', '执行中...')
-                : t('notifications.actions.runDaily', '立即执行每日检查')}
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
+            {!readOnly && (
+              <Button
+                variant="outline"
+                disabled={running}
+                onClick={async () => {
+                  setRunning(true)
+                  try {
+                    await runDailyNotificationChecks()
+                    toast.success(
+                      t('notifications.messages.dailyRan', '每日检查已执行')
+                    )
+                  } catch {
+                    // 失败已由 API 客户端统一写入站内信
+                  } finally {
+                    setRunning(false)
+                  }
+                }}
+              >
+                {running
+                  ? t('notifications.actions.running', '执行中...')
+                  : t('notifications.actions.runDaily', '立即执行每日检查')}
+              </Button>
+            )}
+            <Button onClick={handleSave} disabled={readOnly || saving}>
               {saving
                 ? t('notifications.actions.saving', '保存中...')
                 : t('notifications.actions.save', '保存')}
@@ -381,15 +386,17 @@ function MailSettings() {
               onChange={(event) => setTestRecipient(event.target.value)}
             />
           </div>
-          <Button
-            variant="outline"
-            onClick={handleTest}
-            disabled={testing || !testRecipient}
-          >
-            {testing
-              ? t('notifications.actions.sending', '发送中...')
-              : t('notifications.actions.sendTest', '发送测试邮件')}
-          </Button>
+          {!readOnly && (
+            <Button
+              variant="outline"
+              onClick={handleTest}
+              disabled={testing || !testRecipient}
+            >
+              {testing
+                ? t('notifications.actions.sending', '发送中...')
+                : t('notifications.actions.sendTest', '发送测试邮件')}
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -435,8 +442,6 @@ function TemplateList() {
               {
                 onSuccess: () =>
                   toast.success(t('notifications.messages.saved', '已保存')),
-                onError: () =>
-                  toast.error(t('notifications.messages.saveFailed', '保存失败')),
               }
             )
           }
@@ -458,6 +463,7 @@ interface TemplateCardProps {
 
 function TemplateCard(props: TemplateCardProps) {
   const { t } = useTranslation()
+  const { readOnly } = useSettingsSectionAccess()
   const [subject, setSubject] = useState(props.subject)
   const [body, setBody] = useState(props.body)
   const [enabled, setEnabled] = useState(props.enabled)
@@ -489,7 +495,10 @@ function TemplateCard(props: TemplateCardProps) {
       <CardContent className="space-y-3">
         <div className="space-y-2">
           <Label>{t('notifications.fields.subject', '标题')}</Label>
-          <Input value={subject} onChange={(event) => setSubject(event.target.value)} />
+          <Input
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label>{t('notifications.fields.body', '内容')}</Label>
@@ -502,7 +511,7 @@ function TemplateCard(props: TemplateCardProps) {
         <div className="flex justify-end">
           <Button
             size="sm"
-            disabled={props.saving}
+            disabled={readOnly || props.saving}
             onClick={() => props.onSave({ subject, body, enabled })}
           >
             {t('notifications.actions.save', '保存')}
@@ -515,15 +524,31 @@ function TemplateCard(props: TemplateCardProps) {
 
 function SubscriptionList() {
   const { t } = useTranslation()
-  const { data, isLoading } = useNotificationSubscriptions()
+  const { readOnly } = useSettingsSectionAccess()
+  const { data: subscriptions, isLoading } = useNotificationSubscriptions()
   const createSubscription = useCreateNotificationSubscription()
   const updateSubscription = useUpdateNotificationSubscription()
   const deleteSubscription = useDeleteNotificationSubscription()
 
-  const [event, setEvent] = useState<string>(notificationEvents[0])
+  // 事件列表来自「通知模板」接口（后端按 NotificationEventList 的顺序返回全部事件）：
+  // 以前这里是前端硬编码的 4 个事件，新增事件（如 session_takeover）根本选不到。
+  // 测试邮件不是真实业务事件，不参与订阅。
+  const { data: templatePayload } = useNotificationTemplates()
+  const eventOptions = (templatePayload?.templates ?? [])
+    .map((template) => template.event as string)
+    .filter((value) => value !== 'test')
+
+  const [event, setEvent] = useState('')
   const [channel, setChannel] = useState<'inapp' | 'email'>('inapp')
   const [receiverType, setReceiverType] = useState<'user' | 'email'>('user')
   const [receiver, setReceiver] = useState('')
+
+  // 模板还没加载完时先留空，拿到列表后默认选中第一个。
+  useEffect(() => {
+    if (!event && eventOptions.length > 0) {
+      setEvent(eventOptions[0])
+    }
+  }, [event, eventOptions])
 
   const handleCreate = async () => {
     try {
@@ -535,12 +560,8 @@ function SubscriptionList() {
       })
       setReceiver('')
       toast.success(t('notifications.messages.saved', '已保存'))
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t('notifications.messages.saveFailed', '保存失败')
-      )
+    } catch {
+      // 失败已由 API 客户端统一写入站内信
     }
   }
 
@@ -564,7 +585,7 @@ function SubscriptionList() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {notificationEvents.map((value) => (
+              {eventOptions.map((value) => (
                 <SelectItem key={value} value={value}>
                   {t(`notifications.events.${value}`, value)}
                 </SelectItem>
@@ -574,7 +595,9 @@ function SubscriptionList() {
 
           <Select
             value={receiverType}
-            onValueChange={(value) => setReceiverType(value as 'user' | 'email')}
+            onValueChange={(value) =>
+              setReceiverType(value as 'user' | 'email')
+            }
           >
             <SelectTrigger>
               <SelectValue />
@@ -617,14 +640,16 @@ function SubscriptionList() {
             onChange={(event) => setReceiver(event.target.value)}
           />
 
-          <div className="sm:col-span-4 flex justify-end">
-            <Button
-              onClick={handleCreate}
-              disabled={createSubscription.isPending || !receiver}
-            >
-              {t('notifications.actions.add', '添加')}
-            </Button>
-          </div>
+          {!readOnly && (
+            <div className="sm:col-span-4 flex justify-end">
+              <Button
+                onClick={handleCreate}
+                disabled={createSubscription.isPending || !receiver || !event}
+              >
+                {t('notifications.actions.add', '添加')}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -640,12 +665,12 @@ function SubscriptionList() {
               {t('common.messages.loading', '加载中...')}
             </p>
           )}
-          {!isLoading && (data?.subscriptions?.length ?? 0) === 0 && (
+          {!isLoading && (subscriptions?.subscriptions?.length ?? 0) === 0 && (
             <p className="text-sm text-muted-foreground">
               {t('notifications.subscriptions.empty', '暂无订阅')}
             </p>
           )}
-          {data?.subscriptions?.map((subscription) => (
+          {subscriptions?.subscriptions?.map((subscription) => (
             <div
               key={subscription.id}
               className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
@@ -666,24 +691,26 @@ function SubscriptionList() {
                   {subscription.receiver}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={subscription.enabled}
-                  onCheckedChange={(checked) =>
-                    updateSubscription.mutate({
-                      id: subscription.id,
-                      enabled: checked,
-                    })
-                  }
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteSubscription.mutate(subscription.id)}
-                >
-                  {t('notifications.actions.delete', '删除')}
-                </Button>
-              </div>
+              {!readOnly && (
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={subscription.enabled}
+                    onCheckedChange={(checked) =>
+                      updateSubscription.mutate({
+                        id: subscription.id,
+                        enabled: checked,
+                      })
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteSubscription.mutate(subscription.id)}
+                  >
+                    {t('notifications.actions.delete', '删除')}
+                  </Button>
+                </div>
+              )}
             </div>
           ))}
         </CardContent>

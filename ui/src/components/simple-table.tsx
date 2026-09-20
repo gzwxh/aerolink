@@ -173,7 +173,7 @@ export function SimpleTable<T>({
             <div className="flex flex-wrap items-center gap-1">
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter((page) => {
-                  // Show current page ±2 pages, plus first and last page
+                  // 展示当前页 ±2 页，加上首页与末页
                   return (
                     page === 1 ||
                     page === totalPages ||

@@ -1,15 +1,15 @@
 /**
- * Role names can be scoped with a fixed prefix, e.g. every role created from the
- * node permission tab starts with "node-". The two helpers below keep the
- * displayed value, the live editing behaviour and the submitted payload in
- * sync so the prefix is never missing and never doubled.
+ * 角色名可以带固定前缀，例如从节点权限标签页创建的每个角色都以
+ * "node-" 开头。下面两个辅助函数让展示值、实时编辑行为与提交的
+ * 数据保持一致，使前缀既不会缺失，也不会被重复添加。
+ *
  */
 
 /**
- * Full normalization of a role name: guarantees the configured prefix, treats a
- * partially deleted prefix ("", "no", "node") as "prefix only", and leaves a
- * name that already carries the prefix untouched. Used on load, on blur and on
- * submit.
+ * 角色名的完整规范化：保证带上配置的前缀，把被部分删除的前缀
+ * （""、"no"、"node"）视为"只保留前缀"，
+ * 而已经带前缀的名称原样返回。用于加载、失焦与
+ * 提交时。
  */
 export function normalizeRoleName(name: string, prefix?: string): string {
   if (!prefix) return name
@@ -19,9 +19,9 @@ export function normalizeRoleName(name: string, prefix?: string): string {
 }
 
 /**
- * Live variant used while typing: keeps a partially deleted prefix as-is
- * instead of re-adding it, so backspacing does not fight the user. A value that
- * already carries the prefix is returned unchanged.
+ * 输入过程中使用的实时版本：对已被部分删除的前缀保持原样，
+ * 而不是重新补上，这样退格不会与用户较劲。已经带前缀的值
+ * 原样返回。
  */
 export function applyRoleNamePrefix(value: string, prefix?: string): string {
   if (!prefix) return value

@@ -35,7 +35,7 @@ export async function readAIChatSSEStream(
       }
       onEvent(eventType, data)
     } catch {
-      // ignore invalid SSE payload
+      // 忽略非法的 SSE 载荷
     }
 
     eventType = ''

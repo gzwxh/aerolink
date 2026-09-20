@@ -15,13 +15,17 @@ import {
 } from './components/global-search-provider'
 import { MFAEnrollmentGate } from './components/mfa-enrollment-gate'
 import { MFAPromptDialog } from './components/mfa-prompt-dialog'
+import { SessionSupersededDialog } from './components/session-superseded-dialog'
 import { SiteHeader } from './components/site-header'
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar'
 import { Toaster } from './components/ui/sonner'
 import { AIChatProvider } from './contexts/ai-chat-context'
 import { ClusterProvider } from './contexts/cluster-context'
+import { NavigationProvider } from './contexts/navigation-context'
 import { TerminalProvider, useTerminal } from './contexts/terminal-context'
 import { useCluster } from './hooks/use-cluster'
+import { useSessionHeartbeat } from './hooks/use-session-heartbeat'
+import { useSessionTakeoverNotice } from './hooks/use-session-takeover-notice'
 
 function ClusterGate({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
@@ -90,18 +94,30 @@ function AppContent() {
         <AIChatbox />
       </ErrorBoundary>
       <MFAPromptDialog />
-      <Toaster position="top-right" richColors closeButton />
+      {/* 提示统一在顶部居中、约 3 秒自动消失（全局默认时长）。 */}
+      <Toaster position="top-center" richColors closeButton duration={3000} />
     </>
   )
 }
 
 function AppProviders({ children }: { children: ReactNode }) {
+  // 单点登录：把其他设备的会话顶下线后，在新设备上提示一次。
+  useSessionTakeoverNotice()
+  // 在已登录页面上持续探活：会话被顶下线后马上弹提示，不用等下一次页面操作。
+  useSessionHeartbeat()
+
   return (
     <TerminalProvider>
       <ClusterProvider>
-        <GlobalSearchProvider>
-          <AIChatProvider>{children}</AIChatProvider>
-        </GlobalSearchProvider>
+        <NavigationProvider>
+          <GlobalSearchProvider>
+            <AIChatProvider>
+              {children}
+              {/* 账号被顶下线的提示（单点登录）：主界面与独立 AI 页共用一个实例。 */}
+              <SessionSupersededDialog />
+            </AIChatProvider>
+          </GlobalSearchProvider>
+        </NavigationProvider>
       </ClusterProvider>
     </TerminalProvider>
   )

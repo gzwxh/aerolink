@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 
-import { roleCanAccessAnyNamespace } from '@/lib/rbac-permissions'
+import {
+  permissionRoles,
+  roleCanAccessAnyNamespace,
+} from '@/lib/rbac-permissions'
 import { useCluster } from '@/hooks/use-cluster'
 
 export interface CanOptions {
@@ -9,8 +12,8 @@ export interface CanOptions {
   cluster?: string | null
 }
 
-// useCan returns a permission predicate backed by the current user's roles.
-// The active cluster is applied automatically unless the caller overrides it.
+// useCan 返回一个由当前用户角色支撑的权限判定函数。
+// 除非调用方覆盖，否则会自动应用当前集群。
 export function useCan() {
   const { user } = useAuth()
   const { currentCluster } = useCluster()
@@ -32,9 +35,9 @@ export function useCan() {
 }
 
 /**
- * useCanAnyNamespace answers "may the user do this in at least one namespace?"
- * It backs entry points that are not scoped to a single namespace, such as a
- * list page's Create button or its bulk-delete action.
+ * useCanAnyNamespace 回答"用户是否至少能在某个命名空间里做这件事？"
+ * 它支撑那些不限定单个命名空间的入口，例如
+ * 列表页的创建按钮或批量删除操作。
  */
 export function useCanAnyNamespace() {
   const { user } = useAuth()
@@ -47,7 +50,12 @@ export function useCanAnyNamespace() {
       }
       const cluster =
         options?.cluster !== undefined ? options.cluster : currentCluster
-      return roleCanAccessAnyNamespace(user.roles, resource, verb, { cluster })
+      return roleCanAccessAnyNamespace(
+        permissionRoles(user.roles, user.namespaceScopedRoles),
+        resource,
+        verb,
+        { cluster, isAdmin: user.isAdmin() }
+      )
     },
     [user, currentCluster]
   )

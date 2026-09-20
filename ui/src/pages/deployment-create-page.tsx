@@ -7,8 +7,11 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { applyResource, useResources } from '@/lib/api'
+import { applyResource, useResource, useResources } from '@/lib/api'
+import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { cn, translateError } from '@/lib/utils'
+import { useCan } from '@/hooks/use-can'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsTrigger } from '@/components/ui/tabs'
 import {
+  applyEditedManifest,
   createDefaultContainer,
   defaultNetwork,
   generateWorkloadYaml,
@@ -41,6 +46,7 @@ import {
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 import { StatefulServiceSelector } from '@/components/stateful-service-selector'
+import { TabStrip } from '@/components/tab-strip'
 import {
   CommandEditor,
   PortsEditor,
@@ -169,9 +175,9 @@ const SectionMenu = ({
 )
 
 /**
- * Standalone Tencent-cloud-style workload creation page (replaces the
- * wizard dialog for deployments): persistent basic info on top, tabbed
- * Deployment / Pod / containers / YAML configuration below.
+ * 独立的腾讯云风格工作负载创建页（取代了 Deployment 的
+ * 向导对话框）：顶部是常驻的基本信息，下方是
+ * Deployment / Pod / 容器 / YAML 配置的标签页。
  */
 const KIND_LABELS: Partial<Record<WorkloadResourceType, string>> = {
   deployments: 'Deployment',
@@ -186,20 +192,59 @@ interface DeploymentCreatePageProps {
   resourceType?: WorkloadResourceType
 }
 
+/**
+ * 工作负载表单页的入口：创建路由渲染它时没有
+ * `:name` 参数，而编辑路由（`…/:namespace/:name/edit`）会提供一个，
+ * 从而让页面切换为编辑已有对象。
+ */
 export function DeploymentCreatePage({
   resourceType = 'deployments',
 }: DeploymentCreatePageProps = {}) {
+  const { namespace, name } = useParams()
+  if (name) {
+    return (
+      <DeploymentEditPage
+        resourceType={resourceType}
+        name={name}
+        namespace={namespace || 'default'}
+      />
+    )
+  }
+  return <DeploymentFormPage resourceType={resourceType} />
+}
+
+interface DeploymentFormPageProps {
+  resourceType: WorkloadResourceType
+  /** 编辑时设置：身份字段被锁定，保存即更新。 */
+  editName?: string
+  /** 编辑模式下预填的表单状态。 */
+  initialData?: DeploymentFormData
+  /** 正在编辑的线上对象，用于保存时保留未建模的字段。 */
+  originalManifest?: Record<string, unknown>
+}
+
+function DeploymentFormPage({
+  resourceType,
+  editName,
+  initialData,
+  originalManifest,
+}: DeploymentFormPageProps) {
+  const isEdit = !!editName
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const { namespace: namespaceParam } = useParams()
-  const [formData, setFormData] = useState<DeploymentFormData>(() => ({
-    ...initialFormData,
-    namespace: namespaceParam || searchParams.get('namespace') || 'default',
-    ...(resourceType === 'cronjobs' ? { schedule: '*/5 * * * *' } : {}),
-  }))
+  const can = useCan()
+  const [formData, setFormData] = useState<DeploymentFormData>(
+    () =>
+      initialData ?? {
+        ...initialFormData,
+        namespace: namespaceParam || searchParams.get('namespace') || 'default',
+        ...(resourceType === 'cronjobs' ? { schedule: '*/5 * * * *' } : {}),
+      }
+  )
   const [activeTab, setActiveTab] = useState<MainTab | number>(() => {
     const tabParam = searchParams.get('tab')
     if (tabParam === 'pod') return 'pod'
@@ -209,7 +254,9 @@ export function DeploymentCreatePage({
       const index = Number(match[1])
       if (index >= 0 && index < formData.containers.length) return index
     }
-    return 'deployment'
+    // Pod 没有 Deployment 标签页，因此显式的 `?tab=deployment` 不能让
+    // 页面停留在没有对应触发器的分区上。
+    return resourceType === 'pods' ? 'pod' : 'deployment'
   })
   const [deploySection, setDeploySection] = useState<DeploySection>('labels')
   const [podSection, setPodSection] = useState<PodSection>('labels')
@@ -217,9 +264,15 @@ export function DeploymentCreatePage({
     'general' as 'general' | 'health' | 'resources' | 'security' | 'storage'
   )
   const [editedYaml, setEditedYaml] = useState('')
+  // 表单或 YAML 草稿只要离开过初始快照就算「未保存」：切换集群前据此弹确认
+  // （登记处见 lib/unsaved-edits）。
+  const [formSnapshot] = useState(() =>
+    JSON.stringify({ formData, editedYaml })
+  )
+  useUnsavedEdits(JSON.stringify({ formData, editedYaml }) !== formSnapshot)
   const yamlSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // A pending reverse-sync must not fire after the page is gone.
+  // 待执行的反向同步不能在页面销毁后仍被触发。
   useEffect(
     () => () => {
       if (yamlSyncTimer.current) clearTimeout(yamlSyncTimer.current)
@@ -229,6 +282,18 @@ export function DeploymentCreatePage({
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
+  const kindLabel = KIND_LABELS[resourceType] || resourceType
+  const pageTitle = isEdit
+    ? t('workloadWizard.editPageTitle', {
+        kind: kindLabel,
+        defaultValue: `${kindLabel}: 编辑`,
+      })
+    : t('workloadWizard.pageTitle', {
+        kind: kindLabel,
+        defaultValue: `${kindLabel}: 创建`,
+      })
+  usePageTitle(pageTitle)
+
   const update = (updates: Partial<DeploymentFormData>) =>
     setFormData((prev) => ({ ...prev, ...updates }))
 
@@ -236,9 +301,19 @@ export function DeploymentCreatePage({
     () => generateWorkloadYaml(formData, resourceType),
     [formData, resourceType]
   )
-  const finalYaml = editedYaml || currentYaml
+  // 手写的 YAML 会原样应用；由表单重新生成的 manifest
+  // 会叠加到线上对象上，使表单未建模的字段得以保留。
+  const finalYaml = useMemo(() => {
+    if (editedYaml) return editedYaml
+    if (!originalManifest) return currentYaml
+    try {
+      return applyEditedManifest(currentYaml, originalManifest)
+    } catch {
+      return currentYaml
+    }
+  }, [editedYaml, currentYaml, originalManifest])
 
-  // Keep the tab in the URL so a refresh reopens the same section.
+  // 把标签保留在 URL 中，刷新后能重新打开同一分区。
   const setTab = (tab: MainTab | number) => {
     setActiveTab(tab)
     const params = new URLSearchParams(searchParams)
@@ -246,8 +321,8 @@ export function DeploymentCreatePage({
     setSearchParams(params, { replace: true })
   }
 
-  // When the user edited the YAML by hand it becomes the source of truth:
-  // skip form validation (the YAML document itself is what gets applied).
+  // 当用户手工编辑过 YAML 后，它就成为事实来源：
+  // 跳过表单校验（真正被应用的是那份 YAML 文档）。
   const yamlOverrides = editedYaml.trim().length > 0
   const isValid = useMemo(() => {
     if (yamlOverrides) {
@@ -258,20 +333,37 @@ export function DeploymentCreatePage({
         return false
       }
     }
-    if (!formData.name || !formData.namespace || formData.replicas <= 0)
-      return false
+    if (!formData.name || !formData.namespace) return false
+    // 已经缩容到 0 副本的工作负载是可以编辑的合法状态。
+    if (!isEdit && formData.replicas <= 0) return false
     if (!formData.labels.every((l) => l.key && l.value)) return false
     if (!formData.containers.every((c) => c.image && c.name)) return false
     if (resourceType === 'statefulsets' && !formData.serviceName?.trim())
       return false
     if (resourceType === 'cronjobs' && !formData.schedule?.trim()) return false
     return true
-  }, [yamlOverrides, finalYaml, formData, resourceType])
+  }, [yamlOverrides, finalYaml, formData, resourceType, isEdit])
 
-  const handleCreate = async () => {
+  // 把选中的命名空间保留在 URL 中，刷新后仍指向同一
+  // 目标，而不会回退到 `default`。
+  const namespaceCreatePath = (namespace: string) => {
+    const tabValue =
+      typeof activeTab === 'number' ? `container-${activeTab}` : activeTab
+    return `/${resourceType}/${encodeURIComponent(namespace)}/create?tab=${tabValue}`
+  }
+
+  // 表单里的命名空间会覆盖手工编辑 manifest 中的命名空间
+  // （apply_handler.go 会依据请求设置 obj.Namespace），因此它也是
+  // 权限校验必须跟随的命名空间。
+  const targetNamespace = formData.namespace
+  const canSubmit = can(resourceType, isEdit ? 'update' : 'create', {
+    namespace: targetNamespace,
+  })
+
+  const handleSubmit = async () => {
     if (!isValid) {
-      // Name the missing fields so the banner is actionable instead of a
-      // generic "please complete the form".
+      // 明确指出缺失的字段，让提示条可操作，
+      // 而不是笼统地"请补全表单"。
       const missing: string[] = []
       if (!formData.name.trim()) {
         missing.push(t('workloadWizard.fieldName', '名称'))
@@ -279,7 +371,7 @@ export function DeploymentCreatePage({
       if (!formData.namespace.trim()) {
         missing.push(t('workloadWizard.namespace', '命名空间'))
       }
-      if (formData.replicas <= 0) {
+      if (!isEdit && formData.replicas <= 0) {
         missing.push(t('workloadWizard.replicas', '副本数量'))
       }
       if (resourceType === 'statefulsets' && !formData.serviceName?.trim()) {
@@ -310,12 +402,13 @@ export function DeploymentCreatePage({
       await applyResource(finalYaml, formData.namespace)
       queryClient.invalidateQueries()
       toast.success(t('common.messages.applied', 'Applied successfully'))
-      // Navigate to the newly created deployment's detail page.
-      navigate(`/${resourceType}/${formData.namespace}/${formData.name}`)
+      // 返回到（刚创建或刚编辑过的）对象详情页。
+      navigate(
+        `/${resourceType}/${formData.namespace}/${isEdit ? editName : formData.name}`
+      )
     } catch (err) {
       const msg = translateError(err, t)
       setCreateError(msg)
-      toast.error(msg)
     } finally {
       setIsCreating(false)
     }
@@ -333,9 +426,9 @@ export function DeploymentCreatePage({
     setTab(nextIndex)
   }
 
-  // Keep the selected tab on a container that still exists: after a removal we
-  // land on the neighbouring container (or the Pod tab when the last one is
-  // gone) instead of a dangling index that would render a blank panel.
+  // 让选中的标签保持在仍然存在的容器上：删除之后
+  // 落到相邻容器（最后一个被删掉时则落到 Pod 标签页），
+  // 而不是一个会渲染空白面板的失效索引。
   const removeContainer = (index: number) => {
     const nextCount = formData.containers.length - 1
     setFormData((prev) => ({
@@ -361,9 +454,11 @@ export function DeploymentCreatePage({
     }))
   }
 
-  // Derive the active container from the selected tab so the two can never
-  // drift apart — a stale index rendered the wrong container, or nothing at
-  // all once containers were removed.
+  // 由选中的标签推导当前容器，使两者不会
+  // 出现偏差——索引过期会渲染错误的容器，
+  // 或在容器被删除后什么都不渲染。
+  const activeTabValue =
+    typeof activeTab === 'number' ? `container-${activeTab}` : activeTab
   const activeContainer =
     typeof activeTab === 'number' &&
     activeTab >= 0 &&
@@ -378,6 +473,11 @@ export function DeploymentCreatePage({
     index: i,
   }))
 
+  const selectTab = (value: string) => {
+    const match = value.match(/^container-(\d+)$/)
+    setTab(match ? Number(match[1]) : (value as MainTab))
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       {/* Header */}
@@ -386,16 +486,17 @@ export function DeploymentCreatePage({
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={() => navigate('/deployments')}
+          aria-label={t('common.actions.backToList', '返回列表')}
+          title={t('common.actions.backToList', '返回列表')}
+          onClick={() =>
+            isEdit
+              ? navigate(`/${resourceType}/${targetNamespace}/${editName}`)
+              : navigate(`/${resourceType}`)
+          }
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-xl font-semibold">
-          {t('workloadWizard.pageTitle', {
-            kind: KIND_LABELS[resourceType] || resourceType,
-            defaultValue: `${KIND_LABELS[resourceType] || resourceType}: 创建`,
-          })}
-        </h1>
+        <h1 className="text-2xl font-bold">{pageTitle}</h1>
       </div>
 
       {/* Scrollable content */}
@@ -406,10 +507,13 @@ export function DeploymentCreatePage({
             <Label className="text-xs">{t('workloadWizard.namespace')} *</Label>
             <NamespaceSelector
               selectedNamespace={formData.namespace}
-              handleNamespaceChange={(ns) =>
-                update({ namespace: ns || 'default' })
-              }
+              handleNamespaceChange={(ns) => {
+                const next = ns || 'default'
+                update({ namespace: next })
+                navigate(namespaceCreatePath(next), { replace: true })
+              }}
               triggerClassName="w-full sm:w-full sm:max-w-none"
+              disabled={isEdit}
               modal
             />
           </div>
@@ -423,6 +527,7 @@ export function DeploymentCreatePage({
                 onChange={(e) => update({ name: e.target.value })}
                 placeholder={t('workloadWizard.namePlaceholder', 'unique-name')}
                 className={cn('h-9', !formData.name && 'border-destructive')}
+                disabled={isEdit}
               />
               {!formData.name && (
                 <IconAlertCircle className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-destructive" />
@@ -483,74 +588,49 @@ export function DeploymentCreatePage({
         </div>
 
         {/* Main tabs */}
-        <div className="flex flex-wrap items-center gap-1 border-b">
-          {[
-            ...(resourceType !== 'pods'
-              ? ([
-                  [
-                    'deployment' as MainTab,
-                    KIND_LABELS[resourceType] || 'Workload',
-                  ],
-                ] as Array<[MainTab, string]>)
-              : []),
-            ['pod', 'Pod'] as [MainTab, string],
-          ].map(([key, label]) => (
+        <Tabs value={activeTabValue} onValueChange={selectTab}>
+          <TabStrip>
+            {resourceType !== 'pods' && (
+              <TabsTrigger value="deployment">
+                {KIND_LABELS[resourceType] || 'Workload'}
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="pod">Pod</TabsTrigger>
+            {containerTabs.map((tab) => (
+              <div key={tab.key} className="flex h-11 items-center">
+                <TabsTrigger value={tab.key} className="pr-1">
+                  {tab.label}
+                </TabsTrigger>
+                {formData.containers.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={t('workloadWizard.removeContainer', {
+                      index: tab.index + 1,
+                    })}
+                    title={t('workloadWizard.removeContainer', {
+                      index: tab.index + 1,
+                    })}
+                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                    onClick={() => removeContainer(tab.index)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
             <button
-              key={key}
               type="button"
-              onClick={() => setTab(key)}
-              className={`rounded-t-md border-b-2 px-4 py-2 text-sm transition-colors ${
-                activeTab === key
-                  ? 'border-primary font-medium text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+              onClick={addContainer}
+              className="flex h-11 shrink-0 items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary"
             >
-              {label}
+              <Plus className="h-3.5 w-3.5" />
+              {t('workloadWizard.addContainer', '添加容器')}
             </button>
-          ))}
-          {containerTabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setTab(tab.index)}
-              className={`group flex items-center gap-1 rounded-t-md border-b-2 px-4 py-2 text-sm transition-colors ${
-                activeTab === tab.index
-                  ? 'border-primary font-medium text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab.label}
-              {formData.containers.length > 1 && (
-                <X
-                  className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    removeContainer(tab.index)
-                  }}
-                />
-              )}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={addContainer}
-            className="flex items-center gap-1 rounded-t-md border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-primary"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t('workloadWizard.addContainer', '添加容器')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('yaml')}
-            className={`rounded-t-md border-b-2 px-4 py-2 text-sm transition-colors ${
-              activeTab === 'yaml'
-                ? 'border-primary font-medium text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t('workloadWizard.stepYaml', 'YAML')}
-          </button>
-        </div>
+            <TabsTrigger value="yaml">
+              {t('workloadWizard.stepYaml', 'YAML')}
+            </TabsTrigger>
+          </TabStrip>
+        </Tabs>
 
         {/* Tab content */}
         <div className="pb-4">
@@ -1266,13 +1346,13 @@ export function DeploymentCreatePage({
                   value={finalYaml}
                   onChange={(value) => {
                     const next = value || ''
-                    // Monaco echoes the controlled `value` back through
-                    // onChange when the form regenerates the YAML; ignoring
-                    // those echoes keeps the form authoritative.
-                    if (next === currentYaml) return
-                    // Keep the typed text immediately; debounce the reverse
-                    // sync so typing is smooth. Once synced the override is
-                    // cleared and later form edits regenerate the YAML.
+                    // 表单重新生成 YAML 时 Monaco 会通过
+                    // onChange 把受控的 value 回传；忽略
+                    // 这些回传可以让表单保持权威。
+                    if (next === finalYaml) return
+                    // 立即保留输入的文字；对反向同步做防抖
+                    // 让输入更顺畅。同步完成后该覆盖值会被
+                    // 清除，之后表单的修改会重新生成 YAML。
                     setEditedYaml(next)
                     if (yamlSyncTimer.current)
                       clearTimeout(yamlSyncTimer.current)
@@ -1299,21 +1379,108 @@ export function DeploymentCreatePage({
         </div>
       )}
 
+      {!canSubmit && (
+        <div className="rounded-md border border-destructive/40 border-l-4 border-l-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {isEdit
+            ? t('workloadWizard.noUpdatePermission', {
+                kind: kindLabel,
+                namespace: targetNamespace,
+                defaultValue: `你没有权限在命名空间 {{namespace}} 中更新 {{kind}}。`,
+              })
+            : t('workloadWizard.noCreatePermission', {
+                kind: kindLabel,
+                namespace: targetNamespace,
+                defaultValue: `你没有权限在命名空间 {{namespace}} 中创建 {{kind}}。`,
+              })}
+        </div>
+      )}
+
       {/* Footer actions */}
       <div className="flex items-center justify-end gap-2 border-t pt-3">
-        <Button variant="outline" onClick={() => navigate(`/${resourceType}`)}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            isEdit
+              ? navigate(`/${resourceType}/${targetNamespace}/${editName}`)
+              : navigate(`/${resourceType}`)
+          }
+        >
           {t('common.actions.cancel', '取消')}
         </Button>
         {/* Kept clickable while invalid so the banner can name the missing fields. */}
-        <Button onClick={handleCreate} disabled={isCreating}>
+        <Button onClick={handleSubmit} disabled={isCreating || !canSubmit}>
           {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {t('workloadWizard.createKind', {
-            kind: KIND_LABELS[resourceType] || resourceType,
-            defaultValue: `创建 ${KIND_LABELS[resourceType] || resourceType}`,
-          })}
+          {isEdit
+            ? t('common.actions.save', '保存')
+            : t('workloadWizard.createKind', {
+                kind: kindLabel,
+                defaultValue: `创建 ${kindLabel}`,
+              })}
         </Button>
       </div>
     </div>
+  )
+}
+
+/**
+ * 加载正在编辑的对象，并把解析出的表单状态交给共享的
+ * 表单页。表单用 initialData 初始化 useState，因此
+ * 只在对象就绪后才挂载。
+ */
+function DeploymentEditPage({
+  resourceType,
+  name,
+  namespace,
+}: {
+  resourceType: WorkloadResourceType
+  name: string
+  namespace: string
+}) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { data, isError, error } = useResource(resourceType, name, namespace)
+
+  const initialData = useMemo(
+    () =>
+      data
+        ? parseYamlToFormData(YAML.dump(data), resourceType, {
+            ...initialFormData,
+            name,
+            namespace,
+          })
+        : null,
+    [data, resourceType, name, namespace]
+  )
+
+  if (isError) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <p className="text-sm text-destructive">{translateError(error, t)}</p>
+        <Button
+          variant="outline"
+          onClick={() => navigate(`/${resourceType}/${namespace}/${name}`)}
+        >
+          {t('common.actions.cancel', '取消')}
+        </Button>
+      </div>
+    )
+  }
+
+  if (!initialData) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <DeploymentFormPage
+      resourceType={resourceType}
+      editName={name}
+      initialData={initialData}
+      originalManifest={data as Record<string, unknown>}
+    />
   )
 }
 
@@ -1350,7 +1517,7 @@ function SuffixedNumberField({
   )
 }
 
-/** Input joined with a unit dropdown (Pods / %), console style. */
+/** 输入框与单位下拉框组合（Pods / %），控制台风格。 */
 function QuantityField({
   label,
   value,
@@ -1401,7 +1568,7 @@ function StrategyFormView({
 }: {
   strategy: StrategyForm
   onChange: (next: StrategyForm) => void
-  /** StatefulSet uses OnDelete + partition instead of Recreate + maxSurge. */
+  /** StatefulSet 使用 OnDelete + partition，而不是 Recreate + maxSurge。 */
   variant?: 'deployment' | 'statefulset'
 }) {
   const { t } = useTranslation()
@@ -1526,7 +1693,7 @@ function StrategyFormView({
   )
 }
 
-/** Console-style field: the label sits inside the control box. */
+/** 控制台风格字段：标签位于控件框内部。 */
 function BoxedInput({
   label,
   value,
@@ -1553,7 +1720,7 @@ function BoxedInput({
   )
 }
 
-/** Console-style select: label above the value, both inside the trigger. */
+/** 控制台风格下拉：标签在值上方，二者都在触发器内。 */
 function BoxedSelect({
   label,
   value,
@@ -2044,7 +2211,7 @@ function StorageFormView({
 
 export default DeploymentCreatePage
 
-/** Pull secret selector: docker-registry secrets of the namespace. */
+/** 拉取密钥选择器：该命名空间的 docker-registry secret。 */
 function PullSecretSelector({
   namespace,
   value,

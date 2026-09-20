@@ -17,24 +17,24 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
 
-  // Open (or un-minimize) the terminal
+  // 打开（或取消最小化）终端
   const openTerminal = () => {
     setIsOpen(true)
     setIsMinimized(false)
   }
 
-  // Fully close and destroy the session
+  // 完全关闭并销毁会话
   const closeTerminal = () => {
     setIsOpen(false)
     setIsMinimized(false)
   }
 
-  // Hide the panel but keep the session alive
+  // 隐藏面板但保持会话存活
   const minimizeTerminal = () => {
     setIsMinimized(true)
   }
 
-  // Toggle open/minimized
+  // 在打开 / 最小化之间切换
   const toggleTerminal = () => {
     if (!isOpen) {
       openTerminal()

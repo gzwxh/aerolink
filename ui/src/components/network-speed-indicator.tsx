@@ -6,7 +6,7 @@ interface NetworkSpeedIndicatorProps {
   downloadSpeed: number
 }
 
-// Format bytes per second to human readable format
+// 把每秒字节数格式化为易读形式
 const formatSpeed = (bytesPerSecond: number): string => {
   if (bytesPerSecond === 0) return '0 B/s'
 
@@ -22,7 +22,7 @@ export const NetworkSpeedIndicator: React.FC<NetworkSpeedIndicatorProps> = ({
   uploadSpeed,
   downloadSpeed,
 }) => {
-  // Only show if there's any network activity
+  // 只在有网络活动时显示
   if (uploadSpeed === 0 && downloadSpeed === 0) {
     return null
   }

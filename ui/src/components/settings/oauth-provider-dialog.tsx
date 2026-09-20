@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { IconEdit, IconKey } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
 import { OAuthProvider } from '@/types/api'
 import { OAuthProviderCreateRequest } from '@/lib/api'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,6 +21,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
+import { PasswordInput } from '@/components/password-input'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 interface OAuthProviderDialogProps {
   open: boolean
@@ -48,31 +54,54 @@ export function OAuthProviderDialog({
   provider,
   onSubmit,
 }: OAuthProviderDialogProps) {
+  // 草稿在条件挂载的内容组件里，关闭即丢弃；「有没有改动」上报到这一层，
+  // 由 useUnsavedChangesGuard 拦截遮罩点击 / Esc / 右上角 X。
+  const [isDraftDirty, setIsDraftDirty] = useState(false)
+  const close = useCallback(() => onOpenChange(false), [onOpenChange])
+  const guard = useUnsavedChangesGuard({ dirty: isDraftDirty, onClose: close })
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {open ? (
-        <OAuthProviderDialogContent
-          key={provider?.id ?? 'new'}
-          provider={provider}
-          onOpenChange={onOpenChange}
-          onSubmit={onSubmit}
-        />
-      ) : null}
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={guard.handleOpenChange}>
+        {open ? (
+          <OAuthProviderDialogContent
+            key={provider?.id ?? 'new'}
+            provider={provider}
+            onSubmit={onSubmit}
+            onDraftChange={setIsDraftDirty}
+            onRequestClose={() => guard.handleOpenChange(false)}
+          />
+        ) : null}
+      </Dialog>
+
+      <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
+    </>
   )
 }
 
 function OAuthProviderDialogContent({
   provider,
-  onOpenChange,
   onSubmit,
-}: Omit<OAuthProviderDialogProps, 'open'>) {
+  onDraftChange,
+  onRequestClose,
+}: Omit<OAuthProviderDialogProps, 'open' | 'onOpenChange'> & {
+  /** 上报是否有草稿，父级据此决定关闭时是否先弹确认。 */
+  onDraftChange: (hasDraft: boolean) => void
+  /** 需要用户确认的关闭请求（取消按钮）。 */
+  onRequestClose: () => void
+}) {
   const { t } = useTranslation()
   const isEditMode = !!provider
 
   const [formData, setFormData] = useState(() =>
     createOAuthProviderFormData(provider)
   )
+  // 首帧表单（编辑时为现有配置，新建为默认值）即基线；改过才算未保存。
+  // 含 clientSecret 等敏感字段，仅在本组件内存中比较，不写入日志。
+  const isDirty = useDraftDirty(formData)
+  useEffect(() => {
+    onDraftChange(isDirty)
+  }, [isDirty, onDraftChange])
 
   const [validationError, setValidationError] = useState('')
 
@@ -219,9 +248,8 @@ function OAuthProviderDialogContent({
                 {t('oauthManagement.dialog.clientSecret', 'Client Secret')}
                 {isEditMode ? '' : ' *'}
               </Label>
-              <Input
+              <PasswordInput
                 id="client_secret"
-                type="password"
                 value={formData.clientSecret}
                 onChange={handleInputChange('clientSecret')}
                 placeholder={
@@ -386,11 +414,7 @@ function OAuthProviderDialogContent({
           </Alert>
         )}
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
+          <Button type="button" variant="outline" onClick={onRequestClose}>
             {t('common.actions.cancel', 'Cancel')}
           </Button>
           <Button type="submit">

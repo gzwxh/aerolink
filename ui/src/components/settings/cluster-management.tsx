@@ -1,13 +1,16 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
+  IconCheck,
   IconCopy,
   IconEdit,
   IconPlus,
   IconServer,
+  IconSwitchHorizontal,
   IconTrash,
   IconUpload,
 } from '@tabler/icons-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -18,13 +21,17 @@ import {
   ClusterUpdateRequest,
   createCluster,
   deleteCluster,
+  fetchBindingGroups,
   importClusters,
   updateCluster,
   useClusterList,
 } from '@/lib/api'
+import { copyToClipboard } from '@/lib/clipboard'
+import { useCluster } from '@/hooks/use-cluster'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -51,6 +58,11 @@ import { ClusterImportDialog } from './cluster-import-dialog'
 
 export function ClusterManagement() {
   const { t } = useTranslation()
+  // 只读章节（只有 settings.clusters 的读权限）时不渲染集群写入口。
+  const { readOnly } = useSettingsSectionAccess()
+  // 切换当前集群只是客户端偏好（写入 localStorage），不是对集群的写操作，
+  // 所以只读章节里也保留这个入口。
+  const { currentCluster, setCurrentCluster } = useCluster()
   const queryClient = useQueryClient()
 
   const {
@@ -65,6 +77,7 @@ export function ClusterManagement() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [editingCluster, setEditingCluster] = useState<Cluster | null>(null)
   const [deletingCluster, setDeletingCluster] = useState<Cluster | null>(null)
+  const [deleteBindingGroups, setDeleteBindingGroups] = useState(false)
   const [clusterAgentCommand, setClusterAgentCommand] = useState('')
   const [clusterAgentYaml, setClusterAgentYaml] = useState('')
   const [clusterAgentYamlError, setClusterAgentYamlError] = useState<
@@ -159,6 +172,12 @@ export function ClusterManagement() {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium">{cluster.name}</span>
+              {cluster.name === currentCluster && (
+                <Badge variant="outline" className="gap-1 text-primary">
+                  <IconCheck className="h-3 w-3" />
+                  {t('clusterManagement.currentBadge', 'Current')}
+                </Badge>
+              )}
               {cluster.isDefault && <Badge variant="secondary">Default</Badge>}
             </div>
             {cluster.description && (
@@ -219,7 +238,7 @@ export function ClusterManagement() {
         ),
       },
     ],
-    [getClusterTypeBadge, getStatusBadge, t]
+    [getClusterTypeBadge, getStatusBadge, t, currentCluster]
   )
 
   const actions = useMemo<Action<Cluster>[]>(
@@ -227,29 +246,56 @@ export function ClusterManagement() {
       {
         label: (
           <>
-            <IconEdit className="h-4 w-4" />
-            {t('common.actions.edit', 'Edit')}
+            <IconSwitchHorizontal className="h-4 w-4" />
+            {t('clusterManagement.actions.switch', 'Switch to this cluster')}
           </>
         ),
-        onClick: (cluster) => {
-          setEditingCluster(cluster)
-          setShowClusterDialog(true)
-        },
+        onClick: (cluster) => setCurrentCluster(cluster.name),
+        shouldDisable: (cluster) =>
+          cluster.name === currentCluster || Boolean(cluster.error),
+        hint: (cluster) =>
+          cluster.name === currentCluster
+            ? t(
+                'clusterManagement.hints.currentCluster',
+                'This cluster is already in use'
+              )
+            : cluster.error
+              ? t(
+                  'clusterManagement.hints.switchUnavailable',
+                  'Sync error: this cluster cannot be selected'
+                )
+              : undefined,
       },
-      {
-        label: (
-          <div className="inline-flex items-center gap-2 text-destructive">
-            <IconTrash className="h-4 w-4" />
-            {t('common.actions.delete', 'Delete')}
-          </div>
-        ),
-        shouldDisable: (cluster) => cluster.isDefault,
-        onClick: (cluster) => {
-          setDeletingCluster(cluster)
-        },
-      },
+      ...(readOnly
+        ? []
+        : [
+            {
+              label: (
+                <>
+                  <IconEdit className="h-4 w-4" />
+                  {t('common.actions.edit', 'Edit')}
+                </>
+              ),
+              onClick: (cluster: Cluster) => {
+                setEditingCluster(cluster)
+                setShowClusterDialog(true)
+              },
+            },
+            {
+              label: (
+                <div className="inline-flex items-center gap-2 text-destructive">
+                  <IconTrash className="h-4 w-4" />
+                  {t('common.actions.delete', 'Delete')}
+                </div>
+              ),
+              shouldDisable: (cluster: Cluster) => cluster.isDefault,
+              onClick: (cluster: Cluster) => {
+                setDeletingCluster(cluster)
+              },
+            },
+          ]),
     ],
-    [t]
+    [t, currentCluster, setCurrentCluster, readOnly]
   )
 
   const createMutation = useMutation({
@@ -313,15 +359,7 @@ export function ClusterManagement() {
         }
       }
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'clusterManagement.messages.createError',
-            'Failed to create cluster'
-          )
-      )
-    },
+    onError: () => {},
   })
 
   const importMutation = useMutation({
@@ -340,7 +378,7 @@ export function ClusterManagement() {
     },
   })
 
-  // Update cluster mutation
+  // 更新集群的 mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: ClusterUpdateRequest }) =>
       updateCluster(id, data),
@@ -352,54 +390,68 @@ export function ClusterManagement() {
       setShowClusterDialog(false)
       setEditingCluster(null)
     },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
-          t(
-            'clusterManagement.messages.updateError',
-            'Failed to update cluster'
-          )
-      )
-    },
+    onError: () => {},
   })
 
-  // Delete cluster mutation
+  // 集群下的权限绑定数量，用于删除集群时提示是否一并删除。
+  const { data: clusterBindingGroups = [] } = useQuery({
+    queryKey: ['binding-groups', 'all'],
+    queryFn: () => fetchBindingGroups(),
+  })
+  const deletingBindingGroupCount = deletingCluster
+    ? clusterBindingGroups.filter((g) => g.cluster === deletingCluster.name)
+        .length
+    : 0
+
+  // 删除集群的 mutation
   const deleteMutation = useMutation({
-    mutationFn: deleteCluster,
-    onSuccess: () => {
+    mutationFn: ({
+      id,
+      deleteBindingGroups,
+    }: {
+      id: number
+      deleteBindingGroups: boolean
+    }) => deleteCluster(id, { deleteBindingGroups }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['binding-groups'] })
       toast.success(
         t('clusterManagement.messages.deleted', 'Cluster deleted successfully')
       )
-      setDeletingCluster(null)
-    },
-    onError: (error: Error) => {
-      toast.error(
-        error.message ||
+      if ((result.bindingGroupsRetained ?? 0) > 0) {
+        toast.info(
           t(
-            'clusterManagement.messages.deleteError',
-            'Failed to delete cluster'
+            'clusterManagement.messages.bindingGroupsRetained',
+            'Kept {{count}} permission binding group(s); rebind them after re-importing the cluster.',
+            { count: result.bindingGroupsRetained }
           )
-      )
+        )
+      }
+      setDeletingCluster(null)
+      setDeleteBindingGroups(false)
     },
+    onError: () => {},
   })
 
   const handleSubmitCluster = (clusterData: ClusterCreateRequest) => {
     if (editingCluster) {
-      // Update existing cluster - use the form data directly
+      // 更新已有集群——直接使用表单数据
       updateMutation.mutate({
         id: editingCluster.id,
         data: clusterData,
       })
     } else {
-      // Create new cluster
+      // 创建新集群
       createMutation.mutate(clusterData)
     }
   }
 
   const handleDeleteCluster = () => {
     if (!deletingCluster) return
-    deleteMutation.mutate(deletingCluster.id)
+    deleteMutation.mutate({
+      id: deletingCluster.id,
+      deleteBindingGroups,
+    })
   }
 
   if (isLoading) {
@@ -434,32 +486,41 @@ export function ClusterManagement() {
               </CardTitle>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  importMutation.reset()
-                  setShowImportDialog(true)
-                }}
-                className="gap-2"
-              >
-                <IconUpload className="size-4" />
-                {t('clusterManagement.actions.import', 'Import Clusters')}
-              </Button>
-              <Button
-                onClick={() => {
-                  setEditingCluster(null)
-                  setShowClusterDialog(true)
-                }}
-                className="gap-2"
-              >
-                <IconPlus className="h-4 w-4" />
-                {t('clusterManagement.actions.add', 'Add Cluster')}
-              </Button>
+              {!readOnly && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      importMutation.reset()
+                      setShowImportDialog(true)
+                    }}
+                    className="gap-2"
+                  >
+                    <IconUpload className="size-4" />
+                    {t('clusterManagement.actions.import', 'Import Clusters')}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setEditingCluster(null)
+                      setShowClusterDialog(true)
+                    }}
+                    className="gap-2"
+                  >
+                    <IconPlus className="h-4 w-4" />
+                    {t('clusterManagement.actions.add', 'Add Cluster')}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable data={clusters} columns={columns} actions={actions} />
+          <ActionTable
+            data={clusters}
+            columns={columns}
+            // 切换集群在只读章节里也可用，所以操作列始终渲染。
+            actions={actions}
+          />
           {clusters.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <IconServer className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -560,11 +621,10 @@ export function ClusterManagement() {
                   )}
                   onClick={async () => {
                     if (!clusterAgentCommand) return
-                    try {
-                      await navigator.clipboard.writeText(clusterAgentCommand)
+                    if (await copyToClipboard(clusterAgentCommand)) {
                       setClusterAgentCopyError(null)
                       toast.success(t('common.messages.copied', 'Copied'))
-                    } catch {
+                    } else {
                       setClusterAgentCopyError('command')
                     }
                   }}
@@ -605,13 +665,13 @@ export function ClusterManagement() {
                         'Copy apply command'
                       )}
                       onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(
-                            `kubectl apply -f "${clusterAgentManifestURL}"`
-                          )
+                        const copied = await copyToClipboard(
+                          `kubectl apply -f "${clusterAgentManifestURL}"`
+                        )
+                        if (copied) {
                           setClusterAgentCopyError(null)
                           toast.success(t('common.messages.copied', 'Copied'))
-                        } catch {
+                        } else {
                           setClusterAgentCopyError('yaml')
                         }
                       }}
@@ -652,11 +712,10 @@ export function ClusterManagement() {
                     type="button"
                     variant="outline"
                     onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(clusterAgentYaml)
+                      if (await copyToClipboard(clusterAgentYaml)) {
                         setClusterAgentCopyError(null)
                         toast.success(t('common.messages.copied', 'Copied'))
-                      } catch {
+                      } else {
                         setClusterAgentCopyError('yaml')
                       }
                     }}
@@ -698,14 +757,49 @@ export function ClusterManagement() {
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmationDialog
         open={!!deletingCluster}
-        onOpenChange={() => setDeletingCluster(null)}
+        onOpenChange={() => {
+          setDeletingCluster(null)
+          setDeleteBindingGroups(false)
+        }}
         onConfirm={handleDeleteCluster}
         resourceName={deletingCluster?.name || ''}
         resourceType="cluster"
+        isDeleting={deleteMutation.isPending}
         additionalNote={t(
           'clusterManagement.deleteConfirmation',
           "This action will only remove the current cluster's configuration in kite and will not delete any cluster resources."
         )}
+        extraContent={
+          deletingBindingGroupCount > 0 ? (
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="delete-binding-groups"
+                  checked={deleteBindingGroups}
+                  onCheckedChange={(checked) =>
+                    setDeleteBindingGroups(checked === true)
+                  }
+                />
+                <label
+                  htmlFor="delete-binding-groups"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  {t(
+                    'clusterManagement.deleteBindingGroups',
+                    'Also delete the {{count}} permission binding group(s) of this cluster',
+                    { count: deletingBindingGroupCount }
+                  )}
+                </label>
+              </div>
+              <p className="ml-6 text-xs text-muted-foreground">
+                {t(
+                  'clusterManagement.keepBindingGroupsHint',
+                  'If unchecked, the permission binding groups are kept but stop applying; after re-importing the cluster you can rebind them on the permission page.'
+                )}
+              </p>
+            </div>
+          ) : null
+        }
       />
     </div>
   )
