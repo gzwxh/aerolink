@@ -95,6 +95,13 @@ func (s *smtpSink) handle(conn net.Conn) {
 	}
 }
 
+// settingsPropagationDelay 是等「设置改动传播到所有副本」的时间。
+//
+// 多副本部署下设置读的是每个副本自己的缓存（TTL 10 秒），而请求经负载均衡可能落到
+// 另一个副本上：改完设置立刻发请求，有概率读到旧值。留 12 秒余量。单副本时这段等待
+// 只是稍慢，不会误判。
+const settingsPropagationDelay = 12 * time.Second
+
 // smtpChecks 把通知配置临时指向本地 sink，发一封测试邮件，确认真的收到了，再复原设置。
 func (r *runner) smtpChecks() {
 	fmt.Println("--- 通知投递（本地假 SMTP）---")
@@ -120,6 +127,7 @@ func (r *runner) smtpChecks() {
 	setting["smtpSenderName"] = "Kite Smoke"
 	status, raw := r.putNotificationSetting(setting)
 	r.check("通知设置指向本地假 SMTP", status == 200, fmt.Sprintf("status=%d body=%s", status, truncate(string(raw), 120)))
+	time.Sleep(settingsPropagationDelay)
 	defer func() {
 		if _, raw := r.putNotificationSetting(original); len(raw) == 0 {
 			fmt.Println("   复原通知设置失败")
@@ -237,6 +245,7 @@ func (r *runner) aiChecks() {
 	setting["aiProvider"] = "openai"
 	status, raw := r.putGeneralSetting(setting)
 	r.check("AI 指向本地假 LLM", status == 200, fmt.Sprintf("status=%d body=%s", status, truncate(string(raw), 140)))
+	time.Sleep(settingsPropagationDelay)
 	defer func() {
 		if _, raw := r.putGeneralSetting(original); len(raw) == 0 {
 			fmt.Println("   复原 AI 设置失败")

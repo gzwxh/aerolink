@@ -102,7 +102,7 @@ func main() {
 	flag.StringVar(&opts.namespace, "namespace", "", "只读检查用的命名空间（默认取集群里第一个非系统命名空间）")
 	flag.StringVar(&opts.writeNamespace, "write-namespace", "", "写检查的命名空间；给了才会跑写检查，请用一个可以随便破坏的命名空间")
 	flag.StringVar(&opts.image, "image", "", "写检查用的容器镜像（默认用一个集群里常见的镜像）")
-	flag.StringVar(&opts.logFile, "log-file", "", "服务端日志文件；给了就扫描其中的 SQL 错误")
+	flag.StringVar(&opts.logFile, "log-file", "", "服务端日志文件；给了就扫描其中的 SQL 错误（多副本可用逗号分隔多个）")
 	flag.DurationVar(&opts.timeout, "timeout", 120*time.Second, "单次请求超时")
 	flag.BoolVar(&opts.runAI, "ai", false, "跑 AI 检查（会启动内置假 LLM，并临时改写通用设置里的 aiBaseUrl/aiApiKey）")
 	flag.BoolVar(&opts.runSMTP, "smtp", false, "跑通知投递检查（会启动内置假 SMTP，并临时改写通知设置）")
@@ -229,15 +229,25 @@ func (r *runner) clusterPath(suffix string) string {
 }
 
 // scanLog 扫描服务端日志里的数据库错误。换数据库版本时，这一项比任何接口断言
-// 都更灵敏：13+ 语法、缺函数、缺权限都会在这里冒出来。
+// 都更灵敏：13+ 语法、缺函数、缺权限都会在这里冒出来。多副本场景下日志是分散的，
+// 所以 -log-file 支持逗号分隔的多个文件。
 func (r *runner) scanLog() {
 	if r.opts.logFile == "" {
 		return
 	}
-	raw, err := os.ReadFile(r.opts.logFile)
-	if err != nil {
-		r.check("扫描服务端日志", false, err.Error())
-		return
+	var raw []byte
+	for _, path := range strings.Split(r.opts.logFile, ",") {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			r.check("扫描服务端日志 "+path, false, err.Error())
+			return
+		}
+		raw = append(raw, content...)
+		raw = append(raw, '\n')
 	}
 	patterns := []struct {
 		label string
