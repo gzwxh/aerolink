@@ -101,6 +101,9 @@ sqlite3 dev.db ".backup /data/backup/dev.db.$(date +%F-%H%M)"
 
 ### 5.2 准备目标库
 
+（下面按「复用现成的 `kite-postgres`」写。若目标库要另建在 **PG 12.12** 容器里——新建容器、
+`max_connections` 取多少、端口怎么并存——见 `2026-09-20-pg12-now-and-upgrade-path.md` §6。）
+
 本机复用 `kite-postgres` 里那张只有试跑数据的 `kite` 库，三件事：
 
 ```sh

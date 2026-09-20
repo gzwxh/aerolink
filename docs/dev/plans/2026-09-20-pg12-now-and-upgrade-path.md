@@ -1,6 +1,6 @@
 # 长期跑 PostgreSQL 12：现在要定的事，与将来升级的无缝路径
 
-- 状态：**应用侧结论为「无需改动」**（已跨版本实测）；运维侧列出 6 项要现在定，1 份升级路径
+- 状态：**应用侧代码已就绪**（跨版本实测 + 新增版本下限护栏）；运维侧 6 项要现在定，1 份 12.12 起库操作（§6），1 份升级路径
 - 触发：现网确定要长期停留在 PG 12，后续才考虑升级。问「现在有哪些地方需要改，同时以后换新版本
   能无缝对接」
 - 相关：`docs/dev/plans/2026-09-20-sqlite-to-postgres-migration.md`（切库与搬运工具）
@@ -44,7 +44,11 @@
 | --- | --- |
 | 现状（实测） | `12.12`，官方发布日期 **2022-08-11** |
 | 问题 | 12 系列最后一个 minor 是 **12.22（2024-11-21）**，12.12 之后还缺 **10 个 minor（12.13–12.22）**，其中包含安全修复；官方已把 **12 标记为不再支持** |
-| 现在要做 | 至少升到 **12.22**（minor 升级只需换镜像重启，不用 dump/restore）；并把镜像 tag 写死成 `12.22`（别用 `postgres:12`，否则哪天拉到别的 minor 会带来意外） |
+| 现在要做 | tag 写死到具体 minor（别用 `postgres:12`，否则哪天拉到别的 minor 会带来意外）；12 系列内部只用换镜像重启，不用 dump/restore |
+| 本次采用 | 内网镜像源 `swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/postgres:12.12`（已实测），起库命令见 §6 |
+
+`12.12` → `12.22` 是同一种数据目录布局，想升时只改镜像 tag —— 本次先落在已经端到端验证过的
+`12.12` 上，不引入没验过的变量。
 
 ### 2.2 编码与排序规则（最难事后补，现在必须选对）
 
@@ -102,6 +106,35 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
   不要只靠 `docker run -e` 或改容器内文件：`pg_upgrade` 不会迁移 `postgresql.conf`，
   换实例时要靠这份文件重建。
 
+#### 按 300 个用户算出来的值
+
+要数的不是「300 个人」，而是「同一瞬间有几个连接占着数据库」。两个口径：
+
+- 应用侧：**每个副本**的进程池上限是 `KITE_DB_MAX_OPEN_CONNS`（默认 100）。池子里的连接
+  **空闲时也占着坑位**，不会因为没人用就还回去。
+- 数据库侧：`max_connections` 是全部客户端加起来的总坑位，还要留几个给管理员 `psql`、备份
+  `pg_dump` 和监控（`superuser_reserved_connections` 默认 3，实际只够一个人用）。
+
+所以硬约束是：
+
+```
+副本数 × KITE_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ max_connections
+```
+
+| 部署形态 | 应用侧占用 | 至少要 | 建议值 |
+| --- | --- | --- | --- |
+| 1 副本（现状） | 100 | 120 | 200（现有值就够） |
+| 2 副本 | 200 | 220 | 300 |
+| 3 副本 | 300 | 320 | **400** |
+
+**结论：按 300 人、最多 3 副本，取 `max_connections=400`。** 再扩到 4 副本时，要么加到 500，
+要么把应用侧调成 `KITE_DB_MAX_OPEN_CONNS=80`（4 × 80 = 320）。
+
+不要无脑往大调：每个坑位在数据库进程里都要占内存（基线几 MB，遇到排序/联表再按 `work_mem`
+涨），本机 30G 内存下 400 个坑位最坏按每连接 10MB 估也就 4G 左右，其余内存参数沿用现网
+`kite-postgres` 那一套即可（见 §6.1）。真到「400 都不够」的规模，该上的是连接池中间件
+（PgBouncer），不是继续加坑位。
+
 ### 2.6 备份
 
 从切库那天起就要有：逻辑备份 `pg_dump`（体积小、跨版本可恢复，天然是升级的退路）+ 需要时再
@@ -136,9 +169,15 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
 - 多范围类型（multirange，14+）——驱动 pgx 会按 `pgVersion >= 14` 分支，但它只影响类型映射
 - `datatypes.JSON`（会建成 `jsonb`；12 有 jsonb，但要注意别顺手用 14+ 的 jsonb 新函数）
 
-现状是干净的（已 grep 确认）。**但 CI 不覆盖 PostgreSQL**（`.github/workflows/ci.yml` 只跑
-SQLite），所以这条守则目前没有自动守卫——按需可以加一个「扫生成的建表 SQL 里是否出现高危
-关键词」的测试。
+现状是干净的（已 grep 确认）。**CI 不覆盖 PostgreSQL**（`.github/workflows/ci.yml` 在
+`make build` 之后跑 `go test ./...`，数据库只覆盖 SQLite），所以这条守则由仓库根的
+`pg_version_floor_test.go` 兜底：
+
+- 它用 `go/parser` 扫全仓库 Go 源码里的**字符串字面量**（GORM tag 与手写 SQL 都写在字符串里，
+  注释与文档不算），命中上表关键词就 `t.Fatalf`，并把「哪个版本才有」一并打出来；
+- 覆盖范围是「仓库里出现的 SQL 文本」，不是「运行时真正执行过的 SQL」——所以它是护栏，不是
+  替代真机验证；
+- 新增写法要放行时，在 `pg13PlusTokens` 的注释里写明它在 PG 12 上为什么可用，而不是直接删条目。
 
 ## 5. 与版本无关、但已知的两项
 
@@ -147,3 +186,74 @@ SQLite），所以这条守则目前没有自动守卫——按需可以加一�
    再重试 UPDATE」实现，8 个并发登录会产生 7 条
    `duplicate key value violates unique constraint "user_sessions_pkey"`。设计使然，但如果有
    对 PG 错误日志的告警会被误报。
+
+## 6. 现在就用 12.12 起库：可直接粘贴的操作
+
+前提：本机（`10.100.117.8`）已有一个 `kite-postgres` 容器跑 **18**，数据在 `/data/postgresql`。
+**不要停它、也不要让 12 去挂它的数据目录**——12 认不出 18 的数据布局。正确的做法是「另起一个
+12、换一个端口并存，验证完再切流」，回滚就是改回 DSN。
+
+### 6.1 起 12.12
+
+```sh
+docker pull swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/postgres:12.12
+
+mkdir -p /data/postgresql12
+docker run -d --name kite-postgres12 --restart unless-stopped \
+  -p 5433:5432 \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD='<超管口令>' \
+  -v /data/postgresql12:/var/lib/postgresql/data \
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/postgres:12.12 \
+  -c shared_buffers=1GB -c max_connections=400 -c work_mem=16MB \
+  -c maintenance_work_mem=256MB -c effective_cache_size=8GB -c max_wal_size=2GB \
+  -c timezone=Asia/Shanghai -c log_timezone=Asia/Shanghai \
+  -c log_min_duration_statement=1000
+```
+
+- 12 的官方镜像数据目录就是 `/var/lib/postgresql/data`（18 才是 `/var/lib/postgresql/18/docker`），
+  所以这里挂载点和 18 那个容器不同，**不能互相复用**。
+- 端口用 `5433` 是刻意的：18 还占着 `5432`，并存期间两个都连得上。
+- 首次初始化要等（实测 12.12 约 60 秒，比新镜像慢），就绪判断：
+  `docker exec kite-postgres12 pg_isready -U postgres`，反复到出现 `accepting connections`。
+- `max_connections=400` 的来由见 §2.5；其余参数照抄现网那一套，别另起一组。
+
+### 6.2 建业务角色
+
+```sh
+docker exec kite-postgres12 psql -U postgres -c "CREATE DATABASE kite;"
+docker exec kite-postgres12 psql -U postgres -c "CREATE ROLE kite LOGIN PASSWORD '<kite 口令>';"
+docker exec kite-postgres12 psql -U postgres -c "ALTER DATABASE kite OWNER TO kite;"
+```
+
+不给 `kite` 角色 `CREATEDB` / `CREATEROLE`：应用不需要，给了只是扩大影响面。
+
+### 6.3 搬数据
+
+从 SQLite 搬（首次切库，步骤与校验见 `2026-09-20-sqlite-to-postgres-migration.md` §5）：
+
+```sh
+cd /wxh/kite
+set -a; . /root/kite-secrets.env; set +a
+DB_TYPE=sqlite DB_DSN=dev.db \
+  go run ./tools/dbmigrate -target-type postgres \
+    -target-dsn 'host=127.0.0.1 user=kite password=<kite 口令> dbname=kite port=5433 sslmode=disable TimeZone=Asia/Shanghai'
+```
+
+从 18 搬到 12（若 18 上已有真实数据）：显式加 `-source-type postgres -source-dsn '<18 的 DSN>'`，
+目标 DSN 同上。想先干跑、不动库就加 `-dry-run`。
+
+### 6.4 切流
+
+1. `dev.env` 改 `DB_TYPE=postgres`，`DB_DSN` 指到 `port=5433`，并**带上 `TimeZone=Asia/Shanghai`**；
+2. `make build` 后重启进程（本轮 Go 改动也要靠这次重启才生效）；
+3. 按切库文档 §5.6 的清单逐项校验：各表行数、能登录、3 个集群都能拉资源、MFA 能验码、
+   新建一个角色/收藏确认主键不冲突；
+4. 验证通过后再退休 18：先 `docker stop kite-postgres`，观察几天再删 `/data/postgresql`。
+   在删之前，回滚都只是把 DSN 改回 `5432` 的事。
+
+### 6.5 不要漏的一条
+
+`DB_DSN` 里显式写 `TimeZone=Asia/Shanghai`。12 / 13 / 18 行为一致，但漏写**不会报错**，只会让
+界面与审计日志里的时间整体偏移；应用启动时会对这种漏写打一条 warning（本轮新增，见
+`pkg/common/common.go` 的 `postgresDSNTimeZoneWarning`）。
