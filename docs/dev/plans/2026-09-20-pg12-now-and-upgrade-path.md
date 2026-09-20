@@ -102,9 +102,9 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
 
 - 应用侧 `KITE_DB_MAX_OPEN_CONNS` 默认 100。**多副本时**：`副本数 × 100` 会直接打满
   `max_connections`，必须先在数据库侧上调，或把应用侧调小。
-- 要用的参数（`max_connections`、`shared_buffers`、`work_mem` 等）**放到挂载的配置文件里**，
-  不要只靠 `docker run -e` 或改容器内文件：`pg_upgrade` 不会迁移 `postgresql.conf`，
-  换实例时要靠这份文件重建。
+- 要用的参数的**落地方式**：现网用 `docker run ... -c key=value` 传参（与既有的 18 容器一致，
+  `docker inspect` 随时可查回全套参数），完整清单固化在 §6.1 那条命令里。之所以强调「要有
+  一份外部记录」：`pg_upgrade` 不会迁移 `postgresql.conf`，重建实例时不能靠容器内的文件。
 
 #### 按 300 个用户算出来的值
 
@@ -246,7 +246,16 @@ DB_TYPE=sqlite DB_DSN=dev.db \
 ### 6.4 切流
 
 1. `dev.env` 改 `DB_TYPE=postgres`，`DB_DSN` 指到 `port=5433`，并**带上 `TimeZone=Asia/Shanghai`**；
-2. `make build` 后重启进程（本轮 Go 改动也要靠这次重启才生效）；
+2. `make backend` 重建二进制后重启（Go 改动要靠这次重启才生效）。本节点实际用的重启命令：
+
+```sh
+cd /wxh/kite && make backend
+set -a; . ./dev.env; set +a
+setsid nohup /wxh/kite/kite >> /data/logs/kite.log 2>&1 < /dev/null &
+```
+
+日志在 `/data/logs/kite.log`。`dev.env` 就是本节点的生效配置——**别用不加载它的方式启动**，
+否则会静默回落到 SQLite 的 `dev.db`，看到的是旧数据；
 3. 按切库文档 §5.6 的清单逐项校验：各表行数、能登录、3 个集群都能拉资源、MFA 能验码、
    新建一个角色/收藏确认主键不冲突；
 4. 验证通过后再退休 18：先 `docker stop kite-postgres`，观察几天再删 `/data/postgresql`。
@@ -257,3 +266,23 @@ DB_TYPE=sqlite DB_DSN=dev.db \
 `DB_DSN` 里显式写 `TimeZone=Asia/Shanghai`。12 / 13 / 18 行为一致，但漏写**不会报错**，只会让
 界面与审计日志里的时间整体偏移；应用启动时会对这种漏写打一条 warning（本轮新增，见
 `pkg/common/common.go` 的 `postgresDSNTimeZoneWarning`）。
+
+### 6.6 本节点的落地状态（2026-09-20 实际执行）
+
+| 项 | 值 |
+| --- | --- |
+| 数据库容器 | `kite-postgres12`（12.12），宿主端口 **5433**，数据目录 `/data/postgresql12` |
+| 业务库 / 角色 | `kite` 库，属主 `kite`（`rolsuper/rolcreatedb/rolcreaterole` 全为 `f`） |
+| 口令存放 | `/root/kite-pg12-secrets.env`（600，超管 + `kite` 角色） |
+| 应用配置 | `dev.env`：`DB_TYPE=postgres`、`DB_DSN=...port=5433...TimeZone=Asia/Shanghai` |
+| 应用日志 | `/data/logs/kite.log` |
+| 回滚资产 | `/data/backup/`：`dev.db.2026-09-20-1913`（SQLite 快照）、`kite.bin.old-20260920-1750`（旧二进制）、`dev.env.old-20260920-1750` |
+
+搬运用的是 `tools/dbmigrate`（SQLite → 12.12），逐表行数对照全部一致。两个非致命的工具提示：
+
+- `user_avatars` 主键是 `user_id`、没有自增序列——这张表本来就不需要序列，忽略；
+- 源库里有一张历史遗留表 `passkey_credentials`（旧版本的功能，模型里已无对应类型，**0 行**）
+  没有搬，工具会把它列出来，属于预期内。
+
+回滚顺序：`dev.env` 改回 `DB_DSN=dev.db`（并去掉 `DB_TYPE`）→ 用 `/data/backup/kite.bin.old-*`
+起旧二进制 → 验证。旧库一路没删，回滚窗口不设限。
