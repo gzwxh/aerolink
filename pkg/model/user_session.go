@@ -17,7 +17,11 @@ type UserSession struct {
 	Seq       uint64    `gorm:"not null;default:0" json:"seq"`
 	StartedAt time.Time `gorm:"not null" json:"started_at"`
 	LastSeen  time.Time `gorm:"not null" json:"last_seen"`
-	UpdatedAt time.Time `json:"updated_at"`
+	// EndedAt 是用户主动退出登录的时间，未退出时为 nil。它只回答「这次会话是否还算
+	// 正在使用」，用来避免把「退出后立刻再登录」误报成顶掉了另一台设备；不参与
+	// 令牌有效性判定。
+	EndedAt   *time.Time `json:"ended_at,omitempty"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 // GetUserSession 读取某个用户的会话状态；没有记录时返回 gorm.ErrRecordNotFound。
@@ -79,6 +83,8 @@ func StartUserSession(userID uint, now time.Time) (*UserSession, error) {
 				"seq":        next,
 				"started_at": now,
 				"last_seen":  now,
+				// 新会话开始，上一次退出的标记必须清掉，否则这次登录会被当成「已结束的会话」。
+				"ended_at": nil,
 			})
 		if result.Error != nil {
 			return nil, result.Error
@@ -96,6 +102,16 @@ func StartUserSession(userID uint, now time.Time) (*UserSession, error) {
 		// 另一个登录抢先推进了序号：重新读一次再试。
 	}
 	return nil, errors.New("failed to start the user session: too many concurrent sign-ins")
+}
+
+// EndUserSession 记录用户主动退出登录：只标记结束时间，**保留序号**。
+//
+// 保留序号是有意的：把整行删掉会让序号从 1 重新开始，而「已被更新登录顶掉」的判定正是
+// 「令牌序号 < 当前序号」（见 auth.supersededSeq），序号回退会让一个已作废的旧令牌重新
+// 变得有效。所以要结束会话时用这里，而不是 DeleteUserSession。
+func EndUserSession(userID uint, endedAt time.Time) error {
+	return DB.Model(&UserSession{}).Where("user_id = ?", userID).
+		Update("ended_at", endedAt).Error
 }
 
 // TouchUserSession 只刷新最近活动时间。

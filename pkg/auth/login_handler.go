@@ -705,6 +705,14 @@ func (h *AuthHandler) VerifyPendingMFA(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
+	// 先读 cookie 再清：注销要顺带结束这次会话的跟踪状态，否则紧接着在同一浏览器登录
+	// 会被当成「顶掉了另一台设备」，弹出一条与事实不符的安全提示。
+	// 令牌已过期/无效时拿不到用户，跳过即可——那种会话本来也会被空闲/生存期限制收掉。
+	if tokenString, _ := c.Cookie("auth_token"); tokenString != "" {
+		if claims, err := h.manager.ValidateJWT(tokenString); err == nil {
+			activeSessions.end(uint64(claims.UserID))
+		}
+	}
 	setCookieSecure(c, "auth_token", "", -1)
 	// 提权信任标记不能比会话活得更久，否则
 	// 同一个浏览器上的下一次登录会跳过 MFA 二次验证。

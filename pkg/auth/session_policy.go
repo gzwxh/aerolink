@@ -93,6 +93,9 @@ type sessionState struct {
 	// seq 标识启动本次会话的那次登录。令牌携带签发时的 seq，这样更新的一次登录
 	// 可以确定地让旧令牌失效（时间戳只有秒级精度）。
 	seq uint64
+	// ended 表示这次会话已经由用户主动退出登录结束（见 sessionTracker.end）。
+	// 已结束的会话不再算「仍在使用的会话」，因此紧接着的登录不该被报成顶下线。
+	ended bool
 	// loadedAt 是本条状态从数据库读到的时间：超过 sessionStateCacheTTL 就回源。
 	loadedAt time.Time
 	// persistedAt 是 lastSeen 最后一次写回数据库的时间，用来做回写节流。
@@ -156,6 +159,7 @@ func (t *sessionTracker) loadLocked(userID uint64, now time.Time) *sessionState 
 		startedAt:   session.StartedAt,
 		lastSeen:    session.LastSeen,
 		seq:         session.Seq,
+		ended:       session.EndedAt != nil,
 		loadedAt:    now,
 		persistedAt: session.LastSeen,
 	}
@@ -221,7 +225,9 @@ func (t *sessionTracker) start(userID uint64) bool {
 		return false
 	}
 
-	tookOver := singleDevice && previous != nil && !sessionExpired(*previous, now)
+	// 只有「仍在使用的会话」才算被顶下线：用户自己退出登录之后再登录，上一个会话已经
+	// 结束，不该报成别的设备被踢（否则会在同一台设备上弹出一条误导性的安全提示）。
+	tookOver := singleDevice && previous != nil && !previous.ended && !sessionExpired(*previous, now)
 
 	t.mu.Lock()
 	t.storeLocked(userID, &sessionState{
@@ -235,6 +241,27 @@ func (t *sessionTracker) start(userID uint64) bool {
 	t.mu.Unlock()
 
 	return tookOver
+}
+
+// end 记录用户主动退出登录（注销）。与 forget 不同，它保留会话序号——删行会让序号
+// 从 1 重新开始，已作废的旧令牌会重新变得有效（见 model.EndUserSession）。
+// 标记本身存在库里，所以多副本下另一台机器也能看到。
+func (t *sessionTracker) end(userID uint64) {
+	if userID == 0 {
+		return
+	}
+	now := time.Now()
+
+	t.mu.Lock()
+	if state, ok := t.states[userID]; ok {
+		state.ended = true
+		state.loadedAt = now
+	}
+	t.mu.Unlock()
+
+	if err := model.EndUserSession(uint(userID), now); err != nil {
+		klog.V(4).Infof("failed to record the sign-out for user %d: %v", userID, err)
+	}
 }
 
 // current 返回用户最新会话的跟踪状态。当用户没有已跟踪的会话时

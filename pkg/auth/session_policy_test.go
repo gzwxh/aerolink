@@ -183,6 +183,54 @@ func TestSessionTrackerExpiredUsesStoredActivity(t *testing.T) {
 	}
 }
 
+// 退出登录后再登录不能算「顶掉了另一台设备」：否则用户会在自己刚注销的浏览器上收到
+// 一条「其他设备的会话已退出」的安全提示。
+func TestSessionTrackerSignOutIsNotATakeover(t *testing.T) {
+	setupAuthIntegrationDB(t)
+	cacheSessionPolicy(t, sessionPolicy{singleDevice: true})
+	tracker := newTestSessionTracker()
+
+	// 第一次登录：没有别的会话可顶。
+	if tracker.start(51) {
+		t.Fatal("the first sign-in must not report a takeover")
+	}
+
+	// 退出后再登录：上一个会话已经结束，不该报顶下线。
+	tracker.end(51)
+	if tracker.start(51) {
+		t.Fatal("signing in right after signing out must not report a takeover")
+	}
+
+	// 仍然登录着的时候再登录：这才是真正的顶下线。
+	if !tracker.start(51) {
+		t.Fatal("signing in while another session is still active must report a takeover")
+	}
+
+	// 结束标记写在库里，所以另一台机器（或本机缓存过期后）同样不会误报。
+	tracker.end(51)
+	if newTestSessionTracker().start(51) {
+		t.Fatal("another replica must also treat the signed-out session as finished")
+	}
+}
+
+// 退出登录不能回退序号：作废判定是「令牌序号 < 当前序号」，序号回到 1 会让旧令牌复活。
+func TestSessionTrackerSignOutKeepsSeq(t *testing.T) {
+	setupAuthIntegrationDB(t)
+	cacheSessionPolicy(t, sessionPolicy{singleDevice: true})
+	tracker := newTestSessionTracker()
+
+	tracker.start(52)
+	before := tracker.currentSeq(52)
+	tracker.end(52)
+
+	if got := tracker.currentSeq(52); got != before {
+		t.Fatalf("seq after sign-out = %d, want it to stay %d", got, before)
+	}
+	if !tracker.superseded(52, before-1) {
+		t.Fatal("a token older than the signed-out session must stay superseded")
+	}
+}
+
 // forget（空闲被踢下线）要把库里的状态一起清掉，否则下一次登录的序号会接着旧会话继续涨。
 func TestSessionTrackerForgetClearsStoredState(t *testing.T) {
 	setupAuthIntegrationDB(t)
