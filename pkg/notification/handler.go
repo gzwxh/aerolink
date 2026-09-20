@@ -222,6 +222,12 @@ func HandleCreateNotificationSubscription(c *gin.Context) {
 	}
 
 	switch subscription.ReceiverType {
+	case model.NotificationReceiverAllUsers:
+		// 全体用户：不绑定具体账号（投递时展开成当时的账号列表），
+		// 因此没有 ReceiverID / Receiver 可校验。邮件渠道下没有邮箱的账号
+		// 会在投递时被跳过，这里不预判。
+		subscription.ReceiverID = 0
+		subscription.Receiver = ""
 	case model.NotificationReceiverUser:
 		// 用户可以用 id（选择器）或用户名（自由文本）来指定。
 		var user *model.User

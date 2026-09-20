@@ -65,6 +65,9 @@ func renderEvent(
 }
 
 // resolveRecipients 按启用的订阅解析收件人：站内信用户与邮件地址。
+//
+// 「全体用户」订阅在每一次投递时才展开成当前的账号列表，而不是把订阅时的那批人
+// 固定下来：新入职的人自动收到，停用（或离职）的人也不再收到。
 func resolveRecipients(event string) ([]uint, map[string]bool) {
 	inAppUsers := make([]uint, 0, 4)
 	emails := make(map[string]bool)
@@ -76,6 +79,24 @@ func resolveRecipients(event string) ([]uint, map[string]bool) {
 	}
 	for _, subscription := range subscriptions {
 		if !subscription.Enabled {
+			continue
+		}
+		if subscription.ReceiverType == model.NotificationReceiverAllUsers {
+			users, err := model.ListEnabledUsers()
+			if err != nil {
+				klog.Errorf("failed to expand the all-users subscription: %v", err)
+				continue
+			}
+			for _, user := range users {
+				switch subscription.Channel {
+				case model.NotificationChannelInApp:
+					inAppUsers = append(inAppUsers, user.ID)
+				case model.NotificationChannelEmail:
+					if email := strings.TrimSpace(user.Email); email != "" {
+						emails[email] = true
+					}
+				}
+			}
 			continue
 		}
 		if subscription.ReceiverType == model.NotificationReceiverEmail {
@@ -100,7 +121,22 @@ func resolveRecipients(event string) ([]uint, map[string]bool) {
 			}
 		}
 	}
-	return inAppUsers, emails
+	// 同一个人可能同时被「全体用户」与单独订阅命中，写站内信前先去重，
+	// 否则他会收到两份同样的消息。
+	return dedupeUserIDs(inAppUsers), emails
+}
+
+func dedupeUserIDs(userIDs []uint) []uint {
+	seen := make(map[uint]bool, len(userIDs))
+	unique := make([]uint, 0, len(userIDs))
+	for _, id := range userIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		unique = append(unique, id)
+	}
+	return unique
 }
 
 // deliverInApp 把内容写进这些用户的站内信箱。调用方负责判断渠道开关。

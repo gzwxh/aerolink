@@ -133,3 +133,140 @@ func TestSendEventDeliversInAppOnlyToSubscribers(t *testing.T) {
 		t.Fatalf("email-only subscription wrote an in-app notification: total = %d, want 1", got)
 	}
 }
+
+func seedNotificationTemplate(t *testing.T, event string) {
+	t.Helper()
+	if err := model.DB.Create(&model.NotificationTemplate{
+		Event:   event,
+		Subject: "异地登录",
+		Body:    "{{username}} 登录",
+		Enabled: true,
+	}).Error; err != nil {
+		t.Fatalf("seeding template: %v", err)
+	}
+}
+
+func seedAllUsersSubscription(t *testing.T, event, channel string) {
+	t.Helper()
+	if err := model.DB.Create(&model.NotificationSubscription{
+		Event:        event,
+		Channel:      channel,
+		ReceiverType: model.NotificationReceiverAllUsers,
+		Enabled:      true,
+	}).Error; err != nil {
+		t.Fatalf("seeding all-users subscription: %v", err)
+	}
+}
+
+func setUserEnabled(t *testing.T, userID uint, enabled bool) {
+	t.Helper()
+	if err := model.DB.Model(&model.User{}).Where("id = ?", userID).
+		Update("enabled", enabled).Error; err != nil {
+		t.Fatalf("setting enabled on user %d: %v", userID, err)
+	}
+}
+
+func setUserEmail(t *testing.T, userID uint, email string) {
+	t.Helper()
+	if err := model.DB.Model(&model.User{}).Where("id = ?", userID).
+		Update("email", email).Error; err != nil {
+		t.Fatalf("setting email on user %d: %v", userID, err)
+	}
+}
+
+// 「全体用户」订阅是在**投递时**展开的，不是把订阅那一刻的账号列表固定下来：
+// 订阅建好之后新入职的账号也要收到（否则管理员得为每个新人回来补一条）。
+func TestAllUsersSubscriptionExpandsAtDeliveryTime(t *testing.T) {
+	newNotificationTestDB(t)
+	alice := seedNotificationUser(t, "alice")
+	seedNotificationTemplate(t, model.NotificationEventRemoteLogin)
+	seedAllUsersSubscription(t, model.NotificationEventRemoteLogin, model.NotificationChannelInApp)
+
+	// 订阅之后再入职一个账号。
+	carol := seedNotificationUser(t, "carol")
+
+	SendEvent(model.NotificationEventRemoteLogin, map[string]string{"username": "alice"})
+
+	if got := inAppCount(t, alice.ID); got != 1 {
+		t.Fatalf("existing user got %d in-app notifications, want 1", got)
+	}
+	if got := inAppCount(t, carol.ID); got != 1 {
+		t.Fatalf("user created after the subscription got %d in-app notifications, want 1", got)
+	}
+}
+
+// 停用账号不属于「全体用户」；同一个人被「全体用户」与单独订阅同时命中时只发一份。
+// 邮件渠道下没有邮箱的账号也会被跳过。
+func TestAllUsersSubscriptionResolvesCurrentRecipients(t *testing.T) {
+	newNotificationTestDB(t)
+	event := model.NotificationEventRemoteLogin
+	alice := seedNotificationUser(t, "alice")
+	bob := seedNotificationUser(t, "bob")
+	carol := seedNotificationUser(t, "carol") // 没有邮箱
+	setUserEmail(t, alice.ID, "alice@example.com")
+	setUserEmail(t, bob.ID, "bob@example.com")
+	// alice 已停用：既不该收站内信，也不该收邮件。
+	setUserEnabled(t, alice.ID, false)
+
+	seedAllUsersSubscription(t, event, model.NotificationChannelInApp)
+
+	users, _ := resolveRecipients(event)
+	if containsID(users, alice.ID) {
+		t.Errorf("disabled user %d is still a recipient", alice.ID)
+	}
+	for _, want := range []uint{bob.ID, carol.ID} {
+		if !containsID(users, want) {
+			t.Errorf("user %d is missing from the expanded recipients: %v", want, users)
+		}
+	}
+
+	// 再叠一条单独订阅 bob 的规则：不能因此出现两份。
+	if err := model.DB.Create(&model.NotificationSubscription{
+		Event:        event,
+		Channel:      model.NotificationChannelInApp,
+		ReceiverType: model.NotificationReceiverUser,
+		ReceiverID:   bob.ID,
+		Receiver:     bob.Username,
+		Enabled:      true,
+	}).Error; err != nil {
+		t.Fatalf("seeding user subscription: %v", err)
+	}
+	users, _ = resolveRecipients(event)
+	if len(users) != 2 {
+		t.Fatalf("recipients = %v, want exactly bob and carol once each", users)
+	}
+	if countID(users, bob.ID) != 1 {
+		t.Fatalf("bob appears %d times, want 1", countID(users, bob.ID))
+	}
+
+	// 邮件渠道：只收有邮箱的账号（alice 停用、carol 没邮箱）。
+	if err := model.DB.Model(&model.NotificationSubscription{}).
+		Where("receiver_type = ?", model.NotificationReceiverAllUsers).
+		Update("channel", model.NotificationChannelEmail).Error; err != nil {
+		t.Fatalf("switching the all-users subscription to email: %v", err)
+	}
+	_, emails := resolveRecipients(event)
+	if emails["bob@example.com"] != true {
+		t.Errorf("bob's address is missing from the email recipients: %v", emails)
+	}
+	if emails["alice@example.com"] {
+		t.Errorf("a disabled user's address is still a recipient: %v", emails)
+	}
+	if len(emails) != 1 {
+		t.Errorf("emails = %v, want only bob's address", emails)
+	}
+}
+
+func containsID(ids []uint, want uint) bool {
+	return countID(ids, want) > 0
+}
+
+func countID(ids []uint, want uint) int {
+	count := 0
+	for _, id := range ids {
+		if id == want {
+			count++
+		}
+	}
+	return count
+}
