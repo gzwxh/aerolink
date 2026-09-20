@@ -241,7 +241,8 @@ docker run -d --name kite --restart unless-stopped \
 - **DSN 必须写全**（不像 MySQL 会自动补 `charset` / `parseTime` / `loc` / `timeout`）：`host=... user=... password=... dbname=... port=5432 sslmode=disable`；建议再显式带 `TimeZone=Asia/Shanghai`，与容器时区保持一致，避免 `timestamptz` 按会话时区换算导致界面/日志时间偏移。
 - **`LIKE` 区分大小写**（MySQL 默认不区分、SQLite 对 ASCII 不区分），因此用户搜索、审计日志的「用户名 / 资源名」检索在 PostgreSQL 上对大小写敏感；如需要旧行为，可改用 `LOWER()` 或为相关列建 `citext` / 表达式索引。
 - 表结构、索引与迁移已做方言适配（超长文本列按方言生成 `text` / `longtext`、索引名均在 63 字节内、增量迁移走 GORM Migrator），因此**换库是「新空库 + 启动时 AutoMigrate」**，程序不提供旧库数据搬运，切换前需自行迁移数据。
-- **已验证版本**：`DB_TYPE=postgres` 已在 PostgreSQL **18.6**（Debian 13 官方镜像）上跑通全链路——空库首次启动自动建表 26 张、超管创建、密码登录并写入 `login_records` / 会话，均正常。
+- **已验证版本**：**PostgreSQL 12 及以上可用**，已在 **12.22**（alpine 官方镜像）与 **18.6**（Debian 13 官方镜像）两个端点实测全链路——空库首次启动自动建表 31 张、超管创建、密码登录写 `login_records` / 会话、8 个并发登录的会话序号不重不漏、`SecretString`（MFA 密钥）加密写入后读回解密、头像 `ON CONFLICT` upsert、同库重启再跑一次 `AutoMigrate`，均正常。
+- **版本下限的依据**：实测生成的 SQL 只用到 `bigserial` / `timestamptz` / `bytea` / `CREATE INDEX IF NOT EXISTS` / `ON CONFLICT ... DO UPDATE`（PG 9.5 起支持），没有 13 及以后才引入的语法与函数（`gen_random_uuid()`、`NULLS NOT DISTINCT`、`MERGE` 等）；驱动 pgx 只在多范围类型（multirange）上按 `pgVersion >= 14` 分支，低版本走降级而非报错。注意 CI 不覆盖 PostgreSQL（`ci.yml` 只跑 SQLite），换库前请在目标实例上实跑一遍。
 - **PG 18 起官方镜像的 `PGDATA` 变了**：由 `/var/lib/postgresql/data` 改为 `/var/lib/postgresql/18/docker`，卷应挂 `/var/lib/postgresql`（或 `/var/lib/postgresql/18`）；沿用旧的 `data` 挂载点会导致数据不落盘。
 
 ### 5. 反向代理与 TLS 要点
