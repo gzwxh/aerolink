@@ -13,10 +13,10 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useRelatedResources } from '@/lib/api'
 import { getEventTime, getOwnerInfo } from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   ContainerImagesList,
+  SelectorBadges,
   WorkloadInfoBlock,
   WorkloadInfoRow,
   WorkloadSummaryCard,
@@ -232,22 +232,7 @@ function DaemonSetInformationCard({ daemonset }: { daemonset: DaemonSet }) {
               label={t('common.fields.selector', { defaultValue: 'Selector' })}
               truncate={selectorEntries.length === 0}
             >
-              {selectorEntries.length > 0 ? (
-                <div className="flex min-w-0 flex-wrap gap-1">
-                  {selectorEntries.map(([key, value]) => (
-                    <Badge
-                      key={key}
-                      variant="outline"
-                      className="max-w-full truncate font-mono"
-                      title={`${key}=${value}`}
-                    >
-                      {key}={value}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-muted-foreground">-</span>
-              )}
+              <SelectorBadges entries={selectorEntries} />
             </WorkloadInfoBlock>
             <WorkloadInfoBlock
               label={t('common.fields.images', { defaultValue: 'Images' })}

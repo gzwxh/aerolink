@@ -11,12 +11,12 @@ import { useRelatedResources } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
 import { getDeploymentStatus, getEventTime, getOwnerInfo } from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import {
   ContainerImagesList,
+  SelectorBadges,
   WorkloadInfoBlock,
   WorkloadInfoRow,
   WorkloadSummaryCard,
@@ -119,13 +119,15 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
   const entries = useMemo(() => {
     const result: Array<{
       key: string
-      service: string
+      name: string
+      namespace: string
       protocol: string
       port: number
       access: string
     }> = []
     for (const svc of services) {
       const svcName = svc.metadata?.name || ''
+      const svcNamespace = svc.metadata?.namespace || ''
       const type = svc.spec?.type || 'ClusterIP'
       const clusterIP = svc.spec?.clusterIP
       const lbIngress = svc.status?.loadBalancer?.ingress || []
@@ -151,7 +153,8 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
         }
         result.push({
           key: `${svcName}-${protocol}-${port}-${access}`,
-          service: `${svcName}/${protocol}:${port}`,
+          name: svcName,
+          namespace: svcNamespace,
           protocol,
           port,
           access,
@@ -189,7 +192,16 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
           >
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground">
-                {entry.service}
+                {/* 名称直接链到服务页面（带 search，只显示这一个）：关联关系在那边维护。 */}
+                <Link
+                  to={`/services/${encodeURIComponent(entry.namespace)}?search=${encodeURIComponent(entry.name)}`}
+                  className="app-link"
+                >
+                  {entry.name}
+                </Link>
+                <span className="ml-1">
+                  /{entry.protocol}:{entry.port}
+                </span>
               </p>
               <p className="truncate font-mono text-sm font-medium">
                 {entry.access}
@@ -326,22 +338,7 @@ function DeploymentInformationCard({ deployment }: { deployment: Deployment }) {
               label={t('common.fields.selector')}
               truncate={selectorEntries.length === 0}
             >
-              {selectorEntries.length > 0 ? (
-                <div className="flex min-w-0 flex-wrap gap-1">
-                  {selectorEntries.map(([key, value]) => (
-                    <Badge
-                      key={key}
-                      variant="outline"
-                      className="max-w-full truncate font-mono"
-                      title={`${key}=${value}`}
-                    >
-                      {key}={value}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-muted-foreground">-</span>
-              )}
+              <SelectorBadges entries={selectorEntries} />
             </WorkloadInfoBlock>
             <WorkloadInfoBlock
               label={t('common.fields.images')}

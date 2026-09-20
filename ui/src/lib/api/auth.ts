@@ -152,8 +152,14 @@ export interface MFASetupResponse {
   qr_code: string
 }
 
+/**
+ * 发起动态码绑定，返回密钥、otpauth 链接与二维码。
+ *
+ * `currentPassword` 是本地密码账号的再认证凭据；LDAP 账号没有本地口令，不传该字段，
+ * 后端改用「最近重新登录过」判定（不满足时返回 `mfa_reauth_required`）。
+ */
 export const setupCurrentUserMFA = async (
-  currentPassword: string
+  currentPassword?: string
 ): Promise<MFASetupResponse> => {
   return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', {
     current_password: currentPassword,

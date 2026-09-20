@@ -14,6 +14,11 @@ interface UseResourceTableStateOptions {
   defaultHiddenColumns: string[]
   /** 可选的命名空间，优先于存储的偏好（例如 URL 参数）。 */
   initialNamespace?: string
+  /**
+   * 可选的搜索词，优先于存储的偏好（例如从工作负载页跳过来时带的
+   * `?search=<service 名>`，只显示那一个对象）。
+   */
+  initialSearch?: string
 }
 
 function readStoredJSON<T>(storage: Storage, key: string, fallback: T): T {
@@ -34,6 +39,7 @@ export function useResourceTableState({
   clusterScope,
   defaultHiddenColumns,
   initialNamespace,
+  initialSearch,
 }: UseResourceTableStateOptions) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() =>
@@ -46,6 +52,7 @@ export function useResourceTableState({
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState<string>(() => {
+    if (initialSearch !== undefined) return initialSearch
     return (
       sessionStorage.getItem(
         getClusterScopedStorageKey(`-${resourceName}-searchQuery`)

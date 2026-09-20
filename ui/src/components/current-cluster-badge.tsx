@@ -1,37 +1,27 @@
-import { IconServer } from '@tabler/icons-react'
+import { Boxes } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { useCluster } from '@/hooks/use-cluster'
+import { Badge } from '@/components/ui/badge'
 
 /**
- * 站点顶栏上的紧凑徽标，始终显示用户正在操作哪个集群
- * 及其自定义描述，避免误操作到
- * 错误的集群。
+ * 创建页头部标注「将要建到哪个集群」。
+ *
+ * 这些页面围绕集群级资源展开，页面里没有任何命名空间上下文能暗示目标集群，切错集群时
+ * 用户不会察觉（名字填对了就直接建出去了），所以把目标集群显式标出来。
  */
 export function CurrentClusterBadge() {
-  const { clusters, currentCluster, isLoading, isSwitching } = useCluster()
+  const { t } = useTranslation()
+  const { currentCluster } = useCluster()
 
-  if (isLoading || isSwitching) return null
-
-  const cluster = clusters.find((c) => c.name === currentCluster)
-  if (!cluster) return null
+  if (!currentCluster) {
+    return null
+  }
 
   return (
-    <div
-      className="hidden md:flex max-w-64 shrink-0 items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-sm"
-      title={cluster.description || cluster.name}
-    >
-      <IconServer className="h-4 w-4 shrink-0 text-primary" />
-      <span className="font-medium">{cluster.name}</span>
-      {cluster.description && (
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
-          {cluster.description}
-        </span>
-      )}
-      {cluster.error && (
-        <span className="min-w-0 truncate text-xs text-destructive">
-          {cluster.error}
-        </span>
-      )}
-    </div>
+    <Badge variant="outline" className="gap-1 font-normal">
+      <Boxes className="h-3.5 w-3.5" />
+      {t('common.currentCluster', '当前集群')}：{currentCluster}
+    </Badge>
   )
 }

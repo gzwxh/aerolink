@@ -424,7 +424,8 @@
       "loading": "加载中...",
       "noResults": "没有匹配结果",
       "toggle": "切换 Namespace {{name}}"
-    }
+    },
+    "currentCluster": "当前集群"
   },
   "globalSearch": {
     "title": "全局搜索",
@@ -1095,6 +1096,78 @@
     "gpuLimits": "GPU Limits",
     "saved": "命名空间已更新"
   },
+  "pvCreate": {
+    "pageTitle": "PersistentVolume：创建",
+    "name": "名称",
+    "capacity": "容量",
+    "capacityHint": "支持 Ki/Mi/Gi/Ti 等单位，例如 10Gi；不带单位按字节解释（填 10 就是 10 字节）。",
+    "capacityInvalid": "容量格式形如 10Gi、500Mi、1Ti",
+    "accessModes": "访问模式",
+    "accessModesRequired": "至少选择一种访问模式",
+    "reclaimPolicy": "回收策略",
+    "reclaimPolicyHint": "Retain 保留底层数据，Delete 随 PVC 释放而删除卷。",
+    "storageClassName": "存储类",
+    "storageClassNone": "（不指定）",
+    "volumeMode": "卷模式",
+    "volumeModeDefault": "（默认）",
+    "sourceType": "卷来源",
+    "hostPathPath": "节点路径",
+    "hostPathType": "路径类型",
+    "hostPathTypeNone": "（不指定）",
+    "hostPathRequired": "请填写宿主节点路径",
+    "localPath": "本地路径",
+    "localNodeName": "所在节点",
+    "localNodeHint": "用于生成 nodeAffinity（kubernetes.io/hostname）。",
+    "localPathRequired": "请填写本地卷路径",
+    "localNodeRequired": "本地卷必须指定所在节点（用于生成节点亲和）",
+    "nfsServer": "NFS 服务器",
+    "nfsPath": "共享路径",
+    "nfsRequired": "NFS 需要服务器地址与共享路径",
+    "csiDriver": "驱动名称",
+    "csiVolumeHandle": "卷标识",
+    "csiFsType": "文件系统类型",
+    "csiRequired": "CSI 需要驱动名与卷标识（volumeHandle）",
+    "readOnly": "只读挂载",
+    "invalidForm": "请完善必填信息后再创建",
+    "created": "PersistentVolume {{name}} 已创建",
+    "createButton": "创建 PersistentVolume",
+    "noCreatePermission": "你没有创建 PersistentVolume 的权限。",
+    "mountOptions": "挂载参数",
+    "mountOptionsHint": "以逗号或换行分隔，直接写入挂载参数（mountOptions）。",
+    "claimRef": "预绑定到 PVC（可选）",
+    "claimRefNamespace": "命名空间",
+    "claimRefName": "PVC 名称",
+    "claimRefHint": "填上命名空间与 PVC 名称，就把这个卷锁定给该声明（claimRef）。两个要一起填；留空则不预绑定。",
+    "claimRefIncomplete": "预绑定需要同时填写命名空间与 PVC 名称"
+  },
+  "storageClassCreate": {
+    "pageTitle": "StorageClass：创建",
+    "name": "名称",
+    "nameHint": "资源名需符合 DNS 子域名规则（小写字母、数字、- 与 .）。",
+    "provisioner": "Provisioner",
+    "provisionerHint": "负责动态供给存储的驱动，例如 rancher.io/local-path、nfs.csi.k8s.io；纯静态卷填 kubernetes.io/no-provisioner。",
+    "reclaimPolicy": "回收策略",
+    "reclaimPolicyHint": "Delete：PVC 删除后自动回收底层卷；Retain：保留卷需要人工处理。",
+    "volumeBindingMode": "卷绑定模式",
+    "volumeBindingModeHint": "WaitForFirstConsumer 会等到 Pod 调度后再绑定卷，适合本地盘等依赖节点位置的后端。",
+    "allowVolumeExpansion": "允许扩容",
+    "isDefault": "设为默认 StorageClass",
+    "isDefaultHint": "默认 StorageClass 会影响所有未显式指定 storageClassName 的 PVC；集群里通常只保留一个默认。",
+    "parameters": "参数（parameters）",
+    "parametersHint": "各驱动的参数名不同，例如 nfs.csi.k8s.io 需要 server 与 share。",
+    "addParameter": "添加参数",
+    "mountOptions": "挂载选项",
+    "mountOptionsHint": "以逗号分隔，直接写入挂载参数（mountOptions）。",
+    "invalidForm": "请完善必填信息后再创建",
+    "created": "StorageClass {{name}} 已创建",
+    "createButton": "创建 StorageClass",
+    "noCreatePermission": "你没有创建 StorageClass 的权限。",
+    "staticProvisionerHint": "no-provisioner 是纯静态卷：已自动改用 WaitForFirstConsumer，否则 PVC 可能被绑到 Pod 调度不上去的节点上（Bound 却一直 Pending）。",
+    "duplicateParameters": "参数名重复：{{keys}}。同名参数只会保留最后一行，请合并或改名。",
+    "allowedTopologies": "允许的拓扑（可选）",
+    "allowedTopologiesHint": "每行一条，写成 键=值1,值2（例如 topology.kubernetes.io/zone=cn-south-1a）。留空表示不限制；一个 term 里要写多个表达式时请用下面的 YAML 编辑器。",
+    "invalidTopologies": "写法有误：{{lines}}。每行形如 topology.kubernetes.io/zone=cn-south-1a。"
+  },
   "nsDelete": {
     "title": "删除命名空间 {{name}}？",
     "description": "删除命名空间将永久移除其内部的所有资源。",
@@ -1129,10 +1202,7 @@
     "descPlaceholder": "请输入可选的描述",
     "invalidName": "名称只能包含小写字母、数字和中划线。",
     "grantMovedHint": "授权统一在「权限管理 → 权限绑定」中配置：把该命名空间归属到某个权限绑定，并把用户或用户组作为成员绑定角色。",
-    "created": "命名空间 {{name}} 创建成功",
-    "boundToBinding": "已自动归属到权限绑定「{{name}}」",
-    "boundToRoles": "已把该命名空间加入角色「{{roles}}」的命名空间范围",
-    "notBound": "未自动归属，请联系管理员分配"
+    "created": "命名空间 {{name}} 创建成功"
   },
   "workloadCreate": {
     "title": "创建 {{kind}}",
@@ -1809,13 +1879,6 @@
       "form": {
         "enableAnalytics": "启用数据统计",
         "enableVersionCheck": "启用版本检查"
-      }
-    },
-    "autoBindNamespace": {
-      "title": "命名空间自动归属",
-      "description": "普通用户在权限范围内新建命名空间时，自动把它纳入自己已有的授权（优先归属其权限绑定组）；管理员创建的命名空间不自动归属，便于管理员手动分配。",
-      "form": {
-        "enabled": "用户创建命名空间时自动归属其权限"
       }
     },
     "loginPrompt": {
@@ -2566,6 +2629,10 @@
     }
   },
   "containerAdv": {
+    "portNameHint": "可留空",
+    "associatedServices": "关联的 Service",
+    "noAssociatedServices": "暂无关联的 Service。需要暴露这些端口时，请在「服务」页面创建 Service 并选中本工作负载的 Pod 标签。",
+    "openService": "在服务页面查看 {{name}}",
     "networkTitle": "网络",
     "addCapabilities": "添加能力",
     "dropCapabilities": "移除能力",
@@ -2602,9 +2669,7 @@
     "probePeriod": "检查间隔(秒)",
     "probeThreshold": "失败阈值",
     "containerPortPlaceholder": "e.g. 8080",
-    "listenPortPlaceholder": "e.g. 8080",
     "portRangeError": "端口必须为 1-65535 的数字",
-    "servicePortRangeError": "监听端口必须为 1-65535",
     "nodePortRangeHint": "监听端口范围 {{min}}-{{max}}，留空自动分配",
     "healthTitle": "健康检查",
     "probe": {
@@ -2624,33 +2689,10 @@
     "hookNone": "无",
     "hookExec": "添加要执行的命令",
     "hookHttp": "创建 HTTP 请求",
-    "serviceTitle": "Service",
-    "serviceHint": "选择 ClusterIP、NodePort 或 LoadBalancer 时，创建工作负载将一并创建对应的 Service，并通过标签关联本工作负载的 Pod。",
-    "serviceType": "服务类型",
-    "serviceName": "Service 名称",
-    "serviceNamePlaceholder": "同工作负载名称",
-    "serviceGenerated": "创建时将生成 kind: Service 的 YAML 文档，端口取自上方配置的容器端口。",
-    "svcNone": "不创建服务",
-    "networkHintFull": "定义一个 Service 公开容器；选择 ClusterIP、LoadBalancer 或 NodePort 会自动创建 Service 并关联本工作负载的 Pod。",
     "protocol": "协议",
     "portName": "名称",
-    "serviceTypeLabel": "Service 类型",
-    "serviceNameLabel": "名称",
     "privatePortLabel": "私有容器端口",
-    "servicePortLabel": "监听端口",
-    "hostIPLabel": "主机 IP",
-    "portNameAuto": "默认: {{name}}",
-    "nodePortAutoPlaceholder": "留空自动分配",
-    "containerPort": "容器端口",
-    "nodePort": "监听端口",
-    "nodePortPlaceholder": "监听端口 *",
-    "addPortOrService": "添加端口或 Service",
-    "publicPortPlaceholder": "e.g. 80",
-    "hostIP": "e.g. 1.1.1.1",
-    "clusterIPFormatError": "主机 IP 格式不正确，例如 1.1.1.1",
-    "addHost": "添加主机",
-    "nodePortRangeError": "监听端口必须在 {{min}}-{{max}} 范围内",
-    "networkHint": "定义容器监听的端口，稍后通过 Service 暴露。",
+    "networkHint": "容器监听的端口。要在集群内外访问它们，请在「服务」页面创建 Service 并选中本工作负载的 Pod 标签。",
     "addPort": "添加端口"
   },
   "containerEdit": {
@@ -2671,6 +2713,7 @@
     "memoryLimitHint": "例如 512Mi、2Gi、1G"
   },
   "configmapCreate": {
+    "editPageTitle": "ConfigMap: 编辑",
     "pageTitle": "ConfigMap: 创建",
     "namePlaceholder": "请输入名称",
     "tabData": "数据",
@@ -2698,6 +2741,7 @@
     "createButton": "创建 ConfigMap"
   },
   "secretCreate": {
+    "editPageTitle": "Secret: 编辑",
     "pageTitle": "Secret: 创建",
     "namePlaceholder": "请输入名称",
     "tabData": "数据",
@@ -2741,11 +2785,24 @@
     "revealAll": "显示全部",
     "noEntries": "暂无条目",
     "noDataEntries": "暂无数据条目",
-    "noBinaryDataEntries": "暂无二进制数据条目"
+    "noBinaryDataEntries": "暂无二进制数据条目",
+    "edit": "编辑",
+    "editTitle": "编辑条目",
+    "editHint": "可修改、新增或删除条目；保存后写回该资源。",
+    "addEntry": "新增条目",
+    "invalidKey": "键不能为空",
+    "duplicateKey": "键 {{key}} 重复",
+    "saveFailed": "保存失败"
   },
   "secretDetail": {
     "showBase64": "显示 Base64",
-    "decodeValues": "解码明文"
+    "decodeValues": "解码明文",
+    "dataSaved": "Secret 数据已保存"
+  },
+  "configMapDetail": {
+    "showBase64": "显示 Base64",
+    "decodeBinaryData": "解码明文",
+    "dataSaved": "ConfigMap 数据已保存"
   },
   "labelMatch": {
     "loading": "正在匹配现有 Pod…",
@@ -2837,6 +2894,9 @@
     "description": "管理员已要求你的账号启用 MFA，请先绑定身份验证器后继续使用。",
     "passwordStepHint": "为防止会话被盗用，请先验证当前密码；验证通过后将显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
     "passwordLabel": "当前密码",
+    "directoryStepHint": "目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认。点击继续后显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
+    "reauthRequired": "为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。",
+    "reauthAction": "退出并重新登录",
     "continue": "继续",
     "scanHint": "请使用身份验证器扫描二维码，并输入其显示的 6 位动态码。",
     "qrAlt": "MFA 二维码",
@@ -2910,7 +2970,7 @@
       "mfaPolicy": "强制绑定 MFA",
       "mfaPolicyHint": "只决定谁必须绑定动态验证码；已绑定 MFA 的账号登录时一律验码，与这里的选择无关",
       "mfaThirdPartyEnabled": "LDAP 管理员强制绑定动态码",
-      "mfaThirdPartyEnabledHint": "开启后，用 LDAP 登录的管理员即使还没绑定动态码也会被要求输码；因此未绑定的管理员将无法登录，需要其他管理员协助绑定或关闭此项",
+      "mfaThirdPartyEnabledHint": "开启后，用 LDAP 登录的管理员必须绑定动态码：未绑定时会被引导到绑定页面；绑定后每次登录都要验码",
       "mfaStepUpEnabled": "敏感操作要求 MFA 校验",
       "mfaStepUpEnabledHint": "已启用 MFA 的用户在执行删除类操作或打开交互终端前需重新校验动态码",
       "mfaVerifyTtlSeconds": "MFA 校验有效期",
@@ -3023,7 +3083,10 @@
         "qrCodeAlt": "MFA 二维码",
         "otpauthUrl": "otpauth 链接",
         "description": "绑定动态码后，登录与敏感操作会要求输入一次动态码。",
-        "policyDisabled": "当前安全策略已关闭动态码，需要在「安全管理」里启用后才能绑定。"
+        "featureDisabled": "当前部署已在「设置 → 通用」里关闭动态码功能，无法绑定；需要管理员启用后才能使用。",
+        "directoryHint": "目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认；若最近没有重新登录过，请先退出并重新登录，再回来绑定。",
+        "reauthRequired": "为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。",
+        "reauthAction": "退出并重新登录"
       }
     },
     "mfa": "MFA",

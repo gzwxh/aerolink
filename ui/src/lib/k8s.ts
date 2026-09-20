@@ -475,6 +475,37 @@ export function getOwnerInfo(metadata?: ObjectMeta) {
 }
 
 // @see 上游实现：https://github.com/kubernetes/kubernetes/blob/bd44685eadc64c8cd46a8259f027f57ba9724a85/pkg/printers/internalversion/printers.go#L1317-L1347
+/**
+ * 选出与某个工作负载关联的 Service。
+ *
+ * 判定同时认两种来源：
+ *   - 名字等于工作负载名、或以 `<工作负载名>-` 开头（控制台过去自动生成的命名习惯）；
+ *   - Service 的 selector 被工作负载的 Pod 标签完全覆盖 —— 这才是真正决定关联的规则
+ *     （Service 选中哪些 Pod 由它自己的 selector 决定）。
+ *
+ * 关联本身在「服务」页面维护，这里只用于只读展示与跳转。
+ */
+export function servicesForWorkload(
+  services: Service[],
+  options: { name?: string; labels?: Record<string, string> }
+): Service[] {
+  const workloadName = (options.name || '').trim()
+  const labels = options.labels || {}
+  return services.filter((service) => {
+    const svcName = service.metadata?.name || ''
+    if (
+      workloadName &&
+      (svcName === workloadName || svcName.startsWith(`${workloadName}-`))
+    ) {
+      return true
+    }
+    const selector = (service.spec?.selector || {}) as Record<string, string>
+    const keys = Object.keys(selector)
+    if (keys.length === 0) return false
+    return keys.every((key) => labels[key] === selector[key])
+  })
+}
+
 export function getServiceExternalIP(service: Service): string {
   switch (service.spec?.type) {
     case 'LoadBalancer':

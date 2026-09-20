@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { IconEdit } from '@tabler/icons-react'
 import { Job } from 'kubernetes-types/batch/v1'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -11,6 +13,7 @@ import {
 } from '@/lib/api'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { EventTable } from '@/components/event-table'
 import { JobOverview } from '@/components/job-overview'
@@ -30,10 +33,14 @@ import {
 export function JobDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const can = useCan()
   // 终端需要 pods:exec，日志需要 pods:log；只读管理员两者都有。
   const canExec = can('pods', 'exec', { namespace })
   const canLog = can('pods', 'log', { namespace })
+  // 编辑页会改写对象，是写操作。注意 Job 的 Pod 模板本身不可变（只能改
+  // 并行度、重试次数这类字段），改成模板里的内容会由 API 拒绝。
+  const canUpdate = can('jobs', 'update', { namespace })
 
   const {
     data: job,
@@ -260,6 +267,18 @@ export function JobDetail(props: { namespace: string; name: string }) {
       error={isError ? jobError : null}
       onRefresh={handleRefresh}
       onSaveYaml={handleSaveYaml}
+      headerActions={
+        canUpdate ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/jobs/${namespace}/${name}/edit`)}
+          >
+            <IconEdit className="w-4 h-4" />
+            {t('common.actions.edit')}
+          </Button>
+        ) : null
+      }
       overview={
         job ? (
           <JobOverview

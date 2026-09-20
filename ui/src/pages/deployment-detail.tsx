@@ -22,7 +22,11 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
-import { getDeploymentStatus, toSimpleContainer } from '@/lib/k8s'
+import {
+  getDeploymentStatus,
+  servicesForWorkload,
+  toSimpleContainer,
+} from '@/lib/k8s'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -124,15 +128,14 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   // 与该工作负载关联的 Service（名称匹配或选择器匹配）——
   // 由 Endpoints 卡片使用；同一命名空间中不相关的 Service
   // 不是该 Deployment 概览需要关心的。
-  const associatedServices = useMemo(() => {
-    const matchLabels = deployment?.spec?.selector?.matchLabels || {}
-    return (relatedServices || []).filter((svc) => {
-      const svcName = svc.metadata?.name || ''
-      if (svcName === name || svcName.startsWith(`${name}-`)) return true
-      const selector = (svc.spec?.selector || {}) as Record<string, string>
-      return Object.entries(matchLabels).every(([k, v]) => selector[k] === v)
-    })
-  }, [relatedServices, name, deployment])
+  const associatedServices = useMemo(
+    () =>
+      servicesForWorkload(relatedServices || [], {
+        name,
+        labels: deployment?.spec?.selector?.matchLabels || {},
+      }),
+    [relatedServices, name, deployment]
+  )
 
   const hasRelatedService = useMemo(
     () => relatedResources?.some((resource) => resource.type === 'services'),

@@ -73,7 +73,11 @@ interface AuthContextType {
   credentialProviders: CredentialProvider[]
   oauthProviders: string[]
   loginPrompt: string
-  mfaEnabled: boolean
+  /**
+   * 通用设置里的动态码功能闸：true 表示这个部署允许绑定动态码。
+   * 安全策略（「谁必须绑定」）走用户对象上的 mfa_required，与此无关。
+   */
+  mfaAvailable: boolean
   loginCaptchaEnabled: boolean
   capabilities: BootstrapCapabilities
   login: (provider?: string) => Promise<void>
@@ -260,7 +264,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     bootstrap?.globalSidebarPreference || ''
   )
   const loginPrompt = bootstrap?.auth.loginPrompt || ''
-  const mfaEnabled = bootstrap?.auth.mfaEnabled ?? true
+  const mfaAvailable = bootstrap?.auth.mfaAvailable ?? false
   const loginCaptchaEnabled = bootstrap?.auth.loginCaptchaEnabled ?? false
   const capabilities = bootstrap?.capabilities ?? defaultCapabilities
 
@@ -275,7 +279,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       credentialProviders,
       oauthProviders,
       loginPrompt,
-      mfaEnabled,
+      mfaAvailable,
       loginCaptchaEnabled,
       capabilities,
       login,
@@ -291,7 +295,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     bootstrap?.auth.credentialProviders,
     bootstrap?.auth.oauthProviders,
     loginPrompt,
-    mfaEnabled,
+    mfaAvailable,
     loginCaptchaEnabled,
     capabilities,
     login,

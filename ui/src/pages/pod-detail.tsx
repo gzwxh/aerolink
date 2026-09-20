@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { IconAdjustments, IconBug } from '@tabler/icons-react'
+import { IconAdjustments, IconBug, IconEdit } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Container, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
@@ -363,6 +363,16 @@ export function PodDetail(props: { namespace: string; name: string }) {
         }
         headerActions={
           <>
+            {canUpdate ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/pods/${namespace}/${name}/edit`)}
+              >
+                <IconEdit className="w-4 h-4" />
+                {t('common.actions.edit')}
+              </Button>
+            ) : null}
             {debugAvailable && (
               <Button
                 variant="outline"

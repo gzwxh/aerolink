@@ -18,6 +18,7 @@ import { JobListPage } from './pages/job-list-page'
 import { LoginPage } from './pages/login'
 import { Overview } from './pages/overview'
 import { PodListPage } from './pages/pod-list-page'
+import { PVCreatePage } from './pages/pv-create-page'
 import { RBACRedirect } from './pages/rbac'
 import { ResourceDetail } from './pages/resource-detail'
 import { ResourceList } from './pages/resource-list'
@@ -26,6 +27,7 @@ import { ServiceCreatePage } from './pages/service-create-page'
 import { ServiceListPage } from './pages/service-list-page'
 import { SettingsPage, SettingsRedirect } from './pages/settings'
 import { StatefulSetListPage } from './pages/statefulset-list-page'
+import { StorageClassCreatePage } from './pages/storageclass-create-page'
 
 const subPath = getSubPath()
 
@@ -149,6 +151,10 @@ export const router = createBrowserRouter(
           element: <DeploymentCreatePage resourceType="cronjobs" />,
         },
         {
+          path: 'cronjobs/:namespace/:name/edit',
+          element: <DeploymentCreatePage resourceType="cronjobs" />,
+        },
+        {
           path: 'cronjobs/:namespace',
           element: <CronJobListPage />,
         },
@@ -158,6 +164,10 @@ export const router = createBrowserRouter(
         },
         {
           path: 'jobs/:namespace/create',
+          element: <DeploymentCreatePage resourceType="jobs" />,
+        },
+        {
+          path: 'jobs/:namespace/:name/edit',
           element: <DeploymentCreatePage resourceType="jobs" />,
         },
         {
@@ -173,6 +183,10 @@ export const router = createBrowserRouter(
           element: <DeploymentCreatePage resourceType="pods" />,
         },
         {
+          path: 'pods/:namespace/:name/edit',
+          element: <DeploymentCreatePage resourceType="pods" />,
+        },
+        {
           path: 'pods/:namespace',
           element: <PodListPage />,
         },
@@ -182,6 +196,10 @@ export const router = createBrowserRouter(
         },
         {
           path: 'daemonsets/:namespace/create',
+          element: <DeploymentCreatePage resourceType="daemonsets" />,
+        },
+        {
+          path: 'daemonsets/:namespace/:name/edit',
           element: <DeploymentCreatePage resourceType="daemonsets" />,
         },
         {
@@ -197,6 +215,10 @@ export const router = createBrowserRouter(
           element: <DeploymentCreatePage resourceType="statefulsets" />,
         },
         {
+          path: 'statefulsets/:namespace/:name/edit',
+          element: <DeploymentCreatePage resourceType="statefulsets" />,
+        },
+        {
           path: 'statefulsets/:namespace',
           element: <StatefulSetListPage />,
         },
@@ -209,12 +231,30 @@ export const router = createBrowserRouter(
           element: <ConfigMapCreatePage />,
         },
         {
+          // 编辑：同一套表单读出线上对象（列表/详情走通用路由 :resource/...）。
+          path: 'configmaps/:namespace/:name/edit',
+          element: <ConfigMapCreatePage />,
+        },
+        {
           path: 'secrets/create',
           element: <SecretCreatePage />,
         },
         {
           path: 'secrets/:namespace/create',
           element: <SecretCreatePage />,
+        },
+        {
+          path: 'secrets/:namespace/:name/edit',
+          element: <SecretCreatePage />,
+        },
+        {
+          // 集群级存储资源：没有命名空间段。
+          path: 'persistentvolumes/create',
+          element: <PVCreatePage />,
+        },
+        {
+          path: 'storageclasses/create',
+          element: <StorageClassCreatePage />,
         },
         {
           path: 'crds/:crd',

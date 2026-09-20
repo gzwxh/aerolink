@@ -170,9 +170,8 @@ function textToPairs(text: string): Record<string, string> | null {
   return result
 }
 
-// 克隆出来的命名空间不会复制原命名空间的授权：授权由权限绑定组按命名空间逐条表达。
-// 克隆体只按「新建命名空间自动归属」规则处理：非管理员且恰好属于一个权限绑定组时
-// 自动归属，其余情况留给管理员分配（见 pkg/bindinggroups/auto_bind.go）。
+// 克隆出来的命名空间不会复制原命名空间的授权：授权由权限绑定组按命名空间逐条表达，
+// 建完请在「权限管理 → 权限绑定」里分配。
 function downloadNamespaceYaml(resource: unknown, name: string) {
   const content = yaml.dump(resource, { indent: 2, noRefs: true })
   const blob = new Blob([content], { type: 'application/x-yaml' })

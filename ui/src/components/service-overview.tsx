@@ -17,10 +17,10 @@ import { withCurrentClusterPath } from '@/lib/current-cluster'
 import { getEventTime, getOwnerInfo, getServiceExternalIP } from '@/lib/k8s'
 import { withSubPath } from '@/lib/subpath'
 import { formatDate } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Column, SimpleTable } from '@/components/simple-table'
 import {
+  SelectorBadges,
   WorkloadInfoBlock,
   WorkloadInfoRow,
 } from '@/components/workload-overview-parts'
@@ -245,22 +245,7 @@ function ServiceInformationCard({
               )}
             </WorkloadInfoBlock>
             <WorkloadInfoBlock label={t('common.fields.selector')}>
-              {selectorEntries.length > 0 ? (
-                <div className="flex min-w-0 flex-wrap gap-1">
-                  {selectorEntries.map(([key, value]) => (
-                    <Badge
-                      key={key}
-                      variant="outline"
-                      className="max-w-full truncate font-mono"
-                      title={`${key}=${value}`}
-                    >
-                      {key}={value}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-muted-foreground">-</span>
-              )}
+              <SelectorBadges entries={selectorEntries} />
             </WorkloadInfoBlock>
           </div>
 

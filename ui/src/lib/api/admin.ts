@@ -929,8 +929,6 @@ export interface GeneralSetting {
   kubectlImage: string
   nodeTerminalImage: string
   clusterAgentImage: string
-  /** 普通用户新建命名空间后是否自动纳入其权限范围（优先归属其权限绑定）。 */
-  autoBindUserNamespace: boolean
   enableAnalytics: boolean
   enableVersionCheck: boolean
   passwordLoginDisabled: boolean
@@ -953,7 +951,6 @@ export interface GeneralSettingUpdateRequest {
   kubectlImage?: string
   nodeTerminalImage?: string
   clusterAgentImage?: string
-  autoBindUserNamespace?: boolean
   enableAnalytics?: boolean
   enableVersionCheck?: boolean
   passwordLoginDisabled?: boolean

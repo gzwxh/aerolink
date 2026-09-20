@@ -7,7 +7,6 @@ import {
   IconPhoto,
   IconRobot,
   IconSettings,
-  IconShieldLock,
   IconTerminal2,
   IconUpload,
   IconX,
@@ -62,7 +61,6 @@ interface GeneralSettingsFormData {
   kubectlImage: string
   nodeTerminalImage: string
   clusterAgentImage: string
-  autoBindUserNamespace: boolean
   enableAnalytics: boolean
   enableVersionCheck: boolean
   loginPrompt: string
@@ -88,7 +86,6 @@ export function GeneralManagement() {
     kubectlImage: DEFAULT_KUBECTL_IMAGE,
     nodeTerminalImage: DEFAULT_NODE_TERMINAL_IMAGE,
     clusterAgentImage: DEFAULT_CLUSTER_AGENT_IMAGE,
-    autoBindUserNamespace: true,
     enableAnalytics: true,
     enableVersionCheck: true,
     loginPrompt: '',
@@ -110,7 +107,6 @@ export function GeneralManagement() {
       kubectlImage: data.kubectlImage || DEFAULT_KUBECTL_IMAGE,
       nodeTerminalImage: data.nodeTerminalImage || DEFAULT_NODE_TERMINAL_IMAGE,
       clusterAgentImage: data.clusterAgentImage || DEFAULT_CLUSTER_AGENT_IMAGE,
-      autoBindUserNamespace: data.autoBindUserNamespace ?? true,
       enableAnalytics: data.enableAnalytics ?? false,
       enableVersionCheck: data.enableVersionCheck ?? true,
       loginPrompt: data.loginPrompt || '',
@@ -222,7 +218,6 @@ export function GeneralManagement() {
         formData.nodeTerminalImage.trim() || DEFAULT_NODE_TERMINAL_IMAGE,
       clusterAgentImage:
         formData.clusterAgentImage.trim() || DEFAULT_CLUSTER_AGENT_IMAGE,
-      autoBindUserNamespace: formData.autoBindUserNamespace,
       enableAnalytics: formData.enableAnalytics,
       enableVersionCheck: formData.enableVersionCheck,
       loginPrompt: formData.loginPrompt.trim(),
@@ -502,43 +497,6 @@ export function GeneralManagement() {
                 }))
               }
               placeholder={DEFAULT_CLUSTER_AGENT_IMAGE}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-lg border p-3">
-          <div className="space-y-1">
-            <Label className="flex items-center gap-2 text-sm font-medium">
-              <IconShieldLock className="h-4 w-4" />
-              {t(
-                'generalManagement.autoBindNamespace.title',
-                '命名空间自动归属'
-              )}
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                'generalManagement.autoBindNamespace.description',
-                '普通用户在权限范围内新建命名空间时，自动把它纳入自己已有的授权（优先归属其权限绑定组）；管理员创建的命名空间不自动归属，便于管理员手动分配。'
-              )}
-            </p>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between">
-            <Label htmlFor="general-auto-bind-namespace" className="text-sm">
-              {t(
-                'generalManagement.autoBindNamespace.form.enabled',
-                '用户创建命名空间时自动归属其权限'
-              )}
-            </Label>
-            <Switch
-              id="general-auto-bind-namespace"
-              checked={formData.autoBindUserNamespace}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  autoBindUserNamespace: checked,
-                }))
-              }
             />
           </div>
         </div>

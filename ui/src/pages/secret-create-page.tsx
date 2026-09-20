@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as YAML from 'js-yaml'
@@ -8,7 +8,8 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { applyResource } from '@/lib/api'
+import { applyResource, useResource } from '@/lib/api'
+import { splitSecretData } from '@/lib/base64'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
   DESCRIPTION_ANNOTATION,
@@ -47,6 +48,12 @@ import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 import { TabStrip } from '@/components/tab-strip'
 
 type EditorTab = 'data' | 'binary' | 'meta' | 'yaml'
+
+/** 把 `[key, value]` 序列转成键/值行；空列表给一行空行，保证表格不为空。 */
+function rowsFromPairs(pairs: Array<[string, string]>): DataRow[] {
+  const rows = pairs.map(([key, value]) => ({ key, value }))
+  return rows.length > 0 ? rows : [{ key: '', value: '' }]
+}
 
 const EDITOR_TABS: EditorTab[] = ['data', 'binary', 'meta', 'yaml']
 
@@ -100,6 +107,9 @@ const SECRET_TYPES: Array<{
   { value: 'rke.cattle.io/auth-config', requiredKeys: [] },
 ]
 
+/** 下拉里能选到的内置类型；线上对象用了别的类型时走「自定义」分支。 */
+const KNOWN_SECRET_TYPES: string[] = SECRET_TYPES.map((item) => item.value)
+
 const requiredKeysOf = (type: string) =>
   SECRET_TYPES.find((candidate) => candidate.value === type)?.requiredKeys ?? []
 
@@ -123,11 +133,15 @@ export function SecretCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { namespace: namespaceParam } = useParams()
+  const { namespace: namespaceParam, name: editName } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const can = useCan()
 
-  const pageTitle = t('secretCreate.pageTitle', 'Secret: 创建')
+  const isEdit = Boolean(editName)
+
+  const pageTitle = isEdit
+    ? t('secretCreate.editPageTitle', 'Secret: 编辑')
+    : t('secretCreate.pageTitle', 'Secret: 创建')
   usePageTitle(pageTitle)
 
   const [namespace, setNamespace] = useState(() =>
@@ -193,6 +207,37 @@ export function SecretCreatePage() {
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
+  // 编辑模式：把线上对象读回来预填（创建模式下不发请求）。
+  const { data: existing } = useResource('secrets', editName || '', namespace, {
+    enabled: isEdit,
+  })
+  useEffect(() => {
+    if (!existing) return
+    const annotations = existing.metadata?.annotations || {}
+    const { [DESCRIPTION_ANNOTATION]: description, ...rest } = annotations
+    setName(existing.metadata?.name || '')
+    setNamespace(existing.metadata?.namespace || namespace)
+    setDescription(description || '')
+    setSecretType(existing.type || SECRET_TYPE_OPAQUE)
+    setCustomType(
+      existing.type && !KNOWN_SECRET_TYPES.includes(existing.type)
+        ? existing.type
+        : ''
+    )
+    setImmutable(existing.immutable === true)
+    // data 里既有明文值（stringData 写入后由 apiserver 编码）也有二进制值，
+    // 二者用「能否安全编码往返」区分，避免把 keystore 这类内容当文本改坏。
+    const { text, binary } = splitSecretData(existing.data)
+    setDataRows(rowsFromPairs(text))
+    setBinaryRows(
+      rowsFromPairs(binary).map((row) => ({ ...row, fileName: row.key }))
+    )
+    setLabels(rowsFromPairs(Object.entries(existing.metadata?.labels || {})))
+    setAnnotations(rowsFromPairs(Object.entries(rest)))
+    // 只有线上对象变化时重填，否则会把用户正在编辑的内容冲掉。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing])
+
   // 支撑"从文件读取" / "选择文件"操作的隐藏 input。
   const dataFileInputRef = useRef<HTMLInputElement>(null)
   const binaryBulkInputRef = useRef<HTMLInputElement>(null)
@@ -206,7 +251,7 @@ export function SecretCreatePage() {
     (yamlOverrides
       ? parseSecretYaml(editedYaml)?.metadata?.namespace?.trim()
       : '') || namespace
-  const canCreate = can('secrets', 'create', {
+  const canCreate = can('secrets', isEdit ? 'update' : 'create', {
     namespace: targetNamespace,
   })
 
@@ -282,7 +327,7 @@ export function SecretCreatePage() {
     }
     // "/secrets/<ns>/create" 本身就是创建路由，因此名为
     // "create" 的 Secret 将永远无法再次打开。
-    if (RESERVED_CREATE_NAMES.has(trimmedName)) {
+    if (!isEdit && RESERVED_CREATE_NAMES.has(trimmedName)) {
       return t('secretCreate.reservedName', {
         name: trimmedName,
         defaultValue:
@@ -529,7 +574,9 @@ export function SecretCreatePage() {
       queryClient.invalidateQueries()
       toast.success(t('common.messages.applied', 'Applied successfully'))
       navigate(
-        `/secrets/${encodeURIComponent(target.namespace)}/${target.name}`
+        `/secrets/${encodeURIComponent(target.namespace)}/${
+          isEdit && editName ? editName : target.name
+        }`
       )
     } catch (err) {
       const message = translateError(err, t)
@@ -562,7 +609,13 @@ export function SecretCreatePage() {
           className="h-8 w-8"
           aria-label={t('common.actions.backToList', '返回列表')}
           title={t('common.actions.backToList', '返回列表')}
-          onClick={() => navigate('/secrets')}
+          onClick={() =>
+            isEdit && editName
+              ? navigate(
+                  `/secrets/${encodeURIComponent(namespace)}/${editName}`
+                )
+              : navigate('/secrets')
+          }
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -586,6 +639,7 @@ export function SecretCreatePage() {
                 )
               }}
               triggerClassName="w-full sm:w-full sm:max-w-none"
+              disabled={isEdit}
               modal
             />
           </div>
@@ -599,6 +653,7 @@ export function SecretCreatePage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('secretCreate.namePlaceholder', 'Enter a name')}
+                disabled={isEdit}
                 className={cn('h-9', !name.trim() && 'border-destructive')}
               />
               {!name.trim() && (
@@ -662,7 +717,11 @@ export function SecretCreatePage() {
                   <Label className="text-xs" htmlFor="secret-type">
                     {t('secretCreate.typeLabel', '类型')}
                   </Label>
-                  <Select value={secretType} onValueChange={handleTypeChange}>
+                  <Select
+                    value={secretType}
+                    onValueChange={handleTypeChange}
+                    disabled={isEdit}
+                  >
                     <SelectTrigger id="secret-type" className="h-9">
                       <SelectValue />
                     </SelectTrigger>
@@ -740,6 +799,7 @@ export function SecretCreatePage() {
                 rows={dataRows}
                 mode="text"
                 maskValues
+                multilineValues
                 keyPlaceholder={t(
                   'workloadWizard.labelKeyPlaceholder',
                   'e.g. foo'
@@ -1006,13 +1066,24 @@ export function SecretCreatePage() {
 
       {/* Footer actions */}
       <div className="flex items-center justify-end gap-2 border-t pt-3">
-        <Button variant="outline" onClick={() => navigate('/secrets')}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            isEdit && editName
+              ? navigate(
+                  `/secrets/${encodeURIComponent(namespace)}/${editName}`
+                )
+              : navigate('/secrets')
+          }
+        >
           {t('common.actions.cancel', 'Cancel')}
         </Button>
         {/* Kept clickable while invalid so the banner can name the problem. */}
         <Button onClick={handleCreate} disabled={isCreating || !canCreate}>
           {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {t('secretCreate.createButton', 'Create Secret')}
+          {isEdit
+            ? t('common.actions.save', '保存')
+            : t('secretCreate.createButton', 'Create Secret')}
         </Button>
       </div>
 

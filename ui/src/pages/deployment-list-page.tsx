@@ -8,6 +8,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { restartWorkload, useResources } from '@/lib/api'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
+import { shortenImageName } from '@/lib/image-name'
 import {
   createSearchFilter,
   getDeploymentStatus,
@@ -198,11 +199,20 @@ export function DeploymentListPage() {
             return (
               <div className="flex flex-col items-center gap-0.5 text-xs">
                 {containers.map((container) => (
-                  <div key={container.name} className="max-w-72 break-all">
-                    <span className="text-muted-foreground">
+                  <div
+                    key={container.name}
+                    className="flex w-full min-w-0 max-w-72 items-baseline justify-center gap-1"
+                  >
+                    <span className="shrink-0 text-muted-foreground">
                       {container.name}:{' '}
                     </span>
-                    <span className="font-mono">{container.image}</span>
+                    {/* 只显示镜像名与 tag，完整地址通过 title 悬浮查看，避免长地址折行 */}
+                    <span
+                      className="min-w-0 truncate font-mono"
+                      title={container.image}
+                    >
+                      {shortenImageName(container.image || '')}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -293,16 +303,26 @@ export function DeploymentListPage() {
     [t]
   )
 
-  // URL 中的命名空间在当前集群中是否存在？当用户
-  // 切换集群时，URL 里的命名空间可能已不存在。
+  // URL 的命名空间段只能表达一个命名空间。多选时表格自己把选择存在
+  // sessionStorage / localStorage 里（见 useResourceTableState 的
+  // handleNamespaceChange），逗号拼接的形态只存在于状态、不该出现在 URL 上。
+  const namespaceParamNames = useMemo(
+    () => (namespaceParam ? namespaceParam.split(',').filter(Boolean) : []),
+    [namespaceParam]
+  )
+  // URL 中的命名空间在当前集群中是否存在？当用户切换集群时，URL 里的命名空间可能已不存在。
   const { data: allNamespaces } = useResources('namespaces', undefined, {
     staleTime: 60_000,
   })
   const namespaceExists = useMemo(() => {
-    if (!namespaceParam) return true
+    // 多选不是一个命名空间名，不做存在性判定：它一旦命中这个分支，整页会被
+    // 替换成「命名空间不存在」，工具栏（含命名空间选择器）一起消失。
+    if (namespaceParamNames.length !== 1) return true
     if (!allNamespaces) return true // still loading: assume it exists
-    return allNamespaces.some((ns) => ns.metadata?.name === namespaceParam)
-  }, [allNamespaces, namespaceParam])
+    return allNamespaces.some(
+      (ns) => ns.metadata?.name === namespaceParamNames[0]
+    )
+  }, [allNamespaces, namespaceParamNames])
 
   if (namespaceParam && !namespaceExists) {
     return (
@@ -372,9 +392,13 @@ export function DeploymentListPage() {
         initialNamespace={namespaceParam}
         onNamespaceChange={(ns) => {
           // 保持 URL 同步：/deployments/<ns> 或 /deployments（表示全部）。
+          // 多选（逗号拼接）没有单段 URL 能表达，也写不得——URL 里的逗号值会被
+          // 上面的存在性判定当成一个命名空间名，把整页变成报错页。选择本身已经
+          // 由表格状态持久化，刷新能恢复。
+          const single = ns && ns !== '_all' && !ns.includes(',') ? ns : ''
           navigate(
-            ns && ns !== '_all'
-              ? `/deployments/${encodeURIComponent(ns)}`
+            single
+              ? `/deployments/${encodeURIComponent(single)}`
               : '/deployments',
             { replace: true }
           )

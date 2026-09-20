@@ -31,7 +31,11 @@ export interface AuthProviderCatalog {
   credentialProviders: CredentialProvider[]
   oauthProviders: string[]
   loginPrompt: string
-  mfaEnabled: boolean
+  /**
+   * 通用设置里的动态码功能闸（未与策略做与运算）。
+   * 界面据此决定能否提供绑定入口：策略只回答「谁必须绑定」，不影响自愿绑定。
+   */
+  mfaAvailable: boolean
   /** 来自安全设置的全局 MFA 策略：disabled / all / admin。 */
   mfaPolicy: 'disabled' | 'all' | 'admin'
   loginCaptchaEnabled: boolean

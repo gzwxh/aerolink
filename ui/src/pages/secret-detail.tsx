@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
+import { IconEdit } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import { Secret } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { updateResource, useResource } from '@/lib/api'
+import {
+  decodeBase64Utf8,
+  encodeBase64Map,
+  encodeBase64Utf8,
+} from '@/lib/base64'
+import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EventTable } from '@/components/event-table'
@@ -24,7 +32,7 @@ function getDecodedYamlContent(secret: Secret, showDecodedYaml: boolean) {
     if (showSecret.data) {
       const decodedData: Record<string, string> = {}
       Object.entries(showSecret.data).forEach(([key, value]) => {
-        decodedData[key] = atob(value)
+        decodedData[key] = decodeBase64Utf8(value)
       })
       showSecret.stringData = decodedData
       showSecret.data = undefined
@@ -32,7 +40,7 @@ function getDecodedYamlContent(secret: Secret, showDecodedYaml: boolean) {
   } else if (showSecret.stringData) {
     const data: Record<string, string> = {}
     Object.entries(showSecret.stringData).forEach(([key, value]) => {
-      data[key] = btoa(value)
+      data[key] = encodeBase64Utf8(value)
     })
     showSecret.data = data
     showSecret.stringData = undefined
@@ -78,7 +86,11 @@ function SecretYamlToolbar({
 export function SecretDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const can = useCan()
   const [showDecodedYaml, setShowDecodedYaml] = useState(false)
+  // 数据条目的增删改属于写操作，没有 update 权限时只读展示。
+  const canUpdate = can('secrets', 'update', { namespace })
 
   const { data, isLoading, isError, error, refetch } = useResource(
     'secrets',
@@ -115,6 +127,16 @@ export function SecretDetail(props: { namespace: string; name: string }) {
             sensitive
             base64Encoded
             emptyMessage={t('keyValueDataViewer.noDataEntries', '暂无数据条目')}
+            canEdit={canUpdate}
+            onSave={async (entries) => {
+              // 组件回传的是解码后的明文，写回 k8s 需要重新 base64 编码。
+              await updateResource('secrets', name, namespace, {
+                ...data,
+                data: encodeBase64Map(entries),
+              })
+              toast.success(t('secretDetail.dataSaved', 'Secret 数据已保存'))
+              await refetch()
+            }}
           />
         ) : null,
       },
@@ -149,7 +171,7 @@ export function SecretDetail(props: { namespace: string; name: string }) {
         ) : null,
       },
     ],
-    [data, dataCount, name, namespace, t]
+    [canUpdate, data, dataCount, name, namespace, refetch, t]
   )
 
   return (
@@ -163,6 +185,18 @@ export function SecretDetail(props: { namespace: string; name: string }) {
       error={isError ? error : null}
       onRefresh={refetch}
       onSaveYaml={handleSaveYaml}
+      headerActions={
+        canUpdate ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/secrets/${namespace}/${name}/edit`)}
+          >
+            <IconEdit className="w-4 h-4" />
+            {t('common.actions.edit')}
+          </Button>
+        ) : null
+      }
       yamlToolbar={(context) => (
         <SecretYamlToolbar
           setYamlContent={context.setYamlContent}

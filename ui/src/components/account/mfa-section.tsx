@@ -10,6 +10,10 @@ import {
   setupCurrentUserMFA,
   type MFASetupResponse,
 } from '@/lib/api'
+import {
+  isMFAReauthRequired,
+  mfaEnrollmentNeedsPassword,
+} from '@/lib/mfa-enrollment'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,17 +33,22 @@ import { PasswordInput } from '@/components/password-input'
 /**
  * 「安全 → 动态码（MFA）」。
  *
- * 绑定流程要先输当前密码再显示二维码（相当于再认证，避免会话被盗后直接改绑定），
- * 停用则要求输入一次有效动态码。全局策略关掉 MFA 时所有按钮置灰并给出说明。
+ * 显示二维码前要先做一次再认证（避免会话被盗后直接改绑定）：本地密码账号提交当前密码；
+ * LDAP 账号没有本地口令，后端要求「最近 5 分钟内重新登录过」，因此这里直接发起绑定，
+ * 失败时按 `mfa_reauth_required` 提示重新登录一次。停用则要求输入一次有效动态码。
+ *
+ * 通用设置关掉动态码功能时按钮置灰并给出说明——安全策略只决定「谁必须绑定」，
+ * 不影响自愿绑定，所以这里不再看策略。
  */
 export function MFASection() {
   const { t } = useTranslation()
-  const { user, checkAuth, mfaEnabled } = useAuth()
+  const { user, checkAuth, mfaAvailable, logout } = useAuth()
   const [setup, setSetup] = useState<MFASetupResponse | null>(null)
   const [code, setCode] = useState('')
   const [confirmingPassword, setConfirmingPassword] = useState(false)
   const [confirmPassword, setConfirmPassword] = useState('')
   const [confirmError, setConfirmError] = useState('')
+  const [reauthRequired, setReauthRequired] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -47,7 +56,8 @@ export function MFASection() {
     return null
   }
 
-  const controlsDisabled = !mfaEnabled || saving
+  const needsPassword = mfaEnrollmentNeedsPassword(user)
+  const controlsDisabled = !mfaAvailable || saving
 
   const handleEnable = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -98,23 +108,58 @@ export function MFASection() {
     setConfirmError('')
   }
 
-  const handleConfirmPassword = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  /** 发起绑定；成功返回 null，失败返回要展示的错误文案。 */
+  const startSetup = async (password?: string): Promise<string | null> => {
     setSaving(true)
-    setConfirmError('')
+    setError('')
+    setReauthRequired(false)
 
     try {
-      setSetup(await setupCurrentUserMFA(confirmPassword))
+      setSetup(await setupCurrentUserMFA(password))
       setCode('')
-      closeConfirm()
+      return null
     } catch (err) {
-      setConfirmError(
-        err instanceof Error
-          ? err.message
-          : t('accountSettings.security.mfa.setupError', '绑定失败')
-      )
+      if (isMFAReauthRequired(err)) {
+        // 目录账号没有可提交的口令：这里只能让用户重新登录一次，换一个新鲜的会话。
+        setReauthRequired(true)
+        return t(
+          'accountSettings.security.mfa.reauthRequired',
+          '为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。'
+        )
+      }
+      return err instanceof Error
+        ? err.message
+        : t('accountSettings.security.mfa.setupError', '绑定失败')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleConfirmPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setConfirmError('')
+
+    const message = await startSetup(confirmPassword)
+    if (message) {
+      setConfirmError(message)
+      return
+    }
+    setConfirmPassword('')
+    closeConfirm()
+  }
+
+  const handleStartEnrollment = async () => {
+    setError('')
+    setReauthRequired(false)
+
+    // 本地密码账号先确认密码（弹窗里输入）；目录账号直接发起，由后端判定登录新鲜度。
+    if (needsPassword) {
+      setConfirmingPassword(true)
+      return
+    }
+    const message = await startSetup()
+    if (message) {
+      setError(message)
     }
   }
 
@@ -140,13 +185,41 @@ export function MFASection() {
           )}
         </p>
 
-        {!mfaEnabled && (
+        {!mfaAvailable && (
           <Alert>
             <AlertDescription>
               {t(
-                'accountSettings.security.mfa.policyDisabled',
-                '当前安全策略已关闭动态码，需要在「安全管理」里启用后才能绑定。'
+                'accountSettings.security.mfa.featureDisabled',
+                '当前部署已在「设置 → 通用」里关闭动态码功能，无法绑定；需要管理员启用后才能使用。'
               )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!needsPassword && !user.mfa_enabled && (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'accountSettings.security.mfa.directoryHint',
+              '目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认；若最近没有重新登录过，请先退出并重新登录，再回来绑定。'
+            )}
+          </p>
+        )}
+
+        {reauthRequired && (
+          <Alert>
+            <AlertDescription className="flex flex-col items-start gap-2">
+              <span>
+                {t(
+                  'accountSettings.security.mfa.reauthRequired',
+                  '为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。'
+                )}
+              </span>
+              <Button size="sm" variant="outline" onClick={() => void logout()}>
+                {t(
+                  'accountSettings.security.mfa.reauthAction',
+                  '退出并重新登录'
+                )}
+              </Button>
             </AlertDescription>
           </Alert>
         )}
@@ -191,7 +264,7 @@ export function MFASection() {
                 autoComplete="one-time-code"
                 inputMode="numeric"
                 required
-                disabled={!mfaEnabled}
+                disabled={!mfaAvailable}
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
               />
@@ -219,7 +292,7 @@ export function MFASection() {
                 autoComplete="one-time-code"
                 inputMode="numeric"
                 required
-                disabled={!mfaEnabled}
+                disabled={!mfaAvailable}
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
               />
@@ -239,8 +312,7 @@ export function MFASection() {
               variant="outline"
               disabled={controlsDisabled}
               onClick={() => {
-                setError('')
-                setConfirmingPassword(true)
+                void handleStartEnrollment()
               }}
             >
               {t('accountSettings.security.mfa.setupButton', '绑定 MFA')}

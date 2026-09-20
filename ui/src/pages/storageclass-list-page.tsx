@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { StorageClass } from 'kubernetes-types/storage/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { patchResource, useResources } from '@/lib/api'
@@ -36,14 +36,11 @@ const columnHelper = createColumnHelper<StorageClass>()
 
 export function StorageClassListPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   // 设为默认需要改写 annotation，是写操作。
   const canUpdateStorageClass = useCanAnyNamespace()('storageclasses', 'update')
-  const { data: storageClasses = [] } = useResources(
-    'storageclasses',
-    undefined,
-    { reduce: true }
-  )
+  const { data: storageClasses = [] } = useResources('storageclasses')
   const defaultStorageClassCount = storageClasses.filter(
     isDefaultStorageClass
   ).length
@@ -187,6 +184,8 @@ export function StorageClassListPage() {
       columns={columns}
       clusterScope={true}
       searchQueryFilter={storageClassSearchFilter}
+      showCreateButton
+      onCreateClick={() => navigate('/storageclasses/create')}
     />
   )
 }
