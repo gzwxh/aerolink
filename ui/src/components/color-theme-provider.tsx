@@ -8,6 +8,7 @@ export const colorThemes = {
   notebook: '',
   'clean-slate': '',
   claude: '',
+  emerald: '',
 }
 
 export type ColorTheme = keyof typeof colorThemes

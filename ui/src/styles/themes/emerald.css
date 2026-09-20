@@ -1,0 +1,148 @@
+/* 墨绿主题：与 kkRepo（klboke/kkRepo）默认皮肤对齐的翡翠绿/墨绿配色。
+   色值逐项取自 kkRepo 的 browse-ui/.../assets/themes/default.css 语义 token：
+   --brand #0e7c6f / --brand-strong #0a6055 / --brand-tint #e6f4f0 /
+   --brand-bright #2fbfa4 / --ink 阶 / --line / --surface / --surface-sunken /
+   --canvas / --danger|warning|success|info / --topbar 系。
+   说明：kkRepo 只提供浅色 token，暗色（.dark）变体由其深色系 token
+   （--topbar、--topbar-line、--topbar-ink、--topbar-muted、--ink-1/--ink-2、
+   --brand-bright）派生，不引入 kkRepo 之外的色值。
+   Kite 没有独立的顶栏变量，kkRepo 的深色顶栏（--topbar #16191b）映射到侧边栏，
+   选中态用 --brand-bright（即 kkRepo 的 --topbar-active）。
+
+   表格是唯一需要落到组件层的例外：kkRepo 的 .nx-table 直接引用 --table-head-ink /
+   --row-hover，而 Kite 的表格原语把这两处写死成 text-foreground /
+   hover:bg-muted/50，没有 CSS 变量入口，因此用主题作用域规则落地（见文件末尾，
+   只影响墨绿，不动 ui/components/ui 原语）。表头底色不用规则：Kite 用的是
+   bg-muted，把 --muted 指向 kkRepo 的 --header（= --surface-sunken）即可，
+   这样只有本来就画底色的表头会变，显式写 bg-background 的表格不受影响。
+   其余 kkRepo token 在 Kite 里没有消费方，不映射（照抄过来就是死变量）：
+   --surface-muted（Kite 的表头带与 chip 都是 --surface-sunken）、
+   --brand-tint-strong、--accent-soft、--ink-4、--success|warning|info 的 -bg/-line、
+   --account-avatar-*、--focus、--topbar-selection、--r-* / --s-* / --fs-* / --fw-* / --lh-*。 */
+.color-emerald {
+  --background: #ffffff; /* --canvas */
+  --foreground: #24322e; /* --ink-2 */
+  --card: #ffffff; /* --surface */
+  --card-foreground: #24322e; /* --ink-2 */
+  --popover: #ffffff; /* --surface */
+  --popover-foreground: #24322e; /* --ink-2 */
+  --primary: #0e7c6f; /* --brand */
+  --primary-foreground: #ffffff; /* --active-ink */
+  --secondary: #eef3f1; /* --surface-sunken */
+  --secondary-foreground: #12211d; /* --ink-1 */
+  --muted: #eef3f1; /* --header（= --surface-sunken）：Kite 的表头带与沉底填充 */
+  --muted-foreground: #5a6a64; /* --ink-3 */
+  --accent: #e6f4f0; /* --brand-tint */
+  --accent-foreground: #0a6055; /* --brand-strong */
+  --destructive: #a63a26; /* --danger */
+  --destructive-foreground: #ffffff; /* kkRepo 无对应 token（--danger 只用于文字/描边）*/
+  --border: #dbe2de; /* --line */
+  --input: #c3cec8; /* --line-strong */
+  --ring: #0e7c6f; /* --brand */
+  --chart-1: #0e7c6f; /* --brand */
+  --chart-2: #2c5686; /* --info */
+  --chart-3: #0f6d47; /* --success */
+  --chart-4: #8a5a12; /* --warning */
+  --chart-5: #b8623f; /* --accent */
+  /* 深色侧边栏沿用 kkRepo 顶栏 token */
+  --sidebar: #16191b; /* --topbar */
+  --sidebar-foreground: #f4f7f6; /* --topbar-ink */
+  --sidebar-primary: #2fbfa4; /* --brand-bright（kkRepo --topbar-active） */
+  --sidebar-primary-foreground: #16191b; /* --topbar */
+  --sidebar-accent: rgba(255, 255, 255, 0.09); /* --topbar-hover */
+  --sidebar-accent-foreground: #f4f7f6; /* --topbar-ink */
+  --sidebar-border: #2a2f31; /* --topbar-line */
+  --sidebar-ring: #2fbfa4; /* --brand-bright */
+  /* 表格：kkRepo 的 --table-head-ink / --row-hover */
+  --table-head-ink: #5a6a64; /* --table-head-ink（= --ink-3）*/
+  --row-hover: #e6f4f0; /* --row-hover（= --brand-tint）*/
+  --radius: 0.5rem; /* --r-md: 8px */
+  --shadow-2xs: 0 1px 2px rgba(18, 33, 29, 0.06); /* --shadow-sm */
+  --shadow-xs: 0 1px 2px rgba(18, 33, 29, 0.06);
+  --shadow-sm: 0 1px 2px rgba(18, 33, 29, 0.06);
+  --shadow: 0 8px 24px rgba(28, 44, 40, 0.07); /* --shadow-soft */
+  --shadow-md: 0 8px 24px rgba(28, 44, 40, 0.07);
+  --shadow-lg: 0 18px 44px rgba(17, 36, 31, 0.18); /* --shadow-pop */
+  --shadow-xl: 0 28px 80px rgba(17, 24, 39, 0.26); /* --shadow-modal */
+  --shadow-2xl: 0 28px 80px rgba(17, 24, 39, 0.26);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+}
+
+.dark.color-emerald {
+  --background: #16191b; /* --topbar */
+  --foreground: #f4f7f6; /* --topbar-ink */
+  --card: #2a2f31; /* --topbar-line */
+  --card-foreground: #f4f7f6;
+  --popover: #2a2f31; /* --topbar-line */
+  --popover-foreground: #f4f7f6;
+  --primary: #2fbfa4; /* --brand-bright */
+  --primary-foreground: #12211d; /* --ink-1 */
+  --secondary: #24322e; /* --ink-2 */
+  --secondary-foreground: #f4f7f6;
+  --muted: #24322e; /* --ink-2 */
+  --muted-foreground: #b4bfba; /* --topbar-muted */
+  --accent: #2a2f31; /* --topbar-line */
+  --accent-foreground: #2fbfa4; /* --brand-bright */
+  --destructive: #eec2b6; /* --danger-line */
+  --destructive-foreground: #12211d; /* --ink-1 */
+  --border: #2a2f31; /* --topbar-line */
+  --input: #2a2f31; /* --topbar-line */
+  --ring: #2fbfa4; /* --brand-bright */
+  --chart-1: #2fbfa4; /* --brand-bright */
+  --chart-2: #c4d7f0; /* --info-line */
+  --chart-3: #b6ddca; /* --success-line */
+  --chart-4: #f0dda6; /* --warning-line */
+  --chart-5: #b8623f; /* --accent */
+  --sidebar: #12211d; /* --ink-1 */
+  --sidebar-foreground: #f4f7f6; /* --topbar-ink */
+  --sidebar-primary: #2fbfa4; /* --brand-bright */
+  --sidebar-primary-foreground: #12211d; /* --ink-1 */
+  --sidebar-accent: #2a2f31; /* --topbar-line */
+  --sidebar-accent-foreground: #f4f7f6; /* --topbar-ink */
+  --sidebar-border: #2a2f31; /* --topbar-line */
+  --sidebar-ring: #2fbfa4; /* --brand-bright */
+  /* 表格：kkRepo 没有暗色 token，按上面的派生规则取深色系里同角色的值 */
+  --table-head-ink: #b4bfba; /* --topbar-muted（深底上的次要文字色）*/
+  --row-hover: rgba(
+    255,
+    255,
+    255,
+    0.09
+  ); /* --topbar-hover（kkRepo 唯一的深底悬浮填充；--ink-2 与卡片对比度只有 1.01，看不出悬浮）*/
+  --radius: 0.5rem; /* --r-md: 8px */
+  --shadow-2xs: 0 1px 2px rgba(17, 36, 31, 0.4);
+  --shadow-xs: 0 1px 2px rgba(17, 36, 31, 0.4);
+  --shadow-sm: 0 1px 2px rgba(17, 36, 31, 0.4);
+  --shadow: 0 8px 24px rgba(17, 36, 31, 0.5);
+  --shadow-md: 0 8px 24px rgba(17, 36, 31, 0.5);
+  --shadow-lg: 0 18px 44px rgba(17, 36, 31, 0.55);
+  --shadow-xl: 0 28px 80px rgba(17, 24, 39, 0.6);
+  --shadow-2xl: 0 28px 80px rgba(17, 24, 39, 0.6);
+}
+
+/* 侧边栏是深底，菜单选中项默认用 --primary/10 铺底、--primary 上色，深绿叠深绿
+   看不清。这里改用亮绿（--brand-bright）实底 + 深字的选中样式。 */
+.color-emerald [data-sidebar='menu-button'][data-active='true'],
+.color-emerald [data-sidebar='menu-sub-button'][data-active='true'] {
+  background-color: var(--sidebar-primary);
+  color: var(--sidebar-primary-foreground);
+}
+
+/* 菜单图标固定用 --sidebar-primary，选中时会同色叠在实底上，这里一并压成前景色。 */
+.color-emerald [data-sidebar='menu-button'][data-active='true'] svg,
+.color-emerald [data-sidebar='menu-sub-button'][data-active='true'] svg {
+  color: var(--sidebar-primary-foreground);
+}
+
+/* 表格：把 kkRepo 的 --table-head-ink / --row-hover 落到 Kite 的表格原语上
+   （原语写死了 text-foreground / hover:bg-muted/50）。表头底色走 --muted，
+   不需要规则。行悬浮限定了「含真实单元格的行」：resource-table-view 里展开的行
+   详情用的是原生 <td> 且刻意写成 hover:bg-muted/20（悬浮不变色），不能被这条规则
+   覆盖。 */
+.color-emerald [data-slot='table-head'] {
+  color: var(--table-head-ink);
+}
+.color-emerald [data-slot='table-row']:has([data-slot='table-cell']):hover {
+  background-color: var(--row-hover);
+}
