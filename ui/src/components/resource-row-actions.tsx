@@ -28,6 +28,7 @@ import {
   updateResource,
   type DeepPartial,
 } from '@/lib/api'
+import { getResourceFormEditPath } from '@/lib/resource-catalog'
 import { useCan } from '@/hooks/use-can'
 import {
   useDraftDirty,
@@ -61,9 +62,12 @@ import { YamlEditor } from '@/components/yaml-editor'
  * 行操作菜单覆盖的资源类型。
  *
  * 分组的依据是「有独立详情页、且能被表单编辑」：工作负载六类（Pod 也在内，它的容器镜像
- * 同样可以改）加 Service。要再加一类资源，在这里加类型、在 `resourceTraits` 里声明它支持
- * 哪些项即可——菜单项本身对所有类型是同一套（编辑 / 查看 YAML / 终端 / 修改镜像 /
- * 暂停恢复 / 滚动重启 / 回滚 / 标签注解 / 删除）。
+ * 同样可以改）加 Service、ConfigMap / Secret 与两种存储资源。要再加一类资源，在这里加
+ * 类型、在 `resourceTraits` 里声明它支持哪些项即可——菜单项本身对所有类型是同一套
+ * （编辑 / 查看 YAML / 终端 / 修改镜像 / 暂停恢复 / 滚动重启 / 回滚 / 标签注解 / 删除）。
+ *
+ * 新增表单编辑页时记得同步 `lib/resource-catalog.ts` 的 `getResourceFormEditPath`：
+ * 详情页标题栏的编辑按钮也从那里取路径。
  */
 export type RowActionResourceType =
   | 'deployments'
@@ -73,6 +77,8 @@ export type RowActionResourceType =
   | 'cronjobs'
   | 'pods'
   | 'services'
+  | 'configmaps'
+  | 'secrets'
   | 'persistentvolumes'
   | 'storageclasses'
 
@@ -236,6 +242,23 @@ const resourceTraits: Record<RowActionResourceType, ResourceTraits> = {
     rollback: false,
     pause: false,
   },
+  // ConfigMap / Secret 与 Service 同理：内容在 data 里，没有容器也没有历史版本。
+  configmaps: {
+    containers: null,
+    imagePatch: null,
+    terminal: false,
+    restart: false,
+    rollback: false,
+    pause: false,
+  },
+  secrets: {
+    containers: null,
+    imagePatch: null,
+    terminal: false,
+    restart: false,
+    rollback: false,
+    pause: false,
+  },
   persistentvolumes: {
     // 集群级资源：同样只有元数据与编辑（路径不带命名空间段）。
     containers: null,
@@ -279,6 +302,8 @@ export function ResourceRowActions<T extends RowActionResourceType>({
   const detailPath = namespace
     ? `/${resourceType}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`
     : `/${resourceType}/${encodeURIComponent(name)}`
+  // 编辑页的路径模板集中在 resource-catalog 里（详情页标题栏的编辑按钮同源）。
+  const editPath = getResourceFormEditPath(resourceType, name, namespace)
 
   const canRead = can(resourceType, 'get', { namespace })
   const canUpdate = can(resourceType, 'update', { namespace })
@@ -501,8 +526,8 @@ export function ResourceRowActions<T extends RowActionResourceType>({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          {canUpdate && (
-            <DropdownMenuItem onSelect={() => navigate(`${detailPath}/edit`)}>
+          {canUpdate && editPath && (
+            <DropdownMenuItem onSelect={() => navigate(editPath)}>
               <IconPencil className="size-4" />
               {t('common.actions.edit')}
             </DropdownMenuItem>

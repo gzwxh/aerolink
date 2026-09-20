@@ -94,6 +94,8 @@ describe('资源行操作菜单', () => {
     'cronjobs',
     'pods',
     'services',
+    'configmaps',
+    'secrets',
   ]
 
   // 编辑入口是核心诉求：这些类型的详情页都有编辑路由，
@@ -164,31 +166,34 @@ describe('资源行操作菜单', () => {
     expect(screen.queryByRole('menuitem', { name: 'RESTART' })).toBeNull()
   })
 
-  // Service 没有容器/历史版本：只有元数据与编辑，不能把工作负载那几项显示出来。
-  it('Service 只保留编辑、YAML、标签注解与删除', async () => {
-    await openMenu('services')
+  // 这些资源没有容器/历史版本：只有元数据与编辑，不能把工作负载那几项显示出来。
+  it.each(['services', 'configmaps', 'secrets'] as const)(
+    '%s 只保留编辑、YAML、标签注解与删除',
+    async (resourceType) => {
+      await openMenu(resourceType)
 
-    for (const label of [
-      'EDIT',
-      'VIEW_YAML',
-      'LABELS',
-      'ANNOTATIONS',
-      'DELETE',
-    ]) {
-      expect(
-        await screen.findByRole('menuitem', { name: label })
-      ).toBeInTheDocument()
+      for (const label of [
+        'EDIT',
+        'VIEW_YAML',
+        'LABELS',
+        'ANNOTATIONS',
+        'DELETE',
+      ]) {
+        expect(
+          await screen.findByRole('menuitem', { name: label })
+        ).toBeInTheDocument()
+      }
+      for (const label of [
+        'TERMINAL',
+        'EDIT_IMAGE',
+        'RESTART',
+        'ROLLBACK',
+        'PAUSE',
+      ]) {
+        expect(screen.queryByRole('menuitem', { name: label })).toBeNull()
+      }
     }
-    for (const label of [
-      'TERMINAL',
-      'EDIT_IMAGE',
-      'RESTART',
-      'ROLLBACK',
-      'PAUSE',
-    ]) {
-      expect(screen.queryByRole('menuitem', { name: label })).toBeNull()
-    }
-  })
+  )
 
   // 集群级资源（PV / StorageClass）没有命名空间段：编辑路径是 /:resource/:name/edit。
   // 写成 /:resource/:namespace/:name/edit 会直接 404，而这两个页面只在列表菜单里进出，

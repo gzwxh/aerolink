@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { ResourceType, ResourceTypeMap } from '@/types/api'
 import { updateResource, useResource } from '@/lib/api'
+import { getResourceFormEditPath } from '@/lib/resource-catalog'
 import { EventTable } from '@/components/event-table'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ResourceHistoryTable } from '@/components/resource-history-table'
@@ -86,6 +87,8 @@ export function SimpleResourceDetail<T extends ResourceType>(props: {
       error={error}
       onRefresh={refetch}
       onSaveYaml={handleSaveYaml}
+      // 这些资源都还只有通用详情页（没有专用的 detailPage），编辑入口就靠这个路径。
+      editPath={getResourceFormEditPath(resourceType, name, namespace)}
       overview={
         data ? (
           <ResourceOverview

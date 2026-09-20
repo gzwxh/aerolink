@@ -9,6 +9,7 @@ import {
 import {
   IconCopy,
   IconLoader,
+  IconPencil,
   IconRefresh,
   IconTrash,
 } from '@tabler/icons-react'
@@ -61,6 +62,11 @@ interface ResourceDetailShellProps<T> {
   preYamlTabs?: ResourceDetailShellTab<T>[]
   extraTabs?: ResourceDetailShellTab<T>[]
   headerActions?: ReactNode
+  /**
+   * 有可视化表单编辑页的资源传入该路径，标题栏就会多一个「编辑」按钮
+   * （路径来源见 `lib/resource-catalog.ts` 的 `getResourceFormEditPath`）。
+   */
+  editPath?: string
   titleIcon?: ReactNode
   yamlToolbar?:
     ReactNode | ((context: ResourceDetailShellContext<T>) => ReactNode)
@@ -97,6 +103,7 @@ export function ResourceDetailShell<T>({
   preYamlTabs = [],
   extraTabs = [],
   headerActions,
+  editPath,
   titleIcon,
   yamlToolbar,
   loadingMessage,
@@ -374,6 +381,12 @@ export function ResourceDetailShell<T>({
               </div>
             </div>
             <div className="flex w-full flex-wrap gap-2 md:w-auto md:justify-end">
+              {canUpdate && editPath ? (
+                <Button size="sm" onClick={() => navigate(editPath)}>
+                  <IconPencil className="size-4" />
+                  {t('common.actions.edit')}
+                </Button>
+              ) : null}
               <Button
                 disabled={isRefreshing}
                 variant="outline"

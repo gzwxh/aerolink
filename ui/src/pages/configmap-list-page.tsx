@@ -7,11 +7,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { DataKeysCell } from '@/components/data-keys-cell'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 const configMapSearchFilter = createSearchFilter<ConfigMap>(
@@ -59,26 +56,10 @@ export function ConfigMapListPage() {
       columnHelper.accessor((row) => Object.keys(row.data || {}).join(', '), {
         id: 'data',
         header: t('common.fields.keys', 'Data Keys'),
-        cell: ({ row }) => {
-          const data = row.original.data || {}
-          const keys = Object.keys(data)
-          if (keys.length === 0) {
-            return '-'
-          }
-          const keyList = keys.join(', ')
-          return (
-            <Tooltip>
-              <TooltipTrigger>
-                <span className="line-clamp-2 max-w-64 break-all text-left text-muted-foreground">
-                  {keyList}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="max-w-sm break-all">{keyList}</p>
-              </TooltipContent>
-            </Tooltip>
-          )
-        },
+        // 键的数量与长度都不受控：只显示一行，其余交给 tooltip。
+        cell: ({ row }) => (
+          <DataKeysCell keys={Object.keys(row.original.data || {})} />
+        ),
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
         header: t('common.fields.created', 'Created'),
@@ -89,6 +70,20 @@ export function ConfigMapListPage() {
             <span className="text-muted-foreground text-sm">{dateStr}</span>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="configmaps"
+              resource={row.original}
+            />
+          </div>
+        ),
       }),
     ],
     [t]

@@ -12,11 +12,12 @@ import { expectStatus } from '../support/admin-api'
  *   1. 这些列表都有操作入口；
  *   2. 菜单里的「编辑」直接跳到编辑页。
  *
- * 覆盖工作负载六类（含 Pod）与 Service —— 它们都走同一个行操作菜单
- * （`ui/src/components/resource-row-actions.tsx`）。
+ * 覆盖工作负载六类（含 Pod）、Service、ConfigMap / Secret、PV / StorageClass —— 它们都走
+ * 同一个行操作菜单（`ui/src/components/resource-row-actions.tsx`）。
  *
  * 每类只种一个「跑不起来」的对象（命中不了的 nodeSelector / replicas 0 /
- * 永不触发的 cron 表达式 / 立刻失败退出的 Job / 什么都不选中的 Service），
+ * 永不触发的 cron 表达式 / 立刻失败退出的 Job / 什么都不选中的 Service，
+ * ConfigMap 与 Secret 则是纯数据、不会跑起来任何东西），
  * 用例自清理，不在集群里留下负载。
  *
  * 需要先种对象的原因：列表为空时页面渲染的是空态、整张表（含表头）都不出现。
@@ -38,7 +39,17 @@ const uniqueName = (kind: string) =>
   `zz-e2e-listact-${kind}-${Date.now().toString(36)}`
 
 type RowActionKind =
-  'pods' | 'deployments' | 'statefulsets' | 'daemonsets' | 'jobs' | 'cronjobs'
+  | 'pods'
+  | 'deployments'
+  | 'statefulsets'
+  | 'daemonsets'
+  | 'jobs'
+  | 'cronjobs'
+  | 'services'
+  | 'configmaps'
+  | 'secrets'
+  | 'persistentvolumes'
+  | 'storageclasses'
 
 const podTemplate = (name: string, extra = '') => `    spec:
       # 没有节点带这个标签：即使调度器看到了，也不会有 Pod 落到真节点上。
@@ -159,6 +170,24 @@ spec:
     - port: 80
       targetPort: 80
 `,
+  configmaps: (name) => `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+data:
+  app.conf: |
+    key = value
+`,
+  secrets: (name) => `apiVersion: v1
+kind: Secret
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+type: Opaque
+stringData:
+  password: e2e
+`,
   cronjobs: (name) => `apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -242,6 +271,8 @@ test.describe('list row actions', () => {
   const editFromList = [
     { kind: 'deployments', search: 'Deployments', identity: 'unique-name' },
     { kind: 'services', search: 'Services', identity: 'my-service' },
+    { kind: 'configmaps', search: 'ConfigMaps', identity: 'Enter a name' },
+    { kind: 'secrets', search: 'Secrets', identity: 'Enter a name' },
     {
       kind: 'persistentvolumes',
       search: 'Persistent Volumes',

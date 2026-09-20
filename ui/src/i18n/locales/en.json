@@ -1039,6 +1039,7 @@
     "batchActionFailed": "{{count}} resources failed",
     "batchActionPartialResult": "Completed {{succeeded}} of {{total}} resources.",
     "failedResources": "{{count}} failed resources",
+    "keyCount": "{{count}} key(s)",
     "batchActions": {
       "cordonNodesTitle": "Cordon {{count}} selected nodes?",
       "cordonNodesDescription": "Selected nodes will stop accepting new Pods. Existing Pods will keep running.",

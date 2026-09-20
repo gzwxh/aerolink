@@ -100,7 +100,7 @@
 | 工作负载列表/详情 | `ui/src/pages/{deployment,statefulset,daemonset,cronjob,job,pod}-{list-page,detail}.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/{deployment,statefulset,daemonset}_handler.go` | — |
 | 工作负载创建/编辑表单 | `ui/src/pages/deployment-create-page.tsx`、`ui/src/components/workload-container-sections.tsx`、`workload-container-security.tsx`、`ui/src/components/editors/deployment-form.ts`（编辑模式下的合并规则见 `mergeEditedManifest`） | `ui/src/lib/api/core.ts` | `pkg/resources/apply_handler.go` | — （**表单不生成 Service**：端口只描述容器端口，关联的 Service 只读展示见下一行） |
 | 工作负载编辑入口（Deployment / StatefulSet / DaemonSet / Job / CronJob 同一套） | 路由 `ui/src/routes.tsx` 的 `…/:namespace/:name/edit`；详情页 `headerActions` 里的「编辑」按钮 | — | — | 口径见 `docs/dev/plans/2026-09-20-workload-edit-parity.md` |
-| 对象编辑入口（工作负载六类 + Service + PV / StorageClass） | 表单编辑：路由 `ui/src/routes.tsx` 的 `…/:name/edit`（工作负载/Svc 带命名空间段，PV/SC 是集群级）；同一个 create page 靠 `:name` 切创建/编辑；提交前的字段合并见 `ui/src/lib/{service,pv,storageclass}-yaml.ts`；列表入口是 `ui/src/components/resource-row-actions.tsx` 的「编辑」 | `ui/src/lib/api/core.ts` | `pkg/resources/apply_handler.go`、`generic_resource_handler_write.go` | 不可变字段的实测口径见 `plans/2026-09-20-service-form-edit.md` 与 `plans/2026-09-20-pv-sc-form-edit.md` |
+| 对象编辑入口（12 类可创建资源：工作负载六类 + Service + ConfigMap / Secret + PV / StorageClass + Namespace） | 表单编辑：路由 `ui/src/routes.tsx` 的 `…/:name/edit`（命名空间级带命名空间段，PV/SC 是集群级）；同一个 create page 靠 `:name` 切创建/编辑；提交前的字段合并见 `ui/src/lib/{configmap,secret,service,pv,storageclass}-yaml.ts`；编辑路径的唯一来源是 `ui/src/lib/resource-catalog.ts` 的 `getResourceFormEditPath`（`resource-catalog.test.ts` 会核对路由存在）；列表入口是 `ui/src/components/resource-row-actions.tsx` 的「编辑」，详情页入口是 `resource-detail-shell.tsx` 标题栏的编辑按钮 | `ui/src/lib/api/core.ts` | `pkg/resources/apply_handler.go`、`generic_resource_handler_write.go` | 不可变字段的实测口径见 `plans/2026-09-20-service-form-edit.md`、`plans/2026-09-20-pv-sc-form-edit.md`；编辑对等与列宽口径见 `plans/2026-09-20-edit-parity-and-list-column-width.md` |
 | 工作负载关联的 Service（只读 + 跳转） | `ui/src/components/associated-services.tsx`、`ui/src/lib/k8s.ts` 的 `servicesForWorkload`；服务列表页 `?search=` 预填（`resource-table.tsx` / `use-resource-table-state.ts` 的 `initialSearch`） | — | — | — |
 | 通知投递口径（只发订阅者） | — | — | `pkg/notification/service.go`（`SendEvent` / `resolveRecipients`）、`session_takeover.go` | `notification_subscriptions`、`notifications`（口径见 `docs/dev/plans/2026-09-20-console-ux-and-notification-fixes.md` §5） |
 | 容器编辑对话框 | `ui/src/components/container-edit-dialog.tsx`、`container-table.tsx`、`container-info-card.tsx` | `ui/src/lib/api/core.ts` | 同上 | — |
@@ -172,7 +172,8 @@
    - `ui/src/components/action-table.tsx`：设置类表格
    - `ui/src/components/resource-table-toolbar.tsx`：筛选/刷新间隔/列显示
    - 立刻刷新：`ui/src/components/refresh-button.tsx`（`resource-table` 把数据层的 `refetch` 透传成 `onRefresh`，按钮只负责反馈与去抖，**不要在里面另开请求**）
-   - 行操作菜单：`ui/src/components/resource-row-actions.tsx`（工作负载六类 + Service 共用；某类不支持某项就关掉 `resourceTraits` 里对应的开关，**不要**在每个页面另写一份菜单）；列表页只负责加一列 `columnHelper.display({ id: 'actions' })`
+   - 行操作菜单：`ui/src/components/resource-row-actions.tsx`（工作负载六类 + Service + ConfigMap / Secret + PV / StorageClass 共用；某类不支持某项就关掉 `resourceTraits` 里对应的开关，**不要**在每个页面另写一份菜单）；列表页只负责加一列 `columnHelper.display({ id: 'actions' })`，且必须是最后一列
+   - 不受控长度的单元格：`ui/src/components/data-keys-cell.tsx`（ConfigMap / Secret 的「键」列，单行截断 + tooltip；集群里出现过 150+ 个键的 ConfigMap，铺开能把表格撑宽一倍）
 3. **表单与编辑器**：
    - 表单数据层（类型 + 初值 + 生成 + 编辑时的合并）：`ui/src/lib/pv-yaml.ts`、
      `storageclass-yaml.ts`、`configmap-yaml.ts`、`service-yaml.ts`；页面只消费它们，
@@ -212,7 +213,7 @@
 | --- | --- |
 | 新增资源类型 | `pkg/common/resource.go` → `pkg/resources/handler.go` → `ui/src/lib/resource-catalog.ts` →（如需专用页面）`ui/src/pages/resource-definitions.tsx` |
 | 新增"创建页" | 照 `ui/src/pages/secret-create-page.tsx`（表单页范式）；路由加到 `ui/src/routes.tsx`；列表页加 `showCreateButton`/`onCreateClick` |
-| 给某类资源加「编辑」 | 路由 `…/:namespace/:name/edit` **复用创建页**（同一个组件靠 `:name` 切换）→ 表单数据层加「线上对象 → 表单」与「叠加回线上对象」两个函数（如 `lib/service-yaml.ts` 的 `formFromService` / `mergeServiceUpdate`）→ 详情页 `headerActions` 加按钮。**不可变字段与表单没建模的字段必须从线上对象带过去**，否则 API 会以 `field is immutable` 拒绝；反过来，表单能清空的字段（如 Service 的 selector）要显式删掉，不能只做覆盖合并。 |
+| 给某类资源加「编辑」 | 路由 `…/:namespace/:name/edit` **复用创建页**（同一个组件靠 `:name` 切换）→ 表单数据层加「线上对象 → 表单」与「叠加回线上对象」两个函数（如 `lib/service-yaml.ts` 的 `formFromService` / `mergeServiceUpdate`）→ 详情页加编辑入口（通用详情页把路径传到 `ResourceDetailShell` 的 `editPath`）→ 在 `ui/src/lib/resource-catalog.ts` 的 `formEditableResourceTypes` 里登记（漏登记时列表与详情页都不会出现编辑入口，单测会报错）。**不可变字段与表单没建模的字段必须从线上对象带过去**，否则 API 会以 `field is immutable` 拒绝；反过来，表单能清空的字段（如 Service 的 selector）要显式删掉，不能只做覆盖合并。 |
 | 新增设置项 | 后端 `pkg/settings/*` + `pkg/model/*_setting.go`；前端 `ui/src/components/settings/*` + `settings-sections.tsx`（标签与权限门）+ 两个 locale |
 | 新增通知事件 | `pkg/model/notification.go`（事件常量 + 默认模板 + `NotificationEventList`）→ 触发点（`pkg/notification/*`）→ i18n |
 | 改「通知发给谁」 | `pkg/model/notification.go`（接收者类型常量 + `ListEnabledUsers`）→ `pkg/notification/service.go` 的 `resolveRecipients`（投递时展开）→ `pkg/notification/handler.go`（创建订阅的校验）→ `ui/src/components/settings/notification-management.tsx`；口径见 `plans/2026-09-20-notification-all-users-recipient.md` |

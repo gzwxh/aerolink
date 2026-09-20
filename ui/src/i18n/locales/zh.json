@@ -1039,6 +1039,7 @@
     "batchActionFailed": "{{count}} 个资源操作失败",
     "batchActionPartialResult": "已完成 {{succeeded}}/{{total}} 个资源。",
     "failedResources": "{{count}} 个失败资源",
+    "keyCount": "共 {{count}} 个键",
     "batchActions": {
       "cordonNodesTitle": "停止所选 {{count}} 个节点的调度？",
       "cordonNodesDescription": "所选节点将停止接受新的 Pod，现有 Pod 会继续运行。",

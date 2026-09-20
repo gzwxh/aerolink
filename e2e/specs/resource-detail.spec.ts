@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test'
 
-import { e2eNodeName } from '../env'
+import { e2eContextName, e2eNodeName } from '../env'
+import { expectStatus } from '../support/admin-api'
 
 const nodeName = e2eNodeName
+const clusterPath = `/api/v1/_clusters/${encodeURIComponent(e2eContextName)}`
 
 test.describe('resource detail navigation', () => {
   test('navigates from the services list to service detail', async ({
@@ -148,4 +150,68 @@ spec:
 
     await page.waitForURL('**/pods')
   })
+
+  // PV / StorageClass 没有专用详情组件，走的是通用详情页。它们的表单编辑页
+  // 以前只能从列表的操作菜单进入，详情页上没有任何入口：这里锁住标题栏的
+  // 「编辑」按钮（路径由 lib/resource-catalog 的 getResourceFormEditPath 推导）。
+  const storageDetails = [
+    {
+      kind: 'persistentvolumes' as const,
+      identity: 'pv-data-01',
+      yaml: (name: string) => `apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ${name}
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/volumes/${name}
+    type: DirectoryOrCreate
+`,
+    },
+    {
+      kind: 'storageclasses' as const,
+      identity: 'fast-ssd',
+      yaml: (name: string) => `apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ${name}
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+`,
+    },
+  ]
+
+  for (const { kind, identity, yaml } of storageDetails) {
+    test(`${kind} 的详情页标题栏可以直接进编辑页`, async ({
+      page,
+      request,
+    }) => {
+      const name = `zz-e2e-detail-edit-${Date.now().toString(36)}`
+      try {
+        await expectStatus(
+          await request.post(`${clusterPath}/resources/apply`, {
+            data: { yaml: yaml(name) },
+          }),
+          200
+        )
+
+        await page.goto(`/${kind}/${name}`)
+        await page.getByRole('button', { name: 'Edit', exact: true }).click()
+
+        await page.waitForURL(`**/${kind}/${name}/edit`)
+        const nameInput = page.getByPlaceholder(identity, { exact: true })
+        await expect(nameInput).toHaveValue(name)
+        await expect(nameInput).toBeDisabled()
+      } finally {
+        await request
+          .delete(`${clusterPath}/${kind}/_all/${name}`)
+          .catch(() => undefined)
+      }
+    })
+  }
 })
