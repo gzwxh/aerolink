@@ -43,7 +43,7 @@ helm upgrade --install kite charts/kite -n kite-system --create-namespace \
   -f charts/kite/examples/swr-dsy.yaml
 ```
 
-镜像的构建与推送（含国内网络下的基础镜像、npm / Go 依赖源参数，以及 Docker Hub、gcr.io 不通时的处理）见[构建并推送 Kite 镜像](../../docsCN/guide/build-and-push-image.md)。
+镜像的构建与推送（含国内网络下的基础镜像、npm / Go 依赖源参数，以及 Docker Hub、gcr.io 不通时的处理）见[构建并推送 Kite 镜像](../../docs/guide/build-and-push-image.md)。
 
 > **提示**：华为云 SWR 个人版不接受 Helm OCI 制品（`helm push` 会报 `manifest invalid: Invalid image, fail to parse 'manifest.json'`），因此自建 chart 建议直接从仓库目录安装（`helm install kite charts/kite`），或用 `helm package` 生成 tgz 后通过其它渠道分发。
 
@@ -66,7 +66,7 @@ helm uninstall kite -n kube-system
 
 | 参数                                                       | 说明                                                     | 默认值                        |
 | ---------------------------------------------------------- | -------------------------------------------------------- | ----------------------------- |
-| `image.repository`                                         | 镜像仓库                                                 | `ghcr.io/kite-org/kite`       |
+| `image.repository`                                         | 镜像仓库                                                 | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite`       |
 | `image.tag`                                                | 镜像标签，留空时使用 chart 的 `appVersion`               | `""`                          |
 | `imagePullSecrets`                                         | 私有镜像仓库的拉取凭据                                   | `[]`                          |
 | `replicaCount`                                             | 副本数（使用 SQLite 时请保持 1）                         | `1`                           |
@@ -84,7 +84,7 @@ helm uninstall kite -n kube-system
 | `rbac.create`                                              | 创建 chart 自带的 RBAC 资源                              | `true`                        |
 | `serviceAccount.create` / `serviceAccount.automount`       | 创建 ServiceAccount / 自动挂载 API 凭据                  | `true` / `true`               |
 
-完整参数表见 [Chart Values](../../docsCN/config/chart-values.md)。
+完整参数表见 [Chart Values](../../docs/config/chart-values.md)。
 
 ### 启用持久化（SQLite）
 
@@ -117,7 +117,7 @@ config:
     syncIntervalMinutes: 10 # 同步间隔（分钟，默认 10）
 ```
 
-`config.ldap` 支持 `enabled`、`serverUrl`、`useStartTLS`、`bindDn`、`bindPassword`、`userBaseDn`、`userFilter`、`usernameAttribute`、`displayNameAttribute`、`groupBaseDn`、`groupFilter`、`groupNameAttribute`、`autoSync`、`syncIntervalMinutes`，字段含义见[配置文件](../../docsCN/config/config-file.md)。
+`config.ldap` 支持 `enabled`、`serverUrl`、`useStartTLS`、`bindDn`、`bindPassword`、`userBaseDn`、`userFilter`、`usernameAttribute`、`displayNameAttribute`、`groupBaseDn`、`groupFilter`、`groupNameAttribute`、`autoSync`、`syncIntervalMinutes`，字段含义见[配置文件](../../docs/config/config-file.md)。
 
 ### 私有仓库拉取凭据
 
@@ -140,9 +140,39 @@ helm package charts/kite -d dist
 
 ## 相关文档
 
-- [安装指南](../../docsCN/guide/installation.md)
-- [Chart Values 全量参数](../../docsCN/config/chart-values.md)
-- [构建并推送 Kite 镜像](../../docsCN/guide/build-and-push-image.md)
-- [配置文件（config.yaml）](../../docsCN/config/config-file.md)
-- [环境变量](../../docsCN/config/env.md)
-- [常见问题](../../docsCN/faq.md)
+- [安装指南](../../docs/guide/installation.md)
+- [Chart Values 全量参数](../../docs/config/chart-values.md)
+- [构建并推送 Kite 镜像](../../docs/guide/build-and-push-image.md)
+- [配置文件（config.yaml）](../../docs/config/config-file.md)
+- [环境变量](../../docs/config/env.md)
+- [常见问题](../../docs/faq.md)
+
+## 版本分发（当前：压缩包形式）
+
+公司尚未搭建 Helm 仓库，当前版本以 **`.tgz` 压缩包** 形式分发，随仓库一起维护：
+
+- 压缩包：`charts/kite-1.0.0.tgz`（由 `helm package charts/kite -d charts/` 生成）
+- 镜像：`swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:dsy-v1.0.0`（chart 默认值已指向公司 SWR）
+
+### 安装
+
+```bash
+helm install kite charts/kite-1.0.0.tgz \
+  --namespace kite-system --create-namespace
+```
+
+如需覆盖镜像或配置：
+
+```bash
+helm install kite charts/kite-1.0.0.tgz \
+  --namespace kite-system --create-namespace \
+  -f my-values.yaml
+```
+
+### 后续切换到仓库托管
+
+公司确定搭建 Helm 仓库（ChartMuseum / Harbor / SWR 的 OCI 能力）后：
+
+1. `helm repo add <名称> <仓库地址> && helm repo update`；
+2. `helm push charts/kite-1.0.0.tgz <名称>`（OCI 仓库用 `helm push charts/kite-1.0.0.tgz oci://<地址>/<命名空间>`）；
+3. 安装方式改为 `helm install kite <名称>/kite --version 1.0.0`，并更新本文档。

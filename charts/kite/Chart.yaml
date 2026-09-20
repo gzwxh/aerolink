@@ -3,23 +3,18 @@ name: kite
 description: A Helm chart for Kubernetes
 icon: https://kite.zzde.me/logo.svg
 
-# A chart can be either an 'application' or a 'library' chart.
+# chart 的 type 可以是 'application' 或 'library'。
 #
-# Application charts are a collection of templates that can be packaged into versioned archives
-# to be deployed.
+# application 类型的 chart 是一组模板，可以打包成带版本的归档用于部署。
 #
-# Library charts provide useful utilities or functions for the chart developer. They're included as
-# a dependency of application charts to inject those utilities and functions into the rendering
-# pipeline. Library charts do not define any templates and therefore cannot be deployed.
+# library 类型的 chart 只提供可复用的工具与函数，作为 application chart 的依赖引入，
+# 把工具与函数注入渲染流程。library chart 不定义任何模板，因此不能直接部署。
 type: application
 
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.15.0
+# chart 版本号。每次修改 chart 或其模板（包括 app 版本）都应递增。
+# 版本号遵循语义化版本规范（https://semver.org/）
+version: 1.0.0
 
-# This is the version number of the application being deployed. This version number should be
-# incremented each time you make changes to the application. Versions are not expected to
-# follow Semantic Versioning. They should reflect the version the application is using.
-# It is recommended to use it with quotes.
-appVersion: "v0.15.0"
+# 这是部署的应用自身的版本号。每次修改应用都应递增；它不要求遵循
+# 语义化版本，反映应用使用的版本即可。建议用引号包裹。
+appVersion: "dsy-v1.0.0"

@@ -1,139 +1,144 @@
-# Default values for kite.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# kite 的默认配置值。
+# 这是一个 YAML 格式的文件。
+# 声明需要传入模板的变量。
 
-# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+# 设置 replicaset 数量，更多信息见：https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
 replicaCount: 1
 
-# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+# 设置容器镜像，更多信息见：https://kubernetes.io/docs/concepts/containers/images/
 image:
-  repository: ghcr.io/kite-org/kite
-  # This sets the pull policy for images.
+  repository: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite
+  # 设置镜像的拉取策略。
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
+  # 覆盖镜像 tag，其默认值为 chart 的 appVersion。
   tag:
 
-# This will set the deployment strategy. More information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+# 设置 Deployment 的更新策略。更多信息见：https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
 #
-# IMPORTANT: If persistence is enabled and using SQLite with a
-# ReadWriteOnce PersistentVolumeClaim, you MUST set this to "Recreate".
-# Using "RollingUpdate" will cause pod conflicts during upgrades because multiple
-# pods cannot mount the same RWO volume simultaneously.
+# 重要：如果启用了持久化，并且在 SQLite 场景下使用
+# ReadWriteOnce 的 PersistentVolumeClaim，则必须将其设置为 "Recreate"。
+# 使用 "RollingUpdate" 会导致升级期间出现 pod 冲突，因为
+# 多个 pod 无法同时挂载同一个 RWO 卷。
 deploymentStrategy:
   type: RollingUpdate
   # rollingUpdate:
   #   maxSurge: 25%
   #   maxUnavailable: 25%
 
-# This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+# 这是从私有仓库拉取镜像所需的 Secret，更多信息见：https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
-# This is to override the chart name.
+# 用于覆盖 chart 名称。
 nameOverride: ""
 fullnameOverride: ""
 
 debug: false
 
-# External Host for the application
-# Used in generate OAuth redirect URLs
-# Leave empty to obtain from request headers
-# Example: https://kite.zzde.me
+# 应用对外访问的 Host
+# 用于生成 OAuth 重定向 URL
+# 留空表示从请求头中获取
+# 示例：https://kite.zzde.me
 host: ""
 
-# Base path for the application
-# If you are serving kite under a subpath, set this value accordingly.
-# Remember to also set the ingress path to match.
-# Example: "/kite"
+# 应用的基础路径
+# 如果要把 kite 部署在子路径下，请相应地设置该值。
+# 记得同时把 ingress 的路径设置为一致。
+# 示例："/kite"
 basePath: ""
 
-# Set to true to enable the anonymous user with full-admin access
-# Be careful with this setting in production
+# 设为 true 以启用拥有完全管理员权限的匿名用户
+# 在生产环境使用该设置时请务必谨慎
 anonymousUserEnabled: false
 
-# Secret key for signing JWT tokens. Auto-generated if empty.
-# Ignored if using existingSecret
+# 用于签名 JWT token 的密钥。留空时自动生成。
+# 使用 existingSecret 时忽略该项
 jwtSecret: ""
 
-# This is the key used for encrypting sensitive data
-# Change this in production
-# Ignored if using existingSecret
-encryptKey: "kite-default-encryption-key-change-in-production"
+# 用于加密敏感数据的密钥。
+# 留空时会在首次安装时随机生成（生成的
+# 密钥通过 release 的 Secret 在升级时保留）。只有在
+# 自行管理密钥时（例如使用外部密钥存储）才应在生产环境设置；
+# 提交到版本控制的值等同于公钥。
+# 使用 existingSecret 时忽略该项
+encryptKey: ""
 
-# Secret handling
-# By default the chart will create a Kubernetes Secret containing sensitive values.
+# Secret 处理
+# 默认情况下，chart 会创建一个包含敏感值的 Kubernetes Secret。
 secret:
-  # Create the Secret from chart values (true) or reference an existing Secret (false)
+  # 从 chart 的 values 创建 Secret（true），或引用已有的 Secret（false）
   create: true
-  # If set, the deployment will use this existing secret name instead of the generated one (ignored when `create: true`).
-  # must contain all required keys.
+  # 若设置，Deployment 会使用这个已有的 secret 名称而不是自动生成的名称（当 `create: true` 时忽略）。
+  # 必须包含所有必需的键。
   #  JWT_SECRET
   #  KITE_ENCRYPT_KEY
-  #  DB_TYPE supported values: sqlite, postgres, mysql (defaults to sqlite if not set)
-  #  DB_DSN (not required for sqlite)
-  # if set, the db.dsn and db.type values from the chart will be ignored.
+  #  DB_TYPE 支持的值：sqlite、postgres、mysql（未设置时默认为 sqlite）
+  #  DB_DSN（sqlite 时不需要）
+  # 若设置，chart 中的 db.dsn 与 db.type 值将被忽略。
   existingSecret: ""
 
-# Database configuration
+# 数据库配置
 # type: sqlite | postgres | mysql
-# - sqlite: embedded DB (default). If you choose sqlite and want data to survive pod restarts,
-#   enable persistence below so a PVC will be used to store the sqlite file.
-# - postgres/mysql: connection fields for external DBs.
+# - sqlite：内嵌数据库（默认）。如果选择 sqlite 并希望数据在 pod 重启后仍然保留，
+#   请启用下面的 persistence，这样会用 PVC 存储 sqlite 文件。
+# - postgres/mysql：外部数据库的连接字段。
 db:
-  # supported values: sqlite, postgres, mysql
+  # 支持的值：sqlite、postgres、mysql
   type: sqlite
-  # full DSN string for MySQL/Postgres.
-  # when type is mysql/postgres, is required
-  # leave empty for use existingSecret to provide it when type is not sqlite
-  # Example: "mysql://user:password@tcp(host:port)/dbname"
+  # MySQL/Postgres 的完整 DSN 字符串。
+  # 当 type 为 mysql/postgres 时必填
+  # 当 type 不是 sqlite 时，留空表示由 existingSecret 提供
+  # 示例："mysql://user:password@tcp(host:port)/dbname"
   dsn: ""
   
-  # sqlite-specific options
+  # sqlite 专属选项
   sqlite:
-    # If true, the chart will create a PVC and mount it into the pod for the sqlite DB file.
-    # Set to false to use ephemeral storage (not recommended for production).
+    # 如果为 true，chart 会创建一个 PVC 并挂载到 pod 中用于存放 sqlite 数据库文件。
+    # 设为 false 则使用临时存储（不推荐用于生产环境）。
     persistence:
       pvc:
         enabled: false
         existingClaim: ""
-        # StorageClass to request for the PVC (optional)
+        # 为 PVC 申请的 StorageClass（可选）
         storageClass: ""
-        # accessModes for the PVC
+        # PVC 的 accessModes
         accessModes:
           - ReadWriteOnce
-        # requested size
+        # 申请的容量大小
         size: 1Gi
       hostPath:
         enabled: false
         path: /path/to/host/dir
         type: DirectoryOrCreate
-      # where to mount inside the container
+      # 在容器内的挂载位置
       mountPath: /data
-      # sqlite filename inside the mountPath
+      # mountPath 下的 sqlite 文件名
       filename: kite.db
-    # Additional sqlite database connection options
-    # Example: "_journal_mode=WAL&_busy_timeout=5000"
+    # 额外的 sqlite 数据库连接选项，会以 "/<filename>?<options>" 形式追加到 DSN。
+    # 仅支持 pure-Go 驱动的 "_pragma=..." 形式；mattn 风格的
+    # "_journal_mode=WAL&_busy_timeout=5000" 会被静默忽略。
+    # 示例："_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
     options: ""
 extraEnvs:
   # - name: "EXAMPLE_ENV"
   #   value: "example_value"
 
-# Application configuration from values
-# When enabled, the specified sections become read-only in the UI.
-# You can either provide an existing Secret containing a config.yaml key,
-# or define the configuration inline below.
+# 通过 values 配置应用
+# 启用后，指定的配置项在界面上会变为只读。
+# 你可以提供一个包含 config.yaml 键的已有 Secret，
+# 也可以在下面直接内联定义配置。
 config:
   enabled: false
-  # Name of an existing Secret containing a `config.yaml` key.
-  # When set, the inline config below is ignored.
-  # The user is responsible for creating and managing this Secret.
-  # Example: kubectl create secret generic kite-config --from-file=config.yaml=./my-config.yaml
+  # 包含 `config.yaml` 键的已有 Secret 名称。
+  # 设置后，下面的内联配置会被忽略。
+  # 该 Secret 由用户自行创建和管理。
+  # 示例：kubectl create secret generic kite-config --from-file=config.yaml=./my-config.yaml
   existingSecret: ""
-  # --- Inline configuration (used when existingSecret is empty) ---
-  # Super user configuration (created if the user doesn't exist, password updated on restart)
+  # --- 内联配置（existingSecret 为空时使用） ---
+  # 超级用户配置（用户不存在时创建，重启时更新密码）
   # superUser:
   #   username: "admin"
   #   password: "change-me-in-production"
-  # Sensitive values support ${ENV_VAR} placeholders, expanded from environment
-  # variables at startup. Use extraEnvs to inject secrets from Kubernetes Secrets:
+  # 敏感值支持 ${ENV_VAR} 占位符，启动时会从环境
+  # 变量中展开。使用 extraEnvs 从 Kubernetes Secret 注入密钥：
   #
   # extraEnvs:
   #   - name: PROD_KUBECONFIG
@@ -147,7 +152,7 @@ config:
   #         name: my-oauth-secrets
   #         key: google-client-secret
   #
-  # Then reference them in the config below:
+  # 然后在下面的配置中引用它们：
   # clusters:
   #   - name: production
   #     config: "${PROD_KUBECONFIG}"
@@ -155,7 +160,7 @@ config:
   #   - name: google
   #     clientSecret: "${OAUTH_SECRET}"
   #
-  # Cluster configurations
+  # 集群配置
   # clusters:
   #   - name: production
   #     description: "Production cluster"
@@ -168,7 +173,7 @@ config:
   #   - name: in-cluster
   #     inCluster: true
   #
-  # OAuth provider configurations
+  # OAuth 提供方配置
   # oauth:
   #   - name: google
   #     clientId: "xxx.apps.googleusercontent.com"
@@ -177,7 +182,7 @@ config:
   #     scopes: "openid,profile,email"
   #     enabled: true
   #
-  # LDAP configuration (full field list: docs/config/config-file.md)
+  # LDAP 配置（完整字段列表：docs/config/config-file.md）
   # ldap:
   #   enabled: true
   #   serverUrl: "ldaps://ldap.example.com:636"
@@ -191,11 +196,11 @@ config:
   #   groupBaseDn: "ou=groups,dc=example,dc=com"
   #   groupFilter: "(member=%s)"
   #   groupNameAttribute: "cn"
-  #   # Periodically sync directory users (enabled by default, every 10 minutes)
+  #   # 定期同步目录用户（默认启用，每 10 分钟一次）
   #   autoSync: true
   #   syncIntervalMinutes: 10
   #
-  # RBAC configuration (roles and role mappings)
+  # RBAC 配置（角色与角色映射）
   # rbac:
   #   roles:
   #     - name: admin
@@ -209,16 +214,16 @@ config:
   #       users: ["alice"]
   #       oidcGroups: ["admins"]
 
-# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+# 本节用于构建 service account，更多信息见：https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
-  # Specifies whether a service account should be created
+  # 指定是否创建 service account
   create: true
-  # Automatically mount a ServiceAccount's API credentials?
+  # 是否自动挂载 ServiceAccount 的 API 凭据？
   automount: true
-  # Annotations to add to the service account
+  # 添加到 service account 的 Annotations
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # 要使用的 service account 名称。
+  # 如果未设置且 create 为 true，则会使用 fullname 模板生成名称
   name: ""
 
 rbac:
@@ -230,11 +235,11 @@ rbac:
     - nonResourceURLs: ["*"]
       verbs: ["*"]
 
-# This is for setting Kubernetes Annotations to a Pod.
-# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+# 用于为 Pod 设置 Kubernetes Annotations。
+# 更多信息见：https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 podAnnotations: {}
-# This is for setting Kubernetes Labels to a Pod.
-# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+# 用于为 Pod 设置 Kubernetes Labels。
+# 更多信息见：https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
 
 podSecurityContext:
@@ -250,14 +255,14 @@ securityContext:
   # runAsNonRoot: true
   # runAsUser: 1000
 
-# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+# 用于配置 service，更多信息见：https://kubernetes.io/docs/concepts/services-networking/service/
 service:
-  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+  # 设置 service 类型，更多信息见：https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
   type: ClusterIP
-  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+  # 设置端口，更多信息见：https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
   port: 8080
 
-# This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
+# 本段用于配置 ingress，更多信息见：https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
   enabled: false
   className: "nginx"
@@ -271,35 +276,35 @@ ingress:
   #  - hosts:
   #      - kite.zzde.me
 
-# Gateway API resources for exposing Kite
-# Requires Gateway API CRDs to be installed in the cluster
-# For more information: https://gateway-api.sigs.k8s.io/
+# 用于对外暴露 Kite 的 Gateway API 资源
+# 需要集群中已安装 Gateway API CRD
+# 更多信息见：https://gateway-api.sigs.k8s.io/
 gateway:
   enabled: false
-  # GatewayClass name - must exist in cluster
-  # Examples: "istio", "cilium", "nginx", "envoy-gateway"
+  # GatewayClass 名称——必须已存在于集群中
+  # 示例："istio"、"cilium"、"nginx"、"envoy-gateway"
   className: ""
-  # Set to true to create a new Gateway resource
-  # Set to false to use an existing Gateway
+  # 设为 true 以创建新的 Gateway 资源
+  # 设为 false 以使用已有的 Gateway
   create: false
-  # Name of the Gateway (used for both creating new or referencing existing)
+  # Gateway 名称（创建新 Gateway 或引用已有 Gateway 时都会用到）
   name: ""
-  # Namespace of existing Gateway (only used when create is false)
-  # Defaults to release namespace if not specified
+  # 已有 Gateway 的命名空间（仅在 create 为 false 时使用）
+  # 未指定时默认为 release 所在的命名空间
   namespace: ""
-  # Annotations for the Gateway (only used when create is true)
+  # Gateway 的 Annotations（仅在 create 为 true 时使用）
   annotations: {}
-  # Gateway listeners configuration (only used when create is true)
+  # Gateway listener 配置（仅在 create 为 true 时使用）
   listeners:
     - name: http
       port: 80
       protocol: HTTP
-      # Optional hostname for the listener
+      # listener 的可选 hostname
       # hostname: "*.example.com"
       allowedRoutes:
         namespaces:
           from: Same
-    # Uncomment to add HTTPS listener
+    # 取消注释以添加 HTTPS listener
     # - name: https
     #   port: 443
     #   protocol: HTTPS
@@ -311,15 +316,15 @@ gateway:
     #     mode: Terminate
     #     certificateRefs:
     #       - name: kite-tls-secret
-  # HTTPRoute configuration (supports multiple routes)
+  # HTTPRoute 配置（支持配置多条路由）
   httpRoutes:
     - name: kite
-      # Annotations for the HTTPRoute
+      # HTTPRoute 的 Annotations
       annotations: {}
-      # Hostnames to match (optional, matches all if empty)
+      # 要匹配的 Hostname（可选，留空则匹配所有）
       hostnames: []
         # - kite.example.com
-      # Routing rules
+      # 路由规则
       rules:
         - matches:
             - path:
@@ -327,7 +332,7 @@ gateway:
                 value: /
           timeouts:
             request: "120s"
-    # Example: additional route for different hostname/path
+    # 示例：为不同的 hostname/路径添加路由
     # - name: kite-api
     #   annotations: {}
     #   hostnames:
@@ -340,10 +345,10 @@ gateway:
 
 resources:
   {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # 我们通常建议不指定默认的 resources，而是把这项决定留给用户
+  # 自行斟酌。这样也能提高 chart 在资源较少的环境（如 Minikube）中运行
+  # 的成功率。如果你确实想指定 resources，请取消下面几行的注释，
+  # 按需调整，并删除 'resources:' 后面的花括号。
   # limits:
   #   cpu: 100m
   #   memory: 128Mi
@@ -351,7 +356,7 @@ resources:
   #   cpu: 100m
   #   memory: 128Mi
 
-# This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+# 用于配置 liveness 与 readiness 探针，更多信息见：https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 livenessProbe:
   httpGet:
     path: /healthz
@@ -364,14 +369,14 @@ readinessProbe:
     port: http
   initialDelaySeconds: 10
   periodSeconds: 10
-# Additional volumes on the output Deployment definition.
+# 追加到渲染出的 Deployment 定义上的额外 volumes。
 volumes: []
 # - name: foo
 #   secret:
 #     secretName: mysecret
 #     optional: false
 
-# Additional volumeMounts on the output Deployment definition.
+# 追加到渲染出的 Deployment 定义上的额外 volumeMounts。
 volumeMounts: []
 # - name: foo
 #   mountPath: "/etc/foo"

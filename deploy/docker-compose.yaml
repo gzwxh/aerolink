@@ -1,0 +1,74 @@
+# Kite Docker Compose 部署清单（外部 MySQL 数据库版）
+#
+# 与 deploy/install-mysql.yaml 等价的单机部署方式：不需要 Kubernetes，只要一台
+# 能跑 docker compose 的机器。数据全部在外部 MySQL 里，容器本身无状态，
+# 重建容器不会丢数据。
+#
+# 使用前必改项（搜索 REPLACE-ME）：
+#   1. JWT_SECRET / KITE_ENCRYPT_KEY —— 用 `openssl rand -base64 32` 生成随机值。
+#      ⚠ KITE_ENCRYPT_KEY 用于加密存库的敏感数据（集群 kubeconfig、LDAP/SMTP/OAuth
+#      密码、AI Key 等），一旦投入使用不可更换，否则已保存的凭据将无法解密；
+#      请务必妥善备份。
+#   2. DB_DSN —— 替换为实际的 MySQL 连接信息。
+#      ⚠ 如果这套 Kite 要和已有实例（例如 K8s 里那套）共用同一个数据库，这两个
+#      密钥必须与 kite-secret 里的完全一致，否则会话失效、已保存的凭据解不开。
+#
+# 数据库要求（二选一，提前手动建好）：
+#   CREATE DATABASE kite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+#   CREATE USER 'kite'@'%' IDENTIFIED BY '你的密码';
+#   GRANT ALL PRIVILEGES ON kite.* TO 'kite'@'%';
+#   -- 数据表由 Kite 首次启动时自动迁移创建，无需手工建表。
+#
+# 数据库版本：MySQL 5.7 / 8.0 / 8.4 LTS 均可，推荐 8.0。
+#
+# 启动：docker compose -f deploy/docker-compose.yaml up -d
+# 访问：http://<宿主机IP>:27862
+# 日志：docker logs -f kite
+# 项目名固定为 kite，避免默认取目录名 deploy。
+name: kite
+services:
+  kite:
+    image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+    container_name: kite
+    # 对应 install-mysql.yaml 的 restartPolicy: Always
+    restart: unless-stopped
+    # 对应 install-mysql.yaml 的 terminationGracePeriodSeconds
+    stop_grace_period: 30s
+    ports:
+      # 宿主机端口与 install-mysql.yaml 的 nodePort 保持一致，两种部署方式互换时
+      # 访问 URL 不变；端口冲突时改冒号左边的数字即可。
+      - "27862:8080"
+    environment:
+      DB_TYPE: mysql
+      # go-sql-driver DSN 格式：
+      #   用户名:密码@tcp(mysql主机:3306)/库名?charset=utf8mb4&parseTime=True&loc=Local
+      # 密码含特殊字符（@ : / ( )）时需按驱动规则转义；也可将密码并入连接串后整体 base64。
+      DB_DSN: "REPLACE-ME"
+      JWT_SECRET: "REPLACE-ME"
+      KITE_ENCRYPT_KEY: "REPLACE-ME"
+      # 内网/离线环境建议保留，减少无意义的版本检查请求
+      DISABLE_VERSION_CHECK: "true"
+      # 反向代理场景下必须收紧为真实代理网段，防止伪造来源 IP；
+      # 默认值已覆盖 docker 网桥（172.16.0.0/12）。
+      TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      # 通过 HTTPS 反向代理暴露时打开，且要与实际访问协议一致：否则登录 Cookie
+      # 会带 Secure 标记，在 HTTP 下被浏览器丢弃。
+      #HOST: "https://kite.example.com"
+      # 需要首次启动自动导入 kubeconfig 时取消注释，并把下面 volumes 的挂载一起打开。
+      #KUBECONFIG: /kube/config
+    # 首次启动且数据库里还没有任何集群时，Kite 会导入挂载进来的 kubeconfig
+    # （internal/load.go：优先 $KUBECONFIG，其次 ~/.kube/config）；之后新增或
+    # 修改集群请在页面上操作。
+    # ⚠ 宿主机路径不存在时 docker 会创建一个同名空目录，请改成实际路径；
+    #   另外 kubeconfig 里若写的是 127.0.0.1 / localhost，容器内指向的是容器自身，
+    #   需要换成宿主机或节点可达的地址。
+    #volumes:
+    #  - /root/.kube/config:/kube/config:ro
+    # 镜像默认运行时是 distroless，容器内没有 curl/wget，因此不配置 healthcheck。
+    # 需要健康检查时，用 Dockerfile 的 RUNTIME_IMAGE 参数换成带工具的镜像后再加：
+    #healthcheck:
+    #  test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+    #  interval: 10s
+    #  timeout: 3s
+    #  retries: 3
+    #  start_period: 15s

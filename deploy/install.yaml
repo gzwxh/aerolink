@@ -17,6 +17,18 @@ metadata:
   name: kite
   namespace: kube-system
 ---
+# 替换为随机值后再部署（openssl rand -base64 32 生成），并妥善保存：
+# 更换 KITE_ENCRYPT_KEY 会使已保存的凭据无法解密，需要重新保存全部凭据。
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kite-secret
+  namespace: kube-system
+type: Opaque
+stringData:
+  JWT_SECRET: "REPLACE-ME-with-openssl-rand-base64-32-output"
+  KITE_ENCRYPT_KEY: "REPLACE-ME-with-openssl-rand-base64-32-output"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,9 +49,12 @@ spec:
     spec:
       serviceAccountName: kite
       containers:
-        - image: ghcr.io/kite-org/kite:latest
+        - image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
           imagePullPolicy: IfNotPresent
           name: kite
+          envFrom:
+            - secretRef:
+                name: kite-secret
           resources:
             limits:
               cpu: 1000m

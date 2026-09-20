@@ -4,10 +4,11 @@
 #     -f charts/kite/examples/swr-gzwxh.yaml \
 #     --set image.tag=$(bash scripts/get-version.sh)
 #
-# 镜像构建与推送见 docsCN/guide/build-and-push-image.md。
+# 镜像构建与推送见 docs/guide/build-and-push-image.md。
 image:
   repository: swr.cn-south-1.myhuaweicloud.com/gzwxh/kite
-  tag: v0.15.1-p9-82911d0
+  # 留空则回退到 Chart.appVersion；上面命令的 --set image.tag 已显式传入，不写死。
+  tag: ""
   pullPolicy: IfNotPresent
 
 # SWR 私有仓库需要拉取凭据时，先创建 Secret 再取消下面的注释：
