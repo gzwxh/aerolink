@@ -80,7 +80,7 @@
   --primary-foreground: #12211d; /* --ink-1 */
   --secondary: #24322e; /* --ink-2 */
   --secondary-foreground: #f4f7f6;
-  --muted: #24322e; /* --ink-2 */
+  --muted: #12211d; /* --ink-1（kkRepo 无暗色契约；取深色系里已作表面用的 --ink-1。原先用 --ink-2 #24322e 与卡片 #2a2f31 对比度只有 1.01，表头带看不出来）*/
   --muted-foreground: #b4bfba; /* --topbar-muted */
   --accent: #2a2f31; /* --topbar-line */
   --accent-foreground: #2fbfa4; /* --brand-bright */
