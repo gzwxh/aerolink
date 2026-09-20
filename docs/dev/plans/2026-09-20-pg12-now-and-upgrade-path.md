@@ -276,7 +276,8 @@ setsid nohup /wxh/kite/kite >> /data/logs/kite.log 2>&1 < /dev/null &
 | 口令存放 | `/root/kite-pg12-secrets.env`（600，超管 + `kite` 角色） |
 | 应用配置 | `dev.env`：`DB_TYPE=postgres`、`DB_DSN=...port=5433...TimeZone=Asia/Shanghai` |
 | 应用日志 | `/data/logs/kite.log` |
-| 回滚资产 | `/data/backup/`：`dev.db.2026-09-20-1913`（SQLite 快照）、`kite.bin.old-20260920-1750`（旧二进制）、`dev.env.old-20260920-1750` |
+| 回滚资产 | `/data/backup/`：`dev.db.2026-09-20-1913`（SQLite 快照）、`kite.bin.old-20260920-1750`（旧二进制）、`dev.env.old-20260920-1750`、`pg18-all-2026-09-20-1922.sql`（退役前的 18 全量 dump） |
+| 18 容器 | **已退役**（2026-09-20 停用并删除容器、删除 `/data/postgresql`；删前确认无任何客户端连接，并留了上面那份 dump） |
 
 搬运用的是 `tools/dbmigrate`（SQLite → 12.12），逐表行数对照全部一致。两个非致命的工具提示：
 
@@ -285,4 +286,22 @@ setsid nohup /wxh/kite/kite >> /data/logs/kite.log 2>&1 < /dev/null &
   没有搬，工具会把它列出来，属于预期内。
 
 回滚顺序：`dev.env` 改回 `DB_DSN=dev.db`（并去掉 `DB_TYPE`）→ 用 `/data/backup/kite.bin.old-*`
-起旧二进制 → 验证。旧库一路没删，回滚窗口不设限。
+起旧二进制 → 验证。SQLite 库一路没删，回滚窗口不设限（18 已按运维决定退役，见上表）。
+
+### 6.7 以后换到 12.22（或其它 12.x）
+
+12 系列内部是同一种数据目录布局，**换 minor 不需要 dump/restore**，但要先解决一个前提：
+**内网镜像命名空间里得先有这个 tag**。2026-09-20 实测该命名空间
+（`swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/postgres`）只有
+`12.12`、`13.23`、`18`、`18.6`；`12`（浮动 tag）、`12.19`~`12.22` 都没有，而本机
+**连不上 `docker.io`**，所以「换 tag」这一步得由维护镜像命名空间的人先推上去。
+
+tag 就绪后，操作只有三步（数据目录、端口、参数都不变）：
+
+```sh
+docker stop kite-postgres12 && docker rm kite-postgres12
+# 用 §6.1 同一条 docker run，只把镜像换成 :12.22
+```
+
+停库前先 `pg_dump` 留底；起来后按 §5.6 的清单校验，并**确认 `max_connections` 等参数仍在**
+（参数是 `docker run -c` 传的，重建容器不会自动继承——这正是 §2.5 强调要有一份外部记录的原因）。
