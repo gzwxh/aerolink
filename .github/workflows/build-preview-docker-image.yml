@@ -22,7 +22,7 @@ jobs:
   docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    # Only publish images for successful CI runs from repository pushes
+    # 只对「仓库 push 触发的成功 CI」发布镜像
     if: >-
       ${{
         github.event.workflow_run.conclusion == 'success' &&

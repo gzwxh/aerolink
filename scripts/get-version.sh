@@ -1,7 +1,7 @@
 #!/bin/bash
 
 get_version() {
-    # Check if we're exactly on a tag
+    # 检查是否正好位于某个 tag 上。
     local tag_match=$(git describe --exact-match --tags --match 'v*' HEAD 2>/dev/null)
     if [ -n "$tag_match" ]; then
         echo "$tag_match"

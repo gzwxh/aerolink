@@ -9,62 +9,62 @@ OUTPUT_FILE="${OUTPUT_FILE:-kite-kubeconfig.yaml}"
 
 cleanup() {
     echo "======================================"
-    echo "Kite Resources Cleanup"
+    echo "Kite 资源清理"
     echo "======================================"
     echo ""
-    echo "This will delete the following resources:"
+    echo "将删除以下资源："
     echo "  - ClusterRoleBinding: $SA_NAME"
     echo "  - Secret: $SECRET_NAME (namespace: $NAMESPACE)"
     echo "  - ServiceAccount: $SA_NAME (namespace: $NAMESPACE)"
     echo ""
-    read -p "Continue? (y/n) " -n 1 -r
+    read -p "是否继续？(y/n) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 0
     fi
 
     echo ""
-    echo "Deleting ClusterRoleBinding..."
+    echo "正在删除 ClusterRoleBinding..."
     kubectl delete clusterrolebinding "$SA_NAME" --ignore-not-found=true
 
-    echo "Deleting Secret..."
+    echo "正在删除 Secret..."
     kubectl delete secret "$SECRET_NAME" -n "$NAMESPACE" --ignore-not-found=true
 
-    echo "Deleting ServiceAccount..."
+    echo "正在删除 ServiceAccount..."
     kubectl delete sa "$SA_NAME" -n "$NAMESPACE" --ignore-not-found=true
 
     echo ""
     echo "======================================"
-    echo "✅ Cleanup completed!"
+    echo "✅ 清理完成！"
     echo "======================================"
     echo ""
 }
 
 create() {
     echo "======================================"
-    echo "Kite Kubeconfig Generator"
+    echo "Kite Kubeconfig 生成器"
     echo "======================================"
     echo ""
-    echo "This script creates a Service Account and generates a kubeconfig"
-    echo "that can be used with Kite (no exec plugins required)."
+    echo "本脚本会创建一个 Service Account，并生成一份可供 Kite 使用的"
+    echo "kubeconfig（无需 exec 插件）。"
     echo ""
-    echo "Configuration:"
-    echo "  Namespace:    $NAMESPACE"
-    echo "  SA Name:      $SA_NAME"
-    echo "  Secret Name:  $SECRET_NAME"
-    echo "  Output File:  $OUTPUT_FILE"
+    echo "配置："
+    echo "  命名空间：    $NAMESPACE"
+    echo "  SA 名称：     $SA_NAME"
+    echo "  Secret 名称： $SECRET_NAME"
+    echo "  输出文件：    $OUTPUT_FILE"
     echo ""
-    read -p "Continue? (y/n) " -n 1 -r
+    read -p "是否继续？(y/n) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 0
     fi
 
 echo ""
-echo "Step 1: Creating Service Account..."
+echo "步骤 1：正在创建 Service Account..."
 kubectl create sa "$SA_NAME" -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
-echo "Step 2: Creating ClusterRoleBinding..."
+echo "步骤 2：正在创建 ClusterRoleBinding..."
 cat <<EOF | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -80,7 +80,7 @@ subjects:
   namespace: $NAMESPACE
 EOF
 
-echo "Step 3: Creating Long-lived Token Secret..."
+echo "步骤 3：正在创建长期有效的 Token Secret..."
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
@@ -92,30 +92,30 @@ metadata:
 type: kubernetes.io/service-account-token
 EOF
 
-echo "Step 4: Waiting for token to be populated..."
+echo "步骤 4：正在等待 token 写入..."
 for i in {1..30}; do
     if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath='{.data.token}' 2>/dev/null | grep -q .; then
         break
     fi
     if [ $i -eq 30 ]; then
-        echo "Error: Token was not populated in secret after 30 seconds"
+        echo "错误：30 秒后 secret 中的 token 仍未写入"
         exit 1
     fi
     sleep 1
 done
 
-echo "Step 5: Extracting credentials..."
+echo "步骤 5：正在提取凭据..."
 TOKEN=$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath='{.data.token}' | base64 -d)
 CA_CERT=$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath='{.data.ca\.crt}')
 API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 CLUSTER_NAME=$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')
 
 if [ -z "$API_SERVER" ]; then
-    echo "Error: Could not determine API server URL from current context"
+    echo "错误：无法从当前上下文确定 API server 地址"
     exit 1
 fi
 
-echo "Step 6: Generating kubeconfig..."
+echo "步骤 6：正在生成 kubeconfig..."
 cat > "$OUTPUT_FILE" <<EOF
 apiVersion: v1
 kind: Config
@@ -138,47 +138,47 @@ EOF
 
 echo ""
 echo "======================================"
-echo "✅ Success!"
+echo "✅ 成功！"
 echo "======================================"
 echo ""
-echo "Kubeconfig has been saved to: $OUTPUT_FILE"
+echo "kubeconfig 已保存到：$OUTPUT_FILE"
 echo ""
-echo "You can now use this file to add the cluster to Kite:"
-echo "  1. Copy the contents of $OUTPUT_FILE"
-echo "  2. Go to Kite UI -> Settings -> Clusters -> Add Cluster"
-echo "  3. Paste the kubeconfig content"
+echo "现在可以用该文件把集群添加到 Kite："
+echo "  1. 复制 $OUTPUT_FILE 的内容"
+echo "  2. 在 Kite 界面中进入「系统设置 → 集群管理 → 添加集群」"
+echo "  3. 粘贴 kubeconfig 内容"
 echo ""
-echo "To test the kubeconfig:"
+echo "验证 kubeconfig："
 echo "  kubectl --kubeconfig=$OUTPUT_FILE get nodes"
 echo ""
 }
 
 show_usage() {
     cat <<EOF
-Usage: $0 [COMMAND]
+用法：$0 [COMMAND]
 
-Commands:
-  create    Create Service Account and generate kubeconfig (default)
-  cleanup   Delete all created resources (SA, Secret, ClusterRoleBinding)
-  help      Show this help message
+命令：
+  create    创建 Service Account 并生成 kubeconfig（默认）
+  cleanup   删除已创建的全部资源（SA、Secret、ClusterRoleBinding）
+  help      显示本帮助信息
 
-Environment Variables:
-  NAMESPACE     Kubernetes namespace (default: kube-system)
-  SA_NAME       Service Account name (default: kite-admin)
-  SECRET_NAME   Secret name (default: kite-admin-token)
-  OUTPUT_FILE   Output kubeconfig file (default: kite-kubeconfig.yaml)
+环境变量：
+  NAMESPACE     Kubernetes 命名空间（默认：kube-system）
+  SA_NAME       Service Account 名称（默认：kite-admin）
+  SECRET_NAME   Secret 名称（默认：kite-admin-token）
+  OUTPUT_FILE   输出的 kubeconfig 文件（默认：kite-kubeconfig.yaml）
 
-Examples:
-  # Create resources with defaults
+示例：
+  # 使用默认值创建资源
   $0 create
 
-  # Create with custom namespace
+  # 使用自定义命名空间创建
   NAMESPACE=my-namespace $0 create
 
-  # Cleanup resources
+  # 清理资源
   $0 cleanup
 
-  # Cleanup with custom names
+  # 使用自定义名称清理
   SA_NAME=my-sa NAMESPACE=my-namespace $0 cleanup
 
 EOF
@@ -197,7 +197,7 @@ case "$COMMAND" in
         show_usage
         ;;
     *)
-        echo "Error: Unknown command '$COMMAND'"
+        echo "错误：未知命令 '$COMMAND'"
         echo ""
         show_usage
         exit 1

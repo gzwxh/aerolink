@@ -1,5 +1,5 @@
 # Makefile for Kite project
-.PHONY: help dev build clean test docker-build docker-run frontend backend install deps e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-headed e2e-test e2e-test-headed
+.PHONY: help dev build clean test docker-build docker-run frontend backend install deps changelog e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-existing e2e-run-headed e2e-test e2e-test-headed
 
 # Variables
 BINARY_NAME=kite
@@ -15,10 +15,23 @@ E2E_LDAP_CONTAINER ?= kite-e2e-ldap
 E2E_LDAP_PORT ?= 3389
 E2E_DEX_CONTAINER ?= kite-e2e-dex
 E2E_OAUTH_PORT ?= 5556
+# Existing-cluster mode (e2e-run-existing): KUBECONFIG must point at the cluster,
+# E2E_CLUSTER_NAME is the kubeconfig context Kite imports it as, and
+# E2E_NODE_NAME is the node the node-based specs look for.
+E2E_CLUSTER_NAME ?= kite-e2e
+E2E_CONTEXT_NAME ?= $(E2E_CLUSTER_NAME)
+E2E_NODE_NAME ?=
 SPEC ?=
 
+# 本地开发默认环境变量（存在时由 run/dev 目标自动加载，见 dev.env）
+# 必须用绝对路径：POSIX 规则下，`. name` 对不含斜杠的文件名只按 $PATH 查找、
+# 不回退当前目录（dash 与以 sh 调用的 bash 都如此），`. dev.env` 会报 "file not found"。
+DEV_ENV ?= dev.env
+LOAD_DEV_ENV = if [ -f "$(abspath $(DEV_ENV))" ]; then set -a; . "$(abspath $(DEV_ENV))"; set +a; fi;
+
 # Version information
-VERSION=$(shell scripts/get-version.sh)
+# 发布版本号（前端展示与镜像构建共用）；发新版时修改这里。
+VERSION ?= dsy-v1.0.0
 BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
@@ -27,6 +40,11 @@ LDFLAGS=-ldflags "-s -w \
 	-X 'github.com/zxh326/kite/pkg/version.Version=$(VERSION)' \
 	-X 'github.com/zxh326/kite/pkg/version.BuildDate=$(BUILD_DATE)' \
 	-X 'github.com/zxh326/kite/pkg/version.CommitID=$(COMMIT_ID)'"
+
+# 本机临时覆盖（不进版本库，见 .gitignore）：把 VERSION / LDFLAGS 这类本机专用值写进
+# Makefile.local，例如让本机构建的后端/前端显示另一个版本号而不改仓库里的 VERSION。
+# 文件不存在时该行被忽略；放在这里是为了让覆盖值赢过上面的 ?= 与 LDFLAGS。
+-include Makefile.local
 
 # Default target
 .DEFAULT_GOAL := build
@@ -96,6 +114,12 @@ package-binaries: ## Package each kite binary file separately
 	done
 	@echo "✅ All kite binaries packaged successfully!"
 
+changelog: ## Generate categorized release notes into CHANGELOG.md
+	@echo "📝 Generating CHANGELOG.md..."
+	@printf '%s\n' '# Changelog' '' '本文件由 `make changelog` 生成（脚本：`scripts/changelog.sh`），请勿手工编辑。' '' > CHANGELOG.md
+	@sh scripts/changelog.sh >> CHANGELOG.md
+	@echo "✅ CHANGELOG.md updated"
+
 .PHONY: frontend
 frontend: ## Build frontend only (always rebuilds)
 	cd $(UI_DIR) && pnpm run build
@@ -121,22 +145,20 @@ backend: ## Build backend only (always rebuilds)
 	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 
 # Production targets
-run: backend ## Run the built application
+run: backend ## Run the built application (loads dev.env when present)
 	@echo "🚀 Starting $(BINARY_NAME) server..."
-	./$(BINARY_NAME)
+	@$(LOAD_DEV_ENV) ./$(BINARY_NAME)
 
-dev: ## Run in development mode
+dev: ## Run in development mode (frontend HMR + backend auto rebuild/restart)
 	@echo "🔄 Starting development mode..."
-	@echo "🚀 Starting $(BINARY_NAME) server..."
-	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
-	./$(BINARY_NAME) -v=5 & \
-	BACKEND_PID=$$!; \
-	echo "Backend PID: $$BACKEND_PID"; \
-	trap 'echo "🛑 Stopping backend server..."; kill $$BACKEND_PID 2>/dev/null; exit' INT TERM; \
-	echo "🔄 Starting development server..."; \
-	cd $(UI_DIR) && pnpm run dev; \
-	echo "🛑 Stopping backend server..."; \
-	kill $$BACKEND_PID 2>/dev/null
+	@scripts/dev-backend.sh & \
+		WATCHER_PID=$$!; \
+		trap 'kill $$WATCHER_PID 2>/dev/null || true' INT TERM; \
+		echo "🚀 Backend watcher PID: $$WATCHER_PID"; \
+		echo "🔄 Starting development server..."; \
+		cd $(UI_DIR) && pnpm run dev; \
+		echo "🛑 Stopping backend watcher..."; \
+		kill $$WATCHER_PID 2>/dev/null || true
 
 lint: golangci-lint ## Run linters
 	@echo "🔍 Running linters..."
@@ -239,6 +261,10 @@ e2e-run: e2e-kind-up e2e-stop-app ## Run e2e tests against the local kind cluste
 	@echo "🧪 Running e2e tests..."
 	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" KITE_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" KITE_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test $(SPEC)
 
+e2e-run-existing: e2e-stop-app ## Run e2e tests against an existing cluster (KUBECONFIG, E2E_CLUSTER_NAME, E2E_NODE_NAME)
+	@echo "🧪 Running e2e tests against an existing cluster..."
+	cd $(E2E_DIR) && KUBECONFIG="$(KUBECONFIG)" KITE_E2E_CLUSTER_NAME="$(E2E_CLUSTER_NAME)" KITE_E2E_CONTEXT_NAME="$(E2E_CONTEXT_NAME)" KITE_E2E_NODE_NAME="$(E2E_NODE_NAME)" KITE_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test $(SPEC)
+
 e2e-run-headed: e2e-kind-up e2e-stop-app ## Run e2e tests in headed mode against the local kind cluster
 	@echo "🧪 Running headed e2e tests..."
 	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" KITE_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" KITE_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test --headed $(SPEC)
@@ -253,3 +279,28 @@ docs-dev: ## Start documentation server in development mode
 docs-build: ## Build documentation
 	@echo "📚 Building documentation..."
 	cd docs && pnpm run docs:build
+
+# ----- Docker 镜像 -----
+IMAGE ?= swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+# 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径），
+# 这里只保留依赖源镜像（npm/go 代理）；直连环境可置空：
+#   make image DOCKER_BUILD_ARGS=
+# --provenance=false --sbom=false：禁止 BuildKit 附加 provenance/SBOM 证明清单。
+# 带证明的镜像会以 OCI manifest list 推送，部分仓库（如华为云 SWR）无法解析，
+# 推送时报 "Invalid image, fail to parse 'manifest.json'"。
+DOCKER_BUILD_ARGS ?= --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
+	--build-arg GOPROXY=https://goproxy.cn,direct \
+	--provenance=false --sbom=false
+
+# 版本信息单独传，不放进 DOCKER_BUILD_ARGS：后者可能被置空以走直连环境，
+# 而镜像里的版本号（前端展示）不该跟着丢掉。
+.PHONY: image push
+image: ## Build the Docker image (IMAGE=registry/repo:tag)
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		--build-arg COMMIT_ID=$(COMMIT_ID) \
+		-t $(IMAGE) .
+
+push: image ## Build and push the Docker image
+	docker push $(IMAGE)

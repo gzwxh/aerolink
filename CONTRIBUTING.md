@@ -1,12 +1,14 @@
-# Contributing
+# 贡献指南
 
-Thanks for contributing to Kite.
+感谢你为 Kite 贡献代码。
 
-## Before Opening a PR
+## 提 PR 之前
 
-- AI-assisted coding is welcome. Maintainers also use AI.
-- For new features, please open a feature request issue first.
-- Please review AI-generated changes yourself before submitting.
-- Keep the code clean: remove AI-generated noise, duplicated code, and unnecessary comments.
-- Comments should be minimal and useful. Avoid obvious or verbose comments.
-- If a PR is very large and not self-reviewed, we may ask for cleanup or splitting before review.
+- 欢迎使用 AI 辅助编码，维护者自己也在用 AI。
+- 新功能请先开一个 feature request issue。
+- 提交前请自己先过一遍 AI 生成的改动。
+- 保持代码干净：删掉 AI 产生的噪声、重复代码和多余注释。
+- 注释应当少而有用，避免显然的或啰嗦的注释。
+- 提交信息用中文，但保留英文类型前缀（`feat` / `fix` / `chore`…）——`CHANGELOG.md` 由
+  `scripts/changelog.sh` 按前缀分类生成，写成中文前缀会全部落到「未分类」。
+- 如果 PR 很大且没有自审，我们可能会要求先清理或拆分再评审。

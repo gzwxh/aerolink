@@ -47,5 +47,13 @@ docs/.vitepress/cache
 kite
 !charts/kite
 
+# 打包好的 Helm chart（`helm package charts/kite/` 会在仓库根目录生成
+# kite-<chart version>.tgz，CI 自己打包并上传，不进版本库）
+kite-*.tgz
+charts/*.tgz
 
 .gocache/
+# 本地开发覆盖文件
+dev.env.local
+dev.env.*.local
+Makefile.local

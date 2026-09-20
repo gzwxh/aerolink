@@ -1,5 +1,10 @@
 name: Deploy Demo
 
+# 上游专用作业，本仓库不会执行（门禁仍是 kite-org，保留在那里不改）：
+# 它把 demo 分支构建的镜像推到 ghcr.io，并重启**上游自己的**演示实例
+# （secrets.KITE_DEMO_HOST / KITE_DEMO_AUTH 属于上游）。本仓库没有这些 secrets，
+# 发布走 release.yaml（vars.RELEASE_ENABLED 开关）或 docs/dev/release-checklist.md 的本地流程。
+
 permissions:
   contents: read
   packages: write

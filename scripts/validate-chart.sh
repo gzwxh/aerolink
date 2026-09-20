@@ -1,71 +1,71 @@
 #!/bin/bash
 
-# Helm Chart Validation Script
-# This script validates the Helm chart configuration before release
+# Helm Chart 校验脚本
+# 本脚本在发布前校验 Helm chart 配置。
 
 set -euo pipefail
 
 CHART_DIR="charts/kite"
 TEMP_DIR=$(mktemp -d)
 
-echo "🔍 Validating Helm Chart..."
+echo "🔍 正在校验 Helm Chart..."
 
-# Check if chart directory exists
+# 检查 chart 目录是否存在。
 if [ ! -d "$CHART_DIR" ]; then
-    echo "❌ Chart directory '$CHART_DIR' not found"
+    echo "❌ 未找到 chart 目录 '$CHART_DIR'"
     exit 1
 fi
 
-# Check if Chart.yaml exists
+# 检查 Chart.yaml 是否存在。
 if [ ! -f "$CHART_DIR/Chart.yaml" ]; then
-    echo "❌ Chart.yaml not found in '$CHART_DIR'"
+    echo "❌ 在 '$CHART_DIR' 中未找到 Chart.yaml"
     exit 1
 fi
 
-# Validate Chart.yaml structure
-echo "📋 Checking Chart.yaml structure..."
+# 校验 Chart.yaml 的结构。
+echo "📋 正在检查 Chart.yaml 结构..."
 if ! grep -q "^name:" "$CHART_DIR/Chart.yaml"; then
-    echo "❌ Chart name not found in Chart.yaml"
+    echo "❌ 未在 Chart.yaml 中找到 name 字段"
     exit 1
 fi
 
 if ! grep -q "^version:" "$CHART_DIR/Chart.yaml"; then
-    echo "❌ Chart version not found in Chart.yaml"
+    echo "❌ 未在 Chart.yaml 中找到 version 字段"
     exit 1
 fi
 
-echo "✅ Chart.yaml structure is valid"
+echo "✅ Chart.yaml 结构有效"
 
-# Lint the chart
-echo "🔍 Linting Helm chart..."
+# 对 chart 做 lint。
+echo "🔍 正在对 Helm chart 执行 lint..."
 if helm lint "$CHART_DIR"; then
-    echo "✅ Chart linting passed"
+    echo "✅ Chart lint 通过"
 else
-    echo "❌ Chart linting failed"
+    echo "❌ Chart lint 失败"
     exit 1
 fi
 
-# Test chart packaging
-echo "📦 Testing chart packaging..."
+# 测试 chart 打包。
+echo "📦 正在测试 chart 打包..."
 if helm package "$CHART_DIR" --destination "$TEMP_DIR"; then
-    echo "✅ Chart packaging successful"
+    echo "✅ Chart 打包成功"
     PACKAGE_FILE=$(ls "$TEMP_DIR"/*.tgz)
-    echo "📦 Package created: $(basename "$PACKAGE_FILE")"
+    echo "📦 已生成包：$(basename "$PACKAGE_FILE")"
 else
-    echo "❌ Chart packaging failed"
+    echo "❌ Chart 打包失败"
     exit 1
 fi
 
-# Test template rendering
-echo "🔧 Testing template rendering..."
+# 测试模板渲染。
+echo "🔧 正在测试模板渲染..."
 if helm template test-release "$CHART_DIR" > "$TEMP_DIR/rendered.yaml"; then
-    echo "✅ Template rendering successful"
+    echo "✅ 模板渲染成功"
 else
-    echo "❌ Template rendering failed"
+    echo "❌ 模板渲染失败"
     exit 1
 fi
 
-# Validate rendered YAML
+# 校验渲染出的 YAML。
 # echo "📋 Validating rendered YAML..."
 # if kubectl apply --dry-run=client -f "$TEMP_DIR/rendered.yaml" > /dev/null 2>&1; then
 #     echo "✅ Rendered YAML is valid"
@@ -74,8 +74,8 @@ fi
 #     exit 1
 # fi
 
-# Test with different values (sqlite persistence)
-echo "🔧 Testing with custom values (sqlite persistence)..."
+# 用另一组 values 测试（sqlite 持久化）。
+echo "🔧 正在用自定义 values 测试（sqlite 持久化）..."
 cat > "$TEMP_DIR/test-values-sqlite.yaml" << EOF
 replicaCount: 2
 image:
@@ -92,38 +92,38 @@ db:
 EOF
 
 if helm template test-release "$CHART_DIR" -f "$TEMP_DIR/test-values-sqlite.yaml" > "$TEMP_DIR/rendered-custom-sqlite.yaml"; then
-        echo "✅ Custom values (sqlite) rendering successful"
+        echo "✅ 自定义 values（sqlite）渲染成功"
 else
-        echo "❌ Custom values (sqlite) rendering failed"
+        echo "❌ 自定义 values（sqlite）渲染失败"
         exit 1
 fi
 
 
-# Content checks for sqlite rendering
-echo "📋 Verifying rendered content for sqlite persistence..."
+# 检查 sqlite 渲染结果的内容。
+echo "📋 正在校验 sqlite 持久化的渲染结果..."
 RENDERED_SQLITE="$TEMP_DIR/rendered-custom-sqlite.yaml"
 cat "$RENDERED_SQLITE"
 fail() { echo "❌ $1"; rm -rf "$TEMP_DIR"; exit 1; }
 
-# Ensure a PVC resource was generated for sqlite
+# 确认 sqlite 场景生成了 PVC 资源。
 if ! grep -E -q "kind:\s*PersistentVolumeClaim" "$RENDERED_SQLITE"; then
-    fail "PersistentVolumeClaim not found in sqlite rendered output"
+    fail "sqlite 渲染结果中未找到 PersistentVolumeClaim"
 fi
 
-# Ensure the PVC name or claim reference contains 'kite-storage'
+# 确认 PVC 名称或 claim 引用中包含 'kite-storage'。
 if ! grep -E -q "kite-storage" "$RENDERED_SQLITE"; then
-    fail "sqlite PVC name or reference not found in rendered output"
+    fail "渲染结果中未找到 sqlite PVC 名称或引用"
 fi
 
-# Ensure the mountPath for sqlite (default /data) is present in the Pod spec
+# 确认 Pod spec 中存在 sqlite 的 mountPath（默认 /data）。
 if ! grep -E -q "mountPath:\s*/data" "$RENDERED_SQLITE"; then
-    fail "Expected sqlite mountPath '/data' not found in rendered output"
+    fail "渲染结果中未找到预期的 sqlite mountPath '/data'"
 fi
 
-echo "✅ Sqlite rendered content looks correct"
+echo "✅ sqlite 渲染结果正确"
 
-# Test with postgres DSN provided
-echo "🔧 Testing with custom values (postgres dsn)..."
+# 测试提供 postgres DSN 的情况。
+echo "🔧 正在用自定义 values 测试（postgres dsn）..."
 cat > "$TEMP_DIR/test-values-postgres.yaml" << EOF
 replicaCount: 1
 db:
@@ -133,19 +133,19 @@ db:
 EOF
 
 if helm template test-release "$CHART_DIR" -f "$TEMP_DIR/test-values-postgres.yaml" > "$TEMP_DIR/rendered-custom-postgres.yaml"; then
-        echo "✅ Custom values (postgres) rendering successful"
+        echo "✅ 自定义 values（postgres）渲染成功"
 else
-        echo "❌ Custom values (postgres) rendering failed"
+        echo "❌ 自定义 values（postgres）渲染失败"
         exit 1
 fi
 
-# Content checks for postgres rendering
-echo "📋 Verifying rendered content for postgres DSN..."
+# 检查 postgres 渲染结果的内容。
+echo "📋 正在校验 postgres DSN 的渲染结果..."
 RENDERED_PG="$TEMP_DIR/rendered-custom-postgres.yaml"
 
-echo "✅ Postgres rendered content looks correct"
+echo "✅ postgres 渲染结果正确"
 
-# Clean up
+# 清理。
 rm -rf "$TEMP_DIR"
 
-echo "🎉 All validations passed! Chart is ready for release."
+echo "🎉 全部校验通过！Chart 已可发布。"

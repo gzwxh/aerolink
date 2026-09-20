@@ -1,0 +1,54 @@
+# 本地开发默认配置（配合 dev.env 使用，见 README「本地开发」）。
+#
+# 启动方式：
+#   make dev     # 后端 + Vite 前端热更新
+#   make run     # 仅后端（使用内嵌前端产物）
+#
+# 敏感值支持 ${ENV_VAR} 占位符，会从环境变量展开，例如：
+#   password: ${KITE_DEV_ADMIN_PASSWORD}
+#
+# ⚠️ 仅供本地开发：这里出现的口令/密钥不要用于任何真实环境。
+
+# 首次启动（数据库为空）时自动创建的管理员账号。
+superUser:
+  username: admin
+  password: AdminPass!234
+
+# 集群配置：
+#   - 留空时，启动会尝试导入 ~/.kube/config（或 $KUBECONFIG）中的集群；
+#   - 也可以在这里写死一个集群（config 为 kubeconfig 内容）。
+# clusters:
+#   - name: local
+#     description: 本地 kind / minikube
+#     default: true
+#     config: |
+#       apiVersion: v1
+#       kind: Config
+#       clusters: []
+#       contexts: []
+#       users: []
+#       current-context: ""
+
+# 可选：本地联调外部认证时打开（生产请在界面里配置）。
+# ldap:
+#   enabled: true
+#   serverUrl: ldap://127.0.0.1:3389
+#   bindDn: cn=admin,dc=example,dc=org
+#   bindPassword: ${KITE_DEV_LDAP_PASSWORD}
+#   userBaseDn: ou=users,dc=example,dc=org
+#   userFilter: (&(uid=%s)(objectClass=inetOrgPerson))
+#   usernameAttribute: uid
+#   displayNameAttribute: cn
+
+# 可选：预置自定义角色（界面里也能配）。
+# rbac:
+#   roles:
+#     - name: dev-viewer
+#       description: 本地只读
+#       clusters: ["*"]
+#       namespaces: ["*"]
+#       resources: ["pods", "deployments"]
+#       verbs: ["get", "list", "watch"]
+#   roleMapping:
+#     - name: dev-viewer
+#       users: ["admin"]

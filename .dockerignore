@@ -10,14 +10,25 @@ dev.db
 *.db
 kite
 
+# Local development credentials and overrides
+# `config.dev.yaml` auto-creates admin/AdminPass!234, `dev.env*` holds development
+# keys and `Makefile.local` is a machine-local build override.
+dev.env
+dev.env.local
+dev.env.*.local
+config.dev.yaml
+Makefile.local
+
 # Frontend build artefacts and dependencies
 ui/node_modules
 ui/dist
 ui/.vite
+# Rebuilt from ui/ inside the image; keeping it out also stops host-side stale
+# assets from merging into the freshly built ones.
+static
 
 # Docs and test tooling
 docs
-docsCN
 e2e
 charts
 AGENTS.md

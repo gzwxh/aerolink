@@ -1,25 +1,25 @@
-## Summary
+## 摘要
 
-<!-- What does this PR change? Keep it short. -->
+<!-- 这个 PR 改了什么？简短说明即可。 -->
 
-## Why
+## 原因
 
-<!-- Why is this change needed? -->
+<!-- 为什么需要这个改动？ -->
 
-## Related issue
+## 关联 issue
 
-<!-- For new features, please open and link a feature request issue first. -->
+<!-- 新功能请先开一个 feature request issue，然后在下面关联。 -->
 
 Closes #
 
-## Validation
+## 验证
 
-<!-- How did you test this change? -->
+<!-- 你如何验证了这个改动？ -->
 
-## Checklist
+## 检查清单
 
-- [ ] I reviewed this PR myself before requesting review.
-- [ ] I understand the changes, including AI-generated parts (if any).
-- [ ] For new features, a feature request issue is linked.
-- [ ] I cleaned up AI noise (unnecessary comments, dead code, and unrelated changes).
-- [ ] This PR is reasonably scoped (or split into smaller PRs).
+- [ ] 我在请求评审前自己先过了一遍这个 PR。
+- [ ] 我理解这些改动，包括 AI 生成的部分（如有）。
+- [ ] 新功能已关联一个 feature request issue。
+- [ ] 我清理了 AI 噪声（多余的注释、死代码、与本次改动无关的改动）。
+- [ ] 这个 PR 的范围合理（或已拆成更小的 PR）。

@@ -1,15 +1,15 @@
-# Security Policy
+# 安全政策
 
-## Supported Versions
+## 支持的版本
 
-Which versions of kite are currently being supported with security updates.
+当前提供安全更新的版本如下。
 
-| Version | Supported          |
+| 版本    | 是否支持           |
 | ------- | ------------------ |
 | 0.7.x   | :white_check_mark: |
 | 0.6.x   | :white_check_mark: |
-| < 0.6.0   | :x:                |
+| < 0.6.0 | :x:                |
 
-## Reporting a Vulnerability
+## 报告漏洞
 
-To report a vulnerability, please immediately let us know by emailing kite@zzde.me.
+如果你发现漏洞，请立即发邮件到 kite@zzde.me 告知我们。

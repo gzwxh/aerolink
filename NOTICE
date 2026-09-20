@@ -1,0 +1,53 @@
+# NOTICE
+
+本文件记录本仓库的上游归属、本仓库的改动，以及随仓库分发的第三方静态资产。
+修改本文件或 `LICENSE`、`licenses/*` 需要显式评审（见 `AGENTS.md`）。
+
+## 1. 上游归属
+
+- 上游项目：[kite-org/kite](https://github.com/kite-org/kite)，许可证 **Apache-2.0**
+- 上游镜像：[gitee.com/gzwxh/kite](https://gitee.com/gzwxh/kite)
+- 本仓库是上游项目的定制分支（内部二开），保留上游的版权与许可声明。
+- Apache-2.0 全文见 [LICENSE](./LICENSE) 与 [licenses/Apache-2.0.txt](./licenses/Apache-2.0.txt)。
+
+## 2. 本仓库改动
+
+以下改动说明依据本仓库的 `README.md` 与 `docs/dev/feature-code-index.md` 整理，仅为差异概述，不改变上游的许可条款：
+
+- **部署与发布**：单二进制 + Helm chart；镜像与基础镜像指向公司 SWR；新增 `make image` / `make push` 构建与推送流程。
+- **安全加固**：敏感值以 `SecretString` 加密落库；会话策略（空闲 / 总时长 / 单点登录）；登录失败限流与 IP 黑白名单；三权分立与审计员视图。
+- **访问控制**：容器文件浏览 / 下载 / 上传独立为 RBAC 动词，并写入审计日志。
+- **通知**：SMTP 邮件、消息模板与订阅、站内信，以及不活跃 / 异地登录 / 密码过期提醒。
+- **认证**：登录图形验证码与 MFA 策略管理。
+- **数据库**：支持 MySQL / PostgreSQL。
+- **界面**：设置区重构，界面中文化。
+
+## 3. 第三方资产清单
+
+范围：本仓库中随代码分发的图片、字体与图标。逐项记录**可核实**的来源与许可证；无法从本仓库文件确认的，一律标注 `来源与许可证待确认`，不作推测。
+
+| 资产路径 | 来源 | 许可证 | 备注 |
+| --- | --- | --- | --- |
+| `ui/src/assets/icon.svg` | 来源与许可证待确认 | 待确认 | 项目 LOGO；与 `docs/assets/logo.svg`、`docs/public/logo.svg` 字节完全一致 |
+| `ui/src/assets/github.svg` | GitHub 官方标志图形 | 待确认 | 文件含 `<title>GitHub</title>`；使用受 GitHub 品牌规范约束 |
+| `ui/src/assets/login-banner.svg` | **自研**（本仓库原创，非第三方） | Apache-2.0（同本仓库） | 登录页背景；2026-09-18 重画，不再使用 AGPL 项目素材，图形与文案均为自绘 |
+| `ui/src/assets/fonts/maple-mono-latin-400-normal.woff` | 字体：Maple Mono（文件名遵循 `@fontsource` 命名约定） | 待确认 | 字体文件内未包含许可证声明 |
+| `ui/src/assets/fonts/maple-mono-latin-400-normal.woff2` | 字体：Maple Mono（同上） | 待确认 | 同上 |
+| `ui/src/assets/fonts/jetbrains-mono-latin-wght-normal.woff2` | 字体：JetBrains Mono（同上） | 待确认 | 同上 |
+| `docs/public/assets/fonts/dm-mono-latin-400-normal.woff2` | 字体：DM Mono（同上） | 待确认 | 同上 |
+| `docs/public/assets/fonts/dm-mono-latin-500-normal.woff2` | 字体：DM Mono（同上） | 待确认 | 同上 |
+| `docs/public/assets/fonts/cormorant-garamond-latin-400-normal.woff2` | 字体：Cormorant Garamond（同上） | 待确认 | 同上 |
+| `docs/public/assets/cluster-atlas.png` | 来源与许可证待确认 | 待确认 | 文档站插图 |
+| `docs/public/assets/cluster-atlas-transparent.png` | 来源与许可证待确认 | 待确认 | 文档站插图 |
+| `docs/public/assets/grid-paper.png` | 来源与许可证待确认 | 待确认 | 文档站纹理底图 |
+| `docs/screenshots/*`（28 个 png/webp） | 项目界面截图，来源与许可证待确认 | 待确认 | 文档站截图 |
+| `docs/assets/logo.svg`、`docs/public/logo.svg` | 来源与许可证待确认 | 待确认 | 见 `ui/src/assets/icon.svg` |
+
+- `charts/` 下未发现随仓库分发的第三方图片或字体资产。
+- 运行时代码依赖（Go modules、npm packages）由其各自的包声明许可证，参见 `go.mod` / `go.sum` 与 `ui/pnpm-lock.yaml`，不在本静态资产清单范围内。
+
+**待确认项汇总**：上表中所有标注 `待确认` 的条目都尚未在本仓库内找到可核实的来源或许可证声明，需要逐项补齐。（`ui/src/assets/login-banner.svg` 已于 2026-09-18 改为自研素材，不再是风险项。）
+
+## 4. 不构成背书的声明
+
+文中出现的项目名、产品名与 LOGO（包括但不限于 Kubernetes、Helm、GitHub，以及各字体名称）归各自权利人所有。本文件仅用于描述来源与归属，不表示任何赞助、背书或从属关系。

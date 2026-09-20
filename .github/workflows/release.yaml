@@ -5,17 +5,42 @@ on:
     tags:
       - 'v[0-9]+\.[0-9]+\.[0-9]+'
 
+# 本仓库（内部二开）也能用这条流水线：原来的门禁写死
+# `github.repository_owner == 'kite-org'`，导致本仓库恒不执行，看起来有 CI/CD 实际全靠手工发布。
+# 现在改成"仓库变量开关 + 目标仓库可配置"：
+#
+#   vars.RELEASE_ENABLED        必须显式设为 true 才会跑（默认不跑，避免误触发发布）
+#   vars.IMAGE_REPOSITORY       目标镜像，默认与 charts/kite/values.yaml 的 image.repository 一致
+#                               例：swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite / ghcr.io/<owner>/kite
+#   vars.CHART_OCI_REPOSITORY   Helm chart 的 OCI 目标，留空则不推送 chart
+#                               例：oci://swr.cn-south-1.myhuaweicloud.com/dsy/devops/charts
+#   vars.HELM_INDEX_ENABLED     是否更新 gh-pages 上的 Helm index（上游分发用，本仓库默认关）
+#   secrets.IMAGE_REGISTRY_USERNAME / IMAGE_REGISTRY_PASSWORD
+#                               非 ghcr.io 目标仓库的推送凭据（ghcr.io 用 GITHUB_TOKEN）
+#
+# 镜像 host 由 IMAGE_REPOSITORY 首段推导：带点或带端口的是 registry，否则按 Docker Hub 处理。
+
 env:
   IMAGE_NAME: kite
   GO_VERSION: "1.26"
   NODE_VERSION: "24"
+  IMAGE_REPOSITORY: ${{ vars.IMAGE_REPOSITORY || 'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite' }}
+  CHART_OCI_REPOSITORY: ${{ vars.CHART_OCI_REPOSITORY }}
 
 jobs:
-  # Push image to GitHub Packages.
-  # See also https://docs.docker.com/docker-hub/builds/
+  # 开关没打开时，让 tag 推送产出一个绿色的、有说明的运行记录，
+  # 而不是静默跳过（避免又变回「看起来有 CI/CD，实际不执行」）。
+  disabled-notice:
+    runs-on: ubuntu-latest
+    if: ${{ vars.RELEASE_ENABLED != 'true' }}
+    steps:
+      - name: Explain why nothing was built
+        run: |
+          echo "::notice::Release workflow is disabled: repository variable RELEASE_ENABLED is not 'true'. See docs/dev/release-checklist.md §2."
+
   push:
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'kite-org' }}
+    if: ${{ vars.RELEASE_ENABLED == 'true' }}
     permissions:
       packages: write
       contents: write
@@ -25,17 +50,46 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          # 生成发布说明要遍历 tag（scripts/changelog.sh），浅克隆拿不到。
+          fetch-depth: 0
+
+      - name: Resolve image coordinates
+        id: image
+        run: |
+          REPOSITORY="${{ env.IMAGE_REPOSITORY }}"
+          FIRST="${REPOSITORY%%/*}"
+          case "$FIRST" in
+            # registry host 一定带点（域名）或端口；localhost 是本地调试的特例。
+            *.*|*:*|localhost) REGISTRY="$FIRST" ;;
+            # 形如 zzde/kite：没有 host，按 Docker Hub 处理。
+            *) REGISTRY="docker.io" ;;
+          esac
+          echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
+          echo "Pushing image to $REPOSITORY (registry: $REGISTRY)"
+
       - name: Login to GitHub Container Registry
+        if: steps.image.outputs.registry == 'ghcr.io'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Login to Docker hub Registry
+
+      - name: Login to Docker Hub
+        if: steps.image.outputs.registry == 'docker.io'
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.IMAGE_REGISTRY_USERNAME }}
+          password: ${{ secrets.IMAGE_REGISTRY_PASSWORD }}
+
+      - name: Login to image registry
+        if: steps.image.outputs.registry != 'ghcr.io' && steps.image.outputs.registry != 'docker.io'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ steps.image.outputs.registry }}
+          username: ${{ secrets.IMAGE_REGISTRY_USERNAME }}
+          password: ${{ secrets.IMAGE_REGISTRY_PASSWORD }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -69,7 +123,9 @@ jobs:
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Build
-        run: make cross-compile
+        # 用 tag 覆盖 Makefile 里的默认 VERSION：产物版本与 tag 始终一致，
+        # 发布后核对 /api/v1/version 才有意义（见 docs/dev/release-checklist.md）。
+        run: make cross-compile VERSION=${{ steps.check_version.outputs.tag_name }}
 
       - name: Package binaries
         run: make package-binaries
@@ -84,23 +140,44 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.check_version.outputs.tag_name }}
-            zzde/${{ env.IMAGE_NAME }}:${{ steps.check_version.outputs.tag_name }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
-            zzde/${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_REPOSITORY }}:${{ steps.check_version.outputs.tag_name }}
+            ${{ env.IMAGE_REPOSITORY }}:latest
           labels: runnumber=${{ github.run_id }}
 
-      - name: Login Helm to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Generate release notes
+        run: |
+          TAG_NAME="${{ steps.check_version.outputs.tag_name }}"
+          PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -vx "$TAG_NAME" | head -n 1 || true)
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "Release notes: $PREVIOUS_TAG..$TAG_NAME"
+            sh scripts/changelog.sh --from "$PREVIOUS_TAG" --to "$TAG_NAME" > release-notes.md
+          else
+            echo "Release notes: full history"
+            sh scripts/changelog.sh --to "$TAG_NAME" > release-notes.md
+          fi
+          cat release-notes.md
 
       - name: Package Helm chart
         run: |
           helm package charts/kite/
 
+      - name: Login Helm to the chart registry
+        if: env.CHART_OCI_REPOSITORY != ''
+        run: |
+          HOST="${{ env.CHART_OCI_REPOSITORY }}"
+          HOST="${HOST#oci://}"
+          HOST="${HOST%%/*}"
+          if [ "$HOST" = "ghcr.io" ]; then
+            echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login "$HOST" -u "${{ github.actor }}" --password-stdin
+          else
+            echo "${{ secrets.IMAGE_REGISTRY_PASSWORD }}" | helm registry login "$HOST" -u "${{ secrets.IMAGE_REGISTRY_USERNAME }}" --password-stdin
+          fi
+
       - name: Push Helm chart to OCI registry
+        if: env.CHART_OCI_REPOSITORY != ''
         run: |
           CHART_PACKAGE=$(ls kite-*.tgz)
-          helm push "$CHART_PACKAGE" oci://ghcr.io/${{ github.repository_owner }}/charts
+          helm push "$CHART_PACKAGE" "${{ env.CHART_OCI_REPOSITORY }}"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -109,17 +186,20 @@ jobs:
           name: ${{ steps.check_version.outputs.tag_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          # 用 scripts/changelog.sh 的分类产物作正文，而不是托管平台自动汇总的 commit 列表。
+          body_path: release-notes.md
           files: |
             bin/kite-*-${{ steps.check_version.outputs.tag_name }}.tar.gz
             kite-*.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # 上游把 chart 通过 gh-pages 上的 Helm index 分发；本仓库用 OCI（CHART_OCI_REPOSITORY）
+  # 或内网仓库，所以这个作业默认不跑，需要时用 vars.HELM_INDEX_ENABLED 打开。
   update-helm-index:
     runs-on: ubuntu-latest
     needs: push
-    if: ${{ github.repository_owner == 'kite-org' && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ vars.RELEASE_ENABLED == 'true' && vars.HELM_INDEX_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v') }}
     permissions:
       contents: write
     steps:
@@ -134,7 +214,7 @@ jobs:
           TAG_NAME=${{ needs.push.outputs.tag_name }}
           VERSION=$(echo $TAG_NAME | sed 's/^v//')
 
-          # Download the helm chart from the release
+          # 从 release 里取回 helm chart
           gh release download $TAG_NAME --pattern "kite-$VERSION.tgz"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -144,10 +224,10 @@ jobs:
           TAG_NAME=${{ needs.push.outputs.tag_name }}
           VERSION=$(echo $TAG_NAME | sed 's/^v//')
 
-          # Set the repository URL for the helm chart
+          # 设置 helm chart 的仓库地址（chart 的下载来源）
           REPO_URL="https://github.com/${{ github.repository }}/releases/download/$TAG_NAME"
 
-          # Update index.yaml
+          # 更新 index.yaml
           if [ -f index.yaml ]; then
             helm repo index . --url $REPO_URL --merge index.yaml
           else
