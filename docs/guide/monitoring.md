@@ -1,7 +1,7 @@
-# Monitoring
+# 监控
 
-Kite provides comprehensive monitoring capabilities for your Kubernetes clusters through integration with Prometheus and built-in visualization tools.
+Kite 通过与 Prometheus 集成和内置的可视化工具，为您的 Kubernetes 集群提供全面的监控功能。
 
-![Monitoring](/screenshots/monitor.png)
+![Monitoring](../screenshots/monitor.png)
 
-To learn how to configure Prometheus monitoring, please refer to the [Prometheus Setup Guide](../config/prometheus-setup).
+如何配置 Prometheus 监控，请参阅 [Prometheus 设置指南](../config/prometheus-setup.md)。

@@ -1,46 +1,47 @@
-# What is Kite?
+# 什么是 Kite？
 
-Kite is a lightweight, open-source Kubernetes workspace for platform teams. It brings multi-cluster operations, observability, access control, and AI-assisted troubleshooting into one interface.
+Kite 是面向平台团队的轻量、开源 Kubernetes 工作空间，将多集群运维、可观测性、访问控制和 AI 辅助排障整合到同一个界面中。
 
-![Kite dashboard showing cluster health, workloads, events, and resource usage](/screenshots/overview.png)
+![Kite 仪表盘展示集群健康状态、工作负载、事件和资源用量](../screenshots/overview.png)
 
-## Start here
+## 从这里开始
 
-::: tip Fastest evaluation path
-Install Kite with Helm, use port forwarding for the first visit, then connect the in-cluster Kubernetes API. You can complete the initial setup without preparing a kubeconfig.
+::: tip 最快体验路径
+使用 Helm 安装 Kite，首次访问时通过端口转发打开界面，然后连接集群内的 Kubernetes API。整个初始设置不需要提前准备 kubeconfig。
 :::
 
-1. [Install Kite](./installation) and open the dashboard.
-2. [Set up users](/config/user-management) and [RBAC](/config/rbac-config) before inviting your team.
-3. [Connect Prometheus](/config/prometheus-setup) when you are ready to add cluster metrics.
+1. [安装 Kite](./installation.md) 并打开仪表盘。
+2. 邀请团队前，先配置[用户](../config/user-management.md)和 [RBAC](../config/rbac-config.md)。
+3. 需要集群指标时，再[连接 Prometheus](../config/prometheus-setup.md)。
 
-## Find the right guide
+## 找到对应指南
 
-- **Find any resource quickly:** [Global Search](./global-search)
-- **Understand a workload and its dependencies:** [Related Resources](./related-resources)
-- **Investigate a running Pod:** [Logs](./logs) and [Web Terminal](./web-terminal)
-- **Track cluster health and usage:** [Monitoring](./monitoring)
-- **Install and manage releases:** [Helm Management](./helm-management)
-- **Review resource changes:** [Resource History](./resource-history)
-- **Troubleshoot with an AI agent:** [AI Assistant](./ai-assistant)
-- **Connect private or remote clusters:** [Kite Cluster Agent](./kite-cluster-agent)
+- **快速找到任意资源：** [全局搜索](./global-search.md)
+- **了解工作负载及其依赖关系：** [相关资源](./related-resources.md)
+- **排查正在运行的 Pod：** [日志](./logs.md)与 [Web 终端](./web-terminal.md)
+- **查看集群健康状态和用量：** [监控](./monitoring.md)
+- **安装和管理应用：** [Helm 管理](./helm-management.md)
+- **审查资源变更：** [资源历史](./resource-history.md)
+- **使用 AI Agent 辅助排障：** [AI 助手](./ai-assistant.md)
+- **连接私有或远程集群：** [Kite Cluster Agent](./kite-cluster-agent.md)
+- **打包自己的镜像并推送：** [构建并推送 Kite 镜像](./build-and-push-image.md)
 
-## Platform at a glance
+## 平台能力概览
 
-### Observe
+### 观察
 
-Use real-time CPU, memory, and network charts, live Pod logs, events, and resource relationships to move from a symptom to its context.
+通过实时 CPU、内存和网络图表、Pod 日志、事件与资源关系，从异常现象快速定位所需上下文。
 
-### Operate
+### 运维
 
-Create and edit Kubernetes resources, manage Helm releases, open Pod and Node terminals, run kubectl, and access workloads through Kube Proxy.
+创建和编辑 Kubernetes 资源、管理 Helm Release、打开 Pod 与 Node 终端、运行 kubectl，并通过 Kube Proxy 访问工作负载。
 
-### Govern
+### 治理
 
-Manage team access with OAuth, MFA, passkeys, users, RBAC, role mappings, and audit logs across multiple clusters.
+使用 OAuth、MFA、用户管理、RBAC、角色映射和审计日志，统一管理多集群中的团队访问。
 
-## Where Kite fits
+## Kite 适合什么场景
 
-Headlamp and Kubernetes Dashboard are strong tools for inspecting and operating individual clusters. Kite adds a shared workspace for multi-cluster operations, built-in team governance, observability, and AI-assisted workflows.
+Headlamp 和 Kubernetes Dashboard 都是优秀的单集群资源查看与操作工具。Kite 在此基础上增加了共享的多集群工作空间、团队治理、可观测性和 AI 辅助工作流。
 
-If you are evaluating Kite, continue with the [installation guide](./installation).
+如果你正在评估 Kite，请继续阅读[安装指南](./installation.md)。

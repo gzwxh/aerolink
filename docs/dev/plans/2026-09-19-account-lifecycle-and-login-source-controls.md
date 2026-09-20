@@ -1,0 +1,126 @@
+# 方案：账号生命周期与登录来源控制
+
+- 状态：**已实现**（`pkg/model`、`pkg/auth`、`pkg/notification`、`pkg/settings`、`ui/` 及两侧测试已同步）
+- 相关：`docs/dev/plans/2026-09-18-release-automation-and-attribution.md` 之后的配套口径
+
+## 1. 问题
+
+界面上有四个「看起来在生效、实际是空的」控制项，其中两个还带着默认开启的误导：
+
+| 控制项 | 位置 | 实际情况 |
+| --- | --- | --- |
+| 仅存在用户登录 | 安全管理 → 认证安全 | 后端**从不读取**该字段。OIDC 首次登录无条件建号并启用（`pkg/model/user.go` 的 upsert），与「不存在的用户不能登录」相反 |
+| 仅从用户登录来源登录 | 同上 | 后端从不读取。仓库里唯一的 IP 逻辑是登录失败限流器的白/黑名单 |
+| 账号有效期（`ExpiresAt` / `DefaultUserExpireDays`） | 用户管理 / 安全管理 | **没有任何执行点**：登录与鉴权都不看它，也没有停用任务。只有「即将过期」的提醒 |
+| OIDC 老账号的写回 | `FindWithSubOrUpsertUser` | 更新已存在账号时是整行 `Save`，而结构体只填了 IdP 提供的字段。实测确认：每次登录都会把 `ExpiresAt`、`IsSuperAdmin`、`Email`、`Phone`、`Remark`、`MFADisabled` 清零 |
+
+另外两项工程性问题：
+
+- `ui/src/i18n/locales/*.json` 里**完全没有 `audit.loginResult.*`**，而登录日志用动态键渲染失败原因，因此「日志审计 → 登录日志」一直显示原始码（`invalid_credentials` 等）。
+- 早期两个开关的字段名（`existingUserOnly` / `loginSourceRestricted`）在**已部署库里已经被存成 `true`**（UI 表单会序列化整个结构）。因为它们此前从未被执行过，这些 `true` 不是知情选择；一旦沿用旧名开始真正执行，升级即等于：拒绝所有未开通的 OIDC 用户 + 把登录限制到内置默认白名单的两条 IP（后者等于全体被锁在外面）。
+
+## 2. 口径
+
+### 2.1 账号有效期
+
+1. **每日任务停用**：过期的启用账号被停用，并记录 `disabled_reason = "expired"`（`pkg/notification` 的 `checkExpiredUsers`，与「不活跃自动禁用」同一入口）。仍受「最后一个管理员」保护，避免把管理面锁死。
+2. **登录即时拒绝**：密码/LDAP 与 OIDC 两条登录路径在 `!Enabled` 之后立即拒绝，错误码 `user_expired`。
+3. **已登录会话即时拒绝**：`RequireAuth` 一并校验，覆盖每日任务执行前的窗口。
+4. 自动停用**不发新通知**：过期前 7 天已有每日提醒（`accountExpiryNoticeDays`），停用原因在用户详情与「用户状态」面板可见。若日后需要，再补一个事件。
+
+### 2.2 OIDC 写回
+
+只更新身份源管辖的列（`provider` / `sub` / `username` / `name` / `avatar_url` / `last_login_at`），其余字段一律不动；`oidc_groups` 由分组同步刷新。以库里的那一行为基，调用方因此拿到真实的启用/有效期状态，登录判定不会被零值骗过。
+
+### 2.3 仅存在用户登录（字段改名为 `rejectUnknownUsers`）
+
+- **默认关闭**。
+- 关闭时保持原行为：sub 与用户名都匹配不到就自动建号。
+- 开启时只允许本地已存在的账号登录：
+  - 命中 `sub`：正常更新；
+  - `sub` 未命中但**用户名命中**：把本次登录的 `sub` 绑到该账号，并按身份源接管它（`provider` 改为该身份源，本地口令自此不可用）——这就是「预先开通」的路径，运维用现有建号界面即可准备账号；
+  - 都不命中：返回 `ErrUserNotProvisioned`，登录页给出「账号未开通」。
+- **初始超级管理员不可被认领**（`isGuardedSuperAdmin` → 拒绝）：否则本地应急口令会失效，而那是管理面最后的入口。
+- 未沿用旧字段名的原因见 §1：改名让库里的旧值作废，变更由管理员显式打开。
+
+### 2.4 仅从指定来源登录（字段改名为 `loginSourceEnforced` + `loginSourceAllowlist`）
+
+- **默认关闭**；`loginSourceEnforced` 启用且 `loginSourceAllowlist` 非空时才生效。
+- 生效范围：**登录与已登录请求都拦**。否则在允许网段建立的会话可以被带到任意网络继续使用。鉴权失败**不清 cookie**（换回允许网段即可继续）。
+- 列表与登录失败白名单共用同一套写法：单地址 / CIDR / 地址区间。它**不复用 `IPWhitelist`**——那个字段的语义是「豁免失败锁定」，拿来做准入会把语义搅在一起（且其内置默认值就是两条运维 IP）。
+- 「启用 + 空列表」被**双层拒绝**：后端 `ErrLoginSourceAllowlistRequired` → 400 + `login_source_allowlist_required`；前端提交前也会拦。
+- 读不到安全设置时**不封锁**（fail-open）并打警告：能走到这里通常意味着数据库已不可用，此时把所有人挡在门外只会让故障更难恢复。
+
+## 3. 实现落点
+
+| 位置 | 内容 |
+| --- | --- |
+| `pkg/model/security_setting.go` | 字段改名与新增（`RejectUnknownUsers` / `LoginSourceEnforced` / `LoginSourceAllowlist`）；空列表硬约束 |
+| `pkg/model/user.go` | `FindWithSubOrUpsertUser(user, rejectUnknown)`；`ErrUserNotProvisioned`；`User.IsExpired`；写回改为限定列 |
+| `pkg/model/notification.go` | `DisableReasonExpired`；`LoginResultAccountExpired` / `LoginResultSourceDenied` |
+| `pkg/notification/triggers.go` | `checkExpiredUsers`（并入 `RunDailyChecks`） |
+| `pkg/auth/login_source.go` | `loginSourceAllowed` |
+| `pkg/auth/login_handler.go` | 两条登录路径的有效期与来源闸门；OIDC 回调传策略并处理 `ErrUserNotProvisioned` |
+| `pkg/auth/middleware.go` | `RequireAuth` 的有效期与来源闸门 |
+| `pkg/settings/security.go` | 空列表 400 映射 |
+| `ui/` | 开关改绑新字段、来源允许列表 `TagInput`、提交前校验、登录页新增两个错误码、`audit.loginResult.*` 补全 |
+| 测试 | `pkg/model/oidc_upsert_test.go`、`pkg/notification/expired_users_test.go`、`pkg/auth/login_source_test.go`、`pkg/auth/login_integration_test.go`（有效期） |
+
+## 4. 兼容性与升级注意
+
+- 两个开关升级后都是**关闭**：旧值被忽略，旧键会在下一次保存后从 JSON 里消失。启用它们是有意动作。
+- 启用「仅存在用户登录」前，请确认第三方用户都已有同名本地账号；否则他们会被拒（这是设计意图，但需要提前准备）。
+- 账号有效期从此真正生效：**升级前应检查是否已有过期的启用账号**，否则它们会立刻被拒登录并在每日任务里被停用。（本仓库 `dev.db` 实测：0 个账号设了有效期，无影响。）
+- 自动停用不发送新的通知事件（见 §2.1.4）。
+
+## 5. 验证
+
+- `go test ./...`、`golangci-lint run ./...`、`gofmt -l`
+- `pnpm --dir ui exec tsc --noEmit -p tsconfig.app.json`、`pnpm --dir ui run test`、`pnpm --dir ui run lint`、`prettier --check`
+- 每个修复都做了反证（关掉修复后对应用例必须失败）：OIDC 字段清零、有效期不生效、每日任务不停用、来源限制不拦。
+
+## 6. 附：MFA 策略口径（同批改动）
+
+### 6.1 问题
+
+`MFAPolicy`（安全管理 → MFA 策略）在界面上写作「全局启用 MFA 认证」，于是它同时被当成两件事用：
+「谁必须绑定动态码」和「绑定之后登录时是否使用动态码」。`login_handler.go` 里有一段对
+`MFAPolicy == disabled` 的覆盖，直接把挑战整体跳过——默认值恰好就是 `disabled`，所以
+
+- 管理员自愿给某个账号绑定了动态码，却在默认配置下登录**不验码**；
+- 同一个账号执行删除类操作、打开交互终端时**又要求验码**（`MFAStepUpEnabled` 是独立开关）；
+- 结果是只掌握口令的一方拿到一个完整会话：可读取全部有权资源，只是不能删除/开终端。
+
+### 6.2 口径
+
+**策略只回答「谁必须绑定 MFA」；绑定之后一律使用。**
+
+1. 删除 `MFAPolicy == disabled ⇒ 不挑战` 的覆盖。挑战条件只由账号自身状态决定：
+   `user.MFAEnabled && (provider == password || LDAP 管理员且开启第三方 MFA)`。
+   `MFARequiredFor`（策略 → 是否强制注册）语义不变，仍用于引导注册。
+2. 由此一个自然结果：**非管理员自愿绑定 MFA 的账号，登录也要验码**——不需要额外判定
+   「是不是管理员」，因为账号绑定状态本身就是判定依据。
+3. OIDC/CAS/SAML 回调在签发会话前**清除本浏览器的提权信任 cookie**
+   （`mfa.ClearTrusted`）。第三方登录无法在回调里校验动态码，沿用上一次会话留下的信任窗口
+   会让敏感操作跳过二次验证。
+4. 界面文案同步：`securitySettings.fields.mfaPolicy` 改为「强制绑定 MFA / Require MFA enrollment」
+   并补 hint，选项 `disabled` 改为「不强制 / Nobody」，避免继续暗示「关掉就没有 MFA」。
+
+### 6.3 实现落点
+
+| 位置 | 内容 |
+| --- | --- |
+| `pkg/auth/login_handler.go` | 去掉策略覆盖，挑战只看账号绑定状态；OIDC 回调 `mfa.ClearTrusted(c)` |
+| `pkg/auth/mfa_login_test.go` | TOTP 生成器自检（RFC 6238 向量）、策略为 disabled 仍挑战、正确验证码放行、回调清信任 + 预开通账号绑定 |
+| `ui/src/components/settings/security-management.tsx`、两侧 `locales/*.json` | 策略文案与 hint |
+
+### 6.4 升级注意
+
+- 升级后，**已绑定动态码的账号在默认配置下登录会开始要求验证码**。若曾有人绑了码却
+  从没用过（或验证器已丢失），需要管理员用「重置 MFA」清掉绑定，否则会登录失败。
+- 账号上的「MFA 级别：禁用」（`MFADisabled`）**不能**再当作绕过口：它的语义是「不受
+  全局策略强制注册」，而不是「不用动态码」。此前在策略为 `disabled` 时它顺带起了
+  绕过的作用，现在一个真正绑定过的账号（`MFAEnabled`）登录一律验码，要移除绑定只能
+  重置 MFA。
+- 反证记录：临时恢复策略覆盖 → `TestPasswordLoginChallengesBoundMFAEvenWhenPolicyDisabled`
+  返回 204 而非 401；临时删掉回调的 `ClearTrusted` → `Set-Cookie` 里不再有 `mfa_trust` 清除项。

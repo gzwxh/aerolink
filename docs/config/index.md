@@ -1,9 +1,9 @@
-# Configuration Overview
+# 配置概览
 
-Kite offers a variety of configuration options to adapt to your specific Kubernetes environment and requirements. This section covers the primary configuration areas.
+Kite 提供了各种配置选项，以适应您的特定 Kubernetes 环境和需求。本节涵盖了主要的配置领域。
 
-- [User Management and Account Security](./user-management)
-- [OAuth Setup](./oauth-setup)
-- [Authorization](./rbac-config)
-- [Monitoring](./prometheus-setup)
-- [Chart Configuration](./chart-values)
+- [用户管理与账号安全](./user-management.md)
+- [OAuth 设置](./oauth-setup.md)
+- [授权](./rbac-config.md)
+- [监控](./prometheus-setup.md)
+- [Chart 配置](./chart-values.md)

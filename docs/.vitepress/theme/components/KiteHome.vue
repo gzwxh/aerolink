@@ -17,14 +17,15 @@ import { computed } from "vue";
 import auditScreenshot from "../../../screenshots/audit.webp";
 import detailScreenshot from "../../../screenshots/detail.webp";
 import helmScreenshot from "../../../screenshots/helm.webp";
+import overviewScreenshot from "../../../screenshots/overview2.webp";
 import GitHubStarCount from "./GitHubStarCount.vue";
 
 const content = {
   en: {
-    homeHref: "/",
-    docsHref: "/guide/",
-    installHref: "/guide/installation",
-    languageHref: "/zh/",
+    homeHref: "/en/",
+    docsHref: "/en/guide/",
+    installHref: "/en/guide/installation",
+    languageHref: "/",
     languageLabel: "中文",
     languageCode: "zh-CN",
     homeLabel: "Kite home",
@@ -67,7 +68,7 @@ const content = {
         description:
           "Real-time visibility into clusters, workloads, and performance. Dashboards and events help you act, not just react.",
         link: "Explore observability",
-        href: "/guide/monitoring",
+        href: "/en/guide/monitoring",
       },
       {
         icon: IconTerminal2,
@@ -75,7 +76,7 @@ const content = {
         description:
           "Deploy, troubleshoot, and scale with confidence. Everything you need to run Kubernetes day to day, without context switching.",
         link: "Explore operations",
-        href: "/guide/installation",
+        href: "/en/guide/installation",
       },
       {
         icon: IconShieldLock,
@@ -83,7 +84,7 @@ const content = {
         description:
           "Access control, policies, and audit-ready workflows that keep your platform secure and your teams productive.",
         link: "Explore governance",
-        href: "/config/rbac-config",
+        href: "/en/config/rbac-config",
       },
     ],
     proof: {
@@ -139,10 +140,10 @@ const content = {
     ],
   },
   zh: {
-    homeHref: "/zh/",
-    docsHref: "/zh/guide/",
-    installHref: "/zh/guide/installation",
-    languageHref: "/",
+    homeHref: "/",
+    docsHref: "/guide/",
+    installHref: "/guide/installation",
+    languageHref: "/en/",
     languageLabel: "English",
     languageCode: "en",
     homeLabel: "Kite 首页",
@@ -185,7 +186,7 @@ const content = {
         description:
           "实时了解集群、工作负载和性能。通过仪表盘、指标与事件快速定位真正需要处理的问题。",
         link: "了解可观测性",
-        href: "/zh/guide/monitoring",
+        href: "/guide/monitoring",
       },
       {
         icon: IconTerminal2,
@@ -193,7 +194,7 @@ const content = {
         description:
           "在一个界面中完成部署、排障与扩缩容，覆盖 Kubernetes 日常运维所需的核心工作流。",
         link: "了解运维能力",
-        href: "/zh/guide/installation",
+        href: "/guide/installation",
       },
       {
         icon: IconShieldLock,
@@ -201,7 +202,7 @@ const content = {
         description:
           "通过访问控制、权限策略和完整审计记录保障平台安全，同时保持团队协作效率。",
         link: "了解权限治理",
-        href: "/zh/config/rbac-config",
+        href: "/config/rbac-config",
       },
     ],
     proof: {
@@ -395,7 +396,7 @@ const copy = computed(() =>
 
         <div class="product-media">
           <img
-            src="/screenshots/overview2.webp"
+            :src="overviewScreenshot"
             :alt="copy.proof.imageAlt"
             width="3172"
             height="2334"

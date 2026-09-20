@@ -1,47 +1,43 @@
-# User Management
+# 用户管理
 
-Kite supports multiple user management methods, combining OAuth with local password users, and working with the RBAC permission system to achieve flexible access control.
+Kite 支持多种用户管理方式，结合 OAuth 与本地密码用户，配合 RBAC 权限系统，实现灵活的访问控制。
 
-## User Types
+## 用户类型
 
-- **OAuth Users**: Login through third-party identity providers (such as GitHub, OIDC, etc.).
+- **OAuth 用户**：通过第三方身份提供商（如 GitHub、OIDC 等）登录。
 
-For how to configure OAuth, see [OAuth Configuration Guide](./oauth-setup)
+如何配置 OAuth 见 [OAuth 配置指南](./oauth-setup.md)
 
-- **Password Users**: Login through username and password. Password users can enable authenticator app MFA and register passkeys for passwordless login.
-- **API Keys**: Used for scripts, CI/CD, or external systems calling Kite APIs. See [API Authentication](../api/authentication).
+- **密码用户**： 通过用户名和密码登录。密码用户可以启用认证器应用 MFA。
+- **API 密钥**：用于脚本、CI/CD 或外部系统调用 Kite API。参见 [API 认证](../api/authentication.md)。
 
-## User Management
+## 用户管理
 
-Users with the **admin** role can access the settings entry in the upper right corner of the page to enter the user and permission management interface.
+拥有 **admin** 角色的用户，可在页面右上角进入设置入口，进入用户与权限管理界面。
 
-In this interface, you can:
+在该界面，您可以：
 
-- View all current users and their role information
-- Add new users (only password users are supported)
-- Disable or delete accounts that are no longer needed
-- Modify user role assignments to achieve permission adjustments
+- 查看当前所有用户及其角色信息
+- 新增用户（仅支持密码用户）
+- 禁用或删除不再需要的账号
+- 修改用户的角色分配，实现权限调整
 
 ![User Management](../screenshots/user-m.png)
 
-## Account Security
+## 账号安全
 
-MFA and passkey login are enabled by default and can be managed by admins in **Settings -> Authentication**.
+MFA 登录默认启用，管理员可以在 **设置 -> 认证** 中管理。
 
-Password users can manage their own security settings from the account settings dialog:
+密码用户可以在账号设置弹窗中使用 TOTP 认证器应用启用 MFA。
 
-- Enable MFA with a TOTP authenticator app
-- Add or delete passkeys
-- Use passkeys to sign in when passkey login is enabled
+MFA 仅适用于密码用户。OAuth 和 LDAP 用户应使用身份提供商侧的安全策略。
 
-MFA and passkeys are available only for password users. OAuth and LDAP users should use the security policies from their identity provider.
+## 最佳实践
 
-## Best Practices
+- 推荐优先使用 OAuth 用户，实现统一身份管理
+- 密码用户适用于特殊或临时场景
+- 为密码用户启用 MFA
+- 定期审查用户列表和角色分配，确保权限最小化
+- 禁用未使用账号，降低安全风险
 
-- Recommend prioritizing OAuth users to achieve unified identity management
-- Password users are suitable for special or temporary scenarios
-- Enable MFA or passkeys for password users
-- Regularly review user lists and role assignments to ensure minimal permissions
-- Disable unused accounts to reduce security risks
-
-For permission assignment, refer to [RBAC Permission Management](./rbac-config)
+权限分配可参考 [RBAC 权限管理](./rbac-config.md)
