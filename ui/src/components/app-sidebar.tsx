@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
+import { splitSiteName } from '@/lib/site-name'
 import { useBranding } from '@/contexts/branding-context'
 import { useSidebarConfig } from '@/contexts/sidebar-config-context'
 import { SIDEBAR_CLUSTER_GROUP_ID } from '@/contexts/sidebar-config-defaults'
@@ -37,6 +38,27 @@ import {
 import { ClusterSelector } from './cluster-selector'
 import { Collapsible, CollapsibleTrigger } from './ui/collapsible'
 import { VersionInfo } from './version-info'
+
+/**
+ * 侧边栏里的品牌名称。
+ *
+ * 侧边栏是固定宽度（16rem、overflow-hidden），单行放不下的名称会被**直接裁掉**
+ * （不是省略号，是后面的字看不见）。所以按显示宽度折成最多两行
+ * （见 lib/site-name.ts），并把完整名称放进 title 作为兜底。
+ */
+function SiteNameText({ name, className }: { name: string; className?: string }) {
+  const lines = splitSiteName(name)
+
+  return (
+    <span className={cn('text-base font-semibold', className)} title={name}>
+      {lines.map((line, index) => (
+        <span key={index} className="block leading-tight break-words">
+          {line}
+        </span>
+      ))}
+    </span>
+  )
+}
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
@@ -282,7 +304,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     alt={`${siteName} Logo`}
                     className="ml-1 h-8 w-8"
                   />
-                  <span className="text-base font-semibold">{siteName}</span>
+                  <SiteNameText name={siteName} />
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -315,9 +337,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       className="h-8 w-8"
                     />
                     <div className="flex flex-col">
-                      <span className="text-base font-semibold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                        {siteName}
-                      </span>
+                      <SiteNameText
+                        name={siteName}
+                        className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent"
+                      />
                       {/* 改了品牌就不再暴露上游版本号与提交链接（见 Branding） */}
                       {isCustomBranding ? null : <VersionInfo />}
                     </div>

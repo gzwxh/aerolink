@@ -21,6 +21,7 @@ import {
   useGeneralSetting,
 } from '@/lib/api'
 import { reportOperationFailure } from '@/lib/error-reporter'
+import { SITE_NAME_MAX_LENGTH } from '@/lib/site-name'
 import { cn, translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -607,7 +608,7 @@ export function GeneralManagement() {
               id="general-site-name"
               value={formData.siteName}
               disabled={readOnly}
-              maxLength={100}
+              maxLength={SITE_NAME_MAX_LENGTH}
               onChange={(event) =>
                 setFormData((prev) => ({
                   ...prev,
@@ -619,12 +620,21 @@ export function GeneralManagement() {
                 'Kite'
               )}
             />
-            <p className="text-xs text-muted-foreground">
-              {t(
-                'generalManagement.branding.nameHint',
-                '展示在侧边栏、登录页与浏览器标签上；留空则使用默认名称 Kite。'
-              )}
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'generalManagement.branding.nameHint',
+                  '展示在侧边栏、登录页与浏览器标签上；最长 16 个字符（中文按 1 个算），过长时侧边栏会折成两行完整展示。留空则使用默认名称 Kite。'
+                )}
+              </p>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {t('generalManagement.branding.nameCounter', {
+                  defaultValue: '{{used}}/{{max}}',
+                  used: [...formData.siteName].length,
+                  max: SITE_NAME_MAX_LENGTH,
+                })}
+              </span>
+            </div>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-3">

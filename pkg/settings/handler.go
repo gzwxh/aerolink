@@ -63,8 +63,10 @@ func effectiveVersionCheck(settingValue bool) bool {
 // 所以限制在 256 KiB 以内；更大的图片建议放静态服务器后用 URL 引用。
 const maxLogoURLLength = 256 * 1024
 
-// maxSiteNameLength 与 users 表无关，是控制台名称本身的上限（列宽 varchar(100)）。
-const maxSiteNameLength = 100
+// maxSiteNameLength 是控制台名称（品牌名称）的字符上限。列宽是 varchar(100)，
+// 但侧边栏只有 16rem 宽，名字太长放不下：前端会按两行折行展示，超过 16 个字符
+// （中文按 1 个算）两行也放不下，因此在写入处就收紧到 16。
+const maxSiteNameLength = 16
 
 type UpdateGeneralSettingRequest struct {
 	AIAgentEnabled        *bool   `json:"aiAgentEnabled"`
