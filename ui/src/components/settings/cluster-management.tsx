@@ -171,7 +171,23 @@ export function ClusterManagement() {
         cell: ({ row: { original: cluster } }) => (
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-medium">{cluster.name}</span>
+              {/* 名称是这张表里最自然的入口：点一下直接开「编辑集群」，
+                  不必先展开右侧的操作菜单。只读角色保持纯文本，不做假入口。 */}
+              {readOnly ? (
+                <span className="font-medium">{cluster.name}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="app-link text-left font-medium"
+                  title={t('common.actions.edit', 'Edit')}
+                  onClick={() => {
+                    setEditingCluster(cluster)
+                    setShowClusterDialog(true)
+                  }}
+                >
+                  {cluster.name}
+                </button>
+              )}
               {cluster.name === currentCluster && (
                 <Badge variant="outline" className="gap-1 text-primary">
                   <IconCheck className="h-3 w-3" />
@@ -238,7 +254,7 @@ export function ClusterManagement() {
         ),
       },
     ],
-    [getClusterTypeBadge, getStatusBadge, t, currentCluster]
+    [getClusterTypeBadge, getStatusBadge, t, currentCluster, readOnly]
   )
 
   const actions = useMemo<Action<Cluster>[]>(
