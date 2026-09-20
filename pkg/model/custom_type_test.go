@@ -16,11 +16,16 @@ func TestSliceString_Scan(t *testing.T) {
 		wantErr  bool
 	}{
 		{"nil value", nil, nil, false},
-		{"empty string", "", SliceString{""}, false},
+		{"empty string", "", SliceString{}, false},
 		{"comma separated string", "a,b,c", SliceString{"a", "b", "c"}, false},
 		{"byte slice", []byte("x,y,z"), SliceString{"x", "y", "z"}, false},
 		{"single value string", "single", SliceString{"single"}, false},
 		{"unsupported type", 123, nil, true},
+		// 历史脏数据：空元素与空白必须被清洗，否则前端会出现"空名组"。
+		{"trailing comma", "a,", SliceString{"a"}, false},
+		{"leading comma", ",a", SliceString{"a"}, false},
+		{"only commas and spaces", " , ,", SliceString{}, false},
+		{"whitespace trimmed", " a , b ", SliceString{"a", "b"}, false},
 	}
 
 	for _, tt := range tests {

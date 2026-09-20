@@ -67,8 +67,8 @@ func (h *AuthHandler) UpdateLDAPSetting(c *gin.Context) {
 		return
 	}
 
-	// Re-sync promptly after the settings are saved so fixes to the directory
-	// configuration (or newly enabled LDAP) are reflected quickly.
+	// 保存设置后立即重新同步，这样对目录配置的修复
+	// （或新启用的 LDAP）能很快生效。
 	TriggerLDAPSync()
 
 	c.JSON(http.StatusOK, ldapSettingResponse(updated))
@@ -94,9 +94,9 @@ func ldapSettingResponse(setting *model.LDAPSetting) gin.H {
 	}
 }
 
-// SyncLDAPUsers triggers an immediate alignment sync. It never provisions new
-// users — new accounts are created through ImportLDAPUsers after the admin
-// picks them interactively.
+// SyncLDAPUsers 触发一次立即执行的对齐同步。它从不开通新用户——
+// 新账号由管理员在交互式选择之后
+// 通过 ImportLDAPUsers 创建。
 func (h *AuthHandler) SyncLDAPUsers(c *gin.Context) {
 	setting, err := model.GetLDAPSetting()
 	if err != nil {
@@ -118,8 +118,8 @@ func (h *AuthHandler) GetLDAPSyncStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, GetLDAPSyncStatus())
 }
 
-// ListLDAPImportCandidates exposes directory users for the interactive import
-// picker (username, display name, already-imported / conflict flags).
+// ListLDAPImportCandidates 把目录用户暴露给交互式导入选择器
+// （用户名、展示名、已导入 / 冲突标记）。
 func (h *AuthHandler) ListLDAPImportCandidates(c *gin.Context) {
 	setting, err := model.GetLDAPSetting()
 	if err != nil {
@@ -138,7 +138,7 @@ func (h *AuthHandler) ListLDAPImportCandidates(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"users": candidates, "total": len(candidates)})
 }
 
-// ImportLDAPUsers imports the directory users the admin selected in the picker.
+// ImportLDAPUsers 导入管理员在选择器中选中的目录用户。
 func (h *AuthHandler) ImportLDAPUsers(c *gin.Context) {
 	var req struct {
 		Usernames      []string `json:"usernames"`

@@ -26,7 +26,7 @@ func TestLoadEnvs(t *testing.T) {
 	}{
 		JwtSecret:            JwtSecret,
 		Port:                 Port,
-		EnableAnalytics:      EnableAnalytics,
+		EnableAnalytics:      EnableAnalytics.Load(),
 		AgentPodNamespace:    AgentPodNamespace,
 		NodeTerminalImage:    NodeTerminalImage,
 		KubectlTerminalImage: KubectlTerminalImage,
@@ -36,7 +36,7 @@ func TestLoadEnvs(t *testing.T) {
 		AnonymousUserEnabled: AnonymousUserEnabled,
 		Host:                 Host,
 		DisableGZIP:          DisableGZIP,
-		EnableVersionCheck:   EnableVersionCheck,
+		EnableVersionCheck:   EnableVersionCheck.Load(),
 		Base:                 Base,
 		CORSAllowedOrigins:   append([]string(nil), CORSAllowedOrigins...),
 		TrustedProxies:       append([]string(nil), TrustedProxies...),
@@ -44,7 +44,7 @@ func TestLoadEnvs(t *testing.T) {
 	defer func() {
 		JwtSecret = old.JwtSecret
 		Port = old.Port
-		EnableAnalytics = old.EnableAnalytics
+		EnableAnalytics.Store(old.EnableAnalytics)
 		AgentPodNamespace = old.AgentPodNamespace
 		NodeTerminalImage = old.NodeTerminalImage
 		KubectlTerminalImage = old.KubectlTerminalImage
@@ -54,7 +54,7 @@ func TestLoadEnvs(t *testing.T) {
 		AnonymousUserEnabled = old.AnonymousUserEnabled
 		Host = old.Host
 		DisableGZIP = old.DisableGZIP
-		EnableVersionCheck = old.EnableVersionCheck
+		EnableVersionCheck.Store(old.EnableVersionCheck)
 		Base = old.Base
 		CORSAllowedOrigins = append([]string(nil), old.CORSAllowedOrigins...)
 		TrustedProxies = append([]string(nil), old.TrustedProxies...)
@@ -63,7 +63,7 @@ func TestLoadEnvs(t *testing.T) {
 	CORSAllowedOrigins = nil
 	TrustedProxies = nil
 
-	t.Setenv("JWT_SECRET", "test-jwt-secret")
+	t.Setenv("JWT_SECRET", "test-jwt-secret-with-32-bytes-min!!")
 	t.Setenv("PORT", "9090")
 	t.Setenv("ENABLE_ANALYTICS", "true")
 	t.Setenv("NAMESPACE", "test-namespace")
@@ -83,14 +83,14 @@ func TestLoadEnvs(t *testing.T) {
 
 	LoadEnvs()
 
-	if JwtSecret != "test-jwt-secret" {
-		t.Fatalf("JwtSecret = %q, want %q", JwtSecret, "test-jwt-secret")
+	if JwtSecret != "test-jwt-secret-with-32-bytes-min!!" {
+		t.Fatalf("JwtSecret = %q, want %q", JwtSecret, "test-jwt-secret-with-32-bytes-min!!")
 	}
 	if Port != "9090" {
 		t.Fatalf("Port = %q, want %q", Port, "9090")
 	}
-	if !EnableAnalytics {
-		t.Fatalf("EnableAnalytics = %v, want true", EnableAnalytics)
+	if !EnableAnalytics.Load() {
+		t.Fatalf("EnableAnalytics = %v, want true", EnableAnalytics.Load())
 	}
 	if AgentPodNamespace != "test-namespace" {
 		t.Fatalf("AgentPodNamespace = %q, want %q", AgentPodNamespace, "test-namespace")
@@ -119,8 +119,8 @@ func TestLoadEnvs(t *testing.T) {
 	if DisableGZIP {
 		t.Fatalf("DisableGZIP = %v, want false", DisableGZIP)
 	}
-	if EnableVersionCheck {
-		t.Fatalf("EnableVersionCheck = %v, want false", EnableVersionCheck)
+	if EnableVersionCheck.Load() {
+		t.Fatalf("EnableVersionCheck = %v, want false", EnableVersionCheck.Load())
 	}
 	if Base != "/kite" {
 		t.Fatalf("Base = %q, want %q", Base, "/kite")

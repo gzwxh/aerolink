@@ -6,8 +6,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// ResourceType is the canonical plural name for a Kubernetes resource,
-// matching the form used in API URLs (e.g. /api/v1/pods).
+// ResourceType 是 Kubernetes 资源的规范复数名，
+// 与 API URL 中使用的形式一致（例如 /api/v1/pods）。
 type ResourceType string
 
 const (
@@ -85,8 +85,8 @@ const (
 	HelmReleases                      ResourceType = "helmrelease"
 )
 
-// ResourceMeta holds all metadata for a known Kubernetes resource type.
-// Adding support for a new resource requires only one entry here.
+// ResourceMeta 保存某个已知 Kubernetes 资源类型的全部元数据。
+// 新增一种资源只需要在这里加一条记录。
 type ResourceMeta struct {
 	Kind          string       // e.g. "Pod"
 	Singular      string       // e.g. "pod"
@@ -99,9 +99,9 @@ type ResourceMeta struct {
 	Related       bool // whether this resource exposes the related-resources API
 }
 
-// Registry is the single source of truth for all known resource types.
+// Registry 是所有已知资源类型的唯一事实来源。
 var Registry = []ResourceMeta{
-	// Core v1
+	// Core v1（核心组）
 	{Kind: "Pod", Singular: "pod", Plural: Pods, Short: []string{"po"}, Version: "v1", Searchable: true, Related: true},
 	{Kind: "Namespace", Singular: "namespace", Plural: Namespaces, Short: []string{"ns"}, Version: "v1", ClusterScoped: true},
 	{Kind: "Node", Singular: "node", Plural: Nodes, Version: "v1", ClusterScoped: true, Searchable: true},
@@ -120,28 +120,28 @@ var Registry = []ResourceMeta{
 	{Kind: "ServiceAccount", Singular: "serviceaccount", Plural: ServiceAccounts, Short: []string{"sa"}, Version: "v1"},
 	{Kind: "Event", Singular: "event", Plural: Events, Short: []string{"ev"}, Version: "v1"},
 
-	// apps/v1
+	// apps/v1（应用工作负载）
 	{Kind: "Deployment", Singular: "deployment", Plural: Deployments, Short: []string{"deploy", "dep"}, Group: "apps", Version: "v1", Searchable: true, Related: true},
 	{Kind: "ReplicaSet", Singular: "replicaset", Plural: ReplicaSets, Short: []string{"rs"}, Group: "apps", Version: "v1"},
 	{Kind: "ControllerRevision", Singular: "controllerrevision", Plural: ControllerRevisions, Group: "apps", Version: "v1"},
 	{Kind: "StatefulSet", Singular: "statefulset", Plural: StatefulSets, Short: []string{"sts"}, Group: "apps", Version: "v1", Searchable: true, Related: true},
 	{Kind: "DaemonSet", Singular: "daemonset", Plural: DaemonSets, Short: []string{"ds"}, Group: "apps", Version: "v1", Searchable: true, Related: true},
 
-	// policy/v1
+	// policy/v1（策略）
 	{Kind: "PodDisruptionBudget", Singular: "poddisruptionbudget", Plural: PodDisruptionBudgets, Short: []string{"pdb"}, Group: "policy", Version: "v1", Searchable: true, Related: true},
 
-	// batch/v1
+	// batch/v1（批处理）
 	{Kind: "Job", Singular: "job", Plural: Jobs, Group: "batch", Version: "v1", Searchable: true},
 	{Kind: "CronJob", Singular: "cronjob", Plural: CronJobs, Short: []string{"cj"}, Group: "batch", Version: "v1", Searchable: true},
 
-	// networking.k8s.io/v1
+	// networking.k8s.io/v1（网络）
 	{Kind: "Ingress", Singular: "ingress", Plural: Ingresses, Short: []string{"ing"}, Group: "networking.k8s.io", Version: "v1", Related: true},
 	{Kind: "NetworkPolicy", Singular: "networkpolicy", Plural: NetworkPolicies, Short: []string{"netpol"}, Group: "networking.k8s.io", Version: "v1"},
 	{Kind: "IngressClass", Singular: "ingressclass", Plural: IngressClasses, Group: "networking.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "IPAddress", Singular: "ipaddress", Plural: IPAddresses, Group: "networking.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "ServiceCIDR", Singular: "servicecidr", Plural: ServiceCIDRs, Group: "networking.k8s.io", Version: "v1", ClusterScoped: true},
 
-	// storage.k8s.io/v1
+	// storage.k8s.io/v1（存储）
 	{Kind: "StorageClass", Singular: "storageclass", Plural: StorageClasses, Short: []string{"sc"}, Group: "storage.k8s.io", Version: "v1", ClusterScoped: true, Related: true},
 	{Kind: "VolumeAttachment", Singular: "volumeattachment", Plural: VolumeAttachments, Group: "storage.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "CSIDriver", Singular: "csidriver", Plural: CSIDrivers, Group: "storage.k8s.io", Version: "v1", ClusterScoped: true},
@@ -149,34 +149,34 @@ var Registry = []ResourceMeta{
 	{Kind: "CSIStorageCapacity", Singular: "csistoragecapacity", Plural: CSIStorageCapacities, Group: "storage.k8s.io", Version: "v1"},
 	{Kind: "VolumeAttributesClass", Singular: "volumeattributesclass", Plural: VolumeAttributesClasses, Group: "storage.k8s.io", Version: "v1", ClusterScoped: true},
 
-	// rbac.authorization.k8s.io/v1
+	// rbac.authorization.k8s.io/v1（RBAC 授权）
 	{Kind: "Role", Singular: "role", Plural: Roles, Group: "rbac.authorization.k8s.io", Version: "v1"},
 	{Kind: "RoleBinding", Singular: "rolebinding", Plural: RoleBindings, Group: "rbac.authorization.k8s.io", Version: "v1"},
 	{Kind: "ClusterRole", Singular: "clusterrole", Plural: ClusterRoles, Group: "rbac.authorization.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "ClusterRoleBinding", Singular: "clusterrolebinding", Plural: ClusterRoleBindings, Group: "rbac.authorization.k8s.io", Version: "v1", ClusterScoped: true},
 
-	// certificates.k8s.io
+	// certificates.k8s.io（证书）
 	{Kind: "CertificateSigningRequest", Singular: "certificatesigningrequest", Plural: CertificateSigningRequests, Short: []string{"csr"}, Group: "certificates.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "ClusterTrustBundle", Singular: "clustertrustbundle", Plural: ClusterTrustBundles, Group: "certificates.k8s.io", Version: "v1alpha1", ClusterScoped: true},
 	{Kind: "PodCertificateRequest", Singular: "podcertificaterequest", Plural: PodCertificateRequests, Group: "certificates.k8s.io", Version: "v1beta1"},
 
-	// coordination.k8s.io
+	// coordination.k8s.io（协调 / 选主）
 	{Kind: "Lease", Singular: "lease", Plural: Leases, Group: "coordination.k8s.io", Version: "v1"},
 	{Kind: "LeaseCandidate", Singular: "leasecandidate", Plural: LeaseCandidates, Group: "coordination.k8s.io", Version: "v1alpha2"},
 
-	// node.k8s.io
+	// node.k8s.io（节点运行时）
 	{Kind: "RuntimeClass", Singular: "runtimeclass", Plural: RuntimeClasses, Group: "node.k8s.io", Version: "v1", ClusterScoped: true},
 
-	// scheduling.k8s.io
+	// scheduling.k8s.io（调度）
 	{Kind: "PriorityClass", Singular: "priorityclass", Plural: PriorityClasses, Short: []string{"pc"}, Group: "scheduling.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "Workload", Singular: "workload", Plural: Workloads, Group: "scheduling.k8s.io", Version: "v1alpha2"},
 	{Kind: "PodGroup", Singular: "podgroup", Plural: PodGroups, Group: "scheduling.k8s.io", Version: "v1alpha2"},
 
-	// flowcontrol.apiserver.k8s.io/v1
+	// flowcontrol.apiserver.k8s.io/v1（API 流量控制）
 	{Kind: "FlowSchema", Singular: "flowschema", Plural: FlowSchemas, Group: "flowcontrol.apiserver.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "PriorityLevelConfiguration", Singular: "prioritylevelconfiguration", Plural: PriorityLevelConfigurations, Group: "flowcontrol.apiserver.k8s.io", Version: "v1", ClusterScoped: true},
 
-	// admissionregistration.k8s.io/v1
+	// admissionregistration.k8s.io/v1（准入注册）
 	{Kind: "ValidatingAdmissionPolicy", Singular: "validatingadmissionpolicy", Plural: ValidatingAdmissionPolicies, Group: "admissionregistration.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "ValidatingAdmissionPolicyBinding", Singular: "validatingadmissionpolicybinding", Plural: ValidatingAdmissionPolicyBindings, Group: "admissionregistration.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "ValidatingWebhookConfiguration", Singular: "validatingwebhookconfiguration", Plural: ValidatingWebhookConfigurations, Group: "admissionregistration.k8s.io", Version: "v1", ClusterScoped: true},
@@ -184,7 +184,7 @@ var Registry = []ResourceMeta{
 	{Kind: "MutatingAdmissionPolicy", Singular: "mutatingadmissionpolicy", Plural: MutatingAdmissionPolicies, Group: "admissionregistration.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "MutatingAdmissionPolicyBinding", Singular: "mutatingadmissionpolicybinding", Plural: MutatingAdmissionPolicyBindings, Group: "admissionregistration.k8s.io", Version: "v1", ClusterScoped: true},
 
-	// resource.k8s.io
+	// resource.k8s.io（动态资源分配）
 	{Kind: "ResourceSlice", Singular: "resourceslice", Plural: ResourceSlices, Group: "resource.k8s.io", Version: "v1", ClusterScoped: true},
 	{Kind: "ResourceClaim", Singular: "resourceclaim", Plural: ResourceClaims, Group: "resource.k8s.io", Version: "v1"},
 	{Kind: "DeviceClass", Singular: "deviceclass", Plural: DeviceClasses, Group: "resource.k8s.io", Version: "v1", ClusterScoped: true},
@@ -192,32 +192,32 @@ var Registry = []ResourceMeta{
 	{Kind: "DeviceTaintRule", Singular: "devicetaintrule", Plural: DeviceTaintRules, Group: "resource.k8s.io", Version: "v1alpha3", ClusterScoped: true},
 	{Kind: "ResourcePoolStatusRequest", Singular: "resourcepoolstatusrequest", Plural: ResourcePoolStatusRequests, Group: "resource.k8s.io", Version: "v1alpha3", ClusterScoped: true},
 
-	// apiserverinternal.k8s.io
+	// apiserverinternal.k8s.io（API Server 内部）
 	{Kind: "StorageVersion", Singular: "storageversion", Plural: StorageVersions, Group: "internal.apiserver.k8s.io", Version: "v1alpha1", ClusterScoped: true},
 
-	// storagemigration.k8s.io
+	// storagemigration.k8s.io（存储迁移）
 	{Kind: "StorageVersionMigration", Singular: "storageversionmigration", Plural: StorageVersionMigrations, Group: "storagemigration.k8s.io", Version: "v1beta1", ClusterScoped: true},
 
-	// apiextensions.k8s.io/v1
+	// apiextensions.k8s.io/v1（CRD 扩展）
 	{Kind: "CustomResourceDefinition", Singular: "customresourcedefinition", Plural: "customresourcedefinitions", Short: []string{"crd", "crds"}, Group: "apiextensions.k8s.io", Version: "v1", ClusterScoped: true},
 
-	// metrics.k8s.io/v1beta1
+	// metrics.k8s.io/v1beta1（指标）
 	{Kind: "PodMetrics", Singular: "podmetrics", Plural: PodMetrics, Group: "metrics.k8s.io", Version: "v1beta1"},
 	{Kind: "NodeMetrics", Singular: "nodemetrics", Plural: NodeMetrics, Group: "metrics.k8s.io", Version: "v1beta1", ClusterScoped: true},
 
-	// gateway.networking.k8s.io/v1
+	// gateway.networking.k8s.io/v1（网关 API）
 	{Kind: "Gateway", Singular: "gateway", Plural: Gateways, Group: "gateway.networking.k8s.io", Version: "v1"},
 	{Kind: "HTTPRoute", Singular: "httproute", Plural: HTTPRoutes, Group: "gateway.networking.k8s.io", Version: "v1", Related: true},
 
-	// autoscaling/v2
+	// autoscaling/v2（自动扩缩）
 	{Kind: "HorizontalPodAutoscaler", Singular: "horizontalpodautoscaler", Plural: HorizontalPodAutoscalers, Short: []string{"hpa"}, Group: "autoscaling", Version: "v2", Searchable: true, Related: true},
 
-	// Synthetic resources
+	// 合成资源（背后没有对应的 Kubernetes API）
 	{Kind: "HelmRelease", Singular: "helmrelease", Plural: HelmReleases, Short: []string{"hr"}, Version: "v1"},
 }
 
-// resourceIndex maps lowercase alias → *ResourceMeta for O(1) lookups.
-// Built once at init time from Registry.
+// resourceIndex 维护 小写别名 → *ResourceMeta 的映射，用于 O(1) 查找。
+// 在 init 时依据 Registry 构建一次。
 var resourceIndex map[string]*ResourceMeta
 
 func init() {
@@ -233,8 +233,8 @@ func init() {
 	}
 }
 
-// LookupResource finds a ResourceMeta by any alias (kind, singular, plural, or short name).
-// Returns nil if not found.
+// LookupResource 通过任意别名（kind、单数、复数或短名）查找 ResourceMeta。
+// 找不到时返回 nil。
 func LookupResource(alias string) *ResourceMeta {
 	return resourceIndex[strings.ToLower(strings.TrimSpace(alias))]
 }
@@ -247,7 +247,7 @@ func MustLookupResource(alias string) *ResourceMeta {
 	return resource
 }
 
-// HistoryResourceType keeps registered resources on their existing key and qualifies custom resources by API group.
+// HistoryResourceType 让已注册资源沿用其既有键，并用 API 组限定自定资源。
 func HistoryResourceType(resource, group string) string {
 	if meta := LookupResource(resource); meta != nil && string(meta.Plural) == resource && meta.Group == group {
 		return resource
@@ -255,8 +255,8 @@ func HistoryResourceType(resource, group string) string {
 	return schema.GroupResource{Resource: resource, Group: group}.String()
 }
 
-// SearchAliases builds the alias→plural map used by the search subsystem.
-// Only resources with Searchable=true are included.
+// SearchAliases 构建搜索子系统使用的 别名→复数 映射。
+// 只包含 Searchable=true 的资源。
 func SearchAliases() map[string]string {
 	m := make(map[string]string)
 	for i := range Registry {

@@ -7,16 +7,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// DevCORS returns a CORS middleware that only allows explicitly configured
-// origins. In production the SPA is served from the same origin as the API
-// (go:embed), so no CORS headers are needed at all.
+// DevCORS 返回一个只允许显式配置来源的 CORS 中间件。
+// 生产环境中 SPA 与 API 同源提供
+// （go:embed），因此完全不需要 CORS 响应头。
 //
-// Developers running the Vite dev server on a different port can set
-// CORS_ALLOWED_ORIGINS=http://localhost:5173 to enable cross-origin
-// requests during local development.
+// 在其它端口上运行 Vite dev server 的开发者可以设置
+// CORS_ALLOWED_ORIGINS=http://localhost:5173，以便在本地开发时
+// 启用跨域请求。
 //
-// When allowedOrigins is empty the middleware is a no-op — no CORS
-// headers are emitted and browsers enforce same-origin policy.
+// allowedOrigins 为空时该中间件是空操作——不会发出 CORS
+// 响应头，浏览器按同源策略执行。
 func DevCORS(allowedOrigins []string) gin.HandlerFunc {
 	allowed := make(map[string]bool, len(allowedOrigins))
 	for _, o := range allowedOrigins {
@@ -27,7 +27,7 @@ func DevCORS(allowedOrigins []string) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
-		// Fast path: no origins configured → no CORS headers (production)
+		// 快速路径：未配置任何来源 → 不添加 CORS 响应头（生产环境）
 		if len(allowed) == 0 {
 			c.Next()
 			return
@@ -39,7 +39,7 @@ func DevCORS(allowedOrigins []string) gin.HandlerFunc {
 			return
 		}
 
-		// Only set CORS headers for explicitly allowed origins
+		// 只为显式允许的来源设置 CORS 响应头
 		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers",
@@ -47,7 +47,7 @@ func DevCORS(allowedOrigins []string) gin.HandlerFunc {
 		c.Writer.Header().Set("Access-Control-Allow-Methods",
 			"GET, POST, PUT, DELETE, PATCH, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Max-Age", "86400")
-		// Vary so caches/CDNs don't serve a response with the wrong origin
+		// 添加 Vary，避免缓存/CDN 返回带有错误来源的响应
 		c.Writer.Header().Add("Vary", "Origin")
 
 		if c.Request.Method == http.MethodOptions {

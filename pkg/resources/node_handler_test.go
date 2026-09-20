@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// buildTestScheme creates a runtime.Scheme with all types the handler needs.
+// buildTestScheme 创建一个包含 handler 所需全部类型的 runtime.Scheme。
 func buildTestScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
@@ -30,7 +30,7 @@ func buildTestScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-// podNodeIndexer is the same indexer function registered in pkg/kube/client.go.
+// podNodeIndexer 与 pkg/kube/client.go 中注册的索引函数相同。
 func podNodeIndexer(obj client.Object) []string {
 	pod := obj.(*corev1.Pod)
 	if pod.Spec.NodeName == "" {
@@ -39,10 +39,10 @@ func podNodeIndexer(obj client.Object) []string {
 	return []string{pod.Spec.NodeName}
 }
 
-// newFakeClientSet creates a cluster.ClientSet backed by a fake controller-runtime
-// client that supports the spec.nodeName field indexer. Objects are pre-loaded
-// into the fake client so the informer-like index is already populated.
-// CacheEnabled is set to true to exercise the indexed query path.
+// newFakeClientSet 创建一个由 fake controller-runtime client 支撑的 cluster.ClientSet，
+// 该 client 支持 spec.nodeName 字段索引器。对象会预先加载进 fake client，
+// 因此类似 informer 的索引已经就绪。
+// CacheEnabled 设为 true，以走索引查询路径。
 func newFakeClientSet(t *testing.T, objs ...client.Object) *cluster.ClientSet {
 	t.Helper()
 	scheme := buildTestScheme(t)
@@ -64,8 +64,8 @@ func newFakeClientSet(t *testing.T, objs ...client.Object) *cluster.ClientSet {
 	}
 }
 
-// newFakeClientSetUncached creates a cluster.ClientSet with CacheEnabled=false
-// to exercise the single cluster-wide list fallback path.
+// newFakeClientSetUncached 创建一个 CacheEnabled=false 的 cluster.ClientSet，
+// 以走单次集群级列表的兜底路径。
 func newFakeClientSetUncached(t *testing.T, objs ...client.Object) *cluster.ClientSet {
 	t.Helper()
 	scheme := buildTestScheme(t)
@@ -86,8 +86,8 @@ func newFakeClientSetUncached(t *testing.T, objs ...client.Object) *cluster.Clie
 	}
 }
 
-// newTestGinContext creates a gin.Context for testing with the given ClientSet
-// injected at the "cluster" key (same as production middleware).
+// newTestGinContext 创建一个用于测试的 gin.Context，
+// 并把给定的 ClientSet 注入到 "cluster" 键（与生产环境中间件一致）。
 func newTestGinContext(t *testing.T, cs *cluster.ClientSet) (*gin.Context, *httptest.ResponseRecorder) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -98,7 +98,7 @@ func newTestGinContext(t *testing.T, cs *cluster.ClientSet) (*gin.Context, *http
 	return ctx, rec
 }
 
-// makePod is a helper to create a corev1.Pod with resource requests on a given node.
+// makePod 是一个辅助函数，用于创建在指定节点上带资源请求的 corev1.Pod。
 func makePod(name, namespace, nodeName string, cpuMillis int64, memoryBytes int64) *corev1.Pod {
 	p := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -124,7 +124,7 @@ func makePod(name, namespace, nodeName string, cpuMillis int64, memoryBytes int6
 	return p
 }
 
-// makeNode creates a corev1.Node with the given allocatable resources.
+// makeNode 用给定的可分配资源创建一个 corev1.Node。
 func makeNode(name string, cpuMillis int64, memoryBytes int64, maxPods int64) *corev1.Node {
 	return &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -140,7 +140,7 @@ func makeNode(name string, cpuMillis int64, memoryBytes int64, maxPods int64) *c
 	}
 }
 
-// makeNodeMetrics creates a metricsv1.NodeMetrics with the given usage values.
+// makeNodeMetrics 用给定的用量值创建一个 metricsv1.NodeMetrics。
 func makeNodeMetrics(name string, cpuMillis int64, memoryBytes int64) *metricsv1.NodeMetrics {
 	return &metricsv1.NodeMetrics{
 		ObjectMeta: metav1.ObjectMeta{
@@ -153,7 +153,7 @@ func makeNodeMetrics(name string, cpuMillis int64, memoryBytes int64) *metricsv1
 	}
 }
 
-// decodeNodeListResponse parses the JSON body from the recorder into a NodeListWithMetrics.
+// decodeNodeListResponse 把 recorder 中的 JSON 响应体解析为 NodeListWithMetrics。
 func decodeNodeListResponse(t *testing.T, rec *httptest.ResponseRecorder) *common.NodeListWithMetrics {
 	t.Helper()
 	require.Equal(t, http.StatusOK, rec.Code, "unexpected status code; body=%s", rec.Body.String())
@@ -162,27 +162,27 @@ func decodeNodeListResponse(t *testing.T, rec *httptest.ResponseRecorder) *commo
 	return &result
 }
 
-// ---------- Tests ----------
+// ---------- 测试 ----------
 
-// TestNodeHandlerList_PodAssignmentByFieldIndex verifies that the List method
-// correctly uses the spec.nodeName field indexer to count pods per node and
-// aggregate resource requests — NOT a cluster-wide list followed by grouping.
+// TestNodeHandlerList_PodAssignmentByFieldIndex 校验 List 方法
+// 确实使用 spec.nodeName 字段索引器来统计每个节点的 pod 数并
+// 汇总资源请求——而不是先拉一次集群级列表再分组。
 func TestNodeHandlerList_PodAssignmentByFieldIndex(t *testing.T) {
-	// Two nodes with known allocatable resources.
+	// 两个具有已知可分配资源的节点。
 	nodeA := makeNode("node-a", 4000, 8*1024*1024*1024, 110)
 	nodeB := makeNode("node-b", 8000, 16*1024*1024*1024, 110)
 
-	// Pods assigned to node-a: 2 pods, 500m+200m CPU, 128Mi+256Mi Memory.
+	// 分配给 node-a 的 pod：2 个，CPU 500m+200m，内存 128Mi+256Mi。
 	podA1 := makePod("pod-a1", "default", "node-a", 500, 128*1024*1024)
 	podA2 := makePod("pod-a2", "kube-system", "node-a", 200, 256*1024*1024)
 
-	// Pod assigned to node-b: 1 pod, 1000m CPU, 512Mi Memory.
+	// 分配给 node-b 的 pod：1 个，CPU 1000m，内存 512Mi。
 	podB1 := makePod("pod-b1", "default", "node-b", 1000, 512*1024*1024)
 
-	// Unscheduled pod (no nodeName) — must NOT appear in any node's count.
+	// 未调度（没有 nodeName）的 pod——绝不能出现在任何节点的统计中。
 	unscheduled := makePod("unscheduled-pod", "default", "", 100, 64*1024*1024)
 
-	// NodeMetrics for both nodes.
+	// 两个节点的 NodeMetrics。
 	metricsA := makeNodeMetrics("node-a", 1200, 2*1024*1024*1024)
 	metricsB := makeNodeMetrics("node-b", 3500, 6*1024*1024*1024)
 
@@ -198,34 +198,34 @@ func TestNodeHandlerList_PodAssignmentByFieldIndex(t *testing.T) {
 
 	result := decodeNodeListResponse(t, rec)
 
-	// Nodes should be sorted alphabetically.
+	// 节点应按名称字母序排序。
 	require.Len(t, result.Items, 2)
 	assert.Equal(t, "node-a", result.Items[0].Name)
 	assert.Equal(t, "node-b", result.Items[1].Name)
 
-	// --- node-a assertions ---
+	// --- node-a 断言 ---
 	mA := result.Items[0].Metrics
 	require.NotNil(t, mA, "node-a metrics should not be nil")
 
-	// Pod count: exactly 2 (pod-a1 + pod-a2), NOT 4 (all pods including node-b/unscheduled).
+	// Pod 数量：正好 2（pod-a1 + pod-a2），而不是 4（含 node-b 与未调度的全部 pod）。
 	assert.Equal(t, int64(2), mA.Pods, "node-a should have exactly 2 pods")
 
-	// CPU request: 500 + 200 = 700m
+	// CPU 请求：500 + 200 = 700m
 	assert.Equal(t, int64(700), mA.CPURequest, "node-a CPU request should be 700m")
 
-	// Memory request: 128Mi + 256Mi = 384Mi
+	// 内存请求：128Mi + 256Mi = 384Mi
 	assert.Equal(t, int64((128+256)*1024*1024), mA.MemoryRequest, "node-a memory request should be 384Mi")
 
-	// Allocatable limits
+	// 可分配上限
 	assert.Equal(t, int64(4000), mA.CPULimit, "node-a CPU limit should be 4000m")
 	assert.Equal(t, int64(8*1024*1024*1024), mA.MemoryLimit, "node-a memory limit should be 8Gi")
 	assert.Equal(t, int64(110), mA.PodsLimit, "node-a pods limit should be 110")
 
-	// Metrics usage from NodeMetrics
+	// 来自 NodeMetrics 的用量
 	assert.Equal(t, int64(1200), mA.CPUUsage, "node-a CPU usage from metrics")
 	assert.Equal(t, int64(2*1024*1024*1024), mA.MemoryUsage, "node-a memory usage from metrics")
 
-	// --- node-b assertions ---
+	// --- node-b 断言 ---
 	mB := result.Items[1].Metrics
 	require.NotNil(t, mB, "node-b metrics should not be nil")
 
@@ -238,8 +238,8 @@ func TestNodeHandlerList_PodAssignmentByFieldIndex(t *testing.T) {
 	assert.Equal(t, int64(6*1024*1024*1024), mB.MemoryUsage, "node-b memory usage from metrics")
 }
 
-// TestNodeHandlerList_EmptyCluster verifies List returns an empty items array
-// when there are no nodes at all.
+// TestNodeHandlerList_EmptyCluster 校验没有任何节点时 List
+// 返回空的 items 数组。
 func TestNodeHandlerList_EmptyCluster(t *testing.T) {
 	cs := newFakeClientSet(t)
 	ctx, rec := newTestGinContext(t, cs)
@@ -251,8 +251,8 @@ func TestNodeHandlerList_EmptyCluster(t *testing.T) {
 	assert.Empty(t, result.Items, "empty cluster should return no nodes")
 }
 
-// TestNodeHandlerList_NodesWithoutPods verifies that nodes with no scheduled
-// pods have zeroed resource requests and pod counts.
+// TestNodeHandlerList_NodesWithoutPods 校验没有已调度 pod 的节点
+// 其资源请求与 pod 数都为零。
 func TestNodeHandlerList_NodesWithoutPods(t *testing.T) {
 	node := makeNode("lonely-node", 4000, 8*1024*1024*1024, 110)
 	cs := newFakeClientSet(t, node)
@@ -271,18 +271,18 @@ func TestNodeHandlerList_NodesWithoutPods(t *testing.T) {
 	assert.Equal(t, int64(0), m.Pods, "no pods on this node")
 	assert.Equal(t, int64(0), m.CPURequest, "no CPU requests")
 	assert.Equal(t, int64(0), m.MemoryRequest, "no memory requests")
-	// Allocatable should still be populated.
+	// 可分配资源仍应被填充。
 	assert.Equal(t, int64(4000), m.CPULimit)
 	assert.Equal(t, int64(8*1024*1024*1024), m.MemoryLimit)
 	assert.Equal(t, int64(110), m.PodsLimit)
 }
 
-// TestNodeHandlerList_MultipleContainersPerPod verifies that resource requests
-// from ALL containers in a pod are summed together.
+// TestNodeHandlerList_MultipleContainersPerPod 校验一个 pod 中所有容器
+// 的资源请求会被累加。
 func TestNodeHandlerList_MultipleContainersPerPod(t *testing.T) {
 	node := makeNode("multi-container-node", 8000, 16*1024*1024*1024, 110)
 
-	// Pod with 2 containers: one requesting 200m/128Mi, another 300m/256Mi.
+	// 含 2 个容器的 pod：一个请求 200m/128Mi，另一个 300m/256Mi。
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "multi-container-pod",
@@ -331,10 +331,9 @@ func TestNodeHandlerList_MultipleContainersPerPod(t *testing.T) {
 	assert.Equal(t, int64((128+256)*1024*1024), m.MemoryRequest, "128Mi + 256Mi = 384Mi across containers")
 }
 
-// TestNodeHandlerList_SortOrder verifies that nodes are returned sorted
-// alphabetically by name.
+// TestNodeHandlerList_SortOrder 校验节点按名称字母序返回。
 func TestNodeHandlerList_SortOrder(t *testing.T) {
-	// Insert in reverse order to ensure the handler sorts them.
+	// 逆序插入，以确保 handler 会对它们排序。
 	nodeZ := makeNode("z-node", 1000, 1*1024*1024*1024, 10)
 	nodeA := makeNode("a-node", 1000, 1*1024*1024*1024, 10)
 	nodeM := makeNode("m-node", 1000, 1*1024*1024*1024, 10)
@@ -352,8 +351,8 @@ func TestNodeHandlerList_SortOrder(t *testing.T) {
 	assert.Equal(t, "z-node", result.Items[2].Name)
 }
 
-// TestNodeHandlerList_CrossNamespacePods verifies that pods from different
-// namespaces on the same node are aggregated together.
+// TestNodeHandlerList_CrossNamespacePods 校验同一节点上来自不同命名空间的 pod
+// 会被合并统计。
 func TestNodeHandlerList_CrossNamespacePods(t *testing.T) {
 	node := makeNode("shared-node", 4000, 8*1024*1024*1024, 110)
 
@@ -378,11 +377,11 @@ func TestNodeHandlerList_CrossNamespacePods(t *testing.T) {
 }
 
 // ===================================================================
-// Uncached path tests — exercise the single cluster-wide list fallback
+// 未缓存路径的测试——覆盖单次集群级列表的兜底分支
 // ===================================================================
 
-// TestNodeHandlerList_Uncached_PodAssignment verifies that the uncached fallback
-// (single cluster-wide pod list + group in Go) produces correct per-node metrics.
+// TestNodeHandlerList_Uncached_PodAssignment 校验未缓存的兜底路径
+// （单次集群级 pod 列表 + 在 Go 中分组）能得到正确的每节点指标。
 func TestNodeHandlerList_Uncached_PodAssignment(t *testing.T) {
 	nodeA := makeNode("node-a", 4000, 8*1024*1024*1024, 110)
 	nodeB := makeNode("node-b", 8000, 16*1024*1024*1024, 110)
@@ -411,7 +410,7 @@ func TestNodeHandlerList_Uncached_PodAssignment(t *testing.T) {
 	assert.Equal(t, "node-a", result.Items[0].Name)
 	assert.Equal(t, "node-b", result.Items[1].Name)
 
-	// node-a: 2 pods, 700m CPU, 384Mi memory
+	// node-a：2 个 pod，700m CPU，384Mi 内存
 	mA := result.Items[0].Metrics
 	require.NotNil(t, mA)
 	assert.Equal(t, int64(2), mA.Pods, "node-a should have 2 pods (uncached)")
@@ -420,7 +419,7 @@ func TestNodeHandlerList_Uncached_PodAssignment(t *testing.T) {
 	assert.Equal(t, int64(1200), mA.CPUUsage)
 	assert.Equal(t, int64(2*1024*1024*1024), mA.MemoryUsage)
 
-	// node-b: 1 pod, 1000m CPU, 512Mi memory
+	// node-b：1 个 pod，1000m CPU，512Mi 内存
 	mB := result.Items[1].Metrics
 	require.NotNil(t, mB)
 	assert.Equal(t, int64(1), mB.Pods, "node-b should have 1 pod (uncached)")
@@ -428,7 +427,7 @@ func TestNodeHandlerList_Uncached_PodAssignment(t *testing.T) {
 	assert.Equal(t, int64(512*1024*1024), mB.MemoryRequest, "node-b memory request (uncached)")
 }
 
-// TestNodeHandlerList_Uncached_EmptyCluster verifies uncached path with no nodes.
+// TestNodeHandlerList_Uncached_EmptyCluster 校验未缓存路径在没有任何节点时的行为。
 func TestNodeHandlerList_Uncached_EmptyCluster(t *testing.T) {
 	cs := newFakeClientSetUncached(t)
 	ctx, rec := newTestGinContext(t, cs)
@@ -440,8 +439,8 @@ func TestNodeHandlerList_Uncached_EmptyCluster(t *testing.T) {
 	assert.Empty(t, result.Items)
 }
 
-// TestNodeHandlerList_Uncached_NodesWithoutPods verifies uncached path with
-// nodes that have no pods scheduled.
+// TestNodeHandlerList_Uncached_NodesWithoutPods 校验未缓存路径下
+// 没有 pod 被调度的节点。
 func TestNodeHandlerList_Uncached_NodesWithoutPods(t *testing.T) {
 	node := makeNode("lonely-node", 4000, 8*1024*1024*1024, 110)
 	cs := newFakeClientSetUncached(t, node)
@@ -462,8 +461,8 @@ func TestNodeHandlerList_Uncached_NodesWithoutPods(t *testing.T) {
 	assert.Equal(t, int64(110), m.PodsLimit)
 }
 
-// TestNodeHandlerList_Uncached_MultipleContainersPerPod verifies the fallback
-// path sums requests from all containers in a pod.
+// TestNodeHandlerList_Uncached_MultipleContainersPerPod 校验兜底路径
+// 会累加同一个 pod 中所有容器的请求。
 func TestNodeHandlerList_Uncached_MultipleContainersPerPod(t *testing.T) {
 	node := makeNode("multi-node", 8000, 16*1024*1024*1024, 110)
 

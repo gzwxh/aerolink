@@ -12,9 +12,8 @@ import (
 )
 
 func TestCredentialLoginLimiterBlocksLoopbackClientIP(t *testing.T) {
-	limiter := &credentialLoginAttemptLimiter{
-		attempts: map[string]credentialLoginAttemptState{},
-	}
+	setupAuthIntegrationDB(t)
+	limiter := &credentialLoginAttemptLimiter{}
 	limits := loginLimits{
 		ipFailLimit:   3,
 		ipBlock:       time.Minute,
@@ -24,7 +23,7 @@ func TestCredentialLoginLimiterBlocksLoopbackClientIP(t *testing.T) {
 
 	clientIP := "127.0.0.1"
 	username := "alice"
-	// The attempt that reaches the configured limit is the one that blocks.
+	// 达到配置阈值的那次尝试就是触发封锁的那次。
 	for i := 1; i < limits.ipFailLimit; i++ {
 		if limiter.recordFailure(clientIP, username, limits) {
 			t.Fatalf("recordFailure() blocked after %d failures, want not blocked yet", i)
@@ -33,11 +32,11 @@ func TestCredentialLoginLimiterBlocksLoopbackClientIP(t *testing.T) {
 	if !limiter.recordFailure(clientIP, username, limits) {
 		t.Fatalf("recordFailure() did not block loopback client IP")
 	}
-	if _, blocked := limiter.blockedUntil(clientIP, username, limits); !blocked {
-		t.Fatalf("blockedUntil() = false, want true for loopback client IP")
+	if !limiter.blocked(clientIP, username, limits) {
+		t.Fatalf("blocked() = false, want true for loopback client IP")
 	}
 
-	// Whitelisted IPs are exempt from the failed attempt lockout.
+	// 白名单中的 IP 不受失败尝试锁定影响。
 	exempt := loginLimits{
 		ipFailLimit: 1,
 		ipBlock:     time.Minute,

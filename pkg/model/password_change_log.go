@@ -6,15 +6,15 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// Password change sources recorded in PasswordChangeLog.
+// PasswordChangeLog 中记录的密码变更来源。
 const (
 	PasswordChangeSourceSelf  = "self"
 	PasswordChangeSourceAdmin = "admin"
 )
 
-// PasswordChangeLog is the audit trail of password changes. Unlike
-// PasswordHistory (which is trimmed to enforce the password reuse policy) these
-// rows are kept so administrators can review who changed a password and when.
+// PasswordChangeLog 是密码变更的审计记录。与
+// PasswordHistory（会按密码复用策略裁剪）不同，这里的行会一直保留，
+// 便于管理员审计谁在什么时候改过密码。
 type PasswordChangeLog struct {
 	ID         uint      `json:"id" gorm:"primarykey"`
 	CreatedAt  time.Time `json:"createdAt" gorm:"index:idx_password_change_logs_time,sort:desc"`
@@ -29,9 +29,9 @@ func (PasswordChangeLog) TableName() string {
 	return "password_change_logs"
 }
 
-// RecordPasswordChange stores one audit entry. operatorID/operatorName identify
-// who made the change; source is PasswordChangeSourceSelf or
-// PasswordChangeSourceAdmin.
+// RecordPasswordChange 写入一条审计记录。operatorID/operatorName 标识
+// 是谁做的变更；source 取 PasswordChangeSourceSelf 或
+// PasswordChangeSourceAdmin。
 func RecordPasswordChange(userID uint, username string, operatorID uint, operatorName, source string) {
 	if userID == 0 {
 		return

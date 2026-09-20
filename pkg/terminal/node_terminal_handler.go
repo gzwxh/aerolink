@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,8 +17,10 @@ import (
 	"github.com/zxh326/kite/pkg/utils"
 	"github.com/zxh326/kite/pkg/wsutil"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 )
 
@@ -28,7 +31,7 @@ func NewNodeTerminalHandler() *NodeTerminalHandler {
 	return &NodeTerminalHandler{}
 }
 
-// HandleNodeTerminalWebSocket handles WebSocket connections for node terminal access
+// HandleNodeTerminalWebSocket 处理用于节点终端访问的 WebSocket 连接
 func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 
@@ -40,21 +43,19 @@ func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 
 	user := c.MustGet("user").(model.User)
 
+	// 在 WebSocket 升级之前完成鉴权。
+	if !rbac.CanAccess(user, string(common.Nodes), "exec", cs.Name, "") {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Nodes), "", cs.Name),
+		})
+		return
+	}
+
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		ctx := ws.Context
-		if !rbac.CanAccess(user, string(common.Nodes), "exec", cs.Name, "") {
-			ws.SendErrorMessage(rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Nodes), "", cs.Name))
-			return
-		}
-		node, err := cs.K8sClient.ClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
+		if _, err := cs.K8sClient.ClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{}); err != nil {
 			klog.Errorf("Failed to get node %s: %v", nodeName, err)
 			ws.SendErrorMessage(fmt.Sprintf("Failed to get node %s: %v", nodeName, err))
-			return
-		}
-		if node == nil {
-			klog.Errorf("Node %s not found", nodeName)
-			ws.SendErrorMessage(fmt.Sprintf("Node %s not found", nodeName))
 			return
 		}
 		setting, err := model.GetGeneralSetting()
@@ -74,7 +75,7 @@ func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 			return
 		}
 
-		// Ensure cleanup of the node agent pod
+		// 确保清理节点 agent pod
 		defer func() {
 			klog.Infof("Cleaning up node agent pod %s", nodeAgentName)
 			if err := h.cleanupNodeAgentPod(cs, nodeAgentName); err != nil {
@@ -97,7 +98,7 @@ func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 
 func (h *NodeTerminalHandler) createNodeAgent(ctx context.Context, cs *cluster.ClientSet, nodeName, image string) (string, error) {
 	podName := utils.GenerateNodeAgentName(nodeName)
-	// Define the kite node agent pod spec
+	// 定义 kite node agent 的 pod spec
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -157,12 +158,27 @@ func (h *NodeTerminalHandler) createNodeAgent(ctx context.Context, cs *cluster.C
 			if err := cs.K8sClient.Delete(ctx, object); err != nil {
 				return "", fmt.Errorf("failed to delete existing kite node agent pod: %w", err)
 			}
+			// 删除是异步的；紧随其后的 Create 会失败
+			// 并报 "object is being deleted"，直到 API Server 完成删除。
+			err := wait.PollUntilContextTimeout(ctx, 200*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+				getErr := cs.K8sClient.Get(ctx, namespacedName, &corev1.Pod{})
+				if getErr == nil {
+					return false, nil
+				}
+				if apierrors.IsNotFound(getErr) {
+					return true, nil
+				}
+				return false, getErr
+			})
+			if err != nil {
+				return "", fmt.Errorf("timed out waiting for the old kite node agent pod %s to be deleted: %w", podName, err)
+			}
 		} else {
 			return podName, nil
 		}
 	}
 
-	// Create the pod
+	// 创建 pod
 	err := cs.K8sClient.Create(ctx, pod)
 	if err != nil {
 		return "", fmt.Errorf("failed to create kite node agent pod: %w", err)

@@ -100,6 +100,30 @@ func TestDeleteAPIKeyRejectsInvalidID(t *testing.T) {
 	}
 }
 
+// /apikeys/:id 只能删 API key 伪用户：否则只被授予 settings.apikeys 的委派管理员
+// 就能借这个接口删除普通账号，绕过 settings.users 授权域。
+func TestDeleteAPIKeyRejectsNonAPIKeyUser(t *testing.T) {
+	setupAPIKeyTestDB(t)
+
+	passwordUser := model.User{Username: "not-an-api-key", Provider: model.AuthProviderPassword, Enabled: true}
+	if err := model.DB.Create(&passwordUser).Error; err != nil {
+		t.Fatalf("creating password user: %v", err)
+	}
+
+	router := gin.New()
+	router.DELETE("/apikeys/:id", DeleteAPIKey)
+
+	response := performAPIKeyRequest(router, http.MethodDelete, fmt.Sprintf("/apikeys/%d", passwordUser.ID), "")
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNotFound, response.Body.String())
+	}
+
+	var remaining model.User
+	if err := model.DB.First(&remaining, passwordUser.ID).Error; err != nil {
+		t.Fatalf("the password user must survive DELETE /apikeys/:id: %v", err)
+	}
+}
+
 func setupAPIKeyTestDB(t *testing.T) {
 	t.Helper()
 	originalDB := model.DB
@@ -109,7 +133,7 @@ func setupAPIKeyTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.Role{}, &model.RoleAssignment{}, &model.ResourceHistory{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Role{}, &model.RoleAssignment{}, &model.BindingGroupMember{}, &model.GroupMember{}, &model.ResourceHistory{}); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
 	model.DB = db

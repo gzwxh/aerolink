@@ -150,7 +150,7 @@ func (h *HelmChartHandler) GetChartContent(c *gin.Context) {
 	c.JSON(http.StatusOK, helmChartContentResponse{Templates: content.Templates})
 }
 
-// IndexFile.Get skips prereleases when no version is requested.
+// IndexFile.Get 在未请求版本时会跳过预发布版本。
 func getChartEntry(indexFile *repo.IndexFile, chartName, version string) (*repo.ChartVersion, error) {
 	entry, err := indexFile.Get(chartName, version)
 	if err != nil && version == "" {

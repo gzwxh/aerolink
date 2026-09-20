@@ -4,28 +4,36 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/model"
 )
 
-// templateVariables documents the placeholders available for each event, so the
-// template editor can list them.
+// templateVariables 记录每个事件可用的占位符，
+// 便于模板编辑器把它们列出来。
 var templateVariables = map[string][]string{
 	model.NotificationEventRemoteLogin:          {"username", "ip", "time", "provider", "userAgent"},
 	model.NotificationEventPasswordExpiring:     {"username", "days", "expireDate"},
 	model.NotificationEventPasswordExpired:      {"username", "expireDate"},
 	model.NotificationEventInactiveUserDisabled: {"username", "days"},
 	model.NotificationEventTest:                 {"time"},
+	model.NotificationEventPasswordResetByAdmin: {"username", "operator", "time"},
+	model.NotificationEventAccountDisabled:      {"username", "operator", "time"},
+	model.NotificationEventAccountEnabled:       {"username", "operator", "time"},
+	model.NotificationEventAccountExpiring:      {"username", "days", "expireDate"},
+	model.NotificationEventRoleAssigned:         {"username", "role", "time"},
+	model.NotificationEventRoleUnassigned:       {"username", "role", "time"},
+	model.NotificationEventMailDeliveryFailed:   {"time", "address", "event", "reason"},
 }
 
 type updateNotificationSettingRequest struct {
 	model.NotificationSettingData
-	// SMTPPassword is written only when present, so leaving it empty keeps the
-	// stored password.
+	// SMTPPassword 只在有值时写入，因此留空会保留
+	// 已保存的口令。
 	SMTPPassword *string `json:"smtpPassword"`
-	// ClearSMTPPassword removes the stored password.
+	// ClearSMTPPassword 清除已保存的口令。
 	ClearSMTPPassword bool `json:"clearSmtpPassword"`
 }
 
@@ -36,7 +44,7 @@ func notificationSettingPayload(setting *model.NotificationSettingData) gin.H {
 	}
 }
 
-// HandleGetNotificationSetting returns the notification configuration.
+// HandleGetNotificationSetting 返回通知配置。
 //
 // 路由：GET /api/v1/admin/notification-setting/（仅管理员）。
 func HandleGetNotificationSetting(c *gin.Context) {
@@ -48,7 +56,7 @@ func HandleGetNotificationSetting(c *gin.Context) {
 	c.JSON(http.StatusOK, notificationSettingPayload(setting))
 }
 
-// HandleUpdateNotificationSetting stores the notification configuration.
+// HandleUpdateNotificationSetting 保存通知配置。
 //
 // 路由：PUT /api/v1/admin/notification-setting/（仅管理员）。
 func HandleUpdateNotificationSetting(c *gin.Context) {
@@ -77,21 +85,8 @@ func HandleUpdateNotificationSetting(c *gin.Context) {
 	c.JSON(http.StatusOK, notificationSettingPayload(setting))
 }
 
-// HandleListAutoDisabledUsers lists the accounts disabled by the inactivity
-// policy so an administrator can restore them.
-//
-// 路由：GET /api/v1/admin/notification-setting/disabled-users（仅管理员）。
-func HandleListAutoDisabledUsers(c *gin.Context) {
-	users, err := model.ListAutoDisabledUsers()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load disabled users"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"users": users})
-}
-
-// HandleRunDailyChecks runs the daily notification tasks on demand: password
-// expiry reminders and automatic disabling of long inactive accounts.
+// HandleRunDailyChecks 按需执行每日通知任务：密码过期提醒
+// 以及自动停用长期不活跃的账号。
 //
 // 路由：POST /api/v1/admin/notification-setting/run-daily-checks（仅管理员）。
 func HandleRunDailyChecks(c *gin.Context) {
@@ -99,7 +94,7 @@ func HandleRunDailyChecks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "每日检查已执行"})
 }
 
-// HandleSendTestNotification sends a test mail with the stored configuration.
+// HandleSendTestNotification 用已保存的配置发送一封测试邮件。
 //
 // 路由：POST /api/v1/admin/notification-setting/test-mail（仅管理员）。
 func HandleSendTestNotification(c *gin.Context) {
@@ -131,8 +126,8 @@ func HandleSendTestNotification(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "测试邮件已发送"})
 }
 
-// HandleListNotificationTemplates returns every event template, seeding the
-// defaults on first use.
+// HandleListNotificationTemplates 返回全部事件模板，首次使用时
+// 预置默认值。
 //
 // 路由：GET /api/v1/admin/notification-templates/（仅管理员）。
 func HandleListNotificationTemplates(c *gin.Context) {
@@ -147,7 +142,7 @@ func HandleListNotificationTemplates(c *gin.Context) {
 	})
 }
 
-// HandleUpdateNotificationTemplate updates one event template.
+// HandleUpdateNotificationTemplate 更新某个事件模板。
 //
 // 路由：PUT /api/v1/admin/notification-templates/:event（仅管理员）。
 func HandleUpdateNotificationTemplate(c *gin.Context) {
@@ -181,7 +176,7 @@ func HandleUpdateNotificationTemplate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "saved"})
 }
 
-// HandleListNotificationSubscriptions lists the subscriptions of an event.
+// HandleListNotificationSubscriptions 列出某个事件的订阅。
 //
 // 路由：GET /api/v1/admin/notification-subscriptions/（仅管理员）。
 func HandleListNotificationSubscriptions(c *gin.Context) {
@@ -193,7 +188,7 @@ func HandleListNotificationSubscriptions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"subscriptions": subscriptions})
 }
 
-// HandleCreateNotificationSubscription adds a receiver for an event.
+// HandleCreateNotificationSubscription 为某个事件新增一个接收者。
 //
 // 路由：POST /api/v1/admin/notification-subscriptions/（仅管理员）。
 func HandleCreateNotificationSubscription(c *gin.Context) {
@@ -228,14 +223,15 @@ func HandleCreateNotificationSubscription(c *gin.Context) {
 
 	switch subscription.ReceiverType {
 	case model.NotificationReceiverUser:
-		// The user can be addressed by id (picker) or by username (free text).
+		// 用户可以用 id（选择器）或用户名（自由文本）来指定。
 		var user *model.User
 		var err error
-		if subscription.ReceiverID != 0 {
+		switch {
+		case subscription.ReceiverID != 0:
 			user, err = model.GetUserByID(uint64(subscription.ReceiverID))
-		} else if subscription.Receiver != "" {
+		case subscription.Receiver != "":
 			user, err = model.GetUserByUsername(subscription.Receiver)
-		} else {
+		default:
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请选择接收用户"})
 			return
 		}
@@ -268,7 +264,7 @@ func HandleCreateNotificationSubscription(c *gin.Context) {
 	c.JSON(http.StatusCreated, subscription)
 }
 
-// HandleUpdateNotificationSubscription enables or disables a subscription.
+// HandleUpdateNotificationSubscription 启用或停用一条订阅。
 //
 // 路由：PUT /api/v1/admin/notification-subscriptions/:id（仅管理员）。
 func HandleUpdateNotificationSubscription(c *gin.Context) {
@@ -299,7 +295,7 @@ func HandleUpdateNotificationSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, subscription)
 }
 
-// HandleDeleteNotificationSubscription removes a subscription.
+// HandleDeleteNotificationSubscription 删除一条订阅。
 //
 // 路由：DELETE /api/v1/admin/notification-subscriptions/:id（仅管理员）。
 func HandleDeleteNotificationSubscription(c *gin.Context) {
@@ -315,7 +311,7 @@ func HandleDeleteNotificationSubscription(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// HandleListNotifications returns the inbox of the current user.
+// HandleListNotifications 返回当前用户的站内信。
 //
 // 路由：GET /api/v1/notifications（任意登录用户）。
 func HandleListNotifications(c *gin.Context) {
@@ -335,7 +331,7 @@ func HandleListNotifications(c *gin.Context) {
 	})
 }
 
-// HandleNotificationUnreadCount returns the unread badge count of the user.
+// HandleNotificationUnreadCount 返回用户的未读角标数。
 //
 // 路由：GET /api/v1/notifications/unread-count（任意登录用户）。
 func HandleNotificationUnreadCount(c *gin.Context) {
@@ -348,7 +344,7 @@ func HandleNotificationUnreadCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"count": count})
 }
 
-// HandleMarkNotificationsRead marks the given messages (or all of them) as read.
+// HandleMarkNotificationsRead 把给定消息（或全部消息）标记为已读。
 //
 // 路由：POST /api/v1/notifications/read（任意登录用户）。
 func HandleMarkNotificationsRead(c *gin.Context) {
@@ -387,4 +383,104 @@ func HandleMarkNotificationsRead(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+// HandleClearNotifications 删除当前用户的全部站内消息。
+//
+// 路由：POST /api/v1/notifications/clear（任意登录用户）。
+func HandleClearNotifications(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
+	if err := model.ClearNotifications(user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear notifications"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+// clientEventRateLimiter 限制单个账号每分钟最多能把多少条客户端上报的失败
+// 转成站内信记录，这样即使出现死循环也不会冲垮
+// notifications 表。
+type clientEventRateLimiter struct {
+	mu     sync.Mutex
+	window time.Duration
+	limit  int
+	hits   map[uint][]time.Time
+}
+
+var clientEventLimiter = &clientEventRateLimiter{
+	window: time.Minute,
+	limit:  10,
+	hits:   map[uint][]time.Time{},
+}
+
+func (l *clientEventRateLimiter) allow(userID uint) bool {
+	now := time.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	times := l.hits[userID]
+	fresh := times[:0]
+	for _, t := range times {
+		if now.Sub(t) <= l.window {
+			fresh = append(fresh, t)
+		}
+	}
+	if len(fresh) >= l.limit {
+		l.hits[userID] = fresh
+		return false
+	}
+	l.hits[userID] = append(fresh, now)
+	return true
+}
+
+// HandleCreateClientNotification 把 Web 客户端上报的操作失败
+// 转成该用户的站内消息。
+//
+// 路由：POST /api/v1/notifications/client-events（任意登录用户）。
+//
+// 当请求本身失败时（例如连接被重置），客户端不能依赖 toast 给出反馈，
+// 因此把失败上报到这里，
+// 恢复连接后消息会出现在通知铃铛里。
+func HandleCreateClientNotification(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
+	if !clientEventLimiter.allow(user.ID) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many notifications, try again later"})
+		return
+	}
+
+	var req struct {
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+		Path   string `json:"path"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		return
+	}
+
+	title := truncateRunes(strings.TrimSpace(req.Title), 200)
+	if title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		return
+	}
+	detail := truncateRunes(strings.TrimSpace(req.Detail), 2000)
+	path := truncateRunes(strings.TrimSpace(req.Path), 300)
+	if path != "" {
+		detail = strings.TrimSpace(path + "\n" + detail)
+	}
+
+	if err := model.CreateUserNotification(
+		user.ID, model.NotificationEventOperationFailed, title, detail); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save notification"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"success": true})
+}
+
+func truncateRunes(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max])
 }

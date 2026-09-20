@@ -26,12 +26,12 @@ func NewTerminalHandler() *TerminalHandler {
 	return &TerminalHandler{}
 }
 
-// HandleTerminalWebSocket handles WebSocket connections for terminal sessions
+// HandleTerminalWebSocket 处理终端会话的 WebSocket 连接
 func (h *TerminalHandler) HandleTerminalWebSocket(c *gin.Context) {
-	// Get cluster info from context
+	// 从上下文获取集群信息
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 
-	// Get path parameters
+	// 获取路径参数
 	namespace := c.Param("namespace")
 	podName := c.Param("podName")
 	container := c.Query("container")
@@ -43,16 +43,18 @@ func (h *TerminalHandler) HandleTerminalWebSocket(c *gin.Context) {
 
 	user := c.MustGet("user").(model.User)
 
+	// 在 WebSocket 升级之前完成鉴权：没有权限的客户端
+	// 根本不应该拿到已建立的会话。
+	if !rbac.CanAccess(user, string(common.Pods), "exec", cs.Name, namespace) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Pods), namespace, cs.Name),
+		})
+		return
+	}
+
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		session := kube.NewTerminalSession(cs.K8sClient, ws.Conn, namespace, podName, container)
 		defer session.Close()
-
-		if !rbac.CanAccess(user, string(common.Pods), "exec", cs.Name, namespace) {
-			ws.SendErrorMessage(
-				rbac.NoAccess(user.Key(), string(common.VerbExec), string(common.Pods), namespace, cs.Name),
-			)
-			return
-		}
 
 		subResource := "exec"
 		if c.Query("attach") == "true" {
@@ -95,9 +97,9 @@ func lookupContainer(pod *corev1.Pod, name string) containerLookup {
 	return containerLookup{}
 }
 
-// waitForDebugContainer blocks until the container is running and returns the
-// subresource to stream through: "attach" when the container keeps stdin/tty open,
-// "exec" otherwise.
+// waitForDebugContainer 阻塞直到该容器进入 running 状态，并返回要流式传输的
+// 子资源："attach"（容器保持 stdin/tty 打开时），
+// 否则为 "exec"。
 func waitForDebugContainer(ws *wsutil.Session, cs *cluster.ClientSet, namespace, podName, container string) (string, error) {
 	lastMessage := fmt.Sprintf("Waiting for debug container %s to start", container)
 	if err := ws.SendMessage("info", lastMessage); err != nil {

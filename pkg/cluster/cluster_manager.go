@@ -192,7 +192,7 @@ func (cm *ClusterManager) GetClientSet(clusterName string) (*ClientSet, error) {
 	if clusterName == "" {
 		clusterName = cm.defaultContext
 		if clusterName == "" {
-			// If no default context is set, return the first available cluster
+			// 如果未设置默认 context，则返回第一个可用的集群
 			for _, cs := range cm.clusters {
 				return cs, nil
 			}
@@ -239,6 +239,7 @@ func ImportClustersFromKubeconfig(kubeconfig *clientcmdapi.Config, setDefault bo
 				}
 				importedCount++
 				klog.Infof("Imported cluster success: %s", contextName)
+				ensureClusterAuthorizations(contextName)
 			}
 			continue
 		}
@@ -252,8 +253,20 @@ func ImportClustersFromKubeconfig(kubeconfig *clientcmdapi.Config, setDefault bo
 		}
 		importedCount++
 		klog.Infof("Updated cluster config success: %s", contextName)
+		ensureClusterAuthorizations(contextName)
 	}
 	return int64(importedCount)
+}
+
+// ensureClusterAuthorizations 给新导入或重新导入的集群补齐内置授权：
+// 超级管理员的全局作用域「超级权限绑定」。幂等，且不要求集群当前可达。
+//
+// 内置授权原本只在服务启动时为「当时已存在」的集群创建，导入路径不会触发，
+// 于是新导入的集群在下次重启前都没有这个组，管理员页签会一直提示缺少它。
+func ensureClusterAuthorizations(clusterName string) {
+	if err := model.EnsureSuperAdminProvisioningForCluster(clusterName); err != nil {
+		klog.Warningf("failed to provision default authorizations for cluster %s: %v", clusterName, err)
+	}
 }
 
 var (
@@ -387,10 +400,10 @@ func syncClusters(cm *ClusterManager, readyCh chan<- struct{}) error {
 	return nil
 }
 
-// shouldUpdateCluster decides whether the cached ClientSet needs to be updated
-// based on the desired state from the database.
+// shouldUpdateCluster 依据数据库中的期望状态判断
+// 缓存的 ClientSet 是否需要更新。
 func shouldUpdateCluster(cs *ClientSet, cluster *model.Cluster) bool {
-	// enable/disable toggle
+	// 启用/停用开关
 	if (cs == nil && cluster.Enable) || (cs != nil && !cluster.Enable) {
 		klog.Infof("Cluster %s status changed, updating, enabled -> %v", cluster.Name, cluster.Enable)
 		return true
@@ -403,21 +416,21 @@ func shouldUpdateCluster(cs *ClientSet, cluster *model.Cluster) bool {
 		return true
 	}
 
-	// kubeconfig change
+	// kubeconfig 变更
 	if cs.config != string(cluster.Config) {
 		klog.Infof("Kubeconfig changed for cluster %s, updating", cluster.Name)
 		return true
 	}
 
-	// prometheus URL change
+	// prometheus URL 变更
 	if cs.prometheusURL != cluster.PrometheusURL {
 		klog.Infof("Prometheus URL changed for cluster %s, updating", cluster.Name)
 		return true
 	}
 
-	// k8s version change
-	// TODO: Replace direct ClientSet.Discovery() call with a small DiscoveryInterface.
-	// current code depends on *kubernetes.Clientset, which is hard to mock in tests.
+	// k8s 版本变更
+	// TODO: 用一个精简的 DiscoveryInterface 替换直接调用 ClientSet.Discovery()。
+	// 当前代码依赖 *kubernetes.Clientset，在测试中很难 mock。
 	version, err := cs.K8sClient.ClientSet.Discovery().ServerVersion()
 	if err != nil {
 		klog.Warningf("Failed to get server version for cluster %s: %v", cluster.Name, err)

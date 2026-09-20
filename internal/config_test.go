@@ -19,8 +19,8 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// setupTestDB initializes an in-memory SQLite database for testing.
-// It returns a cleanup function that restores the original DB.
+// setupTestDB 初始化用于测试的内存 SQLite 数据库。
+// 它会返回一个恢复原始 DB 的清理函数。
 func setupTestDB(t *testing.T) {
 	t.Helper()
 
@@ -38,6 +38,8 @@ func setupTestDB(t *testing.T) {
 		model.User{},
 		model.Cluster{},
 		model.GeneralSetting{},
+		model.SecuritySetting{},
+		model.PasswordHistory{},
 		model.LDAPSetting{},
 		model.OAuthProvider{},
 		model.Role{},
@@ -54,7 +56,7 @@ func setupTestDB(t *testing.T) {
 	t.Cleanup(func() { model.DB = oldDB })
 }
 
-// saveManagedSections saves and restores the global ManagedSections map.
+// saveManagedSections 保存并恢复全局 ManagedSections map。
 func saveManagedSections(t *testing.T) {
 	t.Helper()
 	orig := common.ManagedSections
@@ -126,32 +128,32 @@ rbac:
       oidcGroups: ["developers"]
 `
 
-// TestLoadConfigFromFile_EndToEnd tests the full config file loading flow with a real database.
-func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // end-to-end test with multiple subtests
+// TestLoadConfigFromFile_EndToEnd 用真实数据库测试完整的配置文件加载流程。
+func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // 该用例用多个子测试做端到端覆盖
 	setupTestDB(t)
 	saveManagedSections(t)
 
-	// Drain SyncNow so TriggerSync in applyRBAC doesn't block
+	// 排空 SyncNow，让 applyRBAC 中的 TriggerSync 不会阻塞
 	oldSyncNow := rbac.SyncNow
 	rbac.SyncNow = make(chan struct{}, 10)
 	t.Cleanup(func() { rbac.SyncNow = oldSyncNow })
 
-	// Create system roles first (normally done by InitRBAC)
+	// 先创建系统角色（通常由 InitRBAC 完成）
 	if err := model.InitDefaultRole(); err != nil {
 		t.Fatalf("InitDefaultRole: %v", err)
 	}
 
-	// Write config file to temp dir
+	// 把配置文件写入临时目录
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(testConfigYAML), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	// Load config
+	// 加载配置
 	LoadConfigFromFile(configPath)
 
-	// --- Verify managed sections ---
+	// --- 校验受管分区 ---
 	t.Run("ManagedSections", func(t *testing.T) {
 		for _, section := range []string{"clusters", "oauth", "ldap", "rbac"} {
 			if !common.IsSectionManaged(section) {
@@ -160,7 +162,7 @@ func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // end-to-
 		}
 	})
 
-	// --- Verify clusters ---
+	// --- 校验集群 ---
 	t.Run("Clusters", func(t *testing.T) {
 		clusters, err := model.ListClusters()
 		if err != nil {
@@ -198,7 +200,7 @@ func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // end-to-
 		}
 	})
 
-	// --- Verify OAuth ---
+	// --- 校验 OAuth ---
 	t.Run("OAuth", func(t *testing.T) {
 		providers, err := model.GetAllOAuthProviders()
 		if err != nil {
@@ -225,7 +227,7 @@ func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // end-to-
 		}
 	})
 
-	// --- Verify LDAP ---
+	// --- 校验 LDAP ---
 	t.Run("LDAP", func(t *testing.T) {
 		setting, err := model.GetLDAPSetting()
 		if err != nil {
@@ -248,14 +250,16 @@ func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // end-to-
 		}
 	})
 
-	// --- Verify RBAC roles ---
+	// --- 校验 RBAC 角色 ---
 	t.Run("RBAC_Roles", func(t *testing.T) {
 		var roles []model.Role
 		if err := model.DB.Find(&roles).Error; err != nil {
 			t.Fatalf("Find roles: %v", err)
 		}
-		if len(roles) != 3 {
-			t.Fatalf("expected 3 roles, got %d", len(roles))
+		// 4 个内置系统角色（管理员/审计员/安全管理员/只读管理员）+ 配置里的 dev-team。
+		// 代次 3 起内置超级角色已并入管理员，不再是独立角色。
+		if len(roles) != 5 {
+			t.Fatalf("expected 5 roles, got %d", len(roles))
 		}
 		byName := map[string]model.Role{}
 		for _, r := range roles {
@@ -281,23 +285,23 @@ func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // end-to-
 		}
 	})
 
-	// --- Verify RBAC role assignments ---
+	// --- 校验 RBAC 角色分配 ---
 	t.Run("RBAC_Assignments", func(t *testing.T) {
 		var assignments []model.RoleAssignment
 		if err := model.DB.Find(&assignments).Error; err != nil {
 			t.Fatalf("Find assignments: %v", err)
 		}
-		// admin: alice, bob (users) + platform-admins (group) = 3
-		// viewer: * (user) = 1
-		// dev-team: developers (group) = 1
-		// Total = 5
+		// admin：alice、bob（用户）+ platform-admins（组）= 3
+		// viewer：*（用户）= 1
+		// dev-team：developers（组）= 1
+		// 合计 = 5
 		if len(assignments) != 5 {
 			t.Fatalf("expected 5 assignments, got %d", len(assignments))
 		}
 	})
 }
 
-// TestLoadConfigFromFile_EnvExpansion tests ${ENV_VAR} placeholder expansion.
+// TestLoadConfigFromFile_EnvExpansion 测试 ${ENV_VAR} 占位符展开。
 func TestLoadConfigFromFile_EnvExpansion(t *testing.T) {
 	setupTestDB(t)
 	saveManagedSections(t)
@@ -332,12 +336,12 @@ func TestLoadConfigFromFile_EnvExpansion(t *testing.T) {
 	}
 }
 
-// TestLoadConfigFromFile_PartialConfig tests that only configured sections become managed.
+// TestLoadConfigFromFile_PartialConfig 测试只有已配置的分区才会变为受管。
 func TestLoadConfigFromFile_PartialConfig(t *testing.T) {
 	setupTestDB(t)
 	saveManagedSections(t)
 
-	// Only clusters section
+	// 只配置 clusters 分区
 	configYAML := `clusters:
   - name: test-only
     inCluster: true
@@ -360,7 +364,7 @@ func TestLoadConfigFromFile_PartialConfig(t *testing.T) {
 	}
 }
 
-// TestLoadConfigFromFile_EmptyPath tests that empty path is a no-op.
+// TestLoadConfigFromFile_EmptyPath 测试空路径时不做任何事。
 func TestLoadConfigFromFile_EmptyPath(t *testing.T) {
 	saveManagedSections(t)
 
@@ -373,12 +377,12 @@ func TestLoadConfigFromFile_EmptyPath(t *testing.T) {
 	}
 }
 
-// TestLoadConfigFromFile_StartupOverwrite tests that config file overwrites existing DB data.
+// TestLoadConfigFromFile_StartupOverwrite 测试配置文件会覆盖已有的 DB 数据。
 func TestLoadConfigFromFile_StartupOverwrite(t *testing.T) {
 	setupTestDB(t)
 	saveManagedSections(t)
 
-	// Pre-populate with an existing cluster
+	// 预置一个已有集群
 	existing := &model.Cluster{
 		Name:      "old-cluster",
 		InCluster: true,
@@ -409,19 +413,19 @@ func TestLoadConfigFromFile_StartupOverwrite(t *testing.T) {
 	}
 }
 
-// TestBootstrapWithManagedClusters tests that bootstrap returns initialized=true
-// when clusters are managed AND a user exists.
+// TestBootstrapWithManagedClusters 测试在集群受管且存在用户时
+// bootstrap 返回 initialized=true。
 func TestBootstrapWithManagedClusters(t *testing.T) {
 	setupTestDB(t)
 	saveManagedSections(t)
 	common.ManagedSections["clusters"] = true
 
-	// Drain SyncNow so TriggerSync doesn't block
+	// 排空 SyncNow，让 TriggerSync 不会阻塞
 	oldSyncNow := rbac.SyncNow
 	rbac.SyncNow = make(chan struct{}, 10)
 	t.Cleanup(func() { rbac.SyncNow = oldSyncNow })
 
-	// Create a user so bootstrap considers step 1 (user) done
+	// 创建一个用户，让 bootstrap 认为第 1 步（用户）已完成
 	if err := model.InitDefaultRole(); err != nil {
 		t.Fatalf("InitDefaultRole: %v", err)
 	}
@@ -457,14 +461,14 @@ func TestBootstrapWithManagedClusters(t *testing.T) {
 	}
 }
 
-// TestBootstrapWithManagedClustersNoUsers tests that bootstrap returns initialized=false
-// when clusters are managed but no user exists.
+// TestBootstrapWithManagedClustersNoUsers 测试在集群受管但不存在用户时
+// bootstrap 返回 initialized=false。
 func TestBootstrapWithManagedClustersNoUsers(t *testing.T) {
 	setupTestDB(t)
 	saveManagedSections(t)
 	common.ManagedSections["clusters"] = true
 
-	// Save and restore AnonymousUserEnabled
+	// 保存并恢复 AnonymousUserEnabled
 	origAnon := common.AnonymousUserEnabled
 	common.AnonymousUserEnabled = false
 	t.Cleanup(func() { common.AnonymousUserEnabled = origAnon })
@@ -497,17 +501,17 @@ func TestBootstrapWithManagedClustersNoUsers(t *testing.T) {
 	}
 }
 
-// TestLoadConfigFromFile_SuperUser tests that superUser is created on first startup.
+// TestLoadConfigFromFile_SuperUser 测试首次启动时会创建 superUser。
 func TestLoadConfigFromFile_SuperUser(t *testing.T) {
 	setupTestDB(t)
 	saveManagedSections(t)
 
-	// Drain SyncNow so TriggerSync doesn't block
+	// 排空 SyncNow，让 TriggerSync 不会阻塞
 	oldSyncNow := rbac.SyncNow
 	rbac.SyncNow = make(chan struct{}, 10)
 	t.Cleanup(func() { rbac.SyncNow = oldSyncNow })
 
-	// Create system roles (needed for AddSuperUser -> AddRoleAssignment)
+	// 创建系统角色（AddSuperUser -> AddRoleAssignment 需要）
 	if err := model.InitDefaultRole(); err != nil {
 		t.Fatalf("InitDefaultRole: %v", err)
 	}
@@ -527,7 +531,7 @@ clusters:
 
 	LoadConfigFromFile(configPath)
 
-	// Verify super user was created
+	// 校验超级用户已创建
 	uc, _ := model.CountUsers()
 	if uc != 1 {
 		t.Fatalf("expected 1 user, got %d", uc)
@@ -542,7 +546,7 @@ clusters:
 	}
 }
 
-// TestLoadConfigFromFile_SuperUserUpdatesPassword tests that superUser password is updated on restart.
+// TestLoadConfigFromFile_SuperUserUpdatesPassword 测试重启时会更新 superUser 密码。
 func TestLoadConfigFromFile_SuperUserUpdatesPassword(t *testing.T) {
 	setupTestDB(t)
 	saveManagedSections(t)
@@ -555,7 +559,7 @@ func TestLoadConfigFromFile_SuperUserUpdatesPassword(t *testing.T) {
 		t.Fatalf("InitDefaultRole: %v", err)
 	}
 
-	// First startup: create the super user
+	// 首次启动：创建超级用户
 	configYAML := `superUser:
   username: "myadmin"
   password: "old-password"
@@ -567,7 +571,7 @@ func TestLoadConfigFromFile_SuperUserUpdatesPassword(t *testing.T) {
 	}
 	LoadConfigFromFile(configPath)
 
-	// Second startup: update the password
+	// 第二次启动：更新密码
 	configYAML2 := `superUser:
   username: "myadmin"
   password: "new-password"
@@ -577,13 +581,13 @@ func TestLoadConfigFromFile_SuperUserUpdatesPassword(t *testing.T) {
 	}
 	LoadConfigFromFile(configPath)
 
-	// Should still be only 1 user
+	// 仍然应当只有 1 个用户
 	uc, _ := model.CountUsers()
 	if uc != 1 {
 		t.Fatalf("expected 1 user, got %d", uc)
 	}
 
-	// Verify the password was updated (can login with new password)
+	// 校验密码已更新（可以用新密码登录）
 	user, err := model.GetUserByUsername("myadmin")
 	if err != nil {
 		t.Fatalf("GetUserByUsername: %v", err)
@@ -593,8 +597,8 @@ func TestLoadConfigFromFile_SuperUserUpdatesPassword(t *testing.T) {
 	}
 }
 
-// TestLoadConfigFromFile_SuperUserWithRBAC tests that superUser retains admin role
-// even when RBAC roleMapping doesn't explicitly include the superUser.
+// TestLoadConfigFromFile_SuperUserWithRBAC 测试即使 RBAC roleMapping
+// 没有显式包含 superUser，超级用户仍保留管理员角色。
 func TestLoadConfigFromFile_SuperUserWithRBAC(t *testing.T) {
 	setupTestDB(t)
 	saveManagedSections(t)
@@ -607,7 +611,7 @@ func TestLoadConfigFromFile_SuperUserWithRBAC(t *testing.T) {
 		t.Fatalf("InitDefaultRole: %v", err)
 	}
 
-	// Config with superUser + RBAC, but roleMapping does NOT include the superUser
+	// 配置里同时有 superUser 和 RBAC，但 roleMapping 不包含该 superUser
 	configYAML := `superUser:
   username: "myadmin"
   password: "mypass"
@@ -637,7 +641,7 @@ rbac:
 
 	LoadConfigFromFile(configPath)
 
-	// Verify the super user was created
+	// 校验超级用户已创建
 	user, err := model.GetUserByUsername("myadmin")
 	if err != nil {
 		t.Fatalf("GetUserByUsername: %v", err)
@@ -646,8 +650,8 @@ rbac:
 		t.Errorf("username = %q", user.Username)
 	}
 
-	// Verify the super user has the admin role assignment
-	// (superUser is applied AFTER RBAC, so it shouldn't be wiped)
+	// 校验超级用户拥有管理员角色分配
+	// （superUser 在 RBAC 之后应用，所以不应被抹掉）
 	adminRole, err := model.GetRoleByName("admin")
 	if err != nil {
 		t.Fatalf("GetRoleByName(admin): %v", err)
@@ -660,8 +664,8 @@ rbac:
 		t.Fatalf("super user should have admin role assignment, but got: %v", err)
 	}
 
-	// Simulate second startup: applyRBAC wipes all assignments, then applySuperUser
-	// must re-create the admin role assignment.
+	// 模拟第二次启动：applyRBAC 会抹掉所有分配，之后 applySuperUser
+	// 必须重新创建管理员角色分配。
 	LoadConfigFromFile(configPath)
 
 	var assignment2 model.RoleAssignment

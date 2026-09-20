@@ -69,10 +69,10 @@ func (h *SearchHandler) Search(c *gin.Context, query string, limit int) ([]commo
 	query = normalizeSearchQuery(query)
 	limit = normalizeSearchLimit(limit)
 
-	// Determine which resource types to search
+	// 确定要搜索哪些资源类型
 	guessSearchResources, q := utils.GuessSearchResources(query)
 
-	// Collect the search functions to execute
+	// 收集要执行的搜索函数
 	type searchEntry struct {
 		name string
 		fn   resources.SearchFunc
@@ -84,7 +84,7 @@ func (h *SearchHandler) Search(c *gin.Context, query string, limit int) ([]commo
 		}
 	}
 
-	// Execute searches in parallel using errgroup
+	// 用 errgroup 并行执行搜索
 	resultSlices := make([][]common.SearchResult, len(entries))
 	var hadFailure atomic.Bool // set on panic OR error — prevents caching incomplete results
 	g, _ := errgroup.WithContext(context.Background())
@@ -114,7 +114,7 @@ func (h *SearchHandler) Search(c *gin.Context, query string, limit int) ([]commo
 
 	_ = g.Wait() // all goroutines return nil, error is always nil
 
-	// Merge results from all resource types
+	// 合并所有资源类型的结果
 	var allResults []common.SearchResult
 	for _, slice := range resultSlices {
 		allResults = append(allResults, slice...)
@@ -126,13 +126,13 @@ func (h *SearchHandler) Search(c *gin.Context, query string, limit int) ([]commo
 	queryLower := strings.ToLower(q)
 	sortResults(allResults, queryLower)
 
-	// Limit total results
+	// 限制结果总数
 	if len(allResults) > limit {
 		allResults = allResults[:limit]
 	}
 
-	// Only cache results when no failure (panic or error) occurred — avoids
-	// caching incomplete results that would be served as valid 200 OK for the TTL.
+	// 只有在没有失败（panic 或错误）时才缓存结果——避免
+	// 把不完整的结果缓存下来，在 TTL 内当作正常的 200 OK 返回。
 	if !hadFailure.Load() {
 		h.cache.Add(h.createCacheKey(clusterName, user.Key(), query, limit), allResults)
 	}
@@ -140,7 +140,7 @@ func (h *SearchHandler) Search(c *gin.Context, query string, limit int) ([]commo
 	return allResults, nil
 }
 
-// GlobalSearch handles global search across multiple resource types
+// GlobalSearch 处理跨多个资源类型的全局搜索
 func (h *SearchHandler) GlobalSearch(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	clusterName := getSearchClusterName(c)
@@ -155,7 +155,7 @@ func (h *SearchHandler) GlobalSearch(c *gin.Context) {
 		return
 	}
 
-	// Parse limit parameter
+	// 解析 limit 参数
 	limitStr := c.DefaultQuery("limit", strconv.Itoa(defaultSearchLimit))
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
@@ -287,7 +287,7 @@ func getResourceOrder(resourceType string) int {
 	return len(searchResourceOrder) // Default to the end if not found
 }
 
-// sortResults sorts the search results with exact matches first, then by resource type
+// sortResults 对搜索结果排序：精确匹配优先，然后按资源类型
 func sortResults(results []common.SearchResult, query string) {
 	var exactMatches, partialMatches []common.SearchResult
 
@@ -299,7 +299,7 @@ func sortResults(results []common.SearchResult, query string) {
 		}
 	}
 
-	// sort by resources
+	// 按资源排序
 	sortByResources := func(a, b common.SearchResult) bool {
 		return getResourceOrder(a.ResourceType) < getResourceOrder(b.ResourceType)
 	}
@@ -311,7 +311,7 @@ func sortResults(results []common.SearchResult, query string) {
 		return sortByResources(partialMatches[i], partialMatches[j])
 	})
 
-	// Combine results
+	// 合并结果
 	copy(results, append(exactMatches, partialMatches...))
 }
 

@@ -272,7 +272,7 @@ func toolDefinitions(cs *cluster.ClientSet) []agentToolDefinition {
 		},
 	}
 
-	// Only add Prometheus tool if Prometheus client is available
+	// 只有在 Prometheus 客户端可用时才加入 Prometheus 工具
 	if cs != nil && cs.PromClient != nil {
 		tools = append(tools, agentToolDefinition{
 			Name:        "query_prometheus",

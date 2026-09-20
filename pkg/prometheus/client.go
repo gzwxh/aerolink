@@ -30,13 +30,13 @@ type ResourceMetrics struct {
 	MemoryTotal   float64
 }
 
-// UsageDataPoint represents a single time point in usage metrics
+// UsageDataPoint 表示用量指标中的单个时间点
 type UsageDataPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	Value     float64   `json:"value"`
 }
 
-// ResourceUsageHistory contains historical usage data for a resource
+// ResourceUsageHistory 保存某个资源的历史用量数据
 type ResourceUsageHistory struct {
 	CPU        []UsageDataPoint `json:"cpu"`
 	Memory     []UsageDataPoint `json:"memory"`
@@ -46,7 +46,7 @@ type ResourceUsageHistory struct {
 	DiskWrite  []UsageDataPoint `json:"diskWrite"`
 }
 
-// PodMetrics contains metrics for a specific pod
+// PodMetrics 保存某个 pod 的指标
 type PodMetrics struct {
 	CPU        []UsageDataPoint `json:"cpu"`
 	Memory     []UsageDataPoint `json:"memory"`
@@ -82,7 +82,7 @@ func NewClientWithRoundTripper(prometheusURL string, rt http.RoundTripper) (*Cli
 	}, nil
 }
 
-// GetResourceUsageHistory fetches historical usage data for CPU and Memory
+// GetResourceUsageHistory 获取 CPU 与内存的历史用量数据
 func (c *Client) GetResourceUsageHistory(ctx context.Context, instance string, duration string, nodeLabel string) (*ResourceUsageHistory, error) {
 	var step time.Duration
 	var timeRange time.Duration
@@ -120,14 +120,14 @@ func (c *Client) GetResourceUsageHistory(ctx context.Context, instance string, d
 		memoryConditions = append(memoryConditions, fmt.Sprintf(`node="%s"`, instance))
 	}
 
-	// Query CPU usage percentage - using container CPU usage
+	// 查询 CPU 使用率——使用容器 CPU 用量
 	cpuQuery := fmt.Sprintf(`sum(rate(container_cpu_usage_seconds_total{%s}[1m])) / sum(kube_node_status_allocatable{%s}) * 100`, strings.Join(conditions, ","), strings.Join(cpuConditions, ","))
 	cpuData, err := c.queryRange(ctx, cpuQuery, start, now, step)
 	if err != nil {
 		return nil, fmt.Errorf("error querying CPU usage: %w", err)
 	}
 
-	// Query Memory usage percentage - using container memory working set
+	// 查询内存使用率——使用容器内存 working set
 	memoryQuery := fmt.Sprintf(`sum(container_memory_working_set_bytes{%s}) / sum(kube_node_status_allocatable{%s}) * 100`, strings.Join(conditions, ","), strings.Join(memoryConditions, ","))
 	memoryData, err := c.queryRange(ctx, memoryQuery, start, now, step)
 	if err != nil {
@@ -139,14 +139,14 @@ func (c *Client) GetResourceUsageHistory(ctx context.Context, instance string, d
 		conditions = append(conditions, fmt.Sprintf(`%s="%s"`, nodeLabel, instance))
 	}
 
-	// Query Network incoming bytes rate (bytes per second)
+	// 查询网络入向字节速率（字节/秒）
 	networkInQuery := fmt.Sprintf(`sum(rate(container_network_receive_bytes_total{%s}[1m]))`, strings.Join(conditions, ","))
 	networkInData, err := c.queryRange(ctx, networkInQuery, start, now, step)
 	if err != nil {
 		return nil, fmt.Errorf("error querying Network incoming bytes: %w", err)
 	}
 
-	// Query Network outgoing bytes rate (bytes per second)
+	// 查询网络出向字节速率（字节/秒）
 	networkOutQuery := fmt.Sprintf(`sum(rate(container_network_transmit_bytes_total{%s}[1m]))`, strings.Join(conditions, ","))
 	networkOutData, err := c.queryRange(ctx, networkOutQuery, start, now, step)
 	if err != nil {
@@ -210,24 +210,24 @@ func (c *Client) queryRange(ctx context.Context, query string, start, end time.T
 	return dataPoints, nil
 }
 
-// HealthCheck verifies if Prometheus is accessible
+// HealthCheck 验证 Prometheus 是否可访问
 func (c *Client) HealthCheck(ctx context.Context) error {
 	_, err := c.client.Config(ctx)
 	return err
 }
 
-// Query executes an instant query against Prometheus
+// Query 对 Prometheus 执行一次即时查询
 func (c *Client) Query(ctx context.Context, query string, ts time.Time, opts ...v1.Option) (model.Value, v1.Warnings, error) {
 	return c.client.Query(ctx, query, ts, opts...)
 }
 
-// QueryRange executes a range query against Prometheus
+// QueryRange 对 Prometheus 执行一次范围查询
 func (c *Client) QueryRange(ctx context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, error) {
 	return c.client.QueryRange(ctx, query, r, opts...)
 }
 
 func (c *Client) GetCPUUsage(ctx context.Context, namespace, podNamePrefix, container string, start, end time.Time, step time.Duration) ([]UsageDataPoint, error) {
-	// Build query conditionally based on whether pod name prefix and container are provided
+	// 依据是否提供 pod 名前缀与容器，有条件地构造查询
 	conditions := []string{
 		`container!="POD"`, // Exclude the "POD" container
 		`container!=""`,    // Exclude empty containers
@@ -246,7 +246,7 @@ func (c *Client) GetCPUUsage(ctx context.Context, namespace, podNamePrefix, cont
 }
 
 func (c *Client) GetMemoryUsage(ctx context.Context, namespace, podNamePrefix, container string, start, end time.Time, step time.Duration) ([]UsageDataPoint, error) {
-	// Build query conditionally based on whether pod name prefix and container are provided
+	// 依据是否提供 pod 名前缀与容器，有条件地构造查询
 	conditions := []string{
 		`container!="POD"`, // Exclude the "POD" container
 		`container!=""`,    // Exclude empty containers
@@ -352,7 +352,7 @@ func FillMissingDataPoints(startTime time.Time, step time.Duration, existing []U
 	return append(result, existing...)
 }
 
-// GetPodMetrics fetches metrics for a specific pod
+// GetPodMetrics 获取某个 pod 的指标
 func (c *Client) GetPodMetrics(ctx context.Context, namespace, podName, container string, duration string) (*PodMetrics, error) {
 	var step time.Duration
 	var timeRange time.Duration
@@ -378,7 +378,7 @@ func (c *Client) GetPodMetrics(ctx context.Context, namespace, podName, containe
 	if err != nil {
 		return nil, fmt.Errorf("error querying pod CPU usage: %w", err)
 	}
-	// Memory usage query for specific pod
+	// 针对特定 pod 的内存用量查询
 	memoryData, err := c.GetMemoryUsage(ctx, namespace, podName, container, start, now, step)
 	if err != nil {
 		return nil, fmt.Errorf("error querying pod Memory usage: %w", err)

@@ -10,42 +10,59 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// Notification event identifiers. An event is at the same time the template key
-// and the subscription key, so adding a new event only needs a constant here
-// plus an entry in defaultNotificationTemplates.
+// 通知事件标识。事件同时用作模板键与订阅键，因此新增事件只需在这里加一个常量，
+// 并在 defaultNotificationTemplates 中补一条记录。
 const (
-	// NotificationEventRemoteLogin fires after a sign-in from an IP the account
-	// has never used before.
+	// NotificationEventRemoteLogin 在账号从未使用过的 IP 登录后触发。
+	//
 	NotificationEventRemoteLogin = "remote_login"
-	// NotificationEventPasswordExpiring fires when a password is about to expire.
+	// NotificationEventPasswordExpiring 在密码即将过期时触发。
 	NotificationEventPasswordExpiring = "password_expiring"
-	// NotificationEventPasswordExpired fires when a password has just expired.
+	// NotificationEventPasswordExpired 在密码刚刚过期时触发。
 	NotificationEventPasswordExpired = "password_expired"
-	// NotificationEventInactiveUserDisabled fires when an inactive account is
-	// disabled automatically.
+	// NotificationEventInactiveUserDisabled 在长期不活跃的账号被自动停用时触发。
+	//
 	NotificationEventInactiveUserDisabled = "inactive_user_disabled"
-	// NotificationEventTest is used by the "send test mail" action.
+	// NotificationEventTest 供"发送测试邮件"操作使用。
 	NotificationEventTest = "test"
+
+	// 上报给相关用户的安全 / 账号生命周期事件。
+	NotificationEventPasswordResetByAdmin = "password_reset_by_admin"
+	// NotificationEventMFAResetByAdmin 在管理员解除某账号的动态码绑定时发出（等保三级
+	// 要求管理员重置强认证凭据后本人应能立即发现）。
+	NotificationEventMFAResetByAdmin = "mfa_reset_by_admin"
+	NotificationEventAccountDisabled = "account_disabled"
+	NotificationEventAccountEnabled  = "account_enabled"
+	NotificationEventAccountExpiring = "account_expiring"
+	// NotificationEventSessionTakeover 在单点登录把该账号的旧会话顶下线时发出
+	// （抢占性登录）：本人与管理员都会收到站内信，反复出现时还会邮件提醒管理员。
+	NotificationEventSessionTakeover = "session_takeover"
+	// 影响用户权限的 RBAC 变更。
+	NotificationEventRoleAssigned   = "role_assigned"
+	NotificationEventRoleUnassigned = "role_unassigned"
+	// NotificationEventMailDeliveryFailed 提醒管理员某条通知的 SMTP 投递失败。
+	// 它只走站内信，以免递归。
+	NotificationEventMailDeliveryFailed = "mail_delivery_failed"
 )
 
-// Notification delivery channels.
+// 通知投递渠道。
 const (
 	NotificationChannelInApp = "inapp"
 	NotificationChannelEmail = "email"
 )
 
-// Notification receiver kinds.
+// 通知接收者类型。
 const (
 	NotificationReceiverUser  = "user"
 	NotificationReceiverEmail = "email"
 )
 
-// NotificationSettingData holds the notification module configuration. SMTP
-// credentials live in NotificationSetting so the password can be encrypted.
+// NotificationSettingData 保存通知模块的配置。SMTP 凭据放在 NotificationSetting 中，
+// 这样口令可以加密存储。
 type NotificationSettingData struct {
-	// EmailEnabled turns outgoing mail on/off.
+	// EmailEnabled 控制外发邮件的开关。
 	EmailEnabled bool `json:"emailEnabled"`
-	// InAppEnabled turns the built-in inbox on/off.
+	// InAppEnabled 控制内置站内信的开关。
 	InAppEnabled bool `json:"inAppEnabled"`
 
 	SMTPHost       string `json:"smtpHost"`
@@ -53,17 +70,17 @@ type NotificationSettingData struct {
 	SMTPUsername   string `json:"smtpUsername"`
 	SMTPFrom       string `json:"smtpFrom"`
 	SMTPSenderName string `json:"smtpSenderName"`
-	// SMTPTLS is one of "none", "starttls" or "ssl".
+	// SMTPTLS 取值为 "none"、"starttls" 或 "ssl"。
 	SMTPTLS string `json:"smtpTls"`
-	// SMTPSkipVerify skips certificate verification (self signed servers).
+	// SMTPSkipVerify 跳过证书校验（自签名服务器）。
 	SMTPSkipVerify bool `json:"smtpSkipVerify"`
 
-	// PasswordExpireNoticeDays is how many days before expiry a reminder is sent.
+	// PasswordExpireNoticeDays 表示过期前多少天开始发送提醒。
 	PasswordExpireNoticeDays int `json:"passwordExpireNoticeDays"`
 }
 
-// DefaultNotificationSettingData returns the configuration used when nothing
-// has been stored yet: mail off, inbox on.
+// DefaultNotificationSettingData 返回尚未存储任何配置时使用的默认配置：
+// 邮件关闭、站内信开启。
 func DefaultNotificationSettingData() NotificationSettingData {
 	return NotificationSettingData{
 		EmailEnabled:             false,
@@ -74,7 +91,7 @@ func DefaultNotificationSettingData() NotificationSettingData {
 	}
 }
 
-// Normalize clamps the stored configuration into supported ranges.
+// Normalize 把已存储的配置收敛到受支持的取值范围内。
 func (d *NotificationSettingData) Normalize() {
 	if d.SMTPPort <= 0 || d.SMTPPort > 65535 {
 		d.SMTPPort = 465
@@ -93,11 +110,11 @@ func (d *NotificationSettingData) Normalize() {
 	}
 }
 
-// NotificationSetting is the single row holding NotificationSettingData.
+// NotificationSetting 是保存 NotificationSettingData 的单行记录。
 type NotificationSetting struct {
 	Model
-	Data JSONField `json:"-" gorm:"column:data;type:text"`
-	// SMTPPassword is encrypted at rest (SecretString) and never serialized.
+	Data JSONField `json:"-" gorm:"column:data"`
+	// SMTPPassword 以密文存储（SecretString），且不会被序列化。
 	SMTPPassword SecretString `json:"-" gorm:"column:smtp_password;type:text"`
 }
 
@@ -105,8 +122,8 @@ func (NotificationSetting) TableName() string {
 	return "notification_settings"
 }
 
-// NotificationTemplate is the subject/body pair used for one event. Email and
-// in-app deliveries share the same rendered content.
+// NotificationTemplate 是某个事件使用的标题/正文组合。邮件与站内投递
+// 共用同一份渲染结果。
 type NotificationTemplate struct {
 	Model
 	Event   string `json:"event" gorm:"type:varchar(50);uniqueIndex;not null"`
@@ -119,18 +136,18 @@ func (NotificationTemplate) TableName() string {
 	return "notification_templates"
 }
 
-// NotificationSubscription routes an event to a receiver over a channel.
+// NotificationSubscription 把某个事件按渠道路由给接收者。
 type NotificationSubscription struct {
 	Model
 	Event string `json:"event" gorm:"type:varchar(50);index;not null"`
-	// Channel is NotificationChannelInApp or NotificationChannelEmail.
+	// Channel 取 NotificationChannelInApp 或 NotificationChannelEmail。
 	Channel string `json:"channel" gorm:"type:varchar(20);not null"`
-	// ReceiverType is NotificationReceiverUser or NotificationReceiverEmail.
+	// ReceiverType 取 NotificationReceiverUser 或 NotificationReceiverEmail。
 	ReceiverType string `json:"receiverType" gorm:"type:varchar(20);not null"`
-	// ReceiverID is the user id when ReceiverType is "user".
+	// ReceiverID 在 ReceiverType 为 "user" 时是用户 ID。
 	ReceiverID uint `json:"receiverId"`
-	// Receiver keeps the username or the raw mail address, for display and for
-	// resolving the address without a join.
+	// Receiver 保存用户名或原始邮箱地址，既用于展示，也便于在不联表的情况下
+	// 解析出收件地址。
 	Receiver string `json:"receiver" gorm:"type:varchar(255)"`
 	Enabled  bool   `json:"enabled" gorm:"type:boolean;default:true"`
 }
@@ -140,35 +157,97 @@ func (NotificationSubscription) TableName() string {
 }
 
 // Notification is an in-app message ("站内信") shown in the bell menu.
+//
+// user_id 上的两个复合索引分别服务前端轮询的未读计数（user_id + read）与列表
+// （user_id + created_at 倒序）；只按 user_id 的查询（删除全部站内信）走前者的左前缀。
 type Notification struct {
-	Model
-	UserID  uint   `json:"userId" gorm:"index;not null"`
-	Event   string `json:"event" gorm:"type:varchar(50);index"`
-	Title   string `json:"title" gorm:"type:text"`
-	Content string `json:"content" gorm:"type:text"`
-	Read    bool   `json:"read" gorm:"type:boolean;default:false;index"`
+	ID        uint      `json:"id" gorm:"primarykey"`
+	CreatedAt time.Time `json:"createdAt" gorm:"index:idx_notifications_user_created,priority:2,sort:desc"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	UserID    uint      `json:"userId" gorm:"not null;index:idx_notifications_user_read,priority:1;index:idx_notifications_user_created,priority:1"`
+	Event     string    `json:"event" gorm:"type:varchar(50);index"`
+	Title     string    `json:"title" gorm:"type:text"`
+	Content   string    `json:"content" gorm:"type:text"`
+	Read      bool      `json:"read" gorm:"type:boolean;default:false;index:idx_notifications_user_read,priority:2"`
 }
 
 func (Notification) TableName() string {
 	return "notifications"
 }
 
-// LoginRecord keeps every successful sign-in so a new IP can be detected.
+// LoginRecord 记录一次登录尝试，成功与失败都留痕（等保三级安全审计）。
+// 成功登录用于新 IP 检测（见 RecordLogin）。
+//
+// created_at 索引同时服务登录日志的时间窗筛选/倒序分页与按天滚动删除（这两处都是全表
+// 扫的大头）。user_id + ip 是「新 IP 检测」的查询条件，也覆盖只按 user_id 的查询。
 type LoginRecord struct {
-	Model
-	UserID    uint   `json:"userId" gorm:"index;not null"`
-	Username  string `json:"username" gorm:"type:varchar(50);index"`
-	Provider  string `json:"provider" gorm:"type:varchar(50)"`
-	IP        string `json:"ip" gorm:"type:varchar(64);index"`
-	UserAgent string `json:"userAgent" gorm:"type:text"`
+	ID        uint      `json:"id" gorm:"primarykey"`
+	CreatedAt time.Time `json:"createdAt" gorm:"index:idx_login_records_created_at,sort:desc"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	UserID    uint      `json:"userId" gorm:"index:idx_login_records_user_ip,priority:1"`
+	Username  string    `json:"username" gorm:"type:varchar(50);index"`
+	Provider  string    `json:"provider" gorm:"type:varchar(50)"`
+	IP        string    `json:"ip" gorm:"type:varchar(64);index:idx_login_records_user_ip,priority:2"`
+	UserAgent string    `json:"userAgent" gorm:"type:text"`
+	// Result 区分成功与失败：空字符串 = 登录成功，非空 = 失败原因码
+	// （invalid_credentials / mfa_invalid / ip_denied / ...）。
+	//
+	// 用「空值即成功」的失败码，而不是另加一个 success 布尔列：新列在
+	// AutoMigrate 时只能回填列类型的零值，历史行都是成功登录，用布尔列会把它们
+	// 全部显示成失败。
+	Result string `json:"result" gorm:"type:varchar(50);index"`
 }
 
 func (LoginRecord) TableName() string {
 	return "login_records"
 }
 
-// defaultNotificationTemplates seeds every event the module can emit. The text
-// is editable from the UI afterwards.
+// LoginResultSuccess 是成功登录在 LoginRecord.Result 里的取值。
+const LoginResultSuccess = ""
+
+// 失败原因码。取值会展示在「日志审计 → 登录日志」上，改动需要考虑前端文案。
+const (
+	// LoginResultInvalidCredentials 密码或目录凭据不正确。
+	LoginResultInvalidCredentials = "invalid_credentials"
+	// LoginResultMFAInvalid 动态码不正确。
+	LoginResultMFAInvalid = "mfa_invalid"
+	// LoginResultIPDenied 来源 IP 在黑名单中。
+	LoginResultIPDenied = "ip_denied"
+	// LoginResultTooManyAttempts 命中登录错误次数上限，账号或 IP 被锁定。
+	LoginResultTooManyAttempts = "too_many_attempts"
+	// LoginResultNotProvisioned 目录用户尚未在控制台开通。
+	LoginResultNotProvisioned = "not_provisioned"
+	// LoginResultNoPermission 账号被禁用，或没有任何角色 / 权限绑定组成员身份。
+	LoginResultNoPermission = "no_permission"
+	// LoginResultCaptchaInvalid 验证码不正确。
+	LoginResultCaptchaInvalid = "captcha_invalid"
+	// LoginResultAccountExpired 账号已超过有效期。
+	LoginResultAccountExpired = "account_expired"
+	// LoginResultSourceDenied 来源地址不在「仅从指定来源登录」的允许列表内。
+	LoginResultSourceDenied = "source_denied"
+)
+
+// NotificationEventOperationFailed 标记由前端上报的一次操作失败（例如请求
+// 没能到达服务端）。这些记录只展示在站内信中。
+const NotificationEventOperationFailed = "operation_failed"
+
+// CreateUserNotification 为指定用户写入一条站内消息。与 SendEvent 不同，它绕过
+// 订阅与邮件投递：用于记录客户端自身观察到的失败，即便没有配置邮件也必须可见。
+func CreateUserNotification(userID uint, event, title, content string) error {
+	if userID == 0 {
+		return errors.New("user id is required")
+	}
+	notification := Notification{
+		UserID:  userID,
+		Event:   event,
+		Title:   title,
+		Content: content,
+	}
+	return DB.Create(&notification).Error
+}
+
+// defaultNotificationTemplates 预置本模块可发出的每一个事件。文案之后可以在
+// 界面中编辑。
 var defaultNotificationTemplates = map[string]struct {
 	Subject string
 	Body    string
@@ -215,15 +294,100 @@ var defaultNotificationTemplates = map[string]struct {
 发送时间：{{time}}
 `,
 	},
+	NotificationEventPasswordResetByAdmin: {
+		Subject: "[Kite] 密码已被管理员重置",
+		Body: `您好 {{username}}：
+
+您的账号密码已被管理员 {{operator}} 于 {{time}} 重置。
+
+如果这不是您预期的操作，请立即联系管理员核实。
+`,
+	},
+	NotificationEventMFAResetByAdmin: {
+		Subject: "[Kite] 动态码绑定已被管理员重置",
+		Body: `您好 {{username}}：
+
+您账号的多因素认证（MFA）绑定已被管理员 {{operator}} 于 {{time}} 解除，请在下次登录时重新绑定。
+
+如果这不是您预期的操作（例如您并未遗失身份验证器），请立即联系管理员核实。
+`,
+	},
+	NotificationEventAccountDisabled: {
+		Subject: "[Kite] 账号已被禁用",
+		Body: `您好 {{username}}：
+
+您的账号已被管理员 {{operator}} 于 {{time}} 禁用，将无法登录 Kite。
+
+如有疑问，请联系管理员。
+`,
+	},
+	NotificationEventAccountEnabled: {
+		Subject: "[Kite] 账号已启用",
+		Body: `您好 {{username}}：
+
+您的账号已被管理员 {{operator}} 于 {{time}} 启用，现在可以正常登录使用。
+`,
+	},
+	NotificationEventAccountExpiring: {
+		Subject: "[Kite] 账号即将过期",
+		Body: `您好 {{username}}：
+
+您的账号将于 {{expireDate}}（{{days}} 天后）过期，过期后将无法登录。
+
+如需继续使用，请联系管理员办理延期。
+`,
+	},
+	NotificationEventRoleAssigned: {
+		Subject: "[Kite] 已为您分配角色",
+		Body: `您好 {{username}}：
+
+管理员于 {{time}} 为您的账号分配了角色「{{role}}」，相关权限已生效。
+`,
+	},
+	NotificationEventRoleUnassigned: {
+		Subject: "[Kite] 角色已被移除",
+		Body: `您好 {{username}}：
+
+管理员于 {{time}} 移除了您账号的角色「{{role}}」，相关权限已收回。
+`,
+	},
+	NotificationEventSessionTakeover: {
+		Subject: "[Kite] 账号在其他设备登录",
+		Body: `账号 {{username}} 于 {{time}} 在其他设备登录（IP：{{ip}}），出于安全考虑，该账号此前的会话已自动退出。
+
+- 如果是您本人的操作：在登录页重新登录即可继续使用；
+- 如果不是本人操作：说明密码可能已经泄露，请立即修改密码，管理员请尽快核实。
+`,
+	},
+	NotificationEventMailDeliveryFailed: {
+		Subject: "[Kite] 通知邮件发送失败",
+		Body: `管理员您好：
+
+{{time}} 向 {{address}} 发送事件「{{event}}」的通知邮件失败：
+
+  {{reason}}
+
+请检查系统设置中的 SMTP 配置。
+`,
+	},
 }
 
-// NotificationEventList returns every supported event identifier.
+// NotificationEventList 返回所有受支持的事件标识。
 func NotificationEventList() []string {
 	return []string{
 		NotificationEventRemoteLogin,
 		NotificationEventPasswordExpiring,
 		NotificationEventPasswordExpired,
 		NotificationEventInactiveUserDisabled,
+		NotificationEventPasswordResetByAdmin,
+		NotificationEventMFAResetByAdmin,
+		NotificationEventAccountDisabled,
+		NotificationEventAccountEnabled,
+		NotificationEventAccountExpiring,
+		NotificationEventSessionTakeover,
+		NotificationEventRoleAssigned,
+		NotificationEventRoleUnassigned,
+		NotificationEventMailDeliveryFailed,
 	}
 }
 
@@ -247,7 +411,7 @@ func notificationSettingRow() (*NotificationSetting, error) {
 	return &row, nil
 }
 
-// GetNotificationSetting returns the stored configuration with defaults applied.
+// GetNotificationSetting 返回已存储的配置，并应用默认值。
 func GetNotificationSetting() (*NotificationSettingData, error) {
 	row, err := notificationSettingRow()
 	if err != nil {
@@ -264,7 +428,7 @@ func GetNotificationSetting() (*NotificationSettingData, error) {
 	return &data, nil
 }
 
-// UpdateNotificationSetting stores the configuration (SMTP password untouched).
+// UpdateNotificationSetting 保存配置（不改动 SMTP 口令）。
 func UpdateNotificationSetting(data NotificationSettingData) (*NotificationSettingData, error) {
 	data.Normalize()
 	row, err := notificationSettingRow()
@@ -282,7 +446,7 @@ func UpdateNotificationSetting(data NotificationSettingData) (*NotificationSetti
 	return &data, nil
 }
 
-// SetNotificationSMTPPassword stores the SMTP password encrypted at rest.
+// SetNotificationSMTPPassword 以密文方式保存 SMTP 口令。
 func SetNotificationSMTPPassword(password string) error {
 	row, err := notificationSettingRow()
 	if err != nil {
@@ -292,7 +456,7 @@ func SetNotificationSMTPPassword(password string) error {
 	return DB.Save(row).Error
 }
 
-// GetNotificationSMTPPassword returns the decrypted SMTP password.
+// GetNotificationSMTPPassword 返回解密后的 SMTP 口令。
 func GetNotificationSMTPPassword() (string, error) {
 	row, err := notificationSettingRow()
 	if err != nil {
@@ -301,8 +465,8 @@ func GetNotificationSMTPPassword() (string, error) {
 	return string(row.SMTPPassword), nil
 }
 
-// HasNotificationSMTPPassword reports whether a password has been configured,
-// without exposing it.
+// HasNotificationSMTPPassword 报告是否已经配置了口令，
+// 但不暴露口令本身。
 func HasNotificationSMTPPassword() bool {
 	row, err := notificationSettingRow()
 	if err != nil {
@@ -311,19 +475,21 @@ func HasNotificationSMTPPassword() bool {
 	return strings.TrimSpace(string(row.SMTPPassword)) != ""
 }
 
-// EnsureNotificationTemplates creates the templates that do not exist yet and
-// returns all of them ordered by event.
+// EnsureNotificationTemplates 创建尚不存在的模板，
+// 并返回按事件排序的全部模板。
 func EnsureNotificationTemplates() ([]NotificationTemplate, error) {
+	// 显式按 id 排序：接口返回的顺序就是下拉列表的顺序（= NotificationEventList 的
+	// 顺序，新事件追加在最后），不能依赖各数据库对无 ORDER BY 查询的默认顺序。
 	var existing []NotificationTemplate
-	if err := DB.Find(&existing).Error; err != nil {
+	if err := DB.Order("id ASC").Find(&existing).Error; err != nil {
 		return nil, err
 	}
 	known := make(map[string]bool, len(existing))
 	for _, template := range existing {
 		known[template.Event] = true
 	}
-	// NotificationEventList drives the UI; the test template is seeded as well
-	// so the "send test mail" action has something to render.
+	// NotificationEventList 供界面使用；测试模板同样会预置，
+	// 这样"发送测试邮件"才有内容可渲染。
 	seeded := append(NotificationEventList(), NotificationEventTest)
 	for _, event := range seeded {
 		if known[event] {
@@ -347,8 +513,8 @@ func EnsureNotificationTemplates() ([]NotificationTemplate, error) {
 	return existing, nil
 }
 
-// GetNotificationTemplate returns the enabled template of an event, or nil when
-// the event has no template or it has been disabled.
+// GetNotificationTemplate 返回某个事件已启用的模板；
+// 事件没有模板或模板已禁用时返回 nil。
 func GetNotificationTemplate(event string) (*NotificationTemplate, error) {
 	var template NotificationTemplate
 	err := DB.Where("event = ?", event).First(&template).Error
@@ -364,7 +530,7 @@ func GetNotificationTemplate(event string) (*NotificationTemplate, error) {
 	return &template, nil
 }
 
-// UpdateNotificationTemplate saves the subject/body/enabled state of an event.
+// UpdateNotificationTemplate 保存某个事件的标题/正文/启用状态。
 func UpdateNotificationTemplate(template NotificationTemplate) error {
 	var stored NotificationTemplate
 	err := DB.Where("event = ?", template.Event).First(&stored).Error
@@ -381,7 +547,7 @@ func UpdateNotificationTemplate(template NotificationTemplate) error {
 	}).Error
 }
 
-// ListNotificationSubscriptions returns the subscriptions of an event.
+// ListNotificationSubscriptions 返回某个事件的订阅列表。
 func ListNotificationSubscriptions(event string) ([]NotificationSubscription, error) {
 	var subscriptions []NotificationSubscription
 	query := DB.Order("id ASC")
@@ -394,12 +560,12 @@ func ListNotificationSubscriptions(event string) ([]NotificationSubscription, er
 	return subscriptions, nil
 }
 
-// CreateNotificationSubscription stores a new subscription.
+// CreateNotificationSubscription 保存一条新的订阅。
 func CreateNotificationSubscription(subscription *NotificationSubscription) error {
 	return DB.Create(subscription).Error
 }
 
-// GetNotificationSubscription loads one subscription by id.
+// GetNotificationSubscription 按 ID 读取一条订阅。
 func GetNotificationSubscription(id uint) (*NotificationSubscription, error) {
 	var subscription NotificationSubscription
 	if err := DB.First(&subscription, id).Error; err != nil {
@@ -408,17 +574,17 @@ func GetNotificationSubscription(id uint) (*NotificationSubscription, error) {
 	return &subscription, nil
 }
 
-// SaveNotificationSubscription persists changes to an existing subscription.
+// SaveNotificationSubscription 持久化对已有订阅的改动。
 func SaveNotificationSubscription(subscription *NotificationSubscription) error {
 	return DB.Save(subscription).Error
 }
 
-// DeleteNotificationSubscription removes a subscription.
+// DeleteNotificationSubscription 删除一条订阅。
 func DeleteNotificationSubscription(id uint) error {
 	return DB.Delete(&NotificationSubscription{}, id).Error
 }
 
-// CreateInAppNotifications stores inbox messages for the given users.
+// CreateInAppNotifications 为指定用户批量保存站内消息。
 func CreateInAppNotifications(userIDs []uint, event, title, content string) error {
 	if len(userIDs) == 0 {
 		return nil
@@ -443,7 +609,57 @@ func CreateInAppNotifications(userIDs []uint, event, title, content string) erro
 	return DB.Create(&messages).Error
 }
 
-// ListNotifications returns one page of inbox messages for a user.
+// ClearNotifications 删除该用户的全部站内消息。
+func ClearNotifications(userID uint) error {
+	return DB.Where("user_id = ?", userID).Delete(&Notification{}).Error
+}
+
+// ListUsersExpiringBefore 返回 ExpiresAt 早于或等于给定截止时间的已启用用户，
+// 用于"账号即将过期"提醒。
+func ListUsersExpiringBefore(deadline time.Time) ([]User, error) {
+	var users []User
+	err := DB.Where(
+		"enabled = ? AND expires_at IS NOT NULL AND expires_at <= ?",
+		true, deadline,
+	).Find(&users).Error
+	return users, err
+}
+
+// ListAdminUsers 返回通过直接授权持有管理员角色的已启用账号，用于在安全事件时
+// 提醒管理员（所有人发站内信，重复发生的才发邮件）。
+func ListAdminUsers() ([]User, error) {
+	var adminRole Role
+	if err := DB.Where("name = ?", DefaultAdminRole.Name).First(&adminRole).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var users []User
+	err := DB.Model(&User{}).
+		Joins("JOIN role_assignments ON role_assignments.subject = users.username").
+		Where(
+			"role_assignments.role_id = ? AND role_assignments.subject_type = ? AND users.enabled = ?",
+			adminRole.ID, SubjectTypeUser, true,
+		).
+		Distinct("users.id").
+		Find(&users).Error
+	return users, err
+}
+
+// ListAdminUserIDs 返回通过直接授权持有管理员角色的已启用账号的用户 ID。
+func ListAdminUserIDs() ([]uint, error) {
+	users, err := ListAdminUsers()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uint, 0, len(users))
+	for _, user := range users {
+		ids = append(ids, user.ID)
+	}
+	return ids, nil
+}
+
 func ListNotifications(userID uint, page, size int) ([]Notification, int64, error) {
 	if page < 1 {
 		page = 1
@@ -466,7 +682,7 @@ func ListNotifications(userID uint, page, size int) ([]Notification, int64, erro
 	return messages, total, nil
 }
 
-// CountUnreadNotifications returns how many unread messages a user has.
+// CountUnreadNotifications 返回用户的未读消息数。
 func CountUnreadNotifications(userID uint) (int64, error) {
 	var count int64
 	err := DB.Model(&Notification{}).
@@ -475,23 +691,23 @@ func CountUnreadNotifications(userID uint) (int64, error) {
 	return count, err
 }
 
-// MarkNotificationRead marks one message of a user as read.
+// MarkNotificationRead 把用户的一条消息标记为已读。
 func MarkNotificationRead(userID, id uint) error {
 	return DB.Model(&Notification{}).
 		Where("id = ? AND user_id = ?", id, userID).
 		Update("read", true).Error
 }
 
-// MarkAllNotificationsRead marks every message of a user as read.
+// MarkAllNotificationsRead 把用户的所有消息标记为已读。
 func MarkAllNotificationsRead(userID uint) error {
 	return DB.Model(&Notification{}).
 		Where("user_id = ? AND read = ?", userID, false).
 		Update("read", true).Error
 }
 
-// RecordLogin stores a sign-in and reports whether the IP is new for the user.
+// RecordLogin 记录一次成功登录，并报告该 IP 对这个用户是否是新的。
 //
-// 仅记录成功登录；首次登录（无历史记录）不算异地，避免新账号就被提醒。
+// 仅成功登录参与「新 IP」判定；首次登录（无历史记录）不算异地，避免新账号就被提醒。
 func RecordLogin(userID uint, username, provider, ip, userAgent string) (bool, error) {
 	var previous int64
 	if err := DB.Model(&LoginRecord{}).
@@ -511,6 +727,7 @@ func RecordLogin(userID uint, username, provider, ip, userAgent string) (bool, e
 		Provider:  provider,
 		IP:        ip,
 		UserAgent: truncateText(userAgent, 512),
+		Result:    LoginResultSuccess,
 	}
 	if err := DB.Create(&record).Error; err != nil {
 		return false, err
@@ -518,8 +735,25 @@ func RecordLogin(userID uint, username, provider, ip, userAgent string) (bool, e
 	return previous == 0 && total > 0, nil
 }
 
-// ListUsersForPasswordExpiry returns every enabled local account that has a
-// password timestamp, newest password change first.
+// RecordLoginFailure 记录一次失败的登录尝试，它是安全审计链路
+// （等保三级安全审计）的一部分。账号可能并不存在，因此 UserID
+// 保持为 0，只保留尝试时使用的用户名。
+func RecordLoginFailure(username, provider, ip, userAgent, reason string) error {
+	if reason == LoginResultSuccess {
+		reason = LoginResultInvalidCredentials
+	}
+	record := LoginRecord{
+		Username:  truncateText(strings.TrimSpace(username), 50),
+		Provider:  truncateText(provider, 50),
+		IP:        ip,
+		UserAgent: truncateText(userAgent, 512),
+		Result:    truncateText(reason, 50),
+	}
+	return DB.Create(&record).Error
+}
+
+// ListUsersForPasswordExpiry 返回所有已启用且有密码时间戳的本地账号，
+// 按最近一次修改密码的时间倒序。
 func ListUsersForPasswordExpiry() ([]User, error) {
 	var users []User
 	err := DB.Where("enabled = ? AND provider = ? AND password_updated_at IS NOT NULL",
@@ -527,9 +761,8 @@ func ListUsersForPasswordExpiry() ([]User, error) {
 	return users, err
 }
 
-// ListInactiveUsers returns enabled accounts that have not signed in since the
-// given time. Accounts created recently are skipped so a fresh installation
-// does not disable everybody at once.
+// ListInactiveUsers 返回自给定时间起从未登录的已启用账号。刚创建的账号会被跳过，
+// 以免全新部署时一次性把所有人都停用。
 func ListInactiveUsers(since time.Time) ([]User, error) {
 	var users []User
 	err := DB.Where(
@@ -539,10 +772,13 @@ func ListInactiveUsers(since time.Time) ([]User, error) {
 	return users, err
 }
 
-// DisableReasonInactive marks accounts closed by the inactivity policy.
+// DisableReasonInactive 标记按不活跃策略关闭的账号。
 const DisableReasonInactive = "inactive"
 
-// MarkUserAutoDisabled records why an account was disabled automatically.
+// DisableReasonExpired 标记因超过账号有效期而被自动停用的账号。
+const DisableReasonExpired = "expired"
+
+// MarkUserAutoDisabled 记录账号被自动停用的原因。
 func MarkUserAutoDisabled(id uint, reason string) error {
 	now := time.Now()
 	err := DB.Model(&User{}).Where("id = ?", id).Updates(map[string]any{
@@ -553,8 +789,8 @@ func MarkUserAutoDisabled(id uint, reason string) error {
 	return err
 }
 
-// ListAutoDisabledUsers returns every account currently disabled by the
-// inactivity policy, newest first.
+// ListAutoDisabledUsers 返回当前被不活跃策略停用的所有账号，
+// 按时间倒序。
 func ListAutoDisabledUsers() ([]User, error) {
 	var users []User
 	err := DB.Where("enabled = ? AND disabled_reason <> ''", false).

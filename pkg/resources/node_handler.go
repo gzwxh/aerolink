@@ -34,19 +34,19 @@ func NewNodeHandler() *NodeHandler {
 	}
 }
 
-// DrainNode drains a node by evicting all pods
+// DrainNode 通过驱逐所有 pod 来腾空一个节点
 func (h *NodeHandler) DrainNode(c *gin.Context) {
 	nodeName := c.Param("name")
 	ctx := c.Request.Context()
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	user := c.MustGet("user").(model.User)
-	// Parse the request body for drain options
+	// 解析请求体中的 drain 选项
 	var drainRequest struct {
 		Force            bool `json:"force"`
 		GracePeriod      int  `json:"gracePeriod"`
 		DeleteLocal      bool `json:"deleteLocalData"`
 		IgnoreDaemonsets bool `json:"ignoreDaemonsets"`
-		// Timeout aborts the drain after this many seconds when > 0.
+		// Timeout 大于 0 时，超过这么多秒后中止 drain。
 		Timeout int `json:"timeout"`
 	}
 
@@ -55,7 +55,7 @@ func (h *NodeHandler) DrainNode(c *gin.Context) {
 		return
 	}
 
-	// Get the node first to ensure it exists
+	// 先获取该节点，确认它存在
 	var node corev1.Node
 	if err := cs.K8sClient.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
 		if errors.IsNotFound(err) {
@@ -124,7 +124,7 @@ func (h *NodeHandler) DrainNode(c *gin.Context) {
 }
 
 func (h *NodeHandler) markNodeSchedulable(ctx context.Context, client *kube.K8sClient, nodeName string, schedulable bool) error {
-	// Get the current node
+	// 获取当前节点
 	var node corev1.Node
 	if err := client.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
 		return err
@@ -136,7 +136,7 @@ func (h *NodeHandler) markNodeSchedulable(ctx context.Context, client *kube.K8sC
 	return nil
 }
 
-// CordonNode marks a node as unschedulable
+// CordonNode 把节点标记为不可调度
 func (h *NodeHandler) CordonNode(c *gin.Context) {
 	nodeName := c.Param("name")
 	ctx := c.Request.Context()
@@ -157,7 +157,7 @@ func (h *NodeHandler) CordonNode(c *gin.Context) {
 	})
 }
 
-// UncordonNode marks a node as schedulable
+// UncordonNode 把节点标记为可调度
 func (h *NodeHandler) UncordonNode(c *gin.Context) {
 	nodeName := c.Param("name")
 	ctx := c.Request.Context()
@@ -177,13 +177,13 @@ func (h *NodeHandler) UncordonNode(c *gin.Context) {
 	})
 }
 
-// TaintNode adds or updates taints on a node
+// TaintNode 为节点新增或更新污点
 func (h *NodeHandler) TaintNode(c *gin.Context) {
 	nodeName := c.Param("name")
 	ctx := c.Request.Context()
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 
-	// Parse the request body for taint information
+	// 解析请求体中的污点信息
 	var taintRequest struct {
 		Key    string `json:"key" binding:"required"`
 		Value  string `json:"value"`
@@ -195,7 +195,7 @@ func (h *NodeHandler) TaintNode(c *gin.Context) {
 		return
 	}
 
-	// Get the current node
+	// 获取当前节点
 	var node corev1.Node
 	if err := cs.K8sClient.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
 		if errors.IsNotFound(err) {
@@ -206,14 +206,14 @@ func (h *NodeHandler) TaintNode(c *gin.Context) {
 		return
 	}
 
-	// Create the new taint
+	// 构造新的污点
 	newTaint := corev1.Taint{
 		Key:    taintRequest.Key,
 		Value:  taintRequest.Value,
 		Effect: corev1.TaintEffect(taintRequest.Effect),
 	}
 
-	// Check if taint with same key already exists and update it, otherwise add new taint
+	// 如果相同 key 的污点已存在就更新它，否则新增污点
 	found := false
 	for i, taint := range node.Spec.Taints {
 		if taint.Key == taintRequest.Key {
@@ -227,7 +227,7 @@ func (h *NodeHandler) TaintNode(c *gin.Context) {
 		node.Spec.Taints = append(node.Spec.Taints, newTaint)
 	}
 
-	// Update the node
+	// 更新节点
 	if err := cs.K8sClient.Update(ctx, &node); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to taint node: " + err.Error()})
 		return
@@ -240,13 +240,13 @@ func (h *NodeHandler) TaintNode(c *gin.Context) {
 	})
 }
 
-// UntaintNode removes a taint from a node
+// UntaintNode 移除节点上的一个污点
 func (h *NodeHandler) UntaintNode(c *gin.Context) {
 	nodeName := c.Param("name")
 	ctx := c.Request.Context()
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 
-	// Parse the request body for taint key to remove
+	// 解析请求体中要移除的污点 key
 	var untaintRequest struct {
 		Key string `json:"key" binding:"required"`
 	}
@@ -256,7 +256,7 @@ func (h *NodeHandler) UntaintNode(c *gin.Context) {
 		return
 	}
 
-	// Get the current node
+	// 获取当前节点
 	var node corev1.Node
 	if err := cs.K8sClient.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
 		if errors.IsNotFound(err) {
@@ -267,7 +267,7 @@ func (h *NodeHandler) UntaintNode(c *gin.Context) {
 		return
 	}
 
-	// Find and remove the taint with the specified key
+	// 查找并移除指定 key 的污点
 	originalLength := len(node.Spec.Taints)
 	var newTaints []corev1.Taint
 	for _, taint := range node.Spec.Taints {
@@ -282,7 +282,7 @@ func (h *NodeHandler) UntaintNode(c *gin.Context) {
 		return
 	}
 
-	// Update the node
+	// 更新节点
 	if err := cs.K8sClient.Update(ctx, &node); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to untaint node: " + err.Error()})
 		return

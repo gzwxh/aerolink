@@ -181,6 +181,8 @@ func TestCanAccessClusterAndNamespace(t *testing.T) {
 		t.Fatal("expected namespace access to be denied")
 	}
 
+	// 存量兼容：显式配置 namespaces 的角色继续受其约束——不同角色的
+	// 集群与命名空间权限不允许跨角色合并。
 	splitRoleUser := model.User{
 		Roles: []common.Role{
 			{Name: "prod-other", Clusters: []string{"prod"}, Namespaces: []string{"other"}},

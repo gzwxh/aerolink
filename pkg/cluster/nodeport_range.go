@@ -10,9 +10,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GetNodePortRange returns the --service-node-port-range configured on the
-// cluster's kube-apiserver (falls back to the Kubernetes default 30000-32767
-// when the flag or the apiserver pod cannot be read).
+// GetNodePortRange 返回集群 kube-apiserver 上配置的
+// --service-node-port-range（当该 flag 或 apiserver pod 无法读取时，
+// 回退到 Kubernetes 默认的 30000-32767）。
 func (cm *ClusterManager) GetNodePortRange(c *gin.Context) {
 	clusterName := strings.TrimSpace(c.Param("name"))
 	if clusterName == "" {
@@ -30,8 +30,8 @@ func (cm *ClusterManager) GetNodePortRange(c *gin.Context) {
 	min, max := defaultMin, defaultMax
 	source := "default"
 
-	// The flag lives on the kube-apiserver process. Try the canonical label
-	// first, then the pod-name prefix used by kubeadm clusters.
+	// 该 flag 位于 kube-apiserver 进程上。先尝试规范标签，
+	// 再尝试 kubeadm 集群使用的 pod 名前缀。
 	pods, err := cs.K8sClient.ClientSet.CoreV1().
 		Pods("kube-system").
 		List(ctx, metav1.ListOptions{LabelSelector: "component=kube-apiserver"})

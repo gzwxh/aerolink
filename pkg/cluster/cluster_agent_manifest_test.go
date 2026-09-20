@@ -68,13 +68,13 @@ func TestGetClusterAgentManifestInvalidGrant(t *testing.T) {
 	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}, clusterAgentManager: clusteragent.NewManager(func() {})}
 	router := newClusterAgentManifestRouter(manager)
 
-	// Missing grant.
+	// 缺少授权。
 	rec := performClusterRequest(router, http.MethodGet, "/manifest", "")
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("missing grant: status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 
-	// Malformed grant.
+	// 授权格式损坏。
 	rec = performClusterRequest(router, http.MethodGet, "/manifest?grant=garbage", "")
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("malformed grant: status = %d, want %d", rec.Code, http.StatusUnauthorized)
@@ -175,7 +175,7 @@ func TestCreateClusterAgentClusterReturnsConnectionInfo(t *testing.T) {
 	if !strings.Contains(manifestURL, "?grant=") {
 		t.Errorf("manifestURL %q should contain a manifest grant", manifestURL)
 	}
-	// Verify the cluster was persisted correctly.
+	// 校验集群已被正确持久化。
 	cluster, err := model.GetClusterByName("agent-test")
 	if err != nil {
 		t.Fatalf("loading cluster: %v", err)
@@ -226,7 +226,7 @@ func TestCreateClusterAgentClusterServerURLDerivation(t *testing.T) {
 	router := gin.New()
 	router.POST("/clusters", manager.CreateCluster)
 
-	// Verify that X-Forwarded-Host and X-Forwarded-Proto are respected.
+	// 校验 X-Forwarded-Host 与 X-Forwarded-Proto 被正确识别。
 	rec := httptest.NewRecorder()
 	body := strings.NewReader(`{"name":"agent-fwd","clusterAgent":true}`)
 	req := httptest.NewRequest(http.MethodPost, "/clusters", body)

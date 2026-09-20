@@ -86,6 +86,9 @@ func (e *helmReleaseAutoUpgradeExecutor) Run(ctx context.Context, task model.Sch
 			"upgrade",
 			releaseName,
 			payload.Namespace,
+			// 定时任务没有 HTTP 请求，来源留空。
+			"",
+			"",
 			current,
 			next,
 			success,

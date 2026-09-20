@@ -19,7 +19,7 @@ type restClientGetter struct {
 }
 
 func init() {
-	// Match Helm CLI's server-side apply field manager.
+	// 与 Helm CLI 服务端 apply 的 field manager 保持一致。
 	kube.ManagedFieldsManager = "helm"
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/zxh326/kite/pkg/common"
 	"gorm.io/gorm"
@@ -13,9 +14,12 @@ import (
 
 const DefaultGeneralAIModel = "gpt-4o-mini"
 const DefaultGeneralAnthropicModel = "claude-sonnet-4-5"
-const DefaultGeneralKubectlImage = "zzde/kubectl:latest"
-const DefaultGeneralNodeTerminalImage = "busybox:latest"
-const DefaultGeneralClusterAgentImage = "ghcr.io/kite-org/kite:latest"
+
+// DefaultGeneralKubectlImage 是默认的 kubectl 镜像。默认镜像都来自公司镜像仓库
+// （SWR，命名空间 “dsy”）。
+const DefaultGeneralKubectlImage = "swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest"
+const DefaultGeneralNodeTerminalImage = "swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest"
+const DefaultGeneralClusterAgentImage = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest"
 
 const GeneralAIProviderOpenAI = "openai"
 const GeneralAIProviderAnthropic = "anthropic"
@@ -47,24 +51,59 @@ func DefaultGeneralClusterAgentImageValue() string {
 
 type GeneralSetting struct {
 	Model
-	AIAgentEnabled          bool         `json:"aiAgentEnabled" gorm:"column:ai_agent_enabled;type:boolean;not null;default:false"`
-	AIProvider              string       `json:"aiProvider" gorm:"column:ai_provider;type:varchar(50);not null;default:'openai'"`
-	AIModel                 string       `json:"aiModel" gorm:"column:ai_model;type:varchar(255);not null;default:'gpt-4o-mini'"`
-	AIAPIKey                SecretString `json:"aiApiKey" gorm:"column:ai_api_key;type:text"`
-	AIBaseURL               string       `json:"aiBaseUrl" gorm:"column:ai_base_url;type:varchar(500)"`
-	AIMaxTokens             int          `json:"aiMaxTokens" gorm:"column:ai_max_tokens;type:integer;default:16384"`
-	KubectlEnabled          bool         `json:"kubectlEnabled" gorm:"column:kubectl_enabled;type:boolean;not null;default:true"`
-	KubectlImage            string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'zzde/kubectl:latest'"`
-	NodeTerminalImage       string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'busybox:latest'"`
-	ClusterAgentImage       string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'ghcr.io/kite-org/kite:latest'"`
-	EnableAnalytics         bool         `json:"enableAnalytics" gorm:"column:enable_analytics;type:boolean;not null;default:false"`
-	EnableVersionCheck      bool         `json:"enableVersionCheck" gorm:"column:enable_version_check;type:boolean;not null;default:true"`
-	PasswordLoginDisabled   bool         `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
-	EnableMFA               bool         `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
-	EnablePasskeyLogin      bool         `json:"enablePasskeyLogin" gorm:"column:enable_passkey_login;type:boolean;not null;default:true"`
-	LoginPrompt             string       `json:"loginPrompt" gorm:"column:login_prompt;type:text"`
-	JWTSecret               SecretString `json:"-" gorm:"column:jwt_secret;type:text"`
-	GlobalSidebarPreference string       `json:"-" gorm:"column:global_sidebar_preference;type:text"`
+	AIAgentEnabled    bool         `json:"aiAgentEnabled" gorm:"column:ai_agent_enabled;type:boolean;not null;default:false"`
+	AIProvider        string       `json:"aiProvider" gorm:"column:ai_provider;type:varchar(50);not null;default:'openai'"`
+	AIModel           string       `json:"aiModel" gorm:"column:ai_model;type:varchar(255);not null;default:'gpt-4o-mini'"`
+	AIAPIKey          SecretString `json:"aiApiKey" gorm:"column:ai_api_key;type:text"`
+	AIBaseURL         string       `json:"aiBaseUrl" gorm:"column:ai_base_url;type:varchar(500)"`
+	AIMaxTokens       int          `json:"aiMaxTokens" gorm:"column:ai_max_tokens;type:integer;default:16384"`
+	KubectlEnabled    bool         `json:"kubectlEnabled" gorm:"column:kubectl_enabled;type:boolean;not null;default:true"`
+	KubectlImage      string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'"`
+	NodeTerminalImage string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'"`
+	ClusterAgentImage string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'"`
+	// AutoBindUserNamespace 控制「普通用户新建命名空间后自动纳入其已有的授权范围」：
+	// 优先归属其权限绑定组，无法归属时退回追加到其直接持有的受限角色的命名空间列表。
+	// 关闭后任何新建命名空间都不自动归属，交给管理员在权限绑定里分配。
+	AutoBindUserNamespace bool   `json:"autoBindUserNamespace" gorm:"column:auto_bind_user_namespace;type:boolean;not null;default:true"`
+	EnableAnalytics       bool   `json:"enableAnalytics" gorm:"column:enable_analytics;type:boolean;not null;default:false"`
+	EnableVersionCheck    bool   `json:"enableVersionCheck" gorm:"column:enable_version_check;type:boolean;not null;default:true"`
+	PasswordLoginDisabled bool   `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
+	EnableMFA             bool   `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
+	LoginPrompt           string `json:"loginPrompt" gorm:"column:login_prompt;type:text"`
+	// LogoURL 是控制台的自定义 logo（http(s) 或 data: 地址）。为空时前端用内置图标。
+	// 它通过公开的 bootstrap 接口下发，以便登录页也能显示同一个 logo。
+	LogoURL string `json:"logoUrl" gorm:"column:logo_url;type:text"`
+	// SiteName 是控制台在侧边栏、登录页与浏览器标签上展示的名称。为空时前端用默认名
+	// “Kite”（与 logoUrl 一样由公开的 bootstrap 接口下发）。
+	SiteName  string       `json:"siteName" gorm:"column:site_name;type:varchar(100)"`
+	JWTSecret SecretString `json:"-" gorm:"column:jwt_secret;type:text"`
+	// EncryptKeyFingerprint 记录数据库中已有行是用哪个 KITE_ENCRYPT_KEY 加密的，
+	// 这样从内置默认密钥切换出去时可以走迁移，
+	// 而不是把所有已存密钥悄悄弄坏。
+	EncryptKeyFingerprint   string `json:"-" gorm:"column:encrypt_key_fingerprint;type:varchar(64)"`
+	GlobalSidebarPreference string `json:"-" gorm:"column:global_sidebar_preference;type:text"`
+	// RoleRulesVersion 记录已应用到数据库的内置角色规则代次（等保三权分立升级用），
+	// 避免每次启动都覆盖管理员在内置角色上做的手工调整。
+	RoleRulesVersion int `json:"-" gorm:"column:role_rules_version;type:integer;not null;default:0"`
+	// SuperRoleRemoved 记录「内置超级角色退休迁移是否已执行」（代次 3：超级角色并入
+	// 系统管理员，见 RetireSuperRole）。
+	//
+	// 这是一个**单向**迁移标记：老库里的 super-admin 角色行只会被删除，不会被重建。
+	// 系统里因此永远只有一个最高权限角色（admin）；「超级管理员」退化为账号级概念，
+	// 由 users.is_super_admin 与受保护的「超级权限绑定」组表达。
+	SuperRoleRemoved bool `json:"-" gorm:"column:super_role_removed;type:boolean;not null;default:false"`
+	// SuperAdminFlagged 记录存量库的「超级管理员补标」判别是否已经执行过。
+	//
+	// 只做一次：管理员删掉超级管理员账号之后，如果每次启动都重新判别，标记会落到
+	// 「第一个仍直接持有 admin 角色的账号」身上——等于凭空长出一个删不掉的影子
+	// 超级管理员，并把超级角色灌回给它（见 flagExistingSuperAdmin）。
+	SuperAdminFlagged bool `json:"-" gorm:"column:super_admin_flagged;type:boolean;not null;default:false"`
+	// RoleClustersNormalized 记录「角色集群属性归一化」是否已经执行过。
+	//
+	// 角色是全局的：只定义资源与操作，生效范围（集群 + 命名空间）由权限绑定表达。
+	// 早期版本会把创建时的集群写进 roles.clusters，升级时统一归一化成 ["*"]，
+	// 见 NormalizeRoleClusters。
+	RoleClustersNormalized bool `json:"-" gorm:"column:role_clusters_normalized;type:boolean;not null;default:false"`
 }
 
 func NormalizeGeneralAIProvider(provider string) string {
@@ -90,7 +129,34 @@ func DefaultGeneralAIModelByProvider(provider string) string {
 	}
 }
 
+// GetGeneralSetting 返回通用设置（读路径，带 10 秒缓存）。
+//
+// 它出现在鉴权、权限判定、AI、终端等不少热路径上，没有缓存就是「每个请求查一次库」。
+// 设置为「读出来→改几个键→按请求体写回」的流程设计，那种流程请用 LoadGeneralSetting。
 func GetGeneralSetting() (*GeneralSetting, error) {
+	generalSettingMu.RLock()
+	cached, cachedAt, cachedDB := generalSettingEntry, generalSettingAt, generalSettingDB
+	generalSettingMu.RUnlock()
+	// cachedDB != DB 只会在测试替换内存库时出现（生产里 DB 不会换）。
+	if cached != nil && cachedDB == DB && time.Since(cachedAt) < securitySettingCacheTTL {
+		copied := *cached
+		return &copied, nil
+	}
+
+	setting, err := LoadGeneralSetting()
+	if err != nil {
+		return nil, err
+	}
+	generalSettingMu.Lock()
+	generalSettingEntry, generalSettingAt, generalSettingDB = setting, time.Now(), DB
+	generalSettingMu.Unlock()
+
+	copied := *setting
+	return &copied, nil
+}
+
+// LoadGeneralSetting 直接读库，不走缓存（写路径与需要确定性的场景用它）。
+func LoadGeneralSetting() (*GeneralSetting, error) {
 	var setting GeneralSetting
 	err := DB.First(&setting, 1).Error
 	if err == nil {
@@ -137,19 +203,19 @@ func GetGeneralSetting() (*GeneralSetting, error) {
 	}
 
 	setting = GeneralSetting{
-		Model:              Model{ID: 1},
-		AIAgentEnabled:     false,
-		AIProvider:         DefaultGeneralAIProvider,
-		AIModel:            DefaultGeneralAIModel,
-		AIMaxTokens:        16384,
-		KubectlEnabled:     true,
-		KubectlImage:       DefaultGeneralKubectlImageValue(),
-		NodeTerminalImage:  DefaultGeneralNodeTerminalImageValue(),
-		ClusterAgentImage:  DefaultGeneralClusterAgentImageValue(),
-		EnableAnalytics:    common.EnableAnalytics,
-		EnableVersionCheck: common.EnableVersionCheck,
-		EnableMFA:          true,
-		EnablePasskeyLogin: true,
+		Model:                 Model{ID: 1},
+		AIAgentEnabled:        false,
+		AIProvider:            DefaultGeneralAIProvider,
+		AIModel:               DefaultGeneralAIModel,
+		AIMaxTokens:           16384,
+		KubectlEnabled:        true,
+		KubectlImage:          DefaultGeneralKubectlImageValue(),
+		NodeTerminalImage:     DefaultGeneralNodeTerminalImageValue(),
+		ClusterAgentImage:     DefaultGeneralClusterAgentImageValue(),
+		AutoBindUserNamespace: true,
+		EnableAnalytics:       common.EnableAnalytics.Load(),
+		EnableVersionCheck:    common.EnableVersionCheck.Load(),
+		EnableMFA:             true,
 	}
 	if err := ensureJWTSecret(&setting, nil); err != nil {
 		return nil, err
@@ -161,8 +227,28 @@ func GetGeneralSetting() (*GeneralSetting, error) {
 	return &setting, nil
 }
 
+// AfterSave / AfterDelete 让读缓存跟着任何写路径失效（含不经过 UpdateGeneralSetting
+// 的直接写库，例如角色退休迁移与加密密钥重写）。见 SecuritySetting 上的同款钩子。
+func (g *GeneralSetting) AfterSave(*gorm.DB) error {
+	InvalidateGeneralSettingCache()
+	return nil
+}
+
+func (g *GeneralSetting) AfterDelete(*gorm.DB) error {
+	InvalidateGeneralSettingCache()
+	return nil
+}
+
+// InvalidateGeneralSettingCache 让下一次读取回源。
+func InvalidateGeneralSettingCache() {
+	generalSettingMu.Lock()
+	generalSettingEntry, generalSettingAt, generalSettingDB = nil, time.Time{}, nil
+	generalSettingMu.Unlock()
+}
+
 func UpdateGeneralSetting(updates map[string]interface{}) (*GeneralSetting, error) {
-	setting, err := GetGeneralSetting()
+	// 读的是库里的最新值：这一层要做字段归一化，用缓存里的旧值会让归一化结果过期。
+	setting, err := LoadGeneralSetting()
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +266,8 @@ func applyRuntimeGeneralSetting(setting *GeneralSetting) {
 	if setting == nil {
 		return
 	}
-	common.EnableAnalytics = setting.EnableAnalytics
-	common.EnableVersionCheck = setting.EnableVersionCheck
+	common.EnableAnalytics.Store(setting.EnableAnalytics)
+	common.EnableVersionCheck.Store(setting.EnableVersionCheck)
 }
 
 func ensureJWTSecret(setting *GeneralSetting, updates map[string]interface{}) error {

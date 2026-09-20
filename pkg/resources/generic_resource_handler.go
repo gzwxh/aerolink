@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
 
@@ -24,6 +25,10 @@ type GenericResourceHandler[T client.Object, V client.ObjectList] struct {
 	objectType      reflect.Type
 	listType        reflect.Type
 	enableSearch    bool
+	// afterCreate 在创建成功后、写响应之前调用，用于资源特有的创建后处理（目前只有
+	// 命名空间用它把新命名空间纳入创建者的授权范围）。返回值会合并进响应体，供界面
+	// 提示；返回 nil / 空 map 时保持原有响应体不变。
+	afterCreate func(c *gin.Context, obj T) map[string]any
 }
 
 func NewGenericResourceHandler[T client.Object, V client.ObjectList](
@@ -54,6 +59,24 @@ func (h *GenericResourceHandler[T, V]) ToYAML(obj T) string {
 	return string(yamlBytes)
 }
 
+// mergeExtraFields 把资源对象与附加字段合并成一个响应体。附加字段用于回传创建后的
+// 处理结果（例如命名空间的自动归属结论），不改变对象本身的字段。序列化失败时退回
+// 原对象，避免影响创建结果。
+func mergeExtraFields(obj any, extra map[string]any) any {
+	raw, err := json.Marshal(obj)
+	if err != nil {
+		return obj
+	}
+	merged := make(map[string]any, len(extra)+8)
+	if err := json.Unmarshal(raw, &merged); err != nil {
+		return obj
+	}
+	for key, value := range extra {
+		merged[key] = value
+	}
+	return merged
+}
+
 func (h *GenericResourceHandler[T, V]) getGroupKind() schema.GroupKind {
 	objValue := reflect.New(h.objectType).Interface().(T)
 	gvks, _, err := kube.GetScheme().ObjectKinds(objValue)
@@ -77,11 +100,14 @@ func (h *GenericResourceHandler[T, V]) recordHistory(c *gin.Context, opType stri
 		ResourceName:  curr.GetName(),
 		Namespace:     curr.GetNamespace(),
 		OperationType: opType,
-		ResourceYAML:  resourceYAML,
-		PreviousYAML:  h.ToYAML(prev),
+		ResourceYAML:  model.LongText(resourceYAML),
+		PreviousYAML:  model.LongText(h.ToYAML(prev)),
 		Success:       success,
 		ErrorMessage:  errMsg,
-		OperatorID:    user.ID,
+		OperatorID:    model.OperatorRef(user.ID),
+		OperatorName:  user.Username,
+		ClientIP:      c.ClientIP(),
+		UserAgent:     common.AuditUserAgent(c.Request.UserAgent()),
 	}
 	if err := model.DB.Create(&history).Error; err != nil {
 		klog.Errorf("Failed to create resource history: %v", err)

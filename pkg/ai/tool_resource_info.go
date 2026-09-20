@@ -239,7 +239,7 @@ func parseResourceYAML(args map[string]interface{}) (*unstructured.Unstructured,
 	return obj, nil
 }
 
-// MutationTools is the set of tools that modify cluster state and require confirmation.
+// MutationTools 是会修改集群状态、需要确认的工具集合。
 var MutationTools = map[string]bool{
 	"create_resource": true,
 	"apply_resource":  true,

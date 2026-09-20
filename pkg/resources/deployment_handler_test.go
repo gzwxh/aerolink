@@ -88,9 +88,9 @@ func makeTestReplicaSet(name string, revision int64, changeCause, image string) 
 			},
 		},
 		Spec: appsv1.ReplicaSetSpec{
-			// kubectl's own rollback logic (k8s.io/kubectl/pkg/util/deployment)
-			// dereferences Spec.Replicas directly, which the real API server
-			// always defaults to non-nil; our raw fixture must too.
+			// kubectl 自身的回滚逻辑（k8s.io/kubectl/pkg/util/deployment）
+			// 会直接解引用 Spec.Replicas，而真实 API Server
+			// 总会把它补成非 nil；我们的原始 fixture 也必须如此。
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo-app"}},
 			Template: corev1.PodTemplateSpec{
@@ -149,10 +149,10 @@ func decodeRevisionsResponse(t *testing.T, rec *httptest.ResponseRecorder) []Wor
 func TestDeploymentHandlerRevisions_CurrentFollowsDeploymentAnnotation(t *testing.T) {
 	setupWorkloadHandlerTestDB(t)
 
-	// The Deployment's own bookkeeping says revision 2 is current, even though
-	// a ReplicaSet with the numerically higher revision 3 also exists. The
-	// "current" flag must follow the Deployment's annotation, not just pick
-	// the highest revision number in the list.
+	// Deployment 自身的记录表明 revision 2 是当前版本，
+	// 尽管还存在一个 revision 数字更大的 ReplicaSet（3）。
+	// "当前"标记必须跟随 Deployment 的注解，
+	// 而不是简单地取列表里最大的 revision 数字。
 	deployment := makeTestDeployment("2")
 	rs1 := makeTestReplicaSet("demo-app-1", 1, "initial deploy", "nginx:1.25")
 	rs2 := makeTestReplicaSet("demo-app-2", 2, "bump to 1.26", "nginx:1.26")
@@ -173,7 +173,7 @@ func TestDeploymentHandlerRevisions_CurrentFollowsDeploymentAnnotation(t *testin
 		t.Fatalf("expected 3 items, got %d", len(items))
 	}
 
-	// Sorted descending by revision.
+	// 按 revision 倒序排序。
 	if items[0].Revision != 3 || items[1].Revision != 2 || items[2].Revision != 1 {
 		t.Fatalf("unexpected revision order: %+v", items)
 	}
@@ -218,8 +218,8 @@ func TestDeploymentHandlerRevisions_SkipsMalformedRevisionAnnotation(t *testing.
 	deployment := makeTestDeployment("2")
 	rs1 := makeTestReplicaSet("demo-app-1", 1, "initial deploy", "nginx:1.25")
 	rs2 := makeTestReplicaSet("demo-app-2", 2, "bump to 1.26", "nginx:1.26")
-	// A ReplicaSet with a non-numeric revision annotation must be excluded
-	// entirely, not silently sorted/matched as revision 0.
+	// revision 注解不是数字的 ReplicaSet 必须被整体排除，
+	// 而不是被静默地当作 revision 0 参与排序/匹配。
 	rsMalformed := makeTestReplicaSet("demo-app-bad", 0, "", "nginx:broken")
 	rsMalformed.Annotations[deploymentRevisionAnnotation] = "not-a-number"
 
@@ -316,8 +316,8 @@ func TestDeploymentHandlerRollback_DefaultRevision(t *testing.T) {
 			wantImage:         "nginx:1.26",
 		},
 		{
-			// kubectl chooses the second-highest revision when no explicit
-			// target is provided, regardless of the Deployment annotation.
+			// 未显式指定目标时，kubectl 选择次高的 revision，
+			// 与 Deployment 的注解无关。
 			name:              "current lags behind the highest revision",
 			currentAnnotation: "2",
 			wantImage:         "nginx:1.26",

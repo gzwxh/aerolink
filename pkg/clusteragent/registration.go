@@ -232,9 +232,9 @@ func (m *Manager) RESTConfig(clusterID uint) (*rest.Config, uint64, error) {
 			NextProtos: []string{"http/1.1"},
 		},
 		Dial: m.Dialer(clusterID),
-		// Always dial the registered API server through the tunnel; an
-		// env-configured proxy would bypass it and could leak the cluster's
-		// Authorization header.
+		// 始终通过隧道访问已注册的 API Server；
+		// 由环境变量配置的代理会绕过隧道，
+		// 并可能泄露集群的 Authorization 请求头。
 		Proxy: func(*http.Request) (*url.URL, error) {
 			return nil, nil
 		},
@@ -296,7 +296,7 @@ func registrationFromConfig(config *rest.Config) (clusterAgentRegistration, erro
 	}
 
 	authConfig := rest.CopyConfig(config)
-	// Run client-go's auth wrappers against a local transport to resolve the current token without dialing the API server.
+	// 在本地 transport 上运行 client-go 的鉴权包装器，从而在不访问 API Server 的情况下解析出当前 token。
 	authConfig.WrapTransport = func(http.RoundTripper) http.RoundTripper {
 		return credentialCaptureRoundTripper{}
 	}

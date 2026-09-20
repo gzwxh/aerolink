@@ -162,9 +162,9 @@ func requiredToolPermissions(ctx context.Context, cs *cluster.ClientSet, toolNam
 			Namespace: permissionNamespace(resource, namespace),
 		}}, nil
 	case "query_prometheus":
-		// Prometheus queries can access metrics from any namespace
-		// Require at least read permission on pods in all namespaces
-		// This ensures users can only query metrics if they have cluster-wide read access
+		// Prometheus 查询可以访问任意命名空间的指标，
+		// 因此要求在所有命名空间上至少有 pods 的读权限。
+		// 这样只有具备集群范围读权限的用户才能查询指标
 		return []toolPermission{{
 			Resource:  string(common.Pods),
 			Verb:      string(common.VerbGet),
@@ -210,7 +210,7 @@ func AuthorizeTool(c *gin.Context, cs *cluster.ClientSet, toolName string, args 
 	return "", false
 }
 
-// ExecuteTool runs a tool and returns the result as a string.
+// ExecuteTool 执行一个工具，并把结果以字符串返回。
 func ExecuteTool(ctx context.Context, c *gin.Context, cs *cluster.ClientSet, toolName string, args map[string]interface{}) (string, bool) {
 	if result, isError := AuthorizeTool(c, cs, toolName, args); isError {
 		return result, true

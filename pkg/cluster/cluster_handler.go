@@ -17,10 +17,11 @@ import (
 	"gorm.io/gorm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 )
 
-// clusterAgentServerURL derives the Kite server URL from the request context,
-// using common.Host / X-Forwarded-Host / request host and common.Base.
+// clusterAgentServerURL 从请求上下文推导 Kite 服务端 URL，
+// 使用 common.Host / X-Forwarded-Host / 请求 host 以及 common.Base。
 func clusterAgentServerURL(c *gin.Context) string {
 	scheme := "http"
 	if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
@@ -44,8 +45,8 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 	result := make([]common.ClusterInfo, 0, len(clusters))
 	user := c.MustGet("user").(model.User)
 
-	// Custom display info (description) lives in the DB, not in the in-memory
-	// cluster snapshot. Tolerate a missing DB (unit tests) gracefully.
+	// 自定义展示信息（描述）保存在数据库中，而不是内存中的
+	// 集群快照里。要能优雅容忍数据库缺失（单元测试）的情况。
 	descriptions := map[string]string{}
 	if model.DB != nil {
 		if stored, err := model.ListClusters(); err == nil {
@@ -56,7 +57,9 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 	}
 
 	for name, cluster := range clusters {
-		if !rbac.CanAccessCluster(user, name) {
+		// 集群列表用于导航与切换：只靠权限绑定组授权的账号也必须能看到自己
+		// 被授权所在的集群，否则切换器里没有任何可选项（数据仍逐项按命名空间过滤）。
+		if !rbac.CanSeeNamespacesInCluster(user, name) {
 			continue
 		}
 		result = append(result, common.ClusterInfo{
@@ -67,7 +70,7 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 		})
 	}
 	for name, errMsg := range errors {
-		if !rbac.CanAccessCluster(user, name) {
+		if !rbac.CanSeeNamespacesInCluster(user, name) {
 			continue
 		}
 		result = append(result, common.ClusterInfo{
@@ -123,8 +126,8 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// ListClusterNamespaces returns the namespace names of one cluster, used by the
-// RBAC editor to suggest existing namespaces (admin only).
+// ListClusterNamespaces 返回某个集群的命名空间名称，
+// 供 RBAC 编辑器提示已有命名空间（仅管理员）。
 func (cm *ClusterManager) ListClusterNamespaces(c *gin.Context) {
 	clusterName := strings.TrimSpace(c.Param("name"))
 	if clusterName == "" {
@@ -233,6 +236,10 @@ func (cm *ClusterManager) CreateCluster(c *gin.Context) {
 		return
 	}
 
+	// 新建的集群要立刻有内置授权（超级管理员的超级权限绑定），否则管理员页签在
+	// 下次重启前会一直提示缺少该组。
+	ensureClusterAuthorizations(cluster.Name)
+
 	TriggerClusterSync()
 
 	result := gin.H{
@@ -262,14 +269,20 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		return
 	}
 
+	// 可选字段一律用指针：请求里没给的字段不能被当成「显式设为零值」。
+	// 以前这里是非指针 bool，任何只改部分字段的请求（例如只改描述）都会把
+	// in_cluster / is_default / enabled 按 false 写回——静默停用集群、清掉默认集群标记。
+	// 可选字段一律用指针：请求里没给的字段不能被当成「显式设为零值」。
+	// 以前这里是非指针 bool，任何只改部分字段的请求（例如只改描述）都会把
+	// in_cluster / is_default / enabled 按 false 写回——静默停用集群、清掉默认集群标记。
 	var req struct {
-		Name          string `json:"name"`
-		Description   string `json:"description"`
-		Config        string `json:"config"`
-		PrometheusURL string `json:"prometheusURL"`
-		InCluster     bool   `json:"inCluster"`
-		IsDefault     bool   `json:"isDefault"`
-		Enabled       bool   `json:"enabled"`
+		Name          *string `json:"name"`
+		Description   *string `json:"description"`
+		Config        *string `json:"config"`
+		PrometheusURL *string `json:"prometheusURL"`
+		InCluster     *bool   `json:"inCluster"`
+		IsDefault     *bool   `json:"isDefault"`
+		Enabled       *bool   `json:"enabled"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -287,31 +300,46 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		return
 	}
 
-	if req.IsDefault && !cluster.IsDefault {
+	if req.IsDefault != nil && *req.IsDefault && !cluster.IsDefault {
 		if err := model.ClearDefaultCluster(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 	}
+	updates := map[string]interface{}{}
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+	if req.PrometheusURL != nil {
+		updates["prometheus_url"] = *req.PrometheusURL
+	}
+	if req.InCluster != nil {
+		updates["in_cluster"] = *req.InCluster
+	}
+	if req.IsDefault != nil {
+		updates["is_default"] = *req.IsDefault
+	}
+	if req.Enabled != nil {
+		updates["enable"] = *req.Enabled
+	}
+
+	if req.Name != nil && *req.Name != "" && *req.Name != cluster.Name {
+		updates["name"] = *req.Name
+	}
+
+	if req.Config != nil && *req.Config != "" {
+		updates["config"] = model.SecretString(*req.Config)
+	}
+
+	// in-cluster 类型不可通过编辑改变：它依赖 Kite 自身 Pod 的服务账号
+	// 连接，没有 kubeconfig，类型一旦丢失集群将永久无法连接。
+	if cluster.InCluster {
+		updates["in_cluster"] = true
+		delete(updates, "config")
+	}
 	if cluster.ClusterAgent {
-		req.InCluster = false
-		req.Config = ""
-	}
-
-	updates := map[string]interface{}{
-		"description":    req.Description,
-		"prometheus_url": req.PrometheusURL,
-		"in_cluster":     req.InCluster,
-		"is_default":     req.IsDefault,
-		"enable":         req.Enabled,
-	}
-
-	if req.Name != "" && req.Name != cluster.Name {
-		updates["name"] = req.Name
-	}
-
-	if req.Config != "" {
-		updates["config"] = model.SecretString(req.Config)
+		updates["in_cluster"] = false
+		delete(updates, "config")
 	}
 
 	if err := model.UpdateCluster(cluster, updates); err != nil {
@@ -322,6 +350,69 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	TriggerClusterSync()
 
 	c.JSON(http.StatusOK, gin.H{"message": "cluster updated successfully"})
+}
+
+// GetClusterKubeconfig 返回某个集群已存储、解密后的 kubeconfig，
+// 便于管理员查看连接信息。它位于
+// MFA 二次验证关卡之后：安全策略开启时，已注册 MFA 的管理员
+// 必须重新验证一次验证码才能取出凭据。
+//
+// 路由：GET /api/v1/admin/clusters/:id/kubeconfig。
+func (cm *ClusterManager) GetClusterKubeconfig(c *gin.Context) {
+	if common.IsSectionManaged("clusters") {
+		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})
+		return
+	}
+
+	// 路由参数为集群名（GET 路由树中已有 /:name/... 通配，gin 不允许同一
+	// 位置出现不同参数名），因此这里按 name 查询而不是 id。
+	name := c.Param("name")
+	if strings.TrimSpace(name) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cluster name"})
+		return
+	}
+
+	cluster, err := model.GetClusterByName(name)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "cluster not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	switch {
+	case cluster.InCluster:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "the in-cluster connection uses the pod service account and has no stored kubeconfig",
+		})
+		return
+	case cluster.ClusterAgent:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "agent-managed clusters connect through the cluster agent and have no stored kubeconfig",
+		})
+		return
+	}
+
+	raw, err := cluster.Config.Value()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to decrypt the stored kubeconfig: " + err.Error(),
+		})
+		return
+	}
+	plain, ok := raw.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "stored kubeconfig has an unexpected format"})
+		return
+	}
+	if strings.TrimSpace(plain) == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no kubeconfig stored for this cluster"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"config": plain})
 }
 
 func (cm *ClusterManager) DeleteCluster(c *gin.Context) {
@@ -352,6 +443,17 @@ func (cm *ClusterManager) DeleteCluster(c *gin.Context) {
 		return
 	}
 
+	// 集群是权限隔离的第一层：删除集群时权限绑定组必须显式选择处理方式。
+	// ?bindingGroups=delete 连同权限绑定组一起删除；默认保留（detached），
+	// 保留的权限绑定组不再参与授权，集群重新导入后可在权限管理页重新绑定。
+	deleteBindingGroups := strings.EqualFold(c.Query("bindingGroups"), "delete")
+
+	bindingGroupTotal, err := model.CountBindingGroupsByCluster(cluster.Name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := model.DeleteCluster(cluster); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -360,9 +462,29 @@ func (cm *ClusterManager) DeleteCluster(c *gin.Context) {
 		cm.clusterAgentManager.Disconnect(cluster.ID)
 	}
 
+	bindingGroupsDeleted := int64(0)
+	bindingGroupsRetained := int64(0)
+	if bindingGroupTotal > 0 {
+		if deleteBindingGroups {
+			bindingGroupsDeleted, err = model.DeleteBindingGroupsByCluster(cluster.Name)
+		} else {
+			bindingGroupsRetained, err = model.RetainBindingGroupsByCluster(cluster.Name)
+		}
+		if err != nil {
+			klog.Errorf("cluster %s deleted but failed to handle binding groups: %v",
+				cluster.Name, err)
+		}
+		rbac.TriggerSync()
+	}
+
 	TriggerClusterSync()
 
-	c.JSON(http.StatusOK, gin.H{"message": "cluster deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"message":               "cluster deleted successfully",
+		"bindingGroupTotal":     bindingGroupTotal,
+		"bindingGroupsDeleted":  bindingGroupsDeleted,
+		"bindingGroupsRetained": bindingGroupsRetained,
+	})
 }
 
 func (cm *ClusterManager) ConnectClusterAgent(c *gin.Context) {
@@ -436,7 +558,7 @@ func (cm *ClusterManager) ImportClustersFromKubeconfig(c *gin.Context) {
 	}
 
 	if clusterReq.InCluster {
-		// In-cluster config
+		// 集群内配置
 		cluster := &model.Cluster{
 			Name:        "in-cluster",
 			InCluster:   true,
@@ -449,7 +571,7 @@ func (cm *ClusterManager) ImportClustersFromKubeconfig(c *gin.Context) {
 			return
 		}
 		TriggerClusterSync()
-		// wait for sync to complete
+		// 等待同步完成
 		time.Sleep(1 * time.Second)
 		c.JSON(http.StatusCreated, gin.H{
 			"message":       fmt.Sprintf("imported %d clusters successfully", 1),
@@ -466,7 +588,7 @@ func (cm *ClusterManager) ImportClustersFromKubeconfig(c *gin.Context) {
 
 	importedCount := ImportClustersFromKubeconfig(kubeconfig, cc == 0)
 	TriggerClusterSync()
-	// wait for sync to complete
+	// 等待同步完成
 	time.Sleep(1 * time.Second)
 	c.JSON(http.StatusCreated, gin.H{
 		"message":       fmt.Sprintf("imported %d clusters successfully", importedCount),

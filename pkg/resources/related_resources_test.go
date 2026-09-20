@@ -1,416 +1,212 @@
 package resources
 
 import (
-	"context"
-	"net/http"
-	"reflect"
 	"testing"
 
+	"github.com/zxh326/kite/pkg/cluster"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/kube"
-	"github.com/zxh326/kite/pkg/model"
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	policyv1 "k8s.io/api/policy/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func TestDiscoverIngressServices(t *testing.T) {
-	ingress := &networkingv1.Ingress{
-		Spec: networkingv1.IngressSpec{
-			Rules: []networkingv1.IngressRule{
-				{
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{
-								{Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "svc-a"}}},
-								{Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "svc-b"}}},
-								{Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "svc-a"}}},
-							},
-						},
-					},
-				},
-				{},
-			},
-			DefaultBackend: &networkingv1.IngressBackend{
-				Service: &networkingv1.IngressServiceBackend{Name: "svc-b"},
-			},
-		},
-	}
+func newRelatedResourceClientSet(t *testing.T) *cluster.ClientSet {
+	t.Helper()
 
-	got := discoverIngressServices("default", ingress)
-	want := []common.RelatedResource{
-		{Type: "services", Namespace: "default", Name: "svc-a"},
-		{Type: "services", Namespace: "default", Name: "svc-b"},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("discoverIngressServices() = %#v, want %#v", got, want)
-	}
+	ingressGV := schema.GroupVersion{Group: "networking.k8s.io", Version: "v1"}
+	policyGV := schema.GroupVersion{Group: "example.com", Version: "v1"}
+	gatewayGV := schema.GroupVersion{Group: gatewayapiv1.GroupVersion.Group, Version: gatewayapiv1.GroupVersion.Version}
+	coreGV := corev1.SchemeGroupVersion
+
+	mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{ingressGV, policyGV, gatewayGV, coreGV})
+	mapper.AddSpecific(ingressGV.WithKind("Ingress"),
+		ingressGV.WithResource("ingresses"), ingressGV.WithResource("ingress"), meta.RESTScopeNamespace)
+	mapper.AddSpecific(policyGV.WithKind("Policy"),
+		policyGV.WithResource("policies"), policyGV.WithResource("policy"), meta.RESTScopeNamespace)
+	mapper.AddSpecific(gatewayGV.WithKind("Gateway"),
+		gatewayGV.WithResource("gateways"), gatewayGV.WithResource("gateway"), meta.RESTScopeNamespace)
+	mapper.AddSpecific(gatewayGV.WithKind("HTTPRoute"),
+		gatewayGV.WithResource("httproutes"), gatewayGV.WithResource("httproute"), meta.RESTScopeNamespace)
+	mapper.AddSpecific(coreGV.WithKind("Service"),
+		coreGV.WithResource("services"), coreGV.WithResource("service"), meta.RESTScopeNamespace)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(runtime.NewScheme()).
+		WithRESTMapper(mapper).
+		Build()
+	return &cluster.ClientSet{Name: "prod", K8sClient: &kube.K8sClient{Client: k8sClient}}
 }
 
-func TestRelatedResourcesRBACFiltering(t *testing.T) {
-	fixture := newPodAPITestFixture(t, podAPITestConfig{
-		user: model.User{
-			Username: "alice",
-			Roles: []common.Role{
-				{
-					Name:       "pod-reader",
-					Clusters:   []string{"cluster-a"},
-					Namespaces: []string{"default"},
-					Resources:  []string{string(common.Pods)},
-					Verbs:      []string{string(common.VerbGet)},
-				},
-				{
-					Name:       "configmap-reader",
-					Clusters:   []string{"cluster-a"},
-					Namespaces: []string{"default"},
-					Resources:  []string{string(common.ConfigMaps)},
-					Verbs:      []string{string(common.VerbGet)},
-				},
-			},
-		},
-		clusterAObjects: []client.Object{
-			&corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{Name: "source", Namespace: "default", Labels: map[string]string{"app": "source"}},
-				Spec: corev1.PodSpec{Containers: []corev1.Container{{
-					Name: "app",
-					EnvFrom: []corev1.EnvFromSource{
-						{ConfigMapRef: &corev1.ConfigMapEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "visible"}}},
-						{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "hidden"}}},
-					},
-				}}},
-			},
-		},
-	})
+// 资源类型必须来自 RESTMapper：此前统一用 kind + "s"，Ingress、自定义资源、Gateway API
+// 的类型会算成 "ingresss"、"policys"，前端据此拼出来的链接指向不存在的资源。
+func TestResourceTypeForKindUsesRESTMapper(t *testing.T) {
+	cs := newRelatedResourceClientSet(t)
 
-	response := performPodAPIRequest(t, fixture, http.MethodGet, "/api/v1/pods/default/source/related", "", nil)
-	if response.Code != http.StatusOK {
-		t.Fatalf("related resources returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
-	}
-	items := decodePodAPIResponse[[]common.RelatedResource](t, response)
-	if len(items) != 1 || items[0].Type != string(common.ConfigMaps) || items[0].Name != "visible" || items[0].Namespace != "default" {
-		t.Fatalf("related resources = %#v, want only configmaps default/visible", items)
-	}
-}
-
-func TestRelatedResourcesCustomOwnerRBAC(t *testing.T) {
-	tests := []struct {
-		name        string
-		customRole  bool
-		wantVisible bool
+	cases := []struct {
+		name       string
+		cs         *cluster.ClientSet
+		kind       string
+		apiVersion string
+		want       string
 	}{
-		{name: "builtin permission cannot access custom owner"},
-		{name: "qualified custom permission can access owner", customRole: true, wantVisible: true},
+		{"Ingress", cs, "Ingress", "networking.k8s.io/v1", "ingresses"},
+		{"自定义资源", cs, "Policy", "example.com/v1", "policies"},
+		{"core 组", cs, "Service", "v1", "services"},
+		{"未注册的类型退回旧写法", cs, "Deployment", "apps/v1", "deployments"},
+		{"缺少 apiVersion 退回旧写法", cs, "Ingress", "", "ingresss"},
+		{"缺少 kind 退回旧写法", cs, "", "networking.k8s.io/v1", "s"},
+		{"没有集群客户端退回旧写法", nil, "Ingress", "networking.k8s.io/v1", "ingresss"},
+		{"客户端未初始化退回旧写法", &cluster.ClientSet{Name: "prod", K8sClient: &kube.K8sClient{}},
+			"Ingress", "networking.k8s.io/v1", "ingresss"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			roles := []common.Role{{
-				Name:       "source-pod-reader",
-				Clusters:   []string{"cluster-a"},
-				Namespaces: []string{"default"},
-				Resources:  []string{string(common.Pods)},
-				Verbs:      []string{string(common.VerbGet)},
-			}}
-			if tt.customRole {
-				roles = append(roles, common.Role{
-					Name:       "custom-pod-reader",
-					Clusters:   []string{"cluster-a"},
-					Namespaces: []string{"default"},
-					Resources:  []string{"pods.example.com"},
-					Verbs:      []string{string(common.VerbGet)},
-				})
-			}
-			fixture := newPodAPITestFixture(t, podAPITestConfig{
-				user: model.User{Username: "alice", Roles: roles},
-				clusterAObjects: []client.Object{&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "source",
-						Namespace: "default",
-						OwnerReferences: []metav1.OwnerReference{{
-							APIVersion: "example.com/v1",
-							Kind:       "Pod",
-							Name:       "custom-owner",
-						}},
-					},
-				}},
-			})
-
-			response := performPodAPIRequest(t, fixture, http.MethodGet, "/api/v1/pods/default/source/related", "", nil)
-			if response.Code != http.StatusOK {
-				t.Fatalf("related resources returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
-			}
-			items := decodePodAPIResponse[[]common.RelatedResource](t, response)
-			if !tt.wantVisible {
-				if len(items) != 0 {
-					t.Fatalf("related resources = %#v, want no custom owner", items)
-				}
-				return
-			}
-			want := []common.RelatedResource{{Type: "pods", APIVersion: "example.com/v1", Name: "custom-owner", Namespace: "default"}}
-			if !reflect.DeepEqual(items, want) {
-				t.Fatalf("related resources = %#v, want %#v", items, want)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resourceTypeForKind(tc.cs, tc.kind, tc.apiVersion); got != tc.want {
+				t.Fatalf("resourceTypeForKind(%q, %q) = %q, want %q", tc.kind, tc.apiVersion, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestDiscoverConfigs(t *testing.T) {
-	podSpec := &corev1.PodTemplateSpec{
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name: "app",
-					Env: []corev1.EnvVar{
-						{ValueFrom: &corev1.EnvVarSource{ConfigMapKeyRef: &corev1.ConfigMapKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "cm-env"}, Key: "key"}}},
-						{ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "sec-env"}, Key: "key"}}},
-					},
-					EnvFrom: []corev1.EnvFromSource{
-						{ConfigMapRef: &corev1.ConfigMapEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "cm-from"}}},
-						{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "sec-from"}}},
-					},
-				},
-			},
-			Volumes: []corev1.Volume{
-				{VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "cm-vol"}}}},
-				{VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "sec-vol"}}},
-				{VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "pvc-vol"}}},
-			},
+// HTTPRoute 的 parentRef/backendRef 同样要走 RESTMapper：Service 之外的 kind
+// （Ingress、自定义后端）在旧写法下类型是错的。
+func TestGetHTTPRouteRelatedResourcesResolvesTypes(t *testing.T) {
+	cs := newRelatedResourceClientSet(t)
+
+	gatewayGroup := gatewayapiv1.Group(gatewayapiv1.GroupVersion.Group)
+	routeKind := gatewayapiv1.Kind("HTTPRoute")
+	ingressGroup := gatewayapiv1.Group("networking.k8s.io")
+	ingressKind := gatewayapiv1.Kind("Ingress")
+
+	res := &gatewayapiv1.HTTPRoute{Spec: gatewayapiv1.HTTPRouteSpec{
+		CommonRouteSpec: gatewayapiv1.CommonRouteSpec{
+			ParentRefs: []gatewayapiv1.ParentReference{{
+				Group: &gatewayGroup,
+				Kind:  &routeKind,
+				Name:  "parent-route",
+			}},
 		},
-	}
-
-	got := discoverConfigs("default", podSpec)
-	want := []common.RelatedResource{
-		{Type: "configmaps", Namespace: "default", Name: "cm-env"},
-		{Type: "configmaps", Namespace: "default", Name: "cm-from"},
-		{Type: "configmaps", Namespace: "default", Name: "cm-vol"},
-		{Type: "secrets", Namespace: "default", Name: "sec-env"},
-		{Type: "secrets", Namespace: "default", Name: "sec-from"},
-		{Type: "secrets", Namespace: "default", Name: "sec-vol"},
-		{Type: "persistentvolumeclaims", Namespace: "default", Name: "pvc-vol"},
-	}
-	if !sameRelatedResources(got, want) {
-		t.Fatalf("discoverConfigs() = %#v, want %#v", got, want)
-	}
-}
-
-func TestCheckInUsedConfigs(t *testing.T) {
-	podSpec := &corev1.PodTemplateSpec{
-		Spec: corev1.PodSpec{
-			InitContainers: []corev1.Container{
-				{
-					Name: "init",
-					Env: []corev1.EnvVar{
-						{ValueFrom: &corev1.EnvVarSource{ConfigMapKeyRef: &corev1.ConfigMapKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "cm-init"}, Key: "key"}}},
+		Rules: []gatewayapiv1.HTTPRouteRule{{
+			BackendRefs: []gatewayapiv1.HTTPBackendRef{{
+				BackendRef: gatewayapiv1.BackendRef{
+					BackendObjectReference: gatewayapiv1.BackendObjectReference{
+						Group: &ingressGroup,
+						Kind:  &ingressKind,
+						Name:  "web-ingress",
 					},
 				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name: "app",
-					Env: []corev1.EnvVar{
-						{ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "sec-env"}, Key: "key"}}},
-					},
-					EnvFrom: []corev1.EnvFromSource{
-						{ConfigMapRef: &corev1.ConfigMapEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "cm-from"}}},
-					},
+			}},
+		}},
+	}}
+
+	want := map[string]string{
+		"parent-route": "httproutes",
+		"web-ingress":  "ingresses",
+	}
+	got := make(map[string]string)
+	for _, item := range getHTTPRouteRelatedResouces(cs, res, "default") {
+		got[item.Name] = item.Type
+	}
+	for name, wantType := range want {
+		if got[name] != wantType {
+			t.Errorf("related type for %s = %q, want %q (all: %#v)", name, got[name], wantType, got)
+		}
+	}
+}
+
+// 不写 kind 时的默认值保持不变：parentRef 默认 Gateway、backendRef 默认 Service（core 组）。
+func TestGetHTTPRouteRelatedResourcesKeepsKindDefaults(t *testing.T) {
+	cs := newRelatedResourceClientSet(t)
+
+	res := &gatewayapiv1.HTTPRoute{Spec: gatewayapiv1.HTTPRouteSpec{
+		CommonRouteSpec: gatewayapiv1.CommonRouteSpec{
+			ParentRefs: []gatewayapiv1.ParentReference{{Name: "default-gateway"}},
+		},
+		Rules: []gatewayapiv1.HTTPRouteRule{{
+			BackendRefs: []gatewayapiv1.HTTPBackendRef{{
+				BackendRef: gatewayapiv1.BackendRef{
+					BackendObjectReference: gatewayapiv1.BackendObjectReference{Name: "api"},
 				},
-			},
-			Volumes: []corev1.Volume{
-				{VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "pvc-vol"}}},
-			},
-		},
+			}},
+		}},
+	}}
+
+	got := make(map[string]common.RelatedResource)
+	for _, item := range getHTTPRouteRelatedResouces(cs, res, "default") {
+		got[item.Name] = item
 	}
 
-	tests := []struct {
-		name         string
-		resourceType string
-		resourceName string
-		want         bool
-	}{
-		{name: "configmap from init env", resourceType: "configmaps", resourceName: "cm-init", want: true},
-		{name: "configmap from envFrom", resourceType: "configmaps", resourceName: "cm-from", want: true},
-		{name: "secret from env", resourceType: "secrets", resourceName: "sec-env", want: true},
-		{name: "pvc from volume", resourceType: "persistentvolumeclaims", resourceName: "pvc-vol", want: true},
-		{name: "missing configmap", resourceType: "configmaps", resourceName: "missing", want: false},
-		{name: "nil spec", resourceType: "secrets", resourceName: "sec-env", want: false},
+	gateway := got["default-gateway"]
+	if gateway.Type != string(common.Gateways) || gateway.APIVersion != gatewayapiv1.GroupVersion.String() {
+		t.Errorf("default parentRef = %#v, want type %q at %q",
+			gateway, common.Gateways, gatewayapiv1.GroupVersion.String())
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			spec := podSpec
-			if tt.name == "nil spec" {
-				spec = nil
-			}
-			if got := checkInUsedConfigs(spec, tt.resourceName, tt.resourceType); got != tt.want {
-				t.Fatalf("checkInUsedConfigs() = %v, want %v", got, tt.want)
-			}
-		})
+	service := got["api"]
+	if service.Type != string(common.Services) || service.APIVersion != corev1.SchemeGroupVersion.String() {
+		t.Errorf("default backendRef = %#v, want type %q at %q",
+			service, common.Services, corev1.SchemeGroupVersion.String())
 	}
 }
 
-func TestGetHTTPRouteRelatedResources(t *testing.T) {
-	parentKind := gatewayapiv1.Kind("Gateway")
-	backendKind := gatewayapiv1.Kind("ConfigMap")
-	customKind := gatewayapiv1.Kind("Pod")
-	customGroup := gatewayapiv1.Group("example.com")
-	parentNamespace := gatewayapiv1.Namespace("edge")
-	backendNamespace := gatewayapiv1.Namespace("apps")
+// HPA 的 scaleTargetRef 也走同一条换算，而不是 kind + "s"。
+func TestGetScaleTargetRelatedResourcesUsesRESTMapper(t *testing.T) {
+	cs := newRelatedResourceClientSet(t)
 
-	route := &gatewayapiv1.HTTPRoute{
-		Spec: gatewayapiv1.HTTPRouteSpec{
-			CommonRouteSpec: gatewayapiv1.CommonRouteSpec{
-				ParentRefs: []gatewayapiv1.ParentReference{
-					{Name: gatewayapiv1.ObjectName("gw-a")},
-					{Name: gatewayapiv1.ObjectName("gw-b"), Kind: &parentKind, Namespace: &parentNamespace},
-					{Name: gatewayapiv1.ObjectName("custom-parent"), Group: &customGroup, Kind: &customKind},
+	related := getScaleTargetRelatedResources(cs, "Ingress", "networking.k8s.io/v1", "web", "default")
+	if len(related) != 1 {
+		t.Fatalf("getScaleTargetRelatedResources() = %#v, want one entry", related)
+	}
+	if related[0].Type != "ingresses" || related[0].Name != "web" || related[0].Namespace != "default" {
+		t.Fatalf("scaleTargetRef = %#v, want ingresses/web in default", related[0])
+	}
+}
+
+// init 容器与运行容器一样会引用 ConfigMap/Secret，相关资源里不能漏掉它们引用的配置。
+func TestDiscoverConfigsIncludesInitContainers(t *testing.T) {
+	podSpec := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+		Containers: []corev1.Container{{
+			Name: "app",
+			EnvFrom: []corev1.EnvFromSource{{
+				ConfigMapRef: &corev1.ConfigMapEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "app-config"},
 				},
-			},
-			Rules: []gatewayapiv1.HTTPRouteRule{
-				{
-					BackendRefs: []gatewayapiv1.HTTPBackendRef{
-						{
-							BackendRef: gatewayapiv1.BackendRef{
-								BackendObjectReference: gatewayapiv1.BackendObjectReference{
-									Name: gatewayapiv1.ObjectName("svc-a"),
-								},
-							},
-						},
-						{
-							BackendRef: gatewayapiv1.BackendRef{
-								BackendObjectReference: gatewayapiv1.BackendObjectReference{
-									Name:  gatewayapiv1.ObjectName("custom-backend"),
-									Group: &customGroup,
-									Kind:  &customKind,
-								},
-							},
-						},
-						{
-							BackendRef: gatewayapiv1.BackendRef{
-								BackendObjectReference: gatewayapiv1.BackendObjectReference{
-									Name:      gatewayapiv1.ObjectName("cfg"),
-									Kind:      &backendKind,
-									Namespace: &backendNamespace,
-								},
-							},
-						},
-					},
+			}},
+		}},
+		InitContainers: []corev1.Container{{
+			Name: "init",
+			EnvFrom: []corev1.EnvFromSource{{
+				SecretRef: &corev1.SecretEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "init-secret"},
 				},
+			}},
+		}},
+		Volumes: []corev1.Volume{{
+			Name: "data",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "data-pvc"},
 			},
-		},
+		}},
+	}}
+
+	related := discoverConfigs("default", podSpec)
+	got := make(map[string]bool, len(related))
+	for _, item := range related {
+		got[item.Type+"="+item.Name] = true
 	}
 
-	got := getHTTPRouteRelatedResouces(route, "default")
-	want := []common.RelatedResource{
-		{Type: "gateways", Name: "gw-a", Namespace: "default", APIVersion: gatewayapiv1.GroupVersion.String()},
-		{Type: "gateways", Name: "gw-b", Namespace: "edge", APIVersion: gatewayapiv1.GroupVersion.String()},
-		{Type: "pods", Name: "custom-parent", Namespace: "default", APIVersion: "example.com/v1"},
-		{Type: "services", Name: "svc-a", Namespace: "default", APIVersion: corev1.SchemeGroupVersion.String()},
-		{Type: "pods", Name: "custom-backend", Namespace: "default", APIVersion: "example.com/v1"},
-		{Type: "configmaps", Name: "cfg", Namespace: "apps"},
+	for _, want := range []string{
+		string(common.ConfigMaps) + "=app-config",
+		string(common.Secrets) + "=init-secret",
+		string(common.PersistentVolumeClaims) + "=data-pvc",
+	} {
+		if !got[want] {
+			t.Errorf("discoverConfigs() is missing %s: %#v", want, related)
+		}
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("getHTTPRouteRelatedResouces() = %#v, want %#v", got, want)
-	}
-}
-
-func TestGetAutoScalingRelatedResources(t *testing.T) {
-	hpa := &autoscalingv2.HorizontalPodAutoscaler{
-		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
-			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
-				Kind:       "Deployment",
-				APIVersion: "apps/v1",
-				Name:       "demo",
-			},
-		},
-	}
-
-	got := getAutoScalingRelatedResources(hpa, "default")
-	want := []common.RelatedResource{
-		{Type: "deployments", APIVersion: "apps/v1", Name: "demo", Namespace: "default"},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("getAutoScalingRelatedResources() = %#v, want %#v", got, want)
-	}
-}
-
-func TestDiscoverPodsByPodDisruptionBudget(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = corev1.AddToScheme(scheme)
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
-		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod-1", Namespace: "default", Labels: map[string]string{"app": "nginx"}}},
-		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod-2", Namespace: "default", Labels: map[string]string{"app": "nginx"}}},
-		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod-other", Namespace: "default", Labels: map[string]string{"app": "busybox"}}},
-	).Build()
-
-	k8sClient := &kube.K8sClient{Client: fakeClient}
-	selector := &metav1.LabelSelector{MatchLabels: map[string]string{"app": "nginx"}}
-	got, err := discoverPodsByPodDisruptionBudget(context.Background(), k8sClient, "default", selector)
-	if err != nil {
-		t.Fatalf("discoverPodsByPodDisruptionBudget() error = %v", err)
-	}
-	want := []common.RelatedResource{
-		{Type: "pods", Namespace: "default", Name: "pod-1"},
-		{Type: "pods", Namespace: "default", Name: "pod-2"},
-	}
-	if !sameRelatedResources(got, want) {
-		t.Fatalf("discoverPodsByPodDisruptionBudget() = %#v, want %#v", got, want)
-	}
-}
-
-func TestDiscoverPodDisruptionBudgetsByPod(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = corev1.AddToScheme(scheme)
-	_ = policyv1.AddToScheme(scheme)
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
-		&policyv1.PodDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{Name: "pdb-1", Namespace: "default"},
-			Spec: policyv1.PodDisruptionBudgetSpec{
-				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "nginx"}},
-			},
-		},
-		&policyv1.PodDisruptionBudget{
-			ObjectMeta: metav1.ObjectMeta{Name: "pdb-other", Namespace: "default"},
-			Spec: policyv1.PodDisruptionBudgetSpec{
-				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "busybox"}},
-			},
-		},
-	).Build()
-
-	k8sClient := &kube.K8sClient{Client: fakeClient}
-	podLabels := map[string]string{"app": "nginx"}
-	got, err := discoverPodDisruptionBudgetsByPod(context.Background(), k8sClient, "default", podLabels)
-	if err != nil {
-		t.Fatalf("discoverPodDisruptionBudgetsByPod() error = %v", err)
-	}
-	want := []common.RelatedResource{
-		{Type: "poddisruptionbudgets", Namespace: "default", Name: "pdb-1"},
-	}
-	if !sameRelatedResources(got, want) {
-		t.Fatalf("discoverPodDisruptionBudgetsByPod() = %#v, want %#v", got, want)
-	}
-}
-
-func sameRelatedResources(got []common.RelatedResource, want []common.RelatedResource) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	gotMap := make(map[string]int, len(got))
-	wantMap := make(map[string]int, len(want))
-	for _, item := range got {
-		gotMap[relatedResourceKey(item)]++
-	}
-	for _, item := range want {
-		wantMap[relatedResourceKey(item)]++
-	}
-	return reflect.DeepEqual(gotMap, wantMap)
-}
-
-func relatedResourceKey(item common.RelatedResource) string {
-	return item.Type + "|" + item.APIVersion + "|" + item.Name + "|" + item.Namespace
 }

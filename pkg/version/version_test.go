@@ -30,6 +30,7 @@ func TestParseSemver(t *testing.T) {
 	}{
 		{name: "with v prefix", input: "v1.2.3", want: "1.2.3"},
 		{name: "without v prefix", input: "1.2.3", want: "1.2.3"},
+		{name: "internal prefix", input: "dsy-v1.0.1", want: "1.0.1"},
 		{name: "invalid", input: "not-a-version", wantErr: true},
 		{name: "empty", input: "   ", wantErr: true},
 	}
@@ -59,18 +60,18 @@ func TestGetVersionWithoutVersionCheck(t *testing.T) {
 	origVersion := Version
 	origBuildDate := BuildDate
 	origCommitID := CommitID
-	origEnableVersionCheck := common.EnableVersionCheck
+	origEnableVersionCheck := common.EnableVersionCheck.Load()
 	t.Cleanup(func() {
 		Version = origVersion
 		BuildDate = origBuildDate
 		CommitID = origCommitID
-		common.EnableVersionCheck = origEnableVersionCheck
+		common.EnableVersionCheck.Store(origEnableVersionCheck)
 	})
 
 	Version = "1.2.3"
 	BuildDate = "2026-03-27"
 	CommitID = "abc123"
-	common.EnableVersionCheck = false
+	common.EnableVersionCheck.Store(false)
 
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
@@ -101,14 +102,14 @@ func TestGetVersionWithCachedUpdateResult(t *testing.T) {
 	origVersion := Version
 	origBuildDate := BuildDate
 	origCommitID := CommitID
-	origEnableVersionCheck := common.EnableVersionCheck
+	origEnableVersionCheck := common.EnableVersionCheck.Load()
 	origCachedUpdateResult := cachedUpdateResult
 	origLastUpdateFetch := lastUpdateFetch
 	t.Cleanup(func() {
 		Version = origVersion
 		BuildDate = origBuildDate
 		CommitID = origCommitID
-		common.EnableVersionCheck = origEnableVersionCheck
+		common.EnableVersionCheck.Store(origEnableVersionCheck)
 		cachedUpdateResult = origCachedUpdateResult
 		lastUpdateFetch = origLastUpdateFetch
 	})
@@ -116,7 +117,7 @@ func TestGetVersionWithCachedUpdateResult(t *testing.T) {
 	Version = "1.2.3"
 	BuildDate = "2026-03-27"
 	CommitID = "abc123"
-	common.EnableVersionCheck = true
+	common.EnableVersionCheck.Store(true)
 	cachedUpdateResult = updateCheckResult{
 		hasNew:     true,
 		releaseURL: "https://example.com/releases/v1.2.4",

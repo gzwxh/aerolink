@@ -1,7 +1,9 @@
 package model
 
 import (
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/zxh326/kite/pkg/common"
 )
@@ -84,11 +86,11 @@ func TestDefaultGeneralAIModelByProvider(t *testing.T) {
 }
 
 func TestApplyRuntimeGeneralSetting(t *testing.T) {
-	originalAnalytics := common.EnableAnalytics
-	originalVersionCheck := common.EnableVersionCheck
+	originalAnalytics := common.EnableAnalytics.Load()
+	originalVersionCheck := common.EnableVersionCheck.Load()
 	t.Cleanup(func() {
-		common.EnableAnalytics = originalAnalytics
-		common.EnableVersionCheck = originalVersionCheck
+		common.EnableAnalytics.Store(originalAnalytics)
+		common.EnableVersionCheck.Store(originalVersionCheck)
 	})
 
 	applyRuntimeGeneralSetting(&GeneralSetting{
@@ -96,19 +98,79 @@ func TestApplyRuntimeGeneralSetting(t *testing.T) {
 		EnableVersionCheck: false,
 	})
 
-	if !common.EnableAnalytics {
-		t.Fatalf("EnableAnalytics = %v, want true", common.EnableAnalytics)
+	if !common.EnableAnalytics.Load() {
+		t.Fatalf("EnableAnalytics = %v, want true", common.EnableAnalytics.Load())
 	}
-	if common.EnableVersionCheck {
-		t.Fatalf("EnableVersionCheck = %v, want false", common.EnableVersionCheck)
+	if common.EnableVersionCheck.Load() {
+		t.Fatalf("EnableVersionCheck = %v, want false", common.EnableVersionCheck.Load())
 	}
 
 	applyRuntimeGeneralSetting(nil)
-	if !common.EnableAnalytics {
+	if !common.EnableAnalytics.Load() {
 		t.Fatalf("nil setting changed EnableAnalytics")
 	}
-	if common.EnableVersionCheck {
+	if common.EnableVersionCheck.Load() {
 		t.Fatalf("nil setting changed EnableVersionCheck")
+	}
+}
+
+// 这两个开关既在被请求路径读取（安全响应头、版本检查、index.html 注入），
+// 又在通用设置写入时被改写——而且 applyRuntimeGeneralSetting 会随
+// GetGeneralSetting 一起跑，登录、RBAC、终端等路径都会触发它，因此读写是真的会并发。
+//
+// 修复前它们是普通包级 bool，下面这段并发读写用 `go test -race ./pkg/model/`
+// 就会报数据竞争；现在必须是原子量才能通过。
+func TestApplyRuntimeGeneralSettingIsSafeUnderConcurrentReads(t *testing.T) {
+	originalAnalytics := common.EnableAnalytics.Load()
+	originalVersionCheck := common.EnableVersionCheck.Load()
+	t.Cleanup(func() {
+		common.EnableAnalytics.Store(originalAnalytics)
+		common.EnableVersionCheck.Store(originalVersionCheck)
+	})
+
+	const readers = 4
+	var wg sync.WaitGroup
+	started := make(chan struct{}, readers)
+	stop := make(chan struct{})
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			started <- struct{}{}
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					_ = common.EnableAnalytics.Load()
+					_ = common.EnableVersionCheck.Load()
+				}
+			}
+		}()
+	}
+	// 等读者真正跑起来再写：否则写循环可能在它们被调度之前就结束，
+	// 竞争窗口根本没出现（用固定次数的写循环就会这样漏掉）。
+	for i := 0; i < readers; i++ {
+		<-started
+	}
+
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for i := 0; time.Now().Before(deadline); i++ {
+		applyRuntimeGeneralSetting(&GeneralSetting{
+			EnableAnalytics:    i%2 == 0,
+			EnableVersionCheck: i%2 == 1,
+		})
+	}
+	close(stop)
+	wg.Wait()
+
+	// 并发阶段结束后再写一组确定的值，断言不受最后一次并发写入影响。
+	applyRuntimeGeneralSetting(&GeneralSetting{EnableAnalytics: false, EnableVersionCheck: true})
+	if common.EnableAnalytics.Load() {
+		t.Error("EnableAnalytics = true, want false")
+	}
+	if !common.EnableVersionCheck.Load() {
+		t.Error("EnableVersionCheck = false, want true")
 	}
 }
 

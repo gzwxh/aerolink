@@ -18,8 +18,8 @@ const (
 	agentPodCheckInterval = 2 * time.Second
 )
 
-// waitForAgentPodReady polls until the named pod in AgentPodNamespace reaches Ready status,
-// sending progress dots over the WebSocket.
+// waitForAgentPodReady 轮询直到 AgentPodNamespace 中指定的 pod 进入 Ready 状态，
+// 期间通过 WebSocket 发送进度点。
 func waitForAgentPodReady(ctx context.Context, cs *cluster.ClientSet, ws *wsutil.Session, podName, readyMsg string) error {
 	timeout := time.After(agentPodWaitTimeout)
 	ticker := time.NewTicker(agentPodCheckInterval)
@@ -30,7 +30,9 @@ func waitForAgentPodReady(ctx context.Context, cs *cluster.ClientSet, ws *wsutil
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			// 客户端断开 / 上下文取消不是「就绪」。此前这里返回 nil，调用方会接着
+			// attach 一个状态未知的 pod，真实原因被后面那一步的报错掩盖。
+			return ctx.Err()
 		case <-timeout:
 			_ = ws.SendMessage("info", "")
 			ws.SendErrorMessage(utils.GetPodErrorMessage(pod))

@@ -15,12 +15,12 @@ import (
 )
 
 const (
-	// Microsoft Graph API endpoints
+	// Microsoft Graph API 端点
 	graphAPIBaseURL  = "https://graph.microsoft.com/v1.0"
 	graphAPIMemberOf = graphAPIBaseURL + "/me/memberOf"
 )
 
-// OAuthProvider defines the interface for OAuth providers
+// OAuthProvider 定义 OAuth 提供方的接口
 type OAuthProvider interface {
 	GetAuthURL(state string) string
 	ExchangeCodeForToken(code string) (*TokenResponse, error)
@@ -29,7 +29,7 @@ type OAuthProvider interface {
 	GetProviderName() string
 }
 
-// OAuthConfig holds common OAuth configuration
+// OAuthConfig 保存通用的 OAuth 配置
 type OAuthConfig struct {
 	ClientID     string
 	ClientSecret string
@@ -37,7 +37,7 @@ type OAuthConfig struct {
 	Scopes       string
 }
 
-// TokenResponse represents OAuth token response with refresh token support
+// TokenResponse 表示支持 refresh token 的 OAuth 令牌响应
 type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token,omitempty"`
@@ -46,12 +46,15 @@ type TokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-// Claims represents JWT claims with refresh token support
+// Claims 表示支持 refresh token 的 JWT 声明
 type Claims struct {
 	UserID       uint   `json:"user_id"`
 	Username     string `json:"username"`
 	Provider     string `json:"provider"`
 	RefreshToken string `json:"refresh_token,omitempty"`
+	// SessionSeq 是签发该令牌的那次登录的序号，
+	// 用于在开启单设备登录时让旧会话失效。
+	SessionSeq uint64 `json:"session_seq,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -66,8 +69,8 @@ type GenericProvider struct {
 	AllowedGroups []string
 }
 
-// discoverOAuthEndpoints discovers OAuth endpoints from issuer's well-known configuration
-// TODO: cache well-known configuration
+// discoverOAuthEndpoints 从 issuer 的 well-known 配置中发现 OAuth 端点
+// TODO: 缓存 well-known 配置
 func discoverOAuthEndpoints(issuer, providerName string) (*struct {
 	AuthURL     string
 	TokenURL    string
@@ -173,7 +176,7 @@ func (g *GenericProvider) GetAuthURL(state string) string {
 	params := url.Values{}
 	params.Add("client_id", g.Config.ClientID)
 	params.Add("redirect_uri", g.Config.RedirectURL)
-	// TODO: fix me
+	// TODO: 待修复
 	params.Add("scope", g.Config.Scopes)
 	params.Add("state", state)
 	params.Add("response_type", "code")
@@ -220,7 +223,7 @@ func (g *GenericProvider) RefreshToken(refreshToken string) (*TokenResponse, err
 	return g.makeTokenRequest(data)
 }
 
-// ErrNotInAllowedGroups is returned when a user successfully authenticates but does not belong to any specified AllowedGroups.
+// ErrNotInAllowedGroups 在用户认证成功但不属于任何指定的 AllowedGroups 时返回。
 var ErrNotInAllowedGroups = errors.New("user is not in any of the allowed groups")
 
 func (g *GenericProvider) GetUserInfo(accessToken string) (*model.User, error) {
@@ -276,9 +279,9 @@ func (g *GenericProvider) fetchUserInfo(accessToken string) (map[string]interfac
 	return userInfo, nil
 }
 
-// unwrapDataField returns the nested "data" map if present.
-// This handles providers (e.g. Feishu/Lark) that wrap user info under a "data" key.
-// The second return value indicates whether unwrapping occurred.
+// unwrapDataField 在存在嵌套的 "data" map 时将其返回。
+// 用于处理把用户信息包在 "data" 键下的提供方（例如飞书 / Lark）。
+// 第二个返回值表示是否发生了这层解包。
 func unwrapDataField(userInfo map[string]interface{}) (map[string]interface{}, bool) {
 	if data, ok := userInfo["data"]; ok {
 		if nested, ok := data.(map[string]interface{}); ok {
@@ -415,15 +418,15 @@ func isAllowedGroup(userGroups, allowedGroups []string) bool {
 	return false
 }
 
-// fetchAzureADGroups fetches group memberships from Azure AD Graph API /me/memberOf endpoint
-// Handles pagination to retrieve all groups (Azure AD returns max 100 per page)
+// fetchAzureADGroups 从 Azure AD Graph API 的 /me/memberOf 端点获取组成员关系
+// 处理分页以取回全部组（Azure AD 每页最多返回 100 条）
 func (g *GenericProvider) fetchAzureADGroups(accessToken string) ([]interface{}, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	groups := make([]interface{}, 0)
 	nextLink := graphAPIMemberOf
 	totalFetched := 0
 
-	// Follow pagination links until all groups are retrieved
+	// 跟随分页链接，直到取回所有组
 	for nextLink != "" {
 		req, err := http.NewRequest("GET", nextLink, nil)
 		if err != nil {
@@ -453,9 +456,9 @@ func (g *GenericProvider) fetchAzureADGroups(accessToken string) ([]interface{},
 		}
 		_ = resp.Body.Close()
 
-		// Extract group IDs from the current page
-		// Note: Only extracting groups, not directory roles. Directory roles have @odata.type of
-		// "#microsoft.graph.directoryRole" and require different handling.
+		// 从当前页提取组 ID
+		// 注意：这里只提取组，不提取目录角色。目录角色的 @odata.type 是
+		// "#microsoft.graph.directoryRole"，需要另外处理。
 		for _, item := range memberOfResp.Value {
 			if itemType, ok := item["@odata.type"].(string); ok && itemType == "#microsoft.graph.group" {
 				if groupID, ok := item["id"].(string); ok {

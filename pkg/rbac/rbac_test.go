@@ -13,7 +13,7 @@ func TestCanAccess(t *testing.T) {
 		RBACConfig = originalConfig
 	})
 
-	// Define test roles
+	// 定义测试用的角色
 	adminRole := common.Role{
 		Name:        "admin",
 		Description: "Administrator with full access",
@@ -280,6 +280,8 @@ func TestCanAccess(t *testing.T) {
 			expected:   true,
 		},
 		{
+			// 存量兼容：显式配置 namespaces（含反选）的角色仍受其约束；
+			// 新建角色不再提供该字段，范围由权限绑定组圈定。
 			name:  "allow all-namespace but not kube-system: not access",
 			roles: []common.Role{notKubeSystemRole},
 			mappings: []common.RoleMapping{
@@ -310,18 +312,18 @@ func TestCanAccess(t *testing.T) {
 	}
 }
 
-// TestHasResourcePermission covers the namespace-agnostic gate used by the
-// RBAC middleware to decide whether a cross-namespace LIST may pass through.
-// It must be true when the user holds any role granting the verb on the
-// resource in the cluster (namespace irrelevant), and false otherwise.
+// TestHasResourcePermission 覆盖 RBAC 中间件用来判断跨命名空间 LIST 是否放行的
+// 那个与命名空间无关的关卡。
+// 当用户在集群中持有任何授予该资源该 verb 的角色时它必须为 true
+// （与命名空间无关），否则为 false。
 func TestHasResourcePermission(t *testing.T) {
 	originalConfig := RBACConfig
 	t.Cleanup(func() {
 		RBACConfig = originalConfig
 	})
 
-	// Mirrors the issue #610 scenario: two namespace-scoped roles, each
-	// granting a single namespace. Neither role carries "_all" / "*".
+	// 复现 issue #610 的场景：两个限定命名空间范围的角色，
+	// 各自只授予单个命名空间。两个角色都不带 "_all" / "*"。
 	facilitiesRole := common.Role{
 		Name: "facilities", Clusters: []string{"*"},
 		Resources: []string{"deployments"}, Namespaces: []string{"charon-facilities-qd"},
@@ -332,7 +334,7 @@ func TestHasResourcePermission(t *testing.T) {
 		Resources: []string{"deployments"}, Namespaces: []string{"charon-sluice"},
 		Verbs: []string{"get"},
 	}
-	// A role that grants create/update but not get on deployments.
+	// 一个授予 deployments 的 create/update、但不授予 get 的角色。
 	writerRole := common.Role{
 		Name: "writer", Clusters: []string{"*"},
 		Resources: []string{"deployments"}, Namespaces: []string{"team-a"},
@@ -423,110 +425,10 @@ func TestHasResourcePermission(t *testing.T) {
 	}
 }
 
-// TestClusterScopedWildcardRequiresExplicitGrant locks in the rule that a
-// namespace-restricted role cannot reach cluster-scoped resources through a
-// wildcard resource grant. "All resources in namespace dev" must not grant
-// read (or write) access to every node in the cluster.
-func TestClusterScopedWildcardRequiresExplicitGrant(t *testing.T) {
-	originalConfig := RBACConfig
-	t.Cleanup(func() {
-		RBACConfig = originalConfig
-	})
-
-	namespaceScopedWildcard := common.Role{
-		Name:       "ns-scoped-wildcard",
-		Clusters:   []string{"*"},
-		Namespaces: []string{"dev"},
-		Resources:  []string{"*"},
-		Verbs:      []string{"*"},
-	}
-	namespaceScopedExplicitNodes := common.Role{
-		Name:       "ns-scoped-explicit-nodes",
-		Clusters:   []string{"*"},
-		Namespaces: []string{"dev"},
-		Resources:  []string{"nodes"},
-		Verbs:      []string{"get"},
-	}
-	clusterWideWildcard := common.Role{
-		Name:       "cluster-wide-wildcard",
-		Clusters:   []string{"*"},
-		Namespaces: []string{"*"},
-		Resources:  []string{"*"},
-		Verbs:      []string{"get"},
-	}
-	allButKubeSystem := common.Role{
-		Name:       "all-but-kube-system",
-		Clusters:   []string{"*"},
-		Namespaces: []string{"!kube-system", "*"},
-		Resources:  []string{"*"},
-		Verbs:      []string{"get"},
-	}
-
-	tests := []struct {
-		name      string
-		role      common.Role
-		resource  string
-		verb      string
-		namespace string
-		expected  bool
-	}{
-		{
-			name: "wildcard does not grant node reads to a namespace-scoped role",
-			role: namespaceScopedWildcard, resource: "nodes", verb: "get",
-			namespace: common.AllNamespaces, expected: false,
-		},
-		{
-			name: "wildcard does not grant node writes to a namespace-scoped role",
-			role: namespaceScopedWildcard, resource: "nodes", verb: "delete",
-			namespace: common.AllNamespaces, expected: false,
-		},
-		{
-			name: "wildcard does not grant other cluster-scoped resources either",
-			role: namespaceScopedWildcard, resource: "persistentvolumes", verb: "get",
-			namespace: common.AllNamespaces, expected: false,
-		},
-		{
-			name: "wildcard still grants namespaced resources in the granted namespace",
-			role: namespaceScopedWildcard, resource: "pods", verb: "get",
-			namespace: "dev", expected: true,
-		},
-		{
-			name: "explicit cluster-scoped grant still works for a namespace-scoped role",
-			role: namespaceScopedExplicitNodes, resource: "nodes", verb: "get",
-			namespace: common.AllNamespaces, expected: true,
-		},
-		{
-			name: "explicit grant is still limited to the granted verbs",
-			role: namespaceScopedExplicitNodes, resource: "nodes", verb: "delete",
-			namespace: common.AllNamespaces, expected: false,
-		},
-		{
-			name: "cluster-wide roles keep wildcard access to cluster-scoped resources",
-			role: clusterWideWildcard, resource: "nodes", verb: "get",
-			namespace: common.AllNamespaces, expected: true,
-		},
-		{
-			name: "a namespace list carrying the wildcard is not restricted",
-			role: allButKubeSystem, resource: "nodes", verb: "get",
-			namespace: common.AllNamespaces, expected: true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			RBACConfig = &common.RolesConfig{
-				Roles:       []common.Role{tc.role},
-				RoleMapping: []common.RoleMapping{{Name: tc.role.Name, Users: []string{"tester"}}},
-			}
-			got := CanAccess(model.User{Username: "tester"}, tc.resource, tc.verb, "cluster-a", tc.namespace)
-			if got != tc.expected {
-				t.Errorf("CanAccess(%s, %s, ns=%s) = %v, want %v",
-					tc.resource, tc.verb, tc.namespace, got, tc.expected)
-			}
-		})
-	}
-}
-
+// TestClusterScopedWildcardRequiresExplicitGrant 锁定这样一条规则：
+// 限定命名空间的角色不能通过通配资源授权触及集群级资源。
+// "命名空间 dev 中的所有资源" 不得授予对集群中每一个 node 的
+// 读（或写）权限。
 func TestNamespaceRestricted(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -570,4 +472,110 @@ func TestMatchExplicit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestClusterScopedWildcardRequiresExplicitGrant(t *testing.T) {
+	// 角色不再有命名空间范围后，旧的"ns 限定角色的通配符不能扩大到集群级
+	// 资源"防护随之消失：角色规则对所有命名空间与集群级资源一致生效。
+	// 命名空间级别的限制改由权限绑定组承担，绑定组的授权范围按角色里的
+	// 规则形态区分：
+	//   - 资源通配 * 的授权（k8s:*:get 等）写的是"集群里的一切资源"，范围是
+	//     整个集群，集群级资源与 _all 请求一并放行；
+	//   - 指名资源的授权（例如只给 pods）只在组内命名空间生效，不放行集群级资源。
+	originalConfig := RBACConfig
+	originalProjects := bindingGroupsCache
+	t.Cleanup(func() {
+		RBACConfig = originalConfig
+		bindingGroupsCache = originalProjects
+	})
+
+	wildcardRole := common.Role{
+		Name:      "wildcard",
+		Clusters:  []string{"*"},
+		Resources: []string{"*"},
+		Verbs:     []string{"*"},
+	}
+	RBACConfig = &common.RolesConfig{
+		Roles:       []common.Role{wildcardRole},
+		RoleMapping: []common.RoleMapping{{Name: "wildcard", Users: []string{"*"}}},
+	}
+	user := model.User{Username: "any-user"}
+
+	cases := []struct {
+		name      string
+		resource  string
+		verb      string
+		namespace string
+		expected  bool
+	}{
+		{"wildcard grants node reads", "nodes", "get", common.AllNamespaces, true},
+		{"wildcard grants node writes", "nodes", "delete", common.AllNamespaces, true},
+		{"wildcard grants pv reads", "persistentvolumes", "get", common.AllNamespaces, true},
+		{"wildcard grants namespaced pods", "pods", "get", "dev", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bindingGroupsCache = &bindingGroupCache{
+				byNamespace: map[string]uint{},
+				projects:    map[uint]string{},
+				members:     map[uint][]bindingGroupMemberEntry{},
+			}
+			if got := CanAccess(user, tc.resource, tc.verb, "any-cluster", tc.namespace); got != tc.expected {
+				t.Fatalf("CanAccess(%s, %s, ns=%s) = %v, want %v", tc.resource, tc.verb, tc.namespace, got, tc.expected)
+			}
+		})
+	}
+
+	// 权限绑定组路径：资源通配授权覆盖整个集群，指名资源的授权仍只覆盖组内命名空间。
+	t.Run("binding group follows the shape of the granted rule", func(t *testing.T) {
+		namedRole := common.Role{
+			Name:      "pod-reader",
+			Clusters:  []string{"*"},
+			Resources: []string{"pods"},
+			Verbs:     []string{"get"},
+		}
+		RBACConfig = &common.RolesConfig{Roles: []common.Role{}, RoleMapping: []common.RoleMapping{}}
+		bindingGroupsCache = &bindingGroupCache{
+			byNamespace: map[string]uint{"c1/dev": 1},
+			projects:    map[uint]string{1: "c1"},
+			members: map[uint][]bindingGroupMemberEntry{
+				1: {
+					{subjectType: "user", subject: "any-user", role: wildcardRole},
+					{subjectType: "user", subject: "named-user", role: namedRole},
+				},
+			},
+		}
+		if got := canAccessViaBindingGroup(user, "pods", "get", "c1", "dev"); !got {
+			t.Fatal("expected binding group to grant namespaced pod reads")
+		}
+		if got := canAccessViaBindingGroup(user, "nodes", "get", "c1", common.AllNamespaces); !got {
+			t.Fatal("expected a wildcard grant to reach cluster-scoped resources")
+		}
+		if got := canAccessViaBindingGroup(user, "pods", "get", "c1", "other"); !got {
+			t.Fatal("expected a wildcard grant to reach namespaces outside the group")
+		}
+		if got := canAccessViaBindingGroup(user, "nodes", "get", "c2", common.AllNamespaces); got {
+			t.Fatal("expected a wildcard grant to stay inside its cluster")
+		}
+		named := model.User{Username: "named-user"}
+		if got := canAccessViaBindingGroup(named, "pods", "get", "c1", "dev"); !got {
+			t.Fatal("expected a named-resource grant to work inside the group")
+		}
+		if got := canAccessViaBindingGroup(named, "nodes", "get", "c1", common.AllNamespaces); got {
+			t.Fatal("expected a named-resource grant to never grant cluster-scoped resources")
+		}
+		// 命名空间可见性要跟着同样的范围走：否则后端放行、选择器里却看不到该命名空间。
+		if got := CanAccessNamespace(user, "c1", "other"); !got {
+			t.Fatal("expected a wildcard grant to reveal every namespace of its cluster")
+		}
+		if got := CanAccessNamespace(named, "c1", "other"); got {
+			t.Fatal("expected a named-resource grant to keep the namespace list scoped")
+		}
+		if got := canAccessNamespaceViaBindingGroup(named, "c1", "other"); got {
+			t.Fatal("expected a namespace outside the group to stay hidden from a named-resource grant")
+		}
+		if got := canAccessNamespaceViaBindingGroup(user, "c1", "dev"); !got {
+			t.Fatal("expected member to see binding group namespace")
+		}
+	})
 }

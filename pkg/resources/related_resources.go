@@ -22,6 +22,7 @@ import (
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -89,6 +90,29 @@ func discoverIngressServices(namespace string, ingress *v1.Ingress) []common.Rel
 	return relatedServices
 }
 
+// resourceTypeForKind 把 Kind + apiVersion 换算成资源类型（复数形式，前端据此拼链接）。
+//
+// 此前统一用 strings.ToLower(kind) + "s"：Deployment、StatefulSet 这类恰好对得上，
+// 但 Ingress、Endpoints、Policy 以及几乎所有自定义资源都会算错（"ingresss"），
+// 前端因此拿到一个不存在的类型。RESTMapper 能给出准确答案；只在它查不出来
+// （例如类型未注册、集群不可达）时退回旧写法，保持原有的降级行为。
+func resourceTypeForKind(cs *cluster.ClientSet, kind, apiVersion string) string {
+	fallback := strings.ToLower(kind) + "s"
+	if cs == nil || cs.K8sClient == nil || cs.K8sClient.Client == nil || kind == "" || apiVersion == "" {
+		return fallback
+	}
+	gv, err := schema.ParseGroupVersion(apiVersion)
+	if err != nil {
+		return fallback
+	}
+	mapping, err := cs.K8sClient.RESTMapper().RESTMapping(
+		schema.GroupKind{Group: gv.Group, Kind: kind}, gv.Version)
+	if err != nil {
+		return fallback
+	}
+	return mapping.Resource.Resource
+}
+
 func discoverConfigs(namespace string, podSpec *corev1.PodTemplateSpec) []common.RelatedResource {
 	if podSpec == nil {
 		return []common.RelatedResource{}
@@ -98,7 +122,12 @@ func discoverConfigs(namespace string, podSpec *corev1.PodTemplateSpec) []common
 	secretSet := make(map[string]struct{})
 	pvcSet := make(map[string]struct{})
 
-	for _, container := range podSpec.Spec.Containers {
+	// init 容器与运行容器一样会引用 ConfigMap/Secret（checkInUsedConfigs 也是这么算的），
+	// 只扫 Containers 会让只被 init 容器引用的配置在「相关资源」里消失。
+	containers := podSpec.Spec.Containers
+	containers = append(containers, podSpec.Spec.InitContainers...)
+
+	for _, container := range containers {
 		for _, envVar := range container.Env {
 			if envVar.ValueFrom != nil && envVar.ValueFrom.ConfigMapKeyRef != nil {
 				configMapSet[envVar.ValueFrom.ConfigMapKeyRef.Name] = struct{}{}
@@ -196,9 +225,9 @@ func checkInUsedConfigs(spec *corev1.PodTemplateSpec, name string, resourceType 
 	return false
 }
 
-// discoveryWorkloads finds Deployments, StatefulSets and DaemonSets that
-// reference the given ConfigMap/Secret/PVC.  The three List calls are
-// independent, so we fire them in parallel with errgroup.
+// discoveryWorkloads 找出引用了给定 ConfigMap/Secret/PVC 的
+// Deployment、StatefulSet 与 DaemonSet。这三个 List 调用相互独立，
+// 因此用 errgroup 并行发起。
 func discoveryWorkloads(ctx context.Context, k8sClient *kube.K8sClient, namespace string, name string, resourceType string) ([]common.RelatedResource, error) {
 	g, gctx := errgroup.WithContext(ctx)
 
@@ -220,7 +249,7 @@ func discoveryWorkloads(ctx context.Context, k8sClient *kube.K8sClient, namespac
 		return nil, err
 	}
 
-	// Each list is owned exclusively by this goroutine after Wait — safe to read.
+	// Wait 之后每个列表只归本 goroutine 所有——可以安全读取。
 	var related []common.RelatedResource
 	for _, deployment := range deploymentList.Items {
 		if checkInUsedConfigs(&deployment.Spec.Template, name, resourceType) {
@@ -255,8 +284,8 @@ func discoveryWorkloads(ctx context.Context, k8sClient *kube.K8sClient, namespac
 func discoverPodsByService(ctx context.Context, k8sClient *kube.K8sClient, service *corev1.Service) []common.RelatedResource {
 	var endpoints corev1.Endpoints
 	if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: service.Namespace, Name: service.Name}, &endpoints); err != nil {
-		// Endpoints might not be found, which is not a critical error.
-		// For example, for external name services.
+		// Endpoints 可能找不到，这不是致命错误，
+		// 例如 ExternalName 类型的 Service。
 		return nil
 	}
 
@@ -416,7 +445,7 @@ func getPersistentVolumeClaimRelatedResources(pvc *corev1.PersistentVolumeClaim)
 	})
 }
 
-func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // resource-specific discovery is intentionally centralized
+func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // 各资源的关联发现集中在这里，是有意为之
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	namespace := c.Param("namespace")
 	name := c.Param("name")
@@ -437,7 +466,7 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // resource-specific
 		podSpec = &corev1.PodTemplateSpec{
 			Spec: res.Spec,
 		}
-		// For pods, use the labels as selector
+		// 对 pod 而言，使用标签作为选择器
 		if res.Labels != nil {
 			selector = &metav1.LabelSelector{
 				MatchLabels: res.Labels,
@@ -470,11 +499,11 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // resource-specific
 			result = append(result, workloads...)
 		}
 	case *gatewayapiv1.HTTPRoute:
-		result = getHTTPRouteRelatedResouces(res, namespace)
+		result = getHTTPRouteRelatedResouces(cs, res, namespace)
 	case *autoscalingv2.HorizontalPodAutoscaler:
-		result = getAutoScalingRelatedResources(res, namespace)
+		result = getAutoScalingRelatedResources(cs, res, namespace)
 	case *autoscalingv1.HorizontalPodAutoscaler:
-		result = getScaleTargetRelatedResources(res.Spec.ScaleTargetRef.Kind, res.Spec.ScaleTargetRef.APIVersion, res.Spec.ScaleTargetRef.Name, namespace)
+		result = getScaleTargetRelatedResources(cs, res.Spec.ScaleTargetRef.Kind, res.Spec.ScaleTargetRef.APIVersion, res.Spec.ScaleTargetRef.Name, namespace)
 	case *v1.Ingress:
 		services := discoverIngressServices(namespace, res)
 		result = append(result, services...)
@@ -489,8 +518,8 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // resource-specific
 	}
 
 	if podSpec != nil && selector != nil {
-		// discoverServices (I/O) and discoverConfigs (CPU-only) are independent;
-		// run them in parallel so the I/O overlaps with the CPU work.
+		// discoverServices（I/O）与 discoverConfigs（纯 CPU）相互独立；
+		// 并行执行以让 I/O 与 CPU 工作重叠。
 		g, gctx := errgroup.WithContext(ctx)
 
 		var relatedServices []common.RelatedResource
@@ -518,7 +547,7 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // resource-specific
 	if v, ok := resource.(client.Object); ok {
 		for _, owner := range v.GetOwnerReferences() {
 			if owner.Kind == "ReplicaSet" {
-				// get the owner of the ReplicaSet
+				// 获取 ReplicaSet 的属主
 				rs := &appsv1.ReplicaSet{}
 				if err := cs.K8sClient.Get(ctx, client.ObjectKey{Namespace: v.GetNamespace(), Name: owner.Name}, rs); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get ReplicaSet owner: " + err.Error()})
@@ -527,7 +556,7 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // resource-specific
 				if len(rs.OwnerReferences) > 0 {
 					for _, rsOwner := range rs.OwnerReferences {
 						result = append(result, common.RelatedResource{
-							Type:       strings.ToLower(rsOwner.Kind) + "s",
+							Type:       resourceTypeForKind(cs, rsOwner.Kind, rsOwner.APIVersion),
 							Name:       rsOwner.Name,
 							Namespace:  v.GetNamespace(),
 							APIVersion: rsOwner.APIVersion,
@@ -536,7 +565,7 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // resource-specific
 				}
 			}
 			result = append(result, common.RelatedResource{
-				Type:       strings.ToLower(owner.Kind) + "s",
+				Type:       resourceTypeForKind(cs, owner.Kind, owner.APIVersion),
 				Name:       owner.Name,
 				Namespace:  v.GetNamespace(),
 				APIVersion: owner.APIVersion,
@@ -563,19 +592,19 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // resource-specific
 	c.JSON(http.StatusOK, filtered)
 }
 
-func getHTTPRouteRelatedResouces(res *gatewayapiv1.HTTPRoute, namespace string) []common.RelatedResource {
+func getHTTPRouteRelatedResouces(cs *cluster.ClientSet, res *gatewayapiv1.HTTPRoute, namespace string) []common.RelatedResource {
 	var result []common.RelatedResource
 	for _, parentRef := range res.Spec.ParentRefs {
-		var parentResourceType string
+		// parentRef 不写 kind 时就是 Gateway。
+		parentKind := "Gateway"
 		if parentRef.Kind != nil && *parentRef.Kind != "" {
-			parentResourceType = strings.ToLower(string(*parentRef.Kind)) + "s"
-		} else {
-			parentResourceType = string(common.Gateways)
+			parentKind = string(*parentRef.Kind)
 		}
+		parentAPIVersion := gatewayReferenceAPIVersion(parentRef.Group, gatewayapiv1.GroupVersion.String())
 		result = append(result, common.RelatedResource{
-			Type:       parentResourceType,
+			Type:       resourceTypeForKind(cs, parentKind, parentAPIVersion),
 			Name:       string(parentRef.Name),
-			APIVersion: gatewayReferenceAPIVersion(parentRef.Group, gatewayapiv1.GroupVersion.String()),
+			APIVersion: parentAPIVersion,
 			Namespace: func() string {
 				if parentRef.Namespace != nil && *parentRef.Namespace != "" {
 					return string(*parentRef.Namespace)
@@ -587,17 +616,18 @@ func getHTTPRouteRelatedResouces(res *gatewayapiv1.HTTPRoute, namespace string) 
 
 	for _, rule := range res.Spec.Rules {
 		for _, backend := range rule.BackendRefs {
-			var backendType, defaultAPIVersion string
+			// backendRef 不写 kind 时就是 Service（core 组）。
+			backendKind := "Service"
+			defaultAPIVersion := corev1.SchemeGroupVersion.String()
 			if backend.Kind != nil && *backend.Kind != "" {
-				backendType = strings.ToLower(string(*backend.Kind)) + "s"
-			} else {
-				backendType = string(common.Services)
+				backendKind = string(*backend.Kind)
+				if !strings.EqualFold(backendKind, "Service") {
+					defaultAPIVersion = ""
+				}
 			}
-			if backendType == string(common.Services) {
-				defaultAPIVersion = corev1.SchemeGroupVersion.String()
-			}
+			backendAPIVersion := gatewayReferenceAPIVersion(backend.Group, defaultAPIVersion)
 			result = append(result, common.RelatedResource{
-				Type: backendType,
+				Type: resourceTypeForKind(cs, backendKind, backendAPIVersion),
 				Name: string(backend.Name),
 				Namespace: func() string {
 					if backend.Namespace != nil && *backend.Namespace != "" {
@@ -605,7 +635,7 @@ func getHTTPRouteRelatedResouces(res *gatewayapiv1.HTTPRoute, namespace string) 
 					}
 					return namespace
 				}(),
-				APIVersion: gatewayReferenceAPIVersion(backend.Group, defaultAPIVersion),
+				APIVersion: backendAPIVersion,
 			})
 		}
 	}
@@ -626,15 +656,15 @@ func gatewayReferenceAPIVersion(group *gatewayapiv1.Group, defaultAPIVersion str
 	return groupName + "/" + gatewayapiv1.GroupVersion.Version
 }
 
-func getAutoScalingRelatedResources(res *autoscalingv2.HorizontalPodAutoscaler, namespace string) []common.RelatedResource {
+func getAutoScalingRelatedResources(cs *cluster.ClientSet, res *autoscalingv2.HorizontalPodAutoscaler, namespace string) []common.RelatedResource {
 	scaleTarget := res.Spec.ScaleTargetRef
-	return getScaleTargetRelatedResources(scaleTarget.Kind, scaleTarget.APIVersion, scaleTarget.Name, namespace)
+	return getScaleTargetRelatedResources(cs, scaleTarget.Kind, scaleTarget.APIVersion, scaleTarget.Name, namespace)
 }
 
-func getScaleTargetRelatedResources(kind, apiVersion, name, namespace string) []common.RelatedResource {
+func getScaleTargetRelatedResources(cs *cluster.ClientSet, kind, apiVersion, name, namespace string) []common.RelatedResource {
 	var result []common.RelatedResource
 	result = append(result, common.RelatedResource{
-		Type:       strings.ToLower(kind) + "s",
+		Type:       resourceTypeForKind(cs, kind, apiVersion),
 		APIVersion: apiVersion,
 		Name:       name,
 		Namespace:  namespace,

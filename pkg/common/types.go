@@ -35,8 +35,8 @@ type PasswordLoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 	MFACode  string `json:"mfa_code"`
-	// CaptchaToken / CaptchaCode carry the login captcha when the security
-	// policy enables it.
+	// CaptchaToken / CaptchaCode 在安全策略启用时
+	// 携带登录验证码。
 	CaptchaToken string `json:"captcha_token"`
 	CaptchaCode  string `json:"captcha_code"`
 }
@@ -73,8 +73,8 @@ type NodeWithMetrics struct {
 type NodeListWithMetrics struct {
 	Items           []*NodeWithMetrics `json:"items"`
 	metav1.TypeMeta `json:",inline"`
-	// Standard list metadata.
-	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+	// 标准的列表元数据。
+	// 更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
 	// +optional
 	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 }

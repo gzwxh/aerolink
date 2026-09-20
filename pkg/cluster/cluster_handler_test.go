@@ -89,6 +89,67 @@ func TestClusterConfigurationLifecyclePreservesSecretsAndDefault(t *testing.T) {
 	}
 }
 
+// 只改部分字段的请求不能把没给的字段按零值写回：以前 in_cluster / is_default /
+// enabled 是非指针 bool，一个只改描述的请求会静默停用集群、清掉默认集群标记。
+func TestUpdateClusterKeepsFieldsOmittedFromRequest(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}
+	router := gin.New()
+	router.PUT("/clusters/:id", manager.UpdateCluster)
+
+	cluster := &model.Cluster{
+		Name:          "primary",
+		Description:   "main",
+		PrometheusURL: "https://prom.example.com",
+		Config:        model.SecretString("secret-kubeconfig"),
+		Enable:        true,
+		IsDefault:     true,
+	}
+	if err := model.AddCluster(cluster); err != nil {
+		t.Fatalf("creating cluster: %v", err)
+	}
+
+	response := performClusterRequest(router, http.MethodPut,
+		fmt.Sprintf("/clusters/%d", cluster.ID), `{"description":"renamed"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("partial update status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+
+	after, err := model.GetClusterByID(cluster.ID)
+	if err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	}
+	if after.Description != "renamed" {
+		t.Errorf("description = %q, want the updated value", after.Description)
+	}
+	if !after.Enable {
+		t.Error(`omitted "enabled" was written back as false and silently disabled the cluster`)
+	}
+	if !after.IsDefault {
+		t.Error(`omitted "isDefault" was written back as false and cleared the default cluster`)
+	}
+	if after.PrometheusURL != "https://prom.example.com" || string(after.Config) != "secret-kubeconfig" {
+		t.Errorf("omitted optional fields were overwritten: %#v", after)
+	}
+
+	// 显式给出的值仍然要生效，别被「保留旧值」掩盖掉。
+	response = performClusterRequest(router, http.MethodPut,
+		fmt.Sprintf("/clusters/%d", cluster.ID), `{"enabled":false,"isDefault":false,"prometheusURL":""}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("explicit update status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	after, err = model.GetClusterByID(cluster.ID)
+	if err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	}
+	if after.Enable || after.IsDefault {
+		t.Errorf("explicit false values were ignored: enable=%v isDefault=%v", after.Enable, after.IsDefault)
+	}
+	if after.PrometheusURL != "" {
+		t.Errorf("explicit empty prometheusURL was ignored: %q", after.PrometheusURL)
+	}
+}
+
 func TestGetClustersFiltersByAccessAndSortsFailures(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	manager := &ClusterManager{
@@ -155,7 +216,15 @@ func setupClusterHandlerTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
 	}
-	if err := db.AutoMigrate(&model.Cluster{}, &model.GeneralSetting{}); err != nil {
+	// 删除集群时也会处理该集群的权限绑定组，
+	// 因此测试数据库中必须有这些表。
+	if err := db.AutoMigrate(
+		&model.Cluster{},
+		&model.GeneralSetting{},
+		&model.BindingGroup{},
+		&model.BindingGroupNamespace{},
+		&model.BindingGroupMember{},
+	); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
 	model.DB = db

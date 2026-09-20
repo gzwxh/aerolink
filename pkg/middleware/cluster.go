@@ -19,7 +19,7 @@ type clusterClientSetProvider interface {
 	GetClientSet(string) (*cluster.ClientSet, error)
 }
 
-// ClusterMiddleware selects a cluster from the path, header, or query and injects its clients into context.
+// ClusterMiddleware 从路径、请求头或查询参数中选择集群，并把它的客户端注入上下文。
 func ClusterMiddleware(cm clusterClientSetProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clusterName := c.Param("cluster")

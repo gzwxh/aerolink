@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ConfigureRawPathRouting keeps escaped slashes inside one route parameter and decodes parameters once with path semantics.
+// ConfigureRawPathRouting 让转义后的斜杠保留在同一个路由参数内，并用路径语义对参数只解码一次。
 func ConfigureRawPathRouting(r *gin.Engine) {
 	r.UseRawPath = true
 	r.UnescapePathValues = false

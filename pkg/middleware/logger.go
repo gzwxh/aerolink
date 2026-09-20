@@ -18,7 +18,7 @@ var unlogPath = []string{
 func Logger() gin.HandlerFunc {
 	return gin.LoggerWithConfig(gin.LoggerConfig{
 		Formatter: func(param gin.LogFormatterParams) string {
-			// Skip logging for health check and static asset paths
+			// 对健康检查与静态资源路径跳过日志记录
 			for _, path := range unlogPath {
 				if param.Path == path || strings.HasPrefix(param.Path, path) {
 					return ""

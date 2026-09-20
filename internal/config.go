@@ -15,7 +15,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// KiteConfig represents the external configuration file structure.
+// KiteConfig 表示外部配置文件的结构。
 type KiteConfig struct {
 	SuperUser *SuperUserConfig `yaml:"superUser"`
 	Clusters  []ClusterConfig  `yaml:"clusters"`
@@ -92,8 +92,8 @@ type RoleMappingConfig struct {
 	OIDCGroups []string `yaml:"oidcGroups"`
 }
 
-// LoadConfigFromFile loads and applies configuration from the given file path.
-// Sensitive values can use ${ENV_VAR} placeholders which are expanded from environment variables.
+// LoadConfigFromFile 加载并应用给定文件路径的配置。
+// 敏感值可以使用 ${ENV_VAR} 占位符，它们会从环境变量展开。
 func LoadConfigFromFile(path string) {
 	if path == "" {
 		return
@@ -116,7 +116,7 @@ func readConfigFile(path string) (*KiteConfig, [sha256.Size]byte, error) {
 	}
 	hash := sha256.Sum256(data)
 
-	// Expand ${ENV_VAR} placeholders from environment
+	// 从环境变量展开 ${ENV_VAR} 占位符
 	expanded := os.ExpandEnv(string(data))
 
 	var cfg KiteConfig
@@ -168,8 +168,8 @@ func applyConfig(path string, cfg *KiteConfig) AppliedSections {
 		}
 	}
 
-	// Apply super user AFTER RBAC so the admin role assignment
-	// is not wiped by applyRBAC's "delete all assignments" step.
+	// 在 RBAC 之后再应用超级用户，这样管理员角色分配
+	// 不会被 applyRBAC 的「删除所有分配」步骤抹掉。
 	if cfg.SuperUser != nil && cfg.SuperUser.Username != "" && cfg.SuperUser.Password != "" {
 		if err := applySuperUser(cfg.SuperUser); err != nil {
 			klog.Errorf("Failed to apply super user config: %v", err)
@@ -185,12 +185,13 @@ func applyConfig(path string, cfg *KiteConfig) AppliedSections {
 func applySuperUser(cfg *SuperUserConfig) error {
 	existing, err := model.GetUserByUsername(cfg.Username)
 	if err == nil {
-		// User exists — update password and ensure admin role
+		// 用户已存在——更新密码并确保拥有管理员角色
 		hash, err := utils.HashPassword(cfg.Password)
 		if err != nil {
 			return err
 		}
 		existing.Password = hash
+		existing.IsSuperAdmin = true
 		if err := model.DB.Save(existing).Error; err != nil {
 			return err
 		}
@@ -201,7 +202,7 @@ func applySuperUser(cfg *SuperUserConfig) error {
 		return nil
 	}
 
-	// User does not exist — create
+	// 用户不存在——创建
 	u := &model.User{
 		Username: cfg.Username,
 		Password: cfg.Password,
@@ -213,7 +214,7 @@ func applySuperUser(cfg *SuperUserConfig) error {
 	return nil
 }
 
-// ensureAdminRole ensures the user has an admin role assignment (idempotent).
+// ensureAdminRole 确保用户拥有管理员角色分配（幂等）。
 func ensureAdminRole(username string) error {
 	adminRole, err := model.GetRoleByName("admin")
 	if err != nil {
@@ -236,7 +237,7 @@ func ensureAdminRole(username string) error {
 
 func applyClusters(clusters []ClusterConfig) error {
 	return model.DB.Transaction(func(tx *gorm.DB) error {
-		// Delete all existing clusters, then insert from config
+		// 删除所有已有集群，然后按配置插入
 		if err := tx.Where("1 = 1").Delete(&model.Cluster{}).Error; err != nil {
 			return err
 		}
@@ -261,7 +262,7 @@ func applyClusters(clusters []ClusterConfig) error {
 
 func applyOAuth(providers []OAuthConfig) error {
 	return model.DB.Transaction(func(tx *gorm.DB) error {
-		// Delete all existing OAuth providers, then insert from config
+		// 删除所有已有 OAuth 提供方，然后按配置插入
 		if err := tx.Where("1 = 1").Delete(&model.OAuthProvider{}).Error; err != nil {
 			return err
 		}
@@ -321,21 +322,21 @@ func applyLDAP(cfg *LDAPConfig) error {
 
 func applyRBAC(cfg *RBACConfig) error {
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
-		// Delete all non-system roles and their assignments
+		// 删除所有非系统角色及其分配
 		if err := tx.Where("is_system = ?", false).Delete(&model.Role{}).Error; err != nil {
 			return err
 		}
 
-		// Delete all role assignments (including system role assignments, they'll be re-created from config)
+		// 删除所有角色分配（包括系统角色分配，它们会按配置重新创建）
 		if err := tx.Where("1 = 1").Delete(&model.RoleAssignment{}).Error; err != nil {
 			return err
 		}
 
-		// Upsert roles from config
+		// 按配置 upsert 角色
 		for _, r := range cfg.Roles {
 			var existing model.Role
 			if err := tx.Where("name = ?", r.Name).First(&existing).Error; err == nil {
-				// Update existing role (likely a system role)
+				// 更新已有角色（通常是系统角色）
 				existing.Description = r.Description
 				existing.Clusters = r.Clusters
 				existing.Namespaces = r.Namespaces
@@ -345,7 +346,7 @@ func applyRBAC(cfg *RBACConfig) error {
 					return err
 				}
 			} else {
-				// Create new role
+				// 创建新角色
 				role := &model.Role{
 					Name:        r.Name,
 					Description: r.Description,
@@ -360,7 +361,7 @@ func applyRBAC(cfg *RBACConfig) error {
 			}
 		}
 
-		// Apply role mappings
+		// 应用角色映射
 		for _, m := range cfg.RoleMapping {
 			var role model.Role
 			if err := tx.Where("name = ?", m.Name).First(&role).Error; err != nil {
@@ -395,7 +396,7 @@ func applyRBAC(cfg *RBACConfig) error {
 		return err
 	}
 
-	// Trigger RBAC sync to update in-memory cache (outside transaction)
+	// 触发 RBAC 同步以更新内存缓存（在事务之外）
 	rbac.TriggerSync()
 	return nil
 }

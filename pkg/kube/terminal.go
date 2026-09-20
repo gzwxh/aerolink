@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/wsutil"
@@ -15,7 +16,7 @@ import (
 
 const EndOfTransmission = "\u0004"
 
-// TerminalMessage represents messages sent over the WebSocket
+// TerminalMessage 表示通过 WebSocket 发送的消息
 type TerminalMessage struct {
 	Type string `json:"type"`
 	Data string `json:"data"`
@@ -23,7 +24,7 @@ type TerminalMessage struct {
 	Cols uint16 `json:"cols,omitempty"`
 }
 
-// TerminalSession manages a WebSocket connection for terminal communication
+// TerminalSession 管理用于终端通信的 WebSocket 连接
 type TerminalSession struct {
 	k8sClient *K8sClient
 	conn      *wsutil.Conn
@@ -32,6 +33,15 @@ type TerminalSession struct {
 	podName   string
 	container string
 	cancel    context.CancelFunc
+
+	// mu 同时保护 closed 与 sizeChan 的发送：exec 结束后 Close 会关闭
+	// sizeChan，而读 WebSocket 的 goroutine 可能仍在处理 resize，
+	// 向已关闭的 channel 发送会 panic（select + default 也挡不住）。
+	mu     sync.Mutex
+	closed bool
+	// pending 保存一条 stdin 消息里没被 copy 走的部分：io.Copy 的缓冲比
+	// 一次粘贴小得多，多余字节必须留到下一次 Read，不能丢。
+	pending []byte
 }
 
 func NewTerminalSession(client *K8sClient, conn *wsutil.Conn, namespace, podName, container string) *TerminalSession {
@@ -83,10 +93,10 @@ func (session *TerminalSession) Start(ctx context.Context, subResource string) e
 		return err
 	}
 
-	// Send initial connection success message
+	// 发送初始的连接成功消息
 	session.SendMessage("connected", "Terminal connected successfully")
 
-	// Start the exec session
+	// 启动 exec 会话
 	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdin:             session,
 		Stdout:            session,
@@ -104,10 +114,26 @@ func (session *TerminalSession) Start(ctx context.Context, subResource string) e
 }
 
 func (session *TerminalSession) Close() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.closed {
+		return
+	}
+	session.closed = true
 	close(session.sizeChan)
 }
 
 func (session *TerminalSession) Read(p []byte) (int, error) {
+	// 先把上一条消息没读完的字节交给调用方，再读新的 WebSocket 消息。
+	session.mu.Lock()
+	if len(session.pending) > 0 {
+		n := copy(p, session.pending)
+		session.pending = session.pending[n:]
+		session.mu.Unlock()
+		return n, nil
+	}
+	session.mu.Unlock()
+
 	var msg TerminalMessage
 	err := session.conn.ReadJSON(&msg)
 	if err != nil {
@@ -121,16 +147,19 @@ func (session *TerminalSession) Read(p []byte) (int, error) {
 	switch msg.Type {
 	case "stdin":
 		data := []byte(msg.Data)
-		return copy(p, data), nil
+		n := copy(p, data)
+		if n < len(data) {
+			session.mu.Lock()
+			session.pending = append(session.pending, data[n:]...)
+			session.mu.Unlock()
+		}
+		return n, nil
 	case "resize":
 		if msg.Rows > 0 && msg.Cols > 0 {
-			select {
-			case session.sizeChan <- &remotecommand.TerminalSize{
+			session.enqueueSize(&remotecommand.TerminalSize{
 				Width:  msg.Cols,
 				Height: msg.Rows,
-			}:
-			default:
-			}
+			})
 		}
 	default:
 		return copy(p, EndOfTransmission), fmt.Errorf("unknown message type: %s", msg.Type)
@@ -145,6 +174,20 @@ func (session *TerminalSession) Write(p []byte) (int, error) {
 		return 0, err
 	}
 	return len(p), nil
+}
+
+// enqueueSize 投递一次窗口尺寸变化；会话已关闭时直接丢弃，
+// 避免向已关闭的 sizeChan 发送而 panic。
+func (session *TerminalSession) enqueueSize(size *remotecommand.TerminalSize) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.closed {
+		return
+	}
+	select {
+	case session.sizeChan <- size:
+	default:
+	}
 }
 
 func (session *TerminalSession) Next() *remotecommand.TerminalSize {

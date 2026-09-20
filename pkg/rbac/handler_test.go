@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // handler lifecycle test with multiple subtests
+func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // 该用例用多个子测试覆盖 handler 的完整生命周期
 	originalDB := model.DB
 	originalManagedSections := common.ManagedSections
 	originalSyncNow := SyncNow
@@ -46,7 +46,15 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // handler lifecycle test
 	if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
 		t.Fatalf("enable foreign keys: %v", err)
 	}
-	if err := db.AutoMigrate(&model.Role{}, &model.RoleAssignment{}); err != nil {
+	if err := db.AutoMigrate(
+		&model.Role{},
+		&model.RoleAssignment{},
+		&model.BindingGroupMember{},
+		&model.BindingGroup{},
+		&model.User{},
+		&model.Cluster{},
+		&model.GeneralSetting{},
+	); err != nil {
 		t.Fatalf("migrate database: %v", err)
 	}
 
@@ -211,36 +219,82 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // handler lifecycle test
 		}
 	})
 
-	t.Run("system roles cannot be updated or deleted", func(t *testing.T) {
-		systemRole := model.Role{
-			Name:        "admin",
-			Description: "system role",
+	t.Run("protected roles are immutable", func(t *testing.T) {
+		protectedRole := model.Role{
+			Name:        model.DefaultSecurityAdminRole.Name,
+			Description: "security admin",
 			IsSystem:    true,
 			Clusters:    model.SliceString{"*"},
 			Namespaces:  model.SliceString{"*"},
 			Resources:   model.SliceString{"*"},
 			Verbs:       model.SliceString{"*"},
 		}
-		if err := db.Create(&systemRole).Error; err != nil {
-			t.Fatalf("create system role: %v", err)
+		if err := db.Create(&protectedRole).Error; err != nil {
+			t.Fatalf("create protected role: %v", err)
 		}
-		rolePath := "/roles/" + strconv.FormatUint(uint64(systemRole.ID), 10)
+		rolePath := "/roles/" + strconv.FormatUint(uint64(protectedRole.ID), 10)
 
-		response := perform(http.MethodPut, rolePath, `{"name":"changed","description":"changed","clusters":["dev"],"namespaces":["dev"],"resources":["pods"],"verbs":["get"]}`)
+		// 等保三员角色的定义就是三权分立本身：连“保持名称、改规则”也不允许。
+		response := perform(http.MethodPut, rolePath, `{"name":"security-admin","description":"weakened","clusters":["dev"],"namespaces":["dev"],"resources":["pods"],"verbs":["get"]}`)
 		if response.Code != http.StatusForbidden {
 			t.Fatalf("update returned %d, want %d; body=%s", response.Code, http.StatusForbidden, response.Body.String())
 		}
+
+		var stored model.Role
+		if err := db.First(&stored, protectedRole.ID).Error; err != nil {
+			t.Fatalf("load protected role: %v", err)
+		}
+		if stored.Description != protectedRole.Description || len(stored.Resources) != 1 || stored.Resources[0] != "*" {
+			t.Fatalf("protected role changed: %#v", stored)
+		}
+
 		response = perform(http.MethodDelete, rolePath, "")
 		if response.Code != http.StatusForbidden {
 			t.Fatalf("delete returned %d, want %d; body=%s", response.Code, http.StatusForbidden, response.Body.String())
 		}
+	})
 
-		var stored model.Role
-		if err := db.First(&stored, systemRole.ID).Error; err != nil {
-			t.Fatalf("load system role: %v", err)
+	t.Run("reserved role names cannot be reused", func(t *testing.T) {
+		// 最高权限角色是系统管理员（受保护、不可删），已退休的 super-admin 也不得再用：
+		// 同名自定义角色会被误认为内置的最高权限入口。
+		for _, name := range []string{model.DefaultAdminRole.Name, model.SuperRoleName} {
+			body := `{"name":"` + name + `","clusters":["*"],"namespaces":["*"],"resources":["pods"],"verbs":["get"]}`
+			response := perform(http.MethodPost, "/roles", body)
+			if response.Code != http.StatusConflict {
+				t.Fatalf("creating %q returned %d, want %d; body=%s", name, response.Code, http.StatusConflict, response.Body.String())
+			}
 		}
-		if stored.Name != systemRole.Name || stored.Description != systemRole.Description || !stored.IsSystem {
-			t.Fatalf("system role changed: %#v", stored)
+	})
+
+	t.Run("viewer role is also protected from deletion and modification", func(t *testing.T) {
+		if err := model.InitDefaultRole(); err != nil {
+			t.Fatalf("init default roles: %v", err)
+		}
+		viewerRole, err := model.GetRoleByName(model.DefaultViewerRole.Name)
+		if err != nil {
+			t.Fatalf("load viewer role: %v", err)
+		}
+		rolePath := "/roles/" + strconv.FormatUint(uint64(viewerRole.ID), 10)
+
+		// 只读管理员现在也是受保护角色，不允许删除。
+		response := perform(http.MethodDelete, rolePath, "")
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("delete viewer returned %d, want %d; body=%s", response.Code, http.StatusForbidden, response.Body.String())
+		}
+
+		// 只读管理员也不允许修改。
+		response = perform(http.MethodPut, rolePath, `{"name":"viewer","description":"hacked","resources":["*"],"verbs":["get"]}`)
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("update viewer returned %d, want %d; body=%s", response.Code, http.StatusForbidden, response.Body.String())
+		}
+
+		// 验证角色未被删除也未改动。
+		var stored model.Role
+		if err := db.First(&stored, viewerRole.ID).Error; err != nil {
+			t.Fatalf("load viewer after failed delete: %v", err)
+		}
+		if stored.Description != model.DefaultViewerRole.Description {
+			t.Fatalf("viewer description changed: %q", stored.Description)
 		}
 	})
 }

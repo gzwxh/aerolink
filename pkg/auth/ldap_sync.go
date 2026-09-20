@@ -54,16 +54,16 @@ type ldapSyncer struct {
 
 var globalLDAPSyncer = &ldapSyncer{requests: make(chan ldapSyncRequest, 8)}
 
-// StartLDAPSync starts the periodic background LDAP sync worker. Periodic sync
-// only aligns previously imported users; it never provisions new accounts.
+// StartLDAPSync 启动周期性的 LDAP 后台同步任务。周期性同步
+// 只对齐此前已导入的用户，从不开通新账号。
 func StartLDAPSync(ctx context.Context) {
 	globalLDAPSyncer.startOnce.Do(func() {
 		go globalLDAPSyncer.run(ctx)
 	})
 }
 
-// TriggerLDAPSync requests a best-effort alignment sync (no new users are
-// created). Used after LDAP settings are saved. Non-blocking.
+// TriggerLDAPSync 请求一次尽力而为的对齐同步（不会创建新用户）。
+// 在保存 LDAP 设置之后调用。非阻塞。
 func TriggerLDAPSync() {
 	select {
 	case globalLDAPSyncer.requests <- ldapSyncRequest{}:
@@ -71,8 +71,7 @@ func TriggerLDAPSync() {
 	}
 }
 
-// StartManualLDAPSync requests an immediate alignment sync. Reports false if a
-// sync request is already queued or running.
+// StartManualLDAPSync 请求一次立即执行的对齐同步。若已有同步请求在排队或运行中，返回 false。
 func StartManualLDAPSync() bool {
 	select {
 	case globalLDAPSyncer.requests <- ldapSyncRequest{}:
@@ -82,7 +81,7 @@ func StartManualLDAPSync() bool {
 	}
 }
 
-// GetLDAPSyncStatus returns the current running state and the last result.
+// GetLDAPSyncStatus 返回当前的运行状态与最近一次结果。
 func GetLDAPSyncStatus() LDAPSyncStatus {
 	setting, err := model.GetLDAPSetting()
 	status := LDAPSyncStatus{}
@@ -112,8 +111,8 @@ func (s *ldapSyncer) run(ctx context.Context) {
 			return
 		case <-s.requests:
 			s.runIfEnabled(ctx)
-			// Refresh lastKey so the poll tick does not immediately treat the
-			// settings change as new and run a duplicate sync.
+			// 刷新 lastKey，这样轮询的 tick 不会立刻把这次配置变更
+			// 当成新配置而重复执行一次同步。
 			setting, err := model.GetLDAPSetting()
 			if err != nil || !setting.Enabled || !setting.AutoSync {
 				lastKey = ""
@@ -187,8 +186,8 @@ func (s *ldapSyncer) syncAll(ctx context.Context, setting *model.LDAPSetting) *L
 		return result
 	}
 
-	// Periodic / manual "sync" only aligns users that were explicitly imported
-	// through the interactive picker — it never provisions new users itself.
+	// 周期性 / 手动"同步"只对齐那些通过交互式选择器明确导入过的用户——
+	// 它自己从不开通新用户。
 	entries, err := searchDirectoryEntries(cfg)
 	if err != nil {
 		result.Error = err.Error()
@@ -227,7 +226,7 @@ func (s *ldapSyncer) syncAll(ctx context.Context, setting *model.LDAPSetting) *L
 		}
 		present[username] = struct{}{}
 		if _, ok := existing[username]; !ok {
-			// Not imported yet — creation happens through the import picker only.
+			// 尚未导入——创建只通过导入选择器进行。
 			continue
 		}
 		result.TotalUsers++
@@ -241,6 +240,8 @@ func (s *ldapSyncer) syncAll(ctx context.Context, setting *model.LDAPSetting) *L
 		if _, err := model.SyncLDAPUser(&model.User{
 			Username:   username,
 			Name:       e.displayName,
+			Email:      e.email,
+			Phone:      e.phone,
 			OIDCGroups: groups,
 		}, false); err != nil {
 			result.Failed++
@@ -250,8 +251,8 @@ func (s *ldapSyncer) syncAll(ctx context.Context, setting *model.LDAPSetting) *L
 		result.Updated++
 	}
 
-	// Only clean up disabled accounts when the directory enumeration was
-	// healthy, so a transient failure never deletes local records.
+	// 只有在目录枚举健康时才清理被停用的账号，
+	// 这样一次临时故障不会删除本地记录。
 	if result.Failed == 0 {
 		purged, err := purgeDisabledMissingUsers(present)
 		if err != nil {
@@ -266,9 +267,9 @@ func (s *ldapSyncer) syncAll(ctx context.Context, setting *model.LDAPSetting) *L
 	return result
 }
 
-// purgeDisabledMissingUsers physically removes locally disabled LDAP accounts
-// that are no longer returned by the directory. Disabled users that still exist
-// in LDAP stay untouched (the admin can re-enable them any time).
+// purgeDisabledMissingUsers 物理删除目录已不再返回的、本地被停用的 LDAP 账号。
+// 在 LDAP 中仍然存在的被停用用户不会被处理
+// （管理员随时可以重新启用它们）。
 func purgeDisabledMissingUsers(present map[string]struct{}) (int, error) {
 	disabled, err := model.ListDisabledLDAPUsers()
 	if err != nil {
@@ -289,11 +290,13 @@ func purgeDisabledMissingUsers(present map[string]struct{}) (int, error) {
 	return purged, nil
 }
 
-// ldapDirectoryEntry is a lightweight representation of a directory user found
-// by the batch search (the user filter with its %s placeholder widened to *).
+// ldapDirectoryEntry 是批量搜索（把用户过滤条件中的 %s 占位符放宽为 *）
+// 找到的目录用户的轻量表示。
 type ldapDirectoryEntry struct {
 	username    string
 	displayName string
+	email       string
+	phone       string
 	dn          string
 }
 
@@ -316,7 +319,7 @@ func searchDirectoryEntries(cfg ldapConfig) ([]ldapDirectoryEntry, error) {
 		ldap.NeverDerefAliases,
 		0, 0, false,
 		listFilter,
-		[]string{cfg.UsernameAttribute, cfg.DisplayNameAttribute},
+		ldapUserSearchAttributes(cfg),
 		nil,
 	)
 	res, err := conn.SearchWithPaging(req, ldapSyncPageSize)
@@ -328,25 +331,27 @@ func searchDirectoryEntries(cfg ldapConfig) ([]ldapDirectoryEntry, error) {
 		entries = append(entries, ldapDirectoryEntry{
 			username:    strings.TrimSpace(entry.GetAttributeValue(cfg.UsernameAttribute)),
 			displayName: strings.TrimSpace(entry.GetAttributeValue(cfg.DisplayNameAttribute)),
+			email:       ldapEntryEmail(entry),
+			phone:       ldapEntryPhone(entry),
 			dn:          entry.DN,
 		})
 	}
 	return entries, nil
 }
 
-// LDAPImportCandidate is one directory user offered for interactive selection.
+// LDAPImportCandidate 是供交互式选择的一个目录用户。
 type LDAPImportCandidate struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"displayName"`
-	// Imported means a local provider=ldap record already exists.
+	// Imported 表示本地已存在 provider=ldap 的记录。
 	Imported bool `json:"imported"`
-	// Conflict means the username is already taken by a user of another provider
-	// (password or an OIDC provider) and cannot be provisioned from LDAP.
+	// Conflict 表示用户名已被其它 provider（password 或某个 OIDC 提供方）的用户占用，
+	// 无法从 LDAP 开通。
 	Conflict bool `json:"conflict"`
 }
 
-// ListLDAPImportCandidates enumerates directory users together with their local
-// import state so the UI can offer them for interactive selection/import.
+// ListLDAPImportCandidates 枚举目录用户及其本地导入状态，
+// 以便界面把它们列出来供交互式选择/导入。
 func ListLDAPImportCandidates(setting *model.LDAPSetting) ([]LDAPImportCandidate, error) {
 	cfg, err := newLDAPConfig(setting)
 	if err != nil {
@@ -382,7 +387,7 @@ func ListLDAPImportCandidates(setting *model.LDAPSetting) ([]LDAPImportCandidate
 	return candidates, nil
 }
 
-// LDAPImportResult summarizes an interactive import run.
+// LDAPImportResult 汇总一次交互式导入的结果。
 type LDAPImportResult struct {
 	Created     int      `json:"created"`
 	Updated     int      `json:"updated"`
@@ -392,9 +397,9 @@ type LDAPImportResult struct {
 	FailedUsers []string `json:"failedUsers,omitempty"`
 }
 
-// ImportLDAPUsers provisions the requested directory users. Existing LDAP
-// records are aligned (name/groups refreshed) and keep their enabled state;
-// brand-new users are created with the caller's enableImported choice.
+// ImportLDAPUsers 开通请求的目录用户。已有的 LDAP 记录会被对齐
+// （刷新名称/所属组）并保留其启用状态；
+// 全新用户按调用方的 enableImported 选择来创建。
 func ImportLDAPUsers(setting *model.LDAPSetting, usernames []string, enableImported bool) (LDAPImportResult, error) {
 	var res LDAPImportResult
 
@@ -447,6 +452,8 @@ func ImportLDAPUsers(setting *model.LDAPSetting, usernames []string, enableImpor
 		created, err := model.SyncLDAPUser(&model.User{
 			Username:   username,
 			Name:       displayName,
+			Email:      ldapEntryEmail(entry),
+			Phone:      ldapEntryPhone(entry),
 			OIDCGroups: groups,
 		}, enableImported)
 		if err != nil {
@@ -467,8 +474,8 @@ func ImportLDAPUsers(setting *model.LDAPSetting, usernames []string, enableImpor
 	return res, nil
 }
 
-// ldapSyncKey returns a signature of the LDAP settings so the worker can detect
-// changes (e.g. a config file reload) and re-sync promptly.
+// ldapSyncKey 返回 LDAP 设置的签名，便于后台任务察觉配置变更
+// （例如配置文件重载）并及时重新同步。
 func ldapSyncKey(s *model.LDAPSetting) string {
 	if s == nil {
 		return ""

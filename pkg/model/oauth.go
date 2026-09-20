@@ -41,25 +41,25 @@ type OAuthProvider struct {
 	GroupsClaim   string          `json:"groupsClaim" gorm:"type:varchar(255)"`
 	AllowedGroups string          `json:"allowedGroups" gorm:"type:text"`
 
-	// Auto-generated redirect URL
+	// 自动生成的回调地址
 	RedirectURL string `json:"-" gorm:"-"`
 }
 
-// GetAllOAuthProviders returns all OAuth providers from database
+// GetAllOAuthProviders 从数据库返回所有 OAuth 提供方
 func GetAllOAuthProviders() ([]OAuthProvider, error) {
 	var providers []OAuthProvider
 	err := DB.Find(&providers).Error
 	return providers, err
 }
 
-// GetEnabledOAuthProviders returns only enabled OAuth providers
+// GetEnabledOAuthProviders 只返回已启用的 OAuth 提供方
 func GetEnabledOAuthProviders() ([]OAuthProvider, error) {
 	var providers []OAuthProvider
 	err := DB.Where("enabled = ?", true).Find(&providers).Error
 	return providers, err
 }
 
-// GetOAuthProviderByName returns an OAuth provider by name
+// GetOAuthProviderByName 按名称返回 OAuth 提供方
 func GetOAuthProviderByName(name string) (OAuthProvider, error) {
 	var provider OAuthProvider
 	name = NormalizeOAuthProviderName(name)
@@ -70,7 +70,7 @@ func GetOAuthProviderByName(name string) (OAuthProvider, error) {
 	return provider, nil
 }
 
-// CreateOAuthProvider creates a new OAuth provider
+// CreateOAuthProvider 创建一个新的 OAuth 提供方
 func CreateOAuthProvider(provider *OAuthProvider) error {
 	if IsReservedOAuthProviderName(string(provider.Name)) {
 		return ErrReservedOAuthProviderName
@@ -78,7 +78,7 @@ func CreateOAuthProvider(provider *OAuthProvider) error {
 	return DB.Create(provider).Error
 }
 
-// UpdateOAuthProvider updates an existing OAuth provider
+// UpdateOAuthProvider 更新一个已有的 OAuth 提供方
 func UpdateOAuthProvider(provider *OAuthProvider, updates map[string]interface{}) error {
 	name := string(provider.Name)
 	switch value := updates["name"].(type) {
@@ -93,7 +93,7 @@ func UpdateOAuthProvider(provider *OAuthProvider, updates map[string]interface{}
 	return DB.Model(provider).Updates(updates).Error
 }
 
-// DeleteOAuthProvider deletes an OAuth provider by ID
+// DeleteOAuthProvider 按 ID 删除一个 OAuth 提供方
 func DeleteOAuthProvider(id uint) error {
 	return DB.Delete(&OAuthProvider{}, id).Error
 }

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
 )
@@ -47,6 +48,15 @@ func DeleteAPIKey(c *gin.Context) {
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+		return
+	}
+
+	// 与 ListAPIKeyUsers 一样按 provider 限定：否则持有任意一个设置分区权限的
+	// 委派管理员就能借这个接口删除普通账号，绕过 settings.users 授权域
+	// （DeleteUserByID 只保护超级管理员与最后一个管理员）。
+	user, err := model.GetUserByID(id)
+	if err != nil || user.Provider != common.APIKeyProvider {
+		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
 		return
 	}
 

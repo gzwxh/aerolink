@@ -54,7 +54,7 @@ func LoadArchive(chartURL string, repository *model.HelmRepository) (*chart.Char
 
 	var registryClient *registry.Client
 	if parsedURL.Scheme == registry.OCIScheme && !OCIRefHasTagOrDigest(parsedURL) {
-		// Cache the resolved version instead of a mutable tag-less reference.
+		// 缓存已解析出的版本，而不是一个可变的无 tag 引用。
 		registryClient, err = newRegistryClient(repository, chartURL)
 		if err != nil {
 			return nil, err
@@ -160,7 +160,7 @@ func repositoryCredentialsApply(repository *model.HelmRepository, targetURL stri
 	return repository != nil && repository.Username != "" && sameURLHost(repository.URL, targetURL)
 }
 
-// OCIChartName returns the last path segment of an OCI repository URL.
+// OCIChartName 返回 OCI 仓库 URL 的最后一段路径。
 func OCIChartName(repositoryURL string) (string, error) {
 	parsedURL, err := url.Parse(repositoryURL)
 	if err != nil {
@@ -208,7 +208,7 @@ func archiveCacheKey(chartURL string) string {
 	return chartURL
 }
 
-// MatchesRepositoryCacheKey matches paths and OCI tag references under a repository URL.
+// MatchesRepositoryCacheKey 匹配某个仓库 URL 下的路径与 OCI tag 引用。
 func MatchesRepositoryCacheKey(repositoryURL, key string) bool {
 	if key == repositoryURL {
 		return true

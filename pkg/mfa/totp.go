@@ -23,7 +23,7 @@ const (
 	step          = 30
 	digits        = 6
 
-	// defaultWindow is used when the security policy cannot be read.
+	// defaultWindow 在无法读取安全策略时使用。
 	defaultWindow = 1
 )
 
@@ -37,8 +37,8 @@ func GenerateSecret() (string, error) {
 	return base32NoPadding.EncodeToString(buf), nil
 }
 
-// Issuer is the label shown in authenticator apps, configurable in the security
-// settings ("OTP issuer name").
+// Issuer 是认证器 App 中显示的签发者标签，可在安全
+// 设置中配置（"OTP issuer name"）。
 func Issuer() string {
 	if model.DB == nil {
 		return defaultIssuer
@@ -53,8 +53,8 @@ func Issuer() string {
 	return defaultIssuer
 }
 
-// VerifyWindow is the number of 30s steps accepted on each side of the current
-// step, configured in the security settings ("OTP verification window").
+// VerifyWindow 是当前步长前后各接受多少个 30 秒步长，
+// 在安全设置中配置（"OTP verification window"）。
 func VerifyWindow() int {
 	if model.DB == nil {
 		return defaultWindow

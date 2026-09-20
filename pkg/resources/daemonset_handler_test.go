@@ -96,8 +96,8 @@ func TestDaemonSetHandlerRevisions_NotFound(t *testing.T) {
 	}
 }
 
-// TestDaemonSetHandlerRollback_Revision covers both the default (no
-// explicit revision, "{}") and explicit-revision rollback request shapes.
+// TestDaemonSetHandlerRollback_Revision 覆盖两种回滚请求形态：
+// 默认（不带显式 revision，"{}"）与显式指定 revision。
 func TestDaemonSetHandlerRollback_Revision(t *testing.T) {
 	tests := []struct {
 		name string

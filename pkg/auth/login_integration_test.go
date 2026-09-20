@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -117,16 +118,17 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 	originalDB := model.DB
 	originalEncryptKey := common.KiteEncryptKey
 	originalJWTSecret := common.JwtSecret
-	originalAnalytics := common.EnableAnalytics
-	originalVersionCheck := common.EnableVersionCheck
+	originalAnalytics := common.EnableAnalytics.Load()
+	originalVersionCheck := common.EnableVersionCheck.Load()
 	originalRBACConfig := rbac.RBACConfig
 	originalLimiter := credentialLoginAttempts
 
 	common.KiteEncryptKey = "auth-integration-test-key"
 	common.JwtSecret = "auth-integration-test-jwt-secret"
-	common.EnableAnalytics = false
-	common.EnableVersionCheck = true
-	credentialLoginAttempts = &credentialLoginAttemptLimiter{attempts: map[string]credentialLoginAttemptState{}}
+	common.EnableAnalytics.Store(false)
+	common.EnableVersionCheck.Store(true)
+	// 限流状态现在在数据库里，每个用例换新库即等于清空（见 login_attempt_limiter.go）。
+	credentialLoginAttempts = &credentialLoginAttemptLimiter{}
 	rbac.RBACConfig = &common.RolesConfig{
 		Roles: []common.Role{{Name: "viewer"}},
 		RoleMapping: []common.RoleMapping{{
@@ -139,7 +141,22 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.GeneralSetting{}, &model.PasswordHistory{}); err != nil {
+	// 同 mfa_flow_test：后台 RBAC 同步 goroutine 会并发读全局 model.DB，内存库必须单连接，
+	// 否则可能读到另一条连接上的空库。
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		sqlDB.SetMaxOpenConns(1)
+	}
+	// UserSession 是登录时要写会话状态的表（多副本共享同一份，见 session_policy.go）。
+	// 把它一起迁出来，登录类用例才走真实的数据库路径，而不是「表不存在→失败开放」的兜底。
+	if err := db.AutoMigrate(
+		&model.User{},
+		&model.GeneralSetting{},
+		&model.PasswordHistory{},
+		&model.Role{},
+		&model.RoleAssignment{},
+		&model.UserSession{},
+		&model.LoginAttempt{},
+	); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
 	model.DB = db
@@ -153,7 +170,6 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 		NodeTerminalImage:  model.DefaultGeneralNodeTerminalImage,
 		EnableVersionCheck: true,
 		EnableMFA:          true,
-		EnablePasskeyLogin: true,
 		JWTSecret:          model.SecretString(common.JwtSecret),
 	}
 	if err := db.Create(&setting).Error; err != nil {
@@ -175,8 +191,8 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 		model.DB = originalDB
 		common.KiteEncryptKey = originalEncryptKey
 		common.JwtSecret = originalJWTSecret
-		common.EnableAnalytics = originalAnalytics
-		common.EnableVersionCheck = originalVersionCheck
+		common.EnableAnalytics.Store(originalAnalytics)
+		common.EnableVersionCheck.Store(originalVersionCheck)
 		rbac.RBACConfig = originalRBACConfig
 		credentialLoginAttempts = originalLimiter
 	})
@@ -195,4 +211,53 @@ func performAuthRequest(router *gin.Engine, method string, path string, body str
 	}
 	router.ServeHTTP(recorder, request)
 	return recorder
+}
+
+// 账号有效期到期后必须立即生效：登录不再放行，此前签发的会话也不再放行。
+// 「账号有效期」此前没有任何执行点，设了也不生效。
+func TestExpiredAccountIsRejectedAtLoginAndOnExistingSession(t *testing.T) {
+	user := setupAuthIntegrationDB(t)
+	handler := NewAuthHandler()
+	router := gin.New()
+	router.POST("/login", handler.PasswordLogin)
+	router.GET("/protected", handler.RequireAuth(), func(c *gin.Context) {
+		current := c.MustGet("user").(model.User)
+		c.JSON(http.StatusOK, gin.H{"userID": current.ID})
+	})
+
+	login := performAuthRequest(router, http.MethodPost, "/login", `{"username":"alice","password":"correct-password"}`, nil)
+	if login.Code != http.StatusNoContent {
+		t.Fatalf("login status = %d, want %d: %s", login.Code, http.StatusNoContent, login.Body.String())
+	}
+	var authCookie *http.Cookie
+	for _, cookie := range login.Result().Cookies() {
+		if cookie.Name == "auth_token" {
+			authCookie = cookie
+			break
+		}
+	}
+	if authCookie == nil {
+		t.Fatal("login did not issue an auth cookie")
+	}
+	if response := performAuthRequest(router, http.MethodGet, "/protected", "", authCookie); response.Code != http.StatusOK {
+		t.Fatalf("fresh session status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+
+	// 把有效期设到过去：两条路径都必须立刻拒绝。
+	expiredAt := time.Now().Add(-time.Minute)
+	if err := model.DB.Model(&model.User{}).Where("id = ?", user.ID).
+		Update("expires_at", expiredAt).Error; err != nil {
+		t.Fatalf("setting expiry: %v", err)
+	}
+	model.InvalidateUserCache(uint64(user.ID))
+
+	session := performAuthRequest(router, http.MethodGet, "/protected", "", authCookie)
+	if session.Code != http.StatusUnauthorized || !strings.Contains(session.Body.String(), "user_expired") {
+		t.Fatalf("expired session status/code = %d/%s, want 401 with user_expired", session.Code, session.Body.String())
+	}
+
+	relogin := performAuthRequest(router, http.MethodPost, "/login", `{"username":"alice","password":"correct-password"}`, nil)
+	if relogin.Code != http.StatusForbidden || !strings.Contains(relogin.Body.String(), "user_expired") {
+		t.Fatalf("expired re-login status/code = %d/%s, want 403 with user_expired", relogin.Code, relogin.Body.String())
+	}
 }

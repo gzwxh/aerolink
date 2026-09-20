@@ -39,11 +39,12 @@ func recordResourceHistory(cs *cluster.ClientSet, user pkgmodel.User, resource r
 		Namespace:       namespace,
 		OperationType:   opType,
 		OperationSource: "ai",
-		ResourceYAML:    resourceYAML,
-		PreviousYAML:    previousYAML,
+		ResourceYAML:    pkgmodel.LongText(resourceYAML),
+		PreviousYAML:    pkgmodel.LongText(previousYAML),
 		Success:         success,
 		ErrorMessage:    errMsg,
-		OperatorID:      user.ID,
+		OperatorID:      pkgmodel.OperatorRef(user.ID),
+		OperatorName:    user.Username,
 	}
 	if dbErr := pkgmodel.DB.Create(&history).Error; dbErr != nil {
 		klog.Errorf("Failed to create resource history: %v", dbErr)
@@ -83,7 +84,7 @@ func executeGetResource(ctx context.Context, cs *cluster.ClientSet, args map[str
 		return fmt.Sprintf("Error getting %s/%s: %v", resource.Kind, name, err), true
 	}
 
-	// Clean up managed fields
+	// 清理 managed fields
 	obj.SetManagedFields(nil)
 	annotations := obj.GetAnnotations()
 	if annotations != nil {
@@ -111,6 +112,18 @@ func executeDescribeResource(ctx context.Context, cs *cluster.ClientSet, args ma
 	}
 	namespace, _ := args["namespace"].(string)
 	resource := resolveResourceInfo(ctx, cs, kind)
+	// kubectl 的 describer 会打印数据明文：ConfigMap 打印全部值，
+	// service-account-token 类型的 Secret 打印 token。这段输出会进入模型上下文，
+	// 因此这两类不跑 describer，改为返回已脱敏的对象视图（与 get_resource 同路径）。
+	if isSensitiveResourceKind(resource.Kind) {
+		redacted, failed := executeGetResource(ctx, cs, args)
+		if failed {
+			return redacted, true
+		}
+		return fmt.Sprintf(
+			"describe is unavailable for %s because its output would contain secret data; a redacted manifest follows:\n%s",
+			resource.Kind, redacted), false
+	}
 	describer, ok := describe.DescriberFor(resource.GVK().GroupKind(), cs.K8sClient.Configuration)
 	if !ok {
 		return fmt.Sprintf("Error: no describer found for %s", resource.Kind), true
@@ -122,14 +135,24 @@ func executeDescribeResource(ctx context.Context, cs *cluster.ClientSet, args ma
 	return result, false
 }
 
-func redactSensitiveResourceData(resource resourceInfo, obj *unstructured.Unstructured) {
-	kind := strings.ToLower(strings.TrimSpace(resource.Kind))
-	switch kind {
+// isSensitiveResourceKind 报告该类型的对象是否可能携带敏感值，需要在把内容交给
+// 模型之前脱敏。这是 Secret / ConfigMap 相关的唯一判定入口。
+func isSensitiveResourceKind(kind string) bool {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case "secret", "configmap":
-		redactObjectMapValues(obj.Object, "data")
-		redactObjectMapValues(obj.Object, "stringData")
-		redactObjectMapValues(obj.Object, "binaryData")
+		return true
+	default:
+		return false
 	}
+}
+
+func redactSensitiveResourceData(resource resourceInfo, obj *unstructured.Unstructured) {
+	if !isSensitiveResourceKind(resource.Kind) {
+		return
+	}
+	redactObjectMapValues(obj.Object, "data")
+	redactObjectMapValues(obj.Object, "stringData")
+	redactObjectMapValues(obj.Object, "binaryData")
 }
 
 func redactObjectMapValues(object map[string]interface{}, key string) {
@@ -179,7 +202,7 @@ func executeListResources(ctx context.Context, cs *cluster.ClientSet, args map[s
 		return fmt.Sprintf("Error listing %s: %v", resource.Kind, err), true
 	}
 
-	// Build a summary
+	// 构造概要信息
 	var sb strings.Builder
 	kindLower := strings.ToLower(resource.Kind)
 	fmt.Fprintf(&sb, "Found %d %s(s)", len(list.Items), resource.Kind)
@@ -676,7 +699,7 @@ func executeGetClusterOverview(ctx context.Context, cs *cluster.ClientSet) (stri
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Cluster: %s\n\n", cs.Name)
 
-	// Nodes
+	// 节点
 	nodes := &corev1.NodeList{}
 	if err := cs.K8sClient.List(ctx, nodes); err != nil {
 		fmt.Fprintf(&sb, "Error listing nodes: %v\n", err)
@@ -692,7 +715,7 @@ func executeGetClusterOverview(ctx context.Context, cs *cluster.ClientSet) (stri
 		fmt.Fprintf(&sb, "Nodes: %d total, %d ready\n", len(nodes.Items), ready)
 	}
 
-	// Pods
+	// Pod 概览
 	pods := &corev1.PodList{}
 	if err := cs.K8sClient.List(ctx, pods); err != nil {
 		fmt.Fprintf(&sb, "Error listing pods: %v\n", err)
@@ -713,13 +736,13 @@ func executeGetClusterOverview(ctx context.Context, cs *cluster.ClientSet) (stri
 		fmt.Fprintf(&sb, "Pods: %d total (%d running, %d pending, %d failed, %d succeeded)\n", len(pods.Items), running, pending, failed, succeeded)
 	}
 
-	// Namespaces
+	// 命名空间
 	namespaces := &corev1.NamespaceList{}
 	if err := cs.K8sClient.List(ctx, namespaces); err == nil {
 		fmt.Fprintf(&sb, "Namespaces: %d\n", len(namespaces.Items))
 	}
 
-	// Services
+	// Service 概览
 	services := &corev1.ServiceList{}
 	if err := cs.K8sClient.List(ctx, services); err == nil {
 		fmt.Fprintf(&sb, "Services: %d\n", len(services.Items))
@@ -793,7 +816,7 @@ func executeUpdateResource(ctx context.Context, cs *cluster.ClientSet, user pkgm
 
 	yamlStr, _ := getRequiredString(args, "yaml")
 
-	// Get previous state
+	// 获取变更前的状态
 	resource := resolveResourceInfoForObject(ctx, cs, obj)
 	prevObj := buildObjectForResource(resource)
 	key := k8stypes.NamespacedName{
@@ -846,7 +869,7 @@ func executePatchResource(ctx context.Context, cs *cluster.ClientSet, user pkgmo
 		return fmt.Sprintf("Error finding %s/%s: %v", resource.Kind, name, err), true
 	}
 
-	// Get previous state
+	// 获取变更前的状态
 	previousYAML := objectToYAML(obj.DeepCopy())
 
 	patchType := k8stypes.StrategicMergePatchType
@@ -860,7 +883,7 @@ func executePatchResource(ctx context.Context, cs *cluster.ClientSet, user pkgmo
 	patch := client.RawPatch(patchType, patchBytes)
 	err = cs.K8sClient.Patch(ctx, obj, patch)
 
-	// Get current state after patch
+	// 获取 patch 后的当前状态
 	currentYAML := ""
 	if err == nil {
 		currentYAML = objectToYAML(obj)
@@ -895,7 +918,7 @@ func executeDeleteResource(ctx context.Context, cs *cluster.ClientSet, user pkgm
 		Namespace: normalizeNamespace(resource, namespace),
 	}
 
-	// Get previous state before deletion
+	// 获取删除前的状态
 	var previousYAML string
 	if getErr := cs.K8sClient.Get(ctx, key, obj); getErr != nil {
 		if apierrors.IsNotFound(getErr) {

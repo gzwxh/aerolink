@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/captcha"
@@ -12,7 +15,6 @@ import (
 	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/notification"
-	"github.com/zxh326/kite/pkg/passkey"
 	"github.com/zxh326/kite/pkg/rbac"
 	"gorm.io/gorm"
 	"k8s.io/klog/v2"
@@ -79,8 +81,8 @@ func (h *AuthHandler) CreateSuperUser(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "super user already exists"})
 		return
 	}
-	// The first account is an administrator, so the stricter admin password rule
-	// applies.
+	// 第一个账号是管理员，因此适用更严格的管理员口令规则。
+	//
 	if err := model.ValidatePassword(userreq.Password, true); err != nil {
 		c.JSON(http.StatusBadRequest, model.PasswordErrorPayload(err))
 		return
@@ -96,6 +98,13 @@ func (h *AuthHandler) CreateSuperUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create super user"})
 		return
 	}
+	// 初始化超级管理员的角色与权限绑定组（幂等）。
+	if err := model.EnsureSuperAdminProvisioning(); err != nil {
+		klog.Warningf("Failed to provision super administrator bindings: %v", err)
+	}
+	// 先登记会话再签发，这样令牌带有其序号。
+	activeSessions.start(uint64(user.ID))
+
 	jwtToken, err := h.manager.GenerateJWT(user, "")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT"})
@@ -110,12 +119,19 @@ func (h *AuthHandler) LDAPLogin(c *gin.Context) {
 	h.handleCredentialLogin(c, model.AuthProviderLDAP, h.authenticateLDAPUser)
 }
 
-// Captcha hands out a fresh login captcha: a signed id plus the rendered image.
-// Nothing is stored server side; the id is only valid for a few minutes and can
-// be verified without keeping the answer.
+// Captcha 发放一个新的登录验证码：一个带签名的 id 加上渲染好的图片。
+// 服务端不保存任何内容；id 只有几分钟有效，
+// 且无需保存答案即可校验。
+//
+// 请求按 IP 限流，避免这个未认证接口被反复调用
+// 来消耗 CPU 或批量获取令牌。
 //
 // 路由：GET /api/auth/captcha（无需登录）。
 func (h *AuthHandler) Captcha(c *gin.Context) {
+	if !captchaIssuer.allow(c.ClientIP()) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many captcha requests, try again later"})
+		return
+	}
 	idKey, image, err := captcha.Make()
 	if err != nil {
 		klog.Errorf("failed to generate captcha: %v", err)
@@ -125,40 +141,69 @@ func (h *AuthHandler) Captcha(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"idKey": idKey, "image": image})
 }
 
-func (h *AuthHandler) PasskeyLoginBegin(c *gin.Context) {
-	enabled, err := passkey.Enabled()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting"})
-		return
-	}
-	if !enabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkey login is disabled"})
-		return
-	}
-	assertion, err := passkey.BeginLogin(c)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start passkey login"})
-		return
-	}
-	c.JSON(http.StatusOK, assertion)
+// fixedWindowRateLimiter 是一个小的固定窗口限流器，用于验证码发放
+// 以及对失败登录审计写入的节流。它沿用与登录尝试跟踪相同的
+// 内存实现模式。
+type fixedWindowRateLimiter struct {
+	mu     sync.Mutex
+	window time.Duration
+	limit  int
+	hits   map[string][]time.Time
+	lastGC time.Time
 }
 
-func (h *AuthHandler) PasskeyLoginFinish(c *gin.Context) {
-	enabled, err := passkey.Enabled()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting"})
-		return
+var captchaIssuer = newFixedWindowRateLimiter(30, time.Minute)
+
+// loginFailureAuditLimiter 节流「失败登录」的审计写入：登录是未认证端点，
+// 不限速的话刷账号名就能把审计表写成日志洪泛。被节流的尝试仍然照常拒绝登录，
+// 只是不再新增审计记录（见 recordLoginFailure）。
+var loginFailureAuditLimiter = newFixedWindowRateLimiter(30, time.Minute)
+
+func newFixedWindowRateLimiter(limit int, window time.Duration) *fixedWindowRateLimiter {
+	return &fixedWindowRateLimiter{
+		window: window,
+		limit:  limit,
+		hits:   make(map[string][]time.Time),
 	}
-	if !enabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkey login is disabled"})
-		return
+}
+
+// allow 报告该 key 现在是否还能再做一次被计数的操作。
+func (r *fixedWindowRateLimiter) allow(ip string) bool {
+	now := time.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// 偶尔清理过期条目，避免 map 无界增长。
+	if now.Sub(r.lastGC) > r.window {
+		for key, times := range r.hits {
+			kept := times[:0]
+			for _, t := range times {
+				if now.Sub(t) <= r.window {
+					kept = append(kept, t)
+				}
+			}
+			if len(kept) == 0 {
+				delete(r.hits, key)
+			} else {
+				r.hits[key] = kept
+			}
+		}
+		r.lastGC = now
 	}
-	user, err := passkey.FinishLogin(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid passkey"})
-		return
+
+	times := r.hits[ip]
+	fresh := times[:0]
+	for _, t := range times {
+		if now.Sub(t) <= r.window {
+			fresh = append(fresh, t)
+		}
 	}
-	h.completePasswordLikeLogin(c, user)
+	if len(fresh) >= r.limit {
+		r.hits[ip] = fresh
+		return false
+	}
+	r.hits[ip] = append(fresh, now)
+	return true
 }
 
 func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, authenticate credentialAuthenticator) {
@@ -177,11 +222,22 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 	limits := loadLoginLimits()
 	if limits.ipBlacklisted(clientIP) {
 		klog.V(1).Infof("login denied for %s: IP is not allowed", clientIP)
-		c.JSON(http.StatusForbidden, gin.H{"error": "login from this IP is not allowed"})
+		recordLoginFailure(c, username, provider, model.LoginResultIPDenied)
+		c.JSON(http.StatusForbidden, gin.H{"error": "login from this IP is not allowed", "code": "login_ip_denied"})
 		return
 	}
-	if _, blocked := credentialLoginAttempts.blockedUntil(clientIP, username, limits); blocked {
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError})
+	if credentialLoginAttempts.blocked(clientIP, username, limits) {
+		recordLoginFailure(c, username, provider, model.LoginResultTooManyAttempts)
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError, "code": "login_too_many_attempts"})
+		return
+	}
+	if !loginSourceAllowed(clientIP) {
+		klog.Warningf("login denied for %s: source address is not allowed", clientIP)
+		recordLoginFailure(c, username, provider, model.LoginResultSourceDenied)
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "login from this address is not allowed",
+			"code":  loginSourceDeniedCode,
+		})
 		return
 	}
 
@@ -190,14 +246,15 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 		klog.Warningf("Failed to load security setting for MFA policy: %v", settingErr)
 	}
 
-	// The captcha is checked before the credentials so a wrong answer never
-	// counts as a failed password attempt.
+	// 验证码先于凭据校验，这样答错时不会
+	// 被计为一次口令失败尝试。
 	if securitySetting != nil && securitySetting.LoginCaptchaEnabled {
 		switch {
 		case strings.TrimSpace(req.CaptchaToken) == "" || strings.TrimSpace(req.CaptchaCode) == "":
 			c.JSON(http.StatusBadRequest, gin.H{"error": "captcha_required"})
 			return
 		case !captcha.Verify(req.CaptchaToken, req.CaptchaCode):
+			recordLoginFailure(c, username, provider, model.LoginResultCaptchaInvalid)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_captcha"})
 			return
 		}
@@ -208,33 +265,31 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 		errMsg := fmt.Sprintf("%s login failed for %s: %v", strings.ToUpper(provider), username, err)
 		if errors.Is(err, errLDAPUserNotProvisioned) {
 			klog.V(1).Infof("LDAP login denied for %s: user not provisioned locally", username)
+			recordLoginFailure(c, username, provider, model.LoginResultNotProvisioned)
 			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 			return
 		}
 		if isCredentialFailure(err) {
+			recordLoginFailure(c, username, provider, model.LoginResultInvalidCredentials)
 			if shouldRecordCredentialLoginFailure(provider, err) && credentialLoginAttempts.recordFailure(clientIP, username, limits) {
-				c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError})
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError, "code": "login_too_many_attempts"})
 				return
 			}
-			c.JSON(http.StatusUnauthorized, gin.H{"error": errMsg})
+			// 不要把内部错误文本回传给客户端；它保留在
+			// 日志里供运维查看。
+			klog.V(1).Infof("login failed for %s from %s: %s", username, clientIP, errMsg)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials", "code": "login_invalid_credentials"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})
+		klog.Errorf("login error for %s from %s: %s", username, clientIP, errMsg)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed", "code": "login_failed"})
 		return
 	}
 
-	// Password logins always challenge enrolled users. Third-party logins (LDAP)
-	// only do so when the policy enables MFA for third-party admins; the switch
-	// covers admin sign-in and sensitive operations, not every directory user.
-	thirdPartyMFARequired := provider == model.AuthProviderLDAP &&
-		securitySetting != nil &&
-		securitySetting.MFAThirdPartyEnabled &&
-		rbac.UserHasRole(*user, model.DefaultAdminRole.Name)
-	mfaChallengeRequired := user.MFAEnabled &&
-		(provider == model.AuthProviderPassword || thirdPartyMFARequired)
+	mfaChallengeRequired := mfaChallengeRequiredFor(provider, user, securitySetting)
 
-	// A browser that verified a code within the validity window is not asked
-	// again.
+	// 在有效期内已校验过一次验证码的浏览器不会再被要求输入。
+	//
 	if mfaChallengeRequired && !mfa.IsTrusted(c, user.ID) {
 		code := strings.TrimSpace(req.MFACode)
 		switch {
@@ -242,8 +297,9 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "mfa_required"})
 			return
 		case !mfa.Verify(string(user.MFASecret), code):
+			recordLoginFailure(c, username, provider, model.LoginResultMFAInvalid)
 			if credentialLoginAttempts.recordFailure(clientIP, username, limits) {
-				c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError})
+				c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError, "code": "login_too_many_attempts"})
 				return
 			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_mfa_code"})
@@ -257,6 +313,32 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 	h.completePasswordLikeLogin(c, user)
 }
 
+// mfaChallengeRequiredFor 报告这次凭据登录是否需要动态码。
+//
+// 口径是「绑定即使用」：全局策略（`MFAPolicy`）回答的是「谁必须绑定 MFA」
+// （见 model.SecuritySettingData.MFARequiredFor），而不是「绑定之后是否使用」。
+// 所以只要账号绑定过动态码，表单类登录（密码 / LDAP）就必须验码——不看策略。
+//
+// 此前这里会在策略为 disabled 时整体跳过挑战，结果是自愿绑定了动态码的账号登录不再
+// 验码，但敏感操作（删除、终端）仍要求验码：前后矛盾，而且让只掌握口令的一方拿到一个
+// 完整会话（可读全部有权资源，只是不能删除/开终端）。
+//
+// 第三方登录（OIDC 等）是重定向流，无法在这个请求里收动态码，因此不在这里挑战：
+// 回调改为签发票据、由登录页补验（见 VerifyPendingMFA）。
+//
+// 另外保留既有开关 `MFAThirdPartyEnabled` 的原有作用：即使 LDAP 管理员还没绑定，
+// 也要求他先验码（这是强制的绑定引导）。
+func mfaChallengeRequiredFor(provider string, user *model.User, setting *model.SecuritySettingData) bool {
+	formBasedLogin := provider == model.AuthProviderPassword || provider == model.AuthProviderLDAP
+	if formBasedLogin && user.MFAEnabled {
+		return true
+	}
+	return provider == model.AuthProviderLDAP &&
+		setting != nil &&
+		setting.MFAThirdPartyEnabled &&
+		rbac.IsAdministrator(*user)
+}
+
 func shouldRecordCredentialLoginFailure(provider string, err error) bool {
 	switch provider {
 	case model.AuthProviderPassword:
@@ -268,27 +350,57 @@ func shouldRecordCredentialLoginFailure(provider string, err error) bool {
 	}
 }
 
+// recordLoginFailure 把一次失败的登录尝试写入审计日志（等保三级安全审计）：
+// 登录日志不再只有成功登录，失败尝试、被封的 IP、错误的动态码都会留痕。
+//
+// 写入按来源 IP 限速（loginFailureAuditLimiter）：登录是未认证端点，不限速的话
+// 换账号名持续尝试就能把审计表刷成日志洪泛；被限速的尝试仍然照常返回拒绝结果。
+func recordLoginFailure(c *gin.Context, username, provider, reason string) {
+	if model.DB == nil {
+		return
+	}
+	ip := c.ClientIP()
+	if !loginFailureAuditLimiter.allow(ip) {
+		klog.V(1).Infof("login failure audit throttled for %s (reason %s)", ip, reason)
+		return
+	}
+	if err := model.RecordLoginFailure(username, provider, ip, c.Request.UserAgent(), reason); err != nil {
+		klog.Errorf("failed to record login failure for %s: %v", username, err)
+	}
+}
+
 func (h *AuthHandler) completePasswordLikeLogin(c *gin.Context, user *model.User) {
 	if !user.Enabled {
+		recordLoginFailure(c, user.Username, user.Provider, model.LoginResultNoPermission)
 		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		return
+	}
+	if user.IsExpired(time.Now()) {
+		recordLoginFailure(c, user.Username, user.Provider, model.LoginResultAccountExpired)
+		c.JSON(http.StatusForbidden, gin.H{"error": "account expired", "code": "user_expired"})
 		return
 	}
 
 	roles := rbac.GetUserRoles(*user)
-	if len(roles) == 0 {
+	// 仅通过权限绑定组获得授权的账号同样可以登录（绑定组本身就是授权来源）。
+	if len(roles) == 0 && !rbac.HasBindingGroupMembership(*user) {
+		recordLoginFailure(c, user.Username, user.Provider, model.LoginResultNoPermission)
 		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 		return
 	}
 
-	// Track the session so the idle / absolute lifetime limits apply.
-	activeSessions.start(uint64(user.ID))
+	// Track the session so the idle / absolute lifetime limits apply. 返回值表示这次登录
+	// 把之前仍有效的会话顶下线了（单点登录），需要通知本人与管理员。
+	if activeSessions.start(uint64(user.ID)) {
+		notification.NotifySessionTakeover(*user, c.ClientIP(), c.GetHeader("User-Agent"))
+	}
 
 	if err := model.LoginUser(user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed login"})
 		return
 	}
 
-	// Records the sign-in and warns the account when the IP is new to it.
+	// 记录本次登录，并在该 IP 对账号是新的时候提醒账号。
 	notification.NotifyRemoteLogin(c, user)
 
 	jwtToken, err := h.manager.GenerateJWT(user, "")
@@ -302,9 +414,9 @@ func (h *AuthHandler) completePasswordLikeLogin(c *gin.Context, user *model.User
 	c.Status(http.StatusNoContent)
 }
 
-// authenticateLDAPUser verifies LDAP credentials and authorizes against the
-// existing local record. Directory users are provisioned by the batch/periodic
-// sync, not by logins, so no user record is created or updated here.
+// authenticateLDAPUser 校验 LDAP 凭据，并依据已有的本地记录做授权。
+// 目录用户由批量/周期性同步开通，而不是由登录开通，
+// 因此这里不会创建或更新用户记录。
 func (h *AuthHandler) authenticateLDAPUser(username, password string) (*model.User, error) {
 	setting, err := model.GetLDAPSetting()
 	if err != nil {
@@ -346,6 +458,11 @@ func (h *AuthHandler) authenticatePasswordUser(username, password string) (*mode
 
 func (h *AuthHandler) Callback(c *gin.Context) {
 	base := common.Base
+	if !loginSourceAllowed(c.ClientIP()) {
+		klog.Warningf("OAuth Callback - login denied for %s: source address is not allowed", c.ClientIP())
+		c.Redirect(http.StatusFound, base+"/login?error="+loginSourceDeniedCode+"&reason="+loginSourceDeniedCode)
+		return
+	}
 	code := c.Query("code")
 	provider, err := c.Cookie("oauth_provider")
 	if err != nil {
@@ -408,7 +525,17 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	if err := model.FindWithSubOrUpsertUser(user); err != nil {
+	setting, settingErr := model.GetSecuritySetting()
+	if settingErr != nil {
+		klog.Warningf("OAuth Callback - failed to load security setting: %v", settingErr)
+	}
+	if err := model.FindWithSubOrUpsertUser(user, setting != nil && setting.RejectUnknownUsers); err != nil {
+		if errors.Is(err, model.ErrUserNotProvisioned) {
+			klog.Warningf("OAuth Callback - Access denied for user: %s (provider: %s): no local account is provisioned",
+				user.Key(), provider)
+			c.Redirect(http.StatusFound, base+"/login?error=user_not_provisioned&reason=user_not_provisioned&user="+user.Key()+"&provider="+provider)
+			return
+		}
 		if errors.Is(err, model.ErrUserProviderConflict) {
 			klog.Warningf("OAuth Callback - Provider conflict for user: %s (provider: %s), username already used by another auth source",
 				user.Key(), provider)
@@ -420,8 +547,10 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 	}
 	klog.V(1).Infof("OAuth Callback - User details: Username=%s, Name=%s, Sub=%s, Email=%s, OIDCGroups=%v",
 		user.Username, user.Name, user.Sub, user.Username, user.OIDCGroups)
-	role := rbac.GetUserRoles(*user)
-	if len(role) == 0 {
+	// 仅通过权限绑定组获得授权的账号同样可以登录（与密码登录路径保持一致，
+	// 否则用新页签授予的账号走 OIDC 登录会被直接拒绝）。
+	roles := rbac.GetUserRoles(*user)
+	if len(roles) == 0 && !rbac.HasBindingGroupMembership(*user) {
 		klog.Warningf("OAuth Callback - Access denied for user: %s (provider: %s), Username: %s, Name: %s, Sub: %s, OIDCGroups: %v",
 			user.Key(), provider, user.Username, user.Name, user.Sub, user.OIDCGroups)
 		c.Redirect(http.StatusFound, base+"/login?error=insufficient_permissions&reason=insufficient_permissions&user="+user.Key()+"&provider="+provider)
@@ -431,20 +560,157 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 		c.Redirect(http.StatusFound, base+"/login?error=user_disabled&reason=user_disabled")
 		return
 	}
+	if user.IsExpired(time.Now()) {
+		c.Redirect(http.StatusFound, base+"/login?error=user_expired&reason=user_expired")
+		return
+	}
 
-	jwtToken, err := h.manager.GenerateJWT(user, tokenResp.RefreshToken)
-	if err != nil {
+	// 提权信任不能由这次登录继承：它不是这次登录建立的，否则刚验证过的可信窗口会被
+	// 沿用，敏感操作就跳过了二次验证。无论下面走哪条分支都先清掉。
+	mfa.ClearTrusted(c)
+
+	// 账号绑定过动态码就必须验码。第三方回调是重定向流，没法在这里收动态码，
+	// 所以**不签发会话**，只给浏览器一张 5 分钟、一次性、HMAC 签名的票据，
+	// 由登录页补验（见 VerifyPendingMFA）。
+	//
+	// MFAEnabled 但没有密钥属于数据不一致：此时无法验证任何动态码，
+	// 拒绝登录会把这个人彻底锁在外面，所以只记日志并照常签发会话。
+	if user.MFAEnabled {
+		if strings.TrimSpace(string(user.MFASecret)) == "" {
+			klog.Errorf("OAuth Callback - user %s has MFA enabled but no secret stored, skipping the MFA challenge", user.Key())
+		} else {
+			ticket, err := issueMFATicket(user.ID)
+			if err != nil {
+				klog.Errorf("OAuth Callback - failed to issue an MFA ticket for %s: %v", user.Key(), err)
+				c.Redirect(http.StatusFound, base+"/login?error=callback_failed&reason=callback_failed&provider="+provider)
+				return
+			}
+			klog.V(1).Infof("OAuth Callback - user %s must verify an MFA code before a session is created", user.Key())
+			c.Redirect(http.StatusFound, base+"/login?mfa_pending="+url.QueryEscape(ticket))
+			return
+		}
+	}
+
+	if err := h.completeThirdPartyLogin(c, user, tokenResp.RefreshToken); err != nil {
 		c.Redirect(http.StatusFound, base+"/login?error=jwt_generation_failed&reason=jwt_generation_failed&user="+user.Key()+"&provider="+provider)
 		return
 	}
 
-	setCookieSecure(c, "auth_token", jwtToken, common.CookieExpirationSeconds)
-
 	c.Redirect(http.StatusFound, base+"/")
+}
+
+// completeThirdPartyLogin 在第三方登录确认身份（必要时再加上动态码校验）之后签发会话：
+// 先登记会话，让空闲/生存期限制与单设备策略生效——必须在签发之前，因为令牌要携带
+// 新的会话序号——然后签发 JWT 并写入 cookie。
+//
+// refreshToken 只有回调路径拿得到（来自 IdP 的令牌响应），补验动态码的路径传空。
+func (h *AuthHandler) completeThirdPartyLogin(c *gin.Context, user *model.User, refreshToken string) error {
+	if activeSessions.start(uint64(user.ID)) {
+		notification.NotifySessionTakeover(*user, c.ClientIP(), c.GetHeader("User-Agent"))
+	}
+
+	jwtToken, err := h.manager.GenerateJWT(user, refreshToken)
+	if err != nil {
+		return err
+	}
+	setCookieSecure(c, "auth_token", jwtToken, common.CookieExpirationSeconds)
+	return nil
+}
+
+// MFAPendingVerifyRequest 是第三方登录补验动态码的请求体。
+type MFAPendingVerifyRequest struct {
+	Ticket string `json:"mfa_pending"`
+	Code   string `json:"mfa_code"`
+}
+
+// VerifyPendingMFA 用回调阶段签发的票据 + 动态码换取会话。
+//
+// 票据只证明「身份源认证已通过」，它本身换不到任何权限；动态码校验通过后票据才作废
+// （一次性）。失败按凭据登录的同一套限流计数，所以猜码会在若干次后被锁定。
+func (h *AuthHandler) VerifyPendingMFA(c *gin.Context) {
+	var req MFAPendingVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	respondInvalidTicket := func() {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "mfa_pending_invalid", "code": "mfa_pending_invalid"})
+	}
+
+	payload, err := validateMFATicket(strings.TrimSpace(req.Ticket), time.Now())
+	if err != nil {
+		respondInvalidTicket()
+		return
+	}
+
+	user, err := model.GetUserByID(uint64(payload.UserID))
+	if err != nil || !user.MFAEnabled || strings.TrimSpace(string(user.MFASecret)) == "" {
+		respondInvalidTicket()
+		return
+	}
+
+	// 票据有效期内账号可能被停用、过期，或换到不允许的来源网段。会话签发前再确认一次，
+	// 与回调、凭据登录用同一套判定（fail-closed）。
+	if !loginSourceAllowed(c.ClientIP()) {
+		recordLoginFailure(c, user.Username, user.Provider, model.LoginResultSourceDenied)
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "login from this address is not allowed",
+			"code":  loginSourceDeniedCode,
+		})
+		return
+	}
+	if !user.Enabled {
+		recordLoginFailure(c, user.Username, user.Provider, model.LoginResultNoPermission)
+		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		return
+	}
+	if user.IsExpired(time.Now()) {
+		recordLoginFailure(c, user.Username, user.Provider, model.LoginResultAccountExpired)
+		c.JSON(http.StatusForbidden, gin.H{"error": "account expired", "code": "user_expired"})
+		return
+	}
+
+	clientIP := c.ClientIP()
+	limits := loadLoginLimits()
+	if credentialLoginAttempts.blocked(clientIP, user.Username, limits) {
+		recordLoginFailure(c, user.Username, user.Provider, model.LoginResultTooManyAttempts)
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError, "code": "login_too_many_attempts"})
+		return
+	}
+
+	if !mfa.Verify(string(user.MFASecret), strings.TrimSpace(req.Code)) {
+		recordLoginFailure(c, user.Username, user.Provider, model.LoginResultMFAInvalid)
+		if credentialLoginAttempts.recordFailure(clientIP, user.Username, limits) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": tooManyCredentialLoginAttemptsError, "code": "login_too_many_attempts"})
+			return
+		}
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_mfa_code"})
+		return
+	}
+
+	// 动态码通过之后才作废票据：输错一次不该逼用户重新走一遍身份源登录。
+	if err := consumeMFATicket(payload, time.Now()); err != nil {
+		respondInvalidTicket()
+		return
+	}
+
+	credentialLoginAttempts.clear(clientIP, user.Username)
+	mfa.MarkTrusted(c, user.ID)
+
+	if err := h.completeThirdPartyLogin(c, user, ""); err != nil {
+		klog.Errorf("failed to complete the third-party login for %s after MFA verification: %v", user.Key(), err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT"})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
 	setCookieSecure(c, "auth_token", "", -1)
+	// 提权信任标记不能比会话活得更久，否则
+	// 同一个浏览器上的下一次登录会跳过 MFA 二次验证。
+	mfa.ClearTrusted(c)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Logged out successfully",
@@ -461,7 +727,12 @@ func (h *AuthHandler) GetUser(c *gin.Context) {
 	}
 
 	currentUser := user.(model.User)
-	isAdmin := rbac.UserHasRole(currentUser, model.DefaultAdminRole.Name)
+	// 全局作用域权限绑定组（超级权限绑定）带来的角色对所有集群与命名空间生效，
+	// 按用户自身角色一并展示，使控制台的管理入口与权限判定保持一致。
+	currentUser.Roles = rbac.RolesForDisplay(currentUser)
+	// 命名空间级权限绑定组的角色单独下发：前端据此在绑定组范围外隐藏创建 / 批量删除等
+	// 不受单个命名空间约束的入口。刻意不并入 Roles，避免影响 IsAdministrator 判定。
+	currentUser.NamespaceScopedRoles = rbac.NamespaceScopedBindingGroupRoles(currentUser)
 	setting, err := model.GetGeneralSetting()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -470,16 +741,12 @@ func (h *AuthHandler) GetUser(c *gin.Context) {
 		return
 	}
 
-	globalSidebarPreference := strings.TrimSpace(setting.GlobalSidebarPreference)
-	hasGlobalSidebarPreference := globalSidebarPreference != ""
-	if hasGlobalSidebarPreference && (!isAdmin || strings.TrimSpace(currentUser.SidebarPreference) == "") {
-		currentUser.SidebarPreference = globalSidebarPreference
-	}
+	// 优先级：用户自己的布局 > 管理员发布的全局布局 > 前端内置默认。
+	applyBootstrapSidebarPreference(&currentUser, setting)
 
 	c.JSON(http.StatusOK, gin.H{
-		"user":                       currentUser,
-		"hasGlobalSidebarPreference": hasGlobalSidebarPreference,
-		"globalSidebarPreference":    globalSidebarPreference,
+		"user":                    currentUser,
+		"globalSidebarPreference": strings.TrimSpace(setting.GlobalSidebarPreference),
 	})
 }
 
@@ -511,13 +778,15 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 func setCookieSecure(c *gin.Context, name, value string, maxAge int) {
 	secure := strings.HasPrefix(common.Host, "https://") || (c.Request != nil && (c.Request.TLS != nil || strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https")))
 
-	// The session policy decides how long the auth cookie lives; a zero max age
-	// turns it into a session cookie that the browser drops on close.
+	// 会话策略决定 auth cookie 的存活时长；max age 为零时
+	// 它变成会话 cookie，浏览器关闭即丢弃。
+	// 额外的一小时宽限只作用于 auth cookie：
+	// oauth_state 之类的临时值必须保持调用方要求的 TTL。
 	if name == "auth_token" && maxAge > 0 {
 		maxAge = authCookieMaxAge()
-	}
-	if maxAge > 0 {
-		maxAge += 60 * 60
+		if maxAge > 0 {
+			maxAge += 60 * 60
+		}
 	}
 
 	c.SetSameSite(http.SameSiteLaxMode)

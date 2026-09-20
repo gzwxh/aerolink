@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -110,14 +111,22 @@ func cacheUpdateResult(result updateCheckResult) {
 	updateInfoMu.Unlock()
 }
 
+// semverPattern 匹配版本串里的第一段 semver。用片段匹配而不是整串匹配，是因为
+// 内部构建的版本号带自有前缀（例如 `dsy-v1.0.1`），整串匹配会让版本检查对它们永远失败。
+var semverPattern = regexp.MustCompile(`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?`)
+
 func parseSemver(version string) (semver.Version, error) {
 	trimmed := strings.TrimSpace(version)
-	trimmed = strings.TrimPrefix(trimmed, "v")
 	if trimmed == "" {
 		return semver.Version{}, errors.New("empty version")
 	}
 
-	parsed, err := semver.Parse(trimmed)
+	matched := semverPattern.FindString(trimmed)
+	if matched == "" {
+		return semver.Version{}, fmt.Errorf("invalid semver %q", version)
+	}
+
+	parsed, err := semver.Parse(matched)
 	if err != nil {
 		return semver.Version{}, fmt.Errorf("invalid semver %q: %w", version, err)
 	}

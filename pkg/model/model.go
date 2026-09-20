@@ -56,14 +56,7 @@ func InitDB() {
 		}
 
 		if common.DBType == "mysql" {
-			mysqlDSN := strings.TrimPrefix(dsn, "mysql://")
-			if !strings.Contains(mysqlDSN, "parseTime=") {
-				separator := "?"
-				if strings.Contains(mysqlDSN, "?") {
-					separator = "&"
-				}
-				mysqlDSN = mysqlDSN + separator + "parseTime=true"
-			}
+			mysqlDSN := withMySQLDSNDefaults(strings.TrimPrefix(dsn, "mysql://"))
 			DB, err = gorm.Open(mysql.Open(mysqlDSN), cfg)
 			if err != nil {
 				panic("failed to connect database: " + err.Error())
@@ -82,9 +75,9 @@ func InitDB() {
 		panic("database connection is nil, check your DB_TYPE and DB_DSN settings")
 	}
 
-	// For SQLite we must enable foreign key enforcement explicitly.
-	// SQLite has foreign key constraints defined in the schema but they are
-	// not enforced unless PRAGMA foreign_keys = ON is set on the connection.
+	// SQLite 必须显式开启外键约束。
+	// SQLite 在表结构里定义了外键约束，但除非在连接上设置
+	// PRAGMA foreign_keys = ON，否则不会真正生效。
 	if common.DBType == "sqlite" {
 		if err := DB.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
 			panic("failed to enable sqlite foreign keys: " + err.Error())
@@ -92,21 +85,27 @@ func InitDB() {
 	}
 	models := []interface{}{
 		User{},
-		PasskeyCredential{},
 		Cluster{},
 		GeneralSetting{},
 		SecuritySetting{},
+		AuditSetting{},
 		PasswordHistory{},
 		PasswordChangeLog{},
 		LDAPSetting{},
 		OAuthProvider{},
 		Role{},
 		RoleAssignment{},
+		BindingGroup{},
+		BindingGroupNamespace{},
+		BindingGroupMember{},
 		LocalGroup{},
 		GroupMember{},
 		ResourceHistory{},
 		ResourceTemplate{},
 		PendingSession{},
+		MFAPendingTicket{},
+		UserSession{},
+		LoginAttempt{},
 		HelmRepository{},
 		ScheduledTask{},
 		NotificationSetting{},
@@ -121,10 +120,64 @@ func InitDB() {
 			panic("failed to migrate database: " + err.Error())
 		}
 	}
+	if err := MigrateBindingGroupMemberNamespace(); err != nil {
+		panic("failed to migrate binding group member index: " + err.Error())
+	}
+	if err := MigrateDropUserWechatColumn(); err != nil {
+		panic("failed to drop the legacy user wechat column: " + err.Error())
+	}
 	sqldb, err := DB.DB()
 	if err == nil {
 		sqldb.SetMaxOpenConns(common.DBMaxOpenConns)
 		sqldb.SetMaxIdleConns(common.DBMaxIdleConns)
-		sqldb.SetConnMaxLifetime(common.DBMaxIdleTime)
+		sqldb.SetConnMaxLifetime(common.DBConnMaxLifetime)
 	}
+}
+
+// mysqlDSNDefaults 是必须显式钉住的驱动参数：驱动默认 loc=UTC，而应用写入的是本地
+// 时间（time.Now()），不钉住就会出现「写进去一个时间、查出来另一个时间」。
+//
+// loc 要与 MySQL 会话的 time_zone 是同一个值（服务端 time_zone 保持与本机时区一致，
+// 或统一为 UTC）；两者不一致时 TIMESTAMP 列会被二次换算。另外，改动 loc 会改变
+// DATETIME 列的读写口径，已有数据需要一并处理，不能上线后再改。
+//
+// 不设置 readTimeout / writeTimeout：它们是单条语句的超时，首次建表加索引、大表
+// 迁移都可能超过 30s，一刀切会把这些正常语句掐断。
+var mysqlDSNDefaults = [][2]string{
+	{"charset", "utf8mb4"},
+	{"parseTime", "true"},
+	{"loc", "Local"},
+	{"timeout", "5s"},
+}
+
+// withMySQLDSNDefaults 给 DSN 里缺失的驱动参数补上默认值，操作者自己写明的同名
+// 参数优先。参数段从最后一个 '/' 之后的第一个 '?' 开始，与驱动自身的解析口径一致，
+// 这样密码里出现 '?' 也不会被当成参数分隔符。
+func withMySQLDSNDefaults(dsn string) string {
+	head, query := dsn, ""
+	if slash := strings.LastIndex(dsn, "/"); slash >= 0 {
+		if q := strings.Index(dsn[slash+1:], "?"); q >= 0 {
+			head, query = dsn[:slash+1+q], dsn[slash+1+q+1:]
+		}
+	}
+
+	present := make(map[string]bool)
+	for _, part := range strings.Split(query, "&") {
+		if key, _, ok := strings.Cut(part, "="); ok {
+			present[key] = true
+		}
+	}
+	added := make([]string, 0, len(mysqlDSNDefaults))
+	for _, kv := range mysqlDSNDefaults {
+		if !present[kv[0]] {
+			added = append(added, kv[0]+"="+kv[1])
+		}
+	}
+	if len(added) == 0 {
+		return dsn
+	}
+	if query == "" {
+		return head + "?" + strings.Join(added, "&")
+	}
+	return head + "?" + query + "&" + strings.Join(added, "&")
 }

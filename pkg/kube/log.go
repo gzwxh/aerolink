@@ -14,7 +14,10 @@ import (
 )
 
 type PodLogStream struct {
-	Pod    corev1.Pod
+	Pod corev1.Pod
+	// ctx 与 Cancel 在发布进 BatchLogHandler.pods **之前**就已就位（见 AddPod），
+	// 读取方据此可以安全地取消一条尚未开始的流。
+	ctx    context.Context
 	Cancel context.CancelFunc
 	Done   chan struct{}
 }
@@ -27,6 +30,10 @@ type BatchLogHandler struct {
 	opts      *corev1.PodLogOptions
 	ctx       context.Context
 	cancel    context.CancelFunc
+
+	// openPodLogStream 打开某个 pod 的日志流。抽成字段只为让测试注入可控的流，
+	// 生产路径固定是 openPodLogStreamFromClient（k8sClient 的 GetLogs）。
+	openPodLogStream func(ctx context.Context, pod corev1.Pod) (io.ReadCloser, error)
 }
 
 func NewBatchLogHandler(conn *wsutil.Conn, client *K8sClient, opts *corev1.PodLogOptions) *BatchLogHandler {
@@ -39,14 +46,19 @@ func NewBatchLogHandler(conn *wsutil.Conn, client *K8sClient, opts *corev1.PodLo
 		ctx:       ctx,
 		cancel:    cancel,
 	}
+	l.openPodLogStream = l.openPodLogStreamFromClient
 	return l
 }
 
+func (l *BatchLogHandler) openPodLogStreamFromClient(ctx context.Context, pod corev1.Pod) (io.ReadCloser, error) {
+	return l.k8sClient.ClientSet.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, l.opts).Stream(ctx)
+}
+
 func (l *BatchLogHandler) StreamLogs(ctx context.Context) {
-	// Start heartbeat handler
+	// 启动心跳处理器
 	go l.heartbeat(ctx)
 
-	// Wait for either external context cancellation or internal cancellation
+	// 等待外部上下文取消或内部取消
 	select {
 	case <-ctx.Done():
 		klog.V(1).Info("External context cancelled, stopping BatchLogHandler")
@@ -59,15 +71,12 @@ func (l *BatchLogHandler) StreamLogs(ctx context.Context) {
 
 func (l *BatchLogHandler) startPodLogStream(podStream *PodLogStream) {
 	pod := podStream.Pod
-	podCtx, cancel := context.WithCancel(l.ctx)
-	podStream.Cancel = cancel
 
 	defer func() {
 		close(podStream.Done)
 	}()
 
-	req := l.k8sClient.ClientSet.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, l.opts)
-	podLogs, err := req.Stream(podCtx)
+	podLogs, err := l.openPodLogStream(podStream.ctx, pod)
 	if err != nil {
 		_ = wsutil.SendError(l.conn, fmt.Sprintf("Failed to get pod logs for %s: %v", pod.Name, err))
 		return
@@ -153,7 +162,7 @@ func (l *BatchLogHandler) heartbeat(ctx context.Context) {
 	}
 }
 
-// AddPod adds a new pod to the batch log handler and starts streaming its logs
+// AddPod 向批量日志处理器新增一个 pod，并开始流式读取它的日志
 func (l *BatchLogHandler) AddPod(pod corev1.Pod) {
 	key := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
 
@@ -163,21 +172,26 @@ func (l *BatchLogHandler) AddPod(pod corev1.Pod) {
 		return
 	}
 
+	// 取消句柄必须在发布之前就位。此前它由流式协程在发布之后写入，读者可能先读到
+	// nil 而漏掉取消，让这条日志流和它的协程一直挂着。
+	podCtx, cancel := context.WithCancel(l.ctx)
 	podStream := &PodLogStream{
-		Pod:  pod,
-		Done: make(chan struct{}),
+		Pod:    pod,
+		ctx:    podCtx,
+		Cancel: cancel,
+		Done:   make(chan struct{}),
 	}
 	l.pods[key] = podStream
 	l.mu.Unlock()
 
-	// Start streaming for this pod
+	// 开始为这个 pod 流式读取
 	go l.startPodLogStream(podStream)
 
 	_ = wsutil.SendMessage(l.conn, "pod_added", fmt.Sprintf("{\"pod\":\"%s\",\"namespace\":\"%s\"}",
 		pod.Name, pod.Namespace))
 }
 
-// RemovePod removes a pod from the batch log handler and stops streaming its logs
+// RemovePod 从批量日志处理器移除一个 pod，并停止流式读取它的日志
 func (l *BatchLogHandler) RemovePod(pod corev1.Pod) {
 	key := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
 
@@ -188,10 +202,11 @@ func (l *BatchLogHandler) RemovePod(pod corev1.Pod) {
 		return
 	}
 	delete(l.pods, key)
+	cancel := podStream.Cancel
 	l.mu.Unlock()
 
-	if podStream.Cancel != nil {
-		podStream.Cancel()
+	if cancel != nil {
+		cancel()
 	}
 
 	go func() {
@@ -204,8 +219,8 @@ func (l *BatchLogHandler) RemovePod(pod corev1.Pod) {
 func (l *BatchLogHandler) Stop() {
 	l.mu.Lock()
 	for _, podStream := range l.pods {
-		if podStream.Cancel != nil {
-			podStream.Cancel()
+		if cancel := podStream.Cancel; cancel != nil {
+			cancel()
 		}
 	}
 	l.pods = make(map[string]*PodLogStream)
@@ -213,8 +228,8 @@ func (l *BatchLogHandler) Stop() {
 	l.cancel()
 }
 
-// writerFunc adapts a function to io.Writer so we can create
-// small writers inline inside functions and capture local state.
+// writerFunc 把一个函数适配成 io.Writer，
+// 这样我们可以在函数内部创建小 writer 并捕获局部状态。
 type writerFunc func([]byte) (int, error)
 
 func (wf writerFunc) Write(p []byte) (int, error) {

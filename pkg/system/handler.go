@@ -22,9 +22,12 @@ type OverviewData struct {
 	TotalServices   int                   `json:"totalServices"`
 	PromEnabled     bool                  `json:"prometheusEnabled"`
 	Resource        common.ResourceMetric `json:"resource"`
+	// Scoped 表示本次统计只覆盖调用者有权限的命名空间：集群级容量（节点数、
+	// 可分配 CPU/内存、Prometheus 集群指标）不参与统计，前端据此隐藏集群容量视图。
+	Scoped bool `json:"scoped"`
 }
 
-// nodeMetrics holds aggregated metrics computed from the node list.
+// nodeMetrics 保存依据节点列表汇总出的指标。
 type nodeMetrics struct {
 	total          int
 	ready          int
@@ -32,7 +35,7 @@ type nodeMetrics struct {
 	memAllocatable int64 // milli-bytes (matches original MilliValue() contract)
 }
 
-// podMetrics holds aggregated metrics computed from the pod list.
+// podMetrics 保存依据 pod 列表汇总出的指标。
 type podMetrics struct {
 	total        int
 	running      int
@@ -42,109 +45,143 @@ type podMetrics struct {
 	memLimited   int64 // milli-bytes (matches original MilliValue() contract)
 }
 
+func (pm *podMetrics) addPod(pod *v1.Pod) {
+	pm.total++
+	// 方案：用 int64 累加，而不是 resource.Quantity.Add()
+	// 跳过处于终态的 pod；否则会多算
+	if pod.Status.Phase != v1.PodSucceeded && pod.Status.Phase != v1.PodFailed {
+		for j := range pod.Spec.Containers {
+			container := &pod.Spec.Containers[j]
+			pm.cpuRequested += container.Resources.Requests.Cpu().MilliValue()
+			pm.memRequested += container.Resources.Requests.Memory().MilliValue()
+
+			if container.Resources.Limits != nil {
+				if cpu := container.Resources.Limits.Cpu(); cpu != nil {
+					pm.cpuLimited += cpu.MilliValue()
+				}
+				if mem := container.Resources.Limits.Memory(); mem != nil {
+					pm.memLimited += mem.MilliValue()
+				}
+			}
+		}
+	}
+	if utils.IsPodReady(pod) || pod.Status.Phase == v1.PodSucceeded {
+		pm.running++
+	}
+}
+
 func GetOverview(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	user := c.MustGet("user").(model.User)
-	if !rbac.CanAccessCluster(user, cs.Name) {
+
+	// 完整集群访问（直接持有覆盖该集群的角色）可以看到集群级数据；只靠权限绑定组
+	// 授权的账号同样允许进入，但只统计它可见的命名空间，且不接触集群容量 —— 403
+	// 会让这类账号在控制台首页直接报错。
+	fullAccess := rbac.CanAccessCluster(user, cs.Name)
+	if !fullAccess && !rbac.CanSeeNamespacesInCluster(user, cs.Name) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
 
-	// Solution : Fetch and compute all 4 resource types in parallel.
-	// Each goroutine owns its data — no shared state, no mutexes needed.
+	// 命名空间列表先取一次：受限账号的统计范围与命名空间计数都由它决定。
+	var namespaces v1.NamespaceList
+	if err := cs.K8sClient.List(ctx, &namespaces); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	// visible 为 nil 表示不受限（统计整个集群）。
+	var visible map[string]struct{}
+	nsCount := len(namespaces.Items)
+	if !fullAccess {
+		visible = make(map[string]struct{}, len(namespaces.Items))
+		for i := range namespaces.Items {
+			name := namespaces.Items[i].Name
+			if rbac.CanAccessNamespace(user, cs.Name, name) {
+				visible[name] = struct{}{}
+			}
+		}
+		nsCount = len(visible)
+	}
+
+	// 方案：并行获取并计算其余资源类型。
+	// 每个 goroutine 独占自己的数据——没有共享状态，也无需互斥锁。
 	var nm nodeMetrics
 	var pm podMetrics
-	var nsCount, svcCount int
+	var svcCount int
 
 	g, gctx := errgroup.WithContext(ctx)
 
-	// Goroutine 1: List nodes + compute allocatable resources + ready count
-	g.Go(func() error {
-		var nodes v1.NodeList
-		if err := cs.K8sClient.List(gctx, &nodes); err != nil {
-			return err
-		}
-		nm.total = len(nodes.Items)
-		// Solution : Use int64 arithmetic instead of resource.Quantity.Add()
-		// (avoids big.Int operations — ~10-50x faster for the accumulation loop)
-		for i := range nodes.Items {
-			node := &nodes.Items[i]
-			nm.cpuAllocatable += node.Status.Allocatable.Cpu().MilliValue()
-			nm.memAllocatable += node.Status.Allocatable.Memory().MilliValue()
-			for _, cond := range node.Status.Conditions {
-				if cond.Type == v1.NodeReady && cond.Status == v1.ConditionTrue {
-					nm.ready++
-					break
+	// 节点：只有具备集群级访问权限才会计入它们，它们属于容量数据。
+	if fullAccess {
+		g.Go(func() error {
+			var nodes v1.NodeList
+			if err := cs.K8sClient.List(gctx, &nodes); err != nil {
+				return err
+			}
+			nm.total = len(nodes.Items)
+			// 方案：使用 int64 运算，而不是 resource.Quantity.Add()
+			// （避免 big.Int 运算——在累加循环里快约 10-50 倍）
+			for i := range nodes.Items {
+				node := &nodes.Items[i]
+				nm.cpuAllocatable += node.Status.Allocatable.Cpu().MilliValue()
+				nm.memAllocatable += node.Status.Allocatable.Memory().MilliValue()
+				for _, cond := range node.Status.Conditions {
+					if cond.Type == v1.NodeReady && cond.Status == v1.ConditionTrue {
+						nm.ready++
+						break
+					}
 				}
 			}
-		}
-		return nil
-	})
+			return nil
+		})
+	}
 
-	// Goroutine 2: List pods + compute resource requests/limits + running count
+	// Goroutine 2：列出 pod + 计算资源 requests/limits + 运行中数量
 	g.Go(func() error {
 		var pods v1.PodList
 		if err := cs.K8sClient.List(gctx, &pods); err != nil {
 			return err
 		}
-		pm.total = len(pods.Items)
-		// Solution : int64 accumulation instead of resource.Quantity.Add()
 		for i := range pods.Items {
 			pod := &pods.Items[i]
-			// Skip terminal pods; leads to over counting
-			if pod.Status.Phase != v1.PodSucceeded && pod.Status.Phase != v1.PodFailed {
-				for j := range pod.Spec.Containers {
-					container := &pod.Spec.Containers[j]
-					pm.cpuRequested += container.Resources.Requests.Cpu().MilliValue()
-					pm.memRequested += container.Resources.Requests.Memory().MilliValue()
-
-					if container.Resources.Limits != nil {
-						if cpu := container.Resources.Limits.Cpu(); cpu != nil {
-							pm.cpuLimited += cpu.MilliValue()
-						}
-						if mem := container.Resources.Limits.Memory(); mem != nil {
-							pm.memLimited += mem.MilliValue()
-						}
-					}
+			if visible != nil {
+				if _, ok := visible[pod.Namespace]; !ok {
+					continue
 				}
 			}
-			if utils.IsPodReady(pod) || pod.Status.Phase == v1.PodSucceeded {
-				pm.running++
-			}
+			pm.addPod(pod)
 		}
 		return nil
 	})
 
-	// Goroutine 3: List namespaces (count only)
-	g.Go(func() error {
-		var namespaces v1.NamespaceList
-		if err := cs.K8sClient.List(gctx, &namespaces); err != nil {
-			return err
-		}
-		nsCount = len(namespaces.Items)
-		return nil
-	})
-
-	// Goroutine 4: List services (count only)
+	// Goroutine 3：列出 service（只计数）
 	g.Go(func() error {
 		var services v1.ServiceList
 		if err := cs.K8sClient.List(gctx, &services); err != nil {
 			return err
 		}
-		svcCount = len(services.Items)
+		if visible == nil {
+			svcCount = len(services.Items)
+			return nil
+		}
+		for i := range services.Items {
+			if _, ok := visible[services.Items[i].Namespace]; ok {
+				svcCount++
+			}
+		}
 		return nil
 	})
 
-	// Wait for all goroutines; if any fails the context is cancelled
+	// 等待所有 goroutine；任一失败则取消上下文
 	if err := g.Wait(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Memory is reported in bytes from Value(); convert to milli for the API
-	// (consistent with the original behavior that used MilliValue() on Quantity)
+	// 内存由 Value() 以字节返回；为 API 转换为 milli
+	// （与原先对 Quantity 使用 MilliValue() 的行为保持一致）
 	overview := OverviewData{
 		TotalNodes:      nm.total,
 		ReadyNodes:      nm.ready,
@@ -152,7 +189,9 @@ func GetOverview(c *gin.Context) {
 		RunningPods:     pm.running,
 		TotalNamespaces: nsCount,
 		TotalServices:   svcCount,
-		PromEnabled:     cs.PromClient != nil,
+		// Prometheus 指标是集群级聚合，受限账号不看。
+		PromEnabled: fullAccess && cs.PromClient != nil,
+		Scoped:      !fullAccess,
 		Resource: common.ResourceMetric{
 			CPU: common.Resource{
 				Allocatable: nm.cpuAllocatable,

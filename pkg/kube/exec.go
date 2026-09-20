@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 )
 
-// ExecOptions holds parameters for ExecCommand
+// ExecOptions 保存 ExecCommand 的参数
 type ExecOptions struct {
 	Namespace     string
 	PodName       string
@@ -24,7 +24,7 @@ type ExecOptions struct {
 	TTY           bool
 }
 
-// ExecCommand executes a command in a pod
+// ExecCommand 在 pod 中执行一条命令
 func (c *K8sClient) ExecCommand(ctx context.Context, opts ExecOptions) error {
 	req := c.ClientSet.CoreV1().RESTClient().Post().
 		Resource(string(common.Pods)).
@@ -60,7 +60,7 @@ func (c *K8sClient) ExecCommand(ctx context.Context, opts ExecOptions) error {
 	return nil
 }
 
-// ExecCommandBuffered executes a command and returns stdout and stderr as strings
+// ExecCommandBuffered 执行一条命令，并以字符串返回 stdout 与 stderr
 func (c *K8sClient) ExecCommandBuffered(ctx context.Context, namespace, pod, container string, command []string) (string, string, error) {
 	var stdout, stderr bytes.Buffer
 	err := c.ExecCommand(ctx, ExecOptions{

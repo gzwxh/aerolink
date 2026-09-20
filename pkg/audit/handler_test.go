@@ -31,17 +31,17 @@ func TestListAuditLogsFiltersOrdersAndPaginates(t *testing.T) {
 		{
 			CreatedAt:   baseTime,
 			ClusterName: "prod", ResourceType: "pods", ResourceName: "web-old", Namespace: "default",
-			OperationType: "update", OperationSource: "manual", OperatorID: alice.ID, Success: true,
+			OperationType: "update", OperationSource: "manual", OperatorID: model.OperatorRef(alice.ID), Success: true,
 		},
 		{
 			CreatedAt:   baseTime.Add(time.Hour),
 			ClusterName: "prod", ResourceType: "pods", ResourceName: "web-new", Namespace: "default",
-			OperationType: "update", OperationSource: "manual", OperatorID: alice.ID, Success: true,
+			OperationType: "update", OperationSource: "manual", OperatorID: model.OperatorRef(alice.ID), Success: true,
 		},
 		{
 			CreatedAt:   baseTime.Add(2 * time.Hour),
 			ClusterName: "staging", ResourceType: "deployments", ResourceName: "web-other", Namespace: "team-a",
-			OperationType: "delete", OperationSource: "manual", OperatorID: bob.ID, Success: true,
+			OperationType: "delete", OperationSource: "manual", OperatorID: model.OperatorRef(bob.ID), Success: true,
 		},
 	}
 	if err := db.Create(&history).Error; err != nil {

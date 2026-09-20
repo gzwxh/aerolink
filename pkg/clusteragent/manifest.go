@@ -5,17 +5,17 @@ import (
 	"strings"
 )
 
-// GenerateManifest builds the Kubernetes manifest (Secret, ServiceAccount,
-// ClusterRoleBinding, Deployment) used to deploy the Cluster Agent inside a
-// target cluster. The image and server URL are injected so the manifest is
-// always consistent with the platform configuration.
+// GenerateManifest 构造用于在目标集群中部署 Cluster Agent 的
+// Kubernetes manifest（Secret、ServiceAccount、
+// ClusterRoleBinding、Deployment）。镜像与服务器 URL 会被注入，
+// 因此 manifest 始终与平台配置保持一致。
 func GenerateManifest(serverURL, token, publicKey, image string) string {
 	serverURL = strings.TrimSpace(serverURL)
 	token = strings.TrimSpace(token)
 	publicKey = strings.TrimSpace(publicKey)
 	image = strings.TrimSpace(image)
-	// JSON-encode the string values so the YAML is always valid regardless
-	// of special characters.
+	// 对字符串值做 JSON 编码，这样无论是否含特殊字符，
+	// YAML 都始终合法。
 	tokenJSON := fmt.Sprintf("%q", token)
 	publicKeyJSON := fmt.Sprintf("%q", publicKey)
 	serverJSON := fmt.Sprintf("%q", serverURL)

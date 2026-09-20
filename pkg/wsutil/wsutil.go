@@ -2,7 +2,10 @@ package wsutil
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,9 +37,31 @@ type Session struct {
 }
 
 var upgrader = websocket.Upgrader{
+	// 浏览器会在升级请求上带上页面 origin。SameSite=Lax
+	// cookie 已经让跨站连接处于未认证状态；在此基础上再匹配
+	// origin host，可以阻止从另一个 origin 的页面重放
+	// 窃取到的 cookie。非浏览器客户端通常根本不发送 Origin，
+	// 因此仍然允许通过。
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		parsed, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		// 只比较主机名：反向代理可能相对公开 origin 改写
+		// Host 的端口（或直接去掉端口）。
+		return strings.EqualFold(parsed.Hostname(), requestHostname(r.Host))
 	},
+}
+
+func requestHostname(host string) string {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
 }
 
 func Serve(w http.ResponseWriter, r *http.Request, handle func(*Session)) {

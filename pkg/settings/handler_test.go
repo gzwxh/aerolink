@@ -100,13 +100,13 @@ func setupGeneralSettingTestDB(t *testing.T, apiKey string) {
 	originalDB := model.DB
 	originalEncryptKey := common.KiteEncryptKey
 	originalJWTSecret := common.JwtSecret
-	originalAnalytics := common.EnableAnalytics
-	originalVersionCheck := common.EnableVersionCheck
+	originalAnalytics := common.EnableAnalytics.Load()
+	originalVersionCheck := common.EnableVersionCheck.Load()
 
 	common.KiteEncryptKey = "settings-handler-test-key"
 	common.JwtSecret = "settings-handler-test-jwt-secret"
-	common.EnableAnalytics = false
-	common.EnableVersionCheck = true
+	common.EnableAnalytics.Store(false)
+	common.EnableVersionCheck.Store(true)
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -127,7 +127,6 @@ func setupGeneralSettingTestDB(t *testing.T, apiKey string) {
 		NodeTerminalImage:  model.DefaultGeneralNodeTerminalImage,
 		EnableVersionCheck: true,
 		EnableMFA:          true,
-		EnablePasskeyLogin: true,
 		JWTSecret:          model.SecretString(common.JwtSecret),
 	}
 	if err := db.Create(&setting).Error; err != nil {
@@ -142,8 +141,8 @@ func setupGeneralSettingTestDB(t *testing.T, apiKey string) {
 		model.DB = originalDB
 		common.KiteEncryptKey = originalEncryptKey
 		common.JwtSecret = originalJWTSecret
-		common.EnableAnalytics = originalAnalytics
-		common.EnableVersionCheck = originalVersionCheck
+		common.EnableAnalytics.Store(originalAnalytics)
+		common.EnableVersionCheck.Store(originalVersionCheck)
 	})
 }
 

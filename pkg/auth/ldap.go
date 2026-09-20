@@ -87,16 +87,12 @@ func (a *LDAPAuthenticator) Authenticate(setting *model.LDAPSetting, username, p
 		displayName = canonicalUsername
 	}
 
-	// 目录里的 mail 属性直接作为通知收件邮箱。
-	email := strings.TrimSpace(entry.GetAttributeValue("mail"))
-	if email == "" {
-		email = strings.TrimSpace(entry.GetAttributeValue("email"))
-	}
-
+	// 目录里的 mail 属性直接作为通知收件邮箱，mobile / telephoneNumber 作为手机号。
 	return &model.User{
 		Username:   canonicalUsername,
 		Name:       displayName,
-		Email:      email,
+		Email:      ldapEntryEmail(entry),
+		Phone:      ldapEntryPhone(entry),
 		Provider:   model.AuthProviderLDAP,
 		Password:   "",
 		OIDCGroups: groups,
@@ -152,6 +148,44 @@ func dialLDAP(cfg ldapConfig) (*ldap.Conn, *url.URL, error) {
 	return conn, parsedURL, nil
 }
 
+// 目录里作为「邮箱 / 手机」来源的属性，按顺序取第一个有值的。
+// mail 是 inetOrgPerson / AD 的标准收件地址属性；手机优先取 mobile，
+// 回退到办公电话 telephoneNumber。
+var (
+	ldapEmailAttributes = []string{"mail", "email"}
+	ldapPhoneAttributes = []string{"mobile", "telephoneNumber"}
+)
+
+// ldapUserSearchAttributes 是查询目录用户时要一并取回的属性：除用户名与显示名，
+// 还包括联系信息，否则 GetAttributeValue 拿不到值（服务器只返回请求过的属性）。
+func ldapUserSearchAttributes(cfg ldapConfig) []string {
+	attrs := []string{cfg.UsernameAttribute, cfg.DisplayNameAttribute}
+	attrs = append(attrs, ldapEmailAttributes...)
+	attrs = append(attrs, ldapPhoneAttributes...)
+	return attrs
+}
+
+// ldapEntryEmail 取目录里的邮箱；目录没有该属性时返回空串，
+// 由调用方决定是置空本地值还是保留（同步按置空处理）。
+func ldapEntryEmail(entry *ldap.Entry) string {
+	for _, attr := range ldapEmailAttributes {
+		if value := strings.TrimSpace(entry.GetAttributeValue(attr)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// ldapEntryPhone 取目录里的手机号；目录没有该属性时返回空串。
+func ldapEntryPhone(entry *ldap.Entry) string {
+	for _, attr := range ldapPhoneAttributes {
+		if value := strings.TrimSpace(entry.GetAttributeValue(attr)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func findLDAPUser(conn *ldap.Conn, cfg ldapConfig, username string) (*ldap.Entry, error) {
 	filter, err := formatLDAPFilter(cfg.UserFilter, ldap.EscapeFilter(strings.TrimSpace(username)))
 	if err != nil {
@@ -165,7 +199,7 @@ func findLDAPUser(conn *ldap.Conn, cfg ldapConfig, username string) (*ldap.Entry
 		0,
 		false,
 		filter,
-		[]string{cfg.UsernameAttribute, cfg.DisplayNameAttribute},
+		ldapUserSearchAttributes(cfg),
 		nil,
 	)
 
@@ -181,8 +215,8 @@ func findLDAPUser(conn *ldap.Conn, cfg ldapConfig, username string) (*ldap.Entry
 }
 
 func findLDAPGroups(conn *ldap.Conn, cfg ldapConfig, userDN string) (model.SliceString, error) {
-	// Groups are optional: without a group base DN the directory is only used
-	// for authentication and users carry no group memberships.
+	// 组是可选的：没有配置组 base DN 时，目录只用于认证，
+	// 用户不携带任何组成员关系。
 	if strings.TrimSpace(cfg.GroupBaseDN) == "" {
 		return nil, nil
 	}
@@ -232,8 +266,8 @@ func formatLDAPFilter(template, value string) (string, error) {
 	return fmt.Sprintf(template, value), nil
 }
 
-// bindLDAPServiceConnection dials the LDAP server, optionally upgrades to
-// StartTLS, and binds with the configured service account. Callers own conn.
+// bindLDAPServiceConnection 连接 LDAP 服务器，按需升级到
+// StartTLS，并用配置的服务账号完成绑定。连接由调用方负责关闭。
 func bindLDAPServiceConnection(cfg ldapConfig) (*ldap.Conn, error) {
 	conn, parsedURL, err := dialLDAP(cfg)
 	if err != nil {

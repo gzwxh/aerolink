@@ -3,6 +3,7 @@ package terminal
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -37,30 +38,31 @@ func (h *KubectlTerminalHandler) HandleKubectlTerminalWebSocket(c *gin.Context) 
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	user := c.MustGet("user").(model.User)
 
+	// 只有管理员可以使用 kubectl 终端；鉴权必须在
+	// WebSocket 升级之前完成（下面的功能开关同样如此）。
+	if !rbac.IsAdministrator(user) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "kubectl terminal is only available to admin users"})
+		return
+	}
+
+	setting, err := model.GetGeneralSetting()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load settings: %v", err)})
+		return
+	}
+	if !setting.KubectlEnabled {
+		c.JSON(http.StatusForbidden, gin.H{"error": "kubectl terminal is disabled"})
+		return
+	}
+	kubectlImage := strings.TrimSpace(setting.KubectlImage)
+	if kubectlImage == "" {
+		kubectlImage = common.KubectlTerminalImage
+	}
+
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
-		// Only admin users can use the kubectl terminal
-		if !rbac.UserHasRole(user, model.DefaultAdminRole.Name) {
-			ws.SendErrorMessage("kubectl terminal is only available to admin users")
-			return
-		}
-
-		setting, err := model.GetGeneralSetting()
-		if err != nil {
-			ws.SendErrorMessage(fmt.Sprintf("Failed to load settings: %v", err))
-			return
-		}
-		if !setting.KubectlEnabled {
-			ws.SendErrorMessage("kubectl terminal is disabled")
-			return
-		}
-		kubectlImage := strings.TrimSpace(setting.KubectlImage)
-		if kubectlImage == "" {
-			kubectlImage = common.KubectlTerminalImage
-		}
-
 		ctx := ws.Context
 
-		// Ensure the shared admin ServiceAccount + ClusterRoleBinding exist
+		// 确保共享的管理员 ServiceAccount 与 ClusterRoleBinding 已存在
 		if err := h.ensureAdminServiceAccount(ctx, cs); err != nil {
 			klog.Errorf("Failed to ensure kubectl admin SA: %v", err)
 			ws.SendErrorMessage(fmt.Sprintf("Failed to setup kubectl terminal: %v", err))
@@ -97,7 +99,7 @@ func (h *KubectlTerminalHandler) HandleKubectlTerminalWebSocket(c *gin.Context) 
 	})
 }
 
-// ensureAdminServiceAccount creates a cluster-admin ServiceAccount once if it doesn't exist.
+// ensureAdminServiceAccount 在不存在时创建一次 cluster-admin 的 ServiceAccount。
 func (h *KubectlTerminalHandler) ensureAdminServiceAccount(ctx context.Context, cs *cluster.ClientSet) error {
 	labels := map[string]string{
 		"app.kubernetes.io/managed-by": "kite",
@@ -181,7 +183,7 @@ func (h *KubectlTerminalHandler) createKubectlAgent(ctx context.Context, cs *clu
 	return podName, nil
 }
 
-// cleanupPod deletes only the per-session pod (the admin SA/CRB are permanent).
+// cleanupPod 只删除该会话专属的 pod（管理员 SA/CRB 是长期存在的）。
 func (h *KubectlTerminalHandler) cleanupPod(cs *cluster.ClientSet, instanceID string) error {
 	ctx := context.TODO()
 	opts := []client.DeleteAllOfOption{

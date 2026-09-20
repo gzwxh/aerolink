@@ -29,7 +29,7 @@ func TestGenerateManifest(t *testing.T) {
 		}
 	}
 
-	// Should contain exactly 4 documents separated by ---
+	// 应恰好包含 4 个以 --- 分隔的文档
 	if strings.Count(manifest, "---") != 3 {
 		t.Errorf("expected 3 document separators, got %d", strings.Count(manifest, "---"))
 	}
@@ -49,7 +49,7 @@ func TestGenerateManifestWhitespaceTrimmed(t *testing.T) {
 }
 
 func TestGenerateManifestSpecialCharacters(t *testing.T) {
-	// Token with special characters that would break YAML if not quoted.
+	// 含特殊字符的 Token，不加引号会破坏 YAML。
 	manifest := GenerateManifest("https://kite.example.com", "tok:en\"'", "public-key", "img")
 	if !strings.Contains(manifest, `"tok:en\"'"`) {
 		t.Errorf("special characters in token not properly escaped:\n%s", manifest)

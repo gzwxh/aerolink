@@ -34,7 +34,7 @@ type ApplyResourceRequest struct {
 	Namespace string `json:"namespace"`
 }
 
-// ApplyResource applies one or more YAML resources to the cluster
+// ApplyResource 把一个或多个 YAML 资源应用到集群
 func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	user := c.MustGet("user").(model.User)
@@ -84,14 +84,7 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		authorizationNamespace := obj.GetNamespace()
-		if mapping.Scope.Name() == meta.RESTScopeNameRoot {
-			authorizationNamespace = common.AllNamespaces
-			obj.SetNamespace("")
-		} else if req.Namespace != "" {
-			authorizationNamespace = req.Namespace
-			obj.SetNamespace(req.Namespace)
-		}
+		authorizationNamespace := resolveApplyNamespace(obj, mapping, req.Namespace)
 		resource := common.HistoryResourceType(mapping.Resource.Resource, mapping.Resource.Group)
 		canCreate := rbac.CanAccess(user, resource, string(common.VerbCreate), cs.Name, authorizationNamespace)
 		canUpdate := false
@@ -161,31 +154,34 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 			ResourceName:  obj.GetName(),
 			Namespace:     obj.GetNamespace(),
 			OperationType: "apply",
-			ResourceYAML:  docYAML,
-			PreviousYAML:  string(previousYAML),
-			OperatorID:    user.ID,
+			ResourceYAML:  model.LongText(docYAML),
+			PreviousYAML:  model.LongText(string(previousYAML)),
+			OperatorID:    model.OperatorRef(user.ID),
+			OperatorName:  user.Username,
+			ClientIP:      c.ClientIP(),
+			UserAgent:     common.AuditUserAgent(c.Request.UserAgent()),
 			Success:       err == nil,
 			ErrorMessage:  errMessage,
 		})
 
 		if err != nil {
-			switch operation {
-			case "create":
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create resource: " + err.Error()})
-			case "update":
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update resource: " + err.Error()})
-			default:
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get resource: " + err.Error()})
-			}
+			respondApplyError(c, operation, err)
 			return
 		}
 
 		klog.Infof("Successfully applied resource: %s/%s", obj.GetKind(), obj.GetName())
-		appliedResources = append(appliedResources, gin.H{
+		applied := gin.H{
 			"kind":      obj.GetKind(),
 			"name":      obj.GetName(),
 			"namespace": obj.GetNamespace(),
-		})
+		}
+		// 命名空间由普通用户通过 YAML 创建时，与资源创建接口一样纳入其授权范围。
+		if operation == "create" && resource == string(common.Namespaces) {
+			for key, value := range autoBindCreatedNamespace(user, cs.Name, obj.GetName()) {
+				applied[key] = value
+			}
+		}
+		appliedResources = append(appliedResources, applied)
 	}
 
 	if len(appliedResources) == 0 {
@@ -193,12 +189,11 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 		return
 	}
 	if len(appliedResources) == 1 {
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "Resource applied successfully",
-			"kind":      appliedResources[0]["kind"],
-			"name":      appliedResources[0]["name"],
-			"namespace": appliedResources[0]["namespace"],
-		})
+		payload := gin.H{"message": "Resource applied successfully"}
+		for key, value := range appliedResources[0] {
+			payload[key] = value
+		}
+		c.JSON(http.StatusOK, payload)
 		return
 	}
 
@@ -207,4 +202,31 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 		"count":     len(appliedResources),
 		"resources": appliedResources,
 	})
+}
+
+// respondApplyError 把 apply 过程中的错误按操作类型映射为响应。
+func respondApplyError(c *gin.Context, operation string, err error) {
+	switch operation {
+	case "create":
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create resource: " + err.Error()})
+	case "update":
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update resource: " + err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get resource: " + err.Error()})
+	}
+}
+
+// resolveApplyNamespace 决定对象按哪个命名空间做授权，并把命名空间落到对象上：
+// 集群级资源按 _all 授权并清空命名空间；否则请求显式指定的命名空间优先，未指定时
+// 沿用 YAML 里的值。
+func resolveApplyNamespace(obj *unstructured.Unstructured, mapping *meta.RESTMapping, namespaceOverride string) string {
+	if mapping.Scope.Name() == meta.RESTScopeNameRoot {
+		obj.SetNamespace("")
+		return common.AllNamespaces
+	}
+	if namespaceOverride != "" {
+		obj.SetNamespace(namespaceOverride)
+		return namespaceOverride
+	}
+	return obj.GetNamespace()
 }

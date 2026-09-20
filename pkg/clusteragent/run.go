@@ -107,7 +107,7 @@ func Run(ctx context.Context, args []string) error {
 			err = remotedialer.ConnectToProxy(ctx, connectURL.String(), headers, authorizer, nil, nil)
 		}
 		if ctx.Err() != nil {
-			return nil //nolint:nilerr // Context cancellation is a clean shutdown.
+			return nil //nolint:nilerr // 上下文取消属于正常退出。
 		}
 		klog.Warningf("Cluster Agent unavailable: %v; retrying in 5 seconds", err)
 		select {

@@ -2,39 +2,39 @@ package auth
 
 import (
 	"bytes"
+	"errors"
 	"net"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/zxh326/kite/pkg/model"
+	"gorm.io/gorm"
 	"k8s.io/klog/v2"
 )
 
 const (
 	tooManyCredentialLoginAttemptsError = "too many login attempts, please try again later"
-	// failureRetention keeps a recorded failure long enough to be counted even
-	// when the policy does not define a longer block window.
+	// failureRetention 让一次已记录的失败保留足够长的时间以便被计数，
+	// 即使策略没有定义更长的封锁窗口。
 	failureRetention = 5 * time.Minute
 )
 
-type credentialLoginAttemptState struct {
-	failures     []time.Time
-	blockedUntil time.Time
-}
-
+// credentialLoginAttemptLimiter 是凭据登录失败限流的入口。
+//
+// 计数与封锁状态都在数据库里（`model.LoginAttempt`），这里不再持有任何状态：
+// 多副本部署时，「错 N 次锁定」必须跨副本生效，管理员手动拉黑的 IP 也必须对所有副本
+// 生效。数据库读不出来时按「未封锁」处理（失败开放），与其它限流/会话判定一致。
 type credentialLoginAttemptLimiter struct {
-	mu          sync.Mutex
-	attempts    map[string]credentialLoginAttemptState
+	// cleanupMu/lastCleanup 只用来限制「清理过期行」这个动作的频率：它是本机行为
+	// （多副本各自清理一遍没有副作用），不需要跨副本共享。
+	cleanupMu   sync.Mutex
 	lastCleanup time.Time
 }
 
-var credentialLoginAttempts = &credentialLoginAttemptLimiter{
-	attempts: map[string]credentialLoginAttemptState{},
-}
+var credentialLoginAttempts = &credentialLoginAttemptLimiter{}
 
-// loginLimits is the security policy resolved for one login attempt.
+// loginLimits 是针对某次登录尝试解析出的安全策略。
 type loginLimits struct {
 	userFailLimit int
 	userBlock     time.Duration
@@ -80,8 +80,8 @@ func matchesIPList(entries []string, ip string) bool {
 	return false
 }
 
-// matchIPEntry supports a single address, a CIDR block and a range such as
-// 192.168.10.1-192.168.10.20 or 2001:db8:a1-2001:db8:1:a10.
+// matchIPEntry 支持单个地址、CIDR 网段，以及形如
+// 192.168.10.1-192.168.10.20 或 2001:db8:a1-2001:db8:1:a10 的区间。
 func matchIPEntry(entry string, ip string) bool {
 	entry = strings.TrimSpace(entry)
 	client := net.ParseIP(strings.TrimSpace(ip))
@@ -113,135 +113,159 @@ func ipBetween(ip, start, end net.IP) bool {
 func ipAttemptKey(ip string) string  { return "ip:" + ip }
 func userAttemptKey(u string) string { return "user:" + strings.ToLower(strings.TrimSpace(u)) }
 
-// blockedUntil reports whether the IP or the user is currently blocked.
-func (l *credentialLoginAttemptLimiter) blockedUntil(ip string, username string, limits loginLimits) (time.Time, bool) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+// attemptBlocked 读取某个来源的封锁状态：manual 表示管理员手动拉黑（优先于白名单），
+// blocked 表示此刻确实处于封锁期内。没有记录、已经过期、或读不到时都返回未封锁。
+func attemptBlocked(key string, now time.Time) (manual bool, blocked bool) {
+	if model.DB == nil {
+		return false, false
+	}
+	attempt, err := model.GetLoginAttempt(key)
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			klog.Warningf("failed to read the login attempt state for %s: %v", key, err)
+		}
+		return false, false
+	}
+	if !now.Before(attempt.BlockedUntil) {
+		return false, false
+	}
+	return attempt.ManualBlock, true
+}
 
+// blocked 报告该 IP 或用户当前是否被封锁。
+func (l *credentialLoginAttemptLimiter) blocked(ip string, username string, limits loginLimits) bool {
 	now := time.Now()
 	l.cleanupExpired(now)
 
-	if !limits.ipWhitelisted(ip) {
-		if state, ok := l.attempts[ipAttemptKey(ip)]; ok && now.Before(state.blockedUntil) {
-			return state.blockedUntil, true
+	if manual, blocked := attemptBlocked(ipAttemptKey(ip), now); blocked {
+		// 管理员手动拉黑优先于白名单；自动锁定仍然对白名单地址豁免。
+		if manual || !limits.ipWhitelisted(ip) {
+			return true
 		}
 	}
-	if state, ok := l.attempts[userAttemptKey(username)]; ok && now.Before(state.blockedUntil) {
-		return state.blockedUntil, true
+	if _, blocked := attemptBlocked(userAttemptKey(username), now); blocked {
+		return true
 	}
-	return time.Time{}, false
+	return false
 }
 
-// recordFailure counts a failed attempt for both dimensions and reports whether
-// the attempt just reached a limit.
+// recordFailure 为 IP 与用户两个维度各记一次失败，并报告
+// 这次尝试是否刚好触达阈值。
 func (l *credentialLoginAttemptLimiter) recordFailure(ip string, username string, limits loginLimits) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	now := time.Now()
 	l.cleanupExpired(now)
 
 	blocked := false
 	if !limits.ipWhitelisted(ip) {
-		blocked = l.recordFailureForKeyLocked(ipAttemptKey(ip), now, limits.ipFailLimit, limits.ipBlock) || blocked
+		if l.recordFailureForKey(ipAttemptKey(ip), now, limits.ipFailLimit, limits.ipBlock) {
+			blocked = true
+		}
 	}
-	return l.recordFailureForKeyLocked(userAttemptKey(username), now, limits.userFailLimit, limits.userBlock) || blocked
+	if l.recordFailureForKey(userAttemptKey(username), now, limits.userFailLimit, limits.userBlock) {
+		blocked = true
+	}
+	return blocked
 }
 
-func (l *credentialLoginAttemptLimiter) recordFailureForKeyLocked(key string, now time.Time, limit int, block time.Duration) bool {
-	if limit <= 0 {
+// recordFailureForKey 记一次失败；达到阈值时顺便落封锁，并报告本次是否触达阈值。
+func (l *credentialLoginAttemptLimiter) recordFailureForKey(key string, now time.Time, limit int, block time.Duration) bool {
+	if limit <= 0 || model.DB == nil {
 		return false
 	}
 
-	state := l.attempts[key]
-	retention := failureRetention
-	if block > retention {
-		retention = block
-	}
-	kept := state.failures[:0]
-	for _, failure := range state.failures {
-		if now.Sub(failure) < retention {
-			kept = append(kept, failure)
-		}
-	}
-	state.failures = append(kept, now)
-
-	if len(state.failures) >= limit && block > 0 {
-		state.blockedUntil = now.Add(block)
-		state.failures = nil
-		l.attempts[key] = state
-		return true
+	window := failureRetention
+	if block > window {
+		window = block
 	}
 
-	l.attempts[key] = state
-	return false
+	failures, err := model.RecordCredentialLoginFailure(key, now, window)
+	if err != nil {
+		klog.Warningf("failed to record a login failure for %s: %v", key, err)
+		return false
+	}
+	if failures < limit || block <= 0 {
+		return false
+	}
+	if err := model.BlockLoginAttempt(key, now.Add(block), false); err != nil {
+		klog.Warningf("failed to block %s after repeated login failures: %v", key, err)
+		return false
+	}
+	return true
 }
 
-// clear drops the counters of a successful sign-in.
+// clear 清除一次成功登录的计数。
 func (l *credentialLoginAttemptLimiter) clear(ip string, username string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	delete(l.attempts, ipAttemptKey(ip))
-	delete(l.attempts, userAttemptKey(username))
+	if err := model.DeleteLoginAttempts(ipAttemptKey(ip), userAttemptKey(username)); err != nil {
+		klog.V(4).Infof("failed to clear the login attempt counters: %v", err)
+	}
 }
 
+// cleanupExpired 顺手清掉既已解除封锁、计数窗口也过期的行（限制表增长）。
+// 每次都做没有必要（登录尝试本来就不频繁），最多一分钟一次。
 func (l *credentialLoginAttemptLimiter) cleanupExpired(now time.Time) {
+	l.cleanupMu.Lock()
 	if now.Sub(l.lastCleanup) < time.Minute {
+		l.cleanupMu.Unlock()
 		return
 	}
 	l.lastCleanup = now
-	for key, state := range l.attempts {
-		if now.Before(state.blockedUntil) {
-			continue
-		}
-		if len(state.failures) == 0 {
-			delete(l.attempts, key)
-			continue
-		}
-		kept := state.failures[:0]
-		for _, failure := range state.failures {
-			if now.Sub(failure) < failureRetention {
-				kept = append(kept, failure)
-			}
-		}
-		if len(kept) == 0 {
-			delete(l.attempts, key)
-			continue
-		}
-		state.failures = kept
-		l.attempts[key] = state
+	l.cleanupMu.Unlock()
+
+	if err := model.CleanupLoginAttempts(now, failureRetention); err != nil {
+		klog.V(4).Infof("failed to clean up the login attempt table: %v", err)
 	}
 }
 
-// BlockedLoginIP is one currently locked client IP.
+// UnblockLoginIP 清除某个客户端 IP 已记录的锁定，并报告
+// 该 IP 是否确实处于锁定状态。
+func UnblockLoginIP(ip string) bool {
+	key := ipAttemptKey(strings.TrimSpace(ip))
+	_, blocked := attemptBlocked(key, time.Now())
+	if err := model.DeleteLoginAttempts(key); err != nil {
+		klog.Warningf("failed to clear the lock for %s: %v", key, err)
+	}
+	return blocked
+}
+
+// BlockLoginIP 代表管理员把某个客户端 IP 锁定到给定时间。
+//
+// 该封锁优先于允许列表；它现在也存在数据库里，所以对所有副本生效。
+// 需要永久封锁请使用拒绝列表（这个封锁会随到期时间自然消失）。
+func BlockLoginIP(ip string, until time.Time) {
+	if model.DB == nil {
+		return
+	}
+	credentialLoginAttempts.cleanupExpired(time.Now())
+	if err := model.BlockLoginAttempt(ipAttemptKey(strings.TrimSpace(ip)), until, true); err != nil {
+		klog.Warningf("failed to lock %s: %v", ip, err)
+	}
+}
+
+// BlockedLoginIP 是一个当前被锁定的客户端 IP。
 type BlockedLoginIP struct {
 	IP           string    `json:"ip"`
 	BlockedUntil time.Time `json:"blockedUntil"`
 	Failures     int       `json:"failures"`
 }
 
-// BlockedLoginIPs snapshots the locked IPs, newest expiry first.
+// BlockedLoginIPs 快照当前被锁定的 IP，按过期时间倒序。
 func BlockedLoginIPs() []BlockedLoginIP {
-	credentialLoginAttempts.mu.Lock()
-	defer credentialLoginAttempts.mu.Unlock()
-
-	now := time.Now()
-	result := make([]BlockedLoginIP, 0)
-	for key, state := range credentialLoginAttempts.attempts {
-		if !strings.HasPrefix(key, "ip:") {
-			continue
-		}
-		if now.Before(state.blockedUntil) {
-			result = append(result, BlockedLoginIP{
-				IP:           strings.TrimPrefix(key, "ip:"),
-				BlockedUntil: state.blockedUntil,
-				Failures:     len(state.failures),
-			})
-		}
+	if model.DB == nil {
+		return nil
 	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].BlockedUntil.After(result[j].BlockedUntil)
-	})
+	now := time.Now()
+	attempts, err := model.ListLoginAttempts("ip:", now)
+	if err != nil {
+		klog.Warningf("failed to list the locked client IPs: %v", err)
+		return nil
+	}
+	result := make([]BlockedLoginIP, 0, len(attempts))
+	for _, attempt := range attempts {
+		result = append(result, BlockedLoginIP{
+			IP:           strings.TrimPrefix(attempt.Key, "ip:"),
+			BlockedUntil: attempt.BlockedUntil,
+			Failures:     attempt.FailureCount,
+		})
+	}
 	return result
 }

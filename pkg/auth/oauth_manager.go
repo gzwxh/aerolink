@@ -18,7 +18,7 @@ type OAuthManager struct {
 	jwtSecret string
 }
 
-// Keep headroom for cookie name and attributes within common 4096-byte browser limits.
+// 为 cookie 名称与属性留出余量，以适应浏览器常见的 4096 字节上限。
 const maxAuthTokenCookieValueLength = 3800
 
 func NewOAuthManager() *OAuthManager {
@@ -84,6 +84,8 @@ func (om *OAuthManager) GenerateJWT(user *model.User, refreshToken string) (stri
 		Username:     user.Username,
 		Provider:     user.Provider,
 		RefreshToken: refreshToken,
+		// 记录最新一次登录，以便让旧会话失效。
+		SessionSeq: activeSessions.currentSeq(uint64(user.ID)),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -128,9 +130,9 @@ func (om *OAuthManager) ValidateJWT(tokenString string) (*Claims, error) {
 }
 
 func (om *OAuthManager) RefreshJWT(c *gin.Context, tokenString string) (string, error) {
-	// We need to accept expired tokens here so we can extract claims and refresh using
-	// the stored refresh token. Parse the token while skipping claims validation but
-	// still validate the signature.
+	// 这里需要接受已过期的令牌，以便解析出声明并使用已保存的
+	// refresh token 完成刷新。解析时跳过声明校验，
+	// 但仍然校验签名。
 	var claims Claims
 	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -142,18 +144,33 @@ func (om *OAuthManager) RefreshJWT(c *gin.Context, tokenString string) (string, 
 		return "", err
 	}
 
-	// Ensure signature was valid
+	// 确认签名有效
 	if token == nil || !token.Valid {
 		return "", fmt.Errorf("invalid token signature")
 	}
 
-	// A session that exceeded the idle or lifetime limit must not be refreshed.
+	// 已超过空闲时长或生存期限制的会话不允许被刷新。
 	if activeSessions.expired(uint64(claims.UserID)) {
 		activeSessions.forget(uint64(claims.UserID))
 		return "", fmt.Errorf("session expired")
 	}
 
-	if !time.Now().After(claims.ExpiresAt.Time) {
+	// 刷新也不能让一个已因改密码而失效的令牌复活：
+	// 重新签发的令牌会带上全新的 IssuedAt。
+	if user, err := model.GetUserByIDCached(uint64(claims.UserID)); err == nil {
+		if !user.Enabled || tokenIssuedBeforePasswordChange(user, &claims) {
+			return "", fmt.Errorf("session revoked")
+		}
+	}
+
+	// 同样不能复活一个已被单设备登录替换掉的会话。
+	if activeSessions.superseded(uint64(claims.UserID), claims.SessionSeq) {
+		return "", fmt.Errorf("session was replaced by a newer sign-in")
+	}
+
+	// ExpiresAt 在 JWT 负载中是可选的；没有 exp 的令牌被视为已过期，
+	// 从而交给下面的刷新流程处理（或直接干净地失败）。
+	if claims.ExpiresAt != nil && !time.Now().After(claims.ExpiresAt.Time) {
 		user := &model.User{
 			Model: model.Model{
 				ID: claims.UserID,
@@ -176,14 +193,14 @@ func (om *OAuthManager) RefreshJWT(c *gin.Context, tokenString string) (string, 
 			return "", err
 		}
 
-		// Get updated user info with new access token
+		// 用新的 access token 获取更新后的用户信息
 		user, err := provider.GetUserInfo(tokenResp.AccessToken)
 		if err != nil {
 			return "", err
 		}
 		user.ID = claims.UserID
 
-		// Generate new JWT with refreshed token
+		// 用刷新后的令牌生成新的 JWT
 		newRefreshToken := tokenResp.RefreshToken
 		if newRefreshToken == "" {
 			newRefreshToken = claims.RefreshToken // Keep the old refresh token if no new one provided

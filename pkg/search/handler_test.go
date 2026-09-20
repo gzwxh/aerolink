@@ -279,16 +279,16 @@ func TestGlobalSearchFiltersUnauthorizedResults(t *testing.T) {
 	}
 }
 
-// TestSearchParallelExecution verifies that multiple resource searches run concurrently.
+// TestSearchParallelExecution 校验多个资源的搜索是并发执行的。
 func TestSearchParallelExecution(t *testing.T) {
-	// Track concurrent execution: each func sleeps and records max concurrency.
+	// 跟踪并发执行：每个函数休眠并记录最大并发数。
 	var running atomic.Int32
 	var maxConcurrent atomic.Int32
 
 	slowSearch := func(results []common.SearchResult) resources.SearchFunc {
 		return func(_ *gin.Context, _ string, _ int64) ([]common.SearchResult, error) {
 			cur := running.Add(1)
-			// Update max concurrency seen
+			// 更新观察到的最大并发数
 			for {
 				old := maxConcurrent.Load()
 				if cur <= old || maxConcurrent.CompareAndSwap(old, cur) {
@@ -318,8 +318,8 @@ func TestSearchParallelExecution(t *testing.T) {
 		t.Fatalf("Search returned error: %v", err)
 	}
 
-	// With 3 funcs sleeping 50ms each, sequential would take >= 150ms.
-	// Parallel should complete in ~50-80ms. Allow generous margin.
+	// 3 个函数各休眠 50ms，串行执行至少需要 150ms。
+	// 并行应在约 50-80ms 内完成。这里留出宽松的余量。
 	if elapsed >= 140*time.Millisecond {
 		t.Errorf("Search took %v, expected < 140ms for parallel execution", elapsed)
 	}
@@ -333,8 +333,8 @@ func TestSearchParallelExecution(t *testing.T) {
 	}
 }
 
-// TestSearchPartialFailure ensures that one failing resource type doesn't break others
-// and that partial results due to errors are NOT cached.
+// TestSearchPartialFailure 确保某个资源类型失败不会拖垮其它资源类型，
+// 并且因错误产生的部分结果不会被缓存。
 func TestSearchPartialFailure(t *testing.T) {
 	var callCount atomic.Int32
 	searchFuncs := map[string]resources.SearchFunc{
@@ -360,14 +360,14 @@ func TestSearchPartialFailure(t *testing.T) {
 		t.Fatalf("Search returned error: %v", err)
 	}
 
-	// Should have results from pods + deployments (services failed gracefully)
+	// 应当有 pods + deployments 的结果（services 失败但被优雅处理）
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results (failed resource skipped), got %d: %+v", len(results), results)
 	}
 
 	callsBefore := callCount.Load()
 
-	// Second call: should NOT be served from cache because one resource errored.
+	// 第二次调用：不应从缓存返回，因为有一个资源出错了。
 	ctx2 := newSearchContext(t, "test-cluster")
 	results2, err := handler.Search(ctx2, "ok", 50)
 	if err != nil {
@@ -383,8 +383,8 @@ func TestSearchPartialFailure(t *testing.T) {
 	}
 }
 
-// TestGlobalSearchCacheDoesNotTriggerBackgroundRefresh validates Solution E:
-// a cache hit should NOT invoke Search again (no background goroutine).
+// TestGlobalSearchCacheDoesNotTriggerBackgroundRefresh 校验方案 E：
+// 命中缓存时不应再次调用 Search（不启动后台 goroutine）。
 func TestGlobalSearchCacheDoesNotTriggerBackgroundRefresh(t *testing.T) {
 	var searchCallCount atomic.Int32
 
@@ -397,7 +397,7 @@ func TestGlobalSearchCacheDoesNotTriggerBackgroundRefresh(t *testing.T) {
 
 	handler := NewSearchHandler(searchFuncs)
 
-	// First call: populates the cache
+	// 第一次调用：填充缓存
 	resp := performGlobalSearch(t, handler, "test-cluster", "/search?q=nginx&limit=50")
 	if resp.Total != 1 {
 		t.Fatalf("first call: expected 1 result, got %d", resp.Total)
@@ -405,13 +405,13 @@ func TestGlobalSearchCacheDoesNotTriggerBackgroundRefresh(t *testing.T) {
 
 	callsAfterFirst := searchCallCount.Load()
 
-	// Second call: should serve from cache WITHOUT launching background search
+	// 第二次调用：应从缓存返回，且不启动后台搜索
 	resp = performGlobalSearch(t, handler, "test-cluster", "/search?q=nginx&limit=50")
 	if resp.Total != 1 {
 		t.Fatalf("second call: expected 1 result, got %d", resp.Total)
 	}
 
-	// Give any hypothetical background goroutine time to execute
+	// 给任何假设中的后台 goroutine 留出执行时间
 	time.Sleep(100 * time.Millisecond)
 
 	callsAfterSecond := searchCallCount.Load()
@@ -421,8 +421,8 @@ func TestGlobalSearchCacheDoesNotTriggerBackgroundRefresh(t *testing.T) {
 	}
 }
 
-// TestSearchPanicDoesNotCacheResults verifies that when a search function panics,
-// partial results are still returned but NOT cached (avoids serving stale incomplete data).
+// TestSearchPanicDoesNotCacheResults 校验当某个搜索函数 panic 时，
+// 仍返回部分结果但不写入缓存（避免返回陈旧的、不完整的数据）。
 func TestSearchPanicDoesNotCacheResults(t *testing.T) {
 	var callCount atomic.Int32
 
@@ -439,7 +439,7 @@ func TestSearchPanicDoesNotCacheResults(t *testing.T) {
 
 	handler := NewSearchHandler(searchFuncs)
 
-	// First call: one func panics → partial results returned, cache NOT written
+	// 第一次调用：其中一个函数 panic → 返回部分结果，不写缓存
 	ctx1 := newSearchContext(t, "test-cluster")
 	results, err := handler.Search(ctx1, "ok", 50)
 	if err != nil {
@@ -451,8 +451,8 @@ func TestSearchPanicDoesNotCacheResults(t *testing.T) {
 
 	callsBefore := callCount.Load()
 
-	// Second call: should NOT be served from cache (cache was skipped due to panic).
-	// Both search funcs must be invoked again.
+	// 第二次调用：不应从缓存返回（因为 panic 跳过了缓存）。
+	// 两个搜索函数都必须被再次调用。
 	ctx2 := newSearchContext(t, "test-cluster")
 	results2, err := handler.Search(ctx2, "ok", 50)
 	if err != nil {
@@ -468,7 +468,7 @@ func TestSearchPanicDoesNotCacheResults(t *testing.T) {
 	}
 }
 
-// TestSearchEmptyResourceFuncs verifies Search handles zero searchable types gracefully.
+// TestSearchEmptyResourceFuncs 校验 Search 能优雅处理零个可搜索类型的情况。
 func TestSearchEmptyResourceFuncs(t *testing.T) {
 	handler := NewSearchHandler(map[string]resources.SearchFunc{})
 	ctx := newSearchContext(t, "test-cluster")

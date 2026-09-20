@@ -111,8 +111,8 @@ func newStatefulSetHandlerTestRouter(t *testing.T, cs *cluster.ClientSet) *gin.E
 func TestStatefulSetHandlerRevisions_CurrentFollowsStatusUpdateRevision(t *testing.T) {
 	setupWorkloadHandlerTestDB(t)
 
-	// During a rollout, currentRevision still points to the old pods while
-	// updateRevision identifies the desired revision from the StatefulSet spec.
+	// 滚动更新期间，currentRevision 仍指向旧 pod，
+	// 而 updateRevision 标识 StatefulSet spec 中期望的版本。
 	sts := makeTestStatefulSet("demo-sts-cr2")
 	sts.Status.UpdateRevision = "demo-sts-cr3"
 	cr1 := makeTestControllerRevision(t, "demo-sts-cr1", 1, "initial deploy", "nginx:1.25", statefulSetTestUID, "StatefulSet")

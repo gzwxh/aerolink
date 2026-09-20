@@ -17,7 +17,7 @@ func executeQueryPrometheus(ctx context.Context, cs *cluster.ClientSet, args map
 		return "Error: " + err.Error(), true
 	}
 
-	// Check if Prometheus client is available
+	// 检查 Prometheus 客户端是否可用
 	if cs.PromClient == nil {
 		return "Error: Prometheus is not configured for this cluster. Please configure Prometheus URL in cluster settings.", true
 	}
@@ -131,7 +131,7 @@ func executeRangeQuery(ctx context.Context, cs *cluster.ClientSet, query string,
 			for seriesIdx, series := range matrix {
 				fmt.Fprintf(&sb, "Series %d: %s\n", seriesIdx+1, series.Metric)
 
-				// Show summary statistics
+				// 展示汇总统计
 				if len(series.Values) > 0 {
 					var sum, min, max float64
 					min = float64(series.Values[0].Value)
@@ -152,7 +152,7 @@ func executeRangeQuery(ctx context.Context, cs *cluster.ClientSet, query string,
 					fmt.Fprintf(&sb, "  Data points: %d\n", len(series.Values))
 					fmt.Fprintf(&sb, "  Min: %.2f, Max: %.2f, Avg: %.2f\n", min, max, avg)
 
-					// Show first and last few values
+					// 展示开头与结尾的若干取值
 					showCount := 3
 					if len(series.Values) <= showCount*2 {
 						showCount = len(series.Values) / 2

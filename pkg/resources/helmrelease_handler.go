@@ -19,6 +19,7 @@ import (
 	"gorm.io/gorm"
 	"helm.sh/helm/v4/pkg/action"
 	release "helm.sh/helm/v4/pkg/release/v1"
+	"helm.sh/helm/v4/pkg/storage/driver"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
@@ -161,7 +162,7 @@ func (h *HelmReleaseHandler) Patch(c *gin.Context) {
 func (h *HelmReleaseHandler) Describe(c *gin.Context) {
 	obj, err := h.get(c, c.Param("namespace"), c.Param("name"), true)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondHelmReleaseLookupError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -202,10 +203,20 @@ func (h *HelmReleaseHandler) List(c *gin.Context) {
 func (h *HelmReleaseHandler) Get(c *gin.Context) {
 	obj, err := h.get(c, c.Param("namespace"), c.Param("name"), true)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondHelmReleaseLookupError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, obj)
+}
+
+// respondHelmReleaseLookupError 区分「释放不存在」与真正的服务端错误：前者返回 404，
+// 与其它资源接口保持一致，前端才能走「资源不存在」分支。
+func respondHelmReleaseLookupError(c *gin.Context, err error) {
+	if errors.Is(err, driver.ErrReleaseNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }
 func (h *HelmReleaseHandler) GetResource(c *gin.Context, namespace, name string) (interface{}, error) {
 	return h.get(c, namespace, name, true)
@@ -423,7 +434,8 @@ func (h *HelmReleaseHandler) Rollback(c *gin.Context) {
 func (h *HelmReleaseHandler) recordHistory(c *gin.Context, opType, name, namespace string, prev, curr *release.Release, success bool, err error) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	user := c.MustGet("user").(model.User)
-	helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", opType, name, namespace, prev, curr, success, err)
+	helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", opType, name, namespace,
+		c.ClientIP(), c.Request.UserAgent(), prev, curr, success, err)
 }
 
 func (h *HelmReleaseHandler) list(c *gin.Context, namespace string, details bool) (*helmutil.HelmReleaseList, error) {

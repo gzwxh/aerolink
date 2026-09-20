@@ -57,6 +57,136 @@ func TestChangeCurrentUserPasswordVerifiesCurrentPassword(t *testing.T) {
 	}
 }
 
+// TestUpdateCurrentUserLocalUserProfile 覆盖本地密码用户的自助资料更新：
+// 四个字段都会被写入并落库，响应体回传更新后的用户；
+// 邮箱格式非法时返回 400，且一个字段都不会被改动。
+func TestUpdateCurrentUserLocalUserProfile(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	router := updateCurrentUserRouter(t, uint64(user.ID))
+
+	response := performUserRequest(router, http.MethodPut, "/me",
+		`{"name":" Alice A ","email":" alice@example.com ","phone":"12345678","avatar_url":"https://example.com/a.png"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"email":"alice@example.com"`) {
+		t.Fatalf("response does not carry the updated user: %s", response.Body.String())
+	}
+	stored := loadStoredUser(t, uint64(user.ID))
+	if stored.Name != "Alice A" || stored.Email != "alice@example.com" || stored.Phone != "12345678" ||
+		stored.AvatarURL != "https://example.com/a.png" {
+		t.Fatalf("stored profile = %#v", stored)
+	}
+
+	// 邮箱写不进去就等于通知发不出去，必须在落库前拒绝，且其他字段也不能被顺带改掉。
+	invalid := performUserRequest(router, http.MethodPut, "/me",
+		`{"name":"Changed","email":"not-an-email","phone":"999","avatar_url":"https://example.com/b.png"}`)
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid email status = %d, want %d: %s", invalid.Code, http.StatusBadRequest, invalid.Body.String())
+	}
+	if body := invalid.Body.String(); !strings.Contains(body, "email is not a valid email address") {
+		t.Fatalf("invalid email error is not readable: %s", body)
+	}
+	after := loadStoredUser(t, uint64(user.ID))
+	if after.Name != "Alice A" || after.Email != "alice@example.com" || after.Phone != "12345678" ||
+		after.AvatarURL != "https://example.com/a.png" {
+		t.Fatalf("rejected update modified the stored profile: %#v", after)
+	}
+}
+
+// TestUpdateCurrentUserFieldLimits 校验自服务字段的长度边界：
+// 溢出模型列宽时返回 400 而不是静默截断，恰好等于列宽时正常写入。
+func TestUpdateCurrentUserFieldLimits(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	router := updateCurrentUserRouter(t, uint64(user.ID))
+
+	overlong := []struct {
+		field string
+		body  string
+	}{
+		{"name", fmt.Sprintf(`{"name":%q}`, strings.Repeat("a", maxProfileNameLength+1))},
+		{"phone", fmt.Sprintf(`{"phone":%q}`, strings.Repeat("1", maxProfilePhoneLength+1))},
+		{"avatar_url", fmt.Sprintf(`{"avatar_url":%q}`, strings.Repeat("u", maxProfileAvatarLength+1))},
+	}
+	for _, tc := range overlong {
+		response := performUserRequest(router, http.MethodPut, "/me", tc.body)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("overlong %s status = %d, want %d: %s", tc.field, response.Code, http.StatusBadRequest, response.Body.String())
+		}
+		if stored := loadStoredUser(t, uint64(user.ID)); stored.Name != "" || stored.Phone != "" || stored.AvatarURL != "" {
+			t.Fatalf("overlong %s still modified the stored profile: %#v", tc.field, stored)
+		}
+	}
+
+	// 长度上限本身是允许的，避免把边界算成溢出。
+	boundary := fmt.Sprintf(`{"name":%q}`, strings.Repeat("a", maxProfileNameLength))
+	allowed := performUserRequest(router, http.MethodPut, "/me", boundary)
+	if allowed.Code != http.StatusOK {
+		t.Fatalf("boundary name status = %d, want %d: %s", allowed.Code, http.StatusOK, allowed.Body.String())
+	}
+	if stored := loadStoredUser(t, uint64(user.ID)); len(stored.Name) != maxProfileNameLength {
+		t.Fatalf("boundary name length = %d, want %d", len(stored.Name), maxProfileNameLength)
+	}
+}
+
+// TestUpdateCurrentUserDirectoryUserOnlyChangesAvatar 覆盖目录同步账号的字段归属：
+// 昵称 / 邮箱 / 联系方式由源系统掌管，传入后被静默忽略，只有本地头像生效，
+// 整体返回 200——旧实现对这类用户直接返回 403。
+func TestUpdateCurrentUserDirectoryUserOnlyChangesAvatar(t *testing.T) {
+	setupUserHandlerTestDB(t)
+	directoryUser := &model.User{
+		Username: "ldap-alice",
+		Name:     "Directory Name",
+		Email:    "directory@example.com",
+		Phone:    "10086",
+		Provider: model.AuthProviderLDAP,
+		Enabled:  true,
+	}
+	if err := model.DB.Create(directoryUser).Error; err != nil {
+		t.Fatalf("creating directory user: %v", err)
+	}
+	router := updateCurrentUserRouter(t, uint64(directoryUser.ID))
+
+	response := performUserRequest(router, http.MethodPut, "/me",
+		`{"name":"Local Override","email":"local@example.com","phone":"000","avatar_url":"data:image/png;base64,AAAA"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("directory user status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	stored := loadStoredUser(t, uint64(directoryUser.ID))
+	if stored.Name != "Directory Name" || stored.Email != "directory@example.com" ||
+		stored.Phone != "10086" {
+		t.Fatalf("source-controlled fields were overwritten: %#v", stored)
+	}
+	if stored.AvatarURL != "data:image/png;base64,AAAA" {
+		t.Fatalf("avatar not updated for directory user: %q", stored.AvatarURL)
+	}
+}
+
+// TestUpdateCurrentUserCanClearOptionalFields 传空字符串表示清空可选字段，
+// 而不是「未提交」；未出现在请求里的字段则保持不变。
+func TestUpdateCurrentUserCanClearOptionalFields(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	router := updateCurrentUserRouter(t, uint64(user.ID))
+
+	seeded := performUserRequest(router, http.MethodPut, "/me",
+		`{"name":"Alice","email":"alice@example.com","phone":"12345678"}`)
+	if seeded.Code != http.StatusOK {
+		t.Fatalf("seeding profile status = %d: %s", seeded.Code, seeded.Body.String())
+	}
+
+	cleared := performUserRequest(router, http.MethodPut, "/me", `{"email":""}`)
+	if cleared.Code != http.StatusOK {
+		t.Fatalf("clearing email status = %d, want %d: %s", cleared.Code, http.StatusOK, cleared.Body.String())
+	}
+	stored := loadStoredUser(t, uint64(user.ID))
+	if stored.Email != "" {
+		t.Fatalf("email not cleared: %q", stored.Email)
+	}
+	if stored.Name != "Alice" || stored.Phone != "12345678" {
+		t.Fatalf("fields absent from the request were modified: %#v", stored)
+	}
+}
+
 // TestCurrentUserMFALifecycle 走完整条 TOTP 生命周期：
 // setup 只写入「待确认」密钥且 MFA 仍未启用 → enable 校验动态码后正式启用 →
 // disable 再校验一次动态码，随后连同密钥一起清除。
@@ -159,9 +289,9 @@ func TestSetupCurrentUserMFAHonorsGlobalSetting(t *testing.T) {
 	}
 }
 
-// TestUpdateSidebarPreferenceHonorsGlobalPolicy 验证全局侧边栏策略的边界：
-// 已设置全局布局时，非管理员写入被 403 拒绝且不落库；
-// 管理员不受全局策略限制，可以保存自己的偏好。
+// TestUpdateSidebarPreferenceHonorsGlobalPolicy 验证全局侧边栏只作为默认值：
+// 已设置全局布局时，普通用户仍然可以保存自己的布局并落库；
+// 管理员同样可以保存自己的偏好。
 func TestUpdateSidebarPreferenceHonorsGlobalPolicy(t *testing.T) {
 	user := setupUserHandlerTestDB(t)
 	if _, err := model.UpdateGeneralSetting(map[string]interface{}{
@@ -176,16 +306,16 @@ func TestUpdateSidebarPreferenceHonorsGlobalPolicy(t *testing.T) {
 		c.Set("user", *user)
 		UpdateSidebarPreference(c)
 	})
-	blocked := performUserRequest(userRouter, http.MethodPut, "/sidebar", `{"sidebar_preference":"{\"sections\":[\"custom\"]}"}`)
-	if blocked.Code != http.StatusForbidden {
-		t.Fatalf("non-admin status = %d, want %d", blocked.Code, http.StatusForbidden)
+	saved := performUserRequest(userRouter, http.MethodPut, "/sidebar", `{"sidebar_preference":"{\"sections\":[\"custom\"]}"}`)
+	if saved.Code != http.StatusOK {
+		t.Fatalf("non-admin status = %d, want %d: %s", saved.Code, http.StatusOK, saved.Body.String())
 	}
 	stored, err := model.GetUserByID(uint64(user.ID))
 	if err != nil {
-		t.Fatalf("loading blocked user: %v", err)
+		t.Fatalf("loading user: %v", err)
 	}
-	if stored.SidebarPreference != "" {
-		t.Fatalf("blocked update stored preference %q", stored.SidebarPreference)
+	if stored.SidebarPreference != `{"sections":["custom"]}` {
+		t.Fatalf("non-admin preference = %q", stored.SidebarPreference)
 	}
 
 	admin := *user
@@ -208,9 +338,36 @@ func TestUpdateSidebarPreferenceHonorsGlobalPolicy(t *testing.T) {
 	}
 }
 
+// updateCurrentUserRouter 构造一个只挂 UpdateCurrentUser 的路由。
+// 每个请求都像鉴权中间件那样，从数据库重新读取当前用户放进 context。
+func updateCurrentUserRouter(t *testing.T, id uint64) *gin.Engine {
+	t.Helper()
+	router := gin.New()
+	router.PUT("/me", func(c *gin.Context) {
+		current, err := model.GetUserByID(id)
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		c.Set("user", *current)
+		UpdateCurrentUser(c)
+	})
+	return router
+}
+
+// loadStoredUser 从数据库读取用户，用于断言请求是否真的落库。
+func loadStoredUser(t *testing.T, id uint64) *model.User {
+	t.Helper()
+	user, err := model.GetUserByID(id)
+	if err != nil {
+		t.Fatalf("loading user %d: %v", id, err)
+	}
+	return user
+}
+
 // setupUserHandlerTestDB 为每个用例准备一套隔离的测试环境：
 // 打开内存 SQLite 并迁移 User / GeneralSetting 表，写入默认全局设置
-// （打开 MFA 与 Passkey）和本地密码用户 alice，最后用 t.Cleanup 还原
+// （打开 MFA）和本地密码用户 alice，最后用 t.Cleanup 还原
 // 被替换的全局状态（model.DB、加密密钥、JWT 密钥）并关闭连接。
 func setupUserHandlerTestDB(t *testing.T) *model.User {
 	t.Helper()
@@ -238,7 +395,6 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 		NodeTerminalImage:  model.DefaultGeneralNodeTerminalImage,
 		EnableVersionCheck: true,
 		EnableMFA:          true,
-		EnablePasskeyLogin: true,
 		JWTSecret:          model.SecretString(common.JwtSecret),
 	}
 	if err := db.Create(&setting).Error; err != nil {

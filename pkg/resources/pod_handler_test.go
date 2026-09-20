@@ -32,6 +32,41 @@ ignored line
 	}
 }
 
+// 字符/块设备的 size 列是「主设备号, 次设备号」，`ls -lah` 在逗号后留有空格，
+// 于是 strings.Fields 会多切出一个 token。按固定列位解析会让后面所有列错位。
+func TestParseLsOutputHandlesDeviceSizes(t *testing.T) {
+	output := `
+total 0
+crw-rw-rw- 1 root root 1, 5 2025-05-30 12:13:44 +0000 null
+brw-rw---- 1 root disk 8, 0 2025-05-30 12:13:44 +0000 sda
+-rw-r--r-- 1 root root 12 2025-05-30 12:13:44 +0000 2025 report.txt
+`
+
+	files := parseLsOutput(output)
+	if len(files) != 3 {
+		t.Fatalf("expected 3 files, got %d: %#v", len(files), files)
+	}
+
+	want := []struct {
+		name    string
+		size    string
+		mode    string
+		modTime string
+	}{
+		{"2025 report.txt", "12", "-rw-r--r--", "2025-05-30 12:13:44"},
+		{"null", "1, 5", "crw-rw-rw-", "2025-05-30 12:13:44"},
+		{"sda", "8, 0", "brw-rw----", "2025-05-30 12:13:44"},
+	}
+	for i, expected := range want {
+		got := files[i]
+		if got.Name != expected.name || got.Size != expected.size ||
+			got.Mode != expected.mode || got.ModTime != expected.modTime {
+			t.Errorf("file %d = %#v, want name %q size %q mode %q modTime %q",
+				i, got, expected.name, expected.size, expected.mode, expected.modTime)
+		}
+	}
+}
+
 func TestGetPodMetrics(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "demo"},

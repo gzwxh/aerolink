@@ -56,8 +56,8 @@ type PodWithMetrics struct {
 type PodListWithMetrics struct {
 	Items           []*PodWithMetrics `json:"items"`
 	metav1.TypeMeta `json:",inline"`
-	// Standard list metadata.
-	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+	// 标准的列表元数据。
+	// 更多信息：https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
 	// +optional
 	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 }
@@ -155,7 +155,7 @@ func (h *PodHandler) List(c *gin.Context) {
 		}
 		item.Metrics = GetPodMetrics(metricsMap, &objlist.Items[i])
 		if reduce {
-			// remove unnecessary fields to reduce response size
+			// 移除不必要的字段以减小响应体积
 			item.ObjectMeta = metav1.ObjectMeta{
 				Name:              item.Name,
 				Namespace:         item.Namespace,
@@ -250,9 +250,9 @@ func parseKubeSemver(version string) (semver.Version, error) {
 	return semver.Parse(trimmed)
 }
 
-// registerCustomRoutes adds pod-specific extra routes (SSE watch)
+// registerCustomRoutes 注册 pod 专属的额外路由（SSE watch）
 func (h *PodHandler) registerCustomRoutes(group *gin.RouterGroup) {
-	// watch pods in namespace (or _all)
+	// 监听命名空间（或 _all）中的 pod
 	group.GET("/:namespace/watch", h.Watch)
 	group.PATCH("/:namespace/:name/resize", h.Resize)
 	group.PATCH("/:namespace/:name/debug", h.Debug)
@@ -306,15 +306,18 @@ func (h *PodHandler) ListFiles(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
 		path = "/"
+	} else if err := validateContainerPath(path); err != nil {
+		respondFilePathError(c, err)
+		return
 	}
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
-	cmd := []string{"ls", "-lah", "--full-time", path}
+	cmd := []string{"ls", "-lah", "--full-time", safeExecPath(path)}
 	stdout, stderr, err := cs.K8sClient.ExecCommandBuffered(c.Request.Context(), namespace, podName, container, cmd)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(stderr, "not found") {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("File browsing is not supported for %s container (missing 'ls' command)", container),
-			})
+			respondFileError(c, http.StatusBadRequest, fileCodeUnsupported,
+				fmt.Sprintf("File browsing is not supported for %s container (missing 'ls' command)", container),
+				gin.H{"container": container})
 			return
 		}
 		c.JSON(http.StatusOK, nil)
@@ -325,6 +328,18 @@ func (h *PodHandler) ListFiles(c *gin.Context) {
 	c.JSON(http.StatusOK, files)
 }
 
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func parseLsOutput(output string) []FileInfo {
 	lines := strings.Split(output, "\n")
 	files := make([]FileInfo, 0)
@@ -333,6 +348,8 @@ func parseLsOutput(output string) []FileInfo {
 			continue
 		}
 		parts := strings.Fields(line)
+		// 列：mode links uid gid size 日期 时间 时区 名称
+		// （ListFiles 用 `ls -lah --full-time`，即 GNU 的 ISO 时间 + 时区）
 		if len(parts) < 9 {
 			continue
 		}
@@ -342,12 +359,23 @@ func parseLsOutput(output string) []FileInfo {
 
 		uid := parts[2]
 		gid := parts[3]
-		size := parts[4]
 
-		rawDate := strings.Join(parts[5:7], " ")
-		modTime := rawDate
-		name := strings.Join(parts[8:], " ")
-		// Skip . and ..
+		// 字符/块设备的 size 列是「主设备号, 次设备号」，`ls` 在逗号后留有空格，
+		// strings.Fields 因此会多切出一个 token。不补回来的话后面所有列都错位：
+		// 日期读成 "5 2026-09-19"，名称读成 "12:13:44 +0000 null"。
+		sizeIndex := 4
+		size := parts[sizeIndex]
+		if strings.HasSuffix(size, ",") && isAllDigits(parts[sizeIndex+1]) {
+			sizeIndex++
+			size = size + " " + parts[sizeIndex]
+		}
+		if len(parts) < sizeIndex+5 {
+			continue
+		}
+
+		modTime := strings.Join(parts[sizeIndex+1:sizeIndex+3], " ")
+		name := strings.Join(parts[sizeIndex+4:], " ")
+		// 跳过 . 与 ..
 		if name == "." || name == ".." {
 			continue
 		}
@@ -362,7 +390,7 @@ func parseLsOutput(output string) []FileInfo {
 		})
 	}
 	sort.Slice(files, func(i, j int) bool {
-		// Directories first
+		// 目录优先
 		if files[i].IsDir && !files[j].IsDir {
 			return true
 		}
@@ -381,14 +409,18 @@ func (h *PodHandler) PreviewFile(c *gin.Context) {
 	path := c.Query("path")
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path is required"})
+		respondFilePathError(c, errPathRequired)
 		return
 	}
 	if strings.Contains(path, "->") {
 		path = strings.TrimSpace(strings.SplitN(path, "->", 2)[0])
 	}
+	if err := validateContainerPath(path); err != nil {
+		respondFilePathError(c, err)
+		return
+	}
 
-	cmd := []string{"cat", path}
+	cmd := []string{"cat", safeExecPath(path)}
 
 	contentType := mime.TypeByExtension(filepath.Ext(path))
 	if contentType == "" {
@@ -422,12 +454,17 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 
 	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path is required"})
+		respondFilePathError(c, errPathRequired)
 		return
 	}
 	if strings.Contains(path, "->") {
 		path = strings.TrimSpace(strings.SplitN(path, "->", 2)[0])
 	}
+	if err := validateContainerPath(path); err != nil {
+		respondFilePathError(c, err)
+		return
+	}
+
 	_, _, err := cs.K8sClient.ExecCommandBuffered(c.Request.Context(), namespace, podName, container, []string{"test", "-d", path})
 	isDir := err == nil
 
@@ -435,11 +472,11 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 	if isDir {
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar\"", filepath.Base(path)))
 		c.Header("Content-Type", "application/x-tar")
-		cmd = []string{"tar", "cf", "-", path}
+		cmd = []string{"tar", "cf", "-", safeExecPath(path)}
 	} else {
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(path)))
 		c.Header("Content-Type", "application/octet-stream")
-		cmd = []string{"cat", path}
+		cmd = []string{"cat", safeExecPath(path)}
 	}
 
 	err = cs.K8sClient.ExecCommand(c.Request.Context(), kube.ExecOptions{
@@ -458,19 +495,98 @@ func (h *PodHandler) DownloadFile(c *gin.Context) {
 	h.recordFileAudit(c, cs, namespace, podName, "download-file", path, container, err == nil, err)
 }
 
+// safeExecPath 避免用户提供的容器内路径被通过 exec 执行的命令解析成选项
+// （cat/tar/ls 会把以 "-" 开头的参数当作标志）。在路径前加 "./" 对所有实现
+// 都能消除这种歧义，
+// 而 "--" 分隔符在 busybox tar 上并不支持。
+func safeExecPath(p string) string {
+	if strings.HasPrefix(p, "-") {
+		return "./" + p
+	}
+	return p
+}
+
+// validateContainerPath 拒绝客户端本不该发送的形态：
+// 空值、NUL 字节以及 ".." 片段。文件浏览器只遍历一个容器内路径，
+// 因此只有在请求试图越出用户指定目录时才会出现穿越片段。
+// RBAC verb 才是真正的边界，
+// 这里只是让 API 对自身契约保持诚实。
+//
+// 返回的是哨兵错误，调用方用 respondFilePathError 转成可本地化的错误码。
+var (
+	errPathRequired  = errors.New("path is required")
+	errPathInvalid   = errors.New("invalid path")
+	errPathTraversal = errors.New("path must not contain '..'")
+)
+
+func validateContainerPath(p string) error {
+	trimmed := strings.TrimSpace(p)
+	if trimmed == "" {
+		return errPathRequired
+	}
+	if strings.ContainsRune(trimmed, 0) {
+		return errPathInvalid
+	}
+	for _, segment := range strings.Split(trimmed, "/") {
+		if segment == ".." {
+			return errPathTraversal
+		}
+	}
+	return nil
+}
+
+// 容器文件接口的错误码：前端按码本地化提示，error 字段保留英文原文供日志排查。
+const (
+	fileCodeUnsupported   = "pod_files_unsupported"
+	fileCodePathRequired  = "pod_files_path_required"
+	fileCodePathInvalid   = "pod_files_path_invalid"
+	fileCodePathTraversal = "pod_files_path_traversal"
+)
+
+// respondFileError 写入带错误码的 JSON，params 供前端拼装本地化文案里的变量。
+func respondFileError(c *gin.Context, status int, code, message string, params gin.H) {
+	body := gin.H{"error": message, "code": code}
+	if len(params) > 0 {
+		body["params"] = params
+	}
+	c.JSON(status, body)
+}
+
+// respondFilePathError 把路径校验错误映射为错误码后返回。
+func respondFilePathError(c *gin.Context, err error) {
+	code := fileCodePathInvalid
+	switch {
+	case errors.Is(err, errPathRequired):
+		code = fileCodePathRequired
+	case errors.Is(err, errPathTraversal):
+		code = fileCodePathTraversal
+	}
+	respondFileError(c, http.StatusBadRequest, code, err.Error(), nil)
+}
+
+// maxUploadSize 限制 pod 文件上传的请求体大小，
+// 以免有权限的用户用无上限的请求塞满 pod 的磁盘。
+const maxUploadSize = 512 << 20 // 512 MiB
+
 func (h *PodHandler) UploadFile(c *gin.Context) {
 	namespace := c.Param("namespace")
 	podName := c.Param("name")
 	container := c.Query("container")
 	path := c.Query("path")
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
-	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path is required"})
+	if err := validateContainerPath(path); err != nil {
+		respondFilePathError(c, err)
 		return
 	}
 
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadSize)
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
+		if strings.Contains(err.Error(), "request body too large") ||
+			strings.Contains(err.Error(), "http: request body too large") {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "uploaded file is too large"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to get file from request"})
 		return
 	}
@@ -486,7 +602,13 @@ func (h *PodHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	destPath := filepath.Join(path, header.Filename)
+	// 使用清洗后的名称，而不是原始 multipart 值：
+	// 上面的校验针对的是文件名，两者不能出现偏差。
+	destPath := filepath.Join(path, filename)
+	if filepath.Dir(destPath) != filepath.Clean(path) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid destination path"})
+		return
+	}
 	cmd := []string{"tee", destPath}
 
 	err = cs.K8sClient.ExecCommand(c.Request.Context(), kube.ExecOptions{
@@ -529,10 +651,13 @@ func (h *PodHandler) recordFileAudit(c *gin.Context, cs *cluster.ClientSet, name
 		Namespace:       namespace,
 		OperationType:   operation,
 		OperationSource: "manual",
-		ResourceYAML:    fmt.Sprintf("container: %s\npath: %s", container, path),
+		ResourceYAML:    model.LongText(fmt.Sprintf("container: %s\npath: %s", container, path)),
 		Success:         success,
 		ErrorMessage:    errorMessage,
-		OperatorID:      user.ID,
+		OperatorID:      model.OperatorRef(user.ID),
+		OperatorName:    user.Username,
+		ClientIP:        c.ClientIP(),
+		UserAgent:       common.AuditUserAgent(c.Request.UserAgent()),
 	}).Error; err != nil {
 		klog.Errorf("failed to record file audit: %v", err)
 	}
@@ -543,7 +668,7 @@ func writeSSE(c *gin.Context, event string, payload any) error {
 	c.Writer.Header().Set("Cache-Control", "no-cache, no-transform")
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
-	// Try to stream chunked
+	// 尝试分块流式传输
 	c.Writer.Header().Set("Transfer-Encoding", "chunked")
 
 	flusher, ok := c.Writer.(http.Flusher)
@@ -565,11 +690,11 @@ func writeSSE(c *gin.Context, event string, payload any) error {
 	return nil
 }
 
-// Watch implements SSE-based watch for pods list with initial snapshot and incremental updates
+// Watch 实现基于 SSE 的 pod 列表监听：先给初始快照，再给增量更新
 func (h *PodHandler) Watch(c *gin.Context) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 
-	// Parse params
+	// 解析参数
 	namespace := c.Param("namespace")
 	if namespace == "" {
 		namespace = common.AllNamespaces
@@ -578,10 +703,10 @@ func (h *PodHandler) Watch(c *gin.Context) {
 	labelSelector := c.Query("labelSelector")
 	fieldSelector := c.Query("fieldSelector")
 
-	// Reauthorize every streamed item against the latest role configuration so
-	// role revocations take effect without waiting for the connection to close.
-	// For cross-namespace watches this also drops events from unauthorized
-	// namespaces after the middleware's resource-level entry check.
+	// 对每个流式推送的条目按最新角色配置重新鉴权，
+	// 这样角色被回收后无需等连接关闭即可生效。
+	// 对跨命名空间监听而言，这也会在中间件的资源级入口校验之后
+	// 丢弃来自未授权命名空间的事件。
 	user := c.MustGet("user").(model.User)
 
 	listOpts := metav1.ListOptions{}
@@ -608,7 +733,7 @@ func (h *PodHandler) Watch(c *gin.Context) {
 	}
 	defer watchInterface.Stop()
 
-	// Keep-alive pings
+	// 保活心跳
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
@@ -681,7 +806,7 @@ func (h *PodHandler) Watch(c *gin.Context) {
 			case watch.Error:
 				_ = writeSSE(c, "error", gin.H{"error": "watch error"})
 			default:
-				// ignore
+				// 忽略
 			}
 		}
 	}

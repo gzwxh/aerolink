@@ -31,6 +31,19 @@ func setupStatic(r *gin.Engine) {
 	assetsGroup.Use(middleware.StaticCache())
 	assetsGroup.StaticFS("/", http.FS(assetsFS))
 
+	// 运行时 base path 以同源外部脚本的形式发布，
+	// 使严格的 CSP（script-src 'self'）依然可用；在
+	// index.html 里用内联脚本会被浏览器拦截。
+	r.GET(base+"/config.js", func(c *gin.Context) {
+		assetBase := common.Base
+		if assetBase == "/" {
+			assetBase = ""
+		}
+		c.Header("Content-Type", "application/javascript; charset=utf-8")
+		c.Header("Cache-Control", "no-store")
+		c.String(http.StatusOK, utils.ConfigScript(assetBase))
+	})
+
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 		if len(path) >= len(base)+5 && path[len(base):len(base)+5] == "/api/" {
@@ -45,7 +58,7 @@ func setupStatic(r *gin.Engine) {
 		}
 
 		htmlContent := utils.InjectKiteBase(string(content), base)
-		if common.EnableAnalytics {
+		if common.EnableAnalytics.Load() {
 			htmlContent = utils.InjectAnalytics(htmlContent)
 		}
 

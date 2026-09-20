@@ -66,7 +66,7 @@ Response style:
 - Use valid GitHub-Flavored Markdown. Put commands and code in fenced code blocks, and close the fence before starting headings, lists, or tables. Do not wrap Markdown structure in a code fence.
 - Feel free to respond with emojis where appropriate.`
 
-// PageContext provides context about which page the user is viewing.
+// PageContext 提供用户当前正在浏览哪个页面的上下文。
 type PageContext struct {
 	Page         string `json:"page"`
 	Namespace    string `json:"namespace"`
@@ -74,7 +74,7 @@ type PageContext struct {
 	ResourceKind string `json:"resource_kind"`
 }
 
-// Agent handles the AI conversation loop with tool calling.
+// Agent 负责带工具调用的 AI 对话循环。
 type Agent struct {
 	providerName string
 	provider     modelProvider
@@ -92,7 +92,7 @@ type runtimePromptContext struct {
 const maxConversationMessages = 30
 const maxMessageChars = 8000
 
-// NewAgent creates a new AI agent for a conversation.
+// NewAgent 为一次对话创建一个新的 AI agent。
 func NewAgent(cs *cluster.ClientSet, cfg *RuntimeConfig) (*Agent, error) {
 	provider := model.DefaultGeneralAIProvider
 	if cfg != nil {
@@ -146,7 +146,9 @@ func summarizeScope(items []string) string {
 }
 
 func buildRBACOverview(user model.User) string {
-	roles := rbac.GetUserRoles(user)
+	// 与前端用户对象保持一致：通过全局权限绑定组（超级权限绑定）持有的角色也算在内，
+	// 否则模型会以为绑定组管理员“没有角色”。
+	roles := rbac.RolesForDisplay(user)
 	if len(roles) == 0 {
 		return "no roles"
 	}
@@ -190,11 +192,11 @@ func buildRuntimePromptContext(c *gin.Context, cs *cluster.ClientSet) runtimePro
 	return ctx
 }
 
-// buildContextualSystemPrompt augments the system prompt with runtime/page context.
+// buildContextualSystemPrompt 用运行时/页面上下文增强系统提示词。
 func buildContextualSystemPrompt(pageCtx *PageContext, runtimeCtx runtimePromptContext, language string) string {
 	prompt := systemPrompt
 
-	// Add current system time
+	// 加入当前系统时间
 	prompt += fmt.Sprintf("\n\nCurrent system time: %s", time.Now().Format("2006-01-02 15:04:05 MST"))
 
 	if runtimeCtx.ClusterName != "" || runtimeCtx.AccountName != "" || runtimeCtx.RBACOverview != "" {
@@ -222,7 +224,7 @@ func buildContextualSystemPrompt(pageCtx *PageContext, runtimeCtx runtimePromptC
 			prompt += fmt.Sprintf("\n- Current namespace: %s", pageCtx.Namespace)
 		}
 
-		// Add contextual suggestions
+		// 加入上下文相关的建议
 		switch pageCtx.Page {
 		case "overview":
 			prompt += "\n- Suggest analyzing overall cluster health, resource utilization, and potential issues."

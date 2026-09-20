@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/zxh326/kite/pkg/model"
@@ -98,6 +99,11 @@ func (m *Manager) acquire(task model.ScheduledTask, now time.Time) bool {
 
 func (m *Manager) runTask(ctx context.Context, task model.ScheduledTask) {
 	runAt := time.Now()
+	// 执行期间必须续租：acquire 只在开始时写一次 lock_until，长任务会在锁到期后
+	// 被另一个实例当成「无人执行」而抢走，同一个任务就被并发跑了两遍。
+	stopHeartbeat := m.startLockHeartbeat(ctx, task)
+	defer stopHeartbeat()
+
 	klog.Infof("Scheduled task started: cluster=%s type=%s key=%s id=%d", task.ClusterName, task.Type, task.Key, task.ID)
 	executor := m.executors[task.Type]
 	var err error
@@ -106,12 +112,50 @@ func (m *Manager) runTask(ctx context.Context, task model.ScheduledTask) {
 	} else {
 		err = executor.Run(ctx, task)
 	}
+	// 先停心跳再收尾：否则续租可能和 finish 的清锁互相覆盖。
+	stopHeartbeat()
 	m.finish(task, runAt, err)
 	if err != nil {
 		klog.Errorf("Scheduled task finished with error: cluster=%s type=%s key=%s id=%d duration=%s error=%v", task.ClusterName, task.Type, task.Key, task.ID, time.Since(runAt), err)
 		return
 	}
 	klog.Infof("Scheduled task finished: cluster=%s type=%s key=%s id=%d duration=%s", task.ClusterName, task.Type, task.Key, task.ID, time.Since(runAt))
+}
+
+// startLockHeartbeat 在任务执行期间周期性把 lock_until 往后推，返回的函数用于
+// 停止心跳（幂等，可重复调用）。
+func (m *Manager) startLockHeartbeat(ctx context.Context, task model.ScheduledTask) func() {
+	interval := m.lockDuration / 2
+	if interval <= 0 {
+		interval = time.Millisecond
+	}
+	done := make(chan struct{})
+	var once sync.Once
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := m.renewLock(task); err != nil {
+					klog.Errorf("Failed to renew the lock on scheduled task %s/%s/%s: %v",
+						task.ClusterName, task.Type, task.Key, err)
+				}
+			}
+		}
+	}()
+	return func() { once.Do(func() { close(done) }) }
+}
+
+// renewLock 只续租本实例持有的锁：锁若已被别的实例抢走，就不要再动它。
+func (m *Manager) renewLock(task model.ScheduledTask) error {
+	return model.DB.Model(&model.ScheduledTask{}).
+		Where("id = ? AND locked_by = ?", task.ID, m.instanceID).
+		Update("lock_until", time.Now().Add(m.lockDuration)).Error
 }
 
 func (m *Manager) finish(task model.ScheduledTask, runAt time.Time, err error) {

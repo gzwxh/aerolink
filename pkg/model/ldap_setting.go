@@ -100,9 +100,9 @@ func (s LDAPSetting) Validate() error {
 	if !HasExactlyOneLDAPPlaceholder(normalized.UserFilter) {
 		return errors.New("userFilter must contain exactly one %s")
 	}
-	// Group settings are optional — LDAP can be used purely for authentication
-	// when group-based RBAC is not needed. The group filter is only validated
-	// when a group base DN is configured.
+	// 组相关设置是可选的——在不需要基于组的 RBAC 时，LDAP 可以只用于认证。
+	// 只有在配置了组 base DN 时，才会校验组过滤条件。
+	//
 	if normalized.GroupBaseDN != "" && !HasExactlyOneLDAPPlaceholder(normalized.GroupFilter) {
 		return errors.New("groupFilter must contain exactly one %s")
 	}

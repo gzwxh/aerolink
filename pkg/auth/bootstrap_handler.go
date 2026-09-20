@@ -22,7 +22,7 @@ type bootstrapAuthOptions struct {
 	OAuthProviders      []string `json:"oauthProviders"`
 	LoginPrompt         string   `json:"loginPrompt"`
 	MFAEnabled          bool     `json:"mfaEnabled"`
-	PasskeyLoginEnabled bool     `json:"passkeyLoginEnabled"`
+	MFAPolicy           string   `json:"mfaPolicy"`
 	LoginCaptchaEnabled bool     `json:"loginCaptchaEnabled"`
 }
 
@@ -31,13 +31,30 @@ type bootstrapCapabilities struct {
 	KubectlEnabled bool `json:"kubectlEnabled"`
 }
 
+// bootstrapSession 描述本次登录的会话：seq 是登录序号，superseded 表示这次登录把
+// 之前仍有效的会话顶下线了（单点登录），前端据此在新设备上提示「其他设备已退出」。
+type bootstrapSession struct {
+	Seq        uint64 `json:"seq"`
+	Superseded bool   `json:"superseded"`
+}
+
+// bootstrapBranding 是控制台的外观配置。它放在公开的 bootstrap 响应里，
+// 未登录的登录页 / 初始化页才能与登录后的侧边栏用同一个 logo。
+type bootstrapBranding struct {
+	// LogoURL 是管理员配置的自定义 logo；空串表示由前端使用内置图标。
+	LogoURL string `json:"logoUrl"`
+	// SiteName 是控制台展示名称；空串表示由前端使用默认名 “Kite”。
+	SiteName string `json:"siteName"`
+}
+
 type bootstrapResponse struct {
-	Setup                      bootstrapSetupState   `json:"setup"`
-	Auth                       bootstrapAuthOptions  `json:"auth"`
-	Capabilities               bootstrapCapabilities `json:"capabilities"`
-	User                       *model.User           `json:"user"`
-	HasGlobalSidebarPreference bool                  `json:"hasGlobalSidebarPreference"`
-	GlobalSidebarPreference    string                `json:"globalSidebarPreference"`
+	Setup                   bootstrapSetupState   `json:"setup"`
+	Auth                    bootstrapAuthOptions  `json:"auth"`
+	Capabilities            bootstrapCapabilities `json:"capabilities"`
+	Branding                bootstrapBranding     `json:"branding"`
+	Session                 bootstrapSession      `json:"session"`
+	User                    *model.User           `json:"user"`
+	GlobalSidebarPreference string                `json:"globalSidebarPreference"`
 }
 
 func (h *AuthHandler) Bootstrap(c *gin.Context) {
@@ -60,6 +77,13 @@ func (h *AuthHandler) Bootstrap(c *gin.Context) {
 		globalSidebarPreference = ""
 	}
 
+	session := bootstrapSession{}
+	if user != nil {
+		if state, ok := activeSessions.current(uint64(user.ID)); ok {
+			session = bootstrapSession{Seq: state.seq, Superseded: state.tookOver}
+		}
+	}
+
 	c.JSON(http.StatusOK, bootstrapResponse{
 		Setup: setup,
 		Auth:  h.bootstrapAuth(setting),
@@ -67,9 +91,13 @@ func (h *AuthHandler) Bootstrap(c *gin.Context) {
 			AIEnabled:      setting.AIAgentEnabled && strings.TrimSpace(string(setting.AIAPIKey)) != "",
 			KubectlEnabled: setting.KubectlEnabled,
 		},
-		User:                       user,
-		HasGlobalSidebarPreference: globalSidebarPreference != "",
-		GlobalSidebarPreference:    globalSidebarPreference,
+		Branding: bootstrapBranding{
+			LogoURL:  strings.TrimSpace(setting.LogoURL),
+			SiteName: strings.TrimSpace(setting.SiteName),
+		},
+		Session:                 session,
+		User:                    user,
+		GlobalSidebarPreference: globalSidebarPreference,
 	})
 }
 
@@ -107,10 +135,10 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 		ldapEnabled = ldapSetting.Enabled
 	}
 
-	// LDAP is the primary credential method when enabled. Local password
-	// sign-in stays available as a secondary escape hatch so a built-in admin
-	// can always sign in and manage grants (directory users may lack admin
-	// rights). Passkey stays hidden in LDAP mode.
+	// 启用时 LDAP 是主要的凭据方式。本地密码登录
+	// 保留为备用的应急通道，这样内置管理员始终可以登录并管理授权
+	// （目录用户可能缺少管理员权限）。
+	//
 	if setting != nil && !setting.PasswordLoginDisabled {
 		credentialProviders = append(credentialProviders, model.AuthProviderPassword)
 	}
@@ -127,17 +155,23 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 	providers := append(append([]string{}, credentialProviders...), oauthProviders...)
 
 	loginCaptchaEnabled := false
+	mfaPolicy := model.MFAPolicyDisabled
 	if securitySetting, err := model.GetSecuritySetting(); err == nil && securitySetting != nil {
 		loginCaptchaEnabled = securitySetting.LoginCaptchaEnabled
+		mfaPolicy = securitySetting.MFAPolicy
 	}
+
+	// mfaEnabled 是对客户端暴露的综合开关：认证设置的功能闸与安全设置里
+	// 的全局 MFA 策略（未启用/所有用户/仅管理员）必须同时放行。
+	mfaEnabled := (setting == nil || setting.EnableMFA) && mfaPolicy != model.MFAPolicyDisabled
 
 	return bootstrapAuthOptions{
 		Providers:           providers,
 		CredentialProviders: credentialProviders,
 		OAuthProviders:      oauthProviders,
 		LoginPrompt:         loginPrompt,
-		MFAEnabled:          setting == nil || setting.EnableMFA,
-		PasskeyLoginEnabled: !ldapEnabled && setting != nil && setting.EnablePasskeyLogin,
+		MFAEnabled:          mfaEnabled,
+		MFAPolicy:           mfaPolicy,
 		LoginCaptchaEnabled: loginCaptchaEnabled,
 	}
 }
@@ -180,7 +214,13 @@ func (h *AuthHandler) bootstrapUser(c *gin.Context, setting *model.GeneralSettin
 	}
 
 	currentUser := *user
-	currentUser.Roles = rbac.GetUserRoles(currentUser)
+	// 与 /api/auth/user 一致：全局权限绑定组带来的角色也要展示，否则仅由绑定组授权的
+	// 账号能登录、却看不到系统设置入口（前端的管理入口就是由这份角色列表推导的）。
+	currentUser.Roles = rbac.RolesForDisplay(currentUser)
+	// 命名空间级权限绑定组的角色同样要下发：前端的用户对象来自 bootstrap（不是
+	// /api/auth/user），漏掉这里会让绑定组用户看不到「创建 / 批量删除」这类入口，
+	// 即使他在组内命名空间里确实有权限。
+	currentUser.NamespaceScopedRoles = rbac.NamespaceScopedBindingGroupRoles(currentUser)
 	applyBootstrapSidebarPreference(&currentUser, setting)
 	if securitySetting, err := model.GetSecuritySetting(); err == nil {
 		currentUser.MFARequired = securitySetting.MFARequiredFor(&currentUser)
@@ -189,9 +229,19 @@ func (h *AuthHandler) bootstrapUser(c *gin.Context, setting *model.GeneralSettin
 	return &currentUser
 }
 
+// applyBootstrapSidebarPreference 按优先级补上要下发给客户端的侧边栏布局：
+// 用户自己的布局 > 管理员发布的全局布局 > 前端的内置默认。
+//
+// 也就是说全局布局是「新用户/没配过的人的默认样子」，不再强制覆盖已经自己配置过的
+// 账号（以前非管理员会被强制套用全局布局，连保存自己的布局都会被拒绝）。
 func applyBootstrapSidebarPreference(user *model.User, setting *model.GeneralSetting) {
-	globalSidebarPreference := strings.TrimSpace(setting.GlobalSidebarPreference)
-	if globalSidebarPreference != "" && (!rbac.UserHasRole(*user, model.DefaultAdminRole.Name) || strings.TrimSpace(user.SidebarPreference) == "") {
+	if user == nil || setting == nil {
+		return
+	}
+	if strings.TrimSpace(user.SidebarPreference) != "" {
+		return
+	}
+	if globalSidebarPreference := strings.TrimSpace(setting.GlobalSidebarPreference); globalSidebarPreference != "" {
 		user.SidebarPreference = globalSidebarPreference
 	}
 }

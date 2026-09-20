@@ -49,10 +49,12 @@ func RBACMiddleware() gin.HandlerFunc {
 		}
 		if resource == string(common.Namespaces) && verbs == "get" {
 			name := c.Param("name")
-			if name == "" && rbac.CanAccessCluster(user, cs.Name) {
-				// if user has cluster access, allow access to list namespaces resource
-				// don't worry about security here, we will filter namespaces in the list namespace handler
-				// this is just to allow users to list namespaces they have access to
+			if name == "" && rbac.CanSeeNamespacesInCluster(user, cs.Name) {
+				// 如果用户能看到该集群的任一命名空间（通过直接角色获得集群访问权限，
+				// 或作为某个权限绑定组的成员），就允许访问
+				// 命名空间列表这一资源
+				// 这里不必担心安全问题，我们会在 list namespaces 的处理器里过滤命名空间
+				// 目的只是让用户能列出自己有权访问的命名空间
 				c.Next()
 				return
 			}
@@ -62,29 +64,29 @@ func RBACMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		// Cross-namespace LIST / WATCH passthrough.
+		// 跨命名空间的 LIST / WATCH 放行。
 		//
-		// When a user selects multiple namespaces the frontend collapses the
-		// selection into a single "_all" request (see use-resource-table-state).
-		// The same happens for the "All Namespaces" view. The RBAC check below
-		// would reject such requests unless one of the user's roles carried an
-		// explicit "_all" / "*" namespace grant — which is not the case for
-		// namespace-scoped roles, so multi-namespace listing (and the SSE pod
-		// watch) returned 403 even though the user was permitted to access each
-		// individual namespace.
+		// 当用户选择多个命名空间时，前端会把选择折叠成
+		// 单个 "_all" 请求（见 use-resource-table-state）。
+		// "所有命名空间"视图同样如此。按下面的 RBAC 校验，
+		// 这类请求会被拒绝，除非用户某个角色带有
+		// 显式的 "_all" / "*" 命名空间授权——而限定命名空间范围的
+		// 角色并没有，于是即使用户被允许访问其中每个
+		// 单独的命名空间，多命名空间列表（以及 SSE pod
+		// watch）仍然返回 403。
 		//
-		// The list handlers and the pod watch handler filter every returned /
-		// streamed item, so it is safe to let the request reach the handler as
-		// long as:
-		//   - it is a genuine LIST or the pods /_all/watch SSE sub-route (any
-		//     other sub-route such as /:name, /describe, /history, /logs,
-		//     /files, /related still requires an explicit _all/* grant);
-		//   - known resources are namespace-scoped; dynamic CR LIST requests
-		//     defer the scope check to the CR handler (known cluster-scoped
-		//     resources skip the namespace scope in rbac.CanAccess, so they
-		//     pass the normal check below);
-		//   - the user holds at least one role granting `verb` on this resource
-		//     in this cluster (zero-permission users are still rejected).
+		// list 处理器与 pod watch 处理器会过滤每个返回 /
+		// 流式推送的条目，因此只要满足以下条件，把请求放行到处理器是安全的：
+		//   - 它是真正的 LIST，或者是 pods 的 /_all/watch SSE 子路由（其它
+		//     子路由，例如 /:name、/describe、/history、/logs、
+		//     /files、/related，仍然需要显式的 _all/* 授权）；
+		//   - 已知资源是命名空间级的；动态 CR 的 LIST 请求会把范围检查
+		//     交给 CR 处理器（已知的集群级资源在 rbac.CanAccess 中会跳过
+		//     命名空间范围检查，因此它们
+		//     会通过下面的常规校验）；
+		//   - 用户在此集群中至少持有一个对该资源授予 verb 的角色
+		//     （零权限用户仍会被拒绝）。
+		//
 		if verbs == "get" && ns == common.AllNamespaces {
 			isList := isCrossNamespaceList(path)
 			isWatch := resource == string(common.Pods) && isCrossNamespaceWatch(path)
@@ -117,8 +119,8 @@ func method2verb(method string) string {
 	}
 }
 
-// url2namespaceresource converts a URL path to a resource type.
-// For example:
+// url2namespaceresource 把 URL 路径转换为资源类型。
+// 例如：
 //
 // - /api/v1/pods/default/pods => default, pods
 // - /api/v1/pvs/_all/some-pv => _all, some-pv
@@ -128,7 +130,7 @@ func url2namespaceresource(path string) (namespace string, resource string) {
 	if common.Base != "" {
 		path = strings.TrimPrefix(path, common.Base)
 	}
-	// Split the URL into its components
+	// 把 URL 拆分成各个组成部分
 	parts := strings.Split(path, "/")
 	resourceIndex := 3
 	if len(parts) > resourceIndex && parts[resourceIndex] == "_clusters" {
@@ -152,20 +154,20 @@ func url2namespaceresource(path string) (namespace string, resource string) {
 	return
 }
 
-// isCrossNamespaceList reports whether the URL denotes a genuine cross-namespace
-// LIST request (i.e. no :name and no sub-route such as /describe, /history,
-// /logs, /files, /related). It mirrors the path parsing in
-// url2namespaceresource, so callers must first confirm ns == common.AllNamespaces.
+// isCrossNamespaceList 报告该 URL 是否表示一次真正的跨命名空间
+// LIST 请求（即没有 :name，也没有 /describe、/history、
+// /logs、/files、/related 之类的子路由）。它与
+// url2namespaceresource 中的路径解析保持一致，因此调用方必须先确认 ns == common.AllNamespaces。
 //
-// Accepted forms (after common.Base is stripped):
+// 可接受的形式（去掉 common.Base 之后）：
 //
 //	/<group>/<ver>/<res>
 //	/<group>/<ver>/<res>/_all
 //	/<group>/<ver>/_clusters/<cluster>/<res>
 //	/<group>/<ver>/_clusters/<cluster>/<res>/_all
 //
-// Anything longer is a single-resource GET or a sub-route (other than /watch,
-// which is handled by isCrossNamespaceWatch) and is NOT a list.
+// 更长的路径就是单个资源的 GET 或子路由（除 /watch 之外，
+// 后者由 isCrossNamespaceWatch 处理），不算列表。
 func isCrossNamespaceList(path string) bool {
 	if common.Base != "" {
 		path = strings.TrimPrefix(path, common.Base)
@@ -181,20 +183,20 @@ func isCrossNamespaceList(path string) bool {
 	return len(parts) == resourceIndex+2 && parts[resourceIndex+1] == common.AllNamespaces
 }
 
-// isCrossNamespaceWatch reports whether the URL denotes the cross-namespace
-// SSE watch sub-route. Only the pods resource currently registers a watch
-// handler (see PodHandler.registerCustomRoutes); callers must restrict the
-// passthrough to that resource.
+// isCrossNamespaceWatch 报告该 URL 是否表示跨命名空间的
+// SSE watch 子路由。目前只有 pods 资源注册了 watch
+// 处理器（见 PodHandler.registerCustomRoutes）；调用方必须把
+// 放行范围限制在该资源上。
 //
-// Accepted form (after common.Base is stripped):
+// 可接受的形式（去掉 common.Base 之后）：
 //
 //	/<group>/<ver>/<res>/_all/watch
 //	/<group>/<ver>/_clusters/<cluster>/<res>/_all/watch
 //
-// IMPORTANT: any watch handler matched by this route MUST filter every streamed
-// event through the full rbac.CanAccess check when ns == _all. The middleware
-// only checks that the user holds a get permission on the resource; per-object
-// filtering is the handler's responsibility (see PodHandler.Watch).
+// 重要：这条路由匹配到的任何 watch 处理器都必须在 ns == _all 时
+// 通过完整的 rbac.CanAccess 校验过滤每一个流式事件。中间件
+// 只检查用户在该资源上是否有 get 权限；逐对象过滤
+// 由处理器负责（见 PodHandler.Watch）。
 func isCrossNamespaceWatch(path string) bool {
 	if common.Base != "" {
 		path = strings.TrimPrefix(path, common.Base)

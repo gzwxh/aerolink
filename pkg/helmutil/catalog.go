@@ -12,7 +12,7 @@ import (
 	repo "helm.sh/helm/v4/pkg/repo/v1"
 )
 
-// LoadRepositoryCatalog normalizes classic and OCI repositories as an index.
+// LoadRepositoryCatalog 把经典仓库与 OCI 仓库规范化为索引。
 func LoadRepositoryCatalog(repository model.HelmRepository) (*repo.IndexFile, error) {
 	if registry.IsOCI(repository.URL) {
 		return loadOCIRepositoryIndex(repository)

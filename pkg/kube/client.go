@@ -37,10 +37,10 @@ const (
 	defaultKubeAPIBurst     = 100
 )
 
-// cacheSyncTimeout returns the configured cache sync timeout, overridable via
-// the KITE_CACHE_SYNC_TIMEOUT env var (in seconds). The initial LIST for
-// informers on large/remote clusters can take a long time, so the default is
-// generous and remains configurable for edge cases.
+// cacheSyncTimeout 返回已配置的缓存同步超时，可通过
+// KITE_CACHE_SYNC_TIMEOUT 环境变量（单位：秒）覆盖。大型/远程集群上
+// informer 的首次 LIST 可能耗时很久，因此默认值
+// 给得比较宽松，并仍可针对边界情况调整。
 func cacheSyncTimeout() time.Duration {
 	if v := os.Getenv("KITE_CACHE_SYNC_TIMEOUT"); v != "" {
 		if secs, err := strconv.Atoi(v); err == nil && secs > 0 {
@@ -50,9 +50,9 @@ func cacheSyncTimeout() time.Duration {
 	return defaultCacheSyncTimeout
 }
 
-// kubeAPIQPS returns the QPS limit for the Kubernetes API client, overridable
-// via the KITE_KUBE_API_QPS env var. Defaults to 50 (client-go default is 5,
-// which is too low for large/remote clusters during the initial cache sync).
+// kubeAPIQPS 返回 Kubernetes API 客户端的 QPS 上限，可通过
+// KITE_KUBE_API_QPS 环境变量覆盖。默认 50（client-go 默认是 5，
+// 对大型/远程集群在首次缓存同步期间来说太低了）。
 func kubeAPIQPS() float32 {
 	if v := os.Getenv("KITE_KUBE_API_QPS"); v != "" {
 		if qps, err := strconv.ParseFloat(v, 32); err == nil && qps > 0 {
@@ -62,9 +62,9 @@ func kubeAPIQPS() float32 {
 	return defaultKubeAPIQPS
 }
 
-// kubeAPIBurst returns the burst limit for the Kubernetes API client,
-// overridable via the KITE_KUBE_API_BURST env var. Defaults to 100 (client-go
-// default is 10).
+// kubeAPIBurst 返回 Kubernetes API 客户端的突发上限，
+// 可通过 KITE_KUBE_API_BURST 环境变量覆盖。默认 100（client-go
+// 默认是 10）。
 func kubeAPIBurst() int {
 	if v := os.Getenv("KITE_KUBE_API_BURST"); v != "" {
 		if burst, err := strconv.Atoi(v); err == nil && burst > 0 {
@@ -129,7 +129,7 @@ func (l controllerRuntimeLogSink) WithCallDepth(depth int) logr.LogSink {
 	return l
 }
 
-// K8sClient holds the Kubernetes client instances
+// K8sClient 保存 Kubernetes 客户端实例
 type K8sClient struct {
 	client.Client
 	ClientSet     kubernetes.Interface
@@ -140,12 +140,12 @@ type K8sClient struct {
 	cancel context.CancelFunc
 }
 
-// NewClient creates a K8sClient from a rest.Config
+// NewClient 依据 rest.Config 创建 K8sClient
 func NewClient(config *rest.Config) (*K8sClient, error) {
-	// Tune QPS/Burst so the initial cache sync LIST on large/remote clusters is
-	// not throttled by the client-go defaults (QPS=5, Burst=10). Values are
-	// overridable via KITE_KUBE_API_QPS and KITE_KUBE_API_BURST. A value
-	// explicitly set on the rest.Config (e.g. from kubeconfig) is preserved.
+	// 调整 QPS/Burst，使大型/远程集群上首次缓存同步的 LIST
+	// 不会被 client-go 的默认值（QPS=5、Burst=10）限流。
+	// 这些值可通过 KITE_KUBE_API_QPS 与 KITE_KUBE_API_BURST 覆盖。
+	// 在 rest.Config 上显式设置的值（例如来自 kubeconfig）会被保留。
 	if config.QPS == 0 {
 		config.QPS = kubeAPIQPS()
 	}
@@ -192,7 +192,7 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 			return nil, err
 		}
 
-		// Add field indexer for Pod spec.nodeName to enable efficient querying by node
+		// 为 Pod 的 spec.nodeName 添加字段索引器，以便按节点高效查询
 		if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Pod{}, "spec.nodeName", func(rawObj client.Object) []string {
 			pod := rawObj.(*corev1.Pod)
 			if pod.Spec.NodeName == "" {
@@ -234,7 +234,7 @@ func (c *K8sClient) Stop(name string) {
 	c.cancel()
 }
 
-// GetScheme returns the runtime scheme used by the client
+// GetScheme 返回客户端使用的 runtime scheme
 func GetScheme() *runtime.Scheme {
 	return runtimeScheme
 }
@@ -258,9 +258,9 @@ func WaitForResourceDeletion(ctx context.Context, client client.Client, obj clie
 				}
 				return fmt.Errorf("failed to get resource: %w", err)
 			} else if obj.GetDeletionTimestamp().IsZero() {
-				// resource still exist, but deletion timestamp is not set
-				// may be created again after deletion
-				// we can consider it successfully deleted.
+				// 该资源仍然存在，但没有设置删除时间戳
+				// 删除后可能被重新创建
+				// 因此可以认为它已被成功删除。
 				return nil
 			}
 		}

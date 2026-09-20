@@ -1,13 +1,20 @@
 package ai
 
 import (
+	"context"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/zxh326/kite/pkg/cluster"
+	"github.com/zxh326/kite/pkg/kube"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestObjectToYAML(t *testing.T) {
@@ -256,5 +263,56 @@ func TestAsInt64(t *testing.T) {
 				t.Fatalf("unexpected value: want %d, got %d", tc.want, got)
 			}
 		})
+	}
+}
+
+// describe_resource 不能把 Secret / ConfigMap 的明文送进模型上下文：kubectl 的
+// describer 会打印 ConfigMap 的全部值，以及 service-account-token 类型 Secret 的
+// token。这两类资源应改走已脱敏的对象视图。
+func TestDescribeResourceRedactsSensitiveKinds(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("building scheme: %v", err)
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "sa-token", Namespace: "default"},
+		Type:       corev1.SecretTypeServiceAccountToken,
+		Data:       map[string][]byte{"token": []byte("super-secret-token")},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build()
+	// Configuration 指向一个不可达的地址：修复生效时根本不会构造 describer，
+	// 一旦绕过脱敏分支就会在这里失败，而不是静默去打印明文。
+	cs := &cluster.ClientSet{Name: "cluster-a", K8sClient: &kube.K8sClient{
+		Client:        fakeClient,
+		Configuration: &rest.Config{Host: "http://127.0.0.1:1"},
+	}}
+
+	got, isError := executeDescribeResource(context.Background(), cs, map[string]interface{}{
+		"kind":      "Secret",
+		"name":      "sa-token",
+		"namespace": "default",
+	})
+	if isError {
+		t.Fatalf("describe returned an error: %s", got)
+	}
+	if strings.Contains(got, "super-secret-token") {
+		t.Fatalf("secret data leaked into the tool output: %q", got)
+	}
+	if !strings.Contains(got, "***") {
+		t.Fatalf("expected a redacted manifest, got %q", got)
+	}
+}
+
+// isSensitiveResourceKind 是脱敏与 describe 绕行的共同判定：大小写/空格不敏感。
+func TestIsSensitiveResourceKind(t *testing.T) {
+	for _, kind := range []string{"Secret", "secret", " ConfigMap ", "configmap"} {
+		if !isSensitiveResourceKind(kind) {
+			t.Errorf("isSensitiveResourceKind(%q) = false, want true", kind)
+		}
+	}
+	for _, kind := range []string{"Deployment", "Pod", ""} {
+		if isSensitiveResourceKind(kind) {
+			t.Errorf("isSensitiveResourceKind(%q) = true, want false", kind)
+		}
 	}
 }

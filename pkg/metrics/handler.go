@@ -67,16 +67,16 @@ func (h *Handler) GetResourceUsageHistory(c *gin.Context) {
 		return
 	}
 
-	// Get query parameter for time range
+	// 获取时间范围的查询参数
 	duration := c.DefaultQuery("duration", "1h")
 
-	// Validate duration parameter
+	// 校验 duration 参数
 	if !validDurations[duration] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid duration. Must be one of: 30m, 1h, 24h"})
 		return
 	}
 
-	// Get resource usage history if Prometheus is available
+	// Prometheus 可用时获取资源用量历史
 	if cs.PromClient == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Prometheus client not available"})
 		return
@@ -95,7 +95,7 @@ func (h *Handler) GetResourceUsageHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, resourceUsageHistory)
 }
 
-// GetPodMetrics handles pod-specific metrics requests
+// GetPodMetrics 处理 pod 专属的指标请求
 func (h *Handler) GetPodMetrics(c *gin.Context) {
 	ctx := c.Request.Context()
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
@@ -106,25 +106,25 @@ func (h *Handler) GetPodMetrics(c *gin.Context) {
 		return
 	}
 
-	// Get path parameters
+	// 获取路径参数
 	podName := c.Param("podName")
 	if namespace == "" || podName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace and podName are required"})
 		return
 	}
 
-	// Get query parameters
+	// 获取查询参数
 	duration := c.DefaultQuery("duration", "1h")
 	container := c.Query("container") // Optional container name
 	labelSelector := c.Query("labelSelector")
 
-	// Validate duration parameter
+	// 校验 duration 参数
 	if !validDurations[duration] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid duration. Must be one of: 30m, 1h, 24h"})
 		return
 	}
 
-	// Try Prometheus first
+	// 先尝试 Prometheus
 	var podMetrics *prometheus.PodMetrics
 	var err error
 	if cs.PromClient != nil {
@@ -136,7 +136,7 @@ func (h *Handler) GetPodMetrics(c *gin.Context) {
 		}
 	}
 
-	// Fallback: metrics-server
+	// 兜底：metrics-server
 	podMetrics, err = h.fetchPodMetricsFromMetricsServer(c, namespace, podName, container, labelSelector)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get pod metrics from both Prometheus and metrics-server: %v", err)})
@@ -202,7 +202,7 @@ func (h *Handler) fetchPodMetricsFromMetricsServer(c *gin.Context, namespace, po
 		}, nil
 	}
 
-	// single pod
+	// 单个 pod
 	podMetrics, err := cs.K8sClient.MetricsClient.MetricsV1beta1().PodMetricses(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err

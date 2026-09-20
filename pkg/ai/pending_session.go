@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -10,7 +11,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const pendingSessionTTL = 15 * time.Minute
+const (
+	pendingSessionTTL             = 15 * time.Minute
+	pendingSessionCleanupInterval = 10 * time.Minute
+)
 
 type pendingSession struct {
 	Provider      string
@@ -37,7 +41,7 @@ func (s *pendingSessionStore) save(session pendingSession) (string, error) {
 		SessionID:     sessionID,
 		Provider:      session.Provider,
 		AIModel:       session.Model,
-		SystemPrompt:  session.SystemPrompt,
+		SystemPrompt:  model.LongText(session.SystemPrompt),
 		NextToolIndex: session.NextToolIndex,
 		Iteration:     session.Iteration,
 		UserID:        session.UserID,
@@ -57,11 +61,6 @@ func (s *pendingSessionStore) save(session pendingSession) (string, error) {
 		return "", err
 	}
 
-	go func() {
-		if err := model.CleanupExpiredPendingSessions(); err != nil {
-			klog.V(4).Infof("Failed to cleanup expired pending sessions: %v", err)
-		}
-	}()
 	return sessionID, nil
 }
 
@@ -74,7 +73,7 @@ func (s *pendingSessionStore) load(sessionID string) (pendingSession, error) {
 	session := pendingSession{
 		Provider:      dbSession.Provider,
 		Model:         dbSession.AIModel,
-		SystemPrompt:  dbSession.SystemPrompt,
+		SystemPrompt:  string(dbSession.SystemPrompt),
 		NextToolIndex: dbSession.NextToolIndex,
 		Iteration:     dbSession.Iteration,
 		UserID:        dbSession.UserID,
@@ -110,4 +109,26 @@ func newPendingSessionID() string {
 		return hex.EncodeToString(buf)
 	}
 	return fmt.Sprintf("pending-%d", time.Now().UnixNano())
+}
+
+// StartPendingSessionCleanup 定期清理过期的待确认会话。
+//
+// 不在请求路径上顺手清理（每次保存会话都删一遍全表）：AI 每轮工具调用都会保存一次
+// 会话，那条全表 DELETE 既和主写入抢锁，又把延迟压在用户请求上。过期行本身不影响
+// 正确性（读取会过滤 expires_at），晚一点回收只是占点空间。
+func StartPendingSessionCleanup(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(pendingSessionCleanupInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := model.CleanupExpiredPendingSessions(); err != nil {
+					klog.V(4).Infof("Failed to cleanup expired pending sessions: %v", err)
+				}
+			}
+		}
+	}()
 }

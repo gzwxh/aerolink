@@ -14,13 +14,13 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 )
 
-// TrustCookieName marks the browser as recently MFA verified. The window is the
-// "MFA verification validity" (seconds) from the security settings.
+// TrustCookieName 把该浏览器标记为最近已完成 MFA 验证。时间窗来自安全
+// 设置中的 "MFA verification validity"（秒）。
 const TrustCookieName = "kite_mfa_trust"
 
 const defaultTrustTTL = 60 * time.Second
 
-// TrustTTL is how long a successful MFA verification is remembered for a browser.
+// TrustTTL 是某个浏览器的一次成功 MFA 验证会被记住多久。
 func TrustTTL() time.Duration {
 	if model.DB == nil {
 		return defaultTrustTTL
@@ -38,7 +38,7 @@ func signTrust(userID uint, expiresAt int64) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// MarkTrusted remembers a successful MFA verification for this browser.
+// MarkTrusted 为该浏览器记住一次成功的 MFA 验证。
 func MarkTrusted(c *gin.Context, userID uint) {
 	ttl := TrustTTL()
 	expiresAt := time.Now().Add(ttl).Unix()
@@ -48,15 +48,15 @@ func MarkTrusted(c *gin.Context, userID uint) {
 	c.SetCookie(TrustCookieName, value, int(ttl.Seconds()), "/", "", secure, true)
 }
 
-// ClearTrusted drops the trusted browser marker.
+// ClearTrusted 清除受信任浏览器的标记。
 func ClearTrusted(c *gin.Context) {
 	secure := c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(TrustCookieName, "", -1, "/", "", secure, true)
 }
 
-// IsTrusted reports whether this browser verified an MFA code for the user
-// within the validity window.
+// IsTrusted 报告该浏览器是否在有效期内为该用户
+// 验证过一次 MFA 码。
 func IsTrusted(c *gin.Context, userID uint) bool {
 	raw, err := c.Cookie(TrustCookieName)
 	if err != nil || raw == "" {

@@ -84,8 +84,8 @@ func buildProxyURL(host, kind, namespace, name, proxyPath, rawQuery string) (str
 	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + strings.TrimPrefix(proxyPath, "/")
 	u.RawPath = ""
 
-	// Defensive: ensure the cleaned path still contains the expected
-	// namespace/kind/name/proxy prefix and has not escaped it.
+	// 防御性检查：确认清洗后的路径仍然包含预期的
+	// namespace/kind/name/proxy 前缀，没有逃逸出去。
 	prefix := "/api/v1/namespaces/" + namespace + "/" + kind + "/" + name + "/proxy"
 	if !strings.Contains(u.Path, prefix) {
 		return "", errors.New("invalid proxy path: path traversal detected")

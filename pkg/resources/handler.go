@@ -83,7 +83,7 @@ var handlers = map[string]resourceHandler{}
 func newResourceHandlers() map[string]resourceHandler {
 	return map[string]resourceHandler{
 		string(common.Pods):       NewPodHandler(),
-		string(common.Namespaces): NewGenericResourceHandler[*corev1.Namespace, *corev1.NamespaceList](common.Namespaces),
+		string(common.Namespaces): NewNamespaceHandler(),
 		string(common.Nodes):      NewNodeHandler(),
 		string(common.Services):   NewGenericResourceHandler[*corev1.Service, *corev1.ServiceList](common.Services),
 		string(common.Endpoints):  NewGenericResourceHandler[*corev1.Endpoints, *corev1.EndpointsList](common.Endpoints),
@@ -231,7 +231,7 @@ func RegisterRoutes(group *gin.RouterGroup) {
 		}
 		g := group.Group("/" + resourceType)
 		g.GET(path, func(c *gin.Context) {
-			// Set the resource type in the context for related resource handlers
+			// 在上下文中设置资源类型，供关联资源 handler 使用
 			c.Set("resource", resourceType)
 			relatedHandler(c)
 		})
