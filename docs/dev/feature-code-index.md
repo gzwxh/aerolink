@@ -246,6 +246,13 @@ pnpm --dir ui run test                                     # vitest
 make e2e-test            # Playwright + kind（spec 见 e2e/specs/*.spec.ts）
 ```
 
+对着**跑起来的实例**做一遍回归（换数据库版本、大改动前；写检查要显式给可破坏的命名空间）：
+
+```bash
+go run ./tools/apismoke -base-url http://127.0.0.1:8080 -cluster dev -namespace devops \
+  -log-file /data/logs/kite.log            # 只读；加 -write-namespace/-ai/-smtp 会再跑写路径、AI 工具、邮件投递
+```
+
 后端改动的常见验证靶点：`pkg/resources`（资源与创建）、`pkg/audit`（审计与保留策略）、`pkg/model`（模型与缓存）、`pkg/rbac`（授权）。
 
 ---

@@ -305,3 +305,39 @@ docker stop kite-postgres12 && docker rm kite-postgres12
 
 停库前先 `pg_dump` 留底；起来后按 §5.6 的清单校验，并**确认 `max_connections` 等参数仍在**
 （参数是 `docker run -c` 传的，重建容器不会自动继承——这正是 §2.5 强调要有一份外部记录的原因）。
+
+## 7. 回归脚本：`tools/apismoke`
+
+换数据库版本（12.22、14+）、或大改动上线前，用一条命令把各功能面的读写路径过一遍，
+比手点页面可靠，也能把「接口没报错但 SQL 已经出错」的情况暴露出来——后者在换库时
+最容易发生。
+
+```sh
+# 只读检查（默认全跑）+ 扫服务端日志里的数据库错误
+KITE_SMOKE_USER=super KITE_SMOKE_PASSWORD='<口令>' \
+  go run ./tools/apismoke -base-url http://127.0.0.1:8080 \
+    -cluster dev -namespace devops -log-file /data/logs/kite.log
+
+# 再加上写检查、AI 工具、邮件投递
+KITE_SMOKE_USER=super KITE_SMOKE_PASSWORD='<口令>' \
+  go run ./tools/apismoke -base-url http://127.0.0.1:8080 \
+    -cluster dev -namespace devops -write-namespace devops \
+    -log-file /data/logs/kite.log -ai -smtp
+```
+
+| 组 | 内容 | 什么时候跑 |
+| --- | --- | --- |
+| 读 | 设置类；审计三类日志的检索与 CSV 导出；用户/角色/绑定组/API Key；通知/模板/Helm 仓库；集群与资源列表、详情/describe/历史/关联、全局搜索；容器文件浏览 | 默认 |
+| 写 | ConfigMap/Secret/Deployment/Service/Job/CronJob/StatefulSet/DaemonSet 的建改删、扩缩容与滚动重启、YAML apply、Pod 文件上传下载、PV/StorageClass/Namespace 建删 | `-write-namespace <可破坏的命名空间>` |
+| AI | 对话；`apply_resource`/`delete_resource` 的**确认**与**拒绝**两条分支（确认后资源真的建/删，拒绝后确实没建） | `-ai` |
+| 邮件 | 把通知配置临时指向内置假 SMTP，发一封测试邮件并确认真的收到（含 Subject 头） | `-smtp` |
+| 日志 | 扫描服务端日志中的 `SQLSTATE` / `syntax error` / `does not exist` / 权限不足 / 死锁 | `-log-file <路径>` |
+
+三条使用注意：
+
+1. **写检查会真的改集群**：`-write-namespace` 请指向一个可以随便破坏的命名空间。所有对象
+   都用 `smoke-` 前缀，脚本结束时删除，并回查「没有 smoke- 残留」。
+2. `-ai` / `-smtp` 会把通用设置与通知设置临时指向脚本内置的假 LLM / 假 SMTP，跑完复原，
+   所以**可以在生产实例上跑**：不会真的调用外部模型，也不会真的发邮件。
+3. 任何一项 FAIL 都会让退出码非 0，便于接进脚本。
+
