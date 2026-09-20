@@ -172,7 +172,8 @@
    - `ui/src/components/action-table.tsx`：设置类表格
    - `ui/src/components/resource-table-toolbar.tsx`：筛选/刷新间隔/列显示
    - 立刻刷新：`ui/src/components/refresh-button.tsx`（`resource-table` 把数据层的 `refetch` 透传成 `onRefresh`，按钮只负责反馈与去抖，**不要在里面另开请求**）
-   - 行操作菜单：`ui/src/components/workload-row-actions.tsx`（工作负载六类共用，能力差异见文件内的 `workloadTraits`）；列表页只负责加一列 `columnHelper.display({ id: 'actions' })`，不要在页面里重写菜单
+   | 行操作菜单：`ui/src/components/workload-row-actions.tsx`（工作负载六类共用，能力差异见文件内的 `workloadTraits`）；列表页只负责加一列 `columnHelper.display({ id: 'actions' })`，不要在页面里重写菜单 |
+      - 表单数据层：`ui/src/lib/pv-yaml.ts`、`storageclass-yaml.ts`、`configmap-yaml.ts`、`service-yaml.ts`（类型 + 初值 + 生成 + 编辑时的合并，如 `mergeServiceUpdate`）；表单页只消费它们
 3. **表单与编辑器**：
    - `ui/src/components/editors/deployment-form.ts`：类型 + 默认值 + build/parse（数据层）
    - `ui/src/components/workload-container-sections.tsx`、`workload-container-security.tsx`：容器分区编辑器
@@ -209,8 +210,10 @@
 | --- | --- |
 | 新增资源类型 | `pkg/common/resource.go` → `pkg/resources/handler.go` → `ui/src/lib/resource-catalog.ts` →（如需专用页面）`ui/src/pages/resource-definitions.tsx` |
 | 新增"创建页" | 照 `ui/src/pages/secret-create-page.tsx`（表单页范式）；路由加到 `ui/src/routes.tsx`；列表页加 `showCreateButton`/`onCreateClick` |
+| 给某类资源加「编辑」 | 路由 `…/:namespace/:name/edit` **复用创建页**（同一个组件靠 `:name` 切换）→ 表单数据层加「线上对象 → 表单」与「叠加回线上对象」两个函数（如 `lib/service-yaml.ts` 的 `formFromService` / `mergeServiceUpdate`）→ 详情页 `headerActions` 加按钮。**不可变字段与表单没建模的字段必须从线上对象带过去**，否则 API 会以 `field is immutable` 拒绝；反过来，表单能清空的字段（如 Service 的 selector）要显式删掉，不能只做覆盖合并。 |
 | 新增设置项 | 后端 `pkg/settings/*` + `pkg/model/*_setting.go`；前端 `ui/src/components/settings/*` + `settings-sections.tsx`（标签与权限门）+ 两个 locale |
 | 新增通知事件 | `pkg/model/notification.go`（事件常量 + 默认模板 + `NotificationEventList`）→ 触发点（`pkg/notification/*`）→ i18n |
+| 改「通知发给谁」 | `pkg/model/notification.go`（接收者类型常量 + `ListEnabledUsers`）→ `pkg/notification/service.go` 的 `resolveRecipients`（投递时展开）→ `pkg/notification/handler.go`（创建订阅的校验）→ `ui/src/components/settings/notification-management.tsx`；口径见 `plans/2026-09-20-notification-all-users-recipient.md` |
 | 新增审计字段 | `pkg/model/resource_history.go` → 写入点（`pkg/middleware/audit.go` 或 handler）→ `pkg/audit/export.go` → 前端表格列 |
 | 新增环境变量 | `pkg/common/common.go` → `charts/kite/values.yaml` + `charts/kite/templates/deployment.yaml` → 两个 README 参数表 |
 | 新增后端接口 | `routes.go`（选对分组/权限门）→ handler → `pkg/model`（如需落库）→ `ui/src/lib/api/*.ts` |
