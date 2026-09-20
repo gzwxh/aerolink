@@ -56,8 +56,7 @@ func InitDB() {
 		}
 
 		if common.DBType == "mysql" {
-			mysqlDSN := withMySQLDSNDefaults(strings.TrimPrefix(dsn, "mysql://"))
-			DB, err = gorm.Open(mysql.Open(mysqlDSN), cfg)
+			DB, err = gorm.Open(mysql.Open(MySQLDSN(dsn)), cfg)
 			if err != nil {
 				panic("failed to connect database: " + err.Error())
 			}
@@ -83,7 +82,31 @@ func InitDB() {
 			panic("failed to enable sqlite foreign keys: " + err.Error())
 		}
 	}
-	models := []interface{}{
+	for _, model := range Models() {
+		err = DB.AutoMigrate(model)
+		if err != nil {
+			panic("failed to migrate database: " + err.Error())
+		}
+	}
+	if err := MigrateBindingGroupMemberNamespace(); err != nil {
+		panic("failed to migrate binding group member index: " + err.Error())
+	}
+	if err := MigrateDropUserWechatColumn(); err != nil {
+		panic("failed to drop the legacy user wechat column: " + err.Error())
+	}
+	sqldb, err := DB.DB()
+	if err == nil {
+		sqldb.SetMaxOpenConns(common.DBMaxOpenConns)
+		sqldb.SetMaxIdleConns(common.DBMaxIdleConns)
+		sqldb.SetConnMaxLifetime(common.DBConnMaxLifetime)
+	}
+}
+
+// Models 是全部需要建表与迁移的模型。顺序满足外键依赖：被引用的表在前
+// （roles 在 role_assignments 之前、binding_groups 在它的两个子表之前），
+// 因此也可以直接当作整库搬运的插入顺序；搬运工具按相反顺序清表。
+func Models() []interface{} {
+	return []interface{}{
 		User{},
 		Cluster{},
 		GeneralSetting{},
@@ -114,24 +137,6 @@ func InitDB() {
 		Notification{},
 		LoginRecord{},
 	}
-	for _, model := range models {
-		err = DB.AutoMigrate(model)
-		if err != nil {
-			panic("failed to migrate database: " + err.Error())
-		}
-	}
-	if err := MigrateBindingGroupMemberNamespace(); err != nil {
-		panic("failed to migrate binding group member index: " + err.Error())
-	}
-	if err := MigrateDropUserWechatColumn(); err != nil {
-		panic("failed to drop the legacy user wechat column: " + err.Error())
-	}
-	sqldb, err := DB.DB()
-	if err == nil {
-		sqldb.SetMaxOpenConns(common.DBMaxOpenConns)
-		sqldb.SetMaxIdleConns(common.DBMaxIdleConns)
-		sqldb.SetConnMaxLifetime(common.DBConnMaxLifetime)
-	}
 }
 
 // mysqlDSNDefaults 是必须显式钉住的驱动参数：驱动默认 loc=UTC，而应用写入的是本地
@@ -148,6 +153,12 @@ var mysqlDSNDefaults = [][2]string{
 	{"parseTime", "true"},
 	{"loc", "Local"},
 	{"timeout", "5s"},
+}
+
+// MySQLDSN 把 MySQL DSN 规整成驱动需要的形式（去掉 scheme 前缀并补齐
+// mysqlDSNDefaults）。整库搬运工具也用它，避免两处口径不一致导致时间列读错。
+func MySQLDSN(dsn string) string {
+	return withMySQLDSNDefaults(strings.TrimPrefix(dsn, "mysql://"))
 }
 
 // withMySQLDSNDefaults 给 DSN 里缺失的驱动参数补上默认值，操作者自己写明的同名

@@ -449,13 +449,6 @@ func CanAccessCluster(user model.User, name string) bool {
 	return false
 }
 
-// RoleCoversCluster 判断角色自身的集群列表是否作用于该集群（支持 * 与正则模式，
-// 以及 ! 排除）。调用方需要按角色逐个判断集群范围时用它，例如「新建命名空间自动归属」
-// 在退化路径上只需考虑与该集群相关的角色。
-func RoleCoversCluster(clusters []string, cluster string) bool {
-	return match(clusters, cluster)
-}
-
 func CanAccessNamespace(user model.User, cluster, name string) bool {
 	// 兼容存量：显式配置 namespaces 的角色按列表匹配；空（新建角色）= 不约束，
 	// 对该集群全部命名空间可见。权限绑定组成员额外可见其组内命名空间。

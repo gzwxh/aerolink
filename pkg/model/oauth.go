@@ -26,6 +26,26 @@ func IsReservedOAuthProviderName(name string) bool {
 	}
 }
 
+// CanSelfEnrollMFA 报告该账号能否在 Kite 里自助绑定动态码（TOTP）。
+//
+// 只有凭据能在 Kite 侧或目录侧被重新校验的账号才算：本地密码账号与 LDAP 账号。
+// OIDC / 第三方身份源的二次验证由 IdP 负责，Kite 不提供自助绑定入口，
+// 因此也不能把它们算进「必须绑定 MFA」的范围（见 SecuritySettingData.MFARequiredFor）——
+// 否则这些账号会被要求完成一个它们根本做不到的绑定流程，从而被锁在门禁之外。
+// provider 为空表示历史遗留的本地密码账号；匿名伪用户（provider 为 Anonymous）
+// 同样归属「不可自助绑定」，不参与强制绑定。
+func (u *User) CanSelfEnrollMFA() bool {
+	if u == nil {
+		return false
+	}
+	switch u.Provider {
+	case "", AuthProviderPassword, AuthProviderLDAP:
+		return true
+	default:
+		return false
+	}
+}
+
 type OAuthProvider struct {
 	Model
 	Name          LowerCaseString `json:"name" gorm:"type:varchar(100);uniqueIndex;not null"`

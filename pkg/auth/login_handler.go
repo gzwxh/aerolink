@@ -286,7 +286,7 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 		return
 	}
 
-	mfaChallengeRequired := mfaChallengeRequiredFor(provider, user, securitySetting)
+	mfaChallengeRequired := mfaChallengeRequiredFor(provider, user)
 
 	// 在有效期内已校验过一次验证码的浏览器不会再被要求输入。
 	//
@@ -326,17 +326,15 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 // 第三方登录（OIDC 等）是重定向流，无法在这个请求里收动态码，因此不在这里挑战：
 // 回调改为签发票据、由登录页补验（见 VerifyPendingMFA）。
 //
-// 另外保留既有开关 `MFAThirdPartyEnabled` 的原有作用：即使 LDAP 管理员还没绑定，
-// 也要求他先验码（这是强制的绑定引导）。
-func mfaChallengeRequiredFor(provider string, user *model.User, setting *model.SecuritySettingData) bool {
-	formBasedLogin := provider == model.AuthProviderPassword || provider == model.AuthProviderLDAP
-	if formBasedLogin && user.MFAEnabled {
-		return true
+// 这里没有「尚未绑定也要求验码」的分支：那种要求永远无法满足（密钥为空，任何动态码都
+// 验不过），只会把账号彻底锁在登录之外。「LDAP 管理员强制绑定」由
+// model.SecuritySettingData.MFARequiredFor 的 `MFAThirdPartyEnabled` 表达，
+// 未绑定的管理员走的是绑定向导（见 pkg/auth/middleware.go 的 blockForMFAEnrollment）。
+func mfaChallengeRequiredFor(provider string, user *model.User) bool {
+	if user == nil || !user.MFAEnabled {
+		return false
 	}
-	return provider == model.AuthProviderLDAP &&
-		setting != nil &&
-		setting.MFAThirdPartyEnabled &&
-		rbac.IsAdministrator(*user)
+	return provider == model.AuthProviderPassword || provider == model.AuthProviderLDAP
 }
 
 func shouldRecordCredentialLoginFailure(provider string, err error) bool {

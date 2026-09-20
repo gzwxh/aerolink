@@ -83,7 +83,7 @@ var handlers = map[string]resourceHandler{}
 func newResourceHandlers() map[string]resourceHandler {
 	return map[string]resourceHandler{
 		string(common.Pods):       NewPodHandler(),
-		string(common.Namespaces): NewNamespaceHandler(),
+		string(common.Namespaces): NewGenericResourceHandler[*corev1.Namespace, *corev1.NamespaceList](common.Namespaces),
 		string(common.Nodes):      NewNodeHandler(),
 		string(common.Services):   NewGenericResourceHandler[*corev1.Service, *corev1.ServiceList](common.Services),
 		string(common.Endpoints):  NewGenericResourceHandler[*corev1.Endpoints, *corev1.EndpointsList](common.Endpoints),

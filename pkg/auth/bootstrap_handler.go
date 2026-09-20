@@ -21,9 +21,11 @@ type bootstrapAuthOptions struct {
 	CredentialProviders []string `json:"credentialProviders"`
 	OAuthProviders      []string `json:"oauthProviders"`
 	LoginPrompt         string   `json:"loginPrompt"`
-	MFAEnabled          bool     `json:"mfaEnabled"`
-	MFAPolicy           string   `json:"mfaPolicy"`
-	LoginCaptchaEnabled bool     `json:"loginCaptchaEnabled"`
+	// MFAAvailable 是「设置 → 通用 → 启用 MFA」这个功能闸的原始值，没和策略做与运算。
+	// 界面用它决定「能不能提供绑定入口」：安全策略只管谁必须绑定，不影响自愿绑定。
+	MFAAvailable        bool   `json:"mfaAvailable"`
+	MFAPolicy           string `json:"mfaPolicy"`
+	LoginCaptchaEnabled bool   `json:"loginCaptchaEnabled"`
 }
 
 type bootstrapCapabilities struct {
@@ -161,16 +163,17 @@ func (h *AuthHandler) bootstrapAuth(setting *model.GeneralSetting) bootstrapAuth
 		mfaPolicy = securitySetting.MFAPolicy
 	}
 
-	// mfaEnabled 是对客户端暴露的综合开关：认证设置的功能闸与安全设置里
-	// 的全局 MFA 策略（未启用/所有用户/仅管理员）必须同时放行。
-	mfaEnabled := (setting == nil || setting.EnableMFA) && mfaPolicy != model.MFAPolicyDisabled
+	// 只下发通用设置里的功能闸原值。以前这里下发的是「功能闸 且 策略不为未启用」的综合值，
+	// 界面据此把「绑定 MFA」按钮置灰，于是策略为默认值「未启用」时用户根本没法自愿绑定
+	// （后端本来是允许的）。策略只回答「谁必须绑定」，走 mfaRequired / mfa_required。
+	mfaAvailable := setting == nil || setting.EnableMFA
 
 	return bootstrapAuthOptions{
 		Providers:           providers,
 		CredentialProviders: credentialProviders,
 		OAuthProviders:      oauthProviders,
 		LoginPrompt:         loginPrompt,
-		MFAEnabled:          mfaEnabled,
+		MFAAvailable:        mfaAvailable,
 		MFAPolicy:           mfaPolicy,
 		LoginCaptchaEnabled: loginCaptchaEnabled,
 	}

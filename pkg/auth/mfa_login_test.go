@@ -46,42 +46,37 @@ func TestTOTPHelperMatchesRFC6238Vector(t *testing.T) {
 	}
 }
 
-// 挑战条件的口径：策略只管「谁必须绑定」，绑定之后一律要验码；LDAP 与密码一样是
-// 表单登录，因此同样适用；重定向类（OIDC）不在这里挑战，由回调发票据、登录页补验。
+// 挑战条件的口径：策略只管「谁必须绑定」（见 model.SecuritySettingData.MFARequiredFor），
+// 绑定之后一律要验码；LDAP 与密码一样是表单登录，因此同样适用；
+// 重定向类（OIDC）不在这里挑战，由回调发票据、登录页补验。
+//
+// 未绑定的账号在这里一律不挑战：动态码密钥为空，任何码都验不过，挑战等于把人锁在门外。
+// 「LDAP 管理员强制绑定」因此改挂在 MFARequiredFor 上，由绑定向导完成
+// （见 pkg/model/security_setting_test.go 的同名判定）。
 func TestMFAChallengeRequiredForCredentialLogin(t *testing.T) {
 	bind := func(enabled bool) *model.User { return &model.User{MFAEnabled: enabled} }
-	admin := func(enabled bool) *model.User {
+	unboundLDAPAdmin := &model.User{
 		// GetUserRoles 直接返回 user.Roles；admin 是内置角色名。
-		return &model.User{MFAEnabled: enabled, Roles: []common.Role{{Name: model.DefaultAdminRole.Name}}}
+		Roles: []common.Role{{Name: model.DefaultAdminRole.Name}},
 	}
-
-	// 显式给出开关的两种状态，避免依赖默认值（默认是 true）。
-	switchedOn := model.DefaultSecuritySettingData()
-	switchedOn.MFAThirdPartyEnabled = true
-	onSetting := &switchedOn
-	switchedOff := model.DefaultSecuritySettingData()
-	switchedOff.MFAThirdPartyEnabled = false
-	offSetting := &switchedOff
 
 	cases := []struct {
 		name     string
 		provider string
 		user     *model.User
-		setting  *model.SecuritySettingData
 		want     bool
 	}{
-		{"密码 + 已绑定", model.AuthProviderPassword, bind(true), offSetting, true},
-		{"密码 + 未绑定", model.AuthProviderPassword, bind(false), offSetting, false},
-		{"LDAP 普通用户 + 已绑定", model.AuthProviderLDAP, bind(true), offSetting, true},
-		{"LDAP 普通用户 + 未绑定", model.AuthProviderLDAP, bind(false), offSetting, false},
-		{"LDAP 管理员 + 开关开 + 未绑定（强制绑定引导）", model.AuthProviderLDAP, admin(false), onSetting, true},
-		{"LDAP 管理员 + 开关关 + 未绑定", model.AuthProviderLDAP, admin(false), offSetting, false},
-		{"对端身份源（OIDC）+ 已绑定", "mockidp", bind(true), onSetting, false},
+		{"密码 + 已绑定", model.AuthProviderPassword, bind(true), true},
+		{"密码 + 未绑定", model.AuthProviderPassword, bind(false), false},
+		{"LDAP 普通用户 + 已绑定", model.AuthProviderLDAP, bind(true), true},
+		{"LDAP 普通用户 + 未绑定", model.AuthProviderLDAP, bind(false), false},
+		{"LDAP 管理员 + 未绑定", model.AuthProviderLDAP, unboundLDAPAdmin, false},
+		{"对端身份源（OIDC）+ 已绑定", "mockidp", bind(true), false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := mfaChallengeRequiredFor(tc.provider, tc.user, tc.setting); got != tc.want {
+			if got := mfaChallengeRequiredFor(tc.provider, tc.user); got != tc.want {
 				t.Fatalf("mfaChallengeRequiredFor(%s) = %v, want %v", tc.name, got, tc.want)
 			}
 		})

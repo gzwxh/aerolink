@@ -48,12 +48,6 @@ func (h *GenericResourceHandler[T, V]) Create(c *gin.Context) {
 	}
 
 	success = true
-	if h.afterCreate != nil {
-		if extra := h.afterCreate(c, resource); len(extra) > 0 {
-			c.JSON(http.StatusCreated, mergeExtraFields(resource, extra))
-			return
-		}
-	}
 	c.JSON(http.StatusCreated, resource)
 }
 

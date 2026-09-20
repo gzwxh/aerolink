@@ -710,7 +710,7 @@ func notifyRoleChange(event string, roleName, subjectType, subject string) {
 		"username": user.Username,
 		"role":     roleName,
 		"time":     time.Now().Format("2006-01-02 15:04:05"),
-	}, notification.Recipient{UserID: user.ID, Email: user.Email})
+	})
 }
 
 // conflictForUserNamed 报告把 roleName 授予该用户名下的用户是否会

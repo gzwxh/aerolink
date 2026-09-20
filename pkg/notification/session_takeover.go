@@ -1,7 +1,6 @@
 package notification
 
 import (
-	"strings"
 	"sync"
 	"time"
 
@@ -11,11 +10,12 @@ import (
 
 // 抢占性登录（单点登录把旧会话顶下线）的安全告警。
 //
-// 通知策略：
-//   - 本人 + 全部启用的管理员：站内信（留痕，能在控制台里回看）；
-//   - 只有反复出现（同一账号在窗口内被顶替达到 sessionTakeoverEmailAfter 次）才邮件
-//     打扰管理员——换设备、忘了退出这类正常操作不该天天发邮件，而短时间内被反复顶替
-//     更可能是密码已经泄露，值得主动告警。
+// 通知策略：收件人与其它事件一致，**只来自订阅**（`session_takeover` 的站内信 / 邮件
+// 订阅）。此前这里无条件发给本人 + 全部启用的管理员，从没订阅过的人也会收到站内信。
+//
+// 邮件在此之上再叠一层节流：同一账号 24 小时内被顶替达到 sessionTakeoverEmailAfter 次
+// 才发邮件 —— 换设备、忘了退出这类正常操作不该天天打扰，而短时间内被反复顶替更可能
+// 是密码已经泄露，值得主动告警。
 const (
 	sessionTakeoverEmailAfter = 3
 	sessionTakeoverWindow     = 24 * time.Hour
@@ -65,71 +65,24 @@ func NotifySessionTakeover(user model.User, ip, userAgent string) {
 }
 
 func deliverSessionTakeover(user model.User, ip, userAgent string, count int, now time.Time) {
-	setting, err := model.GetNotificationSetting()
-	if err != nil {
-		klog.Errorf("failed to load notification setting: %v", err)
-		return
-	}
-	if !setting.InAppEnabled && !setting.EmailEnabled {
-		return
-	}
-	// 与其它事件一致：模板被管理员停用（或不存在）时整个事件静默。
-	template, err := model.GetNotificationTemplate(model.NotificationEventSessionTakeover)
-	if err != nil {
-		klog.Errorf("failed to load the session takeover template: %v", err)
-		return
-	}
-	if template == nil {
+	setting, title, content, ok := renderEvent(
+		model.NotificationEventSessionTakeover, map[string]string{
+			"username":  user.Username,
+			"ip":        ip,
+			"time":      now.Format(timeLayout),
+			"userAgent": userAgent,
+		})
+	if !ok {
 		return
 	}
 
-	variables := map[string]string{
-		"username":  user.Username,
-		"ip":        ip,
-		"time":      now.Format(timeLayout),
-		"userAgent": userAgent,
-	}
-	title := RenderTemplate(template.Subject, variables)
-	content := RenderTemplate(template.Body, variables)
-
-	admins, err := model.ListAdminUsers()
-	if err != nil {
-		klog.Errorf("failed to list admins for the session takeover alert: %v", err)
-		admins = nil
-	}
-
+	inAppUsers, emails := resolveRecipients(model.NotificationEventSessionTakeover)
 	if setting.InAppEnabled {
-		// 站内信：本人与管理员各留一条（本人也是管理员时只留一条）。
-		recipients := []uint{user.ID}
-		for _, admin := range admins {
-			if admin.ID != user.ID {
-				recipients = append(recipients, admin.ID)
-			}
-		}
-		if err := model.CreateInAppNotifications(
-			recipients, model.NotificationEventSessionTakeover, title, content); err != nil {
-			klog.Errorf("failed to store session takeover notifications: %v", err)
-		}
+		deliverInApp(inAppUsers, model.NotificationEventSessionTakeover, title, content)
 	}
 
-	if !setting.EmailEnabled || count < sessionTakeoverEmailAfter {
+	if count < sessionTakeoverEmailAfter {
 		return
 	}
-	config, err := loadSMTPConfig()
-	if err != nil {
-		klog.Warningf("skip session takeover mails: %v", err)
-		return
-	}
-	// 邮件只发给管理员：用户本人已经有站内信，而短时间内反复被顶替需要管理员介入。
-	sent := map[string]bool{}
-	for _, admin := range admins {
-		address := strings.TrimSpace(admin.Email)
-		if address == "" || sent[address] {
-			continue
-		}
-		sent[address] = true
-		if err := config.send([]string{address}, title, content); err != nil {
-			klog.Errorf("failed to send the session takeover mail to %s: %v", address, err)
-		}
-	}
+	deliverEmails(setting, emails, model.NotificationEventSessionTakeover, title, content)
 }

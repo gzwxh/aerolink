@@ -270,6 +270,130 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 	}
 }
 
+// mfaSetupRouter 构造一个只挂 MFA 自助绑定接口（setup + enable）的路由，
+// 每个请求都像鉴权中间件那样重新从数据库读取当前用户放进 context。
+func mfaSetupRouter(t *testing.T, id uint64) *gin.Engine {
+	t.Helper()
+	router := gin.New()
+	withCurrentUser := func(handler gin.HandlerFunc) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			current, err := model.GetUserByID(id)
+			if err != nil {
+				c.Status(http.StatusInternalServerError)
+				return
+			}
+			c.Set("user", *current)
+			handler(c)
+		}
+	}
+	router.POST("/mfa/setup", withCurrentUser(SetupCurrentUserMFA))
+	router.POST("/mfa/enable", withCurrentUser(EnableCurrentUserMFA))
+	return router
+}
+
+// addDirectoryUser 建一个目录账号（LDAP 或 OIDC），用来验证 provider 维度的门禁：
+// 能自助绑定的只有本地密码账号与 LDAP 账号。
+func addDirectoryUser(t *testing.T, username, provider string) *model.User {
+	t.Helper()
+	user := &model.User{Username: username, Provider: provider, Enabled: true}
+	if err := model.AddUser(user); err != nil {
+		t.Fatalf("creating %s user: %v", provider, err)
+	}
+	return user
+}
+
+// OIDC / 第三方身份源的二次验证由 IdP 负责：Kite 里既没有可校验的口令，
+// 也不该提供绑定入口，否则用户会卡在一个走不完的绑定向导里。
+func TestSetupCurrentUserMFADeniesAccountsThatCannotSelfEnroll(t *testing.T) {
+	setupUserHandlerTestDB(t)
+	user := addDirectoryUser(t, "oidc-user", "oidc")
+	router := mfaSetupRouter(t, uint64(user.ID))
+
+	response := performUserRequest(router, http.MethodPost, "/mfa/setup", `{}`)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusForbidden, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "mfa_not_self_enrollable") {
+		t.Fatalf("response lacks the machine-readable code: %s", response.Body.String())
+	}
+}
+
+// LDAP 账号在 Kite 侧没有可校验的口令，再认证改用「近期重新登录过」：
+// 登录时间就是 user_sessions.started_at，只有真正走完登录流程才会刷新。
+func TestSetupCurrentUserMFAForLDAPRequiresARecentSignIn(t *testing.T) {
+	setupUserHandlerTestDB(t)
+	// 用不同 provider 的两个账号，避免把「无会话记录」误判成「provider 判定」。
+	user := addDirectoryUser(t, "ldap-user", model.AuthProviderLDAP)
+	router := mfaSetupRouter(t, uint64(user.ID))
+
+	// 没有任何会话记录（例如登录发生在这套机制之前）：失败关闭，要求重新登录。
+	noSession := performUserRequest(router, http.MethodPost, "/mfa/setup", `{}`)
+	if noSession.Code != http.StatusForbidden || !strings.Contains(noSession.Body.String(), "mfa_reauth_required") {
+		t.Fatalf("without a session: status/body = %d/%s, want 403 with mfa_reauth_required",
+			noSession.Code, noSession.Body.String())
+	}
+
+	// 会话存在但已超出 5 分钟窗口：同样要求重新登录。
+	if _, err := model.StartUserSession(user.ID, time.Now().Add(-10*time.Minute)); err != nil {
+		t.Fatalf("recording a stale session: %v", err)
+	}
+	stale := performUserRequest(router, http.MethodPost, "/mfa/setup", `{}`)
+	if stale.Code != http.StatusForbidden || !strings.Contains(stale.Body.String(), "mfa_reauth_required") {
+		t.Fatalf("stale session: status/body = %d/%s, want 403 with mfa_reauth_required",
+			stale.Code, stale.Body.String())
+	}
+
+	// 刚刚重新登录过：不需要口令即可拿到密钥（口令字段对目录账号没有意义），
+	// 但仍然只是「待确认」状态，必须再提交一次动态码才算绑定完成。
+	if _, err := model.StartUserSession(user.ID, time.Now()); err != nil {
+		t.Fatalf("recording a fresh session: %v", err)
+	}
+	fresh := performUserRequest(router, http.MethodPost, "/mfa/setup", `{}`)
+	if fresh.Code != http.StatusOK {
+		t.Fatalf("fresh session: status = %d, want %d: %s", fresh.Code, http.StatusOK, fresh.Body.String())
+	}
+	pending := loadStoredUser(t, uint64(user.ID))
+	if pending.MFAEnabled || strings.TrimSpace(string(pending.MFASecret)) == "" {
+		t.Fatalf("pending MFA state = enabled:%v secret:%q", pending.MFAEnabled, pending.MFASecret)
+	}
+
+	// 第二步必须在目录账号上也能走通（改前这里会 403，绑定到一半就断）。
+	enable := performUserRequest(router, http.MethodPost, "/mfa/enable",
+		fmt.Sprintf(`{"code":%q}`, currentTOTPCode(t, string(pending.MFASecret))))
+	if enable.Code != http.StatusOK {
+		t.Fatalf("enable status = %d, want %d: %s", enable.Code, http.StatusOK, enable.Body.String())
+	}
+	if enabled := loadStoredUser(t, uint64(user.ID)); !enabled.MFAEnabled {
+		t.Fatal("directory account is still not marked as MFA enabled")
+	}
+}
+
+// 本地密码账号仍然必须提交当前密码：会话新鲜度不是口令的替代品
+// （令牌被盗时，攻击者拿不到口令就绑不了自己的身份验证器）。
+func TestSetupCurrentUserMFAForPasswordUserRequiresTheCurrentPassword(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	if _, err := model.StartUserSession(user.ID, time.Now()); err != nil {
+		t.Fatalf("recording a fresh session: %v", err)
+	}
+	router := mfaSetupRouter(t, uint64(user.ID))
+
+	missing := performUserRequest(router, http.MethodPost, "/mfa/setup", `{}`)
+	if missing.Code != http.StatusBadRequest {
+		t.Fatalf("missing password status = %d, want %d: %s", missing.Code, http.StatusBadRequest, missing.Body.String())
+	}
+	// 空口令要报「必填」而不是「密码错误」：后者会让用户以为输错了口令。
+	if body := missing.Body.String(); !strings.Contains(body, "current password is required") {
+		t.Fatalf("missing password is not reported as required: %s", body)
+	}
+	wrong := performUserRequest(router, http.MethodPost, "/mfa/setup", `{"current_password":"wrong-secret"}`)
+	if wrong.Code != http.StatusBadRequest {
+		t.Fatalf("wrong password status = %d, want %d: %s", wrong.Code, http.StatusBadRequest, wrong.Body.String())
+	}
+	if stored := loadStoredUser(t, uint64(user.ID)); strings.TrimSpace(string(stored.MFASecret)) != "" {
+		t.Fatalf("rejected requests stored a secret: %q", stored.MFASecret)
+	}
+}
+
 // TestSetupCurrentUserMFAHonorsGlobalSetting 验证全局关闭 MFA 时，
 // setup 会被 403 挡下，不会生成或保存任何密钥。
 func TestSetupCurrentUserMFAHonorsGlobalSetting(t *testing.T) {
@@ -381,7 +505,10 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.GeneralSetting{}, &model.PasswordHistory{}); err != nil {
+	// UserSession 是「近期重新登录过」的判定依据（目录账号自助绑定走这条，见
+	// pkg/users/handler.go 的 recentlyAuthenticated）；不迁它就只能落到「查不到会话」
+	// 的失败关闭分支，测不出通过路径。
+	if err := db.AutoMigrate(&model.User{}, &model.GeneralSetting{}, &model.PasswordHistory{}, &model.UserSession{}); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
 	model.DB = db

@@ -29,7 +29,6 @@ func HandleGetGeneralSetting(c *gin.Context) {
 		"kubectlImage":          setting.KubectlImage,
 		"nodeTerminalImage":     setting.NodeTerminalImage,
 		"clusterAgentImage":     setting.ClusterAgentImage,
-		"autoBindUserNamespace": setting.AutoBindUserNamespace,
 		"enableAnalytics":       setting.EnableAnalytics,
 		"enableVersionCheck":    setting.EnableVersionCheck,
 		"passwordLoginDisabled": setting.PasswordLoginDisabled,
@@ -49,18 +48,16 @@ const maxLogoURLLength = 256 * 1024
 const maxSiteNameLength = 100
 
 type UpdateGeneralSettingRequest struct {
-	AIAgentEnabled    *bool   `json:"aiAgentEnabled"`
-	AIProvider        *string `json:"aiProvider"`
-	AIModel           *string `json:"aiModel"`
-	AIAPIKey          *string `json:"aiApiKey"`
-	AIBaseURL         *string `json:"aiBaseUrl"`
-	AIMaxTokens       *int    `json:"aiMaxTokens"`
-	KubectlEnabled    *bool   `json:"kubectlEnabled"`
-	KubectlImage      *string `json:"kubectlImage"`
-	NodeTerminalImage *string `json:"nodeTerminalImage"`
-	ClusterAgentImage *string `json:"clusterAgentImage"`
-	// AutoBindUserNamespace 控制普通用户新建命名空间后是否自动纳入其权限范围。
-	AutoBindUserNamespace *bool   `json:"autoBindUserNamespace"`
+	AIAgentEnabled        *bool   `json:"aiAgentEnabled"`
+	AIProvider            *string `json:"aiProvider"`
+	AIModel               *string `json:"aiModel"`
+	AIAPIKey              *string `json:"aiApiKey"`
+	AIBaseURL             *string `json:"aiBaseUrl"`
+	AIMaxTokens           *int    `json:"aiMaxTokens"`
+	KubectlEnabled        *bool   `json:"kubectlEnabled"`
+	KubectlImage          *string `json:"kubectlImage"`
+	NodeTerminalImage     *string `json:"nodeTerminalImage"`
+	ClusterAgentImage     *string `json:"clusterAgentImage"`
 	EnableAnalytics       *bool   `json:"enableAnalytics"`
 	EnableVersionCheck    *bool   `json:"enableVersionCheck"`
 	PasswordLoginDisabled *bool   `json:"passwordLoginDisabled"`
@@ -186,9 +183,6 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 	if req.ClusterAgentImage != nil {
 		updates["cluster_agent_image"] = clusterAgentImage
 	}
-	if req.AutoBindUserNamespace != nil {
-		updates["auto_bind_user_namespace"] = *req.AutoBindUserNamespace
-	}
 	if req.EnableAnalytics != nil {
 		updates["enable_analytics"] = *req.EnableAnalytics
 	}
@@ -243,7 +237,6 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		"kubectlImage":          updated.KubectlImage,
 		"nodeTerminalImage":     updated.NodeTerminalImage,
 		"clusterAgentImage":     updated.ClusterAgentImage,
-		"autoBindUserNamespace": updated.AutoBindUserNamespace,
 		"enableAnalytics":       updated.EnableAnalytics,
 		"enableVersionCheck":    updated.EnableVersionCheck,
 		"passwordLoginDisabled": updated.PasswordLoginDisabled,

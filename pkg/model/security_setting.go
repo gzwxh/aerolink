@@ -175,14 +175,37 @@ func (d *SecuritySettingData) MFARequiredFor(user *User) bool {
 	if user.MFADisabled {
 		return false
 	}
+	// 绑定必须由本人在登录后完成，所以只对能自助绑定的账号（本地密码 / LDAP）生效。
+	// OIDC 等外部身份源放在这里强制，就成了「要求用户完成一件做不到的事」：
+	// 前端绑定向导索要当前密码、后端也会 403（见 pkg/users/handler.go），
+	// 账号会被 pkg/auth 的 blockForMFAEnrollment 挡在全部 API 之外。
+	// 这类账号的二次验证由 IdP 负责，需要收紧就在 IdP 侧收紧。
+	if !user.CanSelfEnrollMFA() {
+		return false
+	}
+	// 「LDAP 管理员强制绑定动态码」属于「谁必须绑定」的范畴，因此并到这里，
+	// 让未绑定的 LDAP 管理员被引导去绑定。放在登录环节要求一个他还没有的动态码，
+	// 只会让该账号彻底无法登录（动态码为空，任何验证都失败）。
+	if d.MFAThirdPartyEnabled && user.Provider == AuthProviderLDAP && hasDefaultAdminRole(user) {
+		return true
+	}
 	switch d.MFAPolicy {
 	case MFAPolicyAll:
 		return true
 	case MFAPolicyAdmin:
-		for _, role := range user.Roles {
-			if role.Name == DefaultAdminRole.Name {
-				return true
-			}
+		return hasDefaultAdminRole(user)
+	}
+	return false
+}
+
+// hasDefaultAdminRole 报告账号是否持有内置的系统管理员角色。
+func hasDefaultAdminRole(user *User) bool {
+	if user == nil {
+		return false
+	}
+	for _, role := range user.Roles {
+		if role.Name == DefaultAdminRole.Name {
+			return true
 		}
 	}
 	return false
