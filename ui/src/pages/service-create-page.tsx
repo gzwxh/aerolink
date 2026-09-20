@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react'
@@ -6,7 +6,18 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { applyResource } from '@/lib/api'
+import { applyResource, updateResource, useResource } from '@/lib/api'
+import {
+  allowedServiceTypes,
+  formFromService,
+  generateServiceYaml,
+  initialData,
+  intOrNull,
+  mergeServiceUpdate,
+  PORT_NAME_PATTERN,
+  type ServiceFormData,
+  type ServiceType,
+} from '@/lib/service-yaml'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
@@ -25,93 +36,14 @@ import { LabelSelectorEditor } from '@/components/label-selector-editor'
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 
-type ServiceType = 'ClusterIP' | 'NodePort' | 'LoadBalancer' | 'ExternalName'
-
-interface PortRow {
-  name: string
-  port: string
-  targetPort: string
-  nodePort: string
-  protocol: 'TCP' | 'UDP'
-}
-
-interface ServiceFormData {
-  name: string
-  namespace: string
-  serviceType: ServiceType
-  externalName: string
-  sessionAffinity: 'None' | 'ClientIP'
-  selector: Array<{ key: string; value: string }>
-  ports: PortRow[]
-}
-
-const initialData: ServiceFormData = {
-  name: '',
-  namespace: 'default',
-  serviceType: 'ClusterIP',
-  externalName: '',
-  sessionAffinity: 'None',
-  selector: [{ key: 'app', value: '' }],
-  ports: [
-    { name: '', port: '80', targetPort: '', nodePort: '', protocol: 'TCP' },
-  ],
-}
-
-const intOrNull = (v: string) => {
-  if (!v.trim()) return undefined
-  const n = Number(v)
-  return Number.isNaN(n) ? undefined : n
-}
-
-function generateServiceYaml(d: ServiceFormData): string {
-  const selector = d.selector.reduce<Record<string, string>>((acc, s) => {
-    if (s.key.trim() && s.value.trim()) acc[s.key.trim()] = s.value.trim()
-    return acc
-  }, {})
-
-  const metadata: Record<string, unknown> = {
-    name: d.name,
-    namespace: d.namespace,
-  }
-  const spec: Record<string, unknown> = { type: d.serviceType }
-
-  if (d.serviceType === 'ExternalName') {
-    spec.externalName = d.externalName
-  } else {
-    if (Object.keys(selector).length > 0) spec.selector = selector
-    if (d.sessionAffinity !== 'None') spec.sessionAffinity = d.sessionAffinity
-    const ports = d.ports
-      .map((p) => {
-        const port = intOrNull(p.port)
-        if (!port) return null
-        const targetPort = intOrNull(p.targetPort) ?? port
-        const nodePort =
-          d.serviceType === 'NodePort' ? intOrNull(p.nodePort) : undefined
-        return {
-          ...(p.name.trim() && { name: p.name.trim() }),
-          port,
-          targetPort,
-          protocol: p.protocol,
-          ...(nodePort !== undefined && { nodePort }),
-        }
-      })
-      .filter(Boolean)
-    if (ports.length > 0) spec.ports = ports
-  }
-
-  return yaml.dump(
-    { apiVersion: 'v1', kind: 'Service', metadata, spec },
-    { indent: 2, noRefs: true }
-  )
-}
-
 export function ServiceCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
-  const { namespace: namespaceParam } = useParams()
+  const { namespace: namespaceParam, name: editName } = useParams()
   const can = useCan()
+  const isEdit = Boolean(editName)
 
   const [formData, setFormData] = useState<ServiceFormData>(() => ({
     ...initialData,
@@ -119,18 +51,42 @@ export function ServiceCreatePage() {
   }))
   const [editedYaml, setEditedYaml] = useState('')
   // 表单或 YAML 草稿只要离开过初始快照就算「未保存」：切换集群前据此弹确认
-  // （登记处见 lib/unsaved-edits）。
-  const [formSnapshot] = useState(() =>
+  // （登记处见 lib/unsaved-edits）。预填线上对象时会把初值同步过去，
+  // 否则一进编辑页就被当成「改过」。
+  const [formSnapshot, setFormSnapshot] = useState(() =>
     JSON.stringify({ formData, editedYaml })
   )
   useUnsavedEdits(JSON.stringify({ formData, editedYaml }) !== formSnapshot)
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  const pageTitle = t('serviceCreate.pageTitle', 'Service: 创建')
+  const pageTitle = isEdit
+    ? t('serviceCreate.editPageTitle', 'Service: 编辑')
+    : t('serviceCreate.pageTitle', 'Service: 创建')
   usePageTitle(pageTitle)
 
-  const canCreate = can('services', 'create', { namespace: formData.namespace })
+  // 编辑模式：读回线上对象预填（创建模式下不发请求）。
+  const { data: existing } = useResource(
+    'services',
+    editName || '',
+    namespaceParam,
+    { enabled: isEdit }
+  )
+  useEffect(() => {
+    if (!existing) return
+    const next = formFromService(existing)
+    setFormData(next)
+    setFormSnapshot(JSON.stringify({ formData: next, editedYaml: '' }))
+    // 只在线上对象变化时重填，否则会把正在编辑的内容冲掉。
+  }, [existing])
+
+  // 写入一个已存在的 Service 用的是 update 权限。
+  const canCreate = can('services', isEdit ? 'update' : 'create', {
+    namespace: formData.namespace,
+  })
+  const typeOptions = isEdit
+    ? allowedServiceTypes(formData.serviceType)
+    : allowedServiceTypes('ClusterIP').concat('ExternalName')
 
   const update = (updates: Partial<ServiceFormData>) =>
     setFormData((prev) => ({ ...prev, ...updates }))
@@ -149,13 +105,28 @@ export function ServiceCreatePage() {
         )
         return
       }
-      const target = p.targetPort.trim() ? intOrNull(p.targetPort) : undefined
-      if (target !== undefined && (target < 1 || target > 65535)) {
-        errors.set(
-          i,
-          t('serviceCreate.targetPortRangeError', '目标端口必须为 1-65535')
-        )
-        return
+      // targetPort 可以是数字，也可以是容器端口名。
+      const rawTarget = p.targetPort.trim()
+      if (rawTarget) {
+        const target = intOrNull(rawTarget)
+        if (target === undefined) {
+          if (rawTarget.length > 15 || !PORT_NAME_PATTERN.test(rawTarget)) {
+            errors.set(
+              i,
+              t(
+                'serviceCreate.targetPortNameError',
+                '目标端口要么是 1-65535 的数字，要么是合法的端口名（小写字母/数字/-，最长 15 个字符）'
+              )
+            )
+            return
+          }
+        } else if (target < 1 || target > 65535) {
+          errors.set(
+            i,
+            t('serviceCreate.targetPortRangeError', '目标端口必须为 1-65535')
+          )
+          return
+        }
       }
       if (formData.serviceType === 'NodePort' && p.nodePort.trim()) {
         const np = intOrNull(p.nodePort)
@@ -232,9 +203,26 @@ export function ServiceCreatePage() {
     setIsCreating(true)
     setCreateError(null)
     try {
-      await applyResource(finalYaml, formData.namespace)
-      queryClient.invalidateQueries()
-      toast.success(t('common.messages.applied', 'Applied successfully'))
+      if (isEdit && existing) {
+        // 编辑：把表单（或手改的 YAML）算出来的 spec 叠到线上对象上，
+        // 保住 clusterIP 这类不可变字段与表单没建模的字段。
+        const generated = (yaml.load(finalYaml) || {}) as Record<
+          string,
+          unknown
+        >
+        await updateResource(
+          'services',
+          existing.metadata?.name || formData.name,
+          formData.namespace,
+          mergeServiceUpdate(generated, existing)
+        )
+        queryClient.invalidateQueries()
+        toast.success(t('common.messages.updated', { resource: 'Service' }))
+      } else {
+        await applyResource(finalYaml, formData.namespace)
+        queryClient.invalidateQueries()
+        toast.success(t('common.messages.applied', 'Applied successfully'))
+      }
       navigate(`/services/${formData.namespace}/${formData.name}`)
     } catch (err) {
       setCreateError(translateError(err, t))
@@ -268,6 +256,8 @@ export function ServiceCreatePage() {
               </Label>
               <NamespaceSelector
                 selectedNamespace={formData.namespace}
+                // 编辑时命名空间是身份的一部分，不能改。
+                disabled={isEdit}
                 handleNamespaceChange={(ns) => {
                   const next = ns || 'default'
                   update({ namespace: next })
@@ -288,6 +278,8 @@ export function ServiceCreatePage() {
                 onChange={(e) => update({ name: e.target.value })}
                 placeholder="my-service"
                 className="h-9"
+                // 名字是身份的一部分，改名字等于换一个对象。
+                disabled={isEdit}
               />
             </div>
             <div className="space-y-1.5">
@@ -302,12 +294,21 @@ export function ServiceCreatePage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ClusterIP">ClusterIP</SelectItem>
-                  <SelectItem value="NodePort">NodePort</SelectItem>
-                  <SelectItem value="LoadBalancer">LoadBalancer</SelectItem>
-                  <SelectItem value="ExternalName">ExternalName</SelectItem>
+                  {typeOptions.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {isEdit && typeOptions.length === 1 && (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'serviceCreate.typeImmutableHint',
+                    'ExternalName 与其他类型之间不能互相转换，类型已锁定。'
+                  )}
+                </p>
+              )}
             </div>
           </div>
 
@@ -422,7 +423,6 @@ export function ServiceCreatePage() {
                     }
                   />
                   <Input
-                    type="number"
                     value={port.targetPort}
                     onChange={(e) =>
                       update({
@@ -523,10 +523,15 @@ export function ServiceCreatePage() {
 
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            {t(
-              'workloadWizard.yamlTabHint',
-              '这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准创建；返回修改表单会重新生成。'
-            )}
+            {isEdit
+              ? t(
+                  'serviceCreate.yamlTabEditHint',
+                  '这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准更新；返回修改表单会重新生成。'
+                )
+              : t(
+                  'workloadWizard.yamlTabHint',
+                  '这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准创建；返回修改表单会重新生成。'
+                )}
           </p>
           <div className="min-h-[300px] rounded-md border">
             <SimpleYamlEditor
@@ -608,10 +613,15 @@ export function ServiceCreatePage() {
 
       {!canCreate && (
         <div className="rounded-md border border-destructive/40 border-l-4 border-l-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {t('serviceCreate.noCreatePermission', {
-            namespace: formData.namespace,
-            defaultValue: `你没有权限在命名空间 {{namespace}} 中创建 Service。`,
-          })}
+          {isEdit
+            ? t('serviceCreate.noUpdatePermission', {
+                namespace: formData.namespace,
+                defaultValue: `你没有权限在命名空间 {{namespace}} 中修改 Service。`,
+              })
+            : t('serviceCreate.noCreatePermission', {
+                namespace: formData.namespace,
+                defaultValue: `你没有权限在命名空间 {{namespace}} 中创建 Service。`,
+              })}
         </div>
       )}
 
@@ -621,7 +631,9 @@ export function ServiceCreatePage() {
         </Button>
         <Button onClick={handleCreate} disabled={isCreating || !canCreate}>
           {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {t('serviceCreate.createButton', '创建 Service')}
+          {isEdit
+            ? t('common.actions.save', '保存')
+            : t('serviceCreate.createButton', '创建 Service')}
         </Button>
       </div>
     </div>

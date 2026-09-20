@@ -139,6 +139,10 @@ export const router = createBrowserRouter(
           element: <ServiceCreatePage />,
         },
         {
+          path: 'services/:namespace/:name/edit',
+          element: <ServiceCreatePage />,
+        },
+        {
           path: 'services/:namespace',
           element: <ServiceListPage />,
         },

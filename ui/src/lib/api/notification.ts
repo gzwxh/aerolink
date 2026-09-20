@@ -4,7 +4,8 @@ import { apiClient } from '../api-client'
 import { fetchAPI } from './shared'
 
 export type NotificationChannel = 'inapp' | 'email'
-export type NotificationReceiverType = 'user' | 'email'
+// all_users 是「全体用户」：不绑定具体账号，投递时展开成当时的所有已启用账号。
+export type NotificationReceiverType = 'user' | 'email' | 'all_users'
 // NotificationEvent 与后端 model.NotificationEventList() 保持一致；事件列表不在前端硬编码，
 // 订阅下拉直接取「通知模板」接口返回的事件（见 SubscriptionList）。
 export type NotificationEvent =

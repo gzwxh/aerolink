@@ -1677,7 +1677,9 @@
     },
     "receiverTypes": {
       "user": "User",
-      "email": "Email address"
+      "all_users": "All users",
+      "email": "Email address",
+      "allUsersHint": "Every enabled account, including accounts created later. Disabled accounts are skipped."
     },
     "events": {
       "remote_login": "Remote login notice",
@@ -2789,6 +2791,7 @@
   },
   "serviceCreate": {
     "pageTitle": "Service: Create",
+    "editPageTitle": "Service: Edit",
     "noCreatePermission": "You do not have permission to create Services in namespace {{namespace}}.",
     "serviceName": "Service Name",
     "serviceType": "Service Type",
@@ -2809,7 +2812,11 @@
     "targetPortRangeError": "Target port must be a number between 1 and 65535",
     "nodePortRangeError": "NodePort must be between 30000 and 32767",
     "invalidForm": "Please complete all required fields before creating",
-    "createButton": "Create Service"
+    "createButton": "Create Service",
+    "noUpdatePermission": "You do not have permission to update Services in namespace {{namespace}}.",
+    "targetPortNameError": "Target port must be a number between 1-65535 or a valid port name (lowercase letters, digits, \"-\", up to 15 characters)",
+    "typeImmutableHint": "ExternalName cannot be converted to or from another type, so the type is locked.",
+    "yamlTabEditHint": "This YAML is generated from the form above and can be edited directly. After manual edits it is used as-is for the update; changing the form regenerates it."
   },
   "workloadServiceYaml": {
     "noServices": "No Services are associated with this workload yet (network settings on the create page generate them automatically).",

@@ -1677,7 +1677,9 @@
     },
     "receiverTypes": {
       "user": "用户",
-      "email": "邮箱地址"
+      "all_users": "全体用户",
+      "email": "邮箱地址",
+      "allUsersHint": "当前与以后新建的所有已启用账号；停用账号不会收到。"
     },
     "events": {
       "remote_login": "异地登录提醒",
@@ -2819,6 +2821,7 @@
   },
   "serviceCreate": {
     "pageTitle": "Service: 创建",
+    "editPageTitle": "Service: 编辑",
     "noCreatePermission": "你没有权限在命名空间 {{namespace}} 中创建 Service。",
     "serviceName": "服务名称",
     "serviceType": "服务类型",
@@ -2839,7 +2842,11 @@
     "targetPortRangeError": "目标端口必须为 1-65535",
     "nodePortRangeError": "NodePort 必须为 30000-32767",
     "invalidForm": "请完善必填信息后再创建",
-    "createButton": "创建 Service"
+    "createButton": "创建 Service",
+    "noUpdatePermission": "你没有权限在命名空间 {{namespace}} 中修改 Service。",
+    "targetPortNameError": "目标端口要么是 1-65535 的数字，要么是合法的端口名（小写字母/数字/-，最长 15 个字符）",
+    "typeImmutableHint": "ExternalName 与其他类型之间不能互相转换，类型已锁定。",
+    "yamlTabEditHint": "这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准更新；返回修改表单会重新生成。"
   },
   "workloadServiceYaml": {
     "noServices": "该工作负载暂无关联的 Service（创建工作负载时的网络配置会自动生成）。",

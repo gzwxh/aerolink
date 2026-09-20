@@ -16,6 +16,7 @@ import {
   useNotificationTemplates,
   useUpdateNotificationSubscription,
   useUpdateNotificationTemplate,
+  type NotificationReceiverType,
   type NotificationSetting,
 } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -540,8 +541,12 @@ function SubscriptionList() {
 
   const [event, setEvent] = useState('')
   const [channel, setChannel] = useState<'inapp' | 'email'>('inapp')
-  const [receiverType, setReceiverType] = useState<'user' | 'email'>('user')
+  const [receiverType, setReceiverType] =
+    useState<NotificationReceiverType>('user')
   const [receiver, setReceiver] = useState('')
+
+  // 「全体用户」不需要具体接收者，邮件渠道也不需要先知道收件人是谁。
+  const needsReceiver = receiverType !== 'all_users'
 
   // 模板还没加载完时先留空，拿到列表后默认选中第一个。
   useEffect(() => {
@@ -556,7 +561,7 @@ function SubscriptionList() {
         event,
         channel,
         receiverType,
-        receiver,
+        receiver: needsReceiver ? receiver : undefined,
       })
       setReceiver('')
       toast.success(t('notifications.messages.saved', '已保存'))
@@ -596,7 +601,7 @@ function SubscriptionList() {
           <Select
             value={receiverType}
             onValueChange={(value) =>
-              setReceiverType(value as 'user' | 'email')
+              setReceiverType(value as NotificationReceiverType)
             }
           >
             <SelectTrigger>
@@ -605,6 +610,9 @@ function SubscriptionList() {
             <SelectContent>
               <SelectItem value="user">
                 {t('notifications.receiverTypes.user', '用户')}
+              </SelectItem>
+              <SelectItem value="all_users">
+                {t('notifications.receiverTypes.all_users', '全体用户')}
               </SelectItem>
               <SelectItem value="email">
                 {t('notifications.receiverTypes.email', '邮箱地址')}
@@ -630,21 +638,35 @@ function SubscriptionList() {
             </SelectContent>
           </Select>
 
-          <Input
-            value={receiver}
-            placeholder={
-              receiverType === 'user'
-                ? t('notifications.fields.username', '用户名')
-                : 'ops@example.com'
-            }
-            onChange={(event) => setReceiver(event.target.value)}
-          />
+          {needsReceiver ? (
+            <Input
+              value={receiver}
+              placeholder={
+                receiverType === 'user'
+                  ? t('notifications.fields.username', '用户名')
+                  : 'ops@example.com'
+              }
+              onChange={(event) => setReceiver(event.target.value)}
+            />
+          ) : (
+            // 占位保留网格的第 4 列，避免布局跳一下；文案说明这一条订阅覆盖谁。
+            <p className="self-center text-xs text-muted-foreground">
+              {t(
+                'notifications.receiverTypes.allUsersHint',
+                '当前与以后新建的所有已启用账号；停用账号不会收到。'
+              )}
+            </p>
+          )}
 
           {!readOnly && (
             <div className="sm:col-span-4 flex justify-end">
               <Button
                 onClick={handleCreate}
-                disabled={createSubscription.isPending || !receiver || !event}
+                disabled={
+                  createSubscription.isPending ||
+                  !event ||
+                  (needsReceiver && !receiver)
+                }
               >
                 {t('notifications.actions.add', '添加')}
               </Button>
@@ -688,7 +710,9 @@ function SubscriptionList() {
                     subscription.channel
                   )}
                   {' · '}
-                  {subscription.receiver}
+                  {subscription.receiverType === 'all_users'
+                    ? t('notifications.receiverTypes.all_users', '全体用户')
+                    : subscription.receiver}
                 </div>
               </div>
               {!readOnly && (

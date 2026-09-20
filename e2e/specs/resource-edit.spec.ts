@@ -11,12 +11,14 @@ import { expectJSON, expectStatus } from '../support/admin-api'
 /**
  * 「所有能创建的对象都能改」的 UI 冒烟测试（工作负载之外的那几类）。
  *
- * 覆盖三条容易退化、且只有真跑才看得出来的路径：
+ * 覆盖四条容易退化、且只有真跑才看得出来的路径：
  *   1. Pod：走的还是工作负载表单（`DeploymentCreatePage` 的 pods 模式），
  *      保存不该被 Pod 的不可变字段挡住；
  *   2. ConfigMap：data 的 value 是多行文本域，换行与内容要能原样读出来再存回去；
  *   3. Secret：改一个值不能让同一条 Secret 里的二进制值（keystore、证书）被改写 ——
- *      base64 解码成字符串再编码会丢字节，二进制值必须原样留在二进制标签页。
+ *      base64 解码成字符串再编码会丢字节，二进制值必须原样留在二进制标签页；
+ *   4. Service：编辑要保住 clusterIP（不可变）、标签/注解（表单没建模）与具名
+ *      targetPort（表单里是文本，不能被当成数字顶成 port）。
  *
  * 对象都由 API 种好（`/resources/apply`），只把「编辑」这一段走界面，用例自清理；
  * 不产生真实运行中的容器（Pod 用命中不了的 nodeSelector，其余对象不涉及）。
@@ -205,11 +207,81 @@ data:
       await remove(request, 'secrets', name)
     }
   })
+
+  test('editing a Service keeps its clusterIP, labels and named target port', async ({
+    page,
+    request,
+  }) => {
+    const name = uniqueName('svcedit')
+    try {
+      await seed(
+        request,
+        `apiVersion: v1
+kind: Service
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+  labels:
+    zz-e2e-keep: "yes"
+  annotations:
+    zz-e2e-note: keep me
+spec:
+  selector:
+    app: ${name}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+`
+      )
+
+      const before = await expectJSON<{
+        spec: {
+          clusterIP?: string
+          ports: Array<{ port: number; targetPort: unknown }>
+        }
+      }>(await request.get(`${clusterPath}/services/${namespace}/${name}`), 200)
+      const clusterIP = before.spec.clusterIP
+      expect(clusterIP).toBeTruthy()
+
+      await openEditor(page, 'services', name)
+      // 身份字段锁定（名字是 Service 的标识，改名字等于换一个对象）。
+      await expect(page.getByPlaceholder('my-service')).toBeDisabled()
+
+      // 改服务端口；targetPort（具名 "http"）不能被顶成数字。
+      const portInput = page.getByPlaceholder('Port *')
+      await expect(portInput).toHaveValue('80')
+      await portInput.fill('8080')
+      await save(page, 'services', name)
+
+      const edited = await expectJSON<{
+        metadata: {
+          labels?: Record<string, string>
+          annotations?: Record<string, string>
+        }
+        spec: {
+          clusterIP?: string
+          selector?: Record<string, string>
+          ports: Array<{ port: number; targetPort: unknown }>
+        }
+      }>(await request.get(`${clusterPath}/services/${namespace}/${name}`), 200)
+      expect(edited.spec.ports[0].port).toBe(8080)
+      // 具名 targetPort 原样保留：表单没有数字可填时不能把它替换成 port。
+      expect(edited.spec.ports[0].targetPort).toBe('http')
+      // 不可变字段与表单没建模的字段都从线上对象带了过去。
+      expect(edited.spec.clusterIP).toBe(clusterIP)
+      expect(edited.spec.selector).toEqual({ app: name })
+      expect(edited.metadata.labels?.['zz-e2e-keep']).toBe('yes')
+      expect(edited.metadata.annotations?.['zz-e2e-note']).toBe('keep me')
+    } finally {
+      await remove(request, 'services', name)
+    }
+  })
 })
 
 /** 用例自清理后补一次兜底清理，避免失败时在集群里留下 zz-e2e-* 对象。 */
 test.afterAll(async ({ request }) => {
-  for (const kind of ['pods', 'configmaps', 'secrets']) {
+  for (const kind of ['pods', 'configmaps', 'secrets', 'services']) {
     const list = await request
       .get(`${clusterPath}/${kind}/${namespace}`)
       .catch(() => undefined)
