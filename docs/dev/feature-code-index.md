@@ -172,9 +172,11 @@
    - `ui/src/components/action-table.tsx`：设置类表格
    - `ui/src/components/resource-table-toolbar.tsx`：筛选/刷新间隔/列显示
    - 立刻刷新：`ui/src/components/refresh-button.tsx`（`resource-table` 把数据层的 `refetch` 透传成 `onRefresh`，按钮只负责反馈与去抖，**不要在里面另开请求**）
-   | 行操作菜单：`ui/src/components/workload-row-actions.tsx`（工作负载六类共用，能力差异见文件内的 `workloadTraits`）；列表页只负责加一列 `columnHelper.display({ id: 'actions' })`，不要在页面里重写菜单 |
-      - 表单数据层：`ui/src/lib/pv-yaml.ts`、`storageclass-yaml.ts`、`configmap-yaml.ts`、`service-yaml.ts`（类型 + 初值 + 生成 + 编辑时的合并，如 `mergeServiceUpdate`）；表单页只消费它们
+   - 行操作菜单：`ui/src/components/resource-row-actions.tsx`（工作负载六类 + Service 共用；某类不支持某项就关掉 `resourceTraits` 里对应的开关，**不要**在每个页面另写一份菜单）；列表页只负责加一列 `columnHelper.display({ id: 'actions' })`
 3. **表单与编辑器**：
+   - 表单数据层（类型 + 初值 + 生成 + 编辑时的合并）：`ui/src/lib/pv-yaml.ts`、
+     `storageclass-yaml.ts`、`configmap-yaml.ts`、`service-yaml.ts`；页面只消费它们，
+     转换逻辑（尤其编辑时的合并）放进去才好单测
    - `ui/src/components/editors/deployment-form.ts`：类型 + 默认值 + build/parse（数据层）
    - `ui/src/components/workload-container-sections.tsx`、`workload-container-security.tsx`：容器分区编辑器
    - `ui/src/components/key-value-rows.tsx`：键值行 + 文件读取（`maskValues` 控制是否打码）

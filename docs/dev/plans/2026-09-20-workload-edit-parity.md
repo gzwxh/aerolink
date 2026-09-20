@@ -77,13 +77,14 @@ CronJob / Pod）列表**连操作列都没有**，只能靠点进详情页。
 **改动**：
 
 - 把原来 Deployment 专用的 `deployment-row-actions.tsx` 泛化成
-  `ui/src/components/workload-row-actions.tsx`（props：`resourceType` + `workload`），六类列表共用。
+  `ui/src/components/resource-row-actions.tsx`（props：`resourceType` + `resource`），
+  工作负载六类与 Service 共用（Service 那部分是后补的，见文末）。
   菜单第一项是新增的「编辑」，直达 `/{type}/{namespace}/{name}/edit`（六类的编辑路由在第 1、3 节已经补齐）。
-- 各类型的差异全部收敛在文件内的 `workloadTraits`（容器在哪个 spec 路径下、支持哪些菜单项），
+- 各类型的差异全部收敛在文件内的 `resourceTraits`（容器在哪个 spec 路径下、支持哪些菜单项），
   其余菜单项对所有类型的行为一致。
-- i18n 命名空间 `deploymentActions` → `workloadActions`（文案本来就与类型无关），两个语言包同步改名。
+- i18n 命名空间 `deploymentActions` → `resourceActions`（文案本来就与类型无关），两个语言包同步改名。
 - 六个列表页（工作负载分组，见 `ui/src/lib/resource-catalog.ts` 的 `sidebar.groups.workloads`）
-  各加一列 `columnHelper.display({ id: 'actions' })`。
+  与 `/services` 各加一列 `columnHelper.display({ id: 'actions' })`。
 
 能力矩阵（`✓` = 该类型的菜单里有这一项）：
 
@@ -95,6 +96,7 @@ CronJob / Pod）列表**连操作列都没有**，只能靠点进详情页。
 | Job | ✓ | ✓ | ✓ | — | — | — | — | ✓ | ✓ |
 | CronJob | ✓ | ✓ | — | ✓ | — | — | — | ✓ | ✓ |
 | Pod | ✓ | ✓ | ✓ | ✓ | — | — | — | ✓ | ✓ |
+| Service | ✓ | ✓ | — | — | — | — | — | ✓ | ✓ |
 
 每一项都有原因，不是随意取舍：
 
@@ -103,16 +105,18 @@ CronJob / Pod）列表**连操作列都没有**，只能靠点进详情页。
   CronJob 详情页本身也没有终端页签。
 - **Pod 不给滚动重启/回滚**：没有控制器，没有历史版本；它的镜像是少数可变字段之一，所以保留改镜像。
 - **暂停/恢复只有 Deployment**：只有它（和 CronJob 的 `suspend`）有这个语义，本次没有为 CronJob 造入口。
+- **Service 只留元数据相关的四项**（编辑 / YAML / 标签注解 / 删除）：它没有容器、没有历史版本、
+  也没有终端（`containers: null` 同时关掉了「修改镜像」）。
 
 ## 7. 测试（第 6 节）
 
-- 组件（`ui/src/components/workload-row-actions.test.tsx`，12 条）：六类的「编辑」都能跳到
+- 组件（`ui/src/components/resource-row-actions.test.tsx`，14 条）：七类的「编辑」都能跳到
   `/{type}/{ns}/{name}/edit`；各类型的菜单项与上表一致（Job 无改镜像/重启/回滚、CronJob 无终端、
-  Pod 无重启）；没有 `update` 权限时不出编辑与标签/注解；一条权限都没有时整列不渲染。
-- e2e（`e2e/specs/workload-list-actions.spec.ts`，本地集群实跑，8 passed）：六类列表都有操作列，
-  以及从 Deployment 列表的操作菜单进编辑页（进的是编辑模式，身份字段来自线上对象且被锁定）。
+  Pod 无重启、Service 只有四项）；没有 `update` 权限时不出编辑与标签/注解；一条权限都没有时整列不渲染。
+- e2e（`e2e/specs/list-row-actions.spec.ts`，本地集群实跑，10 passed）：七类列表都有操作列，
+  以及从 Deployment / Service 列表的操作菜单进编辑页（进的是编辑模式，身份字段来自线上对象且被锁定）。
 - 反证：去掉「编辑」菜单项 → 6 条用例失败（每条对应一个类型）；把 Job 的改镜像打开 →
-  「Job 不提供改镜像」失败。
+  「Job 不提供改镜像」失败；给 Service 打开终端 → 「Service 只保留编辑、YAML、标签注解与删除」失败。
 - **一条容易踩的坑**：列表为空时页面渲染的是空态，**整张表（含表头）都不出现**，
   所以 e2e 里断言「有操作列」必须先种一个对象；反过来，只断言表头而不种对象会得到假失败。
   （六类对象的种法都刻意让负载跑不起来：命中不了的 `nodeSelector`、`replicas: 0`、
