@@ -17,6 +17,7 @@ import {
   useClusterList,
   useUserList,
 } from '@/lib/api'
+import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
@@ -43,8 +44,9 @@ import { ResourceTableView } from '@/components/resource-table-view'
 import { TableColumnToggle } from '@/components/table-column-toggle'
 import { YamlDiffViewer } from '@/components/yaml-diff-viewer'
 
-import { AuditExportButton, AuditTimeRangePicker } from './audit-filters'
+import { AuditExportButton } from './audit-filters'
 import { AuditSetting } from './audit-setting'
+import { AuditTimeRangePicker } from './audit-time-range-picker'
 import { LoginLog } from './login-log'
 import { PasswordChangeLog } from './password-change-log'
 
@@ -90,7 +92,10 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
   const [searchQuery, setSearchQuery] = useState('')
   const [operationFilter, setOperationFilter] = useState('')
   const [clusterFilter, setClusterFilter] = useState('')
-  const [timeRange, setTimeRange] = useState<AuditTimeRange>({})
+  // 默认按最近一周过滤：界面一进来就有具体区间可显示，查询与显示保持一致。
+  const [timeRange, setTimeRange] = useState<AuditTimeRange>(() =>
+    defaultAuditTimeRange()
+  )
   const [selectedHistory, setSelectedHistory] =
     useState<ResourceHistory | null>(null)
   const [isDiffOpen, setIsDiffOpen] = useState(false)
@@ -433,8 +438,9 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle>
+          {/* 标题让位给右侧筛选栏：窗口不够宽时先压标题，不去挤筛选栏换行。 */}
+          <div className="min-w-0">
+            <CardTitle className="truncate">
               {scoped
                 ? t('audit.fileOperations.title', '文件操作日志')
                 : t('common.fields.auditLogs', 'Audit Logs')}
@@ -451,7 +457,7 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
                   )}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          <div className="flex shrink-0 items-center justify-end gap-2">
             <AuditTimeRangePicker
               value={timeRange}
               onChange={handleTimeRangeChange}
@@ -463,14 +469,14 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
               )}
               value={searchQuery}
               onChange={(event) => handleSearchChange(event.target.value)}
-              className="w-64"
+              className="w-52"
             />
             {!scoped && (
               <Select
                 value={operationFilter || 'all'}
                 onValueChange={handleOperationChange}
               >
-                <SelectTrigger className="w-44">
+                <SelectTrigger className="w-36">
                   <SelectValue
                     placeholder={t(
                       'common.values.allOperations',
@@ -519,7 +525,7 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
                 value={clusterFilter || 'all'}
                 onValueChange={handleClusterChange}
               >
-                <SelectTrigger className="w-56">
+                <SelectTrigger className="w-40">
                   <SelectValue
                     placeholder={t('common.values.allClusters', 'All clusters')}
                   />
@@ -540,7 +546,7 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
               value={operatorId ? String(operatorId) : 'all'}
               onValueChange={handleUserFilterChange}
             >
-              <SelectTrigger className="w-56">
+              <SelectTrigger className="w-40">
                 <SelectValue
                   placeholder={t('common.values.allUsers', 'All users')}
                 />

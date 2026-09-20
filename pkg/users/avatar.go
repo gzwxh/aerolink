@@ -1,14 +1,8 @@
 package users
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"image"
-
-	// 头像只接受 PNG / JPEG：这两个解码器必须注册，否则 image.DecodeConfig 认不出来。
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,28 +10,18 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/imageupload"
 	"github.com/zxh326/kite/pkg/model"
 	"k8s.io/klog/v2"
 )
 
-// 头像的三个硬限制，服务端强制、前端同时给出说明（见 docs/dev/plans/2026-09-20-avatar-upload.md）。
+// 头像的三个硬限制与服务端其它图片上传共用一套规则，实现在 pkg/imageupload
+// （见 docs/dev/plans/2026-09-20-avatar-upload.md）。
 const (
-	// maxAvatarBytes 是头像文件的大小上限。前端会先在浏览器里裁方并缩放到 512×512
-	// 再上传（通常 20–80 KB），所以正常的用户操作撞不到这个上限。
-	maxAvatarBytes = 1 << 20 // 1 MiB
-	// maxAvatarUploadBody 给 multipart 的边界与字段名留出余量，
-	// 超出的请求体直接拒收，不会读进内存。
-	maxAvatarUploadBody = maxAvatarBytes + 64<<10
-	// maxAvatarDimension 是边长上限，只读图片头（image.DecodeConfig）判定，不解码全图。
-	maxAvatarDimension = 1024
+	maxAvatarBytes      = imageupload.MaxBytes
+	maxAvatarUploadBody = imageupload.MaxBodyBytes
+	maxAvatarDimension  = imageupload.MaxDimension
 )
-
-// avatarContentTypes 是允许的图片类型（按内容嗅探得到的 MIME）。
-// SVG 不在其中：它是脚本载体，内联返回等于存储型 XSS。
-var avatarContentTypes = map[string]string{
-	"image/png":  "png",
-	"image/jpeg": "jpeg",
-}
 
 // 头像相关的错误码。前端按 code 本地化（见 ui/src/lib/utils.ts 的 translateError
 // 与 locales 里的 avatarUpload.errors.*），error 字段只作英文兜底。
@@ -84,37 +68,12 @@ func respondAvatarError(c *gin.Context, status int, code, message string, params
 	c.JSON(status, body)
 }
 
-// validateAvatarImage 按内容判定上传的字节是否是允许的头像图片。
-// 只信内容：客户端的文件名与 Content-Type 都可以随便写。
-func validateAvatarImage(data []byte) (string, error) {
-	contentType := http.DetectContentType(data)
-	expectedFormat, ok := avatarContentTypes[contentType]
-	if !ok {
-		return "", errAvatarInvalidType
-	}
-
-	// DecodeConfig 只解析图片头，顺便验证结构可解（截断/损坏的文件在这里被拒），
-	// 并拿到边长。format 与嗅探结果必须一致，避免「PNG 头 + 其它数据」这类混淆。
-	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil {
-		return "", errAvatarInvalidImage
-	}
-	if format != expectedFormat {
-		return "", errAvatarInvalidType
-	}
-	if cfg.Width <= 0 || cfg.Height <= 0 {
-		return "", errAvatarInvalidImage
-	}
-	if cfg.Width > maxAvatarDimension || cfg.Height > maxAvatarDimension {
-		return "", errAvatarTooLargeDimensions
-	}
-	return contentType, nil
-}
-
+// 校验结果直接沿用 pkg/imageupload 的哨兵错误，这里只改个名，让本包的调用点
+// 读起来仍是「头像」的语义；错误码映射见 respondAvatarValidationError。
 var (
-	errAvatarInvalidType        = errors.New("avatar must be a PNG or JPEG image")
-	errAvatarInvalidImage       = errors.New("avatar is not a readable image")
-	errAvatarTooLargeDimensions = fmt.Errorf("avatar must not exceed %d×%d pixels", maxAvatarDimension, maxAvatarDimension)
+	errAvatarInvalidType        = imageupload.ErrInvalidType
+	errAvatarInvalidImage       = imageupload.ErrInvalidImage
+	errAvatarTooLargeDimensions = imageupload.ErrTooLargeDimensions
 )
 
 // respondAvatarValidationError 把校验错误映射成错误码返回。
@@ -146,7 +105,7 @@ func UploadCurrentUserAvatar(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAvatarUploadBody)
 	file, _, err := c.Request.FormFile("file")
 	if err != nil {
-		if isBodyTooLargeError(err) {
+		if imageupload.IsBodyTooLargeError(err) {
 			respondAvatarError(c, http.StatusRequestEntityTooLarge, avatarCodeTooLarge,
 				fmt.Sprintf("avatar must be at most %d bytes", maxAvatarBytes), gin.H{
 					"limit": maxAvatarBytes,
@@ -184,7 +143,7 @@ func UploadCurrentUserAvatar(c *gin.Context) {
 		return
 	}
 
-	contentType, err := validateAvatarImage(data)
+	contentType, err := imageupload.Validate(data)
 	if err != nil {
 		respondAvatarValidationError(c, err)
 		return
@@ -273,14 +232,4 @@ func GetUserAvatar(c *gin.Context) {
 	}
 
 	c.Data(http.StatusOK, avatar.ContentType, avatar.Data)
-}
-
-// isBodyTooLargeError 判断错误是不是 http.MaxBytesReader 抛出的超限错误。
-// 驱动在不同版本下措辞不同，统一按子串判定（与 pod 文件上传的做法一致）。
-func isBodyTooLargeError(err error) bool {
-	var maxBytesErr *http.MaxBytesError
-	if errors.As(err, &maxBytesErr) {
-		return true
-	}
-	return strings.Contains(err.Error(), "request body too large")
 }

@@ -77,12 +77,6 @@ spec:
             - name: KITE_CONFIG_FILE
               value: /etc/kite/config.yaml
             {{- end }}
-            # 上报类开关由部署层接管（见 values.yaml）：环境变量一旦注入就优先于
-            # 界面设置，避免实例在没人注意的情况下向外发请求。
-            - name: DISABLE_VERSION_CHECK
-              value: {{ not .Values.versionCheck.enabled | quote }}
-            - name: ENABLE_ANALYTICS
-              value: {{ .Values.analytics.enabled | quote }}
           {{- with .Values.extraEnvs }}
           {{- toYaml . | nindent 12 }}
           {{- end }}

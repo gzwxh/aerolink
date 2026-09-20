@@ -63,7 +63,6 @@ import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { Terminal } from '@/components/terminal'
 import { VolumeTable } from '@/components/volume-table'
 import { WorkloadHistoryTabs } from '@/components/workload-history-tabs'
-import { WorkloadServiceYamlTab } from '@/components/workload-service-yaml-tab'
 
 import {
   ResourceDetailShell,
@@ -332,27 +331,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
 
   const extraTabs = useMemo<ResourceDetailShellTab<Deployment>[]>(() => {
     const tabs: ResourceDetailShellTab<Deployment>[] = []
-    const relatedServiceList = associatedServices || []
     const pods = relatedPods || []
-
-    if (relatedServiceList.length > 0) {
-      tabs.push({
-        value: 'service-yaml',
-        label: (
-          <>
-            {t('common.tabs.serviceYaml', '关联 Service')}
-            <Badge variant="secondary">{relatedServiceList.length}</Badge>
-          </>
-        ),
-        content: (
-          <WorkloadServiceYamlTab
-            deployment={deployment!}
-            namespace={namespace!}
-            services={associatedServices}
-          />
-        ),
-      })
-    }
 
     tabs.push(
       {
@@ -533,7 +512,6 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     isLoading,
     isLoadingPods,
     labelSelector,
-    associatedServices,
     handleContainerUpdate,
     name,
     namespace,

@@ -26,6 +26,29 @@
 }
 
 /*
+  kite-song-sc-400-normal / kite-kai-400-normal
+  思源宋体 CN 与寒蝉正楷体的界面子集（GB2312 + 界面文案），SIL OFL 1.1。
+  思源宋体的版权声明含保留字体名 `Source`，派生版未使用该名；两者都改成 Kite 自有名称，
+  来源与许可证见 NOTICE。用 scripts/build-font-subsets.sh 重新生成，
+  两个文件合计约 5MB，因此只提供 400 字重（粗体由浏览器合成）。
+*/
+@font-face {
+  font-family: 'Kite Song SC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@/assets/fonts/kite-song-sc-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Kite Kai';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@/assets/fonts/kite-kai-400-normal.woff2') format('woff2');
+}
+
+/*
   Font families
   - --font-sans holds the system UI font stack
   - --font-mono enforces Maple Mono for all monospace usages

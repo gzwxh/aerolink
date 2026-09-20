@@ -94,6 +94,8 @@
 | --- | --- | --- | --- | --- |
 | 集群管理 | `ui/src/components/settings/cluster-management.tsx`、`cluster-dialog.tsx`、`cluster-import-dialog.tsx`、`ui/src/components/cluster-selector.tsx`、`ui/src/contexts/cluster-context.tsx` | `ui/src/lib/api/cluster.ts`、`ui/src/lib/api/admin.ts` | `pkg/cluster` | `clusters` |
 | Cluster Agent（反向连接） | `ui/src/components/settings/cluster-management.tsx` | `ui/src/lib/api/cluster.ts` | `pkg/clusteragent` | `clusters.cluster_agent*` |
+| 集群徽章（短说明 + 背景色，顶栏与集群管理列表展示） | `ui/src/components/cluster-badge.tsx`（`ClusterBadge`）、`settings/cluster-badge-dialog.tsx`、`cluster-selector.tsx`、`current-cluster-badge.tsx` | `ui/src/lib/api/admin.ts`（`updateClusterBadge`） | `pkg/cluster/cluster_handler.go`（`applyStoredDisplayInfo`、`validateClusterBadge`） | `clusters.badge_*`（口径见 `docs/dev/plans/2026-09-20-cluster-badge.md`） |
+| 集群图标（上传图片或最多 6 个汉字的图标文本） | `ui/src/components/cluster-badge.tsx`（`ClusterBadgeIcon`）、`ui/src/lib/cluster-icon-upload.ts`、`ui/src/lib/square-image.ts`（与头像上传共用） | `ui/src/lib/api/admin.ts`（`uploadClusterBadgeIcon` / `deleteClusterBadgeIcon`） | `pkg/cluster/cluster_badge_icon.go`、`pkg/imageupload`、`pkg/model/cluster_badge_icon.go`、`routes.go` | `cluster_badge_icons`、`clusters.badge_icon_*`（口径见同一方案文档；图标由 `badgeIconEnabled` 单独控制，与徽章开关无关） |
 | 通用资源列表/详情 | `ui/src/pages/resource-list.tsx`、`resource-detail.tsx`、`simple-list-page.tsx`、`simple-resource-detail.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/handler.go`、`generic_resource_handler_{list,write,history}.go` | — |
 | 资源创建（YAML apply） | `ui/src/components/create-resource-dialog.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/apply_handler.go` | `resource_histories` |
 | ConfigMap | `ui/src/pages/configmap-list-page.tsx`、`configmap-detail.tsx`、`configmap-create-page.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources` | — |
@@ -134,7 +136,7 @@
 
 | 功能 | 前端 | 前端 API | 后端 | 数据 |
 | --- | --- | --- | --- | --- |
-| 操作/登录/改密日志 | `ui/src/components/settings/audit-log.tsx`、`login-log.tsx`、`password-change-log.tsx`、`audit-filters.tsx` | `ui/src/lib/api/admin.ts` | `pkg/audit/handler.go`、`pkg/audit/export.go`、`pkg/audit/retention.go` | `resource_histories`、`login_records`、`password_change_logs` |
+| 操作/登录/改密日志 | `ui/src/components/settings/audit-log.tsx`、`login-log.tsx`、`password-change-log.tsx`、`audit-filters.tsx`（导出）、`audit-time-range-picker.tsx`（时间范围，取值与查询参数转换在 `ui/src/lib/audit-time-range.ts`） | `ui/src/lib/api/admin.ts` | `pkg/audit/handler.go`、`pkg/audit/export.go`、`pkg/audit/retention.go` | `resource_histories`、`login_records`、`password_change_logs` |
 | 审计保留策略 / syslog 外发 | `ui/src/components/settings/audit-setting.tsx` | `ui/src/lib/api/admin.ts` | `pkg/audit/retention.go`、`pkg/audit/syslog.go` | `audit_settings` |
 | 管理操作审计写入 | — | — | `pkg/middleware/audit.go` | `resource_histories` |
 | 敏感值落库加密 | — | — | `pkg/model/custom_type.go`（`SecretString`）、`pkg/model/encryption_key.go` | 各表密文字段 |
@@ -223,6 +225,7 @@
 | 新增环境变量 | `pkg/common/common.go` → `charts/kite/values.yaml` + `charts/kite/templates/deployment.yaml` → 两个 README 参数表 |
 | 新增后端接口 | `routes.go`（选对分组/权限门）→ handler → `pkg/model`（如需落库）→ `ui/src/lib/api/*.ts` |
 | 新增前端页面 | `ui/src/pages/*.tsx` → `ui/src/routes.tsx` → 文案进两个 locale |
+| 换 / 加界面字体 | 字体栈 `ui/src/components/font-provider.tsx`（`FONT_STACKS`）→ 选项列表 `ui/src/components/account/appearance-section.tsx`（`FONTS`）→ 文案 `userMenu.fonts.*`（两个 locale）→ `@font-face` 加进 `ui/src/styles/base.css`。中文字体体积大，用 `scripts/build-font-subsets.sh` 生成 GB2312 子集并提交产物，来源与许可证登记到 `NOTICE` 与 `licenses/` |
 | 表格列显隐偏好 | `ui/src/hooks/use-table-column-visibility.ts` + `ui/src/components/table-column-toggle.tsx` |
 | 用户可配置偏好 | 见 `plans/2026-09-18-server-side-user-preferences.md`（当前分散在 localStorage） |
 | 改「谁必须绑定 MFA」/ 自助绑定口径 | `pkg/model/security_setting.go`（`MFARequiredFor`）→ `pkg/auth/middleware.go`（绑定引导拦截）→ `pkg/auth/login_handler.go`（登录挑战）→ `pkg/users/handler.go`（自助绑定）→ `ui/src/lib/mfa-enrollment.ts`（前端镜像）；口径见 `plans/2026-09-20-directory-user-mfa-enrollment.md` |
@@ -244,13 +247,6 @@ pnpm --dir ui exec eslint <files>
 pnpm --dir ui run test                                     # vitest
 
 make e2e-test            # Playwright + kind（spec 见 e2e/specs/*.spec.ts）
-```
-
-对着**跑起来的实例**做一遍回归（换数据库版本、大改动前；写检查要显式给可破坏的命名空间）：
-
-```bash
-go run ./tools/apismoke -base-url http://127.0.0.1:8080 -cluster dev -namespace devops \
-  -log-file /data/logs/kite.log            # 只读；加 -write-namespace/-ai/-smtp 会再跑写路径、AI 工具、邮件投递
 ```
 
 后端改动的常见验证靶点：`pkg/resources`（资源与创建）、`pkg/audit`（审计与保留策略）、`pkg/model`（模型与缓存）、`pkg/rbac`（授权）。

@@ -2,13 +2,11 @@
 
 ## 数据共享
 
-Kite 不收集分析数据，也不会向第三方上报使用情况。
+Kite 不收集任何数据，也不会向第三方上报使用情况。上游的匿名统计（umami）已从这个
+内部分支中整体移除：没有统计开关，没有注入的脚本，服务端下发的
+`Content-Security-Policy` 也不放行任何第三方来源。
 
-上游的匿名统计（umami）在这个内部分支里不可用：服务端下发的 `Content-Security-Policy`
-不放行统计脚本与上报网关，因此即便有人把 `ENABLE_ANALYTICS` 设为 `true`，浏览器也会
-拦掉相关请求。
-
-版本检查同理：本分支默认关闭，不会在没人注意的情况下访问 `api.github.com`。
+Kite 也不会查询上游发布：没有更新检查，没有任何指向 `api.github.com` 的请求。
 
 ## 权限问题
 
@@ -68,11 +66,13 @@ db:
 
 ## 如何更改字体
 
-Kite 默认提供三种字体：系统默认、`Maple Mono` 和 `JetBrains Mono`。
+Kite 默认提供五种字体：系统默认、`Maple Mono`、`JetBrains Mono`，以及中文优先的宋体与楷体。
+
+宋体与楷体随二进制分发，是 SIL OFL 1.1 字体的界面子集（来源见 `NOTICE`）：宋体派生自思源宋体 CN，楷体派生自寒蝉正楷体；两者只覆盖 GB2312 与界面文案，且只有 400 字重，粗体由浏览器合成。字体栈与生成脚本见 `ui/src/components/font-provider.tsx` 与 `scripts/build-font-subsets.sh`。
 
 如果您想使用其他字体，则需要自己构建项目。
 
-用 make 构建 kite，并在 `./ui/src/index.css` 中更改字体
+用 make 构建 kite，并在 `./ui/src/styles/base.css` 中更改字体
 
 ```css
 @font-face {

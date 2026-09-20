@@ -98,8 +98,6 @@ spec:
                   key: MYSQL_DSN
             # Kite 通过 in-cluster kubeconfig（ServiceAccount 令牌）访问本集群；
             # 管理多集群时在页面上添加其它集群的 kubeconfig（加密后存于 MySQL）。
-            - name: DISABLE_VERSION_CHECK
-              value: "true"
             # 反向代理/Ingress 场景下必须收紧为真实代理网段，防止伪造来源 IP：
             - name: TRUSTED_PROXIES
               value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"

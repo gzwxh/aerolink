@@ -4,6 +4,7 @@ import {
   IconCheck,
   IconCopy,
   IconEdit,
+  IconPalette,
   IconPlus,
   IconServer,
   IconSwitchHorizontal,
@@ -17,6 +18,7 @@ import { toast } from 'sonner'
 
 import { Cluster } from '@/types/api'
 import {
+  ClusterBadgeUpdateRequest,
   ClusterCreateRequest,
   ClusterUpdateRequest,
   createCluster,
@@ -24,6 +26,7 @@ import {
   fetchBindingGroups,
   importClusters,
   updateCluster,
+  updateClusterBadge,
   useClusterList,
 } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
@@ -50,9 +53,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { ClusterBadge, ClusterBadgeIcon } from '@/components/cluster-badge'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 
 import { Action, ActionTable } from '../action-table'
+import { ClusterBadgeDialog } from './cluster-badge-dialog'
 import { ClusterDialog } from './cluster-dialog'
 import { ClusterImportDialog } from './cluster-import-dialog'
 
@@ -76,6 +81,7 @@ export function ClusterManagement() {
   const [showClusterDialog, setShowClusterDialog] = useState(false)
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [editingCluster, setEditingCluster] = useState<Cluster | null>(null)
+  const [badgeCluster, setBadgeCluster] = useState<Cluster | null>(null)
   const [deletingCluster, setDeletingCluster] = useState<Cluster | null>(null)
   const [deleteBindingGroups, setDeleteBindingGroups] = useState(false)
   const [clusterAgentCommand, setClusterAgentCommand] = useState('')
@@ -168,58 +174,58 @@ export function ClusterManagement() {
       {
         id: 'name',
         header: t('common.fields.name', 'Name'),
-        cell: ({ row: { original: cluster } }) => (
-          <div>
-            <div className="flex items-center gap-2">
-              {/* 名称是这张表里最自然的入口：点一下直接开「编辑集群」，
-                  不必先展开右侧的操作菜单。只读角色保持纯文本，不做假入口。 */}
-              {readOnly ? (
-                <span className="font-medium">{cluster.name}</span>
-              ) : (
-                <button
-                  type="button"
-                  className="app-link text-left font-medium"
-                  title={t('common.actions.edit', 'Edit')}
-                  onClick={() => {
-                    setEditingCluster(cluster)
-                    setShowClusterDialog(true)
-                  }}
-                >
-                  {cluster.name}
-                </button>
-              )}
-              {cluster.name === currentCluster && (
-                <Badge variant="outline" className="gap-1 text-primary">
-                  <IconCheck className="h-3 w-3" />
-                  {t('clusterManagement.currentBadge', 'Current')}
-                </Badge>
-              )}
-              {cluster.isDefault && <Badge variant="secondary">Default</Badge>}
-            </div>
-          </div>
-        ),
-      },
-      {
-        id: 'description',
-        header: t('common.fields.description', 'Description'),
         cell: ({ row: { original: cluster } }) => {
           const description = cluster.description?.trim()
-          if (!description) {
-            return <span className="text-muted-foreground">-</span>
-          }
-          // 备注往往是整段说明：列表里只显示两行，完整内容放 tooltip
-          // （编辑弹窗里也能看到全文），免得把表格撑宽、把行撑高。
           return (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="line-clamp-2 max-w-64 cursor-default break-all text-muted-foreground">
-                  {description}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="max-w-sm break-all">{description}</p>
-              </TooltipContent>
-            </Tooltip>
+            <div className="flex items-start gap-2">
+              {/* 图标跟着名称走，和集群切换器、页头徽章位一致：管理员改完能在这里直接看到结果。 */}
+              <ClusterBadgeIcon cluster={cluster} size="sm" className="mt-0.5" />
+              <div className="min-w-0 space-y-0.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <ClusterBadge cluster={cluster} />
+                  {/* 名称是这张表里最自然的入口：点一下直接开「编辑集群」，
+                      不必先展开右侧的操作菜单。只读角色保持纯文本，不做假入口。 */}
+                  {readOnly ? (
+                    <span className="font-medium">{cluster.name}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="app-link text-left font-medium"
+                      title={t('common.actions.edit', 'Edit')}
+                      onClick={() => {
+                        setEditingCluster(cluster)
+                        setShowClusterDialog(true)
+                      }}
+                    >
+                      {cluster.name}
+                    </button>
+                  )}
+                  {cluster.name === currentCluster && (
+                    <Badge variant="outline" className="gap-1 text-primary">
+                      <IconCheck className="h-3 w-3" />
+                      {t('clusterManagement.currentBadge', 'Current')}
+                    </Badge>
+                  )}
+                  {cluster.isDefault && (
+                    <Badge variant="secondary">Default</Badge>
+                  )}
+                </div>
+                {/* 描述跟在名称下面：备注往往是整段说明，这里只显示两行，完整内容放
+                    tooltip（编辑弹窗里也能看到全文），免得把表格撑宽、把行撑高。 */}
+                {description && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="line-clamp-2 max-w-64 cursor-default text-left text-xs break-all text-muted-foreground">
+                        {description}
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-sm break-all">{description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
           )
         },
       },
@@ -315,6 +321,15 @@ export function ClusterManagement() {
                 setEditingCluster(cluster)
                 setShowClusterDialog(true)
               },
+            },
+            {
+              label: (
+                <>
+                  <IconPalette className="h-4 w-4" />
+                  {t('clusterManagement.actions.badge', '自定义徽章')}
+                </>
+              ),
+              onClick: (cluster: Cluster) => setBadgeCluster(cluster),
             },
             {
               label: (
@@ -424,6 +439,20 @@ export function ClusterManagement() {
       )
       setShowClusterDialog(false)
       setEditingCluster(null)
+    },
+    onError: () => {},
+  })
+
+  // 徽章同时出现在集群切换器与顶栏，改完要把 ['clusters'] 一起失效——
+  // 那个查询缓存 5 分钟，不失效的话用户得手动刷新才看到效果。
+  const badgeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: ClusterBadgeUpdateRequest }) =>
+      updateClusterBadge(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['clusters'] })
+      toast.success(t('clusterBadge.saved', '集群徽章已更新'))
+      setBadgeCluster(null)
     },
     onError: () => {},
   })
@@ -584,6 +613,22 @@ export function ClusterManagement() {
         }}
         cluster={editingCluster}
         onSubmit={handleSubmitCluster}
+      />
+
+      <ClusterBadgeDialog
+        open={!!badgeCluster}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBadgeCluster(null)
+          }
+        }}
+        cluster={badgeCluster}
+        onSubmit={(data) => {
+          if (badgeCluster) {
+            badgeMutation.mutate({ id: badgeCluster.id, data })
+          }
+        }}
+        isPending={badgeMutation.isPending}
       />
 
       <ClusterImportDialog

@@ -351,8 +351,7 @@
       "related": "Related",
       "terminal": "Terminal",
       "volumes": "Volumes",
-      "yaml": "YAML",
-      "serviceYaml": "Related Services"
+      "yaml": "YAML"
     },
     "units": {
       "pods": "pods",
@@ -478,7 +477,6 @@
     "unsetGlobal": "Unset global sidebar",
     "unsetGlobalSuccess": "Global sidebar disabled successfully",
     "unsetGlobalError": "Failed to disable global sidebar",
-    "updateAvailable": "A newer Kite version is available",
     "customize": "Customize Sidebar",
     "customizeTitle": "Customize Sidebar",
     "expand": "Expand",
@@ -1896,14 +1894,6 @@
         "image": "Image"
       }
     },
-    "runtime": {
-      "title": "Runtime",
-      "description": "Configure analytics and version checking behavior.",
-      "form": {
-        "enableAnalytics": "Enable analytics",
-        "enableVersionCheck": "Enable version check"
-      }
-    },
     "loginPrompt": {
       "title": "Login Prompt",
       "description": "Show a custom message on the login page.",
@@ -2145,6 +2135,43 @@
     },
     "viewAll": "View All Settings"
   },
+  "clusterBadge": {
+    "title": "Custom Cluster Badge",
+    "preview": "Cluster icon and name preview",
+    "enabled": "Show this cluster's badge",
+    "enabledHint": "When off, the header's and create pages' current-cluster label and the cluster management list stop showing this badge. The cluster icon is controlled separately under Custom cluster icon.",
+    "text": "Custom label",
+    "textPlaceholder": "e.g. Staging",
+    "textHint": "At most 16 characters; shown in full, never truncated.",
+    "color": "Badge background",
+    "colorHint": "Hex color, e.g. #0011ff",
+    "colorInvalid": "Enter a hex color, e.g. #0011ff",
+    "iconEnabled": "Custom cluster icon",
+    "iconHint": "Upload an image, or use up to 6 characters instead of the default cluster icon; independent of the badge switch above.",
+    "iconUpload": "Upload icon",
+    "iconUploading": "Processing…",
+    "iconRemove": "Remove icon",
+    "iconUploadedHint": "This icon was uploaded and is stored in this instance's database; it takes precedence over the icon text.",
+    "iconUploadHint": "PNG / JPG, up to {{limit}}; cropped to a square and scaled to at most {{size}}×{{size}} before upload.",
+    "iconUploadSuccess": "Cluster icon updated",
+    "iconUploadFailed": "Failed to upload the icon",
+    "iconRemoveSuccess": "Cluster icon removed",
+    "iconText": "Icon text",
+    "iconTextPlaceholder": "e.g. Staging",
+    "iconTextHint": "Up to 6 characters, always shown in full (never truncated).",
+    "saved": "Cluster badge updated",
+    "errors": {
+      "cluster_icon_file_missing": "No image file was received; please pick one again",
+      "cluster_icon_too_large": "The icon must be at most {{limit}}; please pick a smaller image",
+      "cluster_icon_invalid_type": "Icons support PNG / JPG only",
+      "cluster_icon_invalid_image": "This image is corrupted or cannot be parsed",
+      "cluster_icon_dimensions_too_large": "The icon must be at most {{dimension}} pixels on a side",
+      "cluster_icon_client_not_image": "Please choose an image file (PNG / JPG / WebP and other common formats are fine)",
+      "cluster_icon_client_decode_failed": "The browser cannot decode this image; convert it to PNG or JPG first (common with iPhone HEIC files)",
+      "cluster_icon_client_encode_failed": "Image processing failed; please try another image",
+      "cluster_icon_client_too_large": "This image is still too large after processing; please pick a smaller one"
+    }
+  },
   "clusterManagement": {
     "title": "Cluster Management",
     "currentBadge": "Current",
@@ -2158,7 +2185,8 @@
       "switch": "Switch to this cluster",
       "add": "Add Cluster",
       "import": "Import Clusters",
-      "importing": "Importing..."
+      "importing": "Importing...",
+      "badge": "Custom badge"
     },
     "table": {
       "prometheus": "Prometheus"
@@ -2840,12 +2868,6 @@
     "typeImmutableHint": "ExternalName cannot be converted to or from another type, so the type is locked.",
     "yamlTabEditHint": "This YAML is generated from the form above and can be edited directly. After manual edits it is used as-is for the update; changing the form regenerates it."
   },
-  "workloadServiceYaml": {
-    "noServices": "No Services are associated with this workload yet (network settings on the create page generate them automatically).",
-    "saved": "Service {{name}} updated",
-    "deleted": "Service {{name}} deleted",
-    "invalidYaml": "Invalid YAML"
-  },
   "deploymentOverview": {
     "endpointsTitle": "Endpoints",
     "lbPending": "External IP pending",
@@ -3076,10 +3098,29 @@
   },
   "audit": {
     "timeRange": {
-      "label": "Time range",
-      "from": "From date",
-      "to": "To date",
-      "clear": "Clear time range"
+      "placeholder": "Select a time range",
+      "from": "Start date",
+      "fromTime": "Start time",
+      "to": "End date",
+      "toTime": "End time",
+      "separator": "to",
+      "unbounded": "Any",
+      "invalid": "End time must not be earlier than start time",
+      "clear": "Clear",
+      "monthLabel": "{{month}}/{{year}}",
+      "weekdays": "Sun,Mon,Tue,Wed,Thu,Fri,Sat",
+      "prevYear": "Previous year",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "nextYear": "Next year",
+      "presets": {
+        "day": "Last day",
+        "week": "Last week",
+        "month": "Last month",
+        "quarter": "Last 3 months",
+        "halfYear": "Last 6 months",
+        "year": "Last year"
+      }
     },
     "export": {
       "button": "Export CSV",
@@ -3383,6 +3424,13 @@
   },
   "userMenu": {
     "accountSettings": "Account Settings",
+    "themeMode": "Appearance Mode",
+    "themeModes": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "toggleTheme": "Toggle theme",
     "colorTheme": "Theme",
     "colorThemes": {
       "default": "Default",
@@ -3401,16 +3449,11 @@
     "fonts": {
       "system": "System",
       "maple": "Maple",
-      "jetbrains": "JetBrains Mono"
+      "jetbrains": "JetBrains Mono",
+      "serif": "Song",
+      "kai": "Kai"
     },
     "accountInfo": "Account"
-  },
-  "serviceYaml": {
-    "deleteTitle": "Delete Service {{name}}?",
-    "deleted": "Service {{name}} deleted",
-    "invalidYaml": "Invalid YAML",
-    "saved": "Service {{name}} updated",
-    "deleteDescription": "Deleting this Service immediately cuts off external access through it, and cannot be undone."
   },
   "logViewer": {
     "title": "Logs",

@@ -111,6 +111,8 @@ func Models() []interface{} {
 		// 头像字节单独成表（见 user_avatar.go）：users 行是高频整行读取，不能混进 blob。
 		UserAvatar{},
 		Cluster{},
+		// 集群徽章图标的字节同样单独成表（见 cluster_badge_icon.go）。
+		ClusterBadgeIcon{},
 		GeneralSetting{},
 		SecuritySetting{},
 		AuditSetting{},

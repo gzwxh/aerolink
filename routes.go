@@ -188,6 +188,10 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	clusterAPI.POST("/import", cm.ImportClustersFromKubeconfig)
 	clusterAPI.PUT("/:id", cm.UpdateCluster)
 	clusterAPI.DELETE("/:id", cm.DeleteCluster)
+	// 徽章图标是二进制，走单独的 multipart 接口而不是 PUT /:id 的 JSON 体。
+	// 上传会顺带打开 badge_icon_enabled，见 pkg/cluster/cluster_badge_icon.go。
+	clusterAPI.POST("/:id/badge-icon", cluster.UploadClusterBadgeIcon)
+	clusterAPI.DELETE("/:id/badge-icon", cluster.DeleteClusterBadgeIcon)
 	// 查看已存的 kubeconfig 属于凭据暴露操作：开启 MFA 后需要二次校验动态码。
 	// 注意参数名必须是 :name（GET 树中已有 /:name/namespaces 等通配）。
 	clusterAPI.GET("/:name/kubeconfig",
@@ -290,6 +294,9 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 func registerProtectedRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *cluster.ClusterManager, helmChartsHandler *helm.HelmChartHandler) {
 	api := r.Group("/api/v1")
 	api.GET("/clusters", authHandler.RequireAuth(), cm.GetClusters)
+	// 徽章图标只要求登录（能进切换器的账号本来就看得见集群名），
+	// 未上传过时 404，前端回落到默认图标或图标文本。
+	api.GET("/clusters/:id/badge-icon", authHandler.RequireAuth(), cluster.GetClusterBadgeIcon)
 	// 当前用户可见的权限绑定组（供导航与命名空间分组筛选）
 	api.GET("/projects", authHandler.RequireAuth(), bindinggroups.NewHandler(cm).GetUserBindingGroups)
 	api.GET("/notifications", authHandler.RequireAuth(), notification.HandleListNotifications)

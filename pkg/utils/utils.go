@@ -11,18 +11,6 @@ import (
 
 const kiteBasePlaceholder = "__KITE_BASE__"
 
-// AnalyticsScriptOrigin 是统计脚本 script.js 的来源。注意：本分支不需要上报数据，
-// 服务端下发的 CSP 不放行任何第三方来源（见 pkg/middleware/security_headers.go），
-// 因此即使统计开关被打开，注入的标签也会被浏览器拦掉，不会发出请求。
-const AnalyticsScriptOrigin = "https://cloud.umami.is"
-
-func InjectAnalytics(htmlContent string) string {
-	analyticsScript := `<script defer src="` + AnalyticsScriptOrigin + `/script.js" data-website-id="c3d8a914-abbc-4eed-9699-a9192c4bef9e" data-exclude-search="true" data-exclude-hash="true" data-do-not-track="true"></script>`
-
-	re := regexp.MustCompile(`</head>`)
-	return re.ReplaceAllString(htmlContent, "  "+analyticsScript+"\n  </head>")
-}
-
 func InjectKiteBase(htmlContent string, base string) string {
 	assetBase := base
 	if assetBase == "/" {

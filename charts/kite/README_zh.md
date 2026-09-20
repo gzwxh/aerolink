@@ -83,8 +83,6 @@ helm uninstall kite -n kube-system
 | `config.existingSecret`                                    | 已有的 Secret 名称（内含 `config.yaml` 键），推荐使用     | `""`                          |
 | `rbac.create`                                              | 创建 chart 自带的 RBAC 资源                              | `true`                        |
 | `serviceAccount.create` / `serviceAccount.automount`       | 创建 ServiceAccount / 自动挂载 API 凭据                  | `true` / `true`               |
-| `versionCheck.enabled`                                     | 是否访问 `api.github.com` 查询上游新版本（由环境变量接管，界面只读） | `false`                       |
-| `analytics.enabled`                                        | 是否注入统计脚本；服务端 CSP 不放行统计来源，开启也不会真的上报   | `false`                       |
 
 完整参数表见 [Chart Values](../../docs/config/chart-values.md)。
 

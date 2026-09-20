@@ -73,8 +73,10 @@ vi.mock('@/hooks/use-can', () => ({
 }))
 
 // 创建页头部会标出目标集群。
+// 页头的「当前集群」标签要按名字回查集群，好带上它的图标与徽章；这里不关心这部分，
+// 给个空列表就退化成默认图标、不显示徽章。
 vi.mock('@/hooks/use-cluster', () => ({
-  useCluster: () => ({ currentCluster: 'test-cluster' }),
+  useCluster: () => ({ currentCluster: 'test-cluster', clusters: [] }),
 }))
 
 const renderPage = () => {

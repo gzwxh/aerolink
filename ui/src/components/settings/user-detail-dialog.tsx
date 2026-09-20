@@ -18,10 +18,10 @@ import {
   updateUser,
   useOAuthProviderList,
 } from '@/lib/api'
+import { normalizeAvatarUrl } from '@/lib/avatar-url'
 import { isDeletableUser, isNativeUser } from '@/lib/user-kind'
 import { formatDate } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard'
-import { normalizeAvatarUrl } from '@/lib/avatar-url'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {

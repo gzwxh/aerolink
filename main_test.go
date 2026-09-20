@@ -63,18 +63,15 @@ func TestRegisterBaseRoutes(t *testing.T) {
 	oldVersion := version.Version
 	oldBuildDate := version.BuildDate
 	oldCommitID := version.CommitID
-	oldEnableVersionCheck := common.EnableVersionCheck.Load()
 	defer func() {
 		version.Version = oldVersion
 		version.BuildDate = oldBuildDate
 		version.CommitID = oldCommitID
-		common.EnableVersionCheck.Store(oldEnableVersionCheck)
 	}()
 
 	version.Version = "v1.2.3"
 	version.BuildDate = "2026-03-27"
 	version.CommitID = "abc123"
-	common.EnableVersionCheck.Store(false)
 
 	r := gin.New()
 	registerBaseRoutes(&r.RouterGroup)
@@ -166,14 +163,11 @@ func TestSetupStatic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	oldBase := common.Base
-	oldEnableAnalytics := common.EnableAnalytics.Load()
 	defer func() {
 		common.Base = oldBase
-		common.EnableAnalytics.Store(oldEnableAnalytics)
 	}()
 
 	common.Base = "/kite"
-	common.EnableAnalytics.Store(true)
 
 	r := gin.New()
 	setupStatic(r)
@@ -191,7 +185,7 @@ func TestSetupStatic(t *testing.T) {
 		}
 	})
 
-	t.Run("serves index for ui routes with base and analytics injected", func(t *testing.T) {
+	t.Run("serves index for ui routes with base injected", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/kite/overview", nil)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
@@ -206,8 +200,8 @@ func TestSetupStatic(t *testing.T) {
 		if strings.Contains(body, "window.__dynamic_base__") {
 			t.Fatalf("inline dynamic base script must not be served (blocked by CSP)")
 		}
-		if !strings.Contains(body, "cloud.umami.is/script.js") {
-			t.Fatalf("body missing analytics injection")
+		if strings.Contains(body, "umami") {
+			t.Fatalf("body must not contain any analytics script: %s", body)
 		}
 	})
 
@@ -258,15 +252,11 @@ func TestLoadGeneralSettingReadsStoredJWTSecretAfterKeyMigration(t *testing.T) {
 	originalDB := model.DB
 	originalKey := common.KiteEncryptKey
 	originalSecret := common.JwtSecret
-	originalAnalytics := common.EnableAnalytics.Load()
-	originalVersionCheck := common.EnableVersionCheck.Load()
 	model.DB = db
 	t.Cleanup(func() {
 		model.DB = originalDB
 		common.KiteEncryptKey = originalKey
 		common.JwtSecret = originalSecret
-		common.EnableAnalytics.Store(originalAnalytics)
-		common.EnableVersionCheck.Store(originalVersionCheck)
 	})
 
 	// 内置密钥生效期间落库：此时生成并存储了随机会话密钥。

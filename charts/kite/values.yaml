@@ -121,18 +121,6 @@ extraEnvs:
   # - name: "EXAMPLE_ENV"
   #   value: "example_value"
 
-# 是否查询新版本（访问 api.github.com 查询上游 release）。默认关闭：本分支只在
-# 内网部署，默认不向外发请求。该值以 DISABLE_VERSION_CHECK 环境变量注入，一旦
-# 注入就优先于界面上的同名设置（界面上显示的是实际生效值）。
-versionCheck:
-  enabled: false
-
-# 数据统计。不要开启：服务端下发的 CSP 不放行任何第三方来源，开启也不会真的
-# 发出上报请求。该值以 ENABLE_ANALYTICS 环境变量注入，一旦注入就优先于界面上
-# 的同名设置。
-analytics:
-  enabled: false
-
 # 通过 values 配置应用
 # 启用后，指定的配置项在界面上会变为只读。
 # 你可以提供一个包含 config.yaml 键的已有 Secret，

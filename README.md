@@ -137,7 +137,6 @@ docker run -d --name kite --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://kite.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  -e DISABLE_VERSION_CHECK=true \
   swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
 ```
 
@@ -169,8 +168,6 @@ docker run -d --name kite --restart unless-stopped \
 | `KITE_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | 连接最长存活分钟数 |
 | `KITE_BASE` | 空 | 子路径部署（如 `/kite`），适用于挂在反向代理子目录下 |
 | `NAMESPACE` | 空 | Kite 自身（Agent / 终端 Pod）所在命名空间 |
-| `DISABLE_VERSION_CHECK` | `true` | 是否访问 `api.github.com` 查询上游新版本。本分支默认 `true`（关闭）；显式设置后该开关以环境变量为准，界面不再能改写 |
-| `ENABLE_ANALYTICS` | `false` | 是否注入匿名统计脚本。默认关闭；即使打开，服务端 CSP 也不放行统计来源，不会真的发出上报 |
 | `DISABLE_GZIP` | `false` | `true` 关闭响应压缩（排查代理兼容问题时使用） |
 | `KUBECONFIG` | 空 | 外部 kubeconfig 路径（如需预置集群，一般通过界面添加即可） |
 | `KITE_CONFIG_FILE` | 空 | 外部配置文件路径 |

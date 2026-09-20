@@ -55,12 +55,7 @@ This document describes all available configuration options for the Kite Helm Ch
 
 ## Outbound Requests
 
-Kite makes no outbound requests by default. The switches below are owned by the deployment: once the corresponding environment variable is injected via values, the UI shows the effective value and no longer allows changing it.
-
-| Parameter              | Description                                                                                                                               | Default |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `versionCheck.enabled` | Whether to query `api.github.com` for upstream releases                                                                                   | `false` |
-| `analytics.enabled`    | Whether to inject the analytics script. The server-side CSP allows no analytics origin, so enabling it does not actually report anything. | `false` |
+Kite makes no outbound requests at all: no update check, no telemetry. Instances only talk to the API servers of their own cluster (plus any cluster you add in the UI) and the configured database; `/api/v1/version` returns local build information only.
 
 ## Application Configuration
 

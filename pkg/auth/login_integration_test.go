@@ -118,15 +118,11 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 	originalDB := model.DB
 	originalEncryptKey := common.KiteEncryptKey
 	originalJWTSecret := common.JwtSecret
-	originalAnalytics := common.EnableAnalytics.Load()
-	originalVersionCheck := common.EnableVersionCheck.Load()
 	originalRBACConfig := rbac.RBACConfig
 	originalLimiter := credentialLoginAttempts
 
 	common.KiteEncryptKey = "auth-integration-test-key"
 	common.JwtSecret = "auth-integration-test-jwt-secret"
-	common.EnableAnalytics.Store(false)
-	common.EnableVersionCheck.Store(true)
 	// 限流状态现在在数据库里，每个用例换新库即等于清空（见 login_attempt_limiter.go）。
 	credentialLoginAttempts = &credentialLoginAttemptLimiter{}
 	rbac.RBACConfig = &common.RolesConfig{
@@ -161,16 +157,15 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 	}
 	model.DB = db
 	setting := model.GeneralSetting{
-		Model:              model.Model{ID: 1},
-		AIProvider:         model.DefaultGeneralAIProvider,
-		AIModel:            model.DefaultGeneralAIModel,
-		AIMaxTokens:        4096,
-		KubectlEnabled:     true,
-		KubectlImage:       model.DefaultGeneralKubectlImage,
-		NodeTerminalImage:  model.DefaultGeneralNodeTerminalImage,
-		EnableVersionCheck: true,
-		EnableMFA:          true,
-		JWTSecret:          model.SecretString(common.JwtSecret),
+		Model:             model.Model{ID: 1},
+		AIProvider:        model.DefaultGeneralAIProvider,
+		AIModel:           model.DefaultGeneralAIModel,
+		AIMaxTokens:       4096,
+		KubectlEnabled:    true,
+		KubectlImage:      model.DefaultGeneralKubectlImage,
+		NodeTerminalImage: model.DefaultGeneralNodeTerminalImage,
+		EnableMFA:         true,
+		JWTSecret:         model.SecretString(common.JwtSecret),
 	}
 	if err := db.Create(&setting).Error; err != nil {
 		t.Fatalf("creating general setting: %v", err)
@@ -191,8 +186,6 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 		model.DB = originalDB
 		common.KiteEncryptKey = originalEncryptKey
 		common.JwtSecret = originalJWTSecret
-		common.EnableAnalytics.Store(originalAnalytics)
-		common.EnableVersionCheck.Store(originalVersionCheck)
 		rbac.RBACConfig = originalRBACConfig
 		credentialLoginAttempts = originalLimiter
 	})

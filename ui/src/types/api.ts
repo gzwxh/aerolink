@@ -643,6 +643,15 @@ export interface Cluster {
   updatedAt: string
   prometheusURL?: string
   error?: string
+  // 集群徽章：`/clusters` 只在启用时下发，`/admin/clusters/` 始终回传原值。
+  badgeEnabled?: boolean
+  badgeText?: string
+  badgeColor?: string
+  // 图标与徽章开关互相独立：只换图标、不显示说明的集群也会下发这几个字段。
+  badgeIconEnabled?: boolean
+  badgeIconText?: string
+  /** 上传的图标地址（`/api/v1/clusters/<id>/badge-icon?v=<哈希>`），未上传时为空。 */
+  badgeIconUrl?: string
 }
 
 export interface OAuthProvider {

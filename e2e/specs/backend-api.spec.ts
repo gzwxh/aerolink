@@ -21,8 +21,6 @@ interface GeneralSetting {
   kubectlEnabled: boolean
   kubectlImage: string
   nodeTerminalImage: string
-  enableAnalytics: boolean
-  enableVersionCheck: boolean
   passwordLoginDisabled: boolean
   enableMFA: boolean
   loginPrompt: string
@@ -234,7 +232,6 @@ test('backend APIs work end to end against the real test environment', async ({
     )
     originalGeneralSetting = generalSetting
     expect(typeof generalSetting.kubectlEnabled).toBe('boolean')
-    expect(typeof generalSetting.enableVersionCheck).toBe('boolean')
     const updatedGeneralSetting = await expectJSON<GeneralSetting>(
       await request.put('/api/v1/admin/general-setting/', {
         data: {

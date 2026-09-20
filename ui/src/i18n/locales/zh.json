@@ -351,8 +351,7 @@
       "related": "相关资源",
       "terminal": "终端",
       "volumes": "卷",
-      "yaml": "YAML",
-      "serviceYaml": "关联 Service"
+      "yaml": "YAML"
     },
     "units": {
       "pods": "pods",
@@ -498,7 +497,6 @@
     "crdEmpty": "未找到 CRD",
     "crdLoading": "CRD 加载中...",
     "crdLoadFailed": "CRD 加载失败",
-    "updateAvailable": "有新的 Kite 版本可用",
     "saveFailed": "保存侧边栏配置失败，请稍后重试"
   },
   "nav": {
@@ -1896,14 +1894,6 @@
         "image": "镜像"
       }
     },
-    "runtime": {
-      "title": "运行时",
-      "description": "配置数据统计和版本检查。",
-      "form": {
-        "enableAnalytics": "启用数据统计",
-        "enableVersionCheck": "启用版本检查"
-      }
-    },
     "loginPrompt": {
       "title": "登录提示",
       "description": "在登录页展示自定义提示。",
@@ -2145,6 +2135,43 @@
     },
     "viewAll": "查看所有设置"
   },
+  "clusterBadge": {
+    "title": "自定义集群徽章",
+    "preview": "集群图标和名称效果",
+    "enabled": "显示此集群的徽章",
+    "enabledHint": "关闭后，顶栏与创建页的「当前集群」、集群管理列表都不再显示这个徽章；集群图标由下面的「自定义集群图标」单独控制。",
+    "text": "自定义说明",
+    "textPlaceholder": "如：测试环境",
+    "textHint": "最多 16 个字符，显示时会完整展示，不会截断。",
+    "color": "徽章背景颜色",
+    "colorHint": "十六进制颜色，如 #0011ff",
+    "colorInvalid": "请填写十六进制颜色，如 #0011ff",
+    "iconEnabled": "自定义集群图标",
+    "iconHint": "上传一张图片，或用最多 6 个汉字代替默认的集群图标；与上面的徽章开关互不影响。",
+    "iconUpload": "上传图标",
+    "iconUploading": "处理中…",
+    "iconRemove": "移除图标",
+    "iconUploadedHint": "当前图标来自上传，保存在本实例的数据库中；显示时优先于图标文本。",
+    "iconUploadHint": "支持 PNG / JPG，大小不超过 {{limit}}；上传前自动裁剪为正方形并缩放到 {{size}}×{{size}} 以内。",
+    "iconUploadSuccess": "集群图标已更新",
+    "iconUploadFailed": "图标上传失败",
+    "iconRemoveSuccess": "已移除集群图标",
+    "iconText": "图标文本",
+    "iconTextPlaceholder": "如：测试环境",
+    "iconTextHint": "最多 6 个汉字，显示时会完整展示，不会截断。",
+    "saved": "集群徽章已更新",
+    "errors": {
+      "cluster_icon_file_missing": "没有收到图片文件，请重新选择",
+      "cluster_icon_too_large": "图标不能超过 {{limit}}，请换一张更小的图",
+      "cluster_icon_invalid_type": "图标只支持 PNG / JPG 格式",
+      "cluster_icon_invalid_image": "这张图片已损坏或无法解析",
+      "cluster_icon_dimensions_too_large": "图标边长不能超过 {{dimension}} 像素",
+      "cluster_icon_client_not_image": "请选择图片文件（PNG / JPG / WebP 等常见格式都可以）",
+      "cluster_icon_client_decode_failed": "浏览器无法解析这张图片，请先转成 PNG 或 JPG 再上传（iPhone 的 HEIC 格式常见这种情况）",
+      "cluster_icon_client_encode_failed": "图片处理失败，请换一张试试",
+      "cluster_icon_client_too_large": "这张图片处理后仍然太大，请换一张更小的图"
+    }
+  },
   "clusterManagement": {
     "title": "集群管理",
     "currentBadge": "当前",
@@ -2158,7 +2185,8 @@
       "switch": "切换到此集群",
       "add": "添加集群",
       "import": "导入集群",
-      "importing": "导入中..."
+      "importing": "导入中...",
+      "badge": "自定义徽章"
     },
     "table": {
       "prometheus": "Prometheus"
@@ -2870,12 +2898,6 @@
     "typeImmutableHint": "ExternalName 与其他类型之间不能互相转换，类型已锁定。",
     "yamlTabEditHint": "这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准更新；返回修改表单会重新生成。"
   },
-  "workloadServiceYaml": {
-    "noServices": "该工作负载暂无关联的 Service（创建工作负载时的网络配置会自动生成）。",
-    "saved": "Service {{name}} 已更新",
-    "deleted": "Service {{name}} 已删除",
-    "invalidYaml": "YAML 格式不正确"
-  },
   "deploymentOverview": {
     "endpointsTitle": "Endpoints",
     "lbPending": "外部 IP 待分配",
@@ -3149,6 +3171,13 @@
   },
   "userMenu": {
     "accountSettings": "账号设置",
+    "themeMode": "外观模式",
+    "themeModes": {
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统"
+    },
+    "toggleTheme": "切换主题",
     "colorTheme": "主题",
     "colorThemes": {
       "default": "默认",
@@ -3167,16 +3196,37 @@
     "fonts": {
       "system": "系统",
       "maple": "Maple",
-      "jetbrains": "JetBrains Mono"
+      "jetbrains": "JetBrains Mono",
+      "serif": "宋体",
+      "kai": "楷体"
     },
     "accountInfo": "用户信息"
   },
   "audit": {
     "timeRange": {
-      "label": "时间范围",
-      "from": "开始日期",
-      "to": "结束日期",
-      "clear": "清除时间范围"
+      "placeholder": "请选择时间范围",
+      "from": "开始时间",
+      "fromTime": "开始时刻",
+      "to": "结束时间",
+      "toTime": "结束时刻",
+      "separator": "至",
+      "unbounded": "不限",
+      "invalid": "结束时间不能早于开始时间",
+      "clear": "清空",
+      "monthLabel": "{{year}}年{{month}}月",
+      "weekdays": "日,一,二,三,四,五,六",
+      "prevYear": "上一年",
+      "prevMonth": "上个月",
+      "nextMonth": "下个月",
+      "nextYear": "下一年",
+      "presets": {
+        "day": "最近一天",
+        "week": "最近一周",
+        "month": "最近一月",
+        "quarter": "最近三月",
+        "halfYear": "最近半年",
+        "year": "最近一年"
+      }
     },
     "export": {
       "button": "导出 CSV",
@@ -3404,13 +3454,6 @@
       "add": "添加安全管理员",
       "addDescription": "选中的用户或用户组将获得安全管理员（security-admin）角色。"
     }
-  },
-  "serviceYaml": {
-    "deleteTitle": "删除 Service {{name}}？",
-    "deleted": "Service {{name}} 已删除",
-    "invalidYaml": "YAML 格式不正确",
-    "saved": "Service {{name}} 已更新",
-    "deleteDescription": "删除后通过该 Service 的外部访问将立即中断，且无法恢复。"
   },
   "logViewer": {
     "title": "日志",

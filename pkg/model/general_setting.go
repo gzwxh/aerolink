@@ -61,8 +61,6 @@ type GeneralSetting struct {
 	KubectlImage          string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'"`
 	NodeTerminalImage     string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'"`
 	ClusterAgentImage     string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'"`
-	EnableAnalytics       bool         `json:"enableAnalytics" gorm:"column:enable_analytics;type:boolean;not null;default:false"`
-	EnableVersionCheck    bool         `json:"enableVersionCheck" gorm:"column:enable_version_check;type:boolean;not null;default:true"`
 	PasswordLoginDisabled bool         `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
 	EnableMFA             bool         `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
 	LoginPrompt           string       `json:"loginPrompt" gorm:"column:login_prompt;type:text"`
@@ -191,7 +189,6 @@ func LoadGeneralSetting() (*GeneralSetting, error) {
 				return nil, err
 			}
 		}
-		applyRuntimeGeneralSetting(&setting)
 		return &setting, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -199,18 +196,16 @@ func LoadGeneralSetting() (*GeneralSetting, error) {
 	}
 
 	setting = GeneralSetting{
-		Model:              Model{ID: 1},
-		AIAgentEnabled:     false,
-		AIProvider:         DefaultGeneralAIProvider,
-		AIModel:            DefaultGeneralAIModel,
-		AIMaxTokens:        16384,
-		KubectlEnabled:     true,
-		KubectlImage:       DefaultGeneralKubectlImageValue(),
-		NodeTerminalImage:  DefaultGeneralNodeTerminalImageValue(),
-		ClusterAgentImage:  DefaultGeneralClusterAgentImageValue(),
-		EnableAnalytics:    common.EnableAnalytics.Load(),
-		EnableVersionCheck: common.EnableVersionCheck.Load(),
-		EnableMFA:          true,
+		Model:             Model{ID: 1},
+		AIAgentEnabled:    false,
+		AIProvider:        DefaultGeneralAIProvider,
+		AIModel:           DefaultGeneralAIModel,
+		AIMaxTokens:       16384,
+		KubectlEnabled:    true,
+		KubectlImage:      DefaultGeneralKubectlImageValue(),
+		NodeTerminalImage: DefaultGeneralNodeTerminalImageValue(),
+		ClusterAgentImage: DefaultGeneralClusterAgentImageValue(),
+		EnableMFA:         true,
 	}
 	if err := ensureJWTSecret(&setting, nil); err != nil {
 		return nil, err
@@ -218,7 +213,6 @@ func LoadGeneralSetting() (*GeneralSetting, error) {
 	if err := DB.Create(&setting).Error; err != nil {
 		return nil, err
 	}
-	applyRuntimeGeneralSetting(&setting)
 	return &setting, nil
 }
 
@@ -253,22 +247,7 @@ func UpdateGeneralSetting(updates map[string]interface{}) (*GeneralSetting, erro
 	if err := DB.First(setting, setting.ID).Error; err != nil {
 		return nil, err
 	}
-	applyRuntimeGeneralSetting(setting)
 	return setting, nil
-}
-
-func applyRuntimeGeneralSetting(setting *GeneralSetting) {
-	if setting == nil {
-		return
-	}
-	// 环境变量显式指定过的开关以环境变量为准，通用设置不再覆盖它：这两个开关
-	// 决定实例是否向外发请求，内网部署要能压得住（见 common.LoadEnvs）。
-	if !common.AnalyticsConfigured() {
-		common.EnableAnalytics.Store(setting.EnableAnalytics)
-	}
-	if !common.VersionCheckConfigured() {
-		common.EnableVersionCheck.Store(setting.EnableVersionCheck)
-	}
 }
 
 func ensureJWTSecret(setting *GeneralSetting, updates map[string]interface{}) error {

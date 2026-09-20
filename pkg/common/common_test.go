@@ -9,7 +9,6 @@ func TestLoadEnvs(t *testing.T) {
 	old := struct {
 		JwtSecret            string
 		Port                 string
-		EnableAnalytics      bool
 		AgentPodNamespace    string
 		NodeTerminalImage    string
 		KubectlTerminalImage string
@@ -19,14 +18,12 @@ func TestLoadEnvs(t *testing.T) {
 		AnonymousUserEnabled bool
 		Host                 string
 		DisableGZIP          bool
-		EnableVersionCheck   bool
 		Base                 string
 		CORSAllowedOrigins   []string
 		TrustedProxies       []string
 	}{
 		JwtSecret:            JwtSecret,
 		Port:                 Port,
-		EnableAnalytics:      EnableAnalytics.Load(),
 		AgentPodNamespace:    AgentPodNamespace,
 		NodeTerminalImage:    NodeTerminalImage,
 		KubectlTerminalImage: KubectlTerminalImage,
@@ -36,7 +33,6 @@ func TestLoadEnvs(t *testing.T) {
 		AnonymousUserEnabled: AnonymousUserEnabled,
 		Host:                 Host,
 		DisableGZIP:          DisableGZIP,
-		EnableVersionCheck:   EnableVersionCheck.Load(),
 		Base:                 Base,
 		CORSAllowedOrigins:   append([]string(nil), CORSAllowedOrigins...),
 		TrustedProxies:       append([]string(nil), TrustedProxies...),
@@ -44,7 +40,6 @@ func TestLoadEnvs(t *testing.T) {
 	defer func() {
 		JwtSecret = old.JwtSecret
 		Port = old.Port
-		EnableAnalytics.Store(old.EnableAnalytics)
 		AgentPodNamespace = old.AgentPodNamespace
 		NodeTerminalImage = old.NodeTerminalImage
 		KubectlTerminalImage = old.KubectlTerminalImage
@@ -54,7 +49,6 @@ func TestLoadEnvs(t *testing.T) {
 		AnonymousUserEnabled = old.AnonymousUserEnabled
 		Host = old.Host
 		DisableGZIP = old.DisableGZIP
-		EnableVersionCheck.Store(old.EnableVersionCheck)
 		Base = old.Base
 		CORSAllowedOrigins = append([]string(nil), old.CORSAllowedOrigins...)
 		TrustedProxies = append([]string(nil), old.TrustedProxies...)
@@ -65,7 +59,6 @@ func TestLoadEnvs(t *testing.T) {
 
 	t.Setenv("JWT_SECRET", "test-jwt-secret-with-32-bytes-min!!")
 	t.Setenv("PORT", "9090")
-	t.Setenv("ENABLE_ANALYTICS", "true")
 	t.Setenv("NAMESPACE", "test-namespace")
 	t.Setenv("NODE_TERMINAL_IMAGE", "test-node-image")
 	t.Setenv("KUBECTL_TERMINAL_IMAGE", "test-kubectl-image")
@@ -76,7 +69,6 @@ func TestLoadEnvs(t *testing.T) {
 	t.Setenv("ANONYMOUS_USER_ENABLED", "true")
 	t.Setenv("HOST", "example.com")
 	t.Setenv("DISABLE_GZIP", "false")
-	t.Setenv("DISABLE_VERSION_CHECK", "true")
 	t.Setenv("KITE_BASE", "kite/")
 	t.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173, https://example.com ,,")
 	t.Setenv("TRUSTED_PROXIES", "10.42.0.0/16, 192.0.2.10 ,, ")
@@ -88,9 +80,6 @@ func TestLoadEnvs(t *testing.T) {
 	}
 	if Port != "9090" {
 		t.Fatalf("Port = %q, want %q", Port, "9090")
-	}
-	if !EnableAnalytics.Load() {
-		t.Fatalf("EnableAnalytics = %v, want true", EnableAnalytics.Load())
 	}
 	if AgentPodNamespace != "test-namespace" {
 		t.Fatalf("AgentPodNamespace = %q, want %q", AgentPodNamespace, "test-namespace")
@@ -118,9 +107,6 @@ func TestLoadEnvs(t *testing.T) {
 	}
 	if DisableGZIP {
 		t.Fatalf("DisableGZIP = %v, want false", DisableGZIP)
-	}
-	if EnableVersionCheck.Load() {
-		t.Fatalf("EnableVersionCheck = %v, want false", EnableVersionCheck.Load())
 	}
 	if Base != "/kite" {
 		t.Fatalf("Base = %q, want %q", Base, "/kite")

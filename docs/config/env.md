@@ -23,9 +23,6 @@ Kite 默认支持一些环境变量，来改变一些配置项的默认值。
 
 - **CLUSTER_AGENT_IMAGE**: 为 Cluster Agent 类型集群生成 Cluster Agent 部署清单时使用的 Docker 镜像。
 
-- **ENABLE_ANALYTICS**：是否注入数据统计脚本，默认值为 `false`。该开关一旦由环境变量显式指定，就优先于界面上的同名设置。注意：服务端下发的 CSP 不放行统计脚本与上报网关，因此即使开启也不会真的发出上报。
-- **DISABLE_VERSION_CHECK**：是否访问 `api.github.com` 查询上游新版本。本分支默认关闭；显式设置 `true`/`false` 后优先于界面上的同名设置。
-
 - **PORT**：Kite 运行的端口，默认值为 `8080`。
 
 ## 数据库
@@ -41,7 +38,6 @@ Kite 默认支持一些环境变量，来改变一些配置项的默认值。
 - **KITE_BASE**：Kite 部署在子路径下时的基础路径（如 `/kite`）。
 - **CORS_ALLOWED_ORIGINS**：允许跨域的来源列表（逗号分隔），仅建议开发环境使用。
 - **DISABLE_GZIP**：设为 `true` 关闭 gzip 响应压缩（默认已关闭）。
-- **DISABLE_VERSION_CHECK**：设为 `true` 关闭版本更新检查。
 - **NAMESPACE**：终端 / kubectl Agent Pod 创建所在的 Kubernetes 命名空间，默认 `kube-system`。
 - **KITE_METRICS_TOKEN**：访问 `/metrics` 所需的 Bearer Token；未设置时该端点无需认证。
 - **KITE_ENABLE_PPROF**：设为 `true` 时在 `localhost:6060` 开放 pprof（堆转储可能包含敏感信息，默认关闭）。

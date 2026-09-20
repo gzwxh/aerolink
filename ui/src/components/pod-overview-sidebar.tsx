@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { IconBox, IconExternalLink } from '@tabler/icons-react'
 import { Event as KubernetesEvent, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
@@ -24,8 +24,6 @@ import { withSubPath } from '@/lib/subpath'
 import { cn, getAge } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogTrigger } from '@/components/ui/dialog'
-import { ResourceIframeDialogContent } from '@/components/resource-iframe-dialog-content'
 
 type TranslationFn = ReturnType<typeof useTranslation>['t']
 
@@ -116,7 +114,6 @@ function CompactRelatedResourceRow({
 }: {
   resource: RelatedResources
 }) {
-  const [open, setOpen] = useState(false)
   const [searchParams] = useSearchParams()
   const metadata = getResourceMetadata(resource.type)
   const Icon = metadata?.icon ? resourceIconMap[metadata.icon] : IconBox
@@ -145,32 +142,14 @@ function CompactRelatedResourceRow({
     )
   }
 
-  if (isIframe) {
-    return (
-      <Link
-        to={`${path}?iframe=true`}
-        className="grid w-full min-w-0 cursor-pointer grid-cols-[7rem_minmax(0,1fr)] items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted/40"
-      >
-        {rowContent}
-      </Link>
-    )
-  }
-
+  // 直接跳到对应资源的详情页，不再内嵌弹窗。
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className="grid w-full min-w-0 cursor-pointer grid-cols-[7rem_minmax(0,1fr)] items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted/40"
-        >
-          {rowContent}
-        </button>
-      </DialogTrigger>
-      <ResourceIframeDialogContent
-        title={metadata?.singularLabel || resource.type}
-        path={path}
-      />
-    </Dialog>
+    <Link
+      to={isIframe ? `${path}?iframe=true` : path}
+      className="grid w-full min-w-0 cursor-pointer grid-cols-[7rem_minmax(0,1fr)] items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted/40"
+    >
+      {rowContent}
+    </Link>
   )
 }
 

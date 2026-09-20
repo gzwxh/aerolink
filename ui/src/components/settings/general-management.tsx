@@ -62,8 +62,6 @@ interface GeneralSettingsFormData {
   kubectlImage: string
   nodeTerminalImage: string
   clusterAgentImage: string
-  enableAnalytics: boolean
-  enableVersionCheck: boolean
   loginPrompt: string
   logoUrl: string
   siteName: string
@@ -87,8 +85,6 @@ export function GeneralManagement() {
     kubectlImage: DEFAULT_KUBECTL_IMAGE,
     nodeTerminalImage: DEFAULT_NODE_TERMINAL_IMAGE,
     clusterAgentImage: DEFAULT_CLUSTER_AGENT_IMAGE,
-    enableAnalytics: true,
-    enableVersionCheck: true,
     loginPrompt: '',
     logoUrl: '',
     siteName: '',
@@ -108,8 +104,6 @@ export function GeneralManagement() {
       kubectlImage: data.kubectlImage || DEFAULT_KUBECTL_IMAGE,
       nodeTerminalImage: data.nodeTerminalImage || DEFAULT_NODE_TERMINAL_IMAGE,
       clusterAgentImage: data.clusterAgentImage || DEFAULT_CLUSTER_AGENT_IMAGE,
-      enableAnalytics: data.enableAnalytics ?? false,
-      enableVersionCheck: data.enableVersionCheck ?? true,
       loginPrompt: data.loginPrompt || '',
       logoUrl: data.logoUrl || '',
       siteName: data.siteName || '',
@@ -219,8 +213,6 @@ export function GeneralManagement() {
         formData.nodeTerminalImage.trim() || DEFAULT_NODE_TERMINAL_IMAGE,
       clusterAgentImage:
         formData.clusterAgentImage.trim() || DEFAULT_CLUSTER_AGENT_IMAGE,
-      enableAnalytics: formData.enableAnalytics,
-      enableVersionCheck: formData.enableVersionCheck,
       loginPrompt: formData.loginPrompt.trim(),
       // 显式传空串 = 恢复内置图标（后端同一套「出现即处理」语义）。
       logoUrl: formData.logoUrl.trim(),
@@ -498,55 +490,6 @@ export function GeneralManagement() {
                 }))
               }
               placeholder={DEFAULT_CLUSTER_AGENT_IMAGE}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-lg border">
-          <div className="p-3">
-            <Label className="text-sm font-medium">
-              {t('generalManagement.runtime.title', 'Runtime')}
-            </Label>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t(
-                'generalManagement.runtime.description',
-                'Configure analytics and version checking behavior.'
-              )}
-            </p>
-          </div>
-
-          <div className="flex items-center justify-between border-t p-3">
-            <Label htmlFor="general-enable-analytics" className="text-sm">
-              {t(
-                'generalManagement.runtime.form.enableAnalytics',
-                'Enable analytics'
-              )}
-            </Label>
-            <Switch
-              id="general-enable-analytics"
-              checked={formData.enableAnalytics}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({ ...prev, enableAnalytics: checked }))
-              }
-            />
-          </div>
-
-          <div className="flex items-center justify-between border-t p-3">
-            <Label htmlFor="general-enable-version-check" className="text-sm">
-              {t(
-                'generalManagement.runtime.form.enableVersionCheck',
-                'Enable version check'
-              )}
-            </Label>
-            <Switch
-              id="general-enable-version-check"
-              checked={formData.enableVersionCheck}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  enableVersionCheck: checked,
-                }))
-              }
             />
           </div>
         </div>

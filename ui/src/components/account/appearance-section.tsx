@@ -22,7 +22,11 @@ const DISPLAY_SCALE_MIN = 80
 const DISPLAY_SCALE_MAX = 120
 const DISPLAY_SCALE_STEP = 5
 
-const FONTS: FontOption[] = ['system', 'maple', 'jetbrains']
+const FONTS: FontOption[] = ['system', 'maple', 'jetbrains', 'serif', 'kai']
+
+type ThemeMode = 'light' | 'dark' | 'system'
+
+const THEME_MODES: ThemeMode[] = ['light', 'dark', 'system']
 
 /**
  * 「外观」：主题、字体、显示缩放与侧边栏定制。
@@ -34,6 +38,8 @@ export function AppearanceSection() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const {
+    theme,
+    setTheme,
     colorTheme,
     setColorTheme,
     displayScale,
@@ -72,6 +78,27 @@ export function AppearanceSection() {
 
   return (
     <div className="space-y-6 sm:max-w-xl">
+      <div className="space-y-2">
+        <Label htmlFor="appearance-theme-mode">
+          {t('userMenu.themeMode', '外观模式')}
+        </Label>
+        <Select
+          value={theme}
+          onValueChange={(value) => setTheme(value as ThemeMode)}
+        >
+          <SelectTrigger id="appearance-theme-mode">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {THEME_MODES.map((mode) => (
+              <SelectItem key={mode} value={mode}>
+                {t(`userMenu.themeModes.${mode}`, mode)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="appearance-color-theme">
           {t('userMenu.colorTheme', '主题')}

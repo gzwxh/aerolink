@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { IconCopy, IconDownload, IconX } from '@tabler/icons-react'
+import { IconCopy, IconDownload } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import type { AuditTimeRange } from '@/lib/api'
 import type { DownloadResult } from '@/lib/api/shared'
 import { copyToClipboard } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
@@ -14,62 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-
-/**
- * 审计日志的时间范围筛选。用原生日期输入而不是日历组件：只按天筛选，
- * 日期字符串直接交给后端（`to` 含当天）。
- */
-export function AuditTimeRangePicker({
-  value,
-  onChange,
-}: {
-  value: AuditTimeRange
-  onChange: (value: AuditTimeRange) => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">
-        {t('audit.timeRange.label', '时间范围')}
-      </span>
-      <Input
-        type="date"
-        value={value.from ?? ''}
-        max={value.to || undefined}
-        onChange={(event) =>
-          onChange({ ...value, from: event.target.value || undefined })
-        }
-        aria-label={t('audit.timeRange.from', '开始日期')}
-        className="w-40"
-      />
-      <span className="text-muted-foreground">~</span>
-      <Input
-        type="date"
-        value={value.to ?? ''}
-        min={value.from || undefined}
-        onChange={(event) =>
-          onChange({ ...value, to: event.target.value || undefined })
-        }
-        aria-label={t('audit.timeRange.to', '结束日期')}
-        className="w-40"
-      />
-      {(value.from || value.to) && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground"
-          aria-label={t('audit.timeRange.clear', '清除时间范围')}
-          title={t('audit.timeRange.clear', '清除时间范围')}
-          onClick={() => onChange({})}
-        >
-          <IconX className="h-4 w-4" />
-        </Button>
-      )}
-    </div>
-  )
-}
 
 // 指纹这类长字符串放在弹窗里展示并提供复制：导出的证据要能离线核对，
 // 光在 toast 里闪一下是留不住的。

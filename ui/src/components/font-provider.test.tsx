@@ -39,6 +39,12 @@ function FontConsumer() {
       <button type="button" onClick={() => setFont('jetbrains')}>
         set jetbrains
       </button>
+      <button type="button" onClick={() => setFont('serif')}>
+        set serif
+      </button>
+      <button type="button" onClick={() => setFont('kai')}>
+        set kai
+      </button>
     </div>
   )
 }
@@ -46,6 +52,8 @@ function FontConsumer() {
 describe('FontProvider', () => {
   it('syncs the app font variable and persists font changes', async () => {
     localStorage.clear()
+    // 旧版本留下的值可能已经不在可选项里，这时要回落到默认字体。
+    localStorage.setItem('font-theme-key', 'unknown-font')
 
     render(
       <FontProvider defaultFont="maple" storageKey="font-theme-key">
@@ -80,5 +88,24 @@ describe('FontProvider', () => {
       document.documentElement.style.getPropertyValue('--app-font-sans')
     ).toBe("'JetBrains Mono', var(--font-sans)")
     expect(localStorage.getItem('font-theme-key')).toBe('jetbrains')
+
+    fireEvent.click(screen.getByRole('button', { name: 'set serif' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('state')).toHaveTextContent('serif')
+    })
+    expect(
+      document.documentElement.style.getPropertyValue('--app-font-sans')
+    ).toBe("'Kite Song SC', 'Songti SC', SimSun, 'Noto Serif CJK SC', serif")
+
+    fireEvent.click(screen.getByRole('button', { name: 'set kai' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('state')).toHaveTextContent('kai')
+    })
+    expect(
+      document.documentElement.style.getPropertyValue('--app-font-sans')
+    ).toBe("'Kite Kai', 'Kaiti SC', KaiTi, STKaiti, serif")
+    expect(localStorage.getItem('font-theme-key')).toBe('kai')
   })
 })

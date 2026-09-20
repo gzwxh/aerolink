@@ -4,7 +4,7 @@ import { useMemo, type ReactNode } from 'react'
 import type { ColorTheme } from './color-theme-provider'
 import { ColorThemeProvider, useColorTheme } from './color-theme-provider'
 import { DisplayScaleProvider, useDisplayScale } from './display-scale-provider'
-import { FontProvider, useFont } from './font-provider'
+import { FontProvider, useFont, type FontOption } from './font-provider'
 import { ThemeProvider, useTheme } from './theme-provider'
 
 type AppearanceProviderProps = {
@@ -16,7 +16,7 @@ type AppearanceProviderProps = {
   defaultColorTheme?: ColorTheme
   colorThemeStorageKey?: string
   // 字体
-  defaultFont?: 'system' | 'maple' | 'jetbrains'
+  defaultFont?: FontOption
   fontStorageKey?: string
   // 显示缩放
   defaultDisplayScale?: number
