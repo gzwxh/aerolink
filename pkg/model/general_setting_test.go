@@ -114,6 +114,36 @@ func TestApplyRuntimeGeneralSetting(t *testing.T) {
 	}
 }
 
+// 环境变量显式指定过的开关不能被通用设置改写：内网部署靠它压住向外发请求的
+// 行为，只让数据库说了算的话 DISABLE_VERSION_CHECK 之类的变量形同虚设。
+func TestApplyRuntimeGeneralSettingRespectsEnvOverride(t *testing.T) {
+	originalAnalytics := common.EnableAnalytics.Load()
+	originalVersionCheck := common.EnableVersionCheck.Load()
+	t.Cleanup(func() {
+		common.EnableAnalytics.Store(originalAnalytics)
+		common.EnableVersionCheck.Store(originalVersionCheck)
+	})
+
+	t.Setenv("DISABLE_VERSION_CHECK", "true")
+	t.Setenv("ENABLE_ANALYTICS", "false")
+	// 模拟 LoadEnvs 已按环境变量应用：两个开关都关着。
+	common.EnableAnalytics.Store(false)
+	common.EnableVersionCheck.Store(false)
+
+	// 数据库里是历史值（都开着），环境变量必须压过它。
+	applyRuntimeGeneralSetting(&GeneralSetting{
+		EnableAnalytics:    true,
+		EnableVersionCheck: true,
+	})
+
+	if common.EnableAnalytics.Load() {
+		t.Fatalf("EnableAnalytics = true, want it left false by ENABLE_ANALYTICS=false")
+	}
+	if common.EnableVersionCheck.Load() {
+		t.Fatalf("EnableVersionCheck = true, want it left false by DISABLE_VERSION_CHECK=true")
+	}
+}
+
 // 这两个开关既在被请求路径读取（安全响应头、版本检查、index.html 注入），
 // 又在通用设置写入时被改写——而且 applyRuntimeGeneralSetting 会随
 // GetGeneralSetting 一起跑，登录、RBAC、终端等路径都会触发它，因此读写是真的会并发。

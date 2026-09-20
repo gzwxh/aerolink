@@ -34,6 +34,11 @@ var (
 	// （model.applyRuntimeGeneralSetting 会随 GetGeneralSetting 一起跑），
 	// 同时又被请求路径读取（安全响应头、版本检查、index.html 注入），
 	// 因此必须是原子量：普通 bool 在这里是会被 -race 抓到的数据竞争。
+	//
+	// 两者都会让实例向外发请求，内网部署必须能硬关掉：环境变量一旦显式指定
+	// （ENABLE_ANALYTICS / DISABLE_VERSION_CHECK），就以环境变量为准，通用设置
+	// 不再能改写它。只让数据库说了算的话，环境变量设了也白设——这正是
+	// DISABLE_VERSION_CHECK 曾经失效的原因（见 AnalyticsConfigured）。
 	EnableAnalytics atomic.Bool
 	// AllowInsecureSecrets 允许使用内置密钥；仅限开发环境。
 	AllowInsecureSecrets = false
@@ -121,8 +126,9 @@ func SetManagedSections(sections map[string]bool) {
 // 按用途拆成几组小函数：原来的单个大函数分支数过多，加一个环境变量就得重新数
 // 复杂度；分组后每组只关心一类配置，也更容易对照文档逐个核对。
 func init() {
-	// 与原先非原子变量的默认值保持一致：版本检查默认开启。
-	EnableVersionCheck.Store(true)
+	// 默认关闭版本检查：本分支只在内网部署，默认不向 api.github.com 发请求。
+	// 需要在界面上提示新版本的部署，显式设置 DISABLE_VERSION_CHECK=false 打开。
+	EnableVersionCheck.Store(false)
 }
 
 func LoadEnvs() {
@@ -130,6 +136,33 @@ func LoadEnvs() {
 	loadDatabaseEnvs()
 	loadServerEnvs()
 	loadRuntimeEnvs()
+}
+
+// AnalyticsConfigured / VersionCheckConfigured 报告对应开关是否由环境变量显式
+// 指定；为真时通用设置（界面）不能再改写它。这里直接读环境变量，而不是记住
+// 启动时的判断：这两个开关决定实例是否向外发请求，判定必须与当前进程环境一致。
+func AnalyticsConfigured() bool { return isBooleanEnv("ENABLE_ANALYTICS") }
+
+func VersionCheckConfigured() bool { return isBooleanEnv("DISABLE_VERSION_CHECK") }
+
+// isBooleanEnv 报告环境变量是否被显式设置成了合法布尔值。只认 true/false：
+// 写错的值不会生效，也就不该被当成「部署层已接管这个开关」。
+func isBooleanEnv(name string) bool {
+	_, ok := parseBoolEnv(strings.TrimSpace(os.Getenv(name)))
+	return ok
+}
+
+// parseBoolEnv 解析 "true"/"false"（忽略大小写与首尾空白），第二个返回值表示
+// 取值是否合法。
+func parseBoolEnv(value string) (bool, bool) {
+	switch {
+	case strings.EqualFold(value, "true"):
+		return true, true
+	case strings.EqualFold(value, "false"):
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 // loadSecretEnvs 先读秘钥类配置：后面的组会用到 AllowInsecureSecrets，
@@ -219,8 +252,13 @@ func loadServerEnvs() {
 	if v := os.Getenv("DISABLE_GZIP"); v != "" {
 		DisableGZIP = v == "true"
 	}
-	if v := os.Getenv("DISABLE_VERSION_CHECK"); v == "true" {
-		EnableVersionCheck.Store(false)
+	if v := strings.TrimSpace(os.Getenv("DISABLE_VERSION_CHECK")); v != "" {
+		// 变量名是取反的：设置 true 表示「关闭版本检查」，不能直接写进开关。
+		if disabled, ok := parseBoolEnv(v); ok {
+			EnableVersionCheck.Store(!disabled)
+		} else {
+			klog.Warningf("Invalid DISABLE_VERSION_CHECK %q, keeping %v", v, EnableVersionCheck.Load())
+		}
 	}
 
 	if v := os.Getenv("KITE_BASE"); v != "" {
@@ -255,8 +293,12 @@ func loadServerEnvs() {
 
 // loadRuntimeEnvs 读取运行形态相关配置：命名空间、镜像、匿名访问与配置文件路径。
 func loadRuntimeEnvs() {
-	if analytics := os.Getenv("ENABLE_ANALYTICS"); analytics == "true" {
-		EnableAnalytics.Store(true)
+	if v := strings.TrimSpace(os.Getenv("ENABLE_ANALYTICS")); v != "" {
+		if enabled, ok := parseBoolEnv(v); ok {
+			EnableAnalytics.Store(enabled)
+		} else {
+			klog.Warningf("Invalid ENABLE_ANALYTICS %q, keeping %v", v, EnableAnalytics.Load())
+		}
 	}
 	if ns := os.Getenv("NAMESPACE"); ns != "" {
 		AgentPodNamespace = ns

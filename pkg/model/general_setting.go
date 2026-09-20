@@ -261,8 +261,14 @@ func applyRuntimeGeneralSetting(setting *GeneralSetting) {
 	if setting == nil {
 		return
 	}
-	common.EnableAnalytics.Store(setting.EnableAnalytics)
-	common.EnableVersionCheck.Store(setting.EnableVersionCheck)
+	// 环境变量显式指定过的开关以环境变量为准，通用设置不再覆盖它：这两个开关
+	// 决定实例是否向外发请求，内网部署要能压得住（见 common.LoadEnvs）。
+	if !common.AnalyticsConfigured() {
+		common.EnableAnalytics.Store(setting.EnableAnalytics)
+	}
+	if !common.VersionCheckConfigured() {
+		common.EnableVersionCheck.Store(setting.EnableVersionCheck)
+	}
 }
 
 func ensureJWTSecret(setting *GeneralSetting, updates map[string]interface{}) error {

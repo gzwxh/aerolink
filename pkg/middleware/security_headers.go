@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/common"
 )
 
 // SecurityHeaders 补齐 SPA 此前缺少的基线加固响应头。
@@ -18,19 +17,23 @@ func SecurityHeaders() gin.HandlerFunc {
 	// SPA 自带打包产物，使用内联样式与 blob worker
 	// （Monaco/xterm）；其它一律锁定。运行时 base path 以
 	// 同源的 config.js 提供，因此不需要内联脚本。
+	//
+	// img-src 额外按协议放行外部图片：头像是用户自填的外链，OIDC 身份源下发的
+	// picture 同样是外链，来源无法预先枚举。收紧成 'self' 会让头像静默回落到
+	// 首字母占位（图片请求被浏览器拦截），所以这里保留 http/https。
+	// 统计来源（Umami 的 script.js 与上报网关）一律不放行：本分支不需要上报数据，
+	// 即使 ENABLE_ANALYTICS 被置为 true，注入的脚本标签与上报请求也会被浏览器拦掉。
+	// 将来若要重新启用上报，必须在这里同时放行 script-src 与 connect-src。
 	const csp = "default-src 'self'; " +
 		"script-src 'self'; " +
 		"style-src 'self' 'unsafe-inline'; " +
-		"img-src 'self' data: blob:; " +
+		"img-src 'self' data: blob: https: http:; " +
 		"font-src 'self' data:; " +
 		"connect-src 'self' ws: wss:; " +
 		"worker-src 'self' blob:; " +
 		"object-src 'none'; " +
 		"base-uri 'self'; " +
 		"frame-ancestors 'none'"
-	// 可选的统计脚本从 Umami 云端加载；只在启用统计时
-	// 允许它。
-	cspWithAnalytics := strings.Replace(csp, "script-src 'self';", "script-src 'self' https://cloud.umami.is;", 1)
 
 	return func(c *gin.Context) {
 		header := c.Writer.Header()
@@ -38,11 +41,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		header.Set("X-Frame-Options", "DENY")
 		header.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		if !cspDisabled {
-			if common.EnableAnalytics.Load() {
-				header.Set("Content-Security-Policy", cspWithAnalytics)
-			} else {
-				header.Set("Content-Security-Policy", csp)
-			}
+			header.Set("Content-Security-Policy", csp)
 		}
 		// 只在 TLS 下有意义；其它情况下无副作用。
 		if c.Request.TLS != nil || strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https") {

@@ -155,8 +155,8 @@ The first visit walks through creating the admin account; configure the remainin
 | `KITE_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | connection max lifetime in minutes |
 | `KITE_BASE` | empty | sub-path deployment (e.g. `/kite`) |
 | `NAMESPACE` | empty | namespace for Kite's own agent/terminal pods |
-| `DISABLE_VERSION_CHECK` | `false` | `true` skips the version check (recommended on air-gapped networks) |
-| `ENABLE_ANALYTICS` | `false` | anonymous telemetry; keep off internally |
+| `DISABLE_VERSION_CHECK` | `true` | whether to query `api.github.com` for upstream releases. This branch defaults to `true` (disabled); once set explicitly, the variable wins over the UI setting |
+| `ENABLE_ANALYTICS` | `false` | whether to inject the anonymous analytics script. Off by default; even when enabled, the server-side CSP allows no analytics origin, so nothing is actually reported |
 | `DISABLE_GZIP` | `false` | `true` disables response compression (proxy troubleshooting) |
 | `KUBECONFIG` / `KITE_CONFIG_FILE` | empty | external kubeconfig / config file path |
 | `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest` | node terminal image (company SWR) |

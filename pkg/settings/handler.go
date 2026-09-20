@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 )
 
@@ -29,14 +30,32 @@ func HandleGetGeneralSetting(c *gin.Context) {
 		"kubectlImage":          setting.KubectlImage,
 		"nodeTerminalImage":     setting.NodeTerminalImage,
 		"clusterAgentImage":     setting.ClusterAgentImage,
-		"enableAnalytics":       setting.EnableAnalytics,
-		"enableVersionCheck":    setting.EnableVersionCheck,
+		"enableAnalytics":       effectiveAnalytics(setting.EnableAnalytics),
+		"enableVersionCheck":    effectiveVersionCheck(setting.EnableVersionCheck),
 		"passwordLoginDisabled": setting.PasswordLoginDisabled,
 		"enableMFA":             setting.EnableMFA,
 		"loginPrompt":           setting.LoginPrompt,
 		"logoUrl":               setting.LogoURL,
 		"siteName":              setting.SiteName,
 	})
+}
+
+// effectiveAnalytics / effectiveVersionCheck 返回开关实际生效的取值：环境变量
+// 显式指定过时以环境变量为准。界面据此显示真实状态，避免出现「界面显示开启、
+// 运行时其实已被环境变量关掉」；两者不一致时的保存会被拒绝，见
+// HandleUpdateGeneralSetting。
+func effectiveAnalytics(settingValue bool) bool {
+	if common.AnalyticsConfigured() {
+		return common.EnableAnalytics.Load()
+	}
+	return settingValue
+}
+
+func effectiveVersionCheck(settingValue bool) bool {
+	if common.VersionCheckConfigured() {
+		return common.EnableVersionCheck.Load()
+	}
+	return settingValue
 }
 
 // maxLogoURLLength 是自定义 logo 的长度上限（字符）。它同时允许 http(s) 地址与
@@ -184,9 +203,17 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		updates["cluster_agent_image"] = clusterAgentImage
 	}
 	if req.EnableAnalytics != nil {
+		if locked := effectiveAnalytics(currentSetting.EnableAnalytics); common.AnalyticsConfigured() && *req.EnableAnalytics != locked {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "enableAnalytics is managed by the ENABLE_ANALYTICS environment variable"})
+			return
+		}
 		updates["enable_analytics"] = *req.EnableAnalytics
 	}
 	if req.EnableVersionCheck != nil {
+		if locked := effectiveVersionCheck(currentSetting.EnableVersionCheck); common.VersionCheckConfigured() && *req.EnableVersionCheck != locked {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "enableVersionCheck is managed by the DISABLE_VERSION_CHECK environment variable"})
+			return
+		}
 		updates["enable_version_check"] = *req.EnableVersionCheck
 	}
 	if req.LoginPrompt != nil {
@@ -237,8 +264,8 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		"kubectlImage":          updated.KubectlImage,
 		"nodeTerminalImage":     updated.NodeTerminalImage,
 		"clusterAgentImage":     updated.ClusterAgentImage,
-		"enableAnalytics":       updated.EnableAnalytics,
-		"enableVersionCheck":    updated.EnableVersionCheck,
+		"enableAnalytics":       effectiveAnalytics(updated.EnableAnalytics),
+		"enableVersionCheck":    effectiveVersionCheck(updated.EnableVersionCheck),
 		"passwordLoginDisabled": updated.PasswordLoginDisabled,
 		"enableMFA":             updated.EnableMFA,
 		"loginPrompt":           updated.LoginPrompt,

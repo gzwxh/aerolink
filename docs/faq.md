@@ -2,13 +2,13 @@
 
 ## 数据共享
 
-默认情况下，Kite 不会收集任何分析数据。
+Kite 不收集分析数据，也不会向第三方上报使用情况。
 
-如果您希望帮助改进产品，可以将环境变量 `ENABLE_ANALYTICS` 设置为 `true`。
+上游的匿名统计（umami）在这个内部分支里不可用：服务端下发的 `Content-Security-Policy`
+不放行统计脚本与上报网关，因此即便有人把 `ENABLE_ANALYTICS` 设为 `true`，浏览器也会
+拦掉相关请求。
 
-Kite 将使用 umami 收集极少的匿名使用数据。
-
-源代码可在 [这里](https://github.com/kite-org/kite/blob/main/pkg/utils/utils.go#L10-L16) 找到。
+版本检查同理：本分支默认关闭，不会在没人注意的情况下访问 `api.github.com`。
 
 ## 权限问题
 

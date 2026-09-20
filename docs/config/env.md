@@ -23,7 +23,8 @@ Kite 默认支持一些环境变量，来改变一些配置项的默认值。
 
 - **CLUSTER_AGENT_IMAGE**: 为 Cluster Agent 类型集群生成 Cluster Agent 部署清单时使用的 Docker 镜像。
 
-- **ENABLE_ANALYTICS**：启用数据分析功能，默认值为 `false`。当启用后，Kite 将收集有限数据以帮助改进产品。
+- **ENABLE_ANALYTICS**：是否注入数据统计脚本，默认值为 `false`。该开关一旦由环境变量显式指定，就优先于界面上的同名设置。注意：服务端下发的 CSP 不放行统计脚本与上报网关，因此即使开启也不会真的发出上报。
+- **DISABLE_VERSION_CHECK**：是否访问 `api.github.com` 查询上游新版本。本分支默认关闭；显式设置 `true`/`false` 后优先于界面上的同名设置。
 
 - **PORT**：Kite 运行的端口，默认值为 `8080`。
 

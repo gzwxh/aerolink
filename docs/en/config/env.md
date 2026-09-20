@@ -23,7 +23,8 @@ Kite supports several environment variables by default to change the default val
 
 - **CLUSTER_AGENT_IMAGE**: Docker image used when generating the Cluster Agent manifest for Cluster Agent clusters.
 
-- **ENABLE_ANALYTICS**: Enable data analytics functionality, default value is `false`. When enabled, Kite will collect limited data to help improve the product.
+- **ENABLE_ANALYTICS**: whether to inject the data analytics script, default `false`. Once set explicitly, the variable wins over the UI setting. Note: the CSP served by the backend allows neither the analytics script nor its gateway, so enabling it does not actually report anything.
+- **DISABLE_VERSION_CHECK**: whether to query `api.github.com` for upstream releases. Off by default in this branch; once set explicitly to `true`/`false`, it wins over the UI setting.
 
 - **PORT**: Port on which Kite runs, default value is `8080`.
 

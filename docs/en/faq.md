@@ -2,13 +2,14 @@
 
 ## Data Sharing
 
-By default, Kite does not collect any analytics data.
+Kite collects no analytics data and reports nothing to third parties.
 
-If you would like to help improve the product, you can set the environment variable `ENABLE_ANALYTICS` to `true`.
+The upstream anonymous analytics (umami) is unavailable in this internal branch: the
+`Content-Security-Policy` served by the backend allows neither the analytics script nor its
+gateway, so even if someone sets `ENABLE_ANALYTICS` to `true`, the browser blocks the requests.
 
-Kite will use umami to collect minimal anonymous usage data.
-
-The source code can be found [here](https://github.com/kite-org/kite/blob/main/pkg/utils/utils.go#L10-L16).
+The version check behaves the same way: it is off by default in this branch, so nothing
+silently reaches `api.github.com`.
 
 ## Permission Issues
 

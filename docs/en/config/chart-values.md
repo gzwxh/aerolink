@@ -53,6 +53,15 @@ This document describes all available configuration options for the Kite Helm Ch
 | ----------- | ---------------------------------------- | ------- |
 | `extraEnvs` | List of additional environment variables | `[]`    |
 
+## Outbound Requests
+
+Kite makes no outbound requests by default. The switches below are owned by the deployment: once the corresponding environment variable is injected via values, the UI shows the effective value and no longer allows changing it.
+
+| Parameter              | Description                                                                                                                               | Default |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `versionCheck.enabled` | Whether to query `api.github.com` for upstream releases                                                                                   | `false` |
+| `analytics.enabled`    | Whether to inject the analytics script. The server-side CSP allows no analytics origin, so enabling it does not actually report anything. | `false` |
+
 ## Application Configuration
 
 Kite supports loading cluster, OAuth/LDAP, and RBAC configuration from a YAML config file. When enabled, managed sections become read-only in the UI.
