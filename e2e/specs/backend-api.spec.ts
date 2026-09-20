@@ -1046,12 +1046,18 @@ test('backend APIs work end to end against the real test environment', async ({
       }),
       200
     )
-    await expectForbidden(
+    // 全局布局只是「没自己配过的人的默认样子」：管理员发布之后普通用户仍能保存
+    // 自己的布局，并且以个人布局为准（见 plans/2026-09-20-sidebar-preference-precedence.md）。
+    await expectStatus(
       await readerRequest.post('/api/users/sidebar_preference', {
         data: { sidebar_preference: '{"blocked":true}' },
       }),
-      ['sidebar customization is disabled']
+      200
     )
+    const sidebarUser = await expectJSON<{
+      user: { sidebar_preference?: string }
+    }>(await readerRequest.get('/api/auth/user'), 200)
+    expect(sidebarUser.user.sidebar_preference).toBe('{"blocked":true}')
     if (originalGlobalSidebarPreference) {
       await expectStatus(
         await request.post('/api/v1/admin/sidebar_preference/global', {
