@@ -333,6 +333,32 @@ KITE_SMOKE_USER=super KITE_SMOKE_PASSWORD='<口令>' \
 | 邮件 | 把通知配置临时指向内置假 SMTP，发一封测试邮件并确认真的收到（含 Subject 头） | `-smtp` |
 | 日志 | 扫描服务端日志中的 `SQLSTATE` / `syntax error` / `does not exist` / 权限不足 / 死锁 | `-log-file <路径>` |
 
+### 7.1 跑之前要有「可随便折腾的实例」
+
+写检查会真改集群，AI/邮件检查会临时改设置，所以**别对着生产实例跑全套**。安全做法是在
+换库用的同一个数据库实例上克隆一份数据，另起一个实例：
+
+```sh
+# 1) 克隆生产数据到一个临时库（同实例，走 tools/dbmigrate）
+docker exec kite-postgres12 psql -U postgres -c "CREATE DATABASE kite_smoke OWNER kite;"
+DB_TYPE=postgres DB_DSN='<生产 DSN>' go run ./tools/dbmigrate \
+  -target-type postgres -target-dsn '<kite_smoke 的 DSN>'
+
+# 2) 让克隆库里的测试账号有一个已知口令（否则登录都不知用什么）
+#    用仓库自己的哈希：写一个临时 _test.go 调 utils.HashPassword，或用界面重置
+# 3) 用一个不占用的端口起实例（配置从 dev.env 取，只改库和端口）
+DB_TYPE=postgres DB_DSN='<kite_smoke 的 DSN>' PORT=38092 /wxh/kite/kite &
+
+# 4) 对着它跑；跑完把 kite_smoke 删掉
+KITE_SMOKE_USER=... KITE_SMOKE_PASSWORD=... \
+  go run ./tools/apismoke -base-url http://127.0.0.1:38092 -cluster dev -namespace devops \
+    -write-namespace devops -ai -smtp -log-file /data/logs/kite.log
+docker exec kite-postgres12 psql -U postgres -c "DROP DATABASE kite_smoke;"
+```
+
+多副本看 `2026-09-20-multi-replica-deployment.md`：同一份克隆库上起 2–3 个实例、用
+`-log-file a,b,c` 一起扫日志即可。
+
 三条使用注意：
 
 1. **写检查会真的改集群**：`-write-namespace` 请指向一个可以随便破坏的命名空间。所有对象
