@@ -21,6 +21,7 @@ import {
 import { isDeletableUser, isNativeUser } from '@/lib/user-kind'
 import { formatDate } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard'
+import { normalizeAvatarUrl } from '@/lib/avatar-url'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -183,7 +184,7 @@ export function UserDetailDialog({
   // 显式提交空串等于清空该字段（昵称、头像、联系方式都是这个语义）。
   const payload: Partial<UserItem> & { groups?: string[] } = {}
   if (avatarUrl.trim() !== (baseline.avatar_url ?? '')) {
-    payload.avatar_url = avatarUrl.trim()
+    payload.avatar_url = normalizeAvatarUrl(avatarUrl)
   }
   if (native) {
     if (name.trim() !== (baseline.name ?? '')) payload.name = name.trim()

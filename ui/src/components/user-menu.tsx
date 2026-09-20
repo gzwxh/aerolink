@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { MFA_SETUP_REQUEST_EVENT } from '@/lib/mfa-prompt'
+import { normalizeAvatarUrl } from '@/lib/avatar-url'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -70,7 +71,7 @@ export function UserMenu() {
         >
           <Avatar className="size-sm">
             <AvatarImage
-              src={user.avatar_url}
+              src={normalizeAvatarUrl(user.avatar_url) || undefined}
               alt={user.name || user.username}
             />
             <AvatarFallback className="bg-primary text-primary-foreground">

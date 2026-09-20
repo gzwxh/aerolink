@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { updateCurrentUser } from '@/lib/api'
+import { normalizeAvatarUrl } from '@/lib/avatar-url'
 import { formatDate } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -77,12 +78,12 @@ export function ProfileSection() {
     try {
       // 目录用户只提交头像：其余字段后端会忽略，界面也就不去假装它们可改。
       const payload = externalUser
-        ? { avatar_url: form.avatar_url.trim() }
+        ? { avatar_url: normalizeAvatarUrl(form.avatar_url) }
         : {
             name: form.name.trim(),
             email: form.email.trim(),
             phone: form.phone.trim(),
-            avatar_url: form.avatar_url.trim(),
+            avatar_url: normalizeAvatarUrl(form.avatar_url),
           }
       await updateCurrentUser(payload)
       await checkAuth()
@@ -104,7 +105,7 @@ export function ProfileSection() {
         <div className="flex items-center gap-4">
           <Avatar className="size-16">
             <AvatarImage
-              src={form.avatar_url || undefined}
+              src={normalizeAvatarUrl(form.avatar_url) || undefined}
               alt={user.name || user.username}
             />
             <AvatarFallback className="bg-primary text-lg text-primary-foreground">
@@ -122,6 +123,12 @@ export function ProfileSection() {
               autoComplete="off"
               onChange={(event) => patch('avatar_url', event.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'accountSettings.profile.avatarUrlHint',
+                '填写图片直链；粘贴 GitHub 页面链接会自动转换为 raw 直链。'
+              )}
+            </p>
           </div>
         </div>
 

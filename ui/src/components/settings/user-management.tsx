@@ -33,6 +33,7 @@ import { ApiError } from '@/lib/api-client'
 import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
 import { formatDate, translateError } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
+import { normalizeAvatarUrl } from '@/lib/avatar-url'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -324,7 +325,7 @@ export function UserManagement() {
             <Avatar.Root className="inline-block">
               {row.original.avatar_url ? (
                 <Avatar.Image
-                  src={row.original.avatar_url}
+                  src={normalizeAvatarUrl(row.original.avatar_url)}
                   alt={row.original.username}
                   className="h-8 w-8 rounded-full object-cover"
                 />
