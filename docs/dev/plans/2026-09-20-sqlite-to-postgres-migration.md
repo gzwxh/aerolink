@@ -200,7 +200,7 @@ docker exec kite-postgres psql -U kite -d kite -c "select count(*) from users;"
 
 ## 6. 之后才谈扩副本
 
-切到 pg 之后，多副本的三个共享状态（会话序号、登录失败计数、安全设置缓存）在 `2026-09-20-multi-replica-shared-state.md` 里已经处理完并入库。扩副本时还要注意：
+切到 pg 之后，多副本的三个共享状态（会话序号、登录失败计数、安全设置缓存）在 `2026-09-20-multi-replica-shared-state.md` 里已经处理完并入库。实际部署产物（systemd 副本 + nginx 入口）与实测记录见 `2026-09-20-multi-replica-deployment.md`。扩副本时还要注意：
 
 - **连接池总量** = 副本数 × `KITE_DB_MAX_OPEN_CONNS`，别超过 pg 的 `max_connections`。
 - **每个副本各持一份 K8s informer 缓存**，监听 apiserver 的流量按副本数放大——这本来就是「卡顿」的怀疑来源之一，扩容前后建议对比一次。
