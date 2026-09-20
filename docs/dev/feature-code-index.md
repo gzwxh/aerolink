@@ -172,6 +172,7 @@
    - `ui/src/components/action-table.tsx`：设置类表格
    - `ui/src/components/resource-table-toolbar.tsx`：筛选/刷新间隔/列显示
    - 立刻刷新：`ui/src/components/refresh-button.tsx`（`resource-table` 把数据层的 `refetch` 透传成 `onRefresh`，按钮只负责反馈与去抖，**不要在里面另开请求**）
+   - 行操作菜单：`ui/src/components/workload-row-actions.tsx`（工作负载六类共用，能力差异见文件内的 `workloadTraits`）；列表页只负责加一列 `columnHelper.display({ id: 'actions' })`，不要在页面里重写菜单
 3. **表单与编辑器**：
    - `ui/src/components/editors/deployment-form.ts`：类型 + 默认值 + build/parse（数据层）
    - `ui/src/components/workload-container-sections.tsx`、`workload-container-security.tsx`：容器分区编辑器

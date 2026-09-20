@@ -67,3 +67,53 @@ CronJob 的 `spec.jobTemplate.spec.template.spec` 两条路径都覆盖）。表
   容器卡片里的编辑容器、就地调资源、debug）。要做的话得先确认表单对这些不可变字段的处理。
 - **Service / ConfigMap / Secret** 等其它资源同样只有创建页或 YAML 编辑，本身不在「工作负载」范围内，
   本次未动。
+
+## 6. 列表页的「操作」列（2026-09-20 追加）
+
+**问题**：`/deployments` 最右列的操作菜单里**没有「编辑」**——想改一个 Deployment 只能先点进
+详情页，再用详情页上的编辑按钮；而工作负载分组下的其余五类（StatefulSet / DaemonSet / Job /
+CronJob / Pod）列表**连操作列都没有**，只能靠点进详情页。
+
+**改动**：
+
+- 把原来 Deployment 专用的 `deployment-row-actions.tsx` 泛化成
+  `ui/src/components/workload-row-actions.tsx`（props：`resourceType` + `workload`），六类列表共用。
+  菜单第一项是新增的「编辑」，直达 `/{type}/{namespace}/{name}/edit`（六类的编辑路由在第 1、3 节已经补齐）。
+- 各类型的差异全部收敛在文件内的 `workloadTraits`（容器在哪个 spec 路径下、支持哪些菜单项），
+  其余菜单项对所有类型的行为一致。
+- i18n 命名空间 `deploymentActions` → `workloadActions`（文案本来就与类型无关），两个语言包同步改名。
+- 六个列表页（工作负载分组，见 `ui/src/lib/resource-catalog.ts` 的 `sidebar.groups.workloads`）
+  各加一列 `columnHelper.display({ id: 'actions' })`。
+
+能力矩阵（`✓` = 该类型的菜单里有这一项）：
+
+| 类型 | 编辑 | 查看 YAML | 终端 | 修改镜像 | 暂停/恢复 | 滚动重启 | 回滚 | 标签/注解 | 删除 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Deployment | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| StatefulSet | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ✓ |
+| DaemonSet | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ✓ |
+| Job | ✓ | ✓ | ✓ | — | — | — | — | ✓ | ✓ |
+| CronJob | ✓ | ✓ | — | ✓ | — | — | — | ✓ | ✓ |
+| Pod | ✓ | ✓ | ✓ | ✓ | — | — | — | ✓ | ✓ |
+
+每一项都有原因，不是随意取舍：
+
+- **Job 不给「修改镜像」**：`spec.template` 创建后不可变（`field is immutable`），改镜像只能重建 Job。
+- **CronJob 不给终端**：它不直接拥有 Pod，容器在 `spec.jobTemplate.spec.template` 里；
+  CronJob 详情页本身也没有终端页签。
+- **Pod 不给滚动重启/回滚**：没有控制器，没有历史版本；它的镜像是少数可变字段之一，所以保留改镜像。
+- **暂停/恢复只有 Deployment**：只有它（和 CronJob 的 `suspend`）有这个语义，本次没有为 CronJob 造入口。
+
+## 7. 测试（第 6 节）
+
+- 组件（`ui/src/components/workload-row-actions.test.tsx`，12 条）：六类的「编辑」都能跳到
+  `/{type}/{ns}/{name}/edit`；各类型的菜单项与上表一致（Job 无改镜像/重启/回滚、CronJob 无终端、
+  Pod 无重启）；没有 `update` 权限时不出编辑与标签/注解；一条权限都没有时整列不渲染。
+- e2e（`e2e/specs/workload-list-actions.spec.ts`，本地集群实跑，8 passed）：六类列表都有操作列，
+  以及从 Deployment 列表的操作菜单进编辑页（进的是编辑模式，身份字段来自线上对象且被锁定）。
+- 反证：去掉「编辑」菜单项 → 6 条用例失败（每条对应一个类型）；把 Job 的改镜像打开 →
+  「Job 不提供改镜像」失败。
+- **一条容易踩的坑**：列表为空时页面渲染的是空态，**整张表（含表头）都不出现**，
+  所以 e2e 里断言「有操作列」必须先种一个对象；反过来，只断言表头而不种对象会得到假失败。
+  （六类对象的种法都刻意让负载跑不起来：命中不了的 `nodeSelector`、`replicas: 0`、
+  永不触发的 cron 表达式、立刻失败退出的 Job。）
