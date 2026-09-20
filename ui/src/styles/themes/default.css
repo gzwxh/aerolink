@@ -1,13 +1,20 @@
 /* 默认主题
-   色阶分层参考 kkRepo（klboke/kkRepo，Apache-2.0）的语义 token 口径，取值按其
-   对比度目标重新落在 Kite 自己的色相家族上（中性 286、品牌 235）：
-   - 文字三层：--foreground（正文/标题，约 16.6:1）；--muted-foreground
-     （说明文字、表头、次要信息，约 5.8:1，原先 0.552 只有 4.83:1，12-13px 下偏虚）。
-   - 填充三层：--card（白）> --secondary/--muted（沉底填充、表头、斑马行）>
-     --accent（hover / 选中，品牌浅蓝底）。
-   - 描边两层：--border（分隔线）；--input（表单控件边界，需比分隔线更实，
-     原先与 --border 同值，输入框边框几乎看不见）。 */
-:root {
+   色阶分层参考 kkRepo（klboke/kkRepo，Apache-2.0）的语义 token 口径，取值按其对比度
+   目标重新落在 Kite 自己的色相家族上（中性 286、品牌 235）：
+
+   文字三层：--foreground（正文/标题，约 16.6:1）；--muted-foreground（说明文字、
+   表头、次要信息，约 5.8:1，原先 0.552 只有 4.83:1，12-13px 下偏虚）。
+   填充三层：--card（白）> --secondary/--muted（沉底填充、表头、斑马行）> --accent
+   （hover / 选中，品牌浅蓝底）。
+   描边两层：--border（分隔线）；--input（表单控件边界，需比分隔线更实，原先与
+   --border 同值，输入框边框几乎看不见）。
+
+   「默认」也是一套可选配色，所以下面的选择器写成 :root 与 .color-default 并列：
+   只在 :root 上声明的话，在其它配色下渲染 .color-default 作用域（例如设置页里
+   配色下拉的色块）时，自定义属性会继续从 html 上的 .color-<其它> 继承，色块就会
+   显示成当前配色的颜色。暗色同理。 */
+:root,
+.color-default {
   --background: oklch(1 0 0);
   --foreground: oklch(0.235 0.007 286);
   --card: oklch(1 0 0);
@@ -41,7 +48,8 @@
   --sidebar-ring: oklch(0.52 0.21 235);
 }
 
-.dark {
+.dark,
+.dark.color-default {
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);
@@ -75,6 +83,5 @@
   --sidebar-ring: oklch(0.65 0.18 235);
 }
 
-.color-default {
-  /* 默认主题使用根变量——无需改动 */
-}
+/* 默认配色的完整声明在文件头部的 :root / .dark 选择器里（与 .color-default 共用
+   同一个声明块）。 */

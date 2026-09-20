@@ -3382,6 +3382,15 @@
   "userMenu": {
     "accountSettings": "Account Settings",
     "colorTheme": "Theme",
+    "colorThemes": {
+      "default": "Default",
+      "eye-care": "Eye Care",
+      "darkmatter": "Darkmatter",
+      "notebook": "Notebook",
+      "clean-slate": "Clean Slate",
+      "claude": "Claude",
+      "emerald": "Emerald"
+    },
     "font": "Font",
     "displayScale": "Display Scale",
     "logout": "Log out",

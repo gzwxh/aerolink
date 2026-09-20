@@ -3148,6 +3148,15 @@
   "userMenu": {
     "accountSettings": "账号设置",
     "colorTheme": "主题",
+    "colorThemes": {
+      "default": "默认",
+      "eye-care": "护眼",
+      "darkmatter": "暗物质",
+      "notebook": "笔记本",
+      "clean-slate": "石板",
+      "claude": "陶土",
+      "emerald": "墨绿"
+    },
     "font": "字体",
     "displayScale": "显示缩放",
     "logout": "退出登录",

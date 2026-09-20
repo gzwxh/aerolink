@@ -84,9 +84,14 @@ export function AppearanceSection() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {Object.keys(colorThemes).map((key) => (
-              <SelectItem key={key} value={key} className="capitalize">
-                {key}
+            {(Object.keys(colorThemes) as ColorTheme[]).map((key) => (
+              <SelectItem key={key} value={key}>
+                {/* 色块直接套该配色的类名取 --primary，免得在 JS 里再抄一份颜色。 */}
+                <span
+                  aria-hidden="true"
+                  className={`color-${key} size-3 shrink-0 rounded-full border border-border bg-primary`}
+                />
+                {t(`userMenu.colorThemes.${key}`, key)}
               </SelectItem>
             ))}
           </SelectContent>
