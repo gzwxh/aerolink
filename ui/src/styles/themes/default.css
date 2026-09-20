@@ -1,36 +1,44 @@
-/* 默认主题 */
+/* 默认主题
+   色阶分层参考 kkRepo（klboke/kkRepo，Apache-2.0）的语义 token 口径，取值按其
+   对比度目标重新落在 Kite 自己的色相家族上（中性 286、品牌 235）：
+   - 文字三层：--foreground（正文/标题，约 16.6:1）；--muted-foreground
+     （说明文字、表头、次要信息，约 5.8:1，原先 0.552 只有 4.83:1，12-13px 下偏虚）。
+   - 填充三层：--card（白）> --secondary/--muted（沉底填充、表头、斑马行）>
+     --accent（hover / 选中，品牌浅蓝底）。
+   - 描边两层：--border（分隔线）；--input（表单控件边界，需比分隔线更实，
+     原先与 --border 同值，输入框边框几乎看不见）。 */
 :root {
   --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.235 0.007 286);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
+  --card-foreground: oklch(0.235 0.007 286);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.55 0.22 235);
+  --popover-foreground: oklch(0.235 0.007 286);
+  --primary: oklch(0.52 0.21 235);
   --primary-foreground: oklch(0.98 0.01 235);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
+  --secondary: oklch(0.957 0.003 286);
+  --secondary-foreground: oklch(0.235 0.007 286);
+  --muted: oklch(0.957 0.003 286);
+  --muted-foreground: oklch(0.51 0.013 286);
+  --accent: oklch(0.962 0.013 241);
+  --accent-foreground: oklch(0.42 0.13 235);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.55 0.22 235);
+  --border: oklch(0.905 0.005 286);
+  --input: oklch(0.865 0.008 286);
+  --ring: oklch(0.52 0.21 235);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.55 0.22 235);
+  --sidebar: oklch(0.983 0.003 286);
+  --sidebar-foreground: oklch(0.235 0.007 286);
+  --sidebar-primary: oklch(0.52 0.21 235);
   --sidebar-primary-foreground: oklch(0.98 0.01 235);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.55 0.22 235);
+  --sidebar-accent: oklch(0.957 0.003 286);
+  --sidebar-accent-foreground: oklch(0.235 0.007 286);
+  --sidebar-border: oklch(0.905 0.005 286);
+  --sidebar-ring: oklch(0.52 0.21 235);
 }
 
 .dark {
@@ -45,12 +53,12 @@
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.745 0.013 286);
+  --accent: oklch(0.269 0.045 246.6);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 18%);
   --ring: oklch(0.65 0.18 235);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -63,7 +71,7 @@
   --sidebar-primary-foreground: oklch(0.15 0.02 235);
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(1 0 0 / 14%);
   --sidebar-ring: oklch(0.65 0.18 235);
 }
 
