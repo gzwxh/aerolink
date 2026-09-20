@@ -367,10 +367,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenuItem>
         </SidebarMenu>
         {/* 集群切换器固定在 logo 下方（SidebarHeader 不随内容滚动）：各页面与设置章节
-            都按集群生效，切换是一个全局的客户端偏好，放到内容区会被滚走。 */}
+            底色取 sidebar 作用域的 token、不画描边：--border/--muted 是内容区的值，
+            落在深色侧边栏（如墨绿浅色模式）上会画出一条亮框，实测描边对底色的对比
+            度 5.56（默认主题只有 1.15），和旁边的菜单项不协调。 */}
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-gradient-to-r from-muted/40 to-muted/20 px-1.5 py-1 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-md bg-sidebar-accent px-1.5 py-1">
               <ClusterSelector />
             </div>
           </SidebarMenuItem>
