@@ -1,20 +1,23 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { applyResource } from '@/lib/api'
+import { applyResource, updateResource, useResource } from '@/lib/api'
 import {
   commonProvisioners,
   findDuplicateParameterKeys,
+  formFromStorageClass,
   generateStorageClassYaml,
   initialData,
+  isSimpleTopologies,
   parseAllowedTopologies,
   resolveVolumeBindingMode,
   staticProvisioner,
+  storageClassUpdateFromForm,
   type ReclaimPolicy,
   type StorageClassFormData,
   type VolumeBindingMode,
@@ -42,23 +45,46 @@ export function StorageClassCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { name: editName } = useParams()
   const can = useCan()
+  const isEdit = Boolean(editName)
 
   const [formData, setFormData] = useState<StorageClassFormData>(initialData)
   const [editedYaml, setEditedYaml] = useState('')
   // 只要离开过初始快照就算「未保存」，切换集群前据此弹确认（登记处见 lib/unsaved-edits）。
-  const [formSnapshot] = useState(() =>
+  const [formSnapshot, setFormSnapshot] = useState(() =>
     JSON.stringify({ formData, editedYaml })
   )
   useUnsavedEdits(JSON.stringify({ formData, editedYaml }) !== formSnapshot)
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  const pageTitle = t('storageClassCreate.pageTitle', 'StorageClass：创建')
+  const pageTitle = isEdit
+    ? t('storageClassCreate.editPageTitle', 'StorageClass：编辑')
+    : t('storageClassCreate.pageTitle', 'StorageClass：创建')
   usePageTitle(pageTitle)
 
-  // StorageClass 是集群级资源，没有命名空间可以限定权限范围。
-  const canCreate = can('storageclasses', 'create')
+  // 编辑模式：读回线上对象预填（只在线上对象变化时重填）。
+  const { data: existing } = useResource(
+    'storageclasses',
+    editName || '',
+    undefined,
+    { enabled: isEdit }
+  )
+  useEffect(() => {
+    if (!existing) return
+    const next = formFromStorageClass(existing)
+    setFormData(next)
+    setFormSnapshot(JSON.stringify({ formData: next, editedYaml: '' }))
+  }, [existing])
+
+  // 拓扑写法复杂到一个 term 带多个表达式时，表单那行简写表达不出来：保持线上原值不动。
+  const complexTopologies = Boolean(
+    isEdit && existing && !isSimpleTopologies(existing)
+  )
+
+  // StorageClass 是集群级资源，没有命名空间可以限定权限范围；改写已存在的对象用 update。
+  const canCreate = can('storageclasses', isEdit ? 'update' : 'create')
 
   const update = (updates: Partial<StorageClassFormData>) =>
     setFormData((prev) => ({ ...prev, ...updates }))
@@ -149,14 +175,31 @@ export function StorageClassCreatePage() {
     setCreateError(null)
     try {
       // 集群级资源不传命名空间。
-      await applyResource(finalYaml)
-      await queryClient.invalidateQueries({ queryKey: ['storageclasses'] })
-      toast.success(
-        t('storageClassCreate.created', 'StorageClass {{name}} 已创建', {
-          name: formData.name.trim(),
-        })
-      )
-      navigate('/storageclasses')
+      if (isEdit && existing) {
+        // 只提交表单里真正可变的那几项，其余从线上对象带过去。
+        await updateResource(
+          'storageclasses',
+          existing.metadata?.name || formData.name,
+          undefined,
+          storageClassUpdateFromForm(formData, existing, {
+            keepExistingTopologies: complexTopologies,
+          })
+        )
+        await queryClient.invalidateQueries({ queryKey: ['storageclasses'] })
+        toast.success(
+          t('common.messages.updated', { resource: 'StorageClass' })
+        )
+        navigate(`/storageclasses/${existing.metadata?.name || ''}`)
+      } else {
+        await applyResource(finalYaml)
+        await queryClient.invalidateQueries({ queryKey: ['storageclasses'] })
+        toast.success(
+          t('storageClassCreate.created', 'StorageClass {{name}} 已创建', {
+            name: formData.name.trim(),
+          })
+        )
+        navigate('/storageclasses')
+      }
     } catch (err) {
       setCreateError(translateError(err, t))
     } finally {
@@ -193,6 +236,7 @@ export function StorageClassCreatePage() {
                 onChange={(e) => update({ name: e.target.value })}
                 placeholder="fast-ssd"
                 className="h-9"
+                disabled={isEdit}
               />
               <p className="text-xs text-muted-foreground">
                 {t(
@@ -202,94 +246,115 @@ export function StorageClassCreatePage() {
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                {t('storageClassCreate.provisioner', 'Provisioner')} *
-              </Label>
-              <Input
-                value={formData.provisioner}
-                onChange={(e) => updateProvisioner(e.target.value)}
-                placeholder="rancher.io/local-path"
-                className="h-9"
-                list="storageclass-provisioners"
-              />
-              <datalist id="storageclass-provisioners">
-                {commonProvisioners.map((item) => (
-                  <option key={item} value={item} />
-                ))}
-              </datalist>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'storageClassCreate.provisionerHint',
-                  '负责动态供给存储的驱动，例如 rancher.io/local-path、nfs.csi.k8s.io；纯静态卷填 kubernetes.io/no-provisioner。'
-                )}
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                {t('storageClassCreate.reclaimPolicy', '回收策略')}
-              </Label>
-              <Select
-                value={formData.reclaimPolicy}
-                onValueChange={(v) =>
-                  update({ reclaimPolicy: v as ReclaimPolicy })
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Delete">Delete</SelectItem>
-                  <SelectItem value="Retain">Retain</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'storageClassCreate.reclaimPolicyHint',
-                  'Delete：PVC 删除后自动回收底层卷；Retain：保留卷需要人工处理。'
-                )}
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                {t('storageClassCreate.volumeBindingMode', '卷绑定模式')}
-              </Label>
-              <Select
-                value={formData.volumeBindingMode}
-                onValueChange={(v) =>
-                  update({ volumeBindingMode: v as VolumeBindingMode })
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Immediate">Immediate</SelectItem>
-                  <SelectItem value="WaitForFirstConsumer">
-                    WaitForFirstConsumer
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'storageClassCreate.volumeBindingModeHint',
-                  'WaitForFirstConsumer 会等到 Pod 调度后再绑定卷，适合本地盘等依赖节点位置的后端。'
-                )}
-              </p>
-              {isStaticProvisioner && (
+            {/* 不可变字段统一禁用：实测 API 对 provisioner / parameters /
+                reclaimPolicy / volumeBindingMode 一律 Forbidden，界面上就别装成能改。
+                编辑时提交的值由 storageClassUpdateFromForm 只取可变字段。 */}
+            <fieldset disabled={isEdit} className="m-0 min-w-0 border-0 p-0">
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  {t('storageClassCreate.provisioner', 'Provisioner')} *
+                </Label>
+                <Input
+                  value={formData.provisioner}
+                  onChange={(e) => updateProvisioner(e.target.value)}
+                  placeholder="rancher.io/local-path"
+                  className="h-9"
+                  list="storageclass-provisioners"
+                />
+                <datalist id="storageclass-provisioners">
+                  {commonProvisioners.map((item) => (
+                    <option key={item} value={item} />
+                  ))}
+                </datalist>
                 <p className="text-xs text-muted-foreground">
                   {t(
-                    'storageClassCreate.staticProvisionerHint',
-                    'no-provisioner 是纯静态卷：已自动改用 WaitForFirstConsumer，否则 PVC 可能被绑到 Pod 调度不上去的节点上（Bound 却一直 Pending）。'
+                    'storageClassCreate.provisionerHint',
+                    '负责动态供给存储的驱动，例如 rancher.io/local-path、nfs.csi.k8s.io；纯静态卷填 kubernetes.io/no-provisioner。'
                   )}
                 </p>
-              )}
-            </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  {t('storageClassCreate.reclaimPolicy', '回收策略')}
+                </Label>
+                <Select
+                  value={formData.reclaimPolicy}
+                  onValueChange={(v) =>
+                    update({ reclaimPolicy: v as ReclaimPolicy })
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Delete">Delete</SelectItem>
+                    <SelectItem value="Retain">Retain</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'storageClassCreate.reclaimPolicyHint',
+                    'Delete：PVC 删除后自动回收底层卷；Retain：保留卷需要人工处理。'
+                  )}
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  {t('storageClassCreate.volumeBindingMode', '卷绑定模式')}
+                </Label>
+                <Select
+                  value={formData.volumeBindingMode}
+                  onValueChange={(v) =>
+                    update({ volumeBindingMode: v as VolumeBindingMode })
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Immediate">Immediate</SelectItem>
+                    <SelectItem value="WaitForFirstConsumer">
+                      WaitForFirstConsumer
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'storageClassCreate.volumeBindingModeHint',
+                    'WaitForFirstConsumer 会等到 Pod 调度后再绑定卷，适合本地盘等依赖节点位置的后端。'
+                  )}
+                </p>
+                {isStaticProvisioner && (
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'storageClassCreate.staticProvisionerHint',
+                      'no-provisioner 是纯静态卷：已自动改用 WaitForFirstConsumer，否则 PVC 可能被绑到 Pod 调度不上去的节点上（Bound 却一直 Pending）。'
+                    )}
+                  </p>
+                )}
+              </div>
+            </fieldset>
           </div>
 
           <div className="space-y-4 rounded-md border p-3 lg:col-span-2">
+            {isEdit && (
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'storageClassCreate.editHint',
+                  '编辑时只能改允许扩容、默认类标记、挂载选项与允许的拓扑；Provisioner、参数、回收策略与卷绑定模式创建后不可变，下方已置灰。'
+                )}
+              </p>
+            )}
+            {complexTopologies && (
+              <p className="text-xs text-destructive">
+                {t(
+                  'storageClassCreate.complexTopologies',
+                  '这个 StorageClass 的 allowedTopologies 在一个 term 里写了多个表达式，表单那行简写表达不出来；保存时会保持它不变，要改请用 YAML 标签页。'
+                )}
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -323,96 +388,100 @@ export function StorageClassCreatePage() {
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs">
-                {t('storageClassCreate.parameters', '参数（parameters）')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'storageClassCreate.parametersHint',
-                  '各驱动的参数名不同，例如 nfs.csi.k8s.io 需要 server 与 share。'
-                )}
-              </p>
-              {formData.parameters.map((row, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Input
-                    value={row.key}
-                    onChange={(e) =>
-                      update({
-                        parameters: formData.parameters.map((item, i) =>
-                          i === index ? { ...item, key: e.target.value } : item
-                        ),
-                      })
-                    }
-                    placeholder={t('common.fields.key', '键')}
-                    aria-invalid={
-                      duplicateParameterKeys.has(row.key.trim()) || undefined
-                    }
-                    className={
-                      'h-8 min-w-0 flex-1 ' +
-                      (duplicateParameterKeys.has(row.key.trim())
-                        ? 'border-destructive'
-                        : '')
-                    }
-                  />
-                  <Input
-                    value={row.value}
-                    onChange={(e) =>
-                      update({
-                        parameters: formData.parameters.map((item, i) =>
-                          i === index
-                            ? { ...item, value: e.target.value }
-                            : item
-                        ),
-                      })
-                    }
-                    placeholder={t('common.fields.value', '值')}
-                    className="h-8 min-w-0 flex-1"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
-                    aria-label={t('common.actions.delete', '删除')}
-                    disabled={formData.parameters.length === 1}
-                    onClick={() =>
-                      update({
-                        parameters: formData.parameters.filter(
-                          (_, i) => i !== index
-                        ),
-                      })
-                    }
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
-              {duplicateParameterKeys.size > 0 && (
-                <p className="text-xs text-destructive">
-                  {t('storageClassCreate.duplicateParameters', {
-                    keys: [...duplicateParameterKeys].join('、'),
-                    defaultValue:
-                      '参数名重复：{{keys}}。同名参数只会保留最后一行，请合并或改名。',
-                  })}
+            <fieldset disabled={isEdit} className="m-0 min-w-0 border-0 p-0">
+              <div className="space-y-2">
+                <Label className="text-xs">
+                  {t('storageClassCreate.parameters', '参数（parameters）')}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'storageClassCreate.parametersHint',
+                    '各驱动的参数名不同，例如 nfs.csi.k8s.io 需要 server 与 share。'
+                  )}
                 </p>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() =>
-                  update({
-                    parameters: [
-                      ...formData.parameters,
-                      { key: '', value: '' },
-                    ],
-                  })
-                }
-              >
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                {t('storageClassCreate.addParameter', '添加参数')}
-              </Button>
-            </div>
+                {formData.parameters.map((row, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      value={row.key}
+                      onChange={(e) =>
+                        update({
+                          parameters: formData.parameters.map((item, i) =>
+                            i === index
+                              ? { ...item, key: e.target.value }
+                              : item
+                          ),
+                        })
+                      }
+                      placeholder={t('common.fields.key', '键')}
+                      aria-invalid={
+                        duplicateParameterKeys.has(row.key.trim()) || undefined
+                      }
+                      className={
+                        'h-8 min-w-0 flex-1 ' +
+                        (duplicateParameterKeys.has(row.key.trim())
+                          ? 'border-destructive'
+                          : '')
+                      }
+                    />
+                    <Input
+                      value={row.value}
+                      onChange={(e) =>
+                        update({
+                          parameters: formData.parameters.map((item, i) =>
+                            i === index
+                              ? { ...item, value: e.target.value }
+                              : item
+                          ),
+                        })
+                      }
+                      placeholder={t('common.fields.value', '值')}
+                      className="h-8 min-w-0 flex-1"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      aria-label={t('common.actions.delete', '删除')}
+                      disabled={formData.parameters.length === 1}
+                      onClick={() =>
+                        update({
+                          parameters: formData.parameters.filter(
+                            (_, i) => i !== index
+                          ),
+                        })
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                {duplicateParameterKeys.size > 0 && (
+                  <p className="text-xs text-destructive">
+                    {t('storageClassCreate.duplicateParameters', {
+                      keys: [...duplicateParameterKeys].join('、'),
+                      defaultValue:
+                        '参数名重复：{{keys}}。同名参数只会保留最后一行，请合并或改名。',
+                    })}
+                  </p>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    update({
+                      parameters: [
+                        ...formData.parameters,
+                        { key: '', value: '' },
+                      ],
+                    })
+                  }
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  {t('storageClassCreate.addParameter', '添加参数')}
+                </Button>
+              </div>
+            </fieldset>
 
             <div className="space-y-1.5">
               <Label className="text-xs">
@@ -469,10 +538,15 @@ export function StorageClassCreatePage() {
 
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            {t(
-              'workloadWizard.yamlTabHint',
-              '这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准创建；返回修改表单会重新生成。'
-            )}
+            {isEdit
+              ? t(
+                  'storageClassCreate.yamlTabEditHint',
+                  '这是由上方配置生成的 YAML。编辑模式下保存的是表单里的可变字段，YAML 仅供查看；要改不可变字段请用详情页的 YAML 标签页。'
+                )
+              : t(
+                  'workloadWizard.yamlTabHint',
+                  '这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准创建；返回修改表单会重新生成。'
+                )}
           </p>
           <div className="min-h-[300px] rounded-md border">
             <SimpleYamlEditor
@@ -509,7 +583,9 @@ export function StorageClassCreatePage() {
         </Button>
         <Button onClick={handleCreate} disabled={isCreating || !canCreate}>
           {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {t('storageClassCreate.createButton', '创建 StorageClass')}
+          {isEdit
+            ? t('common.actions.save', '保存')
+            : t('storageClassCreate.createButton', '创建 StorageClass')}
         </Button>
       </div>
     </div>

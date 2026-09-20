@@ -73,6 +73,8 @@ export type RowActionResourceType =
   | 'cronjobs'
   | 'pods'
   | 'services'
+  | 'persistentvolumes'
+  | 'storageclasses'
 
 type PodSpecLike = {
   containers?: Container[]
@@ -234,6 +236,23 @@ const resourceTraits: Record<RowActionResourceType, ResourceTraits> = {
     rollback: false,
     pause: false,
   },
+  persistentvolumes: {
+    // 集群级资源：同样只有元数据与编辑（路径不带命名空间段）。
+    containers: null,
+    imagePatch: null,
+    terminal: false,
+    restart: false,
+    rollback: false,
+    pause: false,
+  },
+  storageclasses: {
+    containers: null,
+    imagePatch: null,
+    terminal: false,
+    restart: false,
+    rollback: false,
+    pause: false,
+  },
 }
 
 export function ResourceRowActions<T extends RowActionResourceType>({
@@ -253,6 +272,13 @@ export function ResourceRowActions<T extends RowActionResourceType>({
   const name = loose.metadata?.name ?? ''
   const namespace = loose.metadata?.namespace ?? ''
   const paused = loose.spec?.paused === true
+  /**
+   * 详情页路径。集群级资源（PV / StorageClass）没有命名空间段：
+   * 路由是 `/:resource/:name`，不是 `/:resource/:namespace/:name`。
+   */
+  const detailPath = namespace
+    ? `/${resourceType}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`
+    : `/${resourceType}/${encodeURIComponent(name)}`
 
   const canRead = can(resourceType, 'get', { namespace })
   const canUpdate = can(resourceType, 'update', { namespace })
@@ -476,15 +502,7 @@ export function ResourceRowActions<T extends RowActionResourceType>({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
           {canUpdate && (
-            <DropdownMenuItem
-              onSelect={() =>
-                navigate(
-                  `/${resourceType}/${encodeURIComponent(
-                    namespace
-                  )}/${encodeURIComponent(name)}/edit`
-                )
-              }
-            >
+            <DropdownMenuItem onSelect={() => navigate(`${detailPath}/edit`)}>
               <IconPencil className="size-4" />
               {t('common.actions.edit')}
             </DropdownMenuItem>
@@ -497,13 +515,7 @@ export function ResourceRowActions<T extends RowActionResourceType>({
           )}
           {traits.terminal && canExec && (
             <DropdownMenuItem
-              onSelect={() =>
-                navigate(
-                  `/${resourceType}/${encodeURIComponent(
-                    namespace
-                  )}/${encodeURIComponent(name)}?tab=terminal`
-                )
-              }
+              onSelect={() => navigate(`${detailPath}?tab=terminal`)}
             >
               <IconTerminal2 className="size-4" />
               {t('common.tabs.terminal')}

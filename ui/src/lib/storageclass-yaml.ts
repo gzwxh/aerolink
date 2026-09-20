@@ -1,4 +1,5 @@
 import * as yaml from 'js-yaml'
+import { StorageClass } from 'kubernetes-types/storage/v1'
 
 import { parseMountOptions } from './mount-options'
 
@@ -179,4 +180,107 @@ export function generateStorageClassYaml(data: StorageClassFormData): string {
   }
 
   return yaml.dump(doc, { indent: 2, noRefs: true })
+}
+
+/** 线上 StorageClass → 表单（编辑模式下回填；只有 §storageClassUpdateFromForm 里那几项可改）。 */
+export function formFromStorageClass(sc: StorageClass): StorageClassFormData {
+  return {
+    ...initialData,
+    name: sc.metadata?.name || '',
+    provisioner: sc.provisioner || '',
+    reclaimPolicy: (sc.reclaimPolicy as ReclaimPolicy) || 'Delete',
+    volumeBindingMode:
+      (sc.volumeBindingMode as VolumeBindingMode) || 'Immediate',
+    allowVolumeExpansion: sc.allowVolumeExpansion === true,
+    isDefault: sc.metadata?.annotations?.[defaultClassAnnotation] === 'true',
+    mountOptions: (sc.mountOptions || []).join(', '),
+    allowedTopologies: formatAllowedTopologies(sc.allowedTopologies),
+    parameters: Object.entries(sc.parameters || {}).map(([key, value]) => ({
+      key,
+      value,
+    })),
+  }
+}
+
+/**
+ * 把 allowedTopologies 反写回「一行一个表达式」的文本。一个 term 里带多个表达式时
+ * 无法用这个简写表达，此时返回空串并在界面上提示用 YAML 标签页改 —— 那是唯一能表达
+ * 复杂结构的地方。返回空串不影响其它字段的编辑（合并时 allowedTopologies 会单独判断）。
+ */
+export function formatAllowedTopologies(
+  topologies: StorageClass['allowedTopologies']
+): string {
+  if (!topologies || topologies.length === 0) return ''
+  const lines: string[] = []
+  for (const term of topologies) {
+    if ((term.matchLabelExpressions ?? []).length !== 1) return ''
+    const expression = term.matchLabelExpressions![0]
+    lines.push(`${expression.key}=${(expression.values ?? []).join(',')}`)
+  }
+  return lines.join('\n')
+}
+
+/** 这个 StorageClass 的 allowedTopologies 能不能用表单那行简写表达。 */
+export function isSimpleTopologies(sc: StorageClass): boolean {
+  const topologies = sc.allowedTopologies ?? []
+  if (topologies.length === 0) return true
+  return topologies.every(
+    (term) => (term.matchLabelExpressions ?? []).length === 1
+  )
+}
+
+/**
+ * 编辑模式要提交的对象：只取表单里**真正可变**的那几项，其余从线上对象带过去。
+ *
+ * 可改范围是实测出来的（k8s 1.32，见 docs/dev/plans/2026-09-20-pv-sc-form-edit.md）：
+ *   ✓ allowVolumeExpansion / mountOptions / allowedTopologies / 元数据（含默认类注解）
+ *   ✗ provisioner、parameters、reclaimPolicy、volumeBindingMode：全部
+ *     `Forbidden: updates to ... are forbidden`
+ * 因此这四项在编辑模式下渲染成只读；`parameters` 尤其不能碰 —— 漏掉一个键就等于
+ * 改了已有卷的供给参数，而 API 连改都不让。
+ */
+export function storageClassUpdateFromForm(
+  data: StorageClassFormData,
+  existing: StorageClass,
+  options: { keepExistingTopologies?: boolean } = {}
+): StorageClass {
+  const annotations: Record<string, string> = {
+    ...existing.metadata?.annotations,
+  }
+  if (data.isDefault) {
+    annotations[defaultClassAnnotation] = 'true'
+  } else {
+    delete annotations[defaultClassAnnotation]
+  }
+
+  const updated: StorageClass = {
+    ...existing,
+    metadata: { ...existing.metadata, annotations },
+  }
+
+  if (data.allowVolumeExpansion) {
+    updated.allowVolumeExpansion = true
+  } else {
+    // 取消勾选就是关掉（置 false 而不是留着 true）。
+    updated.allowVolumeExpansion = false
+  }
+
+  const mountOptions = parseMountOptions(data.mountOptions)
+  if (mountOptions.length > 0) {
+    updated.mountOptions = mountOptions
+  } else {
+    delete updated.mountOptions
+  }
+
+  // 复杂拓扑（一个 term 多个表达式）表达不出来，保持线上原值不动。
+  if (!options.keepExistingTopologies) {
+    const { terms } = parseAllowedTopologies(data.allowedTopologies)
+    if (terms.length > 0) {
+      updated.allowedTopologies = terms
+    } else {
+      delete updated.allowedTopologies
+    }
+  }
+
+  return updated
 }

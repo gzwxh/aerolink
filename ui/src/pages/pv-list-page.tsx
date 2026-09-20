@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { createSearchFilter } from '@/lib/k8s'
 import { formatDate, parseBytes } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 const pvSearchFilter = createSearchFilter<PersistentVolume>(
@@ -129,6 +130,20 @@ export function PVListPage() {
             <span className="text-muted-foreground text-sm">{dateStr}</span>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="persistentvolumes"
+              resource={row.original}
+            />
+          </div>
+        ),
       }),
     ],
     [t]

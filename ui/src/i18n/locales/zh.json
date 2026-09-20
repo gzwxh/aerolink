@@ -1098,6 +1098,7 @@
   },
   "pvCreate": {
     "pageTitle": "PersistentVolume：创建",
+    "editPageTitle": "PersistentVolume：编辑",
     "name": "名称",
     "capacity": "容量",
     "capacityHint": "支持 Ki/Mi/Gi/Ti 等单位，例如 10Gi；不带单位按字节解释（填 10 就是 10 字节）。",
@@ -1138,10 +1139,15 @@
     "claimRefNamespace": "命名空间",
     "claimRefName": "PVC 名称",
     "claimRefHint": "填上命名空间与 PVC 名称，就把这个卷锁定给该声明（claimRef）。两个要一起填；留空则不预绑定。",
-    "claimRefIncomplete": "预绑定需要同时填写命名空间与 PVC 名称"
+    "claimRefIncomplete": "预绑定需要同时填写命名空间与 PVC 名称",
+    "noUpdatePermission": "你没有修改 PersistentVolume 的权限。",
+    "editHint": "编辑时只能改容量（只增）、访问模式、回收策略与挂载参数；卷来源、卷模式、存储类与预绑定创建后不可变，下方已置灰。",
+    "unsupportedSource": "这个卷的来源类型不在表单支持范围内（hostPath / local / nfs / csi），下方来源字段无法显示；如需修改请用「查看 YAML」标签页。",
+    "yamlTabEditHint": "这是由上方配置生成的 YAML。编辑模式下保存的是表单里的可变字段，YAML 仅供查看；要改不可变字段请用详情页的 YAML 标签页。"
   },
   "storageClassCreate": {
     "pageTitle": "StorageClass：创建",
+    "editPageTitle": "StorageClass：编辑",
     "name": "名称",
     "nameHint": "资源名需符合 DNS 子域名规则（小写字母、数字、- 与 .）。",
     "provisioner": "Provisioner",
@@ -1166,7 +1172,10 @@
     "duplicateParameters": "参数名重复：{{keys}}。同名参数只会保留最后一行，请合并或改名。",
     "allowedTopologies": "允许的拓扑（可选）",
     "allowedTopologiesHint": "每行一条，写成 键=值1,值2（例如 topology.kubernetes.io/zone=cn-south-1a）。留空表示不限制；一个 term 里要写多个表达式时请用下面的 YAML 编辑器。",
-    "invalidTopologies": "写法有误：{{lines}}。每行形如 topology.kubernetes.io/zone=cn-south-1a。"
+    "invalidTopologies": "写法有误：{{lines}}。每行形如 topology.kubernetes.io/zone=cn-south-1a。",
+    "editHint": "编辑时只能改允许扩容、默认类标记、挂载选项与允许的拓扑；Provisioner、参数、回收策略与卷绑定模式创建后不可变，下方已置灰。",
+    "complexTopologies": "这个 StorageClass 的 allowedTopologies 在一个 term 里写了多个表达式，表单那行简写表达不出来；保存时会保持它不变，要改请用 YAML 标签页。",
+    "yamlTabEditHint": "这是由上方配置生成的 YAML。编辑模式下保存的是表单里的可变字段，YAML 仅供查看；要改不可变字段请用详情页的 YAML 标签页。"
   },
   "nsDelete": {
     "title": "删除命名空间 {{name}}？",
@@ -3055,6 +3064,7 @@
   "accountSettings": {
     "title": "账号设置",
     "profile": {
+      "avatarUrlHint": "填写图片直链；粘贴 GitHub 页面链接会自动转换为 raw 直链。",
       "nickname": "昵称",
       "saveButton": "保存",
       "saved": "已保存",

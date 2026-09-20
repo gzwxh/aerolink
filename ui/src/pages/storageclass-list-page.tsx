@@ -12,6 +12,7 @@ import { formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
 const defaultStorageClassAnnotation =
@@ -140,9 +141,10 @@ export function StorageClassListPage() {
           </span>
         ),
       }),
+      // 「设为默认」单独成列（它不是菜单项：默认类最多一个，适合直接可点）。
       columnHelper.display({
-        id: 'actions',
-        header: t('common.fields.actions'),
+        id: 'setDefault',
+        header: t('storageClasses.actions.setDefault', '设为默认'),
         cell: ({ row }) => {
           if (!canUpdateStorageClass) {
             return '-'
@@ -172,6 +174,20 @@ export function StorageClassListPage() {
             </Button>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="storageclasses"
+              resource={row.original}
+            />
+          </div>
+        ),
       }),
     ],
     [canUpdateStorageClass, defaultStorageClassCount, setDefaultMutation, t]

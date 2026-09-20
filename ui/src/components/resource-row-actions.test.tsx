@@ -190,6 +190,43 @@ describe('资源行操作菜单', () => {
     }
   })
 
+  // 集群级资源（PV / StorageClass）没有命名空间段：编辑路径是 /:resource/:name/edit。
+  // 写成 /:resource/:namespace/:name/edit 会直接 404，而这两个页面只在列表菜单里进出，
+  // 一旦写错没人会发现。
+  it.each(['persistentvolumes', 'storageclasses'] as const)(
+    '%s 的编辑路径不带命名空间段',
+    async (resourceType) => {
+      render(
+        <ResourceRowActions
+          resourceType={resourceType}
+          resource={{ metadata: { name: 'pv-data-01' } } as never}
+        />
+      )
+
+      const user = userEvent.setup()
+      await user.click(screen.getByRole('button', { name: 'ACTIONS' }))
+
+      // 与 Service 一样：只留元数据相关的五项（点一下菜单就会关，所以先断言）。
+      for (const label of [
+        'EDIT',
+        'VIEW_YAML',
+        'LABELS',
+        'ANNOTATIONS',
+        'DELETE',
+      ]) {
+        expect(
+          await screen.findByRole('menuitem', { name: label })
+        ).toBeInTheDocument()
+      }
+      for (const label of ['TERMINAL', 'EDIT_IMAGE', 'RESTART', 'PAUSE']) {
+        expect(screen.queryByRole('menuitem', { name: label })).toBeNull()
+      }
+
+      await user.click(screen.getByRole('menuitem', { name: 'EDIT' }))
+      expect(navigate).toHaveBeenCalledWith(`/${resourceType}/pv-data-01/edit`)
+    }
+  )
+
   it('没有 update 权限时不显示「编辑」与标签/注解', async () => {
     can.mockImplementation((_resource: string, verb: string) => verb === 'get')
 

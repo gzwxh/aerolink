@@ -1,11 +1,15 @@
 import * as yaml from 'js-yaml'
+import { PersistentVolume } from 'kubernetes-types/core/v1'
 import { describe, expect, it } from 'vitest'
 
 import {
+  formFromPV,
   generatePVYaml,
   hasPartialClaimRef,
   initialData,
+  pvUpdateFromForm,
   reclaimPolicyOptions,
+  volumeSourceOf,
   type PVFormData,
 } from './pv-yaml'
 
@@ -198,5 +202,96 @@ describe('generatePVYaml', () => {
   it('offers only the two supported reclaim policies', () => {
     expect([...reclaimPolicyOptions]).toEqual(['Retain', 'Delete'])
     expect(reclaimPolicyOptions).not.toContain('Recycle')
+  })
+})
+
+/** 一个「线上」的 hostPath PV：带不可变字段、扩展容量与没建模的字段。 */
+const livePV = (): PersistentVolume =>
+  ({
+    apiVersion: 'v1',
+    kind: 'PersistentVolume',
+    metadata: {
+      name: 'pv-1',
+      uid: 'uid-1',
+      labels: { keep: 'me' },
+      annotations: { 'kite.internal/note': 'keep me' },
+    },
+    spec: {
+      capacity: { storage: '10Gi', iops: '3000' },
+      accessModes: ['ReadWriteOnce'],
+      persistentVolumeReclaimPolicy: 'Retain',
+      volumeMode: 'Filesystem',
+      storageClassName: 'fast-ssd',
+      mountOptions: ['noatime'],
+      claimRef: { namespace: 'dev', name: 'data' },
+      hostPath: { path: '/data/volumes/pv-1', type: 'Directory' },
+    },
+    status: { phase: 'Bound' },
+  }) as unknown as PersistentVolume
+
+describe('PV 编辑（只放行可变字段）', () => {
+  it('线上对象预填回表单', () => {
+    const data = formFromPV(livePV())
+    expect(data.name).toBe('pv-1')
+    expect(data.capacity).toBe('10Gi')
+    expect(data.accessModes).toEqual(['ReadWriteOnce'])
+    expect(data.reclaimPolicy).toBe('Retain')
+    expect(data.mountOptions).toBe('noatime')
+    expect(data.volumeMode).toBe('Filesystem')
+    expect(data.storageClassName).toBe('fast-ssd')
+    expect(data.claimRefNamespace).toBe('dev')
+    expect(data.claimRefName).toBe('data')
+    expect(data.sourceType).toBe('hostPath')
+    expect(data.hostPathPath).toBe('/data/volumes/pv-1')
+    expect(data.hostPathType).toBe('Directory')
+  })
+
+  it('能识别不支持的卷来源', () => {
+    expect(volumeSourceOf(livePV())).toBe('hostPath')
+    const rbd = {
+      spec: { capacity: { storage: '1Gi' }, rbd: { pool: 'p', image: 'i' } },
+    } as unknown as PersistentVolume
+    expect(volumeSourceOf(rbd)).toBeNull()
+  })
+
+  // PUT 是整体替换：漏掉一个字段就等于删掉它。不可变字段与表单没建模的
+  // 字段（iops 这类扩展容量、status、uid）都必须原样带过去。
+  it('只改表单里的可变字段，其余原样保留', () => {
+    const existing = livePV()
+    const updated = pvUpdateFromForm(
+      form({
+        capacity: '20Gi',
+        accessModes: ['ReadWriteMany'],
+        reclaimPolicy: 'Delete',
+        mountOptions: 'noatime,nodiratime',
+      }),
+      existing
+    )
+
+    const spec = updated.spec as Record<string, unknown>
+    expect(spec.capacity).toEqual({ storage: '20Gi', iops: '3000' })
+    expect(spec.accessModes).toEqual(['ReadWriteMany'])
+    expect(spec.persistentVolumeReclaimPolicy).toBe('Delete')
+    expect(spec.mountOptions).toEqual(['noatime', 'nodiratime'])
+    // 不可变的来源与卷模式、以及绑定语义相关字段都没动。
+    expect(spec.volumeMode).toBe('Filesystem')
+    expect(spec.storageClassName).toBe('fast-ssd')
+    expect(spec.claimRef).toEqual({ namespace: 'dev', name: 'data' })
+    expect(spec.hostPath).toEqual({
+      path: '/data/volumes/pv-1',
+      type: 'Directory',
+    })
+    expect(updated.metadata?.labels).toEqual({ keep: 'me' })
+    expect(updated.metadata?.annotations).toEqual({
+      'kite.internal/note': 'keep me',
+    })
+    expect(updated.status?.phase).toBe('Bound')
+  })
+
+  it('清空挂载参数就是删掉它', () => {
+    const updated = pvUpdateFromForm(form({ mountOptions: '' }), livePV())
+    expect(
+      (updated.spec as Record<string, unknown>).mountOptions
+    ).toBeUndefined()
   })
 })

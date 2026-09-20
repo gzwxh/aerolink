@@ -1098,6 +1098,7 @@
   },
   "pvCreate": {
     "pageTitle": "PersistentVolume: Create",
+    "editPageTitle": "PersistentVolume: Edit",
     "name": "Name",
     "capacity": "Capacity",
     "capacityHint": "Units such as Ki/Mi/Gi/Ti are supported, e.g. 10Gi. A bare number is bytes (10 means 10 bytes).",
@@ -1138,10 +1139,15 @@
     "claimRefNamespace": "Namespace",
     "claimRefName": "PVC name",
     "claimRefHint": "Give both the namespace and the PVC name to lock this volume to that claim (claimRef). Fill both or neither.",
-    "claimRefIncomplete": "Pre-binding needs both the namespace and the PVC name"
+    "claimRefIncomplete": "Pre-binding needs both the namespace and the PVC name",
+    "noUpdatePermission": "You do not have permission to update PersistentVolumes.",
+    "editHint": "Only capacity (increase), access modes, reclaim policy and mount options can be edited; the volume source, volume mode, storage class and pre-binding are immutable after creation and are greyed out below.",
+    "unsupportedSource": "This volume uses a source type the form does not support (hostPath / local / nfs / csi), so the source fields cannot be shown; use the YAML tab to change it.",
+    "yamlTabEditHint": "This YAML is generated from the form. In edit mode the mutable form fields are saved and the YAML is read-only; use the detail page YAML tab to change immutable fields."
   },
   "storageClassCreate": {
     "pageTitle": "StorageClass: Create",
+    "editPageTitle": "StorageClass: Edit",
     "name": "Name",
     "nameHint": "Names must follow DNS subdomain rules (lowercase letters, digits, - and .).",
     "provisioner": "Provisioner",
@@ -1166,7 +1172,10 @@
     "duplicateParameters": "Duplicate parameter names: {{keys}}. Only the last row with the same name is kept — merge or rename them.",
     "allowedTopologies": "Allowed topologies (optional)",
     "allowedTopologiesHint": "One per line, written as key=value1,value2 (e.g. topology.kubernetes.io/zone=cn-south-1a). Empty means unrestricted; use the YAML editor below for several expressions inside one term.",
-    "invalidTopologies": "Invalid lines: {{lines}}. Each line looks like topology.kubernetes.io/zone=cn-south-1a."
+    "invalidTopologies": "Invalid lines: {{lines}}. Each line looks like topology.kubernetes.io/zone=cn-south-1a.",
+    "editHint": "Only volume expansion, the default-class annotation, mount options and allowed topologies can be edited; provisioner, parameters, reclaim policy and volume binding mode are immutable after creation and are greyed out below.",
+    "complexTopologies": "This StorageClass has several match expressions in one allowedTopologies term, which the single-line form cannot express; saving keeps it unchanged, use the YAML tab to change it.",
+    "yamlTabEditHint": "This YAML is generated from the form. In edit mode the mutable form fields are saved and the YAML is read-only; use the detail page YAML tab to change immutable fields."
   },
   "nsDelete": {
     "title": "Delete namespace {{name}}?",
@@ -3289,6 +3298,7 @@
   "accountSettings": {
     "title": "Account Settings",
     "profile": {
+      "avatarUrlHint": "Use a direct image URL; GitHub page links are converted to raw links automatically.",
       "nickname": "Nickname",
       "saveButton": "Save",
       "saved": "Saved",

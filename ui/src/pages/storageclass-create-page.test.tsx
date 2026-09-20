@@ -37,6 +37,9 @@ vi.mock('@/components/simple-yaml-editor', () => ({
 const applyResource = vi.fn()
 vi.mock('@/lib/api', () => ({
   applyResource: (...args: unknown[]) => applyResource(...args),
+  // 编辑模式才会用到；创建模式下页面不读它，给 undefined 即可。
+  useResource: () => ({ data: undefined }),
+  updateResource: vi.fn(),
 }))
 
 vi.mock('sonner', () => ({

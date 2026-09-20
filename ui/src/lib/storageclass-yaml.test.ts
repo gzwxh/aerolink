@@ -1,15 +1,20 @@
 import * as yaml from 'js-yaml'
+import { StorageClass } from 'kubernetes-types/storage/v1'
 import { describe, expect, it } from 'vitest'
 
 import {
   defaultClassAnnotation,
   findDuplicateParameterKeys,
+  formatAllowedTopologies,
+  formFromStorageClass,
   generateStorageClassYaml,
   initialData,
+  isSimpleTopologies,
   parseAllowedTopologies,
   parseMountOptions,
   resolveVolumeBindingMode,
   staticProvisioner,
+  storageClassUpdateFromForm,
   type ParameterRow,
   type StorageClassFormData,
 } from './storageclass-yaml'
@@ -189,5 +194,149 @@ describe('findDuplicateParameterKeys', () => {
     expect(findDuplicateParameterKeys([row('a'), row('a'), row('a')])).toEqual(
       new Set(['a'])
     )
+  })
+})
+
+/** 一个「线上」的 StorageClass：provisioner/parameters 都是不可变的。 */
+const liveStorageClass = (): StorageClass =>
+  ({
+    apiVersion: 'storage.k8s.io/v1',
+    kind: 'StorageClass',
+    metadata: {
+      name: 'fast-ssd',
+      uid: 'uid-1',
+      labels: { keep: 'me' },
+      annotations: { 'kite.internal/note': 'keep me' },
+    },
+    provisioner: 'rancher.io/local-path',
+    reclaimPolicy: 'Delete',
+    volumeBindingMode: 'Immediate',
+    allowVolumeExpansion: true,
+    parameters: { server: 'nfs.internal', share: '/data' },
+    mountOptions: ['noatime'],
+    allowedTopologies: [
+      {
+        matchLabelExpressions: [
+          { key: 'topology.kubernetes.io/zone', values: ['a'] },
+        ],
+      },
+    ],
+  }) as unknown as StorageClass
+
+describe('StorageClass 编辑（只放行可变字段）', () => {
+  it('线上对象预填回表单', () => {
+    const data = formFromStorageClass(liveStorageClass())
+    expect(data.name).toBe('fast-ssd')
+    expect(data.provisioner).toBe('rancher.io/local-path')
+    expect(data.reclaimPolicy).toBe('Delete')
+    expect(data.volumeBindingMode).toBe('Immediate')
+    expect(data.allowVolumeExpansion).toBe(true)
+    expect(data.mountOptions).toBe('noatime')
+    expect(data.allowedTopologies).toBe('topology.kubernetes.io/zone=a')
+    expect(data.parameters).toEqual([
+      { key: 'server', value: 'nfs.internal' },
+      { key: 'share', value: '/data' },
+    ])
+  })
+
+  // 实测：provisioner / parameters / reclaimPolicy / volumeBindingMode 全部
+  // `Forbidden: updates to ... are forbidden`。这四个一个字都不能进请求体。
+  it('provisioner、parameters、回收策略与绑定模式都不动', () => {
+    const existing = liveStorageClass()
+    const data = formFromStorageClass(existing)
+    const updated = storageClassUpdateFromForm(
+      {
+        ...data,
+        // 就算表单里被改过（理论上不可能，字段已置灰），也不该提交出去。
+        provisioner: 'csi.example.com',
+        reclaimPolicy: 'Retain',
+        volumeBindingMode: 'WaitForFirstConsumer',
+        parameters: [{ key: 'server', value: 'hacked' }],
+      },
+      existing
+    )
+
+    expect(updated.provisioner).toBe('rancher.io/local-path')
+    expect(updated.reclaimPolicy).toBe('Delete')
+    expect(updated.volumeBindingMode).toBe('Immediate')
+    expect(updated.parameters).toEqual({
+      server: 'nfs.internal',
+      share: '/data',
+    })
+  })
+
+  it('可变字段按表单生效，清空即删除', () => {
+    const existing = liveStorageClass()
+    const data = formFromStorageClass(existing)
+
+    const updated = storageClassUpdateFromForm(
+      {
+        ...data,
+        allowVolumeExpansion: false,
+        mountOptions: '',
+        allowedTopologies: '',
+      },
+      existing
+    )
+    expect(updated.allowVolumeExpansion).toBe(false)
+    expect(updated.mountOptions).toBeUndefined()
+    expect(updated.allowedTopologies).toBeUndefined()
+    // 元数据（标签、我们自己的注解）不能被清掉。
+    expect(updated.metadata?.labels).toEqual({ keep: 'me' })
+    expect(updated.metadata?.annotations?.['kite.internal/note']).toBe(
+      'keep me'
+    )
+  })
+
+  it('默认类注解能加上也能去掉', () => {
+    const existing = liveStorageClass()
+    const data = formFromStorageClass(existing)
+
+    const asDefault = storageClassUpdateFromForm(
+      { ...data, isDefault: true },
+      existing
+    )
+    expect(asDefault.metadata?.annotations?.[defaultClassAnnotation]).toBe(
+      'true'
+    )
+
+    const notDefault = storageClassUpdateFromForm(
+      { ...data, isDefault: false },
+      {
+        ...existing,
+        metadata: {
+          ...existing.metadata,
+          annotations: { [defaultClassAnnotation]: 'true' },
+        },
+      }
+    )
+    expect(
+      notDefault.metadata?.annotations?.[defaultClassAnnotation]
+    ).toBeUndefined()
+  })
+
+  // 一个 term 里多个表达式表达不出那行简写：解析出空 terms 时不能把线上的拓扑清掉。
+  it('复杂拓扑在表单里表达不出来时保持线上原值', () => {
+    const complex = {
+      ...liveStorageClass(),
+      allowedTopologies: [
+        {
+          matchLabelExpressions: [
+            { key: 'a', values: ['1'] },
+            { key: 'b', values: ['2'] },
+          ],
+        },
+      ],
+    } as StorageClass
+    expect(formatAllowedTopologies(complex.allowedTopologies)).toBe('')
+    expect(isSimpleTopologies(complex)).toBe(false)
+    expect(isSimpleTopologies(liveStorageClass())).toBe(true)
+
+    const updated = storageClassUpdateFromForm(
+      formFromStorageClass(complex),
+      complex,
+      { keepExistingTopologies: true }
+    )
+    expect(updated.allowedTopologies).toEqual(complex.allowedTopologies)
   })
 })

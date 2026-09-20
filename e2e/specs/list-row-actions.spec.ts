@@ -126,6 +126,27 @@ spec:
           image: ${PREPULLED_IMAGE}
           command: ["/bin/false"]
 `,
+  persistentvolumes: (name) => `apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ${name}
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/volumes/${name}
+    type: DirectoryOrCreate
+`,
+  storageclasses: (name) => `apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ${name}
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+`,
   services: (name) => `apiVersion: v1
 kind: Service
 metadata:
@@ -172,14 +193,21 @@ async function seed(
   )
 }
 
+/** 集群级资源（PV / StorageClass）的 API 路径是 /:kind/_all/:name，没有命名空间段。 */
+const clusterScopedKinds = new Set<RowActionKind>([
+  'persistentvolumes',
+  'storageclasses',
+])
+
 async function remove(
   request: APIRequestContext,
   kind: RowActionKind,
   name: string
 ) {
-  await request
-    .delete(`${clusterPath}/${kind}/${namespace}/${name}`)
-    .catch(() => undefined)
+  const path = clusterScopedKinds.has(kind)
+    ? `${clusterPath}/${kind}/_all/${name}`
+    : `${clusterPath}/${kind}/${namespace}/${name}`
+  await request.delete(path).catch(() => undefined)
 }
 
 test.describe('list row actions', () => {
@@ -196,65 +224,70 @@ test.describe('list row actions', () => {
         await expect(
           page.getByRole('columnheader', { name: 'Actions' })
         ).toBeVisible()
+        // 必须是最右一列：曾经被插到「创建时间」前面过。
+        await expect(page.getByRole('columnheader').last()).toHaveText(
+          'Actions'
+        )
       } finally {
         await remove(request, kind, name)
       }
     })
   }
 
-  test('a Service is edited straight from the list actions menu', async ({
-    page,
-    request,
-  }) => {
-    const name = uniqueName('services')
-    try {
-      await seed(request, 'services', name)
+  // 「从列表的操作菜单进编辑页」：四种资源的编辑页路由与身份字段各不相同，
+  // 差异都放在这张表里，用例本身只有一条。集群级资源（PV / StorageClass）的
+  // 编辑路径没有命名空间段，这是最容易写错的地方。
+  // search 是列表搜索框里的名字（取的是 catalog 的 pluralLabel，带空格），
+  // identity 是编辑页里那个被锁定的名称输入框的 placeholder。
+  const editFromList = [
+    { kind: 'deployments', search: 'Deployments', identity: 'unique-name' },
+    { kind: 'services', search: 'Services', identity: 'my-service' },
+    {
+      kind: 'persistentvolumes',
+      search: 'Persistent Volumes',
+      identity: 'pv-data-01',
+    },
+    {
+      kind: 'storageclasses',
+      search: 'Storage Classes',
+      identity: 'fast-ssd',
+    },
+  ] as const
 
-      await page.goto('/services')
-      await page.getByPlaceholder('Search Services or app=nginx...').fill(name)
+  for (const { kind, search, identity } of editFromList) {
+    test(`a ${kind} record is edited straight from the list actions menu`, async ({
+      page,
+      request,
+    }) => {
+      const name = uniqueName(kind)
+      try {
+        await seed(request, kind, name)
+        await page.goto(`/${kind}`)
+        // 用列表自带的搜索定位这一行，不依赖排序与分页。
+        await page
+          .getByPlaceholder(`Search ${search} or app=nginx...`)
+          .fill(name)
 
-      const row = page.getByRole('row').filter({ hasText: name })
-      await expect(row).toBeVisible()
+        const row = page.getByRole('row').filter({ hasText: name })
+        await expect(row).toBeVisible()
 
-      await row.getByRole('button', { name: 'Actions' }).click()
-      await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
+        await row.getByRole('button', { name: 'Actions' }).click()
+        // exact：菜单里还有「修改镜像」（Edit image）这类同名开头的项。
+        await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
 
-      await page.waitForURL(`**/services/${namespace}/${name}/edit`)
-      // 进的是编辑模式：身份字段来自线上对象且被锁定。
-      const nameInput = page.getByPlaceholder('my-service')
-      await expect(nameInput).toHaveValue(name)
-      await expect(nameInput).toBeDisabled()
-    } finally {
-      await remove(request, 'services', name)
-    }
-  })
+        // 集群级资源没有命名空间段。
+        const expected = ['persistentvolumes', 'storageclasses'].includes(kind)
+          ? `**/${kind}/${name}/edit`
+          : `**/${kind}/${namespace}/${name}/edit`
+        await page.waitForURL(expected)
 
-  test('a Deployment is edited straight from the list actions menu', async ({
-    page,
-    request,
-  }) => {
-    const name = uniqueName('deployments')
-    try {
-      await seed(request, 'deployments', name)
-
-      await page.goto('/deployments')
-      // 用列表自带的搜索定位这一行，不依赖排序与分页。
-      await page
-        .getByPlaceholder('Search Deployments or app=nginx...')
-        .fill(name)
-
-      const row = page.getByRole('row').filter({ hasText: name })
-      await expect(row).toBeVisible()
-
-      await row.getByRole('button', { name: 'Actions' }).click()
-      // exact：同一个菜单里还有「修改镜像」（Edit image）。
-      await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
-
-      await page.waitForURL(`**/deployments/${namespace}/${name}/edit`)
-      // 进的是编辑模式而不是创建模式：身份字段来自线上对象且被锁定。
-      await expect(page.getByPlaceholder('unique-name')).toHaveValue(name)
-    } finally {
-      await remove(request, 'deployments', name)
-    }
-  })
+        // 进的是编辑模式：身份字段来自线上对象且被锁定。
+        const input = page.getByPlaceholder(identity, { exact: true })
+        await expect(input).toHaveValue(name)
+        await expect(input).toBeDisabled()
+      } finally {
+        await remove(request, kind, name)
+      }
+    })
+  }
 })

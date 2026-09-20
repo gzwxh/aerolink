@@ -257,7 +257,15 @@ export const router = createBrowserRouter(
           element: <PVCreatePage />,
         },
         {
+          path: 'persistentvolumes/:name/edit',
+          element: <PVCreatePage />,
+        },
+        {
           path: 'storageclasses/create',
+          element: <StorageClassCreatePage />,
+        },
+        {
+          path: 'storageclasses/:name/edit',
           element: <StorageClassCreatePage />,
         },
         {

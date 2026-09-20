@@ -1,20 +1,28 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { applyResource, useResources } from '@/lib/api'
+import {
+  applyResource,
+  updateResource,
+  useResource,
+  useResources,
+} from '@/lib/api'
 import {
   accessModeOptions,
   capacityPattern,
+  formFromPV,
   generatePVYaml,
   hasPartialClaimRef,
   hostPathTypeOptions,
   initialData,
+  pvUpdateFromForm,
   reclaimPolicyOptions,
+  volumeSourceOf,
   type PVFormData,
   type ReclaimPolicy,
   type VolumeMode,
@@ -42,22 +50,44 @@ export function PVCreatePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { name: editName } = useParams()
   const can = useCan()
+  const isEdit = Boolean(editName)
 
   const [formData, setFormData] = useState<PVFormData>(initialData)
   const [editedYaml, setEditedYaml] = useState('')
-  const [formSnapshot] = useState(() =>
+  const [formSnapshot, setFormSnapshot] = useState(() =>
     JSON.stringify({ formData, editedYaml })
   )
   useUnsavedEdits(JSON.stringify({ formData, editedYaml }) !== formSnapshot)
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  const pageTitle = t('pvCreate.pageTitle', 'PersistentVolume：创建')
+  const pageTitle = isEdit
+    ? t('pvCreate.editPageTitle', 'PersistentVolume：编辑')
+    : t('pvCreate.pageTitle', 'PersistentVolume：创建')
   usePageTitle(pageTitle)
 
-  // 集群级资源，没有命名空间可限定权限范围。
-  const canCreate = can('persistentvolumes', 'create')
+  // 编辑模式：读回线上对象预填（只在线上对象变化时重填，免得冲掉正在编辑的内容）。
+  const { data: existing } = useResource(
+    'persistentvolumes',
+    editName || '',
+    undefined,
+    { enabled: isEdit }
+  )
+  useEffect(() => {
+    if (!existing) return
+    const next = formFromPV(existing)
+    setFormData(next)
+    setFormSnapshot(JSON.stringify({ formData: next, editedYaml: '' }))
+  }, [existing])
+
+  // 集群级资源，没有命名空间可限定权限范围；改写已存在的对象用的是 update。
+  const canCreate = can('persistentvolumes', isEdit ? 'update' : 'create')
+
+  // 线上卷的来源类型；表单只支持四种，其余（rbd、iscsi…）在编辑模式下只能提示去 YAML 改。
+  const liveSource = existing ? volumeSourceOf(existing) : null
+  const unsupportedSource = isEdit && existing && liveSource === null
 
   // 供「存储类」下拉选择已有 StorageClass（也可手填）。
   const { data: storageClasses = [] } = useResources('storageclasses')
@@ -170,14 +200,29 @@ export function PVCreatePage() {
     setCreateError(null)
     try {
       // 集群级资源不传命名空间。
-      await applyResource(finalYaml)
-      await queryClient.invalidateQueries({ queryKey: ['persistentvolumes'] })
-      toast.success(
-        t('pvCreate.created', 'PersistentVolume {{name}} 已创建', {
-          name: formData.name.trim(),
-        })
-      )
-      navigate('/persistentvolumes')
+      if (isEdit && existing) {
+        // 只提交表单里真正可变的那几项，其余从线上对象带过去。
+        await updateResource(
+          'persistentvolumes',
+          existing.metadata?.name || formData.name,
+          undefined,
+          pvUpdateFromForm(formData, existing)
+        )
+        await queryClient.invalidateQueries({ queryKey: ['persistentvolumes'] })
+        toast.success(
+          t('common.messages.updated', { resource: 'PersistentVolume' })
+        )
+        navigate(`/persistentvolumes/${existing.metadata?.name || ''}`)
+      } else {
+        await applyResource(finalYaml)
+        await queryClient.invalidateQueries({ queryKey: ['persistentvolumes'] })
+        toast.success(
+          t('pvCreate.created', 'PersistentVolume {{name}} 已创建', {
+            name: formData.name.trim(),
+          })
+        )
+        navigate('/persistentvolumes')
+      }
     } catch (err) {
       setCreateError(translateError(err, t))
     } finally {
@@ -220,6 +265,7 @@ export function PVCreatePage() {
                 onChange={(e) => update({ name: e.target.value })}
                 placeholder="pv-data-01"
                 className="h-9"
+                disabled={isEdit}
               />
             </div>
 
@@ -302,63 +348,83 @@ export function PVCreatePage() {
           </div>
 
           <div className="space-y-4 rounded-md border p-3 lg:col-span-2">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">
-                  {t('pvCreate.storageClassName', '存储类')}
-                </Label>
-                <Select
-                  value={formData.storageClassName || '__none__'}
-                  onValueChange={(v) =>
-                    update({
-                      storageClassName: v === '__none__' ? '' : v,
-                    })
-                  }
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">
-                      {t('pvCreate.storageClassNone', '（不指定）')}
-                    </SelectItem>
-                    {storageClasses.map((sc) => (
-                      <SelectItem
-                        key={sc.metadata?.name}
-                        value={sc.metadata?.name || ''}
-                      >
-                        {sc.metadata?.name}
+            {isEdit && (
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'pvCreate.editHint',
+                  '编辑时只能改容量（只增）、访问模式、回收策略与挂载参数；卷来源、卷模式、存储类与预绑定创建后不可变，下方已置灰。'
+                )}
+              </p>
+            )}
+            {unsupportedSource && (
+              <p className="text-xs text-destructive">
+                {t(
+                  'pvCreate.unsupportedSource',
+                  '这个卷的来源类型不在表单支持范围内（hostPath / local / nfs / csi），下方来源字段无法显示；如需修改请用「查看 YAML」标签页。'
+                )}
+              </p>
+            )}
+            {/* 不可变字段统一禁用：置灰比藏起来好——值还能看见，也不会让人白填一遍。
+                编辑时提交的值由 pvUpdateFromForm 只取可变字段，这里的输入不会进请求体。 */}
+            <fieldset disabled={isEdit} className="m-0 min-w-0 border-0 p-0">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t('pvCreate.storageClassName', '存储类')}
+                  </Label>
+                  <Select
+                    value={formData.storageClassName || '__none__'}
+                    onValueChange={(v) =>
+                      update({
+                        storageClassName: v === '__none__' ? '' : v,
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        {t('pvCreate.storageClassNone', '（不指定）')}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                      {storageClasses.map((sc) => (
+                        <SelectItem
+                          key={sc.metadata?.name}
+                          value={sc.metadata?.name || ''}
+                        >
+                          {sc.metadata?.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">
-                  {t('pvCreate.volumeMode', '卷模式')}
-                </Label>
-                <Select
-                  value={formData.volumeMode || '__none__'}
-                  onValueChange={(v) =>
-                    update({
-                      volumeMode: v === '__none__' ? '' : (v as VolumeMode),
-                    })
-                  }
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Filesystem">Filesystem</SelectItem>
-                    <SelectItem value="Block">Block</SelectItem>
-                    <SelectItem value="__none__">
-                      {t('pvCreate.volumeModeDefault', '（默认）')}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t('pvCreate.volumeMode', '卷模式')}
+                  </Label>
+                  <Select
+                    value={formData.volumeMode || '__none__'}
+                    onValueChange={(v) =>
+                      update({
+                        volumeMode: v === '__none__' ? '' : (v as VolumeMode),
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Filesystem">Filesystem</SelectItem>
+                      <SelectItem value="Block">Block</SelectItem>
+                      <SelectItem value="__none__">
+                        {t('pvCreate.volumeModeDefault', '（默认）')}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
+            </fieldset>
 
             <div className="space-y-1.5">
               <Label className="text-xs">
@@ -378,257 +444,270 @@ export function PVCreatePage() {
               </p>
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">
-                  {t('pvCreate.sourceType', '卷来源')} *
-                </Label>
-                <Select
-                  value={formData.sourceType}
-                  onValueChange={(v) =>
-                    update({ sourceType: v as VolumeSourceType })
-                  }
-                >
-                  <SelectTrigger className="h-9 w-full md:w-72">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hostPath">
-                      HostPath（节点本地目录）
-                    </SelectItem>
-                    <SelectItem value="local">Local（本地卷）</SelectItem>
-                    <SelectItem value="nfs">NFS（网络文件系统）</SelectItem>
-                    <SelectItem value="csi">CSI（存储驱动）</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {formData.sourceType === 'hostPath' && (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.hostPathPath', '节点路径')} *
-                    </Label>
-                    <Input
-                      value={formData.hostPathPath}
-                      onChange={(e) => update({ hostPathPath: e.target.value })}
-                      placeholder="/data/volumes/pv-data-01"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.hostPathType', '路径类型')}
-                    </Label>
-                    <Select
-                      value={formData.hostPathType || '__none__'}
-                      onValueChange={(v) =>
-                        update({ hostPathType: v === '__none__' ? '' : v })
-                      }
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {hostPathTypeOptions.map((type) => (
-                          <SelectItem
-                            key={type || '__none__'}
-                            value={type || '__none__'}
-                          >
-                            {type ||
-                              t('pvCreate.hostPathTypeNone', '（不指定）')}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              )}
-
-              {formData.sourceType === 'local' && (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.localPath', '本地路径')} *
-                    </Label>
-                    <Input
-                      value={formData.localPath}
-                      onChange={(e) => update({ localPath: e.target.value })}
-                      placeholder="/mnt/disks/ssd1"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.localNodeName', '所在节点')} *
-                    </Label>
-                    <Input
-                      value={formData.localNodeName}
-                      onChange={(e) =>
-                        update({ localNodeName: e.target.value })
-                      }
-                      placeholder="node-1"
-                      className="h-9"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {t(
-                        'pvCreate.localNodeHint',
-                        '用于生成 nodeAffinity（kubernetes.io/hostname）。'
-                      )}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {formData.sourceType === 'nfs' && (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.nfsServer', 'NFS 服务器')} *
-                    </Label>
-                    <Input
-                      value={formData.nfsServer}
-                      onChange={(e) => update({ nfsServer: e.target.value })}
-                      placeholder="10.0.0.10"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.nfsPath', '共享路径')} *
-                    </Label>
-                    <Input
-                      value={formData.nfsPath}
-                      onChange={(e) => update({ nfsPath: e.target.value })}
-                      placeholder="/exports/data"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 md:col-span-2">
-                    <Checkbox
-                      id="pv-nfs-readonly"
-                      checked={formData.nfsReadOnly}
-                      onCheckedChange={(checked) =>
-                        update({ nfsReadOnly: checked === true })
-                      }
-                    />
-                    <Label
-                      htmlFor="pv-nfs-readonly"
-                      className="text-xs font-normal"
-                    >
-                      {t('pvCreate.readOnly', '只读挂载')}
-                    </Label>
-                  </div>
-                </div>
-              )}
-
-              {formData.sourceType === 'csi' && (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.csiDriver', '驱动名称')} *
-                    </Label>
-                    <Input
-                      value={formData.csiDriver}
-                      onChange={(e) => update({ csiDriver: e.target.value })}
-                      placeholder="disk.csi.azure.com"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.csiVolumeHandle', '卷标识')} *
-                    </Label>
-                    <Input
-                      value={formData.csiVolumeHandle}
-                      onChange={(e) =>
-                        update({ csiVolumeHandle: e.target.value })
-                      }
-                      placeholder="vol-0123456789"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {t('pvCreate.csiFsType', '文件系统类型')}
-                    </Label>
-                    <Input
-                      value={formData.csiFsType}
-                      onChange={(e) => update({ csiFsType: e.target.value })}
-                      placeholder="ext4"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 md:pt-6">
-                    <Checkbox
-                      id="pv-csi-readonly"
-                      checked={formData.csiReadOnly}
-                      onCheckedChange={(checked) =>
-                        update({ csiReadOnly: checked === true })
-                      }
-                    />
-                    <Label
-                      htmlFor="pv-csi-readonly"
-                      className="text-xs font-normal"
-                    >
-                      {t('pvCreate.readOnly', '只读挂载')}
-                    </Label>
-                  </div>
-                </div>
-              )}
-
-              {fieldError.source && (
-                <p className="text-xs text-destructive">{fieldError.source}</p>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">
-                  {t('pvCreate.claimRef', '预绑定到 PVC（可选）')}
-                </Label>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Input
-                    value={formData.claimRefNamespace}
-                    onChange={(e) =>
-                      update({ claimRefNamespace: e.target.value })
+            <fieldset disabled={isEdit} className="m-0 min-w-0 border-0 p-0">
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t('pvCreate.sourceType', '卷来源')} *
+                  </Label>
+                  <Select
+                    value={formData.sourceType}
+                    onValueChange={(v) =>
+                      update({ sourceType: v as VolumeSourceType })
                     }
-                    placeholder={t('pvCreate.claimRefNamespace', '命名空间')}
-                    className={
-                      'h-9 ' + (fieldError.claimRef ? 'border-destructive' : '')
-                    }
-                  />
-                  <Input
-                    value={formData.claimRefName}
-                    onChange={(e) => update({ claimRefName: e.target.value })}
-                    placeholder={t('pvCreate.claimRefName', 'PVC 名称')}
-                    className={
-                      'h-9 ' + (fieldError.claimRef ? 'border-destructive' : '')
-                    }
-                  />
+                  >
+                    <SelectTrigger className="h-9 w-full md:w-72">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hostPath">
+                        HostPath（节点本地目录）
+                      </SelectItem>
+                      <SelectItem value="local">Local（本地卷）</SelectItem>
+                      <SelectItem value="nfs">NFS（网络文件系统）</SelectItem>
+                      <SelectItem value="csi">CSI（存储驱动）</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {t(
-                    'pvCreate.claimRefHint',
-                    '填上命名空间与 PVC 名称，就把这个卷锁定给该声明（claimRef）。两个要一起填；留空则不预绑定。'
-                  )}
-                </p>
-                {fieldError.claimRef && (
+
+                {formData.sourceType === 'hostPath' && (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.hostPathPath', '节点路径')} *
+                      </Label>
+                      <Input
+                        value={formData.hostPathPath}
+                        onChange={(e) =>
+                          update({ hostPathPath: e.target.value })
+                        }
+                        placeholder="/data/volumes/pv-data-01"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.hostPathType', '路径类型')}
+                      </Label>
+                      <Select
+                        value={formData.hostPathType || '__none__'}
+                        onValueChange={(v) =>
+                          update({ hostPathType: v === '__none__' ? '' : v })
+                        }
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {hostPathTypeOptions.map((type) => (
+                            <SelectItem
+                              key={type || '__none__'}
+                              value={type || '__none__'}
+                            >
+                              {type ||
+                                t('pvCreate.hostPathTypeNone', '（不指定）')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {formData.sourceType === 'local' && (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.localPath', '本地路径')} *
+                      </Label>
+                      <Input
+                        value={formData.localPath}
+                        onChange={(e) => update({ localPath: e.target.value })}
+                        placeholder="/mnt/disks/ssd1"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.localNodeName', '所在节点')} *
+                      </Label>
+                      <Input
+                        value={formData.localNodeName}
+                        onChange={(e) =>
+                          update({ localNodeName: e.target.value })
+                        }
+                        placeholder="node-1"
+                        className="h-9"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {t(
+                          'pvCreate.localNodeHint',
+                          '用于生成 nodeAffinity（kubernetes.io/hostname）。'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.sourceType === 'nfs' && (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.nfsServer', 'NFS 服务器')} *
+                      </Label>
+                      <Input
+                        value={formData.nfsServer}
+                        onChange={(e) => update({ nfsServer: e.target.value })}
+                        placeholder="10.0.0.10"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.nfsPath', '共享路径')} *
+                      </Label>
+                      <Input
+                        value={formData.nfsPath}
+                        onChange={(e) => update({ nfsPath: e.target.value })}
+                        placeholder="/exports/data"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 md:col-span-2">
+                      <Checkbox
+                        id="pv-nfs-readonly"
+                        checked={formData.nfsReadOnly}
+                        onCheckedChange={(checked) =>
+                          update({ nfsReadOnly: checked === true })
+                        }
+                      />
+                      <Label
+                        htmlFor="pv-nfs-readonly"
+                        className="text-xs font-normal"
+                      >
+                        {t('pvCreate.readOnly', '只读挂载')}
+                      </Label>
+                    </div>
+                  </div>
+                )}
+
+                {formData.sourceType === 'csi' && (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.csiDriver', '驱动名称')} *
+                      </Label>
+                      <Input
+                        value={formData.csiDriver}
+                        onChange={(e) => update({ csiDriver: e.target.value })}
+                        placeholder="disk.csi.azure.com"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.csiVolumeHandle', '卷标识')} *
+                      </Label>
+                      <Input
+                        value={formData.csiVolumeHandle}
+                        onChange={(e) =>
+                          update({ csiVolumeHandle: e.target.value })
+                        }
+                        placeholder="vol-0123456789"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t('pvCreate.csiFsType', '文件系统类型')}
+                      </Label>
+                      <Input
+                        value={formData.csiFsType}
+                        onChange={(e) => update({ csiFsType: e.target.value })}
+                        placeholder="ext4"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 md:pt-6">
+                      <Checkbox
+                        id="pv-csi-readonly"
+                        checked={formData.csiReadOnly}
+                        onCheckedChange={(checked) =>
+                          update({ csiReadOnly: checked === true })
+                        }
+                      />
+                      <Label
+                        htmlFor="pv-csi-readonly"
+                        className="text-xs font-normal"
+                      >
+                        {t('pvCreate.readOnly', '只读挂载')}
+                      </Label>
+                    </div>
+                  </div>
+                )}
+
+                {fieldError.source && (
                   <p className="text-xs text-destructive">
-                    {fieldError.claimRef}
+                    {fieldError.source}
                   </p>
                 )}
               </div>
-            </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t('pvCreate.claimRef', '预绑定到 PVC（可选）')}
+                  </Label>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <Input
+                      value={formData.claimRefNamespace}
+                      onChange={(e) =>
+                        update({ claimRefNamespace: e.target.value })
+                      }
+                      placeholder={t('pvCreate.claimRefNamespace', '命名空间')}
+                      className={
+                        'h-9 ' +
+                        (fieldError.claimRef ? 'border-destructive' : '')
+                      }
+                    />
+                    <Input
+                      value={formData.claimRefName}
+                      onChange={(e) => update({ claimRefName: e.target.value })}
+                      placeholder={t('pvCreate.claimRefName', 'PVC 名称')}
+                      className={
+                        'h-9 ' +
+                        (fieldError.claimRef ? 'border-destructive' : '')
+                      }
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'pvCreate.claimRefHint',
+                      '填上命名空间与 PVC 名称，就把这个卷锁定给该声明（claimRef）。两个要一起填；留空则不预绑定。'
+                    )}
+                  </p>
+                  {fieldError.claimRef && (
+                    <p className="text-xs text-destructive">
+                      {fieldError.claimRef}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </fieldset>
           </div>
         </div>
 
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            {t(
-              'workloadWizard.yamlTabHint',
-              '这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准创建；返回修改表单会重新生成。'
-            )}
+            {isEdit
+              ? t(
+                  'pvCreate.yamlTabEditHint',
+                  '这是由上方配置生成的 YAML。编辑模式下保存的是表单里的可变字段，YAML 仅供查看；要改不可变字段请用「查看 YAML」标签页。'
+                )
+              : t(
+                  'workloadWizard.yamlTabHint',
+                  '这是由上方配置生成的 YAML，可直接编辑。手动编辑后将以该 YAML 为准创建；返回修改表单会重新生成。'
+                )}
           </p>
           <div className="min-h-[300px] rounded-md border">
             <SimpleYamlEditor
@@ -652,10 +731,15 @@ export function PVCreatePage() {
 
       {!canCreate && (
         <div className="rounded-md border border-destructive/40 border-l-4 border-l-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {t(
-            'pvCreate.noCreatePermission',
-            '你没有创建 PersistentVolume 的权限。'
-          )}
+          {isEdit
+            ? t(
+                'pvCreate.noUpdatePermission',
+                '你没有修改 PersistentVolume 的权限。'
+              )
+            : t(
+                'pvCreate.noCreatePermission',
+                '你没有创建 PersistentVolume 的权限。'
+              )}
         </div>
       )}
 
@@ -668,7 +752,9 @@ export function PVCreatePage() {
         </Button>
         <Button onClick={handleCreate} disabled={isCreating || !canCreate}>
           {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {t('pvCreate.createButton', '创建 PersistentVolume')}
+          {isEdit
+            ? t('common.actions.save', '保存')
+            : t('pvCreate.createButton', '创建 PersistentVolume')}
         </Button>
       </div>
     </div>

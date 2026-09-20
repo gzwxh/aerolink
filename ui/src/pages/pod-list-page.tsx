@@ -128,17 +128,6 @@ export function PodListPage() {
           </div>
         ),
       }),
-      columnHelper.display({
-        id: 'actions',
-        header: () => (
-          <div className="text-right">{t('common.fields.actions')}</div>
-        ),
-        cell: ({ row }) => (
-          <div className="flex justify-end">
-            <ResourceRowActions resourceType="pods" resource={row.original} />
-          </div>
-        ),
-      }),
       columnHelper.accessor((row) => row.metadata?.creationTimestamp, {
         id: 'creationTimestamp',
         header: t('common.fields.created'),
@@ -155,6 +144,17 @@ export function PodListPage() {
             </Tooltip>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions resourceType="pods" resource={row.original} />
+          </div>
+        ),
       }),
     ],
     [t]

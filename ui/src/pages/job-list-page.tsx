@@ -113,6 +113,16 @@ export function JobListPage() {
           )
         },
       }),
+      columnHelper.accessor('metadata.creationTimestamp', {
+        header: t('common.fields.created'),
+        cell: ({ getValue }) => {
+          const dateStr = formatDate(getValue() || '')
+
+          return (
+            <span className="text-muted-foreground text-sm">{dateStr}</span>
+          )
+        },
+      }),
       columnHelper.display({
         id: 'actions',
         header: () => (
@@ -123,16 +133,6 @@ export function JobListPage() {
             <ResourceRowActions resourceType="jobs" resource={row.original} />
           </div>
         ),
-      }),
-      columnHelper.accessor('metadata.creationTimestamp', {
-        header: t('common.fields.created'),
-        cell: ({ getValue }) => {
-          const dateStr = formatDate(getValue() || '')
-
-          return (
-            <span className="text-muted-foreground text-sm">{dateStr}</span>
-          )
-        },
       }),
     ],
     [t]

@@ -90,20 +90,6 @@ export function CronJobListPage() {
         },
       }),
       columnHelper.display({
-        id: 'actions',
-        header: () => (
-          <div className="text-right">{t('common.fields.actions')}</div>
-        ),
-        cell: ({ row }) => (
-          <div className="flex justify-end">
-            <ResourceRowActions
-              resourceType="cronjobs"
-              resource={row.original}
-            />
-          </div>
-        ),
-      }),
-      columnHelper.display({
         id: 'lastSuccess',
         header: t('cronJobList.lastSuccess', 'Last Success'),
         cell: ({ row }) => {
@@ -117,6 +103,20 @@ export function CronJobListPage() {
             </span>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="cronjobs"
+              resource={row.original}
+            />
+          </div>
+        ),
       }),
     ],
     [t]

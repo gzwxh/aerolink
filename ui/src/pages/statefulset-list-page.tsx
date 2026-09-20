@@ -134,6 +134,16 @@ export function StatefulSetListPage() {
         header: t('common.fields.serviceName'),
         cell: ({ getValue }) => getValue() || '-',
       }),
+      columnHelper.accessor('metadata.creationTimestamp', {
+        header: t('common.fields.created'),
+        cell: ({ getValue }) => {
+          const dateStr = formatDate(getValue() || '')
+
+          return (
+            <span className="text-muted-foreground text-sm">{dateStr}</span>
+          )
+        },
+      }),
       columnHelper.display({
         id: 'actions',
         header: () => (
@@ -147,16 +157,6 @@ export function StatefulSetListPage() {
             />
           </div>
         ),
-      }),
-      columnHelper.accessor('metadata.creationTimestamp', {
-        header: t('common.fields.created'),
-        cell: ({ getValue }) => {
-          const dateStr = formatDate(getValue() || '')
-
-          return (
-            <span className="text-muted-foreground text-sm">{dateStr}</span>
-          )
-        },
       }),
     ],
     [t]

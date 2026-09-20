@@ -38,6 +38,9 @@ vi.mock('@/components/simple-yaml-editor', () => ({
 const applyResource = vi.fn()
 vi.mock('@/lib/api', () => ({
   applyResource: (...args: unknown[]) => applyResource(...args),
+  // 编辑模式才会用到；创建模式下页面不读它，给 undefined 即可。
+  useResource: () => ({ data: undefined }),
+  updateResource: vi.fn(),
   // 存储类下拉用；这里给一个已存在的类，页面不依赖它也能测。
   useResources: () => ({ data: [{ metadata: { name: 'hostpath' } }] }),
 }))

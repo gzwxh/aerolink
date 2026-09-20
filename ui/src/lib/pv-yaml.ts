@@ -1,4 +1,5 @@
 import * as yaml from 'js-yaml'
+import { PersistentVolume } from 'kubernetes-types/core/v1'
 
 import { parseMountOptions } from './mount-options'
 
@@ -184,4 +185,97 @@ export function generatePVYaml(data: PVFormData): string {
     { apiVersion: 'v1', kind: 'PersistentVolume', metadata, spec },
     { indent: 2, noRefs: true }
   )
+}
+
+/** 从线上 PV 的 spec 判断卷来源类型；表单不支持的来源返回 null（只读展示用）。 */
+export function volumeSourceOf(pv: PersistentVolume): VolumeSourceType | null {
+  const spec = pv.spec
+  if (!spec) return null
+  if (spec.hostPath) return 'hostPath'
+  if (spec.nfs) return 'nfs'
+  if (spec.local) return 'local'
+  if (spec.csi) return 'csi'
+  return null
+}
+
+/** 本地卷的节点名藏在 nodeAffinity 里（生成时就是那么写的），这里反着取回来。 */
+function localNodeNameOf(pv: PersistentVolume): string {
+  const terms = pv.spec?.nodeAffinity?.required?.nodeSelectorTerms ?? []
+  for (const term of terms) {
+    for (const expression of term.matchExpressions ?? []) {
+      if (
+        expression.key === 'kubernetes.io/hostname' &&
+        expression.values?.length
+      ) {
+        return expression.values.join(',')
+      }
+    }
+  }
+  return ''
+}
+
+/**
+ * 线上 PV → 表单。编辑模式下只有「容量 / 访问模式 / 回收策略 / 挂载参数」是可编辑的，
+ * 其余字段回填只是为了在界面上看得见（渲染成只读）。
+ */
+export function formFromPV(pv: PersistentVolume): PVFormData {
+  const spec = pv.spec || {}
+  return {
+    ...initialData,
+    name: pv.metadata?.name || '',
+    capacity: spec.capacity?.storage ? String(spec.capacity.storage) : '',
+    accessModes: (spec.accessModes || []).map((mode) => String(mode)),
+    reclaimPolicy:
+      (spec.persistentVolumeReclaimPolicy as ReclaimPolicy) || 'Retain',
+    storageClassName: spec.storageClassName || '',
+    volumeMode: (spec.volumeMode as VolumeMode) || 'Filesystem',
+    mountOptions: (spec.mountOptions || []).join(', '),
+    claimRefNamespace: spec.claimRef?.namespace || '',
+    claimRefName: spec.claimRef?.name || '',
+    sourceType: volumeSourceOf(pv) ?? initialData.sourceType,
+    hostPathPath: spec.hostPath?.path || '',
+    hostPathType: spec.hostPath?.type || '',
+    nfsServer: spec.nfs?.server || '',
+    nfsPath: spec.nfs?.path || '',
+    nfsReadOnly: spec.nfs?.readOnly === true,
+    localPath: spec.local?.path || '',
+    localNodeName: localNodeNameOf(pv),
+    csiDriver: spec.csi?.driver || '',
+    csiVolumeHandle: spec.csi?.volumeHandle || '',
+    csiFsType: spec.csi?.fsType || '',
+    csiReadOnly: spec.csi?.readOnly === true,
+  }
+}
+
+/**
+ * 编辑模式要提交的对象：只取表单里**真正可变**的那几项，其余全部从线上对象带过去。
+ *
+ * 可改范围是实测出来的（k8s 1.32，见 docs/dev/plans/2026-09-20-pv-sc-form-edit.md）：
+ *   ✓ capacity（可增）/ accessModes / persistentVolumeReclaimPolicy / mountOptions / 元数据
+ *   ✗ 卷来源（hostPath、nfs、csi…）：Forbidden: spec.persistentvolumesource ...
+ *   ✗ volumeMode：field is immutable
+ * 表单没建模的（iops 这类扩展容量、status、uid…）同样原样保留 —— PUT 是整体替换，
+ * 漏掉就等于删掉。
+ */
+export function pvUpdateFromForm(
+  data: PVFormData,
+  existing: PersistentVolume
+): PersistentVolume {
+  const spec: Record<string, unknown> = {
+    ...existing.spec,
+    // capacity 里可能还有 iops 这类扩展资源，只覆盖 storage 这一项。
+    capacity: { ...existing.spec?.capacity, storage: data.capacity.trim() },
+    accessModes: [...data.accessModes],
+    persistentVolumeReclaimPolicy: data.reclaimPolicy,
+  }
+
+  const mountOptions = parseMountOptions(data.mountOptions)
+  if (mountOptions.length > 0) {
+    spec.mountOptions = mountOptions
+  } else {
+    // 「清空」就是不要：沿用线上对象的话就永远删不掉。
+    delete spec.mountOptions
+  }
+
+  return { ...existing, spec } as PersistentVolume
 }
