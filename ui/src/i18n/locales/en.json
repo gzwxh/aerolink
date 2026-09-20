@@ -682,7 +682,7 @@
     "exposeInvalidPort": "Port must be between 1 and 65535",
     "exposeNoSelector": "No Deployment selector labels found to expose"
   },
-  "deploymentActions": {
+  "workloadActions": {
     "viewYaml": "View YAML",
     "viewYamlDescription": "Current YAML of {{name}} (read-only).",
     "editImage": "Edit image",

@@ -22,6 +22,7 @@ import { MetricCell } from '@/components/metrics-cell'
 import { NodeLink } from '@/components/node-link'
 import { PodStatusIcon } from '@/components/pod-status-icon'
 import { ResourceTable } from '@/components/resource-table'
+import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const podSearchFilter = createSearchFilter<Pod>(
   (p) => p.metadata?.name,
@@ -124,6 +125,17 @@ export function PodListPage() {
         cell: ({ row }) => (
           <div className="font-medium">
             <NodeLink name={row.original.spec?.nodeName} />
+          </div>
+        ),
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <WorkloadRowActions resourceType="pods" workload={row.original} />
           </div>
         ),
       }),

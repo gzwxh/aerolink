@@ -21,6 +21,7 @@ import {
   ResourceTable,
   type ResourceTableBatchAction,
 } from '@/components/resource-table'
+import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const daemonSetSearchFilter = createSearchFilter<DaemonSet>(
   (d) => d.metadata?.name,
@@ -110,6 +111,20 @@ export function DaemonSetListPage() {
           },
         }
       ),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <WorkloadRowActions
+              resourceType="daemonsets"
+              workload={row.original}
+            />
+          </div>
+        ),
+      }),
       columnHelper.accessor('metadata.creationTimestamp', {
         header: t('common.fields.created'),
         cell: ({ getValue }) => {

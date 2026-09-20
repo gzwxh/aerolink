@@ -682,7 +682,7 @@
     "exposeInvalidPort": "端口必须在 1 到 65535 之间",
     "exposeNoSelector": "Deployment 没有可用于暴露的 selector 标签"
   },
-  "deploymentActions": {
+  "workloadActions": {
     "viewYaml": "查看 YAML",
     "viewYamlDescription": "{{name}} 的当前 YAML 配置（只读）。",
     "editImage": "修改镜像版本",

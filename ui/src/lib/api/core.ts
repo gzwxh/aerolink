@@ -568,7 +568,10 @@ export const copyDebugPod = async (
   return apiClient.post(`/pods/${namespace}/${name}/debug-copy`, body)
 }
 
-type DeepPartial<T> = T extends object
+// DeepPartial 描述 patch 请求体：只提交要改的字段，其余不动。工作负载行的
+// 「修改镜像」菜单需要按资源类型拼出这个请求体（Pod 与 CronJob 的容器路径不同），
+// 因此把类型一并导出。
+export type DeepPartial<T> = T extends object
   ? {
       [P in keyof T]?: DeepPartial<T[P]>
     }

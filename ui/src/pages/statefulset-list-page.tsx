@@ -21,6 +21,7 @@ import {
   ResourceTable,
   type ResourceTableBatchAction,
 } from '@/components/resource-table'
+import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const statefulSetSearchFilter = createSearchFilter<StatefulSet>(
   (s) => s.metadata?.name,
@@ -132,6 +133,20 @@ export function StatefulSetListPage() {
       columnHelper.accessor('spec.serviceName', {
         header: t('common.fields.serviceName'),
         cell: ({ getValue }) => getValue() || '-',
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <WorkloadRowActions
+              resourceType="statefulsets"
+              workload={row.original}
+            />
+          </div>
+        ),
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
         header: t('common.fields.created'),

@@ -23,13 +23,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { DeploymentRowActions } from '@/components/deployment-row-actions'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
 import {
   ResourceTable,
   type ResourceTableBatchAction,
 } from '@/components/resource-table'
+import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const deploymentSearchFilter = createSearchFilter<Deployment>(
   (d) => d.metadata?.name,
@@ -295,7 +295,10 @@ export function DeploymentListPage() {
         ),
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <DeploymentRowActions deployment={row.original} />
+            <WorkloadRowActions
+              resourceType="deployments"
+              workload={row.original}
+            />
           </div>
         ),
       }),

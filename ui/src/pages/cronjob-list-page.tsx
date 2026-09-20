@@ -9,6 +9,7 @@ import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResourceTable } from '@/components/resource-table'
+import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 function getSuspendBadge(cronjob: CronJob) {
   const isSuspended = cronjob.spec?.suspend ?? false
@@ -87,6 +88,20 @@ export function CronJobListPage() {
             </span>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <WorkloadRowActions
+              resourceType="cronjobs"
+              workload={row.original}
+            />
+          </div>
+        ),
       }),
       columnHelper.display({
         id: 'lastSuccess',

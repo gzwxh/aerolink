@@ -9,6 +9,7 @@ import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResourceTable } from '@/components/resource-table'
+import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const jobSearchFilter = createSearchFilter<Job>(
   (j) => j.metadata?.name,
@@ -111,6 +112,17 @@ export function JobListPage() {
             <span className="text-muted-foreground text-sm">{dateStr}</span>
           )
         },
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: () => (
+          <div className="text-right">{t('common.fields.actions')}</div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <WorkloadRowActions resourceType="jobs" workload={row.original} />
+          </div>
+        ),
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
         header: t('common.fields.created'),
