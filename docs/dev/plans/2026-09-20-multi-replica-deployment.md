@@ -18,11 +18,14 @@
 - 每个副本各持一份 K8s informer 缓存：副本数翻倍，对 apiserver 的 watch 压力也翻倍，这是扩容要
   盯的副作用之一（也可能是当初「卡顿」的候选原因）。
 
-### 为什么不用 K8s 跑
+### 为什么当时没走 K8s
 
 `charts/kite` 与 `deploy/install.yaml` 都能跑在 K8s 里（`replicaCount` + `db.type: postgres` 即可多副本），
-但本节点现状是「裸进程 + 宿主机 nginx」：内网镜像源里没有 nginx 镜像、kite 镜像的推送要看 Harbor/SWR
-凭据，而宿主机已经装了 nginx。所以先用最小改动落地，K8s 那条路等镜像流水线理顺再切。
+而本节点现状是「裸进程 + 宿主机 nginx」、宿主机又已经装了 nginx，所以先用最小改动落地。
+
+镜像这条限制已经松动：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite:v1.0.0`
+现在可以公开拉取（2026-09-20 实测 `docker manifest inspect` 通过）。要走 K8s 还差一个入口层——
+该命名空间里没有 nginx 镜像，用集群已有的 ingress controller，或另推一个即可。
 
 ## 2. 单机三副本能解决什么、不能解决什么
 
