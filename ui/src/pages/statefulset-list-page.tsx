@@ -17,11 +17,11 @@ import { formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import {
   ResourceTable,
   type ResourceTableBatchAction,
 } from '@/components/resource-table'
-import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const statefulSetSearchFilter = createSearchFilter<StatefulSet>(
   (s) => s.metadata?.name,
@@ -141,9 +141,9 @@ export function StatefulSetListPage() {
         ),
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <WorkloadRowActions
+            <ResourceRowActions
               resourceType="statefulsets"
-              workload={row.original}
+              resource={row.original}
             />
           </div>
         ),

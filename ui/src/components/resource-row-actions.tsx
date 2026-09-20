@@ -57,9 +57,22 @@ import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confir
 import { WorkloadRevisionsTable } from '@/components/workload-revisions-table'
 import { YamlEditor } from '@/components/yaml-editor'
 
-/** 行操作菜单覆盖的工作负载类型。Pod 也在内：它的容器镜像同样可以改。 */
-export type WorkloadResourceType =
-  'deployments' | 'statefulsets' | 'daemonsets' | 'jobs' | 'cronjobs' | 'pods'
+/**
+ * 行操作菜单覆盖的资源类型。
+ *
+ * 分组的依据是「有独立详情页、且能被表单编辑」：工作负载六类（Pod 也在内，它的容器镜像
+ * 同样可以改）加 Service。要再加一类资源，在这里加类型、在 `resourceTraits` 里声明它支持
+ * 哪些项即可——菜单项本身对所有类型是同一套（编辑 / 查看 YAML / 终端 / 修改镜像 /
+ * 暂停恢复 / 滚动重启 / 回滚 / 标签注解 / 删除）。
+ */
+export type RowActionResourceType =
+  | 'deployments'
+  | 'statefulsets'
+  | 'daemonsets'
+  | 'jobs'
+  | 'cronjobs'
+  | 'pods'
+  | 'services'
 
 type PodSpecLike = {
   containers?: Container[]
@@ -67,10 +80,10 @@ type PodSpecLike = {
 }
 
 /**
- * 只声明本组件用到的字段，这样 6 种工作负载共用一套逻辑，不必为每种各写一遍。
- * 真实的 k8s 类型都能结构化地赋给它。
+ * 只声明本组件用到的字段，这样所有受支持的资源共用一套逻辑，不必为每种各写一遍。
+ * 真实的 k8s 类型都能结构化地赋给它（Service 没有这些字段，全为可选所以也没问题）。
  */
-type WorkloadLike = {
+type ResourceLike = {
   metadata?: {
     name?: string
     namespace?: string
@@ -87,15 +100,18 @@ type WorkloadLike = {
 }
 
 /**
- * 各类工作负载的差异全部收敛在这张表里：容器在哪个 spec 路径下、支持哪些菜单项。
+ * 各类资源的差异全部收敛在这张表里：容器在哪个 spec 路径下、支持哪些菜单项。
  * 其余菜单项（编辑、YAML、标签/注解、删除）对所有类型的行为都一样。
  */
-type WorkloadTraits = {
-  /** 取容器：Pod 直接取 spec，CronJob 在 jobTemplate 下多一层 */
-  containers: (workload: WorkloadLike) => PodSpecLike
+type ResourceTraits = {
   /**
-   * 「修改镜像」要提交的 patch 体。Job 的 spec.template 创建后不可变，
-   * 因此 Job 改不了镜像，这里是 null。
+   * 取容器：Pod 直接取 spec，CronJob 在 jobTemplate 下多一层；
+   * 没有容器的资源（Service）为 null，也就没有「修改镜像」。
+   */
+  containers: ((resource: ResourceLike) => PodSpecLike) | null
+  /**
+   * 「修改镜像」要提交的 patch 体；null 表示不给这个入口。
+   * Job 的 spec.template 创建后不可变，同样不给。
    */
   imagePatch:
     | ((
@@ -134,15 +150,15 @@ function containerFields(containers: Container[], initContainers: Container[]) {
   }
 }
 
-const podTemplateOf = (workload: WorkloadLike): PodSpecLike =>
+const podTemplateOf = (workload: ResourceLike): PodSpecLike =>
   workload.spec?.template?.spec ?? {}
 
-const podTemplateOfCronJob = (workload: WorkloadLike): PodSpecLike =>
+const podTemplateOfCronJob = (workload: ResourceLike): PodSpecLike =>
   workload.spec?.jobTemplate?.spec?.template ?? {}
 
-const podOf = (workload: WorkloadLike): PodSpecLike => workload.spec ?? {}
+const podOf = (workload: ResourceLike): PodSpecLike => workload.spec ?? {}
 
-const workloadTraits: Record<WorkloadResourceType, WorkloadTraits> = {
+const resourceTraits: Record<RowActionResourceType, ResourceTraits> = {
   deployments: {
     containers: podTemplateOf,
     imagePatch: (containers, initContainers) => ({
@@ -208,22 +224,32 @@ const workloadTraits: Record<WorkloadResourceType, WorkloadTraits> = {
     rollback: false,
     pause: false,
   },
+  services: {
+    // Service 没有容器、终端、滚动重启、回滚与暂停这些概念：
+    // 列表里只留「编辑 / 查看 YAML / 标签注解 / 删除」。
+    containers: null,
+    imagePatch: null,
+    terminal: false,
+    restart: false,
+    rollback: false,
+    pause: false,
+  },
 }
 
-export function WorkloadRowActions<T extends WorkloadResourceType>({
+export function ResourceRowActions<T extends RowActionResourceType>({
   resourceType,
-  workload,
+  resource,
 }: {
   resourceType: T
-  workload: ResourceTypeMap[T]
+  resource: ResourceTypeMap[T]
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const can = useCan()
 
-  const traits = workloadTraits[resourceType]
-  const loose = workload as unknown as WorkloadLike
+  const traits = resourceTraits[resourceType]
+  const loose = resource as unknown as ResourceLike
   const name = loose.metadata?.name ?? ''
   const namespace = loose.metadata?.namespace ?? ''
   const paused = loose.spec?.paused === true
@@ -263,17 +289,17 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
     onClose: closeMetadataDialog,
   })
 
-  const containerSpecs = useMemo(
-    () => ({
-      containers: traits.containers(loose).containers ?? [],
-      initContainers: traits.containers(loose).initContainers ?? [],
-    }),
-    [traits, loose]
-  )
+  const containerSpecs = useMemo(() => {
+    const spec = traits.containers?.(loose) ?? {}
+    return {
+      containers: spec.containers ?? [],
+      initContainers: spec.initContainers ?? [],
+    }
+  }, [traits, loose])
 
   const yamlContent = useMemo(
-    () => (dialog === 'yaml' ? yaml.dump(workload, { indent: 2 }) : ''),
-    [dialog, workload]
+    () => (dialog === 'yaml' ? yaml.dump(resource, { indent: 2 }) : ''),
+    [dialog, resource]
   )
 
   if (!canRead && !canUpdate && !canDelete && !canExec) {
@@ -312,8 +338,8 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
       } as DeepPartial<ResourceTypeMap[T]>)
       toast.success(
         paused
-          ? t('workloadActions.resumed', { name })
-          : t('workloadActions.paused', { name })
+          ? t('resourceActions.resumed', { name })
+          : t('resourceActions.paused', { name })
       )
       await refresh()
     } catch {
@@ -328,7 +354,7 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
         name,
         namespace
       )
-      toast.success(t('workloadActions.rollingRestarted', { name }))
+      toast.success(t('resourceActions.rollingRestarted', { name }))
       await refresh()
     } catch {
       // 操作失败已由 API 客户端统一写入站内信，不再弹窗
@@ -351,7 +377,7 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
       })
 
     if (changed.length === 0) {
-      toast.info(t('workloadActions.imageUnchanged'))
+      toast.info(t('resourceActions.imageUnchanged'))
       setDialog(null)
       return
     }
@@ -379,7 +405,7 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
           ResourceTypeMap[T]
         >
       )
-      toast.success(t('workloadActions.imageUpdated', { name }))
+      toast.success(t('resourceActions.imageUpdated', { name }))
       setDialog(null)
       await refresh()
     } catch {
@@ -400,11 +426,11 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
     try {
       // 整体替换而非 merge patch：删除键时不会留下旧值。
       await updateResource(resourceType, name, namespace, {
-        ...workload,
+        ...resource,
         metadata,
       } as ResourceTypeMap[T])
       toast.success(
-        t('workloadActions.metadataSaved', {
+        t('resourceActions.metadataSaved', {
           name,
           field: isAnnotations
             ? t('common.fields.annotations')
@@ -466,7 +492,7 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
           {canRead && (
             <DropdownMenuItem onSelect={() => setDialog('yaml')}>
               <IconFileCode className="size-4" />
-              {t('workloadActions.viewYaml')}
+              {t('resourceActions.viewYaml')}
             </DropdownMenuItem>
           )}
           {traits.terminal && canExec && (
@@ -486,7 +512,7 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
           {traits.imagePatch !== null && canUpdate && (
             <DropdownMenuItem onSelect={openImageDialog}>
               <IconPhoto className="size-4" />
-              {t('workloadActions.editImage')}
+              {t('resourceActions.editImage')}
             </DropdownMenuItem>
           )}
           {traits.pause && canUpdate && (
@@ -497,14 +523,14 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
                 <IconPlayerPause className="size-4" />
               )}
               {paused
-                ? t('workloadActions.resume')
-                : t('workloadActions.pause')}
+                ? t('resourceActions.resume')
+                : t('resourceActions.pause')}
             </DropdownMenuItem>
           )}
           {traits.restart && canUpdate && (
             <DropdownMenuItem onSelect={() => void handleRollingRestart()}>
               <IconReload className="size-4" />
-              {t('workloadActions.rollingRestart')}
+              {t('resourceActions.rollingRestart')}
             </DropdownMenuItem>
           )}
           {traits.rollback && canUpdate && (
@@ -518,13 +544,13 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => openMetadataDialog('labels')}>
                 <IconTag className="size-4" />
-                {t('workloadActions.manageLabels')}
+                {t('resourceActions.manageLabels')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => openMetadataDialog('annotations')}
               >
                 <IconNotes className="size-4" />
-                {t('workloadActions.manageAnnotations')}
+                {t('resourceActions.manageAnnotations')}
               </DropdownMenuItem>
             </>
           )}
@@ -549,9 +575,9 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>{t('workloadActions.viewYaml')}</DialogTitle>
+            <DialogTitle>{t('resourceActions.viewYaml')}</DialogTitle>
             <DialogDescription>
-              {t('workloadActions.viewYamlDescription', { name })}
+              {t('resourceActions.viewYamlDescription', { name })}
             </DialogDescription>
           </DialogHeader>
           {yamlContent && (
@@ -571,9 +597,9 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{t('workloadActions.editImage')}</DialogTitle>
+            <DialogTitle>{t('resourceActions.editImage')}</DialogTitle>
             <DialogDescription>
-              {t('workloadActions.editImageDescription', { name })}
+              {t('resourceActions.editImageDescription', { name })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -619,10 +645,10 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              {t('workloadActions.rollbackTitle', { name })}
+              {t('resourceActions.rollbackTitle', { name })}
             </DialogTitle>
             <DialogDescription>
-              {t('workloadActions.rollbackDescription')}
+              {t('resourceActions.rollbackDescription')}
             </DialogDescription>
           </DialogHeader>
           <WorkloadRevisionsTable
@@ -646,13 +672,13 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
           <DialogHeader>
             <DialogTitle>
               {isAnnotations
-                ? t('workloadActions.manageAnnotations')
-                : t('workloadActions.manageLabels')}
+                ? t('resourceActions.manageAnnotations')
+                : t('resourceActions.manageLabels')}
             </DialogTitle>
             <DialogDescription>
               {isAnnotations
-                ? t('workloadActions.annotationsDescription', { name })
-                : t('workloadActions.labelsDescription', { name })}
+                ? t('resourceActions.annotationsDescription', { name })
+                : t('resourceActions.labelsDescription', { name })}
             </DialogDescription>
           </DialogHeader>
           <KVEditor
@@ -664,8 +690,8 @@ export function WorkloadRowActions<T extends WorkloadResourceType>({
             pairs={metadataPairs}
             addLabel={
               isAnnotations
-                ? t('workloadActions.addAnnotation')
-                : t('workloadActions.addLabel')
+                ? t('resourceActions.addAnnotation')
+                : t('resourceActions.addLabel')
             }
             onChange={setMetadataPairs}
           />

@@ -4,9 +4,9 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  WorkloadRowActions,
-  type WorkloadResourceType,
-} from './workload-row-actions'
+  ResourceRowActions,
+  type RowActionResourceType,
+} from './resource-row-actions'
 
 const { navigate, can } = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -50,13 +50,13 @@ vi.mock('react-i18next', () => ({
         'common.actions.edit': 'EDIT',
         'common.actions.delete': 'DELETE',
         'common.tabs.terminal': 'TERMINAL',
-        'workloadActions.viewYaml': 'VIEW_YAML',
-        'workloadActions.editImage': 'EDIT_IMAGE',
-        'workloadActions.pause': 'PAUSE',
-        'workloadActions.resume': 'RESUME',
-        'workloadActions.rollingRestart': 'RESTART',
-        'workloadActions.manageLabels': 'LABELS',
-        'workloadActions.manageAnnotations': 'ANNOTATIONS',
+        'resourceActions.viewYaml': 'VIEW_YAML',
+        'resourceActions.editImage': 'EDIT_IMAGE',
+        'resourceActions.pause': 'PAUSE',
+        'resourceActions.resume': 'RESUME',
+        'resourceActions.rollingRestart': 'RESTART',
+        'resourceActions.manageLabels': 'LABELS',
+        'resourceActions.manageAnnotations': 'ANNOTATIONS',
         'workloads.actions.rollback': 'ROLLBACK',
       }
       return map[key] ?? fallback ?? key
@@ -66,12 +66,12 @@ vi.mock('react-i18next', () => ({
 
 const workload = { metadata: { namespace: 'default', name: 'web' } }
 
-async function openMenu(resourceType: WorkloadResourceType) {
+async function openMenu(resourceType: RowActionResourceType) {
   render(
-    <WorkloadRowActions
+    <ResourceRowActions
       resourceType={resourceType}
       // 各类型的真实对象结构不同，菜单只读 metadata 与 spec 里的少量字段。
-      workload={workload as never}
+      resource={workload as never}
     />
   )
   const user = userEvent.setup()
@@ -85,17 +85,18 @@ beforeEach(() => {
   can.mockReturnValue(true)
 })
 
-describe('工作负载行操作菜单', () => {
-  const allTypes: WorkloadResourceType[] = [
+describe('资源行操作菜单', () => {
+  const allTypes: RowActionResourceType[] = [
     'deployments',
     'statefulsets',
     'daemonsets',
     'jobs',
     'cronjobs',
     'pods',
+    'services',
   ]
 
-  // 编辑入口是这次补的核心诉求：6 种类型的详情页都有编辑路由，
+  // 编辑入口是核心诉求：这些类型的详情页都有编辑路由，
   // 列表里的菜单必须能直达，而不是只能点进详情页再找。
   it.each(allTypes)(
     '%s 的菜单里有「编辑」并跳到编辑页',
@@ -163,6 +164,32 @@ describe('工作负载行操作菜单', () => {
     expect(screen.queryByRole('menuitem', { name: 'RESTART' })).toBeNull()
   })
 
+  // Service 没有容器/历史版本：只有元数据与编辑，不能把工作负载那几项显示出来。
+  it('Service 只保留编辑、YAML、标签注解与删除', async () => {
+    await openMenu('services')
+
+    for (const label of [
+      'EDIT',
+      'VIEW_YAML',
+      'LABELS',
+      'ANNOTATIONS',
+      'DELETE',
+    ]) {
+      expect(
+        await screen.findByRole('menuitem', { name: label })
+      ).toBeInTheDocument()
+    }
+    for (const label of [
+      'TERMINAL',
+      'EDIT_IMAGE',
+      'RESTART',
+      'ROLLBACK',
+      'PAUSE',
+    ]) {
+      expect(screen.queryByRole('menuitem', { name: label })).toBeNull()
+    }
+  })
+
   it('没有 update 权限时不显示「编辑」与标签/注解', async () => {
     can.mockImplementation((_resource: string, verb: string) => verb === 'get')
 
@@ -180,9 +207,9 @@ describe('工作负载行操作菜单', () => {
     can.mockReturnValue(false)
 
     const { container } = render(
-      <WorkloadRowActions
+      <ResourceRowActions
         resourceType="deployments"
-        workload={workload as never}
+        resource={workload as never}
       />
     )
 

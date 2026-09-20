@@ -8,8 +8,8 @@ import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
-import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 function getSuspendBadge(cronjob: CronJob) {
   const isSuspended = cronjob.spec?.suspend ?? false
@@ -96,9 +96,9 @@ export function CronJobListPage() {
         ),
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <WorkloadRowActions
+            <ResourceRowActions
               resourceType="cronjobs"
-              workload={row.original}
+              resource={row.original}
             />
           </div>
         ),

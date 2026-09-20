@@ -21,8 +21,8 @@ import {
 import { MetricCell } from '@/components/metrics-cell'
 import { NodeLink } from '@/components/node-link'
 import { PodStatusIcon } from '@/components/pod-status-icon'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
-import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const podSearchFilter = createSearchFilter<Pod>(
   (p) => p.metadata?.name,
@@ -135,7 +135,7 @@ export function PodListPage() {
         ),
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <WorkloadRowActions resourceType="pods" workload={row.original} />
+            <ResourceRowActions resourceType="pods" resource={row.original} />
           </div>
         ),
       }),

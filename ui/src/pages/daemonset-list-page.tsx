@@ -17,11 +17,11 @@ import { formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import {
   ResourceTable,
   type ResourceTableBatchAction,
 } from '@/components/resource-table'
-import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const daemonSetSearchFilter = createSearchFilter<DaemonSet>(
   (d) => d.metadata?.name,
@@ -118,9 +118,9 @@ export function DaemonSetListPage() {
         ),
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <WorkloadRowActions
+            <ResourceRowActions
               resourceType="daemonsets"
-              workload={row.original}
+              resource={row.original}
             />
           </div>
         ),

@@ -9,18 +9,22 @@ import { expectStatus } from '../support/admin-api'
  * 以前只有 Deployment 的列表有这一列，而且菜单里没有「编辑」：想改一个 Deployment
  * 必须先点进详情页，再用详情页上的编辑按钮进编辑页。这个文件锁住两件事：
  *
- *   1. 工作负载分组下的六类（含 Pod）列表都有操作入口；
+ *   1. 这些列表都有操作入口；
  *   2. 菜单里的「编辑」直接跳到编辑页。
  *
+ * 覆盖工作负载六类（含 Pod）与 Service —— 它们都走同一个行操作菜单
+ * （`ui/src/components/resource-row-actions.tsx`）。
+ *
  * 每类只种一个「跑不起来」的对象（命中不了的 nodeSelector / replicas 0 /
- * 永不触发的 cron 表达式 / 立刻失败退出的 Job），用例自清理，不在集群里留下负载。
+ * 永不触发的 cron 表达式 / 立刻失败退出的 Job / 什么都不选中的 Service），
+ * 用例自清理，不在集群里留下负载。
  *
  * 需要先种对象的原因：列表为空时页面渲染的是空态、整张表（含表头）都不出现。
  *
  * 运行（对已有集群、真实 K8s）：
  *   make e2e-run-existing KUBECONFIG=~/.kube/config \
  *     E2E_CLUSTER_NAME=<context 名> E2E_CONTEXT_NAME=<context 名> E2E_NODE_NAME=<node> \
- *     SPEC="specs/workload-list-actions.spec.ts"
+ *     SPEC="specs/list-row-actions.spec.ts"
  */
 
 const namespace = 'default'
@@ -33,7 +37,7 @@ const PREPULLED_IMAGE =
 const uniqueName = (kind: string) =>
   `zz-e2e-listact-${kind}-${Date.now().toString(36)}`
 
-type WorkloadKind =
+type RowActionKind =
   'pods' | 'deployments' | 'statefulsets' | 'daemonsets' | 'jobs' | 'cronjobs'
 
 const podTemplate = (name: string, extra = '') => `    spec:
@@ -45,7 +49,7 @@ ${extra}      containers:
           image: ${PREPULLED_IMAGE}
 `
 
-const workloadYaml: Record<WorkloadKind, (name: string) => string> = {
+const workloadYaml: Record<RowActionKind, (name: string) => string> = {
   pods: (name) => `apiVersion: v1
 kind: Pod
 metadata:
@@ -122,6 +126,18 @@ spec:
           image: ${PREPULLED_IMAGE}
           command: ["/bin/false"]
 `,
+  services: (name) => `apiVersion: v1
+kind: Service
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+spec:
+  selector:
+    app: ${name}
+  ports:
+    - port: 80
+      targetPort: 80
+`,
   cronjobs: (name) => `apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -141,12 +157,11 @@ spec:
 `,
 }
 
-/** 工作负载分组（见 ui/src/lib/resource-catalog.ts 的 sidebar.groups.workloads）。 */
-const workloadKinds = Object.keys(workloadYaml) as WorkloadKind[]
+const rowActionKinds = Object.keys(workloadYaml) as RowActionKind[]
 
 async function seed(
   request: APIRequestContext,
-  kind: WorkloadKind,
+  kind: RowActionKind,
   name: string
 ) {
   await expectStatus(
@@ -159,7 +174,7 @@ async function seed(
 
 async function remove(
   request: APIRequestContext,
-  kind: WorkloadKind,
+  kind: RowActionKind,
   name: string
 ) {
   await request
@@ -167,8 +182,8 @@ async function remove(
     .catch(() => undefined)
 }
 
-test.describe('workload list actions', () => {
-  for (const kind of workloadKinds) {
+test.describe('list row actions', () => {
+  for (const kind of rowActionKinds) {
     test(`the ${kind} list offers a row-actions column`, async ({
       page,
       request,
@@ -186,6 +201,33 @@ test.describe('workload list actions', () => {
       }
     })
   }
+
+  test('a Service is edited straight from the list actions menu', async ({
+    page,
+    request,
+  }) => {
+    const name = uniqueName('services')
+    try {
+      await seed(request, 'services', name)
+
+      await page.goto('/services')
+      await page.getByPlaceholder('Search Services or app=nginx...').fill(name)
+
+      const row = page.getByRole('row').filter({ hasText: name })
+      await expect(row).toBeVisible()
+
+      await row.getByRole('button', { name: 'Actions' }).click()
+      await page.getByRole('menuitem', { name: 'Edit', exact: true }).click()
+
+      await page.waitForURL(`**/services/${namespace}/${name}/edit`)
+      // 进的是编辑模式：身份字段来自线上对象且被锁定。
+      const nameInput = page.getByPlaceholder('my-service')
+      await expect(nameInput).toHaveValue(name)
+      await expect(nameInput).toBeDisabled()
+    } finally {
+      await remove(request, 'services', name)
+    }
+  })
 
   test('a Deployment is edited straight from the list actions menu', async ({
     page,

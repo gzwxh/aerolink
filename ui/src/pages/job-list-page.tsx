@@ -8,8 +8,8 @@ import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
-import { WorkloadRowActions } from '@/components/workload-row-actions'
 
 const jobSearchFilter = createSearchFilter<Job>(
   (j) => j.metadata?.name,
@@ -120,7 +120,7 @@ export function JobListPage() {
         ),
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <WorkloadRowActions resourceType="jobs" workload={row.original} />
+            <ResourceRowActions resourceType="jobs" resource={row.original} />
           </div>
         ),
       }),
