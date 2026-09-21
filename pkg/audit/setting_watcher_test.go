@@ -36,7 +36,7 @@ func TestConvergeAuditSettingOnlyReloadsWhenChanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAuditSetting() error = %v", err)
 	}
-	setting.Archive.AccessLog.Format = model.LogFormatText
+	setting.RetentionDays = 90
 	if _, err := model.UpdateAuditSetting(*setting); err != nil {
 		t.Fatalf("UpdateAuditSetting() error = %v", err)
 	}

@@ -1,6 +1,8 @@
 package model
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -495,4 +497,58 @@ func TestAuditSettingRevisionFollowsContent(t *testing.T) {
 	if changed == first {
 		t.Error("内容改了，指纹必须变（否则多副本不会收敛）")
 	}
+}
+
+// 界面把 urls / brokers 当数组用（filter / join）：nil 会被序列化成 null，
+// 让整个审计设置页抛 "Cannot read properties of null (reading 'join')"。
+func TestGetAuditSettingNeverReturnsNilSlices(t *testing.T) {
+	db := setupAuditSettingTestDB(t)
+
+	assertRenderable := func(t *testing.T, setting *AuditSettingData) {
+		t.Helper()
+		if setting.Forward.Kafka.Brokers == nil {
+			t.Error("Forward.Kafka.Brokers 为 nil：界面 join / filter 会抛异常")
+		}
+		if setting.Archive.Elasticsearch.URLs == nil {
+			t.Error("Archive.Elasticsearch.URLs 为 nil：界面 join / filter 会抛异常")
+		}
+		if setting.Archive.VictoriaLogs.URLs == nil {
+			t.Error("Archive.VictoriaLogs.URLs 为 nil：界面 join / filter 会抛异常")
+		}
+		if setting.Archive.OpenObserve.URLs == nil {
+			t.Error("Archive.OpenObserve.URLs 为 nil：界面 join / filter 会抛异常")
+		}
+		encoded, err := json.Marshal(setting)
+		if err != nil {
+			t.Fatalf("marshaling the setting: %v", err)
+		}
+		if bytes.Contains(encoded, []byte("null")) {
+			t.Errorf("响应里不应出现 null（会被序列化成 null 的字段）：%s", encoded)
+		}
+	}
+
+	t.Run("新库由默认值播种", func(t *testing.T) {
+		setting, err := GetAuditSetting()
+		if err != nil {
+			t.Fatalf("GetAuditSetting() error = %v", err)
+		}
+		assertRenderable(t, setting)
+	})
+
+	t.Run("旧行里显式存了 null", func(t *testing.T) {
+		legacy := `{"retentionDays":0,"syslog":{"enabled":false,"mode":"syslog",` +
+			`"kafka":{"brokers":null}},` +
+			`"archive":{"localDir":"","elasticsearch":{"urls":null},` +
+			`"victorialogs":{"urls":null},"openobserve":{"urls":null}}}`
+		if err := db.Model(&AuditSetting{Model: Model{ID: 1}}).
+			Update("data", JSONField(legacy)).Error; err != nil {
+			t.Fatalf("seeding a legacy row: %v", err)
+		}
+
+		setting, err := GetAuditSetting()
+		if err != nil {
+			t.Fatalf("GetAuditSetting() error = %v", err)
+		}
+		assertRenderable(t, setting)
+	})
 }

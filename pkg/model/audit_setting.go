@@ -282,6 +282,10 @@ const (
 //
 // 注意 Enabled / Elasticsearch.Enabled 两个开关由 sink 推导（见 ApplySinkExclusivity）：
 // 这里的默认值只在 sink=parquet / sink=elasticsearch 时才可能为真。
+//
+// 列表字段给**非 nil 空切片**（而不是 nil）：nil 会被序列化成 `null`，而界面把它们当数组用
+// （`urls.join(',')` / `filter`），遇到 null 会直接抛 "Cannot read properties of null"，
+// 整个设置页打不开。
 func DefaultArchiveSetting() ArchiveSetting {
 	return ArchiveSetting{
 		Enabled:       false,
@@ -310,14 +314,17 @@ func DefaultArchiveSetting() ArchiveSetting {
 		},
 		Elasticsearch: ESArchive{
 			Enabled:     false,
+			URLs:        []string{},
 			IndexPrefix: DefaultESIndexPrefix,
 		},
 		VictoriaLogs: VictoriaLogsArchive{
 			Enabled: false,
+			URLs:    []string{},
 			Stream:  DefaultLogStream,
 		},
 		OpenObserve: OpenObserveArchive{
 			Enabled: false,
+			URLs:    []string{},
 			Org:     DefaultOpenObserveOrg,
 			Stream:  DefaultLogStream,
 		},
@@ -336,6 +343,7 @@ func DefaultAuditSettingData() AuditSettingData {
 			Facility: DefaultSyslogFacility,
 			Format:   LogFormatText,
 			Kafka: KafkaSetting{
+				Brokers:       []string{},
 				SASLMechanism: KafkaSASLNone,
 				// 默认走 TLS（见 KafkaSetting.UseTLS 的注释）。
 				UseTLS: true,
@@ -575,6 +583,33 @@ func normalizeStringList(values []string) []string {
 	return cleaned
 }
 
+// applyReadDefaults 补齐读出来的配置里那几处「缺了就会让消费方直接报错」的形状。
+//
+// 只修形状，不做取值校验（校验在 Normalize 里、只发生在写入路径）：调用方拿到的一定是一份
+// 能直接渲染的配置。两件事：
+//   - 列表字段（ES / VictoriaLogs / OpenObserve 的 urls、Kafka 的 brokers）一律给非 nil 切片：
+//     nil 会序列化成 `null`，而界面当数组用（join / filter）会抛
+//     "Cannot read properties of null"，整个设置页打不开；
+//   - mode 给显式取值：升级前的行没有这个字段（当时只有 syslog），
+//     「空串 = syslog」这条约定散在各处迟早会漏一处。
+func (d *AuditSettingData) applyReadDefaults() {
+	if d.Forward.Mode == "" {
+		d.Forward.Mode = LogForwardModeSyslog
+	}
+	d.Forward.Kafka.Brokers = nonNilStringList(d.Forward.Kafka.Brokers)
+	d.Archive.Elasticsearch.URLs = nonNilStringList(d.Archive.Elasticsearch.URLs)
+	d.Archive.VictoriaLogs.URLs = nonNilStringList(d.Archive.VictoriaLogs.URLs)
+	d.Archive.OpenObserve.URLs = nonNilStringList(d.Archive.OpenObserve.URLs)
+}
+
+// nonNilStringList 把 nil 换成空切片，其余原样返回（不做清洗：读路径不改值）。
+func nonNilStringList(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
+}
+
 // GetAuditSetting 读取审计配置，不存在时写入并返回默认值。
 func GetAuditSetting() (*AuditSettingData, error) {
 	var setting AuditSetting
@@ -586,6 +621,8 @@ func GetAuditSetting() (*AuditSettingData, error) {
 				return nil, err
 			}
 		}
+		// 行里可能存着 null（升级前播种的行就是这样）：在返回前补齐形状。
+		data.applyReadDefaults()
 		return &data, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -600,6 +637,7 @@ func GetAuditSetting() (*AuditSettingData, error) {
 	if err := DB.Create(&row).Error; err != nil {
 		return nil, err
 	}
+	data.applyReadDefaults()
 	return &data, nil
 }
 
