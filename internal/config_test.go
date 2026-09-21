@@ -128,6 +128,59 @@ rbac:
       oidcGroups: ["developers"]
 `
 
+// TestApplyAuditSinkIgnoresRuntimeChanges：sink 只在启动时确定，配置文件热更新试图切换时必须
+// 保持原值（半生效会丢记录：写入还在旧通道，查询已经切到新通道）。
+func TestApplyAuditSinkIgnoresRuntimeChanges(t *testing.T) {
+	originalSink := model.AuditSink
+	t.Cleanup(func() {
+		model.AuditSink = originalSink
+		auditSinkResolved = false
+	})
+	auditSinkResolved = false
+	model.AuditSink = model.AuditSinkDatabase
+
+	applyAuditSink("parquet")
+	if model.AuditSink != model.AuditSinkParquet {
+		t.Fatalf("首次应用应生效, got %q", model.AuditSink)
+	}
+
+	// 热重载（applyConfig 会在配置文件变化时再跑一次）尝试切到别的存储。
+	applyAuditSink("elasticsearch")
+	if model.AuditSink != model.AuditSinkParquet {
+		t.Errorf("热重载不得改变 sink（会变成半生效状态、丢审计记录）, got %q", model.AuditSink)
+	}
+
+	// 同一个值重复应用是正常的（每次重载都会跑），不该有任何副作用。
+	applyAuditSink("parquet")
+	if model.AuditSink != model.AuditSinkParquet {
+		t.Errorf("重复应用同一个 sink 应保持不变, got %q", model.AuditSink)
+	}
+}
+
+// 只设环境变量、不挂配置文件时，KITE_AUDIT_SINK 也必须生效：app.go 在「有配置文件」与「只有环境
+// 变量」两条路里只会走一条，两边都得认得这个变量，否则部署者以为配了、实际还是 database。
+func TestLoadConfigFromEnvAppliesAuditSink(t *testing.T) {
+	setupTestDB(t)
+
+	originalSink := model.AuditSink
+	t.Cleanup(func() {
+		model.AuditSink = originalSink
+		auditSinkResolved = false
+	})
+	auditSinkResolved = false
+	model.AuditSink = model.AuditSinkDatabase
+
+	t.Setenv("KITE_AUDIT_SINK", "parquet")
+	// 指向一个不存在的 kubeconfig：避免用例去读开发机上的 ~/.kube/config。
+	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "absent-kubeconfig"))
+
+	LoadConfigFromEnv()
+
+	if model.AuditSink != model.AuditSinkParquet {
+		t.Fatalf("KITE_AUDIT_SINK=parquet 未生效, sink = %q", model.AuditSink)
+	}
+}
+
 // TestLoadConfigFromFile_EndToEnd 用真实数据库测试完整的配置文件加载流程。
 func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // 该用例用多个子测试做端到端覆盖
 	setupTestDB(t)

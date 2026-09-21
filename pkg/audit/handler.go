@@ -267,6 +267,21 @@ func ListAuditLogs(c *gin.Context) {
 	if !ok {
 		return
 	}
+
+	// sink≠database 时审计记录根本不在库里（见 model.RecordAudit），改由归档后端回答。
+	// 响应结构与库查询保持一致，前端不需要知道数据来自哪种存储。
+	if !model.AuditSinkUsesDatabase() {
+		filters, ok := auditHistoryArchiveFilters(c)
+		if !ok {
+			return
+		}
+		respondArchiveList[model.ResourceHistory](c, archiveListView{
+			kind: ESKindAuditHistory, timeField: esFieldCreatedAt, filters: filters,
+			from: from, to: to, toIsDateOnly: toIsDateOnly(c), page: page, size: size,
+		})
+		return
+	}
+
 	query, ok := auditLogQuery(c, from, to, toIsDateOnly(c))
 	if !ok {
 		return
@@ -291,6 +306,19 @@ func ListLoginLogs(c *gin.Context) {
 	if !ok {
 		return
 	}
+
+	if !model.AuditSinkUsesDatabase() {
+		filters, ok := loginRecordArchiveFilters(c)
+		if !ok {
+			return
+		}
+		respondArchiveList[model.LoginRecord](c, archiveListView{
+			kind: ESKindLoginRecord, timeField: esFieldCreatedAt, filters: filters,
+			from: from, to: to, toIsDateOnly: toIsDateOnly(c), page: page, size: size,
+		})
+		return
+	}
+
 	query, ok := loginLogQuery(c, from, to, toIsDateOnly(c))
 	if !ok {
 		return
@@ -308,6 +336,19 @@ func ListPasswordChangeLogs(c *gin.Context) {
 	if !ok {
 		return
 	}
+
+	if !model.AuditSinkUsesDatabase() {
+		filters, ok := passwordChangeArchiveFilters(c)
+		if !ok {
+			return
+		}
+		respondArchiveList[model.PasswordChangeLog](c, archiveListView{
+			kind: ESKindPasswordChangeLog, timeField: esFieldCreatedAt, filters: filters,
+			from: from, to: to, toIsDateOnly: toIsDateOnly(c), page: page, size: size,
+		})
+		return
+	}
+
 	query, ok := passwordChangeLogQuery(c, from, to, toIsDateOnly(c))
 	if !ok {
 		return

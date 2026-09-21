@@ -53,13 +53,13 @@ func NotifyRemoteLogin(c *gin.Context, user *model.User) {
 				klog.Errorf("panic in remote login notification: %v", r)
 			}
 		}()
-		SendEvent(model.NotificationEventRemoteLogin, map[string]string{
+		SendEventTo(model.NotificationEventRemoteLogin, map[string]string{
 			"username":  user.Username,
 			"ip":        ip,
 			"time":      time.Now().Format(timeLayout),
 			"provider":  user.Provider,
 			"userAgent": userAgent,
-		})
+		}, user.ID)
 	}()
 }
 
@@ -159,11 +159,11 @@ func checkAccountExpiry() {
 		if daysLeft < 0 {
 			continue // already expired; login enforcement handles access
 		}
-		SendEvent(model.NotificationEventAccountExpiring, map[string]string{
+		SendEventTo(model.NotificationEventAccountExpiring, map[string]string{
 			"username":   user.Username,
 			"days":       strconv.Itoa(daysLeft + 1),
 			"expireDate": user.ExpiresAt.Format("2006-01-02"),
-		})
+		}, user.ID)
 	}
 }
 
@@ -188,11 +188,11 @@ func checkPasswordExpiry(setting *model.NotificationSettingData, securitySetting
 		if !remind {
 			continue
 		}
-		SendEvent(event, map[string]string{
+		SendEventTo(event, map[string]string{
 			"username":   user.Username,
 			"days":       days,
 			"expireDate": expireAt.Format(dateLayout),
-		})
+		}, user.ID)
 	}
 }
 
@@ -272,10 +272,10 @@ func checkInactiveUsers(securitySetting *model.SecuritySettingData) int {
 			klog.Warningf("failed to record disable reason for %s: %v", user.Username, err)
 		}
 		klog.Infof("disabled inactive user %s (no sign-in for %d days)", user.Username, days)
-		SendEvent(model.NotificationEventInactiveUserDisabled, map[string]string{
+		SendEventTo(model.NotificationEventInactiveUserDisabled, map[string]string{
 			"username": user.Username,
 			"days":     strconv.Itoa(days),
-		})
+		}, user.ID)
 	}
 	return disabled
 }

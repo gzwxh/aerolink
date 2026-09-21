@@ -86,7 +86,9 @@ func (h *GenericResourceHandler[T, V]) recordHistory(c *gin.Context, opType stri
 		ClientIP:      c.ClientIP(),
 		UserAgent:     common.AuditUserAgent(c.Request.UserAgent()),
 	}
-	if err := model.DB.Create(&history).Error; err != nil {
+	// 带请求上下文：审计事件由此带上 request_id，可与同一次请求的访问日志互相定位。
+	// 走统一入口而不是 DB.Create：由 sink 决定落库还是直接归档（见 model.RecordAudit）。
+	if err := model.RecordAudit(c.Request.Context(), &history); err != nil {
 		klog.Errorf("Failed to create resource history: %v", err)
 	}
 }

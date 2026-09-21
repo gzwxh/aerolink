@@ -135,8 +135,8 @@ export function ResourceTableToolbar<T>({
               <span
                 className={cn(
                   'bg-muted-foreground/25 size-2 rounded-full',
-                  useSSE && isConnected && 'bg-emerald-500',
-                  useSSE && !isConnected && 'bg-red-500'
+                  useSSE && isConnected && 'bg-success',
+                  useSSE && !isConnected && 'bg-destructive'
                 )}
               />
               <span>{t('resourceTable.watch')}</span>

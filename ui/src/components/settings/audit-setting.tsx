@@ -6,7 +6,9 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import type {
+  AccessLogArchiveSetting,
   AuditSetting as AuditSettingData,
+  LogFormat,
   SyslogNetwork,
 } from '@/types/api'
 import { updateAuditSetting, useAuditSetting } from '@/lib/api'
@@ -31,11 +33,72 @@ const DEFAULT_FORM: AuditSettingData = {
     address: '',
     tag: 'kite',
     facility: 13,
+    format: 'text',
     insecureSkipVerify: false,
+  },
+  stdout: {
+    enabled: true,
+    format: 'json',
+  },
+  archive: {
+    enabled: false,
+    localDir: '',
+    retentionDays: 7,
+    maxBytes: 10 * 1024 * 1024 * 1024,
+    flush: { intervalSeconds: 120, maxBatchRows: 100000, maxBatchBytes: 0 },
+    accessLog: {
+      enabled: true,
+      retentionDays: 3,
+      maxBytes: 5 * 1024 * 1024 * 1024,
+      flush: { intervalSeconds: 120, maxBatchRows: 200000, maxBatchBytes: 0 },
+      format: 'text',
+    },
+    s3: {
+      enabled: false,
+      endpoint: '',
+      region: '',
+      bucket: '',
+      accessKey: '',
+      secretKey: '',
+      pathStyle: true,
+      useTLS: false,
+      prefix: '',
+      // 默认与后端一致（false = 本地留几天 + 全量同步 S3）；仅在首次响应到达前作为占位。
+      deleteLocalAfterUpload: false,
+    },
+    elasticsearch: {
+      enabled: false,
+      urls: [],
+      username: '',
+      password: '',
+      indexPrefix: 'kite-audit',
+      tlsInsecureSkipVerify: false,
+    },
+    victorialogs: {
+      enabled: false,
+      urls: [],
+      stream: 'kite-audit',
+      accountId: '',
+      projectId: '',
+      tlsInsecureSkipVerify: false,
+    },
+    openobserve: {
+      enabled: false,
+      urls: [],
+      org: 'default',
+      stream: 'kite-audit',
+      username: '',
+      password: '',
+      tlsInsecureSkipVerify: false,
+    },
+    includeResourceYAML: false,
   },
 }
 
 const SYSLOG_NETWORKS: SyslogNetwork[] = ['udp', 'tcp', 'tls']
+
+/** 日志输出格式二选一：text 保持现状，json 输出结构化单行（不做任意模板）。 */
+const LOG_FORMATS: LogFormat[] = ['text', 'json']
 
 function SettingGroup({
   title,
@@ -79,6 +142,12 @@ function SettingRow({
   )
 }
 
+/** 把数字输入框的字符串解析成非负整数：空 / 非法 / 负数一律回落 0（0 = 不限制）。 */
+function numberOrZero(value: string): number {
+  const parsed = Number.parseInt(value, 10)
+  return Number.isNaN(parsed) || parsed < 0 ? 0 : parsed
+}
+
 /**
  * 日志审计 → 审计设置。
  *
@@ -101,11 +170,37 @@ export function AuditSetting() {
     }
   }, [data])
 
+  // 审计记录的落地方式由**配置文件**在启动时决定，后端在响应顶层返回；界面只读展示。
+  const sink = data?.sink ?? 'database'
+  // 五条通道互斥（见 docs/dev/plans/2026-09-20-audit-log-parquet-archive.md §12.13）：
+  // 通道开关由存储方式决定（配置文件指定、界面只读），不是管理员可改的意向。
+  const parquetSink = sink === 'parquet'
+  const elasticsearchSink = sink === 'elasticsearch'
+  const victoriaLogsSink = sink === 'victorialogs'
+  const openObserveSink = sink === 'openobserve'
+  // victorialogs / openobserve 的过期数据只能由服务端清（客户端没有删除接口），
+  // 所以「保留策略」区块必须明说它不生效（见后端 AuditSinkRetentionIsServerSide）。
+  const retentionServerSide = data?.retentionServerSide ?? false
+
   const mutation = useMutation({
     mutationFn: (payload: AuditSettingData) => updateAuditSetting(payload),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['audit-setting'] })
       toast.success(t('audit.setting.messages.updated', '审计设置已保存'))
+
+      // 保存本身成功了，但目标存储可能连不上（地址写错、密钥不对、网络不通）。
+      // 这种情况必须当场告诉管理员——否则要等到归档真的跑起来才发现。
+      const warnings = response?.warnings ?? []
+      if (warnings.length > 0) {
+        toast.warning(
+          t(
+            'audit.setting.messages.probeFailed',
+            '配置已保存，但连通性检查未通过：{{detail}}',
+            { detail: warnings.join('; ') }
+          ),
+          { duration: 10000 }
+        )
+      }
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -114,11 +209,71 @@ export function AuditSetting() {
   const retentionTooShort = days > 0 && days < minRetentionDays
   const syslogAddressMissing =
     formData.syslog.enabled && !formData.syslog.address.trim()
-  const invalid = retentionTooShort || syslogAddressMissing
+
+  const archive = formData.archive
+  // 启用 S3 / ES / 外部日志存储时关键连接信息必填，否则后端 Normalize 会拒绝保存。
+  const s3Incomplete =
+    archive.s3.enabled &&
+    (!archive.s3.endpoint.trim() || !archive.s3.bucket.trim())
+  const esIncomplete =
+    archive.elasticsearch.enabled &&
+    archive.elasticsearch.urls.filter((url) => url.trim()).length === 0
+  const victoriaLogsIncomplete =
+    archive.victorialogs.enabled &&
+    archive.victorialogs.urls.filter((url) => url.trim()).length === 0
+  const openObserveIncomplete =
+    archive.openobserve.enabled &&
+    archive.openobserve.urls.filter((url) => url.trim()).length === 0
+  const invalid =
+    retentionTooShort ||
+    syslogAddressMissing ||
+    s3Incomplete ||
+    esIncomplete ||
+    victoriaLogsIncomplete ||
+    openObserveIncomplete
 
   // 系统设置里的写入口跟随后端章节级授权，只读时全部禁用。
   const patchSyslog = (patch: Partial<AuditSettingData['syslog']>) =>
     setFormData((prev) => ({ ...prev, syslog: { ...prev.syslog, ...patch } }))
+  const patchStdout = (patch: Partial<AuditSettingData['stdout']>) =>
+    setFormData((prev) => ({ ...prev, stdout: { ...prev.stdout, ...patch } }))
+  const patchArchive = (patch: Partial<AuditSettingData['archive']>) =>
+    setFormData((prev) => ({ ...prev, archive: { ...prev.archive, ...patch } }))
+  const patchS3 = (patch: Partial<AuditSettingData['archive']['s3']>) =>
+    setFormData((prev) => ({
+      ...prev,
+      archive: { ...prev.archive, s3: { ...prev.archive.s3, ...patch } },
+    }))
+  const patchES = (
+    patch: Partial<AuditSettingData['archive']['elasticsearch']>
+  ) =>
+    setFormData((prev) => ({
+      ...prev,
+      archive: {
+        ...prev.archive,
+        elasticsearch: { ...prev.archive.elasticsearch, ...patch },
+      },
+    }))
+  const patchVictoriaLogs = (
+    patch: Partial<AuditSettingData['archive']['victorialogs']>
+  ) =>
+    setFormData((prev) => ({
+      ...prev,
+      archive: {
+        ...prev.archive,
+        victorialogs: { ...prev.archive.victorialogs, ...patch },
+      },
+    }))
+  const patchOpenObserve = (
+    patch: Partial<AuditSettingData['archive']['openobserve']>
+  ) =>
+    setFormData((prev) => ({
+      ...prev,
+      archive: {
+        ...prev.archive,
+        openobserve: { ...prev.archive.openobserve, ...patch },
+      },
+    }))
 
   if (isLoading && !data) {
     return (
@@ -147,12 +302,76 @@ export function AuditSetting() {
 
       <CardContent className="space-y-4">
         <SettingGroup
+          title={t('audit.setting.sink.title', '存储方式')}
+          description={t(
+            'audit.setting.sink.description',
+            '审计记录的落地方式（五者互斥），由配置文件 auditSink / 环境变量 KITE_AUDIT_SINK 在启动时指定，界面只读。'
+          )}
+        >
+          <SettingRow label={t('audit.setting.sink.label', '落地方式')}>
+            <span className="text-sm font-medium">
+              {t(`audit.setting.sink.${sink}`, sink)}
+            </span>
+          </SettingRow>
+          {sink === 'parquet' && (
+            <SettingRow
+              label={t('audit.setting.sink.delay', '查询延迟上限')}
+              hint={t(
+                'audit.setting.sink.delayHint',
+                'parquet 是攒批落盘的：刚发生的操作在这个时间内可能还查不到，审计列表会给出提示。'
+              )}
+            >
+              <span className="text-sm">
+                {t('audit.setting.sink.delayValue', '{{seconds}} 秒', {
+                  seconds: data?.setting.archive.flush.intervalSeconds || 120,
+                })}
+              </span>
+            </SettingRow>
+          )}
+          {sink !== 'database' && (
+            <SettingRow
+              label={t('audit.setting.sink.unavailable', '当前不可用的能力')}
+              hint={t(
+                'audit.setting.sink.unavailableHint',
+                '下列能力都依赖本库里的历史记录，sink≠database 时不可用：'
+              )}
+            >
+              <ul className="list-disc space-y-1 pl-4 text-sm">
+                <li>
+                  {t(
+                    'audit.setting.sink.unavailableHistory',
+                    '资源级变更历史（含 YAML 对比与回滚）：资源详情页的「历史」会明确提示不可用'
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'audit.setting.sink.unavailableNewIP',
+                    '异地登录提醒（需要历史登录记录才能判定）'
+                  )}
+                </li>
+              </ul>
+            </SettingRow>
+          )}
+        </SettingGroup>
+
+        <SettingGroup
           title={t('audit.setting.retention.title', '保留策略')}
           description={t(
             'audit.setting.retention.description',
-            '按时间自动滚动清理过期的审计记录；每次清理都会留下一条审计记录。'
+            '按时间自动滚动清理过期的审计记录（含 Elasticsearch 的按天索引）；每次清理都会留下一条审计记录。'
           )}
         >
+          {retentionServerSide && (
+            // 保留天数在当前 sink 下没有执行力：过期由存储端自己的配置决定，客户端连删除接口都没有。
+            // 这里必须明说，否则管理员改完天数为没生效还以为是 bug。
+            <div className="mx-3 mt-3 rounded-md border border-warning/25 bg-warning/10 px-3 py-2 text-xs text-muted-foreground">
+              {t(
+                'audit.setting.retention.serverSideNotice',
+                '当前存储方式（{{sink}}）的过期清理由服务端负责，本页的保留天数对它不生效：请到服务端的保留配置里调整（VictoriaLogs 的 -retentionPeriod、OpenObserve 的 stream data_retention）。',
+                { sink: t(`audit.setting.sink.${sink}`, sink) }
+              )}
+            </div>
+          )}
           <SettingRow
             label={t('audit.setting.retention.keepForever', '永久保留')}
             hint={t(
@@ -266,6 +485,36 @@ export function AuditSetting() {
           </SettingRow>
 
           <SettingRow
+            label={t('audit.setting.syslog.format', '输出格式')}
+            hint={t(
+              'audit.setting.syslog.formatHint',
+              'text 为 key=value 文本；json 输出结构化字段（与归档字段集一致）。'
+            )}
+          >
+            <Select
+              value={formData.syslog.format}
+              disabled={readOnly}
+              onValueChange={(value) =>
+                patchSyslog({ format: value as LogFormat })
+              }
+            >
+              <SelectTrigger className="max-w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LOG_FORMATS.map((format) => (
+                  <SelectItem key={format} value={format}>
+                    {t(
+                      `audit.setting.logFormat.${format}`,
+                      format.toUpperCase()
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          <SettingRow
             label={t('audit.setting.syslog.address', '服务器地址')}
             hint={t('audit.setting.syslog.addressHint', '格式 host:port')}
           >
@@ -352,6 +601,790 @@ export function AuditSetting() {
           )}
         </SettingGroup>
 
+        <SettingGroup
+          title={t('audit.setting.stdout.title', '标准输出（日志采集）')}
+          description={t(
+            'audit.setting.stdout.description',
+            '把审计事件（操作 / 登录 / 改密）也输出到标准输出，交给外部日志采集工具收走。关闭后日志平台只能看到 HTTP 访问日志，查不到「谁做了什么」。'
+          )}
+        >
+          <SettingRow
+            label={t('audit.setting.stdout.enabled', '输出到标准输出')}
+            hint={t(
+              'audit.setting.stdout.enabledHint',
+              '默认开启。审计事件量很小（远低于访问日志），关闭前请确认日志平台另有审计数据来源。'
+            )}
+          >
+            <Switch
+              checked={formData.stdout.enabled}
+              disabled={readOnly}
+              onCheckedChange={(checked) => patchStdout({ enabled: checked })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.stdout.format', '输出格式')}
+            hint={t(
+              'audit.setting.stdout.formatHint',
+              'json（推荐）输出结构化单行并带 logger=audit 标记，便于采集侧分流；text 与 syslog 正文同构。'
+            )}
+          >
+            <Select
+              value={formData.stdout.format}
+              disabled={readOnly}
+              onValueChange={(value) =>
+                patchStdout({ format: value as LogFormat })
+              }
+            >
+              <SelectTrigger className="max-w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LOG_FORMATS.map((format) => (
+                  <SelectItem key={format} value={format}>
+                    {t(
+                      `audit.setting.logFormat.${format}`,
+                      format.toUpperCase()
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingRow>
+        </SettingGroup>
+
+        <SettingGroup
+          title={t('audit.setting.archive.title', '归档（parquet + 外部存储）')}
+          description={t(
+            'audit.setting.archive.description',
+            '把审计与访问日志归档成 parquet 文件，可选上传到 S3 兼容对象存储，或写入 Elasticsearch / VictoriaLogs / OpenObserve。归档是尽力而为：失败不会影响本地落库，也不会拖慢请求。'
+          )}
+        >
+          {/* 通道互斥说明：下面三组开关哪些生效完全由「存储方式」决定，先把这条说在前面，
+              避免管理员在不会生效的开关上反复配置。 */}
+          <div className="mx-3 mt-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            {t(`audit.setting.archive.sinkNotice.${sink}`)}
+          </div>
+          <SettingRow
+            label={t('audit.setting.archive.enabled', '启用归档')}
+            hint={t(
+              'audit.setting.archive.enabledHint',
+              '由存储方式决定：只有 sink=parquet 时才写 parquet 文件，其它存储方式下不可开启。'
+            )}
+          >
+            <Switch
+              checked={archive.enabled}
+              disabled={readOnly || !parquetSink}
+              onCheckedChange={(checked) => patchArchive({ enabled: checked })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.localDir', '本地目录')}
+            hint={t(
+              'audit.setting.archive.localDirHint',
+              '留空使用环境变量 KITE_AUDIT_ARCHIVE_DIR 指定的默认目录。'
+            )}
+          >
+            <Input
+              value={archive.localDir}
+              placeholder="/var/log/kite/archive"
+              disabled={readOnly}
+              onChange={(event) =>
+                patchArchive({ localDir: event.target.value })
+              }
+              className="max-w-80"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.retentionDays', '本地保留天数')}
+            hint={t(
+              'audit.setting.archive.retentionDaysHint',
+              '0 表示不按时间清理。'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.retentionDays}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchArchive({
+                  retentionDays: numberOrZero(event.target.value),
+                })
+              }
+              className="max-w-32"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.maxBytes', '本地容量上限（字节）')}
+            hint={t(
+              'audit.setting.archive.maxBytesHint',
+              '0 表示不按容量清理；超出时先删最旧的文件。'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.maxBytes}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchArchive({ maxBytes: numberOrZero(event.target.value) })
+              }
+              className="max-w-48"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.flushInterval', '攒批间隔（秒）')}
+            hint={t(
+              'audit.setting.archive.flushIntervalHint',
+              '到达间隔、条数或字节任一阈值即落一个 parquet 文件。'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.flush.intervalSeconds}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchArchive({
+                  flush: {
+                    ...archive.flush,
+                    intervalSeconds: numberOrZero(event.target.value),
+                  },
+                })
+              }
+              className="max-w-32"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.flushRows', '单批最大条数')}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.flush.maxBatchRows}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchArchive({
+                  flush: {
+                    ...archive.flush,
+                    maxBatchRows: numberOrZero(event.target.value),
+                  },
+                })
+              }
+              className="max-w-40"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.flushBytes', '单批最大字节数')}
+            hint={t(
+              'audit.setting.archive.flushBytesHint',
+              '0 表示不按字节触发；攒够即落盘，避免单个文件过大。'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.flush.maxBatchBytes}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchArchive({
+                  flush: {
+                    ...archive.flush,
+                    maxBatchBytes: numberOrZero(event.target.value),
+                  },
+                })
+              }
+              className="max-w-48"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.includeResourceYAML',
+              '归档资源清单（YAML）'
+            )}
+            hint={t(
+              'audit.setting.archive.includeResourceYAMLHint',
+              '默认关闭：变更前后的 YAML 可能很大，会把归档文件撑大。仅在需要溯源时开启。'
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={archive.includeResourceYAML}
+                disabled={readOnly}
+                onCheckedChange={(checked) =>
+                  patchArchive({ includeResourceYAML: checked })
+                }
+              />
+              <span className="text-sm text-muted-foreground">
+                {t(
+                  'audit.setting.archive.includeResourceYAMLValue',
+                  '在操作日志归档中写入 YAML'
+                )}
+              </span>
+            </div>
+          </SettingRow>
+        </SettingGroup>
+
+        <SettingGroup
+          title={t('audit.setting.archive.s3.title', 'S3 归档（对象存储）')}
+          description={t(
+            'audit.setting.archive.s3.description',
+            '兼容 MinIO / RustFS / Ceph RGW / 腾讯 COS / 华为 OBS / 阿里 OSS 等一切 S3 兼容存储。默认本地保留几天、同时把全部文件同步到 S3（S3 为长期归档）。'
+          )}
+        >
+          <SettingRow
+            label={t('audit.setting.archive.s3.enabled', '启用上传')}
+            hint={t(
+              'audit.setting.archive.s3.enabledHint',
+              'S3 是 parquet 的远端副本：只有 sink=parquet 时才有可同步的文件。'
+            )}
+          >
+            <Switch
+              checked={archive.s3.enabled}
+              disabled={readOnly || !parquetSink}
+              onCheckedChange={(checked) => patchS3({ enabled: checked })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.s3.endpoint', 'Endpoint')}
+            hint={t(
+              'audit.setting.archive.s3.endpointHint',
+              '含协议头，如 http://minio:9000。'
+            )}
+          >
+            <Input
+              value={archive.s3.endpoint}
+              placeholder="http://minio:9000"
+              disabled={readOnly}
+              onChange={(event) => patchS3({ endpoint: event.target.value })}
+              className="max-w-80"
+            />
+            {s3Incomplete && !archive.s3.endpoint.trim() && (
+              <p className="mt-2 text-xs text-destructive">
+                {t(
+                  'audit.setting.archive.s3.endpointRequired',
+                  '启用上传时必须填写 Endpoint。'
+                )}
+              </p>
+            )}
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.s3.region', 'Region')}
+            hint={t(
+              'audit.setting.archive.s3.regionHint',
+              '腾讯 COS 必填；MinIO / RustFS 等可留空。'
+            )}
+          >
+            <Input
+              value={archive.s3.region}
+              placeholder="us-east-1"
+              disabled={readOnly}
+              onChange={(event) => patchS3({ region: event.target.value })}
+              className="max-w-40"
+            />
+          </SettingRow>
+
+          <SettingRow label={t('audit.setting.archive.s3.bucket', 'Bucket')}>
+            <Input
+              value={archive.s3.bucket}
+              placeholder="kite-audit"
+              disabled={readOnly}
+              onChange={(event) => patchS3({ bucket: event.target.value })}
+              className="max-w-60"
+            />
+            {s3Incomplete && !archive.s3.bucket.trim() && (
+              <p className="mt-2 text-xs text-destructive">
+                {t(
+                  'audit.setting.archive.s3.bucketRequired',
+                  '启用上传时必须填写 Bucket。'
+                )}
+              </p>
+            )}
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.s3.accessKey', 'Access Key')}
+          >
+            <Input
+              value={archive.s3.accessKey}
+              disabled={readOnly}
+              autoComplete="off"
+              onChange={(event) => patchS3({ accessKey: event.target.value })}
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.s3.secretKey', 'Secret Key')}
+            hint={t(
+              'audit.setting.archive.s3.secretKeyHint',
+              '读取时以掩码返回；不修改则保持原值。'
+            )}
+          >
+            <Input
+              type="password"
+              value={archive.s3.secretKey}
+              disabled={readOnly}
+              autoComplete="new-password"
+              onChange={(event) => patchS3({ secretKey: event.target.value })}
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.s3.prefix', '对象前缀')}
+            hint={t(
+              'audit.setting.archive.s3.prefixHint',
+              '对象键为 <前缀>/<类型>/<年>/<月>/<日>/<文件名>。'
+            )}
+          >
+            <Input
+              value={archive.s3.prefix}
+              placeholder="kite-audit"
+              disabled={readOnly}
+              onChange={(event) => patchS3({ prefix: event.target.value })}
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.s3.pathStyle', 'Path-style 寻址')}
+            hint={t(
+              'audit.setting.archive.s3.pathStyleHint',
+              'MinIO / RustFS / Ceph 用 path-style；COS / OBS / OSS 关闭。'
+            )}
+          >
+            <Switch
+              checked={archive.s3.pathStyle}
+              disabled={readOnly}
+              onCheckedChange={(checked) => patchS3({ pathStyle: checked })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.s3.useTLS', '使用 TLS（https）')}
+          >
+            <Switch
+              checked={archive.s3.useTLS}
+              disabled={readOnly}
+              onCheckedChange={(checked) => patchS3({ useTLS: checked })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.s3.deleteLocal',
+              '上传成功后删除本地文件'
+            )}
+            hint={t(
+              'audit.setting.archive.s3.deleteLocalHint',
+              '默认关闭：本地按「本地保留天数」留几天，同时把全部文件同步到 S3；开启后本地仅作中转（S3 成为唯一长期副本）。'
+            )}
+          >
+            <Switch
+              checked={archive.s3.deleteLocalAfterUpload}
+              disabled={readOnly}
+              onCheckedChange={(checked) =>
+                patchS3({ deleteLocalAfterUpload: checked })
+              }
+            />
+          </SettingRow>
+        </SettingGroup>
+
+        <SettingGroup
+          title={t('audit.setting.archive.es.title', 'Elasticsearch（检索）')}
+          description={t(
+            'audit.setting.archive.es.description',
+            '归档记录写入按天索引供全文检索。ES 只做检索，不替代 S3 归档与本地落库。过期的按天索引会按「保留策略」的保留天数整体删除。'
+          )}
+        >
+          <SettingRow
+            label={t('audit.setting.archive.es.enabled', '启用写入')}
+            hint={t(
+              'audit.setting.archive.es.enabledHint',
+              '由存储方式决定：只有 sink=elasticsearch 时才写 ES，其它存储方式下不可开启。'
+            )}
+          >
+            <Switch
+              checked={archive.elasticsearch.enabled}
+              disabled={readOnly || !elasticsearchSink}
+              onCheckedChange={(checked) => patchES({ enabled: checked })}
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.es.urls', '节点地址')}
+            hint={t(
+              'audit.setting.archive.es.urlsHint',
+              '多个地址用英文逗号分隔，如 http://es:9200。'
+            )}
+          >
+            <Input
+              value={archive.elasticsearch.urls.join(',')}
+              placeholder="http://es:9200"
+              disabled={readOnly}
+              onChange={(event) =>
+                patchES({ urls: event.target.value.split(',') })
+              }
+              className="max-w-96"
+            />
+            {esIncomplete && (
+              <p className="mt-2 text-xs text-destructive">
+                {t(
+                  'audit.setting.archive.es.urlsRequired',
+                  '启用写入时至少填写一个节点地址。'
+                )}
+              </p>
+            )}
+          </SettingRow>
+
+          <SettingRow label={t('audit.setting.archive.es.username', '用户名')}>
+            <Input
+              value={archive.elasticsearch.username}
+              disabled={readOnly}
+              autoComplete="off"
+              onChange={(event) => patchES({ username: event.target.value })}
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.es.password', '密码')}
+            hint={t(
+              'audit.setting.archive.es.passwordHint',
+              '读取时以掩码返回；不修改则保持原值。'
+            )}
+          >
+            <Input
+              type="password"
+              value={archive.elasticsearch.password}
+              disabled={readOnly}
+              autoComplete="new-password"
+              onChange={(event) => patchES({ password: event.target.value })}
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.es.indexPrefix', '索引前缀')}
+            hint={t(
+              'audit.setting.archive.es.indexPrefixHint',
+              '索引名为 <前缀>-YYYY.MM.DD。'
+            )}
+          >
+            <Input
+              value={archive.elasticsearch.indexPrefix}
+              placeholder="kite-audit"
+              disabled={readOnly}
+              onChange={(event) => patchES({ indexPrefix: event.target.value })}
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.es.skipVerify', '跳过证书校验')}
+            hint={t(
+              'audit.setting.archive.es.skipVerifyHint',
+              '服务端使用自签证书时开启。'
+            )}
+          >
+            <Switch
+              checked={archive.elasticsearch.tlsInsecureSkipVerify}
+              disabled={readOnly}
+              onCheckedChange={(checked) =>
+                patchES({ tlsInsecureSkipVerify: checked })
+              }
+            />
+          </SettingRow>
+        </SettingGroup>
+
+        {/* VictoriaLogs：与 ES 同构，但单 stream、服务端保留，没有索引前缀与按天索引。 */}
+        <SettingGroup
+          title={t('audit.setting.archive.victorialogs.title', 'VictoriaLogs')}
+          description={t(
+            'audit.setting.archive.victorialogs.description',
+            '写入走 ES bulk 兼容接口、检索走 LogsQL；单 stream（服务端按时间分区），过期由服务端 -retentionPeriod 负责。注意：这是 VictoriaLogs（日志库），不是 VictoriaMetrics（时序库）。'
+          )}
+        >
+          <SettingRow
+            label={t('audit.setting.archive.victorialogs.enabled', '启用写入')}
+            hint={t(
+              'audit.setting.archive.victorialogs.enabledHint',
+              '由存储方式决定：只有 sink=victorialogs 时才写 VictoriaLogs，其它存储方式下不可开启。'
+            )}
+          >
+            <Switch
+              checked={archive.victorialogs.enabled}
+              disabled={readOnly || !victoriaLogsSink}
+              onCheckedChange={(checked) =>
+                patchVictoriaLogs({ enabled: checked })
+              }
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.victorialogs.urls', '节点地址')}
+            hint={t(
+              'audit.setting.archive.victorialogs.urlsHint',
+              '多个地址用英文逗号分隔（写入时轮询）；默认端口 9428。'
+            )}
+          >
+            <Input
+              value={archive.victorialogs.urls.join(',')}
+              placeholder="http://victorialogs:9428"
+              disabled={readOnly}
+              onChange={(event) =>
+                patchVictoriaLogs({ urls: event.target.value.split(',') })
+              }
+              className="max-w-96"
+            />
+            {victoriaLogsIncomplete && (
+              <p className="mt-2 text-xs text-destructive">
+                {t(
+                  'audit.setting.archive.victorialogs.urlsRequired',
+                  '启用写入时至少填写一个节点地址。'
+                )}
+              </p>
+            )}
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.victorialogs.stream', '日志流名')}
+            hint={t(
+              'audit.setting.archive.victorialogs.streamHint',
+              '四类记录共用这一个流，靠 kind 字段区分；不按天分名。'
+            )}
+          >
+            <Input
+              value={archive.victorialogs.stream}
+              placeholder="kite-audit"
+              disabled={readOnly}
+              onChange={(event) =>
+                patchVictoriaLogs({ stream: event.target.value })
+              }
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.victorialogs.accountId',
+              'Account ID'
+            )}
+            hint={t(
+              'audit.setting.archive.victorialogs.tenantHint',
+              '多租户部署才填（日志存储端按租户隔离），单租户留空。'
+            )}
+          >
+            <Input
+              value={archive.victorialogs.accountId}
+              disabled={readOnly}
+              autoComplete="off"
+              onChange={(event) =>
+                patchVictoriaLogs({ accountId: event.target.value })
+              }
+              className="max-w-40"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.victorialogs.projectId',
+              'Project ID'
+            )}
+            hint={t(
+              'audit.setting.archive.victorialogs.tenantHint',
+              '多租户部署才填（日志存储端按租户隔离），单租户留空。'
+            )}
+          >
+            <Input
+              value={archive.victorialogs.projectId}
+              disabled={readOnly}
+              autoComplete="off"
+              onChange={(event) =>
+                patchVictoriaLogs({ projectId: event.target.value })
+              }
+              className="max-w-40"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.victorialogs.skipVerify',
+              '跳过证书校验'
+            )}
+            hint={t(
+              'audit.setting.archive.victorialogs.skipVerifyHint',
+              '服务端使用自签证书时开启。'
+            )}
+          >
+            <Switch
+              checked={archive.victorialogs.tlsInsecureSkipVerify}
+              disabled={readOnly}
+              onCheckedChange={(checked) =>
+                patchVictoriaLogs({ tlsInsecureSkipVerify: checked })
+              }
+            />
+          </SettingRow>
+        </SettingGroup>
+
+        {/*
+          OpenObserve：写入走 /api/{org}/{stream}/_json，检索走它自己的搜索接口。
+          它自己的接口在不同版本间有过调整，所以后端把「路径 + 请求体 + 响应体」集中在一处、
+          并用单测钉住形状（见 pkg/audit/openobserve_sink.go 的注释）。
+        */}
+        <SettingGroup
+          title={t('audit.setting.archive.openobserve.title', 'OpenObserve')}
+          description={t(
+            'audit.setting.archive.openobserve.description',
+            '写入走它自己的 JSON 摄取接口、检索走它自己的搜索接口；单 stream，过期由服务端 stream 的 data_retention 负责。'
+          )}
+        >
+          <SettingRow
+            label={t('audit.setting.archive.openobserve.enabled', '启用写入')}
+            hint={t(
+              'audit.setting.archive.openobserve.enabledHint',
+              '由存储方式决定：只有 sink=openobserve 时才写 OpenObserve，其它存储方式下不可开启。'
+            )}
+          >
+            <Switch
+              checked={archive.openobserve.enabled}
+              disabled={readOnly || !openObserveSink}
+              onCheckedChange={(checked) =>
+                patchOpenObserve({ enabled: checked })
+              }
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.openobserve.urls', '节点地址')}
+            hint={t(
+              'audit.setting.archive.openobserve.urlsHint',
+              '多个地址用英文逗号分隔（写入时轮询）；默认端口 5080。'
+            )}
+          >
+            <Input
+              value={archive.openobserve.urls.join(',')}
+              placeholder="http://openobserve:5080"
+              disabled={readOnly}
+              onChange={(event) =>
+                patchOpenObserve({ urls: event.target.value.split(',') })
+              }
+              className="max-w-96"
+            />
+            {openObserveIncomplete && (
+              <p className="mt-2 text-xs text-destructive">
+                {t(
+                  'audit.setting.archive.openobserve.urlsRequired',
+                  '启用写入时至少填写一个节点地址。'
+                )}
+              </p>
+            )}
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.openobserve.org', '组织（Org）')}
+            hint={t(
+              'audit.setting.archive.openobserve.orgHint',
+              '默认 default；流名与组织名一起决定写入路径 /api/{org}/{stream}/_json。'
+            )}
+          >
+            <Input
+              value={archive.openobserve.org}
+              placeholder="default"
+              disabled={readOnly}
+              onChange={(event) =>
+                patchOpenObserve({ org: event.target.value })
+              }
+              className="max-w-40"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.openobserve.stream', '日志流名')}
+            hint={t(
+              'audit.setting.archive.openobserve.streamHint',
+              '四类记录共用这一个流，靠 kind 字段区分；不按天分名。'
+            )}
+          >
+            <Input
+              value={archive.openobserve.stream}
+              placeholder="kite-audit"
+              disabled={readOnly}
+              onChange={(event) =>
+                patchOpenObserve({ stream: event.target.value })
+              }
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.openobserve.username', '用户名')}
+            hint={t(
+              'audit.setting.archive.openobserve.usernameHint',
+              'OpenObserve 的 Basic 认证用户名通常是登录邮箱。'
+            )}
+          >
+            <Input
+              value={archive.openobserve.username}
+              disabled={readOnly}
+              autoComplete="off"
+              onChange={(event) =>
+                patchOpenObserve({ username: event.target.value })
+              }
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.openobserve.password', '密码')}
+            hint={t(
+              'audit.setting.archive.openobserve.passwordHint',
+              '读取时以掩码返回；不修改则保持原值。'
+            )}
+          >
+            <Input
+              type="password"
+              value={archive.openobserve.password}
+              disabled={readOnly}
+              autoComplete="new-password"
+              onChange={(event) =>
+                patchOpenObserve({ password: event.target.value })
+              }
+              className="max-w-60"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.openobserve.skipVerify',
+              '跳过证书校验'
+            )}
+            hint={t(
+              'audit.setting.archive.openobserve.skipVerifyHint',
+              '服务端使用自签证书时开启。'
+            )}
+          >
+            <Switch
+              checked={archive.openobserve.tlsInsecureSkipVerify}
+              disabled={readOnly}
+              onCheckedChange={(checked) =>
+                patchOpenObserve({ tlsInsecureSkipVerify: checked })
+              }
+            />
+          </SettingRow>
+        </SettingGroup>
+
         <div className="flex justify-end gap-2">
           <Button
             variant="outline"
@@ -362,6 +1395,266 @@ export function AuditSetting() {
           </Button>
           <Button
             disabled={readOnly || invalid || mutation.isPending}
+            onClick={() => mutation.mutate(formData)}
+          >
+            {t('common.actions.submit', 'Submit')}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * 系统设置 → 系统日志：访问日志（HTTP 访问记录）的归档与输出配置。
+ *
+ * 与审计设置拆成**两个导航项**而不是同一页的两个页签：两类参数的调优节奏完全不同
+ * （访问日志量级大得多、默认保留期更短），放在一页很容易把一类的值改成另一类的。
+ *
+ * 权限沿用 `settings.audit`——访问日志归档本来就在那份配置里（`audit_settings` 的
+ * `archive.accessLog`），拆出去只是换个入口，不新增授权章节。
+ */
+export function SystemLogSetting() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const { readOnly } = useSettingsSectionAccess()
+  const { data } = useAuditSetting()
+  const [formData, setFormData] = useState<AuditSettingData>(DEFAULT_FORM)
+  // 访问日志只能随归档通道落地（parquet 或 ES）：sink=database 时没有归档通道，
+  // 访问日志只走标准输出，这个开关也就没有意义（见方案 §12.13）。
+  const databaseSink = (data?.sink ?? 'database') === 'database'
+
+  useEffect(() => {
+    if (data?.setting) {
+      setFormData(data.setting)
+    }
+  }, [data])
+
+  const mutation = useMutation({
+    mutationFn: (payload: AuditSettingData) => updateAuditSetting(payload),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['audit-setting'] })
+      toast.success(t('audit.setting.messages.updated', '审计设置已保存'))
+
+      // 与审计设置一致：保存后后端会探一次目标存储，探测失败要当场告诉管理员，
+      // 否则「配置存进去了、归档其实跑不起来」只能等下次查日志才发现。
+      const warnings = response?.warnings ?? []
+      if (warnings.length > 0) {
+        toast.warning(
+          t(
+            'audit.setting.messages.probeFailed',
+            '配置已保存，但连通性检查未通过：{{detail}}',
+            { detail: warnings.join('; ') }
+          ),
+          { duration: 10000 }
+        )
+      }
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
+  const archive = formData.archive
+  const patchAccessLog = (patch: Partial<AccessLogArchiveSetting>) =>
+    setFormData((prev) => ({
+      ...prev,
+      archive: {
+        ...prev.archive,
+        accessLog: { ...prev.archive.accessLog, ...patch },
+      },
+    }))
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('audit.systemLog.title', '系统日志')}</CardTitle>
+        <p className="text-muted-foreground text-sm">
+          {t(
+            'audit.systemLog.description',
+            '访问日志（HTTP 访问记录）的归档与输出格式。与审计日志分开配置：访问日志量级大得多，默认保留期更短。'
+          )}
+        </p>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <SettingGroup
+          title={t('audit.setting.archive.accessLog.title', '访问日志归档')}
+          description={t(
+            'audit.setting.archive.accessLog.description',
+            '访问日志量级大，默认保留期更短，与审计日志分开配置。'
+          )}
+        >
+          <SettingRow
+            label={t('audit.setting.archive.accessLog.enabled', '纳入归档')}
+            hint={t(
+              'audit.setting.archive.accessLog.enabledHint',
+              'parquet 下由这里决定是否写访问日志；sink=database 时没有归档通道，访问日志只走标准输出。'
+            )}
+          >
+            <Switch
+              checked={archive.accessLog.enabled}
+              disabled={readOnly || databaseSink}
+              onCheckedChange={(checked) =>
+                patchAccessLog({ enabled: checked })
+              }
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.accessLog.retentionDays',
+              '本地保留天数'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.accessLog.retentionDays}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchAccessLog({
+                  retentionDays: numberOrZero(event.target.value),
+                })
+              }
+              className="max-w-32"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.accessLog.maxBytes',
+              '本地容量上限（字节）'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.accessLog.maxBytes}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchAccessLog({ maxBytes: numberOrZero(event.target.value) })
+              }
+              className="max-w-48"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t('audit.setting.archive.accessLog.format', '输出格式')}
+            hint={t(
+              'audit.setting.archive.accessLog.formatHint',
+              '控制台标准输出的访问日志格式：text 保持现状，json 为结构化单行。'
+            )}
+          >
+            <Select
+              value={archive.accessLog.format}
+              disabled={readOnly}
+              onValueChange={(value) =>
+                patchAccessLog({ format: value as LogFormat })
+              }
+            >
+              <SelectTrigger className="max-w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LOG_FORMATS.map((format) => (
+                  <SelectItem key={format} value={format}>
+                    {t(
+                      `audit.setting.logFormat.${format}`,
+                      format.toUpperCase()
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.accessLog.flushInterval',
+              '攒批间隔（秒）'
+            )}
+            hint={t(
+              'audit.setting.archive.accessLog.flushIntervalHint',
+              '访问日志量大，默认攒批更大：到间隔、条数或字节任一阈值即落一个 parquet 文件。'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.accessLog.flush.intervalSeconds}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchAccessLog({
+                  flush: {
+                    ...archive.accessLog.flush,
+                    intervalSeconds: numberOrZero(event.target.value),
+                  },
+                })
+              }
+              className="max-w-32"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.accessLog.flushRows',
+              '单批最大条数'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.accessLog.flush.maxBatchRows}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchAccessLog({
+                  flush: {
+                    ...archive.accessLog.flush,
+                    maxBatchRows: numberOrZero(event.target.value),
+                  },
+                })
+              }
+              className="max-w-40"
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.accessLog.flushBytes',
+              '单批最大字节数'
+            )}
+            hint={t(
+              'audit.setting.archive.accessLog.flushBytesHint',
+              '0 表示不按字节触发。'
+            )}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={archive.accessLog.flush.maxBatchBytes}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchAccessLog({
+                  flush: {
+                    ...archive.accessLog.flush,
+                    maxBatchBytes: numberOrZero(event.target.value),
+                  },
+                })
+              }
+              className="max-w-48"
+            />
+          </SettingRow>
+        </SettingGroup>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            disabled={readOnly}
+            onClick={() => setFormData(data?.setting ?? DEFAULT_FORM)}
+          >
+            {t('common.actions.reset', 'Reset')}
+          </Button>
+          <Button
+            disabled={readOnly || mutation.isPending}
             onClick={() => mutation.mutate(formData)}
           >
             {t('common.actions.submit', 'Submit')}

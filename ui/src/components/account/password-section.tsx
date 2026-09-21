@@ -95,7 +95,7 @@ export function PasswordSection() {
           aria-invalid={passwordTouched && !passwordValid}
           className={
             passwordTouched && !passwordValid
-              ? 'border-red-500 focus-visible:ring-red-500'
+              ? 'border-destructive focus-visible:ring-destructive'
               : undefined
           }
         />
@@ -119,13 +119,13 @@ export function PasswordSection() {
           aria-invalid={confirmMismatch}
           className={
             confirmMismatch
-              ? 'border-red-500 focus-visible:ring-red-500'
+              ? 'border-destructive focus-visible:ring-destructive'
               : undefined
           }
         />
         {/* 两次密码不一致：内联提示在确认密码框正下方 */}
         {confirmMismatch && (
-          <p className="text-xs text-red-600">
+          <p className="text-xs text-destructive">
             {t('accountSettings.password.mismatch', '两次输入的密码不一致')}
           </p>
         )}

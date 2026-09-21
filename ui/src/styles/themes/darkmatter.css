@@ -6,17 +6,26 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.2101 0.0318 264.6645);
   --primary: oklch(0.6716 0.1368 48.513);
-  --primary-foreground: oklch(1 0 0);
+  /* 橙底上压白字只有 3.1:1，改用本主题自己的深墨色（暗色侧本来就是这么用的）。 */
+  --primary-foreground: oklch(0.2101 0.0318 264.6645);
   --secondary: oklch(0.536 0.0398 196.028);
   --secondary-foreground: oklch(1 0 0);
   --muted: oklch(0.967 0.0029 264.5419);
-  --muted-foreground: oklch(0.551 0.0234 264.3637);
+  --muted-foreground: oklch(0.535 0.0234 264.3637);
   --accent: oklch(0.9491 0 0);
   --accent-foreground: oklch(0.2101 0.0318 264.6645);
-  --destructive: oklch(0.6368 0.2078 25.3313);
+  --destructive: oklch(0.575 0.2078 25.3313);
   --destructive-foreground: oklch(0.9851 0 0);
+  --success: oklch(0.504 0.12 158);
+  --success-foreground: oklch(1 0 0);
+  --info: oklch(0.518 0.14 248);
+  --info-foreground: oklch(1 0 0);
+  --warning: oklch(0.52 0.14 92);
+  --warning-foreground: oklch(1 0 0);
+  --attention: oklch(0.536 0.15 32);
+  --attention-foreground: oklch(1 0 0);
   --border: oklch(0.9276 0.0058 264.5313);
-  --input: oklch(0.9276 0.0058 264.5313);
+  --input: oklch(0.865 0.0058 264.5313);
   --ring: oklch(0.6716 0.1368 48.513);
   --chart-1: oklch(0.594 0.0443 196.0233);
   --chart-2: oklch(0.7214 0.1337 49.9802);
@@ -26,7 +35,7 @@
   --sidebar: oklch(0.967 0.0029 264.5419);
   --sidebar-foreground: oklch(0.2101 0.0318 264.6645);
   --sidebar-primary: oklch(0.6716 0.1368 48.513);
-  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-primary-foreground: oklch(0.2101 0.0318 264.6645);
   --sidebar-accent: oklch(1 0 0);
   --sidebar-accent-foreground: oklch(0.2101 0.0318 264.6645);
   --sidebar-border: oklch(0.9276 0.0058 264.5313);
@@ -61,13 +70,23 @@
   --secondary: oklch(0.594 0.0443 196.0233);
   --secondary-foreground: oklch(0.1797 0.0043 308.1928);
   --muted: oklch(0.252 0 0);
-  --muted-foreground: oklch(0.6268 0 0);
+  --muted-foreground: oklch(0.635 0 0);
   --accent: oklch(0.3211 0 0);
   --accent-foreground: oklch(0.8109 0 0);
-  --destructive: oklch(0.594 0.0443 196.0233);
+  /* 原值是本主题浅色的 --secondary（青），与 --secondary 同色，危险按钮会跟着变青色。
+     换成中性色阶里同位置的暗色红（与 default/eye-care 暗色同值）。 */
+  --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.1797 0.0043 308.1928);
+  --success: oklch(0.63 0.12 158);
+  --success-foreground: oklch(0.1797 0.0043 308.1928);
+  --info: oklch(0.642 0.14 248);
+  --info-foreground: oklch(0.1797 0.0043 308.1928);
+  --warning: oklch(0.644 0.14 92);
+  --warning-foreground: oklch(0.1797 0.0043 308.1928);
+  --attention: oklch(0.66 0.15 32);
+  --attention-foreground: oklch(0.1797 0.0043 308.1928);
   --border: oklch(0.252 0 0);
-  --input: oklch(0.252 0 0);
+  --input: oklch(0.33 0 0);
   --ring: oklch(0.7214 0.1337 49.9802);
   --chart-1: oklch(0.594 0.0443 196.0233);
   --chart-2: oklch(0.7214 0.1337 49.9802);

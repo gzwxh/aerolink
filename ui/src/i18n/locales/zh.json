@@ -256,7 +256,24 @@
       "email": "邮箱",
       "error": "错误",
       "phone": "手机",
-      "remark": "备注"
+      "remark": "备注",
+      "method": "方法",
+      "path": "路径",
+      "statusCode": "状态码",
+      "latency": "耗时",
+      "clientIp": "客户端 IP"
+    },
+    "dateTime": {
+      "placeholder": "选择时间",
+      "date": "日期",
+      "time": "时刻",
+      "clear": "清空",
+      "monthLabel": "{{year}}年{{month}}月",
+      "weekdays": "日,一,二,三,四,五,六",
+      "prevYear": "上一年",
+      "prevMonth": "上个月",
+      "nextMonth": "下个月",
+      "nextYear": "下一年"
     },
     "messages": {
       "addNewItem": "添加新的{{resource}}",
@@ -267,6 +284,7 @@
       "auditLogsDescription": "追踪资源变更操作并查看 YAML 差异",
       "loginLogsDescription": "查看每一次登录尝试（含被拒绝的尝试）及其来源 IP",
       "passwordChangeLogsDescription": "查看密码修改人与修改时间",
+      "archiveSourceNotice": "数据来自归档（{{backend}}），不含最近约 {{seconds}} 秒内的操作",
       "confirmRemoveOwnRole": "你正在移除自己的角色分配，这可能会影响你的权限。确定继续吗？",
       "copied": "已复制到剪贴板",
       "copyFailed": "复制失败，请手动选择文本后复制。",
@@ -1678,8 +1696,67 @@
     "operationFailed": "操作失败",
     "tabs": {
       "email": "邮件设置",
+      "announcements": "通知栏",
       "templates": "消息模板",
       "subscriptions": "消息订阅"
+    },
+    "announcements": {
+      "description": "公告显示在所有用户页面顶端的通知栏里，按优先级降序滚动输出；按生效时间自动出现与消失。",
+      "empty": "暂无公告",
+      "createTitle": "新增公告",
+      "editTitle": "编辑公告",
+      "dialogHint": "通知栏按一行滚动输出：正文里的换行会被合并，标题会加粗显示在正文前面。",
+      "never": "不限",
+      "barLabel": "通知栏",
+      "expand": "展开全文",
+      "fields": {
+        "title": "标题",
+        "content": "内容",
+        "level": "级别",
+        "priority": "优先级",
+        "enabled": "启用",
+        "scroll": "横向滚动",
+        "scrollHint": "开启后内容从右向左循环滚动；关闭则单行显示，靠拖动或右侧箭头展开读全文。",
+        "enabledHint": "关闭后不会展示在顶栏，公告内容仍会保留。",
+        "startAt": "生效时间",
+        "startAtHint": "留空立即生效",
+        "endAt": "结束时间",
+        "endAtHint": "留空永不结束"
+      },
+      "toolbar": {
+        "label": "格式",
+        "bold": "加粗",
+        "italic": "斜体",
+        "strikethrough": "删除线",
+        "color": "文字颜色",
+        "hint": "选中文字后点上面的按钮即可加粗、斜体或改颜色；颜色按钮里可选具体颜色或「默认颜色」清除，输入区里直接看到效果。",
+        "colorPalette": "选择颜色",
+        "colorDefault": "默认颜色"
+      },
+      "levels": {
+        "info": "提示",
+        "warning": "警告",
+        "danger": "严重"
+      },
+      "status": {
+        "active": "生效中",
+        "pending": "未开始",
+        "expired": "已结束",
+        "disabled": "已停用"
+      },
+      "colors": {
+        "primary": "主题色",
+        "muted": "次要灰",
+        "info": "信息蓝",
+        "success": "成功绿",
+        "warning": "警告橙",
+        "attention": "提示黄",
+        "danger": "危险红"
+      },
+      "scrollOff": "不滚动",
+      "enabledOn": "已启用",
+      "enabledOff": "已停用",
+      "scrollOn": "横向滚动"
     },
     "channels": {
       "inapp": "站内信",
@@ -1703,6 +1780,7 @@
       "account_expiring": "账号即将过期提醒",
       "role_assigned": "角色分配通知",
       "role_unassigned": "角色移除通知",
+      "scheduled_task_failed": "定时任务执行失败",
       "mail_delivery_failed": "邮件发送失败告警",
       "session_takeover": "账号在其他设备登录提醒",
       "test": "测试邮件"
@@ -1774,7 +1852,9 @@
       "selectedCount": "已选 {{selected}}/{{total}}",
       "mandatory": "管理员必收",
       "mandatoryHint": "带锁的事件是安全事件：无论订阅怎么配，都会以站内信通知全部管理员，无法取消。",
-      "noReceiverHint": "没有配置接收者的事件不会通知任何人（管理员也一样）。",
+      "targetUser": "当事人必收",
+      "targetUserHint": "带头像标记的事件描述的是当事人自己账号的状态/凭据变化（密码重置、账号启停、角色变更、异地登录等），一定会以站内信通知本人，无法取消。",
+      "noReceiverHint": "订阅用于给事件增加额外收件人（例如把某事件也发给管理员）；当事人自己关心的事件由「当事人必收」保证送达。",
       "addSelected": "添加订阅（{{count}}）",
       "addedResult": "已新增 {{created}} 条，跳过 {{skipped}} 条（已存在）",
       "selectEventsFirst": "请先选择事件"
@@ -1844,6 +1924,7 @@
       "apikeys": "API 密钥",
       "templates": "模板",
       "audit": "审计管理",
+      "systemLog": "系统日志",
       "security": "安全管理",
       "notification": "通知管理"
     },
@@ -2357,6 +2438,10 @@
       "rollingBack": "回滚中...",
       "success": "回滚成功",
       "error": "回滚失败"
+    },
+    "requiresDatabaseSink": "资源级变更历史需要审计记录落在数据库（auditSink=database，默认）。当前存储方式下本页不可用：parquet 默认不写资源 YAML，Elasticsearch 的文档也不含 YAML——两者都撑不起变更前后对比。",
+    "errors": {
+      "resource_history_requires_database_sink": "资源级变更历史需要审计记录落在数据库（auditSink=database，默认），当前存储方式下不可用。"
     }
   },
   "apikeyManagement": {
@@ -2666,6 +2751,7 @@
       "loadingValues": "正在加载 Values...",
       "autoUpgradeSaved": "自动升级配置已保存",
       "autoUpgradeDescription": "发现新 Chart 版本时升级。",
+      "autoUpgradeNotifyDescription": "执行失败时会用站内信通知配置这个任务的账号。",
       "autoUpgradeChartDescription": "用于检查版本的 Chart 来源。",
       "autoUpgradeScheduleDescription": "检查更新的时间。",
       "autoUpgradeIntervalDescription": "检查频率。",
@@ -3246,17 +3332,44 @@
       "operation": "操作日志",
       "file": "文件操作",
       "password": "改密日志",
+      "archive": "归档检索",
       "setting": "审计设置"
+    },
+    "systemLog": {
+      "title": "系统日志",
+      "description": "访问日志（HTTP 访问记录）的归档与输出格式。与审计日志分开配置：访问日志量级大得多，默认保留期更短。"
     },
     "setting": {
       "title": "审计设置",
       "description": "配置审计记录的保留策略与外部外发。审计记录只能查看，不能手工删除。",
       "messages": {
-        "updated": "审计设置已保存"
+        "updated": "审计设置已保存",
+        "probeFailed": "配置已保存，但连通性检查未通过：{{detail}}"
+      },
+      "scope": {
+        "audit": "审计日志",
+        "system": "系统日志"
+      },
+      "sink": {
+        "title": "存储方式",
+        "description": "审计记录的落地方式（五者互斥），由配置文件 auditSink / 环境变量 KITE_AUDIT_SINK 在启动时指定，界面只读。",
+        "label": "落地方式",
+        "database": "数据库",
+        "parquet": "本地 parquet 文件",
+        "elasticsearch": "Elasticsearch",
+        "victorialogs": "VictoriaLogs",
+        "openobserve": "OpenObserve",
+        "delay": "查询延迟上限",
+        "delayHint": "parquet 是攒批落盘的：刚发生的操作在这个时间内可能还查不到，审计列表会给出提示。",
+        "delayValue": "{{seconds}} 秒",
+        "unavailable": "当前不可用的能力",
+        "unavailableHint": "下列能力都依赖本库里的历史记录，sink≠database 时不可用：",
+        "unavailableHistory": "资源级变更历史（含 YAML 对比与回滚）：资源详情页的「历史」会明确提示不可用",
+        "unavailableNewIP": "异地登录提醒（需要历史登录记录才能判定）"
       },
       "retention": {
         "title": "保留策略",
-        "description": "按时间自动滚动清理过期的审计记录；每次清理都会留下一条审计记录。",
+        "description": "按时间自动滚动清理过期的审计记录（含 Elasticsearch 的按天索引）；每次清理都会留下一条审计记录。",
         "keepForever": "永久保留",
         "keepForeverHint": "默认开启：不做任何自动删除。",
         "keepForeverValue": "不自动清理审计记录",
@@ -3264,7 +3377,8 @@
         "daysHint": "不低于 {{min}} 天；等保与《网络安全法》通常按 {{recommended}} 天核查。",
         "daysUnit": "天",
         "tooShort": "保留天数必须为 0（永久保留）或不低于 {{min}} 天。",
-        "belowRecommended": "当前保留天数低于建议的 {{recommended}} 天，可能无法通过等保核查。"
+        "belowRecommended": "当前保留天数低于建议的 {{recommended}} 天，可能无法通过等保核查。",
+        "serverSideNotice": "当前存储方式（{{sink}}）的过期清理由服务端负责，本页的保留天数对它不生效：请到服务端的保留配置里调整（VictoriaLogs 的 -retentionPeriod、OpenObserve 的 stream data_retention）。"
       },
       "syslog": {
         "title": "日志外发（syslog）",
@@ -3278,10 +3392,169 @@
         "tagHint": "外发消息里的应用名，便于在日志服务器上区分来源。",
         "facility": "设施（facility）",
         "facilityHint": "默认 13（log audit），取值范围 0-23。",
+        "format": "输出格式",
+        "formatHint": "text 为 key=value 文本；json 输出结构化字段（与归档字段集一致）。",
         "skipVerify": "跳过证书校验",
         "skipVerifyHint": "仅 tls 生效。服务端使用自签证书时开启。",
         "skipVerifyValue": "不校验服务端证书"
+      },
+      "stdout": {
+        "title": "标准输出（日志采集）",
+        "description": "把审计事件（操作 / 登录 / 改密）也输出到标准输出，交给外部日志采集工具收走。关闭后日志平台只能看到 HTTP 访问日志，查不到「谁做了什么」。",
+        "enabled": "输出到标准输出",
+        "enabledHint": "默认开启。审计事件量很小（远低于访问日志），关闭前请确认日志平台另有审计数据来源。",
+        "format": "输出格式",
+        "formatHint": "json（推荐）输出结构化单行并带 logger=audit 标记，便于采集侧分流；text 与 syslog 正文同构。"
+      },
+      "logFormat": {
+        "text": "文本（text）",
+        "json": "JSON（json）"
+      },
+      "archive": {
+        "title": "归档（parquet + 外部存储）",
+        "description": "把审计与访问日志归档成 parquet 文件，可选上传到 S3 兼容对象存储，或写入 Elasticsearch / VictoriaLogs / OpenObserve。归档是尽力而为：失败不会影响本地落库，也不会拖慢请求。",
+        "enabled": "启用归档",
+        "enabledHint": "由存储方式决定：只有 sink=parquet 时才写 parquet 文件，其它存储方式下不可开启。",
+        "localDir": "本地目录",
+        "localDirHint": "留空使用环境变量 KITE_AUDIT_ARCHIVE_DIR 指定的默认目录。",
+        "retentionDays": "本地保留天数",
+        "retentionDaysHint": "0 表示不按时间清理。",
+        "maxBytes": "本地容量上限（字节）",
+        "maxBytesHint": "0 表示不按容量清理；超出时先删最旧的文件。",
+        "flushInterval": "攒批间隔（秒）",
+        "flushIntervalHint": "到达间隔、条数或字节任一阈值即落一个 parquet 文件。",
+        "flushRows": "单批最大条数",
+        "flushBytes": "单批最大字节数",
+        "flushBytesHint": "0 表示不按字节触发；攒够即落盘，避免单个文件过大。",
+        "includeResourceYAML": "归档资源清单（YAML）",
+        "includeResourceYAMLHint": "默认关闭：变更前后的 YAML 可能很大，会把归档文件撑大。仅在需要溯源时开启。",
+        "includeResourceYAMLValue": "在操作日志归档中写入 YAML",
+        "accessLog": {
+          "title": "访问日志归档",
+          "description": "访问日志量级大，默认保留期更短，与审计日志分开配置。",
+          "enabled": "纳入归档",
+          "retentionDays": "本地保留天数",
+          "maxBytes": "本地容量上限（字节）",
+          "format": "输出格式",
+          "formatHint": "控制台标准输出的访问日志格式：text 保持现状，json 为结构化单行。",
+          "flushInterval": "攒批间隔（秒）",
+          "flushIntervalHint": "访问日志量大，默认攒批更大：到间隔、条数或字节任一阈值即落一个 parquet 文件。",
+          "flushRows": "单批最大条数",
+          "flushBytes": "单批最大字节数",
+          "flushBytesHint": "0 表示不按字节触发。",
+          "enabledHint": "parquet 下由这里决定是否写访问日志；sink=database 时没有归档通道，访问日志只走标准输出。"
+        },
+        "s3": {
+          "title": "S3 归档（对象存储）",
+          "description": "兼容 MinIO / RustFS / Ceph RGW / 腾讯 COS / 华为 OBS / 阿里 OSS 等一切 S3 兼容存储。默认本地保留几天，同时把全部文件同步到 S3（S3 是长期归档）。",
+          "enabled": "启用上传",
+          "endpoint": "Endpoint",
+          "endpointHint": "含协议头，如 http://minio:9000。",
+          "endpointRequired": "启用上传时必须填写 Endpoint。",
+          "region": "Region",
+          "regionHint": "腾讯 COS 必填；MinIO / RustFS 等可留空。",
+          "bucket": "Bucket",
+          "bucketRequired": "启用上传时必须填写 Bucket。",
+          "accessKey": "Access Key",
+          "secretKey": "Secret Key",
+          "secretKeyHint": "读取时以掩码返回；不修改则保持原值。",
+          "prefix": "对象前缀",
+          "prefixHint": "对象键为 <前缀>/<类型>/<年>/<月>/<日>/<文件名>。",
+          "pathStyle": "Path-style 寻址",
+          "pathStyleHint": "MinIO / RustFS / Ceph 用 path-style；COS / OBS / OSS 关闭。",
+          "useTLS": "使用 TLS（https）",
+          "deleteLocal": "上传成功后删除本地文件",
+          "deleteLocalHint": "默认关闭：本地按「本地保留天数」留几天，同时把全部文件同步到 S3；开启后本地仅作中转（S3 成为唯一长期副本）。失败时保留本地、等待补传。",
+          "enabledHint": "S3 是 parquet 的远端副本：只有 sink=parquet 时才有可同步的文件。"
+        },
+        "es": {
+          "title": "Elasticsearch（检索）",
+          "description": "归档记录写入按天索引供全文检索。ES 只做检索，不替代 S3 归档与本地落库。过期的按天索引会按「保留策略」的保留天数整体删除。",
+          "enabled": "启用写入",
+          "enabledHint": "由存储方式决定：只有 sink=elasticsearch 时才写 ES，其它存储方式下不可开启。",
+          "urls": "节点地址",
+          "urlsHint": "多个地址用英文逗号分隔，如 http://es:9200。",
+          "urlsRequired": "启用写入时至少填写一个节点地址。",
+          "username": "用户名",
+          "password": "密码",
+          "passwordHint": "读取时以掩码返回；不修改则保持原值。",
+          "indexPrefix": "索引前缀",
+          "indexPrefixHint": "索引名为 <前缀>-YYYY.MM.DD。",
+          "skipVerify": "跳过证书校验",
+          "skipVerifyHint": "服务端使用自签证书时开启。"
+        },
+        "sinkNotice": {
+          "database": "当前存储方式为「数据库」：审计记录只落库，下面的归档通道（parquet / S3 / Elasticsearch / VictoriaLogs / OpenObserve）都不生效，开关由存储方式决定、不可修改。",
+          "parquet": "当前存储方式为「parquet」：审计记录只落本地 parquet 文件（S3 是可选远端副本）；Elasticsearch / VictoriaLogs / OpenObserve 通道不生效。",
+          "elasticsearch": "当前存储方式为「Elasticsearch」：审计记录只写 ES；parquet / S3 / VictoriaLogs / OpenObserve 通道不生效。",
+          "victorialogs": "当前存储方式为「VictoriaLogs」：审计记录只写 VictoriaLogs（单 stream，过期由服务端保留策略负责）；parquet / S3 / Elasticsearch / OpenObserve 通道不生效。",
+          "openobserve": "当前存储方式为「OpenObserve」：审计记录只写 OpenObserve（单 stream，过期由服务端 data_retention 负责）；parquet / S3 / Elasticsearch / VictoriaLogs 通道不生效。"
+        },
+        "victorialogs": {
+          "title": "VictoriaLogs（日志存储）",
+          "description": "写入走 ES bulk 兼容接口、检索走 LogsQL；单 stream（服务端按时间分区），过期由服务端 -retentionPeriod 负责。注意：这是 VictoriaLogs（日志库），不是 VictoriaMetrics（时序库）。",
+          "enabled": "启用写入",
+          "enabledHint": "由存储方式决定：只有 sink=victorialogs 时才写 VictoriaLogs，其它存储方式下不可开启。",
+          "urls": "节点地址",
+          "urlsHint": "多个地址用英文逗号分隔（写入时轮询）；默认端口 9428。",
+          "urlsRequired": "启用写入时至少填写一个节点地址。",
+          "stream": "日志流名",
+          "streamHint": "四类记录共用这一个流，靠 kind 字段区分；不按天分名。",
+          "accountId": "Account ID",
+          "projectId": "Project ID",
+          "tenantHint": "多租户部署才填（日志存储端按租户隔离），单租户留空。",
+          "skipVerify": "跳过证书校验",
+          "skipVerifyHint": "服务端使用自签证书时开启。"
+        },
+        "openobserve": {
+          "title": "OpenObserve（日志存储）",
+          "description": "写入走它自己的 JSON 摄取接口、检索走它自己的搜索接口；单 stream，过期由服务端 stream 的 data_retention 负责。",
+          "enabled": "启用写入",
+          "enabledHint": "由存储方式决定：只有 sink=openobserve 时才写 OpenObserve，其它存储方式下不可开启。",
+          "urls": "节点地址",
+          "urlsHint": "多个地址用英文逗号分隔（写入时轮询）；默认端口 5080。",
+          "urlsRequired": "启用写入时至少填写一个节点地址。",
+          "org": "组织（Org）",
+          "orgHint": "默认 default；流名与组织名一起决定写入路径 /api/{org}/{stream}/_json。",
+          "stream": "日志流名",
+          "streamHint": "四类记录共用这一个流，靠 kind 字段区分；不按天分名。",
+          "username": "用户名",
+          "usernameHint": "OpenObserve 的 Basic 认证用户名通常是登录邮箱。",
+          "password": "密码",
+          "passwordHint": "读取时以掩码返回；不修改则保持原值。",
+          "skipVerify": "跳过证书校验",
+          "skipVerifyHint": "服务端使用自签证书时开启。"
+        },
+        "elasticsearch": {
+          "enabledHint": "由存储方式决定：只有 sink=elasticsearch 时才写 ES，其它存储方式下不可开启。"
+        }
       }
+    },
+    "archive": {
+      "title": "归档检索",
+      "description": "检索已经归档出去的历史日志。本地已清理的记录在这里仍可查到。",
+      "resource": "归档记录",
+      "failed": "归档检索失败：{{message}}",
+      "empty": "没有匹配的归档记录。归档写入是异步的，刚发生的操作可能还没落进检索索引。",
+      "searchPlaceholder": "搜索关键字...",
+      "statusCode": "状态码",
+      "backendLabel": "数据来源",
+      "backendDisabled": "未配置",
+      "backend": {
+        "elasticsearch": "Elasticsearch",
+        "duckdb": "DuckDB（直接查 parquet）",
+        "victorialogs": "VictoriaLogs",
+        "openobserve": "OpenObserve"
+      },
+      "disabledTitle": "归档检索暂不可用",
+      "disabledHint": "检索后端跟随存储方式：Elasticsearch、DuckDB（直接查 parquet，无需额外部署组件）、VictoriaLogs 或 OpenObserve。当前存储方式对应的后端还不可用，请在「审计设置 → 归档」补齐配置后重试。",
+      "goToSetting": "前往审计设置",
+      "kind": {
+        "audit": "操作历史",
+        "login": "登录日志",
+        "access": "访问日志"
+      },
+      "disabledSinkHint": "当前审计落地方式是「数据库」（auditSink=database，默认）：记录都在库里，没有归档可查，归档通道的开关也已按互斥关闭。要用归档检索，请在配置文件里把 auditSink 改成 parquet / elasticsearch / victorialogs / openobserve 后重启。"
     },
     "fileOperations": {
       "title": "文件操作日志",

@@ -2,6 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 
 import {
   APIKey,
+  ArchiveBackend,
+  ArchiveBackendsResponse,
+  ArchiveKind,
+  ArchiveQueryResponse,
   AuditLogResponse,
   AuditSetting,
   AuditSettingResponse,
@@ -952,10 +956,139 @@ export const useAuditSetting = () =>
     queryFn: fetchAuditSetting,
   })
 
+// 保存审计设置。
+//
+// 后端保存后会主动探一次目标存储（S3 列前缀 / ES ping），把结果放在 warnings 里返回：
+// 探测失败**不影响保存**（可能只是网络抖动），所以是警告而不是错误，界面必须展示出来，
+// 否则「配置存进去了、归档其实传不上去」只能等下次查日志才发现。
 export const updateAuditSetting = async (
   setting: AuditSetting
-): Promise<{ setting: AuditSetting }> =>
-  apiClient.put<{ setting: AuditSetting }>('/admin/audit-setting/', setting)
+): Promise<{ setting: AuditSetting; warnings?: string[] }> =>
+  apiClient.put<{ setting: AuditSetting; warnings?: string[] }>(
+    '/admin/audit-setting/',
+    setting
+  )
+
+// —— 归档检索（走 Elasticsearch，见方案 §10.3 步骤 9）——
+//
+// 只读，按类型分三个接口；查询参数与本地列表接口同构，于是可以复用同一套时间范围与
+// 筛选组件。ES 未启用时后端返回 400 并给出原因，界面据此提示去「审计设置 → 归档」开启。
+
+export interface ArchiveQueryParams {
+  page?: number
+  size?: number
+  range?: AuditTimeRange
+  search?: string
+  /** 指定检索后端；留空由服务端按可用性决定（配置了 ES 就用 ES，否则 DuckDB）。 */
+  backend?: ArchiveBackend
+  // 操作历史
+  cluster?: string
+  operation?: string
+  resourceType?: string
+  namespace?: string
+  // 登录
+  username?: string
+  provider?: string
+  outcome?: 'success' | 'failure'
+  // 访问日志
+  method?: string
+  statusCode?: string
+  path?: string
+  clientIp?: string
+}
+
+const ARCHIVE_ENDPOINTS: Record<ArchiveKind, string> = {
+  audit: 'audit-history-archive',
+  login: 'login-record-archive',
+  access: 'access-log-archive',
+}
+
+function appendArchiveParams(
+  params: URLSearchParams,
+  query: ArchiveQueryParams
+) {
+  params.set('page', String(query.page ?? 1))
+  params.set('size', String(query.size ?? 20))
+  appendTimeRange(params, query.range)
+
+  const optionalKeys = [
+    'search',
+    'backend',
+    'cluster',
+    'operation',
+    'resourceType',
+    'namespace',
+    'username',
+    'provider',
+    'outcome',
+    'method',
+    'statusCode',
+    'path',
+    'clientIp',
+  ] as const
+  for (const key of optionalKeys) {
+    const value = query[key]
+    if (value) {
+      params.set(key, String(value))
+    }
+  }
+}
+
+export const fetchArchiveRecords = async <T>(
+  kind: ArchiveKind,
+  query: ArchiveQueryParams = {}
+): Promise<ArchiveQueryResponse<T>> => {
+  const params = new URLSearchParams()
+  appendArchiveParams(params, query)
+  return fetchAPI<ArchiveQueryResponse<T>>(
+    `/admin/${ARCHIVE_ENDPOINTS[kind]}?${params.toString()}`
+  )
+}
+
+export const useArchiveRecords = <T>(
+  kind: ArchiveKind,
+  query: ArchiveQueryParams = {}
+) =>
+  useQuery<ArchiveQueryResponse<T>, Error>({
+    queryKey: ['archive-records', kind, query],
+    queryFn: () => fetchArchiveRecords<T>(kind, query),
+    // 归档查的是历史数据，不频繁变动，没必要反复重取。
+    staleTime: 30000,
+  })
+
+// 可用检索后端与默认选择：
+// 配置了 ES 的部署可以选 ES 或 DuckDB；没配置 ES 时 ES 选项置灰，默认走 DuckDB。
+export const fetchArchiveBackends = (): Promise<ArchiveBackendsResponse> => {
+  return fetchAPI<ArchiveBackendsResponse>('/admin/archive-backends')
+}
+
+export const useArchiveBackends = () =>
+  useQuery<ArchiveBackendsResponse, Error>({
+    queryKey: ['archive-backends'],
+    queryFn: fetchArchiveBackends,
+    // 后端可用性只随审计配置变化，没必要频繁重取。
+    staleTime: 60000,
+  })
+
+// 导出归档记录为 CSV。
+//
+// 过滤条件与检索接口共用同一套参数（appendArchiveParams），所以「页面上筛出来的」和
+// 「导出的」永远一致。分页参数对导出无意义（后端全量翻页），这里固定传 1 / 20 只为
+// 复用同一套序列化逻辑。
+//
+// 后端的翻页受 ES `from + size` 上限约束（默认 1 万条）：命中更多时会截断导出，
+// 此时 rowCount 会小于检索到的总数，界面据此提示缩小时间范围。
+export const exportArchiveRecords = (
+  kind: ArchiveKind,
+  query: ArchiveQueryParams = {}
+) => {
+  const params = new URLSearchParams()
+  appendArchiveParams(params, { ...query, page: 1, size: 20 })
+  return downloadFile(
+    `/admin/${ARCHIVE_ENDPOINTS[kind]}/export?${params.toString()}`,
+    `kite-${kind}-logs-archive.csv`
+  )
+}
 
 // API Key 管理
 export interface APIKeyCreateRequest {

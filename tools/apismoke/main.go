@@ -54,12 +54,10 @@ type runner struct {
 	opts    *options
 	client  *client
 	results []result
-	// aiRestore / notifyRestore 记录被假实现改动的原设置，结束时复原。
-	aiRestore     map[string]any
-	notifyRestore map[string]any
 }
 
-func (r *runner) check(name string, ok bool, detail string) bool {
+// check 记录并打印一条断言结果。
+func (r *runner) check(name string, ok bool, detail string) {
 	r.results = append(r.results, result{name: name, ok: ok, detail: detail})
 	status := "PASS"
 	if !ok {
@@ -72,15 +70,14 @@ func (r *runner) check(name string, ok bool, detail string) bool {
 		line += "  (" + truncate(detail, 100) + ")"
 	}
 	fmt.Println(line)
-	return ok
 }
 
 // expectStatus 是最常用的断言：状态码在期望集合里就算通过。
-func (r *runner) expectStatus(name, method, path string, body any, want ...int) (int, []byte) {
+func (r *runner) expectStatus(name, method, path string, body any, want ...int) {
 	status, raw, err := r.client.request(method, path, body)
 	if err != nil {
 		r.check(name, false, err.Error())
-		return 0, nil
+		return
 	}
 	ok := false
 	for _, code := range want {
@@ -90,7 +87,6 @@ func (r *runner) expectStatus(name, method, path string, body any, want ...int) 
 		}
 	}
 	r.check(name, ok, fmt.Sprintf("status=%d body=%s", status, truncate(string(raw), 120)))
-	return status, raw
 }
 
 func main() {

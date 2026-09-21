@@ -35,7 +35,7 @@ function ClusterGate({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
           <span>{t('cluster.loading')}</span>
         </div>
       </div>
@@ -45,7 +45,7 @@ function ClusterGate({ children }: { children: ReactNode }) {
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-red-500">
+        <div className="text-destructive">
           <p>{t('cluster.error', { error: error.message })}</p>
         </div>
       </div>
@@ -70,6 +70,7 @@ function AppContent() {
       <SidebarProvider>
         <AppSidebar variant="inset" />
         <SidebarInset className="h-dvh overflow-y-auto overscroll-none scrollbar-hide">
+          {/* 通知栏在顶栏里（见 SiteHeader 的右侧信息区），不另外占一行。 */}
           <SiteHeader />
           <div className="@container/main flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 flex-col gap-4 py-4 md:gap-6">

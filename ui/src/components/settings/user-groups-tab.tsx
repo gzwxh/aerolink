@@ -45,7 +45,7 @@ import {
   type KnownGroupDetail,
 } from '@/lib/api'
 import { ApiError } from '@/lib/api-client'
-import { formatDate } from '@/lib/utils'
+import { formatDate, translateError } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import {
   useDraftDirty,
@@ -413,8 +413,8 @@ export function UserGroupsTab() {
       setNewGroupName('')
       setNewGroupDescription('')
       setNewGroupMembers([])
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsCreating(false)
     }
@@ -433,8 +433,8 @@ export function UserGroupsTab() {
       toast.success(t('userManagement.memberAdded', 'Members added'))
       closeAddMember()
       setAddMemberSelection([])
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsMutating(false)
     }
@@ -460,8 +460,9 @@ export function UserGroupsTab() {
               "{{username}}'s membership comes from the directory; remove it there.",
           })
         )
+      } else {
+        toast.error(translateError(error, t))
       }
-      // 其余失败已由 API 客户端统一写入站内信
     } finally {
       setIsMutating(false)
     }
@@ -508,9 +509,9 @@ export function UserGroupsTab() {
       // 改名后回到列表页：名字已经变了，继续停在旧名字的详情上会让人以为没生效。
       setDetailGroupName(null)
       closeRename()
-    } catch {
+    } catch (error) {
       await invalidate()
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      toast.error(translateError(error, t))
     } finally {
       setIsMutating(false)
     }
@@ -533,8 +534,8 @@ export function UserGroupsTab() {
         t('userManagement.groupDescriptionUpdated', 'Description updated')
       )
       closeDescription()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsMutating(false)
     }
@@ -563,9 +564,9 @@ export function UserGroupsTab() {
       )
       setDetailGroupName(null)
       setShowDelete(false)
-    } catch {
+    } catch (error) {
       await invalidate()
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      toast.error(translateError(error, t))
     } finally {
       setIsMutating(false)
     }

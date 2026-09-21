@@ -72,7 +72,6 @@ func respondAvatarError(c *gin.Context, status int, code, message string, params
 // 读起来仍是「头像」的语义；错误码映射见 respondAvatarValidationError。
 var (
 	errAvatarInvalidType        = imageupload.ErrInvalidType
-	errAvatarInvalidImage       = imageupload.ErrInvalidImage
 	errAvatarTooLargeDimensions = imageupload.ErrTooLargeDimensions
 )
 

@@ -3,6 +3,7 @@ import { IconCopy, IconLoader2 } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { ResourceType, ResourceTypeMap } from '@/types/api'
 import { applyResource, createResource, fetchResource } from '@/lib/api'
@@ -373,8 +374,8 @@ function CloneResourceDialogContent({
       if (onCloned) {
         try {
           await onCloned(targetName)
-        } catch {
-          // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+        } catch (error) {
+          toast.error(translateError(error, t))
         }
       }
       navigate(

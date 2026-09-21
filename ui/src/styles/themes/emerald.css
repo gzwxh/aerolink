@@ -9,6 +9,11 @@
    Kite 没有独立的顶栏变量，kkRepo 的深色顶栏（--topbar #16191b）映射到侧边栏，
    选中态用 --brand-bright（即 kkRepo 的 --topbar-active）。
 
+   暗色描边是“从 kkRepo 取值”的一个例外：kkRepo 的暗色系里没有任何用作描边的
+   色值，原先拿 --topbar-line(#2a2f31) 同时当 --card / --border / --input，卡片描边
+   与输入框边界都是 1.00:1（完全看不见）。这里改用本仓其余 6 套暗色主题一致的
+   半透明白描边（--border 14% / --input 22%），只影响这两个 token。
+
    表格是唯一需要落到组件层的例外：kkRepo 的 .nx-table 直接引用 --table-head-ink /
    --row-hover，而 Kite 的表格原语把这两处写死成 text-foreground /
    hover:bg-muted/50，没有 CSS 变量入口，因此用主题作用域规则落地（见文件末尾，
@@ -36,6 +41,16 @@
   --accent-foreground: #0a6055; /* --brand-strong */
   --destructive: #a63a26; /* --danger */
   --destructive-foreground: #ffffff; /* kkRepo 无对应 token（--danger 只用于文字/描边）*/
+  /* 状态色：success/info/warning 直接取 kkRepo 的 --success/--info/--warning；
+     attention 对应的 --accent(#b8623f) 对白字只有 4.32，不到 AA，取同色相的加深值。 */
+  --success: #0f6d47; /* --success */
+  --success-foreground: #ffffff;
+  --info: #2c5686; /* --info */
+  --info-foreground: #ffffff;
+  --warning: #8a5a12; /* --warning */
+  --warning-foreground: #ffffff;
+  --attention: #9c563d; /* --accent 同色相加深 */
+  --attention-foreground: #ffffff;
   --border: #dbe2de; /* --line */
   --input: #c3cec8; /* --line-strong */
   --ring: #0e7c6f; /* --brand */
@@ -86,8 +101,17 @@
   --accent-foreground: #2fbfa4; /* --brand-bright */
   --destructive: #eec2b6; /* --danger-line */
   --destructive-foreground: #12211d; /* --ink-1 */
-  --border: #2a2f31; /* --topbar-line */
-  --input: #2a2f31; /* --topbar-line */
+  /* 暗色状态色按 kkRepo 深色系的色相派生（kkRepo 无暗色状态契约）*/
+  --success: #76b78d;
+  --success-foreground: #16191b;
+  --info: #82add9;
+  --info-foreground: #16191b;
+  --warning: #cba267;
+  --warning-foreground: #16191b;
+  --attention: #e2967b;
+  --attention-foreground: #16191b;
+  --border: oklch(1 0 0 / 14%); /* 不取自 kkRepo，见文件头注释 */
+  --input: oklch(1 0 0 / 22%); /* 同上：表单边界需比分隔线更实 */
   --ring: #2fbfa4; /* --brand-bright */
   --chart-1: #2fbfa4; /* --brand-bright */
   --chart-2: #c4d7f0; /* --info-line */

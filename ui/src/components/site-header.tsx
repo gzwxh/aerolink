@@ -11,6 +11,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 
+import { AnnouncementBar } from './announcement-bar'
 import { CreateResourceDialog } from './create-resource-dialog'
 import { CurrentClusterBadge } from './current-cluster-badge'
 import { DynamicBreadcrumb } from './dynamic-breadcrumb'
@@ -43,7 +44,9 @@ export function SiteHeader() {
   return (
     <>
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
-        <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
+        {/* min-w-0：这一层必须能收缩，否则右侧那组固定宽度的元素（公告栏、集群徽章、
+            搜索）不会让步，压力全落在面包屑上，把它挤到只剩几个字宽。 */}
+        <div className="flex w-full min-w-0 items-center gap-1 px-4 lg:gap-2 lg:px-6">
           <SidebarTrigger className="-ml-1" />
           <Separator
             orientation="vertical"
@@ -65,7 +68,13 @@ export function SiteHeader() {
             </button>
           )}
           <DynamicBreadcrumb />
-          <div className="ml-auto flex items-center gap-2">
+          {/* flex-1 + min-w-0：这一组要吃掉面包屑之外的剩余宽度，里面的公告栏才能做到
+              「空间大就长、空间小就短」（见 AnnouncementBar 的注释）。
+              面包屑默认是 `flex: 0 1 auto`，基础宽度按内容算、又不参与 grow，
+              因此它的宽度不受影响，弹性全部落在公告栏上；justify-end 保证内容仍靠右。 */}
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
+            {/* 公告在集群徽章之前（两者同属顶栏的右侧信息区）。 */}
+            <AnnouncementBar />
             <CurrentClusterBadge />
             <Search />
             {canCreateAnyResource && (
@@ -88,7 +97,7 @@ export function SiteHeader() {
                 )}
                 className={`flex items-center justify-center rounded-sm p-1 transition-colors ${
                   isOpen
-                    ? 'text-green-500 hover:text-green-600'
+                    ? 'text-success hover:text-success/80'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >

@@ -91,6 +91,17 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 	// 审计记录保留策略（按天滚动，默认 0 = 永久保留）与 syslog 外发（默认关闭）。
 	audit.StartRetentionWorker(ctx)
 	audit.StartSyslogForwarder()
+	// 审计事件 → 标准输出（默认开启）：让只采集 stdout 的日志平台也能查到谁做了什么。
+	audit.StartAuditStdout()
+	// 审计链路的自监控指标（丢弃 / 失败 / 补传积压）挂到 /metrics。
+	audit.RegisterAuditMetrics()
+	// 归档链（本地 parquet + 可选 S3/ES）：通道由 sink 唯一决定（三者互斥）。
+	// 启动前先确认**唯一落点**可用：目标不可用（如 sink=parquet 却没有归档目录、sink=elasticsearch
+	// 却没有节点地址）就等于所有审计记录无处可去，此时宁可起不来，也不要起一个静默丢记录的实例。
+	if err := audit.ValidateSinkTarget(common.AuditArchiveDir); err != nil {
+		klog.Fatalf("refusing to start: %v", err)
+	}
+	audit.StartParquetArchiver(ctx, common.AuditArchiveDir)
 	// AI 待确认会话的过期回收。
 	ai.StartPendingSessionCleanup(ctx)
 	return cm, nil
@@ -107,6 +118,8 @@ func buildEngine(cm *cluster.ClusterManager) *gin.Engine {
 	}
 	r.Use(gin.Recovery())
 	r.Use(middleware.SecurityHeaders())
+	// 请求关联 ID 必须排在访问日志之前：访问日志与审计事件都要带上它才能串成一条链。
+	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.DevCORS(common.CORSAllowedOrigins))
 

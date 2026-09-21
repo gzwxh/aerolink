@@ -30,6 +30,13 @@ const exportRowLimit = 100000
 //
 // 导出动作本身会落进操作日志（见 middleware.isAdminAuditRead）。
 func ExportAuditLogs(c *gin.Context) {
+	// sink≠database 时数据不在库里，直接走归档导出。两条路径的表头是刻意对齐的
+	// （见 archive_export.go），所以产出的 CSV 可以直接合并分析。
+	if !model.AuditSinkUsesDatabase() {
+		ExportAuditHistoryArchive(c)
+		return
+	}
+
 	from, to, ok := parseTimeRange(c)
 	if !ok {
 		return
@@ -78,6 +85,11 @@ func ExportAuditLogs(c *gin.Context) {
 
 // ExportLoginLogs 把登录日志（含被拒绝的登录尝试）导出为 CSV。
 func ExportLoginLogs(c *gin.Context) {
+	if !model.AuditSinkUsesDatabase() {
+		ExportLoginRecordArchive(c)
+		return
+	}
+
 	from, to, ok := parseTimeRange(c)
 	if !ok {
 		return
@@ -114,6 +126,11 @@ func ExportLoginLogs(c *gin.Context) {
 
 // ExportPasswordChangeLogs 把改密日志导出为 CSV。
 func ExportPasswordChangeLogs(c *gin.Context) {
+	if !model.AuditSinkUsesDatabase() {
+		ExportPasswordChangeRecordArchive(c)
+		return
+	}
+
 	from, to, ok := parseTimeRange(c)
 	if !ok {
 		return

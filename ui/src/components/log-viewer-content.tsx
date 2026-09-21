@@ -544,7 +544,7 @@ export function LogViewer({
                 />
                 {isLoading && <span>{t('common.messages.loading')}</span>}
                 {isReconnecting && (
-                  <span className="text-blue-600">
+                  <span className="text-info">
                     {t('logViewer.reconnecting')}
                   </span>
                 )}
@@ -592,7 +592,7 @@ export function LogViewer({
             >
               <IconPalette className="h-4 w-4" />
               <div
-                className="absolute -top-1 -right-1 w-3 h-3 rounded-full border border-gray-400"
+                className="absolute -top-1 -right-1 w-3 h-3 rounded-full border border-border"
                 style={{
                   backgroundColor: currentTheme.background,
                 }}

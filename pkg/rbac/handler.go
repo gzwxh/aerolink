@@ -706,11 +706,11 @@ func notifyRoleChange(event string, roleName, subjectType, subject string) {
 	if err != nil || user == nil || !user.Enabled {
 		return
 	}
-	notification.SendEvent(event, map[string]string{
+	notification.SendEventTo(event, map[string]string{
 		"username": user.Username,
 		"role":     roleName,
 		"time":     time.Now().Format("2006-01-02 15:04:05"),
-	})
+	}, user.ID)
 }
 
 // conflictForUserNamed 报告把 roleName 授予该用户名下的用户是否会

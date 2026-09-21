@@ -15,7 +15,9 @@ describe('resolveClusterBadgeColor', () => {
   it('非法颜色回落默认色，不把任意字符串塞进内联样式', () => {
     expect(resolveClusterBadgeColor('#0011ff')).toBe('#0011ff')
     expect(resolveClusterBadgeColor('  #AABBCC  ')).toBe('#AABBCC')
-    expect(resolveClusterBadgeColor(undefined)).toBe(DEFAULT_CLUSTER_BADGE_COLOR)
+    expect(resolveClusterBadgeColor(undefined)).toBe(
+      DEFAULT_CLUSTER_BADGE_COLOR
+    )
     expect(resolveClusterBadgeColor('red')).toBe(DEFAULT_CLUSTER_BADGE_COLOR)
     expect(resolveClusterBadgeColor('#fff;background:url(x)')).toBe(
       DEFAULT_CLUSTER_BADGE_COLOR
@@ -25,8 +27,12 @@ describe('resolveClusterBadgeColor', () => {
 
 describe('hasClusterBadge', () => {
   it('只有启用且有说明文本才算启用徽章', () => {
-    expect(hasClusterBadge({ badgeEnabled: true, badgeText: '测试' })).toBe(true)
-    expect(hasClusterBadge({ badgeEnabled: true, badgeText: '   ' })).toBe(false)
+    expect(hasClusterBadge({ badgeEnabled: true, badgeText: '测试' })).toBe(
+      true
+    )
+    expect(hasClusterBadge({ badgeEnabled: true, badgeText: '   ' })).toBe(
+      false
+    )
     expect(hasClusterBadge({ badgeEnabled: false, badgeText: '测试' })).toBe(
       false
     )
@@ -80,7 +86,9 @@ describe('ClusterBadge', () => {
 describe('ClusterBadgeIcon', () => {
   it('没自定义图标时用默认集群图标', () => {
     const { container } = render(
-      <ClusterBadgeIcon cluster={{ badgeEnabled: true, badgeText: '测试环境' }} />
+      <ClusterBadgeIcon
+        cluster={{ badgeEnabled: true, badgeText: '测试环境' }}
+      />
     )
 
     expect(container.querySelector('svg')).not.toBeNull()

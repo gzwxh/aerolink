@@ -58,6 +58,7 @@ var adminAuditResourceTypes = map[string]string{
 	"notification-setting":       "notification-setting",
 	"notification-templates":     "notification-template",
 	"notification-subscriptions": "notification-subscription",
+	"announcements":              "announcement",
 	"templates":                  "template",
 	"charts":                     "helm-repository",
 	"audit-logs":                 "audit-log",
@@ -70,7 +71,11 @@ var adminAuditSkippedSuffixes = []string{"/test-mail", "/run-daily-checks"}
 
 // adminAuditIdentifierKeys 是请求体里可以用于标识被操作对象的字段，按优先级排列。
 // 只挑这几个字段，避免把密码、密钥等敏感内容写进审计日志。
-var adminAuditIdentifierKeys = []string{"username", "name", "ip", "event", "subject", "cluster", "namespace"}
+// title 放在最后：只有前面都未命中时才用它（目前只有通知栏公告的请求体带这个字段），
+// 不会改变其它接口已有的标识口径。
+var adminAuditIdentifierKeys = []string{
+	"username", "name", "ip", "event", "subject", "cluster", "namespace", "title",
+}
 
 // AdminAudit 把管理接口的写操作（POST/PUT/PATCH/DELETE）记录到 resource_histories，
 // 使「日志审计 → 操作日志」除了集群资源变更之外，也覆盖系统设置与权限管理下的管理操作。
@@ -174,7 +179,10 @@ func recordAdminAudit(c *gin.Context, path, operation string, body []byte) {
 		OperatorID:      model.OperatorRef(operator.ID),
 		OperatorName:    operator.Username,
 	}
-	if err := model.DB.Create(&history).Error; err != nil {
+	// 带上请求上下文：审计事件据此带上 request_id，让日志平台能把这条操作与同一次请求的
+	// 访问日志、报错日志串起来。
+	// 走统一入口而不是 DB.Create：由 sink 决定落库还是直接归档（见 model.RecordAudit）。
+	if err := model.RecordAudit(c.Request.Context(), &history); err != nil {
 		klog.Errorf("Failed to record admin audit log: %v", err)
 	}
 }

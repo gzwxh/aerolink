@@ -296,6 +296,17 @@ config:
 | `users`      | string[] | 用户名（`*` 表示所有用户）    | 否   |
 | `oidcGroups` | string[] | OIDC/LDAP 组名                | 否   |
 
+### 审计与归档配置
+
+审计记录的落地方式在**启动时**决定、页面只读（改存储方式需要重启）；`auditArchive` 只是**首次启动的播种值**，之后可在「日志审计 → 审计设置」页面里改。
+
+| 字段          | 类型   | 描述                                                                                                                | 必填 |
+| ------------- | ------ | ------------------------------------------------------------------------------------------------------------------- | ---- |
+| `auditSink`   | string | 落地方式：`database`（默认）、`parquet`、`elasticsearch`、`victorialogs`、`openobserve`（**五选一互斥**）           | 否   |
+| `auditArchive`| object | 归档设置（本地 parquet / S3 / Elasticsearch / VictoriaLogs / OpenObserve），实际生效的只有 `auditSink` 对应的那一条 | 否   |
+
+取值非法或所选通道的落地目标没配好（如 `parquet` 没有归档目录、`elasticsearch` 没有节点地址）时，Kite 会**拒绝启动**，不会静默回落。完整的可照抄样例（含五种落地方式）见仓库根目录的 `config.dev.yaml`，或参见[环境变量](./env.md)里的 `KITE_AUDIT_SINK`。
+
 ## 行为说明
 
 - **启动覆盖**：每次启动时都会重新应用配置。通过数据库对已管理部分的修改会被覆盖。

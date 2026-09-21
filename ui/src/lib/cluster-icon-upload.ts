@@ -45,7 +45,8 @@ const clusterIconImage = createSquareImageProcessor({
   targetSize: CLUSTER_ICON_TARGET_SIZE,
   maxBytes: CLUSTER_ICON_MAX_BYTES,
   fileName: (extension) => `cluster-icon.${extension}`,
-  makeError: (failure) => new ClusterIconUploadError(`cluster_icon_client_${failure}`),
+  makeError: (failure) =>
+    new ClusterIconUploadError(`cluster_icon_client_${failure}`),
 })
 
 /**

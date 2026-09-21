@@ -9,13 +9,13 @@ export function Footer() {
   return (
     <footer className="border-t">
       <div className="container mx-auto px-4 py-6">
-        <p className="text-center text-sm text-gray-500">
+        <p className="text-center text-sm text-muted-foreground">
           {t('login.footer', {
             year: new Date().getFullYear(),
             company: COMPANY_NAME,
           })}
         </p>
-        <p className="text-center text-xs text-gray-400 mt-1">
+        <p className="text-center text-xs text-muted-foreground mt-1">
           {DEPARTMENT_NAME}
         </p>
       </div>

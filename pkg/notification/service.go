@@ -14,19 +14,31 @@ import (
 
 // SendEvent 渲染某个事件的模板，并投递给该事件的订阅者。
 //
-// 收件人**只**来自启用的订阅（`notification_subscriptions`）：某个事件发给谁、走哪个
-// 渠道，完全由管理员在「通知 → 订阅」里配置。此前这里还接受调用方传入的「额外接收人」
-// （例如受影响的那个用户），那条路径不看订阅，于是从没订阅过的人也会收到站内信。
-// 唯一保留的例外是「通知邮件发送失败」的自监控提醒（见 notifyAdminsOfMailFailure）：
-// 出问题的正是邮件通道，不能再依赖订阅。
+// 收件人来自启用的订阅（`notification_subscriptions`）与管理员必收档；需要送达当事人时
+// 用 SendEventTo。
 //
 // 它从不返回错误：通知失败只记录日志，因此不会影响调用方（例如一次登录）。
 func SendEvent(event string, variables map[string]string) {
+	sendEvent(event, variables, nil)
+}
+
+// SendEventTo 在 SendEvent 的基础上，把「当事人」（recipients）加入必收收件人。
+//
+// 只有 model.NotificationEventTargetsUser(event) 为真时才采纳 recipients：非清单事件
+// 传入的收件人会被忽略并记一条 V(1) 日志。这是刻意的——历史上 SendEvent 有一个通用的
+// extras 参数，任何调用方都能顺手把一个事件变成「不看订阅也发」，结果全网用户在订阅表
+// 为空的情况下也收到了上千条消息（见 plans/2026-09-20-console-ux-and-notification-fixes.md §5）。
+// 现在要开这个口子，得先在 model.targetUserEvents 里显式登记该事件。
+func SendEventTo(event string, variables map[string]string, recipients ...uint) {
+	sendEvent(event, variables, recipients)
+}
+
+func sendEvent(event string, variables map[string]string, recipients []uint) {
 	setting, title, content, ok := renderEvent(event, variables)
 	if !ok {
 		return
 	}
-	inAppUsers, emails := resolveRecipients(event)
+	inAppUsers, emails := resolveRecipients(event, recipients)
 	if setting.InAppEnabled {
 		deliverInApp(inAppUsers, event, title, content)
 	}
@@ -64,11 +76,11 @@ func renderEvent(
 		true
 }
 
-// resolveRecipients 按启用的订阅解析收件人：站内信用户与邮件地址。
+// resolveRecipients 解析收件人：订阅者 + 当事人必收 + 管理员必收，最后去重。
 //
 // 「全体用户」订阅在每一次投递时才展开成当前的账号列表，而不是把订阅时的那批人
 // 固定下来：新入职的人自动收到，停用（或离职）的人也不再收到。
-func resolveRecipients(event string) ([]uint, map[string]bool) {
+func resolveRecipients(event string, explicit []uint) ([]uint, map[string]bool) {
 	inAppUsers := make([]uint, 0, 4)
 	emails := make(map[string]bool)
 
@@ -121,6 +133,20 @@ func resolveRecipients(event string) ([]uint, map[string]bool) {
 			}
 		}
 	}
+	// 「当事人必收」：事件描述的是这个账号自己的状态/凭据变化，订阅配置不该让它消失。
+	//
+	// 有意**不**检查 Enabled：account_disabled 的当事人此刻正是停用状态，按「停用账号
+	// 不收」过滤会让这条消息永远发不出去（它恰恰是当事人必须看到的那一条）。
+	if len(explicit) > 0 {
+		if model.NotificationEventTargetsUser(event) {
+			inAppUsers = append(inAppUsers, explicit...)
+		} else {
+			klog.V(1).Infof(
+				"notification event %q is not in the target-user list, ignoring %d explicit recipient(s)",
+				event, len(explicit))
+		}
+	}
+
 	// 「管理员必收」的事件不看订阅：这类事件（重置密码、清动态码、角色变更、
 	// 邮件通道故障）是追责与应急处置的线索，任何订阅配置都不该让它消失。
 	if model.NotificationEventMandatoryForAdmins(event) {
@@ -132,8 +158,8 @@ func resolveRecipients(event string) ([]uint, map[string]bool) {
 		}
 	}
 
-	// 同一个人可能同时被「全体用户」与单独订阅命中，写站内信前先去重，
-	// 否则他会收到两份同样的消息。
+	// 同一个人可能同时被「全体用户」订阅、单独订阅、当事人必收与管理员必收命中，
+	// 写站内信前先去重，否则他会收到两份同样的消息。
 	return dedupeUserIDs(inAppUsers), emails
 }
 

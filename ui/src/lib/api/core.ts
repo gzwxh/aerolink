@@ -900,8 +900,7 @@ export const useResource = <T extends keyof ResourceTypeMap>(
   const ns = namespace || '_all'
   return useQuery({
     queryKey: getResourceQueryKey(resource, ns, name, currentCluster),
-    // 没有名字时不要发请求：创建页会渲染同一个组件，空名字的 GET 只会拿到 404
-    // 并被记进站内信。
+    // 没有名字时不要发请求：创建页会渲染同一个组件，空名字的 GET 只会拿到 404。
     enabled: options?.enabled ?? true,
     queryFn: () => {
       return fetchResource<ResourceTypeMap[T]>(

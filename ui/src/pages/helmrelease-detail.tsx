@@ -577,8 +577,8 @@ function HelmReleaseHistoryTable({
       await rollbackHelmRelease(namespace, name, revision)
       toast.success(t('helm.messages.rollbackStarted'))
       await Promise.all([refetchHistory(), onRollbackComplete()])
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setRollingBackRevision(null)
     }
@@ -903,7 +903,7 @@ function HelmReleaseChartVersionDetail({
       {hasNewVersion ? (
         <Badge
           variant="outline"
-          className="shrink-0 border-amber-500/30 bg-amber-500/10 font-normal text-amber-700 dark:text-amber-300"
+          className="shrink-0 border-warning/25 bg-warning/10 font-normal text-warning"
         >
           {t('helm.messages.newVersionAvailable', {
             version: latestVersion,
@@ -1676,9 +1676,9 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
               onClick={() => setAutoUpgradeDialogOpen(true)}
             >
               {autoUpgradeLastError ? (
-                <IconExclamationCircle className="size-4 fill-red-500 dark:fill-red-400" />
+                <IconExclamationCircle className="size-4 fill-destructive" />
               ) : isAutoUpgradeEnabled ? (
-                <IconCircleCheckFilled className="size-4 fill-green-500 dark:fill-green-400" />
+                <IconCircleCheckFilled className="size-4 fill-success" />
               ) : null}
               {t('helm.actions.autoUpgrade')}
             </Button>

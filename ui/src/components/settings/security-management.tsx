@@ -19,7 +19,7 @@ import {
   type MFAPolicy,
   type SecuritySetting,
 } from '@/lib/api'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -237,8 +237,8 @@ export function SecurityManagement() {
         t('securitySettings.messages.updated', 'Security settings updated')
       )
     },
-    onError: () => {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    onError: (error) => {
+      toast.error(translateError(error, t))
     },
   })
 

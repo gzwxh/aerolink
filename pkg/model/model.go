@@ -82,6 +82,11 @@ func InitDB() {
 			panic("failed to enable sqlite foreign keys: " + err.Error())
 		}
 	}
+	// 公告的 Scroll 列要在主循环之前补：加列与「判断这列是不是刚加的」必须紧邻，
+	// 主循环跑完就分不清了（见 MigrateAnnouncementScrollBackfill 的注释）。
+	if err := MigrateAnnouncementScrollBackfill(); err != nil {
+		panic("failed to backfill announcement scroll: " + err.Error())
+	}
 	for _, model := range Models() {
 		err = DB.AutoMigrate(model)
 		if err != nil {
@@ -140,6 +145,10 @@ func Models() []interface{} {
 		NotificationSubscription{},
 		Notification{},
 		LoginRecord{},
+		// 顶栏通知栏公告（管理员发布，见 plans/2026-09-21-announcement-bar.md）。
+		Announcement{},
+		// 周期性全局任务的执行权租约（多副本选主，见 leader.go）。
+		LeaderLease{},
 	}
 }
 

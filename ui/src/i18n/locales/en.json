@@ -256,7 +256,24 @@
       "email": "Email",
       "error": "Error",
       "phone": "Phone",
-      "remark": "Remarks"
+      "remark": "Remarks",
+      "method": "Method",
+      "path": "Path",
+      "statusCode": "Status code",
+      "latency": "Latency",
+      "clientIp": "Client IP"
+    },
+    "dateTime": {
+      "placeholder": "Select date and time",
+      "date": "Date",
+      "time": "Time",
+      "clear": "Clear",
+      "monthLabel": "{{month}}/{{year}}",
+      "weekdays": "S,M,T,W,T,F,S",
+      "prevYear": "Previous year",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "nextYear": "Next year"
     },
     "messages": {
       "addNewItem": "Add a new {{resource}}",
@@ -266,6 +283,7 @@
       "assigned": "Assigned",
       "auditLogsDescription": "Track who changed resources and review YAML diffs",
       "loginLogsDescription": "Review every sign-in attempt, successful or rejected, and its source IP",
+      "archiveSourceNotice": "Served from the archive ({{backend}}); actions from the last ~{{seconds}}s may not appear yet",
       "passwordChangeLogsDescription": "Review who changed a password and when",
       "confirmRemoveOwnRole": "You are removing your own role assignment. This may affect your permissions. Are you sure?",
       "copied": "Copied to clipboard",
@@ -1678,8 +1696,67 @@
     "operationFailed": "Operation failed",
     "tabs": {
       "email": "Mail",
+      "announcements": "Announcement Bar",
       "templates": "Templates",
       "subscriptions": "Subscriptions"
+    },
+    "announcements": {
+      "description": "Announcements appear in the bar at the top of every page, scrolling in priority order and showing or hiding automatically according to their schedule.",
+      "empty": "No announcements",
+      "createTitle": "New announcement",
+      "editTitle": "Edit announcement",
+      "dialogHint": "The bar scrolls as a single line: line breaks in the body are collapsed, and the title is shown in bold before the body.",
+      "never": "Any",
+      "barLabel": "Announcement bar",
+      "expand": "Show full text",
+      "fields": {
+        "title": "Title",
+        "content": "Content",
+        "level": "Level",
+        "priority": "Priority",
+        "enabled": "Enabled",
+        "scroll": "Scroll horizontally",
+        "scrollHint": "When on, the content loops from right to left. When off, it stays on one line: drag it, or use the arrow on the right to read the rest.",
+        "enabledHint": "When off it is hidden from the top bar; the content is kept.",
+        "startAt": "Starts at",
+        "startAtHint": "Leave empty to start immediately",
+        "endAt": "Ends at",
+        "endAtHint": "Leave empty to never end"
+      },
+      "toolbar": {
+        "label": "Formatting",
+        "bold": "Bold",
+        "italic": "Italic",
+        "strikethrough": "Strikethrough",
+        "color": "Text color",
+        "hint": "Select text, then use the buttons above to make it bold, italic or colored; the color button opens a palette, where \"Default color\" clears it. The input shows the result directly.",
+        "colorPalette": "Choose a color",
+        "colorDefault": "Default color"
+      },
+      "levels": {
+        "info": "Info",
+        "warning": "Warning",
+        "danger": "Critical"
+      },
+      "status": {
+        "active": "Active",
+        "pending": "Scheduled",
+        "expired": "Expired",
+        "disabled": "Disabled"
+      },
+      "colors": {
+        "primary": "Primary",
+        "muted": "Muted",
+        "info": "Info",
+        "success": "Success",
+        "warning": "Warning",
+        "attention": "Attention",
+        "danger": "Danger"
+      },
+      "scrollOff": "Static",
+      "enabledOn": "Enabled",
+      "enabledOff": "Disabled",
+      "scrollOn": "Scrolling"
     },
     "channels": {
       "inapp": "In-app",
@@ -1703,6 +1780,7 @@
       "account_expiring": "Account expiring soon",
       "role_assigned": "Role assigned",
       "role_unassigned": "Role removed",
+      "scheduled_task_failed": "Scheduled task failed",
       "mail_delivery_failed": "Mail delivery failed",
       "session_takeover": "Signed in on another device",
       "test": "Test mail"
@@ -1774,7 +1852,9 @@
       "selectedCount": "{{selected}}/{{total}} selected",
       "mandatory": "Admins always receive",
       "mandatoryHint": "Locked events are security events: they always reach every admin as an in-app message, regardless of subscriptions, and cannot be turned off.",
-      "noReceiverHint": "Events without a configured recipient are not delivered to anyone (including admins).",
+      "targetUser": "Affected user always receives",
+      "targetUserHint": "Events marked with a user icon describe changes to the affected user's own account or credentials (password reset, account enable/disable, role change, login from a new IP, ...). They always reach that user as an in-app message and cannot be turned off.",
+      "noReceiverHint": "Subscriptions add extra recipients (for example, sending an event to admins too); events about a user's own account are always delivered to that user by the affected-user rule.",
       "addSelected": "Add subscriptions ({{count}})",
       "addedResult": "Added {{created}}, skipped {{skipped}} (already configured)",
       "selectEventsFirst": "Choose at least one event"
@@ -1844,6 +1924,7 @@
       "apikeys": "API Keys",
       "templates": "Templates",
       "audit": "Audit Management",
+      "systemLog": "System Logs",
       "security": "Security Management",
       "notification": "Notification Management"
     },
@@ -2357,6 +2438,10 @@
       "rollingBack": "Rolling back...",
       "success": "Successfully rolled back resource",
       "error": "Failed to rollback resource"
+    },
+    "requiresDatabaseSink": "Resource change history requires audit records in the database (auditSink=database, the default). It is unavailable with the current storage: parquet does not write resource YAML by default, and Elasticsearch documents never contain it — neither can support a before/after diff.",
+    "errors": {
+      "resource_history_requires_database_sink": "Resource change history requires audit records in the database (auditSink=database, the default) and is unavailable with the current storage."
     }
   },
   "detail": {
@@ -2636,6 +2721,7 @@
       "loadingValues": "Loading values...",
       "autoUpgradeSaved": "Auto upgrade saved",
       "autoUpgradeDescription": "Upgrade when a newer chart version is available.",
+      "autoUpgradeNotifyDescription": "The account that configured this task is notified in-app when a run fails.",
       "autoUpgradeChartDescription": "Chart source for version checks.",
       "autoUpgradeScheduleDescription": "When to check for updates.",
       "autoUpgradeIntervalDescription": "Check frequency.",
@@ -3140,17 +3226,44 @@
       "operation": "Operation Logs",
       "file": "File Operations",
       "password": "Password Change Logs",
+      "archive": "Archive Search",
       "setting": "Audit Settings"
+    },
+    "systemLog": {
+      "title": "System Logs",
+      "description": "Archive and format the access log (HTTP request log). Kept separate from the audit settings because access logs are far larger and tuned on a different cadence."
     },
     "setting": {
       "title": "Audit Settings",
       "description": "Configure how long audit records are kept and where they are forwarded. Audit records can only be viewed, never deleted by hand.",
       "messages": {
-        "updated": "Audit settings saved"
+        "updated": "Audit settings saved",
+        "probeFailed": "Settings saved, but the connectivity check failed: {{detail}}"
+      },
+      "scope": {
+        "audit": "Audit logs",
+        "system": "System logs"
+      },
+      "sink": {
+        "title": "Storage",
+        "description": "Where audit records are written (mutually exclusive). Decided at startup by auditSink / KITE_AUDIT_SINK, read-only here.",
+        "label": "Destination",
+        "database": "Database",
+        "parquet": "Local parquet files",
+        "elasticsearch": "Elasticsearch",
+        "victorialogs": "VictoriaLogs",
+        "openobserve": "OpenObserve",
+        "delay": "Query delay ceiling",
+        "delayHint": "parquet is written in batches: an action performed within this window may not be queryable yet. The audit list shows a notice.",
+        "delayValue": "{{seconds}}s",
+        "unavailable": "Unavailable features",
+        "unavailableHint": "These rely on the history records in this database and are unavailable unless sink=database:",
+        "unavailableHistory": "Per-resource change history (YAML diff and rollback): the resource detail page states this explicitly",
+        "unavailableNewIP": "Remote-login alerts (needs past login records to decide)"
       },
       "retention": {
         "title": "Retention policy",
-        "description": "Expired audit records roll off automatically by age; every prune leaves its own audit record.",
+        "description": "Expired audit records are rolled off automatically (including Elasticsearch daily indices); every cleanup run leaves an audit record behind.",
         "keepForever": "Keep forever",
         "keepForeverHint": "On by default: nothing is ever deleted automatically.",
         "keepForeverValue": "Never prune audit records",
@@ -3158,7 +3271,8 @@
         "daysHint": "At least {{min}} days; compliance reviews usually expect {{recommended}} days.",
         "daysUnit": "days",
         "tooShort": "Retention must be 0 (keep forever) or at least {{min}} days.",
-        "belowRecommended": "This is below the recommended {{recommended}} days and may not pass a compliance review."
+        "belowRecommended": "This is below the recommended {{recommended}} days and may not pass a compliance review.",
+        "serverSideNotice": "Expiry for the current storage mode ({{sink}}) is handled by the server, so the retention days on this page do not apply to it: adjust retention in the server configuration (VictoriaLogs -retentionPeriod, OpenObserve stream data_retention)."
       },
       "syslog": {
         "title": "Log forwarding (syslog)",
@@ -3172,10 +3286,169 @@
         "tagHint": "Application name in forwarded messages, so the log server can tell sources apart.",
         "facility": "Facility",
         "facilityHint": "Defaults to 13 (log audit); range 0-23.",
+        "format": "Output format",
+        "formatHint": "text is key=value; json emits structured fields (same field set as the archive).",
         "skipVerify": "Skip certificate verification",
         "skipVerifyHint": "TLS only. Enable when the server uses a self-signed certificate.",
         "skipVerifyValue": "Do not verify the server certificate"
+      },
+      "stdout": {
+        "title": "Standard output (log collection)",
+        "description": "Also emit audit events (operations / logins / password changes) to stdout for external log collectors. When disabled, a log platform that only reads stdout sees HTTP access logs but cannot tell who did what.",
+        "enabled": "Emit to stdout",
+        "enabledHint": "Enabled by default. Audit events are a tiny fraction of access logs; before disabling, make sure the log platform gets audit data from somewhere else.",
+        "format": "Output format",
+        "formatHint": "json (recommended) writes a single structured line tagged logger=audit so collectors can route it; text matches the syslog body."
+      },
+      "logFormat": {
+        "text": "Text (text)",
+        "json": "JSON (json)"
+      },
+      "archive": {
+        "title": "Archive (parquet + external storage)",
+        "description": "Archive audit and access logs as parquet files, optionally upload them to S3-compatible object storage, or write them to Elasticsearch / VictoriaLogs / OpenObserve. Archiving is best-effort: failures never affect local persistence or slow down requests.",
+        "enabled": "Enable archiving",
+        "enabledHint": "Decided by the storage mode: parquet files are written only when sink=parquet, and this cannot be turned on otherwise.",
+        "localDir": "Local directory",
+        "localDirHint": "Leave empty to use the directory from KITE_AUDIT_ARCHIVE_DIR.",
+        "retentionDays": "Local retention (days)",
+        "retentionDaysHint": "0 means no time-based cleanup.",
+        "maxBytes": "Local size limit (bytes)",
+        "maxBytesHint": "0 means no size-based cleanup; the oldest files are removed first.",
+        "flushInterval": "Flush interval (seconds)",
+        "flushIntervalHint": "A parquet file is written when the interval, row count or byte limit is reached.",
+        "flushRows": "Max rows per batch",
+        "flushBytes": "Max bytes per batch",
+        "flushBytesHint": "0 means no byte-based trigger; a batch is written once it is large enough to keep files from growing too big.",
+        "includeResourceYAML": "Archive resource manifests (YAML)",
+        "includeResourceYAMLHint": "Off by default: the before/after YAML can be large and would bloat the archive files. Enable only when you need the exact manifests.",
+        "includeResourceYAMLValue": "Write YAML into the operation log archive",
+        "accessLog": {
+          "title": "Access log archive",
+          "description": "Access logs are much larger, so they keep a shorter default retention and are configured separately.",
+          "enabled": "Include in archive",
+          "retentionDays": "Local retention (days)",
+          "maxBytes": "Local size limit (bytes)",
+          "format": "Output format",
+          "formatHint": "Format of the access log written to stdout: text keeps the current output, json is a single structured line.",
+          "flushInterval": "Flush interval (seconds)",
+          "flushIntervalHint": "Access logs are much larger, so the default batch is bigger: a parquet file is written when the interval, row count or byte limit is reached.",
+          "flushRows": "Max rows per batch",
+          "flushBytes": "Max bytes per batch",
+          "flushBytesHint": "0 means no byte-based trigger.",
+          "enabledHint": "With parquet this decides whether access logs are archived; with sink=database there is no archive channel and access logs go to stdout only."
+        },
+        "s3": {
+          "title": "S3 archive (object storage)",
+          "description": "Works with any S3-compatible storage such as MinIO / RustFS / Ceph RGW / Tencent COS / Huawei OBS / Alibaba OSS. Local files are kept for a few days while every file is also synced to S3 (which serves as the long-term archive).",
+          "enabled": "Enable upload",
+          "endpoint": "Endpoint",
+          "endpointHint": "Include the scheme, e.g. http://minio:9000.",
+          "endpointRequired": "Endpoint is required when upload is enabled.",
+          "region": "Region",
+          "regionHint": "Required for Tencent COS; optional for MinIO / RustFS.",
+          "bucket": "Bucket",
+          "bucketRequired": "Bucket is required when upload is enabled.",
+          "accessKey": "Access Key",
+          "secretKey": "Secret Key",
+          "secretKeyHint": "Returned masked on read; leave unchanged to keep the current value.",
+          "prefix": "Object prefix",
+          "prefixHint": "Object key is <prefix>/<type>/<year>/<month>/<day>/<file>.",
+          "pathStyle": "Path-style addressing",
+          "pathStyleHint": "Use path-style for MinIO / RustFS / Ceph; disable for COS / OBS / OSS.",
+          "useTLS": "Use TLS (https)",
+          "deleteLocal": "Delete local file after upload",
+          "deleteLocalHint": "Off by default: local files are kept for the retention days while every file is also synced to S3; when enabled, local disk becomes staging only (S3 is the sole long-term copy). Files are kept on failure for retry.",
+          "enabledHint": "S3 is the remote copy of parquet: there is nothing to sync unless sink=parquet."
+        },
+        "es": {
+          "title": "Elasticsearch (search)",
+          "description": "Archived records are written to daily indices for full-text search. ES is search-only and does not replace S3 archiving or local persistence. Expired daily indices are deleted whole, according to the retention policy.",
+          "enabled": "Enable indexing",
+          "enabledHint": "The storage sink decides this: Elasticsearch is written only when sink=elasticsearch, so it cannot be enabled under other sinks.",
+          "urls": "Node addresses",
+          "urlsHint": "Separate multiple addresses with commas, e.g. http://es:9200.",
+          "urlsRequired": "At least one node address is required when indexing is enabled.",
+          "username": "Username",
+          "password": "Password",
+          "passwordHint": "Returned masked on read; leave unchanged to keep the current value.",
+          "indexPrefix": "Index prefix",
+          "indexPrefixHint": "Index name is <prefix>-YYYY.MM.DD.",
+          "skipVerify": "Skip certificate verification",
+          "skipVerifyHint": "Enable when the server uses a self-signed certificate."
+        },
+        "sinkNotice": {
+          "database": "The storage mode is \"database\": audit records are stored in the database only, so none of the archive channels below (parquet / S3 / Elasticsearch / VictoriaLogs / OpenObserve) take effect. Their switches follow the storage mode and cannot be changed here.",
+          "parquet": "The storage mode is \"parquet\": audit records are written to local parquet files only (S3 is an optional remote copy); the Elasticsearch / VictoriaLogs / OpenObserve channels do not take effect.",
+          "elasticsearch": "The storage mode is \"Elasticsearch\": audit records are written to ES only; the parquet / S3 / VictoriaLogs / OpenObserve channels do not take effect.",
+          "victorialogs": "The storage mode is \"VictoriaLogs\": audit records are written to VictoriaLogs only (single stream; expiry is handled by the server retention period); the parquet / S3 / Elasticsearch / OpenObserve channels do not take effect.",
+          "openobserve": "The storage mode is \"OpenObserve\": audit records are written to OpenObserve only (single stream; expiry is handled by the server-side data_retention); the parquet / S3 / Elasticsearch / VictoriaLogs channels do not take effect."
+        },
+        "victorialogs": {
+          "title": "VictoriaLogs (log store)",
+          "description": "Writes go through the ES bulk-compatible endpoint and searches through LogsQL; a single stream (partitioned by the server), with expiry handled by the server's -retentionPeriod. Note: this is VictoriaLogs (log store), not VictoriaMetrics (time-series database).",
+          "enabled": "Enable writes",
+          "enabledHint": "Decided by the storage mode: VictoriaLogs is written only when sink=victorialogs, and this cannot be turned on otherwise.",
+          "urls": "Node addresses",
+          "urlsHint": "Separate multiple addresses with commas (round-robin on write); default port 9428.",
+          "urlsRequired": "At least one node address is required when writes are enabled.",
+          "stream": "Log stream",
+          "streamHint": "All four record kinds share this one stream and are told apart by the kind field; no per-day naming.",
+          "accountId": "Account ID",
+          "projectId": "Project ID",
+          "tenantHint": "Only for multi-tenant deployments (the store isolates by tenant); leave empty for single tenant.",
+          "skipVerify": "Skip certificate verification",
+          "skipVerifyHint": "Enable when the server uses a self-signed certificate."
+        },
+        "openobserve": {
+          "title": "OpenObserve (log store)",
+          "description": "Writes go through its own JSON ingest endpoint and searches through its own search API; a single stream, with expiry handled by the stream's server-side data_retention.",
+          "enabled": "Enable writes",
+          "enabledHint": "Decided by the storage mode: OpenObserve is written only when sink=openobserve, and this cannot be turned on otherwise.",
+          "urls": "Node addresses",
+          "urlsHint": "Separate multiple addresses with commas (round-robin on write); default port 5080.",
+          "urlsRequired": "At least one node address is required when writes are enabled.",
+          "org": "Organization (org)",
+          "orgHint": "Defaults to default; the org and stream together form the write path /api/{org}/{stream}/_json.",
+          "stream": "Log stream",
+          "streamHint": "All four record kinds share this one stream and are told apart by the kind field; no per-day naming.",
+          "username": "Username",
+          "usernameHint": "The Basic auth username for OpenObserve is usually the login email.",
+          "password": "Password",
+          "passwordHint": "Returned masked on read; leave unchanged to keep the current value.",
+          "skipVerify": "Skip certificate verification",
+          "skipVerifyHint": "Enable when the server uses a self-signed certificate."
+        },
+        "elasticsearch": {
+          "enabledHint": "Decided by the storage mode: ES is written only when sink=elasticsearch, and this cannot be turned on otherwise."
+        }
       }
+    },
+    "archive": {
+      "title": "Archive Search",
+      "description": "Search historical logs that have already been archived. Records cleaned up locally are still findable here.",
+      "resource": "archived records",
+      "failed": "Archive search failed: {{message}}",
+      "empty": "No matching archived records. Archiving is asynchronous, so very recent actions may not be indexed yet.",
+      "searchPlaceholder": "Search keyword...",
+      "statusCode": "Status code",
+      "backendLabel": "Data source",
+      "backendDisabled": "not configured",
+      "backend": {
+        "elasticsearch": "Elasticsearch",
+        "duckdb": "DuckDB (queries parquet directly)",
+        "victorialogs": "VictoriaLogs",
+        "openobserve": "OpenObserve"
+      },
+      "disabledTitle": "Archive search is unavailable",
+      "disabledHint": "The search backend follows the storage mode: Elasticsearch, DuckDB (queries parquet directly, no extra component needed), VictoriaLogs, or OpenObserve. The backend for the current storage mode is not usable yet; complete the configuration under Audit Settings → Archive and retry.",
+      "goToSetting": "Go to audit settings",
+      "kind": {
+        "audit": "Operation history",
+        "login": "Login logs",
+        "access": "Access logs"
+      },
+      "disabledSinkHint": "The storage mode is \"database\" (auditSink=database, the default): records live in the database, so there is no archive to search, and the archive channel switches are forced off. To use archive search, set auditSink to parquet / elasticsearch / victorialogs / openobserve in the config file and restart."
     },
     "fileOperations": {
       "title": "File Operation Logs",

@@ -77,6 +77,16 @@ spec:
             - name: KITE_CONFIG_FILE
               value: /etc/kite/config.yaml
             {{- end }}
+            {{- if .Values.auditArchiveDir }}
+            - name: KITE_AUDIT_ARCHIVE_DIR
+              value: {{ .Values.auditArchiveDir }}
+            {{- end }}
+            {{- if .Values.logFile }}
+            # klog 落盘：程序读取该环境变量后设置 -log_file 并关闭 stderr 输出
+            #（显式传 -log_file flag 的方式仍然有效）。
+            - name: KITE_LOG_FILE
+              value: {{ .Values.logFile }}
+            {{- end }}
           {{- with .Values.extraEnvs }}
           {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -105,6 +115,11 @@ spec:
             - name: {{ include "kite.fullname" . }}-storage
               mountPath: {{ .Values.db.sqlite.persistence.mountPath }}
           {{- end }}
+          {{- if .Values.auditPersistence.enabled }}
+            # 归档 parquet 与 klog 日志共用这一个卷（归档目录是其子目录）。
+            - name: {{ include "kite.fullname" . }}-audit
+              mountPath: {{ .Values.auditPersistence.mountPath }}
+          {{- end }}
       volumes:
       {{- if .Values.config.enabled }}
         - name: kite-config
@@ -123,6 +138,19 @@ spec:
           hostPath:
             path: {{ .Values.db.sqlite.persistence.hostPath.path }}
             type: {{ .Values.db.sqlite.persistence.hostPath.type }}
+      {{- else }}
+          emptyDir: {}
+      {{- end }}
+      {{- end }}
+      {{- if .Values.auditPersistence.enabled }}
+        - name: {{ include "kite.fullname" . }}-audit
+      {{- if .Values.auditPersistence.pvc.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.auditPersistence.pvc.existingClaim | default (printf "%s-audit" (include "kite.fullname" .)) }}
+      {{- else if .Values.auditPersistence.hostPath.enabled }}
+          hostPath:
+            path: {{ .Values.auditPersistence.hostPath.path }}
+            type: {{ .Values.auditPersistence.hostPath.type }}
       {{- else }}
           emptyDir: {}
       {{- end }}

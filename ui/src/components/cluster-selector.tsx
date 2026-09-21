@@ -26,7 +26,7 @@ export function ClusterSelector() {
   if (isLoading || isSwitching) {
     return (
       <div className="flex items-center justify-center">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
         {isSwitching && (
           <span className="ml-2 text-sm text-sidebar-foreground/70">
             {t('cluster.switching', '切换集群中...')}
@@ -73,7 +73,7 @@ export function ClusterSelector() {
                 className={cn(
                   'truncate text-xs',
                   currentError
-                    ? 'text-red-500'
+                    ? 'text-destructive'
                     : 'text-sidebar-foreground/70'
                 )}
                 title={currentError || currentDescription}
@@ -115,7 +115,7 @@ export function ClusterSelector() {
                 className={cn(
                   'text-xs truncate',
                   cluster.error
-                    ? 'text-red-500'
+                    ? 'text-destructive'
                     : 'text-muted-foreground font-mono'
                 )}
                 title={cluster.error || cluster.description || cluster.version}

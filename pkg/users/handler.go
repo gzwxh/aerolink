@@ -700,11 +700,12 @@ func ResetUserMFA(c *gin.Context) {
 	}
 
 	operator := c.MustGet("user").(model.User)
-	notification.SendEvent(model.NotificationEventMFAResetByAdmin, map[string]string{
+	// 当事人必收：本人要能第一时间发现动态码被移除。
+	notification.SendEventTo(model.NotificationEventMFAResetByAdmin, map[string]string{
 		"username": target.Username,
 		"operator": operator.Username,
 		"time":     time.Now().Format("2006-01-02 15:04:05"),
-	})
+	}, target.ID)
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -868,11 +869,11 @@ func ResetPassword(c *gin.Context) {
 		return
 	}
 	// 告知本人密码已被重置（安全惯例）：非本人操作可第一时间申诉。
-	notification.SendEvent(model.NotificationEventPasswordResetByAdmin, map[string]string{
+	notification.SendEventTo(model.NotificationEventPasswordResetByAdmin, map[string]string{
 		"username": target.Username,
 		"operator": operator.Username,
 		"time":     time.Now().Format("2006-01-02 15:04:05"),
-	})
+	}, target.ID)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -962,11 +963,11 @@ func RestoreDisabledUsers(c *gin.Context) {
 		}()
 		now := time.Now().Format("2006-01-02 15:04:05")
 		for _, u := range accounts {
-			notification.SendEvent(model.NotificationEventAccountEnabled, map[string]string{
+			notification.SendEventTo(model.NotificationEventAccountEnabled, map[string]string{
 				"username": u.Username,
 				"operator": operatorName,
 				"time":     now,
-			})
+			}, u.ID)
 		}
 	}(restored, operator.Username)
 
@@ -1016,11 +1017,11 @@ func SetUserEnabled(c *gin.Context) {
 	if !req.Enabled {
 		event = model.NotificationEventAccountDisabled
 	}
-	notification.SendEvent(event, map[string]string{
+	notification.SendEventTo(event, map[string]string{
 		"username": target.Username,
 		"operator": operator.Username,
 		"time":     time.Now().Format("2006-01-02 15:04:05"),
-	})
+	}, target.ID)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

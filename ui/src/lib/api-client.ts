@@ -1,6 +1,5 @@
 // 带认证支持的 API 客户端
 import { appendCurrentClusterHeader } from './current-cluster'
-import { reportOperationFailure } from './error-reporter'
 import { requestMFAVerification } from './mfa-prompt'
 import { notifySessionSuperseded } from './session-events'
 import { withSubPath } from './subpath'
@@ -161,30 +160,12 @@ class ApiClient {
     url: string,
     options: ApiRequestOptions = {}
   ): Promise<T> {
-    let response: Response
-    try {
-      response = await this.request(url, options)
-    } catch (error) {
-      // 网络层失败（服务器不可达 / 连接被重置等）：写入当前用户的站内信。
-      reportOperationFailure(
-        `${methodOf(options)} ${url} 请求失败: ${errorText(error)}`
-      )
-      throw error
-    }
+    const response = await this.request(url, options)
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       const message =
         errorData.error || `HTTP error! status: ${response.status}`
-      // 401 由刷新/跳登录流程接管；MFA 校验取消是用户主动行为，均不记站内信。
-      if (
-        response.status !== 401 &&
-        errorData.code !== 'mfa_verification_required'
-      ) {
-        reportOperationFailure(
-          `${methodOf(options)} ${url} 失败 (HTTP ${response.status}): ${message}`
-        )
-      }
       throw new ApiError(
         message,
         response.status,
@@ -203,8 +184,8 @@ class ApiClient {
 
   /**
    * 下载附件（如审计日志导出的 CSV）。列表接口返回 JSON，导出接口返回文件流，
-   * 所以不能走 makeRequest：这里返回 Blob 与响应头，错误处理保持一致（失败同样
-   * 写入站内信）。
+   * 所以不能走 makeRequest：这里返回 Blob 与响应头，错误处理与 makeRequest 一致
+   * （抛出错误，由调用方弹提示）。
    */
   async download(
     url: string,
@@ -217,23 +198,12 @@ class ApiClient {
     sha256?: string
     hmac?: string
   }> {
-    let response: Response
-    try {
-      response = await this.request(url, { ...options, method: 'GET' })
-    } catch (error) {
-      reportOperationFailure(
-        `${methodOf(options)} ${url} 请求失败: ${errorText(error)}`
-      )
-      throw error
-    }
+    const response = await this.request(url, { ...options, method: 'GET' })
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       const message =
         errorData.error || `HTTP error! status: ${response.status}`
-      reportOperationFailure(
-        `${methodOf(options)} ${url} 失败 (HTTP ${response.status}): ${message}`
-      )
       throw new ApiError(
         message,
         response.status,
@@ -319,23 +289,12 @@ class ApiClient {
 
 export const API_BASE_URL = '/api/v1'
 
-function methodOf(options: ApiRequestOptions): string {
-  return (options.method || 'GET').toUpperCase()
-}
-
 // 从 `attachment; filename="kite-audit-logs-20260101-120000.csv"` 里取出文件名。
 function filenameFromDisposition(header: string | null): string {
   if (!header) return 'download'
   const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header)
   const name = match?.[1]?.trim()
   return name ? decodeURIComponent(name) : 'download'
-}
-
-function errorText(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message || error.name
-  }
-  return String(error)
 }
 
 // 创建单例实例

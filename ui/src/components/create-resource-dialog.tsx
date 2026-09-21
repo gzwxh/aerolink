@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { applyResource, useResources, useTemplates } from '@/lib/api'
 import { isClusterScopedKind } from '@/lib/resource-catalog'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
+import { translateError } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard'
 import { Button } from '@/components/ui/button'
 import {
@@ -236,7 +237,7 @@ function CreateResourceDialogContent({
       onClose()
     } catch (err) {
       console.error('Failed to apply resource', err)
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      toast.error(translateError(err, t))
     } finally {
       setIsLoading(false)
     }

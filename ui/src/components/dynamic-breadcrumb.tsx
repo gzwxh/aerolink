@@ -102,8 +102,12 @@ export function DynamicBreadcrumb() {
 
   const breadcrumbs = generateBreadcrumbs()
 
+  // 顶栏空间被右侧那组元素（公告栏、集群徽章、搜索）挤窄时，面包屑**不能逐字换行**：
+  // 中文没有分词点，会被拆成「系 / 统 / 设 / 置」竖着排（真机上就是这个样子）。
+  // 空间不够时宁可裁掉一部分，也不要拆成竖排；`min-w-0` 让它能收缩，
+  // `truncate` 是溢出时的兜底。
   return (
-    <Breadcrumb className="hidden md:block">
+    <Breadcrumb className="hidden min-w-0 truncate md:block">
       <BreadcrumbList>
         {breadcrumbs.map((crumb, index) => (
           <div key={index} className="flex items-center">

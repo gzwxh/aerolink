@@ -722,7 +722,7 @@ func (h *PodHandler) recordFileAudit(c *gin.Context, cs *cluster.ClientSet, name
 	if opErr != nil {
 		errorMessage = opErr.Error()
 	}
-	if err := model.DB.Create(&model.ResourceHistory{
+	history := model.ResourceHistory{
 		ClusterName:     cs.Name,
 		ResourceType:    string(common.Pods),
 		ResourceName:    podName,
@@ -736,7 +736,8 @@ func (h *PodHandler) recordFileAudit(c *gin.Context, cs *cluster.ClientSet, name
 		OperatorName:    user.Username,
 		ClientIP:        c.ClientIP(),
 		UserAgent:       common.AuditUserAgent(c.Request.UserAgent()),
-	}).Error; err != nil {
+	}
+	if err := model.RecordAudit(c.Request.Context(), &history); err != nil {
 		klog.Errorf("failed to record file audit: %v", err)
 	}
 }

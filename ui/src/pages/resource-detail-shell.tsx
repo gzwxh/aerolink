@@ -16,12 +16,13 @@ import {
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { type ResourceType } from '@/types/api'
 import { getResourceListPath } from '@/lib/resource-catalog'
 import { getResourceMetadata } from '@/lib/resource-metadata'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
-import { cn } from '@/lib/utils'
+import { cn, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
@@ -199,13 +200,13 @@ export function ResourceDetailShell<T>({
         // 保存成功后 data 刷新会重置基线；这里先清掉，避免刷新失败时草稿标记残留。
         yamlDirtyRef.current = false
         setYamlDirty(false)
-      } catch {
-        // 操作失败已由 API 客户端统一写入站内信
+      } catch (error) {
+        toast.error(translateError(error, t))
       } finally {
         setIsSavingYaml(false)
       }
     },
-    [onSaveYaml]
+    [onSaveYaml, t]
   )
 
   const shellContext = useMemo<ResourceDetailShellContext<T>>(

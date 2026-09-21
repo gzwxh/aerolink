@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/zxh326/kite/pkg/common"
@@ -22,6 +23,18 @@ type KiteConfig struct {
 	OAuth     []OAuthConfig    `yaml:"oauth"`
 	LDAP      *LDAPConfig      `yaml:"ldap"`
 	RBAC      *RBACConfig      `yaml:"rbac"`
+	// AuditSink 决定审计记录落到哪里（**五选一互斥**）：
+	//
+	//	database（默认）| parquet | elasticsearch | victorialogs | openobserve
+	//
+	// 它是**启动期决定**的（审计写入路径按它选择、运行期不变），所以界面只读；这与下面的
+	// auditArchive 不同——那种是"播种值"，界面始终可改。多副本部署必须在每一份配置里写
+	// 同一个值（否则不同副本把记录写到不同地方，任何一处都查不全）。
+	AuditSink string `yaml:"auditSink"`
+	// AuditArchive 是审计/访问日志归档的**播种值**：仅当数据库里还是默认归档配置时
+	// 才写入，之后由管理员在「日志审计 → 审计设置 → 归档」里维护（区别于其它
+	// section 的「配置文件接管、界面只读」语义）。
+	AuditArchive *model.ArchiveSetting `yaml:"auditArchive"`
 }
 
 type AppliedSections map[string]bool
@@ -168,6 +181,20 @@ func applyConfig(path string, cfg *KiteConfig) AppliedSections {
 		}
 	}
 
+	// sink 必须在归档播种**之前**落定：播种会触发配置校验，而其中一条（parquet 作为唯一
+	// 存储时 flush 间隔不得超过 5 分钟）依赖它。
+	applyAuditSink(cfg.AuditSink)
+
+	// 归档配置是「播种」而不是「接管」：只在数据库仍是默认值时写入。
+	// 它不进 ManagedSections，界面始终可改。
+	if cfg.AuditArchive != nil {
+		if err := applyAuditArchive(cfg.AuditArchive); err != nil {
+			klog.Errorf("Failed to seed audit archive config: %v", err)
+		} else {
+			klog.Info("Seeded audit archive settings from config file")
+		}
+	}
+
 	// 在 RBAC 之后再应用超级用户，这样管理员角色分配
 	// 不会被 applyRBAC 的「删除所有分配」步骤抹掉。
 	if cfg.SuperUser != nil && cfg.SuperUser.Username != "" && cfg.SuperUser.Password != "" {
@@ -180,6 +207,64 @@ func applyConfig(path string, cfg *KiteConfig) AppliedSections {
 	}
 
 	return sections
+}
+
+// applyAuditSink 确定审计记录的落地方式（配置文件优先，其次 KITE_AUDIT_SINK 环境变量）。
+//
+// 取值非法时**直接启动失败**而不是回落 database：静默回落会让人以为配置生效了，
+// 而实际上审计记录去了另一个地方——这种"看起来正常"的错误在审计场景里代价最高。
+// 这与 DB_TYPE 的处理方式一致（见 pkg/common）。
+// auditSinkResolved 记录 sink 是否已经确定。
+//
+// sink 是**启动期**决定的（写入与查询都按它选择，归档运行时也只是启动时按它建一次）；配置文件
+// 热更新时绝不能改它：只改 `model.AuditSink` 而不重建运行时会得到一个**半生效**状态（写入还在旧
+// 通道、查询已切走），例如 database→parquet 的热切换会把之后的审计记录直接丢掉。
+// 所以这里只警告并保持原值，切换存储需要重启。
+var auditSinkResolved bool
+
+func applyAuditSink(value string) {
+	if strings.TrimSpace(value) == "" {
+		value = os.Getenv("KITE_AUDIT_SINK")
+	}
+	if strings.TrimSpace(value) == "" {
+		return // 未配置：保持默认 database，行为与改造前一致。
+	}
+
+	sink, err := model.NormalizeAuditSink(value)
+	if err != nil {
+		klog.Fatalf("Invalid audit sink %q (set via auditSink or KITE_AUDIT_SINK): %v", value, err)
+	}
+	if auditSinkResolved && model.AuditSink != sink {
+		klog.Warningf("Ignoring audit sink change %q -> %q from a config reload: "+
+			"the sink is decided at startup, restart to switch storage", model.AuditSink, sink)
+		return
+	}
+	model.AuditSink = sink
+	auditSinkResolved = true
+	klog.Infof("Audit sink: %s", sink)
+}
+
+// applyAuditArchive 把 config.yaml 的 auditArchive 播种进审计设置。
+//
+// 只在数据库里仍是**默认**归档配置时写入：管理员改过（或之前已播过种）就不动，
+// 避免每次重启都把界面上的调整覆盖回去。
+func applyAuditArchive(cfg *model.ArchiveSetting) error {
+	current, err := model.GetAuditSetting()
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(current.Archive, model.DefaultArchiveSetting()) {
+		klog.Info("Audit archive settings already customized; config file seeding skipped")
+		return nil
+	}
+
+	data := *current
+	data.Archive = *cfg
+	if err := data.Normalize(); err != nil {
+		return err
+	}
+	_, err = model.UpdateAuditSetting(data)
+	return err
 }
 
 func applySuperUser(cfg *SuperUserConfig) error {

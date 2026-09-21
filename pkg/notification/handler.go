@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +27,7 @@ var templateVariables = map[string][]string{
 	model.NotificationEventRoleAssigned:         {"username", "role", "time"},
 	model.NotificationEventRoleUnassigned:       {"username", "role", "time"},
 	model.NotificationEventMailDeliveryFailed:   {"time", "address", "event", "reason"},
+	model.NotificationEventScheduledTaskFailed:  {"taskName", "taskType", "cluster", "key", "reason", "time"},
 }
 
 type updateNotificationSettingRequest struct {
@@ -189,9 +189,12 @@ func HandleListNotificationSubscriptions(c *gin.Context) {
 	}
 	// mandatoryEvents 一并下发：界面要把这些事件标成「管理员必收、无法取消」，
 	// 清单只存在后端（model.mandatoryAdminEvents），前端不另抄一份。
+	// targetUserEvents 同理：这些事件的当事人一定会收到，订阅只用于增加额外收件人，
+	// 界面需要如实标注，否则管理员会以为自己必须为这些事件配订阅才有人收。
 	c.JSON(http.StatusOK, gin.H{
-		"subscriptions":   subscriptions,
-		"mandatoryEvents": model.MandatoryAdminEvents(),
+		"subscriptions":    subscriptions,
+		"mandatoryEvents":  model.MandatoryAdminEvents(),
+		"targetUserEvents": model.TargetUserEvents(),
 	})
 }
 
@@ -502,92 +505,4 @@ func HandleClearNotifications(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
-}
-
-// clientEventRateLimiter 限制单个账号每分钟最多能把多少条客户端上报的失败
-// 转成站内信记录，这样即使出现死循环也不会冲垮
-// notifications 表。
-type clientEventRateLimiter struct {
-	mu     sync.Mutex
-	window time.Duration
-	limit  int
-	hits   map[uint][]time.Time
-}
-
-var clientEventLimiter = &clientEventRateLimiter{
-	window: time.Minute,
-	limit:  10,
-	hits:   map[uint][]time.Time{},
-}
-
-func (l *clientEventRateLimiter) allow(userID uint) bool {
-	now := time.Now()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	times := l.hits[userID]
-	fresh := times[:0]
-	for _, t := range times {
-		if now.Sub(t) <= l.window {
-			fresh = append(fresh, t)
-		}
-	}
-	if len(fresh) >= l.limit {
-		l.hits[userID] = fresh
-		return false
-	}
-	l.hits[userID] = append(fresh, now)
-	return true
-}
-
-// HandleCreateClientNotification 把 Web 客户端上报的操作失败
-// 转成该用户的站内消息。
-//
-// 路由：POST /api/v1/notifications/client-events（任意登录用户）。
-//
-// 当请求本身失败时（例如连接被重置），客户端不能依赖 toast 给出反馈，
-// 因此把失败上报到这里，
-// 恢复连接后消息会出现在通知铃铛里。
-func HandleCreateClientNotification(c *gin.Context) {
-	user := c.MustGet("user").(model.User)
-	if !clientEventLimiter.allow(user.ID) {
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many notifications, try again later"})
-		return
-	}
-
-	var req struct {
-		Title  string `json:"title"`
-		Detail string `json:"detail"`
-		Path   string `json:"path"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
-		return
-	}
-
-	title := truncateRunes(strings.TrimSpace(req.Title), 200)
-	if title == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
-		return
-	}
-	detail := truncateRunes(strings.TrimSpace(req.Detail), 2000)
-	path := truncateRunes(strings.TrimSpace(req.Path), 300)
-	if path != "" {
-		detail = strings.TrimSpace(path + "\n" + detail)
-	}
-
-	if err := model.CreateUserNotification(
-		user.ID, model.NotificationEventOperationFailed, title, detail); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save notification"})
-		return
-	}
-	c.JSON(http.StatusCreated, gin.H{"success": true})
-}
-
-func truncateRunes(s string, max int) string {
-	runes := []rune(s)
-	if len(runes) <= max {
-		return s
-	}
-	return string(runes[:max])
 }

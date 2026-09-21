@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 
 import { NodeWithMetrics } from '@/types/api'
 import { updateResource } from '@/lib/api'
-import { getAge } from '@/lib/utils'
+import { getAge, translateError } from '@/lib/utils'
 import {
   useDraftDirty,
   useUnsavedChangesGuard,
@@ -165,8 +165,8 @@ export function NodeEditDialog({
       )
       await queryClient.invalidateQueries({ queryKey: ['nodes'] })
       close()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsSaving(false)
     }

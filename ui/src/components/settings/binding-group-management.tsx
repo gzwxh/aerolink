@@ -40,6 +40,7 @@ import {
 } from '@/lib/api'
 import { ApiError } from '@/lib/api-client'
 import { isProtectedRole, systemRoleDescription } from '@/lib/system-roles'
+import { translateError } from '@/lib/utils'
 import { useCluster } from '@/hooks/use-cluster'
 import {
   useDraftDirty,
@@ -566,7 +567,7 @@ export function BindingGroupManagement() {
       </div>
 
       {pendingForCluster.length > 0 && (
-        <div className="flex items-start justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+        <div className="flex items-start justify-between gap-3 rounded-md border border-warning/40 bg-warning/5 p-3">
           <div className="space-y-0.5 text-sm">
             <p className="font-medium">
               {t(
@@ -658,7 +659,7 @@ export function BindingGroupManagement() {
                         {g.detached && (
                           <Badge
                             variant="outline"
-                            className="border-amber-500/50 text-amber-600"
+                            className="border-warning/40 text-warning"
                           >
                             {t('bindingGroup.retainedBadge', '保留')}
                           </Badge>
@@ -1412,8 +1413,8 @@ export function BindingGroupFormPage({
         prev.includes(namespace) ? prev : [...prev, namespace]
       )
       setNewNamespace('')
-    } catch {
-      // 错误已写入站内信
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -1672,7 +1673,7 @@ export function BindingGroupFormPage({
         )}
 
         {conflictingNamespaces.length > 0 && (
-          <div className="mt-3 space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
+          <div className="mt-3 space-y-1 rounded-md border border-warning/40 bg-warning/5 p-2">
             <p className="text-xs font-medium">
               {t(
                 'bindingGroup.nsTakenTitle',

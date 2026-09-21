@@ -458,8 +458,8 @@ export function HelmChartListPage() {
       setRepositoryFilter(allRepositories)
       setRepositoryToDelete(null)
       await Promise.all([refetchRepositories(), localChartsQuery.refetch()])
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsDeletingRepository(false)
     }

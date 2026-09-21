@@ -53,7 +53,7 @@ func (s *smtpSink) serve() {
 }
 
 func (s *smtpSink) handle(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	reader := bufio.NewReader(conn)
 	write := func(line string) { _, _ = conn.Write([]byte(line + "\r\n")) }
 	write("220 smtp-sink ready")
@@ -200,11 +200,11 @@ func (l *fakeLLM) handle(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	chunk := func(delta map[string]any, finish any) {
-		body, _ := json.Marshal(map[string]any{
+		body := mustJSON(map[string]any{
 			"id": "chatcmpl-smoke", "object": "chat.completion.chunk", "created": 0, "model": "smoke",
 			"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}},
 		})
-		fmt.Fprintf(w, "data: %s\n\n", body)
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", body)
 	}
 
 	if tool != "" && !hasToolResult {
@@ -213,7 +213,7 @@ func (l *fakeLLM) handle(w http.ResponseWriter, req *http.Request) {
 			"index": 0, "id": "call_smoke", "type": "function",
 			"function": map[string]any{"name": tool, "arguments": args},
 		}}}, "tool_calls")
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		return
 	}
 	text := "SMOKE-LLM-OK"
@@ -222,7 +222,19 @@ func (l *fakeLLM) handle(w http.ResponseWriter, req *http.Request) {
 	}
 	chunk(map[string]any{"role": "assistant", "content": text}, nil)
 	chunk(map[string]any{}, "stop")
-	fmt.Fprint(w, "data: [DONE]\n\n")
+	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+}
+
+// mustJSON 序列化假 LLM 用的常量数据。
+//
+// 这里的字段全是常量与字符串，序列化失败只可能是代码写错（不是运行时输入问题）：用一个固定的
+// 错误载荷代替，让烟雾测试以“解析不出预期结构”的形式暴露出来，而不是静默发出一段空 body。
+func mustJSON(value any) []byte {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return []byte(`{"error":"fake llm: failed to marshal the chunk"}`)
+	}
+	return body
 }
 
 var sessionIDPattern = regexp.MustCompile(`"session_id"\s*:\s*"([^"]+)"`)

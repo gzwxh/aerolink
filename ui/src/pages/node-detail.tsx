@@ -31,6 +31,7 @@ import {
   formatCPU,
   formatDate,
   formatMemory,
+  translateError,
 } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
@@ -137,8 +138,8 @@ export function NodeDetail(props: { name: string }) {
       setIsDrainPopoverOpen(false)
       await refetch()
       await refetchRelated()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -148,8 +149,8 @@ export function NodeDetail(props: { name: string }) {
       toast.success(t('detail.status.nodeCordoned', { name }))
       setIsCordonPopoverOpen(false)
       refetch()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -159,8 +160,8 @@ export function NodeDetail(props: { name: string }) {
       toast.success(t('detail.status.nodeUncordoned', { name }))
       setIsCordonPopoverOpen(false)
       refetch()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -175,8 +176,8 @@ export function NodeDetail(props: { name: string }) {
       setIsTaintPopoverOpen(false)
       setTaintData({ key: '', value: '', effect: 'NoSchedule' })
       refetch()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -191,8 +192,8 @@ export function NodeDetail(props: { name: string }) {
       toast.success(t('detail.status.nodeTaintRemoved', { name }))
       if (!key) setUntaintKey('')
       refetch()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -609,9 +610,9 @@ function NodeOverview({
           value={
             <span className="inline-flex min-w-0 items-center gap-2">
               {isReady ? (
-                <IconCircleCheckFilled className="size-4 shrink-0 fill-green-500" />
+                <IconCircleCheckFilled className="size-4 shrink-0 fill-success" />
               ) : (
-                <IconExclamationCircle className="size-4 shrink-0 fill-red-500" />
+                <IconExclamationCircle className="size-4 shrink-0 fill-destructive" />
               )}
               <span className="truncate">
                 {isReady
@@ -810,11 +811,11 @@ function NodeOverview({
                       <span
                         className={cn(
                           'size-1.5 shrink-0 rounded-full',
-                          condition.health === 'True' && 'bg-emerald-500',
+                          condition.health === 'True' && 'bg-success',
                           condition.health === 'False' && 'bg-destructive',
                           condition.health !== 'True' &&
                             condition.health !== 'False' &&
-                            'bg-yellow-500'
+                            'bg-warning'
                         )}
                       />
                       <span className="truncate font-medium">

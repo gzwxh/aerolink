@@ -264,6 +264,13 @@ export function translateError(error: Error | unknown, t: TFunction): string {
       defaultValue: error.message,
     })
   }
+  // 资源级变更历史：sink≠database 时后端明确回 501 + code（审计记录没落库，YAML 对比做不了），
+  // 按码本地化成「为什么不可用」，而不是把裸英文报错丢给用户。
+  if (policyError.code === 'resource_history_requires_database_sink') {
+    return t(`resourceHistory.errors.${policyError.code}`, {
+      defaultValue: error.message,
+    })
+  }
   // 登录类错误（凭据错误 / 尝试次数超限 / IP 拒绝等）同样按码本地化。
   if (policyError.code?.startsWith('login_')) {
     return t(`login.errors.${policyError.code}`, {

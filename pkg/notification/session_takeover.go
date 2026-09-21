@@ -10,8 +10,8 @@ import (
 
 // 抢占性登录（单点登录把旧会话顶下线）的安全告警。
 //
-// 通知策略：收件人与其它事件一致，**只来自订阅**（`session_takeover` 的站内信 / 邮件
-// 订阅）。此前这里无条件发给本人 + 全部启用的管理员，从没订阅过的人也会收到站内信。
+// 通知策略：当事人必收（被顶下线的那个账号一定收到站内信，见 model.targetUserEvents），
+// 其余收件人（其他账号 / 邮箱）仍只看订阅。
 //
 // 邮件在此之上再叠一层节流：同一账号 24 小时内被顶替达到 sessionTakeoverEmailAfter 次
 // 才发邮件 —— 换设备、忘了退出这类正常操作不该天天打扰，而短时间内被反复顶替更可能
@@ -76,7 +76,7 @@ func deliverSessionTakeover(user model.User, ip, userAgent string, count int, no
 		return
 	}
 
-	inAppUsers, emails := resolveRecipients(model.NotificationEventSessionTakeover)
+	inAppUsers, emails := resolveRecipients(model.NotificationEventSessionTakeover, []uint{user.ID})
 	if setting.InAppEnabled {
 		deliverInApp(inAppUsers, model.NotificationEventSessionTakeover, title, content)
 	}

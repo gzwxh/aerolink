@@ -29,6 +29,7 @@ import {
   type DeepPartial,
 } from '@/lib/api'
 import { getResourceFormEditPath } from '@/lib/resource-catalog'
+import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import {
   useDraftDirty,
@@ -393,8 +394,8 @@ export function ResourceRowActions<T extends RowActionResourceType>({
           : t('resourceActions.paused', { name })
       )
       await refresh()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -407,8 +408,8 @@ export function ResourceRowActions<T extends RowActionResourceType>({
       )
       toast.success(t('resourceActions.rollingRestarted', { name }))
       await refresh()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -459,8 +460,8 @@ export function ResourceRowActions<T extends RowActionResourceType>({
       toast.success(t('resourceActions.imageUpdated', { name }))
       setDialog(null)
       await refresh()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsSaving(false)
     }
@@ -490,8 +491,8 @@ export function ResourceRowActions<T extends RowActionResourceType>({
       )
       setDialog(null)
       await refresh()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsSaving(false)
     }
@@ -504,8 +505,8 @@ export function ResourceRowActions<T extends RowActionResourceType>({
       toast.success(t('resourceTable.deleteSuccess', { name }))
       setShowDelete(false)
       await refresh()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsDeleting(false)
     }

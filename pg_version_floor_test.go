@@ -65,7 +65,7 @@ func TestNoSQLNewerThanPostgres12(t *testing.T) {
 		}
 		file, parseErr := parser.ParseFile(fset, path, nil, 0)
 		if parseErr != nil {
-			return nil
+			return nil //nolint:nilerr // 解析不了的文件直接跳过，不因它中断整轮扫描。
 		}
 		ast.Inspect(file, func(node ast.Node) bool {
 			lit, ok := node.(*ast.BasicLit)

@@ -16,6 +16,7 @@ import {
   setUserEnabled,
 } from '@/lib/api'
 import { fetchAPI } from '@/lib/api/shared'
+import { translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -135,7 +136,7 @@ export function UserStatusPanel() {
       setSelected((prev) => prev.filter((id) => id !== account.id))
       await refetch()
     } catch {
-      // 失败已由 API 客户端统一写入站内信
+      toast.error(translateError(error, t))
     }
   }
 
@@ -165,8 +166,8 @@ export function UserStatusPanel() {
       queryClient.invalidateQueries({ queryKey: ['user-list'] })
       refetch()
     },
-    onError: () => {
-      // 失败已由 API 客户端统一写入站内信
+    onError: (error) => {
+      toast.error(translateError(error, t))
     },
   })
 
@@ -210,8 +211,8 @@ export function UserStatusPanel() {
       )
       refetch()
     },
-    onError: () => {
-      // 失败已由 API 客户端统一写入站内信
+    onError: (error) => {
+      toast.error(translateError(error, t))
     },
   })
 

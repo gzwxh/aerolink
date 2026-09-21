@@ -10,7 +10,7 @@ import (
 // （重置密码、清动态码、角色变更、邮件通道故障这几类是追责与应急处置的线索）。
 func TestMandatoryEventsReachAdminsWithoutAnySubscription(t *testing.T) {
 	newNotificationTestDB(t)
-	admin := seedNotificationAdmin(t, "root")
+	admin := seedNotificationAdmin(t)
 	ordinary := seedNotificationUser(t, "alice")
 	seedNotificationTemplate(t, model.NotificationEventRoleAssigned)
 
@@ -28,7 +28,7 @@ func TestMandatoryEventsReachAdminsWithoutAnySubscription(t *testing.T) {
 // 「没配置接收者就不要推给管理员」）。
 func TestNonMandatoryEventsDoNotReachAdminsWithoutSubscription(t *testing.T) {
 	newNotificationTestDB(t)
-	admin := seedNotificationAdmin(t, "root")
+	admin := seedNotificationAdmin(t)
 	seedNotificationTemplate(t, model.NotificationEventRemoteLogin)
 
 	SendEvent(model.NotificationEventRemoteLogin, map[string]string{"username": "root", "ip": "10.0.0.1"})
@@ -41,7 +41,7 @@ func TestNonMandatoryEventsDoNotReachAdminsWithoutSubscription(t *testing.T) {
 // 管理员退订不了：即便把该事件的订阅全部停用/删除，强制事件照样送达。
 func TestMandatoryEventsIgnoreRemovedSubscriptions(t *testing.T) {
 	newNotificationTestDB(t)
-	admin := seedNotificationAdmin(t, "root")
+	admin := seedNotificationAdmin(t)
 	seedNotificationTemplate(t, model.NotificationEventPasswordResetByAdmin)
 
 	// 先有一条指向管理员的订阅，再删掉它（模拟管理员在界面上「取消推送」）。
@@ -70,7 +70,7 @@ func TestMandatoryEventsIgnoreRemovedSubscriptions(t *testing.T) {
 // 停用的账号不再收站内信（登不进来，也没人看）。这里顺带锁住「管理员解析」按 enabled 过滤。
 func TestMandatoryEventsSkipDisabledAdmins(t *testing.T) {
 	newNotificationTestDB(t)
-	admin := seedNotificationAdmin(t, "root")
+	admin := seedNotificationAdmin(t)
 	seedNotificationTemplate(t, model.NotificationEventMFAResetByAdmin)
 	setUserEnabled(t, admin.ID, false)
 
@@ -85,7 +85,7 @@ func TestMandatoryEventsSkipDisabledAdmins(t *testing.T) {
 // （rbac.AdminUserIDs，覆盖权限绑定组授权）。这里注入一个受控实现，验证它真的被用上。
 func TestMandatoryEventsUseInjectedAdminResolver(t *testing.T) {
 	newNotificationTestDB(t)
-	admin := seedNotificationAdmin(t, "root")
+	admin := seedNotificationAdmin(t)
 	injected := seedNotificationUser(t, "ops")
 	seedNotificationTemplate(t, model.NotificationEventRoleUnassigned)
 
@@ -105,9 +105,9 @@ func TestMandatoryEventsUseInjectedAdminResolver(t *testing.T) {
 // 强制事件与订阅命中同一个人时只写一条站内信（去重在并上管理员之后做）。
 func TestMandatoryEventDoesNotDuplicateForSubscribedAdmin(t *testing.T) {
 	newNotificationTestDB(t)
-	admin := seedNotificationAdmin(t, "root")
+	admin := seedNotificationAdmin(t)
 	seedNotificationTemplate(t, model.NotificationEventRoleAssigned)
-	seedAllUsersSubscription(t, model.NotificationEventRoleAssigned, model.NotificationChannelInApp)
+	seedAllUsersSubscription(t, model.NotificationEventRoleAssigned)
 
 	SendEvent(model.NotificationEventRoleAssigned, map[string]string{"username": "alice"})
 

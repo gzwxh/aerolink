@@ -103,7 +103,7 @@ export function ClusterManagement() {
         const badge = (
           <Badge
             variant="outline"
-            className="bg-violet-50 text-violet-700 border-violet-200"
+            className="bg-success/10 text-success border-success/25"
           >
             {t('clusterManagement.type.clusterAgent', 'Cluster Agent')}
           </Badge>
@@ -125,7 +125,7 @@ export function ClusterManagement() {
         return (
           <Badge
             variant="outline"
-            className="bg-blue-50 text-blue-700 border-blue-200"
+            className="bg-info/10 text-info border-info/25"
           >
             {t('clusterManagement.type.inCluster', 'In-Cluster')}
           </Badge>
@@ -134,7 +134,7 @@ export function ClusterManagement() {
       return (
         <Badge
           variant="outline"
-          className="bg-gray-50 text-gray-700 border-gray-200"
+          className="bg-muted text-muted-foreground border-border"
         >
           {t('clusterManagement.type.external', 'External')}
         </Badge>
@@ -179,7 +179,11 @@ export function ClusterManagement() {
           return (
             <div className="flex items-start gap-2">
               {/* 图标跟着名称走，和集群切换器、页头徽章位一致：管理员改完能在这里直接看到结果。 */}
-              <ClusterBadgeIcon cluster={cluster} size="sm" className="mt-0.5" />
+              <ClusterBadgeIcon
+                cluster={cluster}
+                size="sm"
+                className="mt-0.5"
+              />
               <div className="min-w-0 space-y-0.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <ClusterBadge cluster={cluster} />
@@ -446,8 +450,13 @@ export function ClusterManagement() {
   // 徽章同时出现在集群切换器与顶栏，改完要把 ['clusters'] 一起失效——
   // 那个查询缓存 5 分钟，不失效的话用户得手动刷新才看到效果。
   const badgeMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: ClusterBadgeUpdateRequest }) =>
-      updateClusterBadge(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: number
+      data: ClusterBadgeUpdateRequest
+    }) => updateClusterBadge(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
       queryClient.invalidateQueries({ queryKey: ['clusters'] })

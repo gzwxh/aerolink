@@ -171,6 +171,12 @@ export const fetchNotificationSubscriptions = async (event?: string) => {
      * 界面据此上锁，不另抄一份。
      */
     mandatoryEvents: string[]
+    /**
+     * 「当事人必收」的事件清单（`model.targetUserEvents`）：这些事件描述的是当事人自己
+     * 账号的状态/凭据变化，投递时一定会发给本人，与订阅无关。界面据此标注，
+     * 否则管理员会以为自己必须为这些事件配订阅才有人收到。
+     */
+    targetUserEvents: string[]
   }>(`/admin/notification-subscriptions/${query}`)
 }
 

@@ -126,7 +126,7 @@ export function ContainerTable(props: {
                     <div className="space-y-2">
                       {container.resources.requests && (
                         <div>
-                          <div className="text-xs font-medium text-green-600 dark:text-green-400">
+                          <div className="text-xs font-medium text-muted-foreground">
                             Requests
                           </div>
                           <div className="text-sm space-y-1">
@@ -153,7 +153,7 @@ export function ContainerTable(props: {
                       )}
                       {container.resources.limits && (
                         <div>
-                          <div className="text-xs font-medium text-red-600 dark:text-red-400">
+                          <div className="text-xs font-medium text-muted-foreground">
                             Limits
                           </div>
                           <div className="text-sm space-y-1">
@@ -203,7 +203,7 @@ export function ContainerTable(props: {
                       {container.env.slice(0, 5).map((envVar, envIndex) => (
                         <div key={envIndex} className="text-sm">
                           <div className=" text-xs">
-                            <span className="text-blue-600 dark:text-blue-400 font-mono">
+                            <span className="text-info font-mono">
                               {envVar.name}
                             </span>
                             {envVar.value && (
@@ -215,7 +215,7 @@ export function ContainerTable(props: {
                               </>
                             )}
                             {envVar.valueFrom && (
-                              <span className="text-orange-600 dark:text-orange-400 ml-1">
+                              <span className="text-attention ml-1">
                                 (from{' '}
                                 {envVar.valueFrom.secretKeyRef
                                   ? 'secret'
@@ -241,7 +241,7 @@ export function ContainerTable(props: {
                   {/* Environment variables from sources */}
                   {container.envFrom && container.envFrom.length > 0 && (
                     <div>
-                      <div className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2">
+                      <div className="text-xs font-medium text-muted-foreground mb-2">
                         Environment From Sources ({container.envFrom.length})
                       </div>
                       <div className="space-y-1">
@@ -253,11 +253,11 @@ export function ContainerTable(props: {
                                   <>
                                     <Badge
                                       variant="outline"
-                                      className="text-xs bg-blue-50 dark:bg-blue-950"
+                                      className="text-xs bg-info/10"
                                     >
                                       ConfigMap
                                     </Badge>
-                                    <span className=" text-xs text-blue-600 dark:text-blue-400">
+                                    <span className=" text-xs text-info">
                                       {envFromSource.configMapRef.name}
                                     </span>
                                     {envFromSource.configMapRef.optional && (
@@ -274,11 +274,11 @@ export function ContainerTable(props: {
                                   <>
                                     <Badge
                                       variant="outline"
-                                      className="text-xs bg-green-50 dark:bg-green-950"
+                                      className="text-xs bg-success/10"
                                     >
                                       Secret
                                     </Badge>
-                                    <span className=" text-xs text-green-600 dark:text-green-400">
+                                    <span className=" text-xs text-success">
                                       {envFromSource.secretRef.name}
                                     </span>
                                     {envFromSource.secretRef.optional && (
@@ -369,7 +369,7 @@ export function ContainerTable(props: {
                           <div className="flex items-center gap-2 text-sm">
                             <Badge
                               variant="outline"
-                              className="text-xs bg-green-50 dark:bg-green-950"
+                              className="text-xs bg-success/10"
                             >
                               Liveness
                             </Badge>
@@ -388,7 +388,7 @@ export function ContainerTable(props: {
                           <div className="flex items-center gap-2 text-sm">
                             <Badge
                               variant="outline"
-                              className="text-xs bg-blue-50 dark:bg-blue-950"
+                              className="text-xs bg-info/10"
                             >
                               Readiness
                             </Badge>
@@ -407,7 +407,7 @@ export function ContainerTable(props: {
                           <div className="flex items-center gap-2 text-sm">
                             <Badge
                               variant="outline"
-                              className="text-xs bg-yellow-50 dark:bg-yellow-950"
+                              className="text-xs bg-warning/10"
                             >
                               Startup
                             </Badge>

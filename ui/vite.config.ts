@@ -105,6 +105,19 @@ export default defineConfig(({ command }) => ({
     emptyOutDir: true,
     chunkSizeWarningLimit: 3000,
     modulePreload: true,
+    /*
+      前端浏览器基线：Chrome / Edge 111、Firefox 128、Safari / iOS 16.4。
+
+      显式写死，不跟 Vite 默认的 'baseline-widely-available'
+      （chrome111 / edge111 / firefox114 / safari16.4）走：真实下限由产物里的 CSS 决定，
+      而 Firefox 的 128 才是下限——产物里的 @property（Tailwind 的 --tw-* 注册属性）
+      要 128，:has()（sidebar 折叠宽度、card 的 inset 网格、表格首列）要 121。
+      Vite 默认声明的 firefox114 是低估，会让人误以为 114 也能用。
+
+      低于这条基线的浏览器不做兼容（规则见 AGENTS.md「界面（UI）」），
+      改动原因见 docs/dev/plans/2026-09-21-theme-contrast-and-browser-baseline.md。
+    */
+    target: ['chrome111', 'edge111', 'firefox128', 'safari16.4', 'ios16.4'],
     rolldownOptions: {
       output: {
         manualChunks: getManualChunk,

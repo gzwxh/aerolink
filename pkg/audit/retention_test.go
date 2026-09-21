@@ -33,6 +33,8 @@ func setupRetentionTestDB(t *testing.T) *gorm.DB {
 		&model.LoginRecord{},
 		&model.PasswordChangeLog{},
 		&model.AuditSetting{},
+		// 周期性全局任务的执行权租约（多副本选主，见 leader.go）。
+		&model.LeaderLease{},
 	); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -140,6 +142,54 @@ func TestPruneExpiredAuditRecords(t *testing.T) {
 		Count(&pruned)
 	if pruned != 1 {
 		t.Fatalf("expected the retention run to record itself, got %d", pruned)
+	}
+}
+
+// 保留策略同样要清理 Elasticsearch 的过期按天索引：sink=elasticsearch 时 ES 就是审计记录
+// 唯一所在地，库里本来就是空的（只清库等于保留策略没生效）。0 天（永久保留）时一个索引都不动。
+func TestPruneExpiredAuditRecordsDeletesExpiredESIndices(t *testing.T) {
+	setupRetentionTestDB(t)
+	// ES 索引清理只在 sink=elasticsearch 时发生（五者互斥，见方案 §12.13）；VictoriaLogs /
+	// OpenObserve 没有客户端删除接口，保留由服务端负责。
+	originalSink := model.AuditSink
+	t.Cleanup(func() { model.AuditSink = originalSink })
+	model.AuditSink = model.AuditSinkElasticsearch
+
+	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.Local)
+
+	fake := newFakeESIndices(t, "kite-audit-2026.01.01", "kite-audit-2026.09.20")
+	fake.listErr = true // 先用「索引还不存在」的 ES 验证永久保留不碰 ES
+
+	setting := model.DefaultAuditSettingData()
+	setting.Archive.Elasticsearch = model.ESArchive{
+		Enabled:     true,
+		URLs:        []string{fake.server.URL},
+		IndexPrefix: "kite-audit",
+	}
+	if _, err := model.UpdateAuditSetting(setting); err != nil {
+		t.Fatalf("saving audit setting: %v", err)
+	}
+
+	// 默认 0 天 = 永久保留：ES 不该被访问（listErr 便不会再触发）。
+	if deleted := PruneExpiredAuditRecords(now); deleted != 0 {
+		t.Fatalf("retention 0 must keep everything, deleted %d", deleted)
+	}
+	if fake.listPath != "" {
+		t.Fatalf("永久保留时不该去列 ES 索引, got %q", fake.listPath)
+	}
+
+	fake.listErr = false
+	setting.RetentionDays = 90
+	if _, err := model.UpdateAuditSetting(setting); err != nil {
+		t.Fatalf("saving retention: %v", err)
+	}
+
+	// 库里没有记录（sink=es 时的常态），返回值只能是 0，但 ES 侧必须删掉过期索引。
+	if deleted := PruneExpiredAuditRecords(now); deleted != 0 {
+		t.Fatalf("库表里没有记录时 deleted = %d, want 0", deleted)
+	}
+	if len(fake.deleted) != 1 || fake.deleted[0] != "kite-audit-2026.01.01" {
+		t.Fatalf("deleted indices = %v, want only the expired one", fake.deleted)
 	}
 }
 

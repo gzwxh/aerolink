@@ -831,7 +831,111 @@ export interface AuditLogResponse {
   total: number
   page: number
   size: number
+  /**
+   * 数据来源后端：只有 sink 不是 database 时才有（此时列表由归档检索回答）。
+   * 界面据此提示"这份数据来自归档，不是实时库表"。
+   */
+  backend?: ArchiveBackend
+  /** 刚发生的操作最晚多久之后才可查（秒）：parquet 攒批落盘带来的延迟，界面应明示。 */
+  queryDelaySeconds?: number
 }
+
+/**
+ * 归档检索的记录字段名与后端 ES 文档一致（snake_case，见方案 §5 schema）。
+ * 这里只声明界面用到的字段，其余原样透传。
+ */
+export interface ArchiveAuditHistoryRecord {
+  id?: number
+  created_at?: string
+  cluster_name?: string
+  resource_type?: string
+  resource_name?: string
+  namespace?: string
+  operation_type?: string
+  operation_source?: string
+  success?: boolean
+  error_message?: string
+  client_ip?: string
+  user_agent?: string
+  operator_name?: string
+}
+
+export interface ArchiveLoginRecord {
+  id?: number
+  created_at?: string
+  user_id?: number
+  username?: string
+  provider?: string
+  ip?: string
+  user_agent?: string
+  result?: string
+}
+
+export interface ArchiveAccessLogRecord {
+  ts?: string
+  client_ip?: string
+  method?: string
+  path?: string
+  status_code?: number
+  latency_ms?: number
+  cluster?: string
+  user?: string
+}
+
+/**
+ * 归档检索的后端标识。
+ *
+ * - elasticsearch：走 ES 检索面（有倒排索引，能力最强）
+ * - duckdb：DuckDB 直接查 parquet（本地热层 + S3 冷层），**不需要额外部署组件**
+ * - victorialogs：VictoriaLogs 自己的 LogsQL 检索面
+ * - openobserve：OpenObserve 自己的搜索接口
+ */
+export type ArchiveBackend =
+  'elasticsearch' | 'duckdb' | 'victorialogs' | 'openobserve'
+
+/**
+ * 审计记录的落地方式（**五选一互斥**，见后端 model.AuditSink）。
+ *
+ * 由**配置文件**在启动时决定、运行期不变，因此界面只读展示：
+ * - database：只写数据库（默认）
+ * - parquet：只落 parquet 文件（可叠加 S3 远端副本），查询有攒批延迟
+ * - elasticsearch：只写 Elasticsearch
+ * - victorialogs：只写 VictoriaLogs（**不是** VictoriaMetrics：后者存不下字段明细）
+ * - openobserve：只写 OpenObserve
+ */
+export type AuditSinkName =
+  'database' | 'parquet' | 'elasticsearch' | 'victorialogs' | 'openobserve'
+
+/** 归档检索后端的可用性：界面据此启用/禁用选项并解释原因。 */
+export interface ArchiveBackendStatus {
+  name: ArchiveBackend
+  available: boolean
+  /** 不可用的原因（例如「未启用 Elasticsearch」）。 */
+  reason?: string
+  /** 是否为当前配置下的默认后端。 */
+  default: boolean
+}
+
+/** 可用后端列表与默认选择（`default` 为空表示没有任何后端可用）。 */
+export interface ArchiveBackendsResponse {
+  backends: ArchiveBackendStatus[]
+  default: ArchiveBackend | ''
+  /** 当前审计落地方式：通道互斥，界面据此给引导。 */
+  sink?: string
+}
+
+/** 归档检索的响应结构，与本地列表接口同构（data/total/page/size）。 */
+export interface ArchiveQueryResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  size: number
+  /** 本次结果来自哪个后端，界面据此提示数据来源。 */
+  backend?: ArchiveBackend
+}
+
+/** 归档检索的类型：操作历史 / 登录 / 访问日志。 */
+export type ArchiveKind = 'audit' | 'login' | 'access'
 
 export interface LoginRecord {
   id: number
@@ -854,6 +958,10 @@ export interface LoginLogResponse {
   total: number
   page: number
   size: number
+  /** 数据来源后端（sink 非 database 时才有）；同 AuditLogResponse。 */
+  backend?: ArchiveBackend
+  /** 刚发生的操作最晚多久之后才可查（秒）。 */
+  queryDelaySeconds?: number
 }
 
 export interface PasswordChangeLog {
@@ -871,10 +979,28 @@ export interface PasswordChangeLogResponse {
   total: number
   page: number
   size: number
+  /** 数据来源后端（sink 非 database 时才有）；同 AuditLogResponse。 */
+  backend?: ArchiveBackend
+  /** 刚发生的操作最晚多久之后才可查（秒）。 */
+  queryDelaySeconds?: number
 }
 
 /** syslog 外发的网络类型（tls 为加密外发）。 */
 export type SyslogNetwork = 'udp' | 'tcp' | 'tls'
+
+/** 日志输出格式：text 为现状，json 为结构化单行。 */
+export type LogFormat = 'text' | 'json'
+
+/**
+ * 审计事件输出到标准输出（stdout）的设置：交给外部日志采集工具收走。
+ *
+ * 与 syslog 的区别：syslog 是应用主动外发到远端日志服务器；stdout 是本地输出、被动采集。
+ * 默认开启且用 json——日志平台只收 stdout 时也应能查到「谁在什么时间从哪个 IP 做了什么」。
+ */
+export interface StdoutSetting {
+  enabled: boolean
+  format: LogFormat
+}
 
 export interface SyslogSetting {
   enabled: boolean
@@ -884,22 +1010,135 @@ export interface SyslogSetting {
   /** RFC5424 的 APP-NAME 字段。 */
   tag: string
   facility: number
+  /** 外发消息正文格式：text（RFC5424 + key=value）或 json。 */
+  format: LogFormat
   /** 仅 tls 生效：跳过服务端证书校验（自签证书场景）。 */
   insecureSkipVerify: boolean
 }
 
 /**
- * 审计章节配置：保留策略 + syslog 外发。
+ * 审计章节配置：保留策略 + syslog 外发 + 归档。
  *
  * retentionDays 为 0 = 永久保留；非 0 时后端强制不低于 minRetentionDays。
  */
 export interface AuditSetting {
   retentionDays: number
   syslog: SyslogSetting
+  stdout: StdoutSetting
+  archive: ArchiveSetting
+}
+
+/** parquet writer 的攒批触发条件：时间 / 条数 / 字节满足其一即 flush。 */
+export interface FlushSetting {
+  intervalSeconds: number
+  maxBatchRows: number
+  maxBatchBytes: number
+}
+
+/** 访问日志的归档与本地滚留（与审计日志分开配置，默认保留期更短）。 */
+export interface AccessLogArchiveSetting {
+  enabled: boolean
+  retentionDays: number
+  maxBytes: number
+  flush: FlushSetting
+  /** 访问日志写到标准输出的格式：text（现状）或 json。 */
+  format: LogFormat
+}
+
+/**
+ * S3 兼容对象存储的归档设置（MinIO / RustFS / Ceph RGW / COS / OBS / OSS…）。
+ * 各家只差 endpoint / pathStyle / region 三项。
+ */
+export interface S3ArchiveSetting {
+  enabled: boolean
+  endpoint: string
+  region: string
+  bucket: string
+  accessKey: string
+  /** 只写不回显：读取时后端返回掩码，原样回传表示不修改。 */
+  secretKey: string
+  pathStyle: boolean
+  useTLS: boolean
+  prefix: string
+  /** 上传成功后删除本地文件（S3 作为最终存储）。 */
+  deleteLocalAfterUpload: boolean
+}
+
+/** Elasticsearch 检索面设置：按天索引 `<indexPrefix>-YYYY.MM.DD`。 */
+export interface ESArchiveSetting {
+  enabled: boolean
+  urls: string[]
+  username: string
+  /** 只写不回显：读取时后端返回掩码，原样回传表示不修改。 */
+  password: string
+  indexPrefix: string
+  tlsInsecureSkipVerify: boolean
+}
+
+/**
+ * VictoriaLogs 写入设置（写入走 ES bulk 兼容接口，检索走 LogsQL）。
+ *
+ * **不是** VictoriaMetrics：后者是时序库，存不下审计记录的字段明细。
+ * 单 stream，不自己按天分区；过期数据由服务端 `-retentionPeriod` 负责。
+ */
+export interface VictoriaLogsArchiveSetting {
+  enabled: boolean
+  urls: string[]
+  /** 日志流名（VictoriaLogs 的 stream 字段）。 */
+  stream: string
+  /** 多租户标识（请求头 AccountID / ProjectID），单租户留空。 */
+  accountId: string
+  projectId: string
+  tlsInsecureSkipVerify: boolean
+}
+
+/**
+ * OpenObserve 写入设置（写入走 `_json` 接口，检索走它自己的搜索接口）。
+ *
+ * 单 stream，不自己按天分区；过期数据由服务端 stream 的 `data_retention` 负责。
+ */
+export interface OpenObserveArchiveSetting {
+  enabled: boolean
+  urls: string[]
+  /** 组织名（默认 default）。 */
+  org: string
+  /** 日志流名（默认 kite-audit）。 */
+  stream: string
+  username: string
+  /** 只写不回显：读取时后端返回掩码，原样回传表示不修改。 */
+  password: string
+  tlsInsecureSkipVerify: boolean
+}
+
+/** 审计/访问日志的归档设置：本地 parquet + S3 + 三种外部日志存储。 */
+export interface ArchiveSetting {
+  enabled: boolean
+  localDir: string
+  retentionDays: number
+  maxBytes: number
+  flush: FlushSetting
+  accessLog: AccessLogArchiveSetting
+  s3: S3ArchiveSetting
+  elasticsearch: ESArchiveSetting
+  victorialogs: VictoriaLogsArchiveSetting
+  openobserve: OpenObserveArchiveSetting
+  /** 操作日志归档是否带上变更前后的资源清单（默认关：YAML 可能很大）。 */
+  includeResourceYAML: boolean
 }
 
 export interface AuditSettingResponse {
   setting: AuditSetting
+  /**
+   * 审计记录的落地方式。由配置文件决定、运行期不变，所以界面上只读展示。
+   */
+  sink?: AuditSinkName
+  /**
+   * 保留天数是否由**存储端**负责（sink=victorialogs / openobserve 时为 true）。
+   *
+   * 这两家都没有「删除过期数据」的客户端接口，保留由服务端配置决定，因此界面必须明说
+   * 「保留策略对当前存储方式不生效」，否则就是「配了没生效」的静默失效。
+   */
+  retentionServerSide?: boolean
   /** 后端强制的保留天数下限（30）。 */
   minRetentionDays: number
   /** 等保 / 网安法通常核查的最低保留期（180），仅作提示。 */

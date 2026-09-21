@@ -322,6 +322,11 @@ func validateClusterBadge(badge model.Cluster) error {
 	return nil
 }
 
+// UpdateCluster 更新集群信息（徽章部分更新、字段校验与集群重载都在这里）。
+//
+// 为什么不做成多个小函数：那需要额外传递「哪些字段被显式设置」的中间状态，比集中在一处更难对照。
+//
+//nolint:gocyclo // 这是一条「逐字段判断哪些改了」的直线流程，拆成多个函数反而要额外传递
 func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	if common.IsSectionManaged("clusters") {
 		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})

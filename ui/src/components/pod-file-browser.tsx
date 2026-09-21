@@ -21,6 +21,7 @@ import {
   usePodFiles,
 } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
+import { translateError } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -130,8 +131,8 @@ export function PodFileBrowser({
           defaultValue: '已上传 {{name}}',
         })
       )
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsUploading(false)
       e.target.value = ''
@@ -273,9 +274,9 @@ export function PodFileBrowser({
                   <TableRow key={file.name}>
                     <TableCell>
                       {file.isDir ? (
-                        <IconFolder className="w-4 h-4 text-blue-500" />
+                        <IconFolder className="w-4 h-4 text-info" />
                       ) : (
-                        <IconFile className="w-4 h-4 text-gray-500" />
+                        <IconFile className="w-4 h-4 text-muted-foreground" />
                       )}
                     </TableCell>
                     <TableCell>

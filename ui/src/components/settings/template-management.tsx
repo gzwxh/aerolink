@@ -18,6 +18,7 @@ import {
   updateTemplate,
   useTemplates,
 } from '@/lib/api'
+import { translateError } from '@/lib/utils'
 import {
   useDraftDirty,
   useUnsavedChangesGuard,
@@ -88,7 +89,7 @@ export function TemplateManagement() {
     },
     onError: (error) => {
       console.error('Error creating template:', error)
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      toast.error(translateError(error, t))
     },
   })
 
@@ -112,7 +113,7 @@ export function TemplateManagement() {
     },
     onError: (error) => {
       console.error('Error updating template:', error)
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      toast.error(translateError(error, t))
     },
   })
 
@@ -130,7 +131,7 @@ export function TemplateManagement() {
     },
     onError: (error) => {
       console.error('Error deleting template:', error)
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      toast.error(translateError(error, t))
     },
   })
 

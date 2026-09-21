@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zxh326/kite/pkg/model"
+	"github.com/zxh326/kite/pkg/notification"
 	"k8s.io/klog/v2"
 )
 
@@ -15,6 +16,9 @@ const (
 	defaultScanInterval = time.Minute
 	defaultLockDuration = 10 * time.Minute
 )
+
+// timeLayout 用于格式化站内信里的时间（notification 包里的同名常量未导出）。
+const timeLayout = "2006-01-02 15:04:05"
 
 type Executor interface {
 	Run(context.Context, model.ScheduledTask) error
@@ -117,9 +121,49 @@ func (m *Manager) runTask(ctx context.Context, task model.ScheduledTask) {
 	m.finish(task, runAt, err)
 	if err != nil {
 		klog.Errorf("Scheduled task finished with error: cluster=%s type=%s key=%s id=%d duration=%s error=%v", task.ClusterName, task.Type, task.Key, task.ID, time.Since(runAt), err)
+		m.notifyTaskFailure(task, err)
 		return
 	}
 	klog.Infof("Scheduled task finished: cluster=%s type=%s key=%s id=%d duration=%s", task.ClusterName, task.Type, task.Key, task.ID, time.Since(runAt))
+}
+
+// notifyTaskFailure 把一次执行失败告诉任务创建者。
+//
+// 定时任务在人不在场的时候跑，失败原本只写进 scheduled_tasks.last_error，创建者不会主动
+// 去看——这正是「不在场时发生的、与自己相关的事」，按失败反馈口径应该走站内信
+// （见 plans/2026-09-21-notification-recipient-and-failure-feedback.md §2.3）。
+// 收件人是创建者本人，通过 SendEventTo 的「当事人必收」档送达，不依赖订阅配置。
+//
+// 只处理执行失败：调度配置本身有问题（scheduleErr）时 next_run_at 不会推进，任务会被
+// 每一轮扫描重复捡起，在这里通知会变成刷屏。
+//
+// 投递是同步的：与每日检查（notification.triggers）一致，而调度循环本来就串行等待执行器。
+func (m *Manager) notifyTaskFailure(task model.ScheduledTask, runErr error) {
+	// 建任务时 CreatorID 一律来自当前登录用户（见 helmrelease_handler 的 UpdateAutoUpgrade），
+	// 为 0 只能是早期数据，没有收件人可发。
+	if task.CreatorID == 0 {
+		return
+	}
+	// 这一调用发生在调度循环的 goroutine 里，一次 panic 会把整个调度器带崩，
+	// 而通知失败本身不该影响任务收尾（与 notification.NotifyRemoteLogin 同一处理）。
+	defer func() {
+		if r := recover(); r != nil {
+			klog.Errorf("panic while notifying the failure of scheduled task %d: %v", task.ID, r)
+		}
+	}()
+
+	taskName := task.Name
+	if taskName == "" {
+		taskName = task.Key
+	}
+	notification.SendEventTo(model.NotificationEventScheduledTaskFailed, map[string]string{
+		"taskName": taskName,
+		"taskType": task.Type,
+		"cluster":  task.ClusterName,
+		"key":      task.Key,
+		"reason":   runErr.Error(),
+		"time":     time.Now().Format(timeLayout),
+	}, task.CreatorID)
 }
 
 // startLockHeartbeat 在任务执行期间周期性把 lock_until 往后推，返回的函数用于

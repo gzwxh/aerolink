@@ -1,6 +1,8 @@
 package helmutil
 
 import (
+	"context"
+
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	release "helm.sh/helm/v4/pkg/release/v1"
@@ -50,7 +52,8 @@ func RecordReleaseHistory(clusterName string, operatorID uint, source, opType, n
 		OperatorID:      model.OperatorRef(operatorID),
 		OperatorName:    operatorName,
 	}
-	if err := model.DB.Create(&history).Error; err != nil {
+	// 自动升级等非 HTTP 场景没有请求上下文：传 context.TODO()（与传 nil 行为一致）。
+	if err := model.RecordAudit(context.TODO(), &history); err != nil {
 		klog.Errorf("Failed to create helm release history: %v", err)
 	}
 }
