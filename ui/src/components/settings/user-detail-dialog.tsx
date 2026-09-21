@@ -20,7 +20,7 @@ import {
 } from '@/lib/api'
 import { normalizeAvatarUrl } from '@/lib/avatar-url'
 import { isDeletableUser, isNativeUser } from '@/lib/user-kind'
-import { formatDate } from '@/lib/utils'
+import { formatDate, translateError } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -220,8 +220,8 @@ export function UserDetailDialog({
         })
       )
     },
-    onError: () => {
-      // 失败原因（邮箱格式、长度超限等）已由 API 客户端写明，弹窗保留以便修改后重试。
+    onError: (error) => {
+      toast.error(translateError(error, t))
     },
   })
 

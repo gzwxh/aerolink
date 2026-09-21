@@ -30,7 +30,16 @@ func openSchedulerTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
 	}
-	if err := db.AutoMigrate(&model.ScheduledTask{}); err != nil {
+	// 任务失败要向创建者发站内信（见 failure_notification_test.go），因此通知相关的表
+	// 也要就位：缺 notification_subscriptions 时收件人解析会静默退化成「只发给当事人」。
+	if err := db.AutoMigrate(
+		&model.ScheduledTask{},
+		&model.User{},
+		&model.NotificationSetting{},
+		&model.NotificationTemplate{},
+		&model.NotificationSubscription{},
+		&model.Notification{},
+	); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
 	previous := model.DB

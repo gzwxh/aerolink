@@ -5,13 +5,13 @@ import {
   useState,
   type ChangeEvent,
 } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import {
   IconLoader2,
   IconPalette,
   IconTrash,
   IconUpload,
 } from '@tabler/icons-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -31,13 +31,6 @@ import {
   useDraftDirty,
   useUnsavedChangesGuard,
 } from '@/hooks/use-unsaved-changes-guard'
-import {
-  CLUSTER_BADGE_TEXT_MAX_LENGTH,
-  ClusterBadge,
-  ClusterBadgeIcon,
-  DEFAULT_CLUSTER_BADGE_COLOR,
-  isValidClusterBadgeColor,
-} from '@/components/cluster-badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -50,6 +43,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import {
+  CLUSTER_BADGE_TEXT_MAX_LENGTH,
+  ClusterBadge,
+  ClusterBadgeIcon,
+  DEFAULT_CLUSTER_BADGE_COLOR,
+  isValidClusterBadgeColor,
+} from '@/components/cluster-badge'
 import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
 interface ClusterBadgeDialogProps {
@@ -417,7 +417,10 @@ function ClusterBadgeDialogContent({
               id="cluster-badge-icon-text"
               value={formData.badgeIconText}
               onChange={(e) => handleChange('badgeIconText', e.target.value)}
-              placeholder={t('clusterBadge.iconTextPlaceholder', '如：测试环境')}
+              placeholder={t(
+                'clusterBadge.iconTextPlaceholder',
+                '如：测试环境'
+              )}
               maxLength={CLUSTER_ICON_TEXT_MAX_LENGTH}
               disabled={!formData.badgeIconEnabled}
             />

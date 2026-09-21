@@ -237,9 +237,14 @@ export function HelmReleaseAutoUpgradeDialog({
                   >
                     {t('helm.fields.autoUpgrade')}
                   </Label>
-                  <p className="text-pretty text-sm text-muted-foreground">
-                    {t('helm.messages.autoUpgradeDescription')}
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-pretty text-sm text-muted-foreground">
+                      {t('helm.messages.autoUpgradeDescription')}
+                    </p>
+                    <p className="text-pretty text-xs text-muted-foreground">
+                      {t('helm.messages.autoUpgradeNotifyDescription')}
+                    </p>
+                  </div>
                   <Switch
                     id="helm-auto-upgrade-enabled"
                     checked={enabled}

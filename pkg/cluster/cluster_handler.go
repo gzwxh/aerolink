@@ -322,6 +322,11 @@ func validateClusterBadge(badge model.Cluster) error {
 	return nil
 }
 
+// UpdateCluster 更新集群信息（徽章部分更新、字段校验与集群重载都在这里）。
+//
+// 为什么不做成多个小函数：那需要额外传递「哪些字段被显式设置」的中间状态，比集中在一处更难对照。
+//
+//nolint:gocyclo // 这是一条「逐字段判断哪些改了」的直线流程，拆成多个函数反而要额外传递
 func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	if common.IsSectionManaged("clusters") {
 		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})
@@ -511,18 +516,11 @@ func (cm *ClusterManager) GetClusterKubeconfig(c *gin.Context) {
 		return
 	}
 
-	raw, err := cluster.Config.Value()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to decrypt the stored kubeconfig: " + err.Error(),
-		})
-		return
-	}
-	plain, ok := raw.(string)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "stored kubeconfig has an unexpected format"})
-		return
-	}
+	// cluster.Config 读出来时已经由 SecretString.Scan 解开，这里直接用字符串即可。
+	// 原来调的是 Value()——那是**加密**方法（写库时才用），会把明文再加密一次返回，
+	// 于是「查看当前配置」永远只给出一串 base64；而错误信息写的是 "failed to decrypt"，
+	// 可见是加密/解密用反了。
+	plain := string(cluster.Config)
 	if strings.TrimSpace(plain) == "" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "no kubeconfig stored for this cluster"})
 		return

@@ -44,6 +44,7 @@ import { ResourceTableView } from '@/components/resource-table-view'
 import { TableColumnToggle } from '@/components/table-column-toggle'
 import { YamlDiffViewer } from '@/components/yaml-diff-viewer'
 
+import { ArchiveQuery } from './archive-query'
 import { AuditExportButton } from './audit-filters'
 import { AuditSetting } from './audit-setting'
 import { AuditTimeRangePicker } from './audit-time-range-picker'
@@ -456,6 +457,20 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
                     'Track who changed resources and review YAML diffs'
                   )}
             </p>
+            {/* sink 非 database 时，这份列表由归档检索回答：必须提示"数据不实时"，
+                否则用户会以为刚做的操作丢了。 */}
+            {auditData?.backend && (
+              <p className="text-muted-foreground mt-1 text-xs">
+                {t(
+                  'common.messages.archiveSourceNotice',
+                  '数据来自归档（{{backend}}），不含最近约 {{seconds}} 秒内的操作',
+                  {
+                    backend: auditData.backend,
+                    seconds: auditData.queryDelaySeconds ?? 120,
+                  }
+                )}
+              </p>
+            )}
           </div>
           <div className="flex shrink-0 items-center justify-end gap-2">
             <AuditTimeRangePicker
@@ -648,6 +663,7 @@ export function AuditLog() {
     tabParam === 'operation' ||
     tabParam === 'file' ||
     tabParam === 'password' ||
+    tabParam === 'archive' ||
     tabParam === 'setting'
       ? tabParam
       : 'login'
@@ -668,6 +684,9 @@ export function AuditLog() {
       </TabsContent>
       <TabsContent value="password">
         <PasswordChangeLog />
+      </TabsContent>
+      <TabsContent value="archive">
+        <ArchiveQuery />
       </TabsContent>
       <TabsContent value="setting">
         <AuditSetting />

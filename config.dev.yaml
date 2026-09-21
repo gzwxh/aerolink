@@ -53,12 +53,95 @@ superUser:
 #     - name: dev-viewer
 #       users: ["admin"]
 
-# 可选：日志归档（本地 parquet + 外部存储 S3/ES）。详细方案见
-# docs/dev/plans/2026-09-20-audit-log-parquet-archive.md。
-# 这里只作为「首次启动播种值」：数据库无归档配置时写入 audit_settings，
+# 审计日志的落地方式（五选一、互斥）：
+#   database      → 只写数据库（默认；不配置时行为与改造前完全一致）
+#   parquet       → 不写数据库，只落 parquet 文件（可叠加 S3 远端副本）
+#   elasticsearch → 不写数据库，只写 Elasticsearch
+#   victorialogs  → 不写数据库，只写 VictoriaLogs（**不是** VictoriaMetrics，理由见 ④）
+#   openobserve   → 不写数据库，只写 OpenObserve
+# 由本文件 / 环境变量 KITE_AUDIT_SINK 在**启动时**决定（本文件优先），管理页面只读。
+# 取值非法、或所选通道的落地目标没配好，会**直接启动失败**（不静默回落）：
+#   parquet 需要归档目录（下面 localDir 或 KITE_AUDIT_ARCHIVE_DIR）
+#   elasticsearch 需要 elasticsearch.urls
+#   victorialogs 需要 victorialogs.urls
+#   openobserve 需要 openobserve.urls
+# 五种落地方式**互斥**（不可共存）：允许共存就会出现「库里有、parquet 有、ES 也有一份」——
+# 三处都不全，而哪一份是权威取决于看的人，审计场景里这正是要避免的。下面 archive 区块
+# 里的各通道开关由 sink 推导，只有对应通道会在当前 sink 下生效（详见方案文档 §12.13）。
+# 多副本部署：每一份配置里都要写同一个 sink，否则不同副本把记录写到不同地方；
+# 另外 sink=parquet 且多副本时，归档目录必须是**共享卷**（RWX PVC / NFS 等）——每个副本只写自己
+# 产生的记录，检索读的又是本地目录，目录不共享就查不全（详见方案 §12.15）。
+# 注意：sink=parquet 时 archive.flush.intervalSeconds 不得超过 300 秒——攒批间隔就是
+# 「刚发生的操作查不到」的窗口。
+#
+# 不改的话就是 database，下面五段按需照抄一段即可（②〜⑤要替掉文件末尾那段 auditArchive:）：
+#
+# ① database（默认）——只要不设 auditSink 就是这个，auditArchive 整段也可删掉。
+#    （审计仍会按 audit_settings 里的 syslog / 标准输出配置外发。）
+#
+# ② parquet——本地 parquet 文件；配上 S3 就是「本地留几天 + 全量同步 S3」：
+#    auditSink: parquet
+#    auditArchive:
+#      localDir: /var/log/kite/archive    # 必填（或用 KITE_AUDIT_ARCHIVE_DIR），否则拒绝启动
+#      retentionDays: 7                   # 本地保留天数（S3 上的副本不受它影响）
+#      s3:
+#        enabled: true
+#        endpoint: http://minio:9000      # 各厂商 endpoint 见方案文档 §8.1
+#        region: ""                       # COS 必填（如 ap-guangzhou）
+#        bucket: kite-audit
+#        accessKey: ${KITE_S3_ACCESS_KEY}
+#        secretKey: ${KITE_S3_SECRET_KEY}
+#        pathStyle: true                  # MinIO/RustFS/Ceph 为 true，COS/OBS 为 false
+#        useTLS: false
+#        prefix: kite-audit/
+#        deleteLocalAfterUpload: false    # false = 本地留几天 + 全量同步 S3；true = 上传即删本地
+#
+# ③ elasticsearch——只写 ES（按天索引，可检索）：
+#    auditSink: elasticsearch
+#    auditArchive:
+#      elasticsearch:
+#        urls: ["http://es:9200"]         # 必填，否则拒绝启动
+#        username: elastic
+#        password: ${KITE_ES_PASSWORD}
+#        indexPrefix: kite-audit          # 索引名 <前缀>-YYYY.MM.DD
+#
+# ④ victorialogs——只写 VictoriaLogs（VictoriaMetrics 体系里的日志存储，默认端口 9428）：
+#    注意：这里要的是 VictoriaLogs（vlogs），**不是** VictoriaMetrics：后者是时序库
+#    （metric + 标签 + 采样值），存不下资源名 / 操作者 / 错误信息这些字段明细。
+#    单 stream（服务端按时间分区），过期由服务端 -retentionPeriod 负责，客户端不删。
+#    auditSink: victorialogs
+#    auditArchive:
+#      victorialogs:
+#        urls: ["http://victorialogs:9428"]   # 必填，否则拒绝启动；多地址写在一行里
+#        stream: kite-audit                   # 日志流名（四类记录共用一个流）
+#        accountId: ""                        # 多租户才填（请求头 AccountID），单租户留空
+#        projectId: ""                        # 多租户才填（请求头 ProjectID），单租户留空
+#        tlsInsecureSkipVerify: false
+#
+# ⑤ openobserve——只写 OpenObserve（默认端口 5080）：
+#    单 stream，过期由服务端 stream 的 data_retention 负责，客户端不删。
+#    auditSink: openobserve
+#    auditArchive:
+#      openobserve:
+#        urls: ["http://openobserve:5080"]    # 必填，否则拒绝启动
+#        org: default                         # 组织名，写入路径为 /api/{org}/{stream}/_json
+#        stream: kite-audit                   # 日志流名（四类记录共用一个流）
+#        username: kite@example.com           # Basic 认证用户名（通常是登录邮箱）
+#        password: ${KITE_OPENOBSERVE_PASSWORD}
+#        tlsInsecureSkipVerify: false
+#
+# auditSink: database
+
+# 可选：日志归档（本地 parquet + 外部存储 S3/ES/VictoriaLogs/OpenObserve）。详细方案见
+# docs/dev/plans/2026-09-20-audit-log-parquet-archive.md 与
+# docs/dev/plans/2026-09-21-additional-audit-log-sinks.md。
+# 这是**配置全集**（五条通道的开关 + 各自参数），但实际生效的只有 auditSink 对应的那一条：
+# `enabled` / `s3.enabled` / `elasticsearch.enabled` / `victorialogs.enabled` /
+# `openobserve.enabled` 都由 auditSink 推导，不用手改。
+# 它只作为「首次启动播种值」：数据库无归档配置时写入 audit_settings，
 # 之后管理员可在「审计设置」页面修改（页面配置优先于本文件）。
 auditArchive:
-  enabled: false                 # 本地开发默认关闭，按需打开
+  enabled: false                 # 实际生效值由 auditSink 推导（sink=parquet 时才为 true）
   localDir: /var/log/kite/archive  # 日志存放位置（空 = 用 KITE_AUDIT_ARCHIVE_DIR）
   retentionDays: 7               # 本地保留天数（存多久），0 = 不清理
   maxBytes: 10737418240          # 本地容量上限（10 GiB），0 = 不清理
@@ -75,6 +158,7 @@ auditArchive:
       intervalSeconds: 120
       maxBatchRows: 200000
       maxBatchBytes: 67108864
+    format: text                 # 访问日志控制台输出：text 保持现状，json 为结构化单行
   # 外部存储 S3（兼容 MinIO / RustFS / Ceph RGW / 腾讯 COS / 华为 OBS / 阿里 OSS 等）
   s3:
     enabled: false
@@ -86,7 +170,7 @@ auditArchive:
     pathStyle: true                      # MinIO/RustFS/Ceph 为 true，COS/OBS 为 false
     useTLS: false
     prefix: kite-audit/
-    deleteLocalAfterUpload: true         # 上传成功即删本地（默认）
+    deleteLocalAfterUpload: false        # 默认 false = 本地留几天 + 全量同步 S3；true = 上传即删本地
   # 外部存储 Elasticsearch（检索，非归档）
   elasticsearch:
     enabled: false
@@ -94,4 +178,21 @@ auditArchive:
     username: ""
     password: ${KITE_ES_PASSWORD}
     indexPrefix: kite-audit
+    tlsInsecureSkipVerify: false
+  # 外部存储 VictoriaLogs（日志存储，非 VictoriaMetrics；单 stream、服务端保留）
+  victorialogs:
+    enabled: false
+    urls: ["http://victorialogs:9428"]
+    stream: kite-audit
+    accountId: ""                        # 多租户才填（请求头 AccountID）
+    projectId: ""                        # 多租户才填（请求头 ProjectID）
+    tlsInsecureSkipVerify: false
+  # 外部存储 OpenObserve（单 stream、服务端 data_retention）
+  openobserve:
+    enabled: false
+    urls: ["http://openobserve:5080"]
+    org: default
+    stream: kite-audit
+    username: ""
+    password: ${KITE_OPENOBSERVE_PASSWORD}
     tlsInsecureSkipVerify: false

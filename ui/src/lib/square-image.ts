@@ -29,10 +29,7 @@ export interface SquareCrop {
 }
 
 export type SquareImageFailure =
-  | 'not_image'
-  | 'decode_failed'
-  | 'encode_failed'
-  | 'too_large'
+  'not_image' | 'decode_failed' | 'encode_failed' | 'too_large'
 
 export interface SquareImageOptions {
   /** 输出边长上限；比它还小的图不放大。 */

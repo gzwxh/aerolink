@@ -43,7 +43,6 @@ export function ResourceDeleteConfirmationDialog({
       )
       navigate(getResourceListPath(resourceType))
     } catch (error) {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
       // 资源可能已经不存在（被并发删除或强制删除）：
       // 不要把用户留在损坏的详情页上。
       const message = String(
@@ -52,6 +51,8 @@ export function ResourceDeleteConfirmationDialog({
       ).toLowerCase()
       if (message.includes('not found') || message.includes('404')) {
         navigate(getResourceListPath(resourceType))
+      } else {
+        toast.error(error instanceof Error ? error.message : String(error))
       }
     } finally {
       setIsDeleting(false)

@@ -26,9 +26,9 @@ export interface LabelPair {
 const MAX_VISIBLE_MATCHES = 10
 
 const WARNING_BANNER =
-  'rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400'
+  'rounded-md border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning'
 const MATCH_BANNER =
-  'rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400'
+  'rounded-md border border-success/25 bg-success/10 px-3 py-2 text-sm text-success'
 
 /**
  * 从导入的文件中解析标签对：可以是 JSON 对象，或纯文本

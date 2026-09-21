@@ -84,6 +84,10 @@ var (
 	// ConfigFilePath 是外部配置文件的路径（通过 KITE_CONFIG_FILE 环境变量设置）
 	ConfigFilePath = ""
 
+	// AuditArchiveDir 是审计/访问日志的本地归档目录（KITE_AUDIT_ARCHIVE_DIR）。
+	// 只作启动兜底：审计设置里的 Archive.LocalDir 优先（见 pkg/model/audit_setting.go）。
+	AuditArchiveDir = ""
+
 	// ManagedSections 记录哪些配置分区由配置文件管理。
 	// Key 取值："clusters"、"oauth"、"ldap"、"rbac"、"superUser"
 	ManagedSections = map[string]bool{}
@@ -304,5 +308,8 @@ func loadRuntimeEnvs() {
 	}
 	if v := os.Getenv("KITE_CONFIG_FILE"); v != "" {
 		ConfigFilePath = v
+	}
+	if v := os.Getenv("KITE_AUDIT_ARCHIVE_DIR"); v != "" {
+		AuditArchiveDir = strings.TrimSpace(v)
 	}
 }

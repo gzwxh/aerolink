@@ -148,8 +148,9 @@ func openMissingTableDB(t *testing.T) *gorm.DB {
 		t.Fatalf("failed to open test database: %v", err)
 	}
 	if db.Migrator().HasTable("general_settings") {
-		t.Fatalf("这个用例需要空库，但 general_settings 已存在（%s）：%s",
-			db.Dialector.Name(), "KITE_TEST_PG_DSN 请指向一个从未做过 AutoMigrate 的库")
+		t.Fatalf(
+			"这个用例需要空库，但 general_settings 已存在（%s）：%s",
+			db.Name(), "KITE_TEST_PG_DSN 请指向一个从未做过 AutoMigrate 的库")
 	}
 
 	previousDB := DB

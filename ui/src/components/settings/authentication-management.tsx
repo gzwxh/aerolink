@@ -133,8 +133,8 @@ export function AuthenticationManagement() {
         )
       )
     },
-    onError: () => {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    onError: (error) => {
+      toast.error(translateError(error, t))
     },
   })
 
@@ -239,8 +239,8 @@ export function AuthenticationManagement() {
       toast.success(
         t('authenticationManagement.ldap.sync.started', 'LDAP sync started')
       )
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -308,10 +308,10 @@ export function AuthenticationManagement() {
 
             {!passwordLoginEnabled && (
               <div className="border-t p-3">
-                <div className="flex gap-3 rounded-md bg-amber-500/10 border border-amber-500/30 p-3">
-                  <IconAlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex gap-3 rounded-md bg-warning/10 border border-warning/25 p-3">
+                  <IconAlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
                   <div className="space-y-1 text-sm">
-                    <p className="font-medium text-amber-600 dark:text-amber-400">
+                    <p className="font-medium text-warning">
                       {t(
                         'common.messages.passwordLoginWarningTitle',
                         'Warning: You may lose access!'

@@ -60,10 +60,10 @@ function InitStep({
         <div
           className={`flex aspect-square h-10 w-10 items-center justify-center rounded-full border-2 flex-shrink-0 ${
             completed
-              ? 'border-green-500 bg-green-500 text-white'
+              ? 'border-success bg-success text-success-foreground'
               : isActive
-                ? 'border-blue-500 bg-blue-50 text-blue-600'
-                : 'border-gray-300 bg-gray-50 text-gray-400'
+                ? 'border-info bg-info/10 text-info'
+                : 'border-border bg-muted text-muted-foreground'
           }`}
         >
           {completed ? (
@@ -76,21 +76,17 @@ function InitStep({
           <h3
             className={`text-lg font-medium ${
               completed
-                ? 'text-green-600'
+                ? 'text-success'
                 : isActive
-                  ? 'text-gray-900'
-                  : 'text-gray-400'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground'
             }`}
           >
             {title}
           </h3>
           <p
             className={`text-xs text-muted-foreground ${
-              completed
-                ? 'text-green-600'
-                : isActive
-                  ? 'text-gray-600'
-                  : 'text-gray-400'
+              completed ? 'text-success' : ''
             }`}
           >
             {description}
@@ -320,7 +316,7 @@ export function InitializationPage() {
                       aria-invalid={passwordTouched && !passwordValid}
                       className={
                         passwordTouched && !passwordValid
-                          ? 'border-red-500 focus-visible:ring-red-500'
+                          ? 'border-destructive focus-visible:ring-destructive'
                           : undefined
                       }
                       required
@@ -347,14 +343,14 @@ export function InitializationPage() {
                       aria-invalid={confirmMismatch}
                       className={
                         confirmMismatch
-                          ? 'border-red-500 focus-visible:ring-red-500'
+                          ? 'border-destructive focus-visible:ring-destructive'
                           : undefined
                       }
                       required
                     />
                     {/* 两次密码不一致：内联提示在确认密码框正下方 */}
                     {confirmMismatch && (
-                      <p className="text-xs text-red-600">
+                      <p className="text-xs text-destructive">
                         {t('initialization.step1.passwordMismatch')}
                       </p>
                     )}
@@ -400,8 +396,8 @@ export function InitializationPage() {
                         }}
                         className={`px-3 py-1 text-sm rounded-md transition-colors ${
                           !isFileMode && !isInCluster
-                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                            : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+                            ? 'bg-info/10 text-info border border-info/25'
+                            : 'bg-muted text-muted-foreground border border-border hover:bg-accent'
                         }`}
                       >
                         {t('initialization.step2.pasteMode', {
@@ -416,8 +412,8 @@ export function InitializationPage() {
                         }}
                         className={`px-3 py-1 text-sm rounded-md transition-colors ${
                           isFileMode && !isInCluster
-                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                            : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+                            ? 'bg-info/10 text-info border border-info/25'
+                            : 'bg-muted text-muted-foreground border border-border hover:bg-accent'
                         }`}
                       >
                         {t('initialization.step2.fileMode', {
@@ -432,8 +428,8 @@ export function InitializationPage() {
                         }}
                         className={`px-3 py-1 text-sm rounded-md transition-colors ${
                           isInCluster
-                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                            : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+                            ? 'bg-info/10 text-info border border-info/25'
+                            : 'bg-muted text-muted-foreground border border-border hover:bg-accent'
                         }`}
                       >
                         {t('clusterManagement.type.inCluster', {
@@ -444,7 +440,7 @@ export function InitializationPage() {
 
                     {isInCluster ? (
                       <div className="space-y-2">
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-muted-foreground">
                           {t('common.messages.inClusterConfiguration', {
                             defaultValue:
                               'Import clusters from inside the running Kite instance. No kubeconfig required.',
@@ -456,15 +452,15 @@ export function InitializationPage() {
                         <input
                           type="file"
                           onChange={handleFileSelect}
-                          className="w-full text-sm text-gray-500
+                          className="w-full text-sm text-muted-foreground
                             file:mr-4 file:py-2 file:px-4
                             file:rounded-md file:border-0
                             file:text-sm file:font-medium
-                            file:bg-blue-50 file:text-blue-700
-                            hover:file:bg-blue-100
+                            file:bg-info/10 file:text-info
+                            hover:file:bg-info/15
                             file:cursor-pointer cursor-pointer"
                         />
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {t('initialization.step2.fileHint', {
                             defaultValue:
                               'Select your kubeconfig file (usually located at ~/.kube/config)',
@@ -484,7 +480,7 @@ export function InitializationPage() {
                       />
                     )}
 
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {t('initialization.step2.kubeconfigHint')}
                     </p>
                   </div>
@@ -511,14 +507,14 @@ export function InitializationPage() {
               {step >= 2 && (
                 <div className="text-center py-6">
                   <div className="flex items-center justify-center mb-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                      <IconCheck className="h-6 w-6 text-green-600" />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
+                      <IconCheck className="h-6 w-6 text-success" />
                     </div>
                   </div>
-                  <h3 className="text-lg font-medium text-green-600">
+                  <h3 className="text-lg font-medium text-success">
                     {t('initialization.completion.title')}
                   </h3>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {t('initialization.completion.message')}
                   </p>
                 </div>

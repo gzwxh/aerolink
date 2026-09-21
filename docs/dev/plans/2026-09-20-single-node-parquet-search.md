@@ -1,0 +1,388 @@
+# 单机部署下的归档检索评估（本地 parquet + DuckDB）
+
+日期：2026-09-20
+状态：**已实施**（2026-09-21）。检索后端支持「Elasticsearch 或 DuckDB」二选一，没有 ES 的
+部署也能查归档（见 §9 实施记录）。
+
+DuckDB 侧先按**方案 B（CLI 子进程）**落地，随后按需求**切到方案 A（Go SDK / CGO 进程内
+引擎）**：两种驱动都在代码里，由构建 tag 选择——**默认（无 tag）走 SDK（cgo）**，
+`-tags duckdb_cli` 才是纯 Go 的 CLI 驱动。详见 §9.9。
+
+前置阅读：`docs/dev/plans/2026-09-20-audit-log-parquet-archive.md`（归档链路本身）。
+
+## 1. 背景与问题
+
+归档链路已经能把审计/访问日志写成按天分区的 parquet：本地目录、可选上传 S3、可选写入 ES。
+
+但**检索只有 ES 一条路**：`pkg/audit/archive_query.go` 的 `currentESSink()` 在 ES 未启用时
+直接返回 400，本地/S3 的 parquet 在生产代码里**只写不读**（`parquet-go` 仅出现在写入路径，
+读回只存在于测试）。于是：
+
+1. 单机 / 边缘部署为了查历史日志，要额外背一个 Elasticsearch（容器 1–1.5 GiB 内存 + JVM）。
+2. 磁盘上已经有 parquet，却无法用它回答"上个月谁删过这个 deployment"这类问题。
+
+本文评估：**不引入 ES 的前提下，用 DuckDB 直接查本地（或 S3 上）的 parquet，是否可行、代价多大。**
+
+目标场景（用户侧描述）：单机实例 —— 主库用 SQLite（现状 `github.com/glebarez/sqlite`，纯 Go），
+归档落本地磁盘，不额外部署 ES。
+
+非目标：替换主库。**不要**把 SQLite 换成 DuckDB —— 它是列存分析引擎、单写者模型，不适合
+OLTP 高频事务写，GORM 侧也没有成熟驱动。这里的 DuckDB 只是**查询引擎**。
+
+## 2. 候选方案
+
+### 方案 A：进程内绑定 DuckDB（CGO）
+
+`github.com/marcboeker/go-duckdb`，直接 `database/sql` 调用。
+
+- 优点：无进程边界、可流式读、延迟最低；能直接用 Go 传参（`?` 占位符），**没有 SQL 拼接带来的注入面**。
+- 代价：需要开启 CGO，直接推翻当前几条工程约束：
+  - 失去静态单二进制（当前产物 `statically linked`，`CGO_ENABLED=0`，`ldd` → not a dynamic executable）
+  - `Makefile` 里 4 个交叉编译目标（linux/amd64、linux/arm64、darwin/arm64、windows/amd64）全部失效
+  - 运行时基座要从 `distroless/static` 换成带 glibc 的镜像（Debian/Ubuntu slim）
+  - 构建镜像要带 gcc
+- 还是"引入 CGO 依赖"这件事本身：见归档方案 §9.4 / §11，需要一次显式的工程取舍。
+
+### 方案 B：DuckDB CLI 子进程（推荐先评估）
+
+把 DuckDB 官方 **CLI 二进制**放进镜像，Go 侧用 `exec.Command` 调：
+
+```bash
+duckdb -json -c "SELECT ... FROM read_parquet([...]) WHERE ... LIMIT 20"
+```
+
+- 优点：**主程序保持纯 Go、`CGO_ENABLED=0`、静态链接、交叉编译全部保留**；DuckDB 只是一个被调用的外部可执行文件。
+  - 官方提供 Linux **musl 静态版** CLI（`duckdb_cli-linux-amd64-musl.zip`），`distroless/static` 里可直接跑。
+- 代价：
+  - 每次查询要拉起一个进程（几十 ms 量级启动开销）
+  - 只能靠命令行/标准输入传 SQL，**参数化能力弱 → 必须自己严格转义**（见 §5）
+  - 结果走 stdout 解析（JSON），大结果集有序列化成本
+- 变体：长驻 `duckdb` 进程 + 标准输入管道复用，可摊薄启动开销；代价是进程管理复杂度上升（先不采用）。
+
+## 3. 方案对比
+
+| 维度 | 现状（ES） | 方案 A（CGO 绑定） | 方案 B（CLI 子进程） |
+|---|---|---|---|
+| 额外常驻内存 | 1–1.5 GiB（容器 + JVM） | 随查询波动，空闲≈0 | 同左（每次进程退出即释放） |
+| 部署复杂度 | 需单独维护 ES | 镜像换 glibc 基座 | 多一个静态二进制进镜像 |
+| CGO / 静态二进制 | 无影响 | **破坏**（去 CGO_ENABLED=0） | **保持** |
+| 交叉编译（4 个目标） | 无影响 | 失效 | 保持 |
+| 单次查询延迟 | 低（常驻、有索引） | 最低 | +进程启动（几十 ms） |
+| SQL 注入面 | 无（DSL 构造） | 无（占位符） | **有**（需严格转义/白名单） |
+| 检索能力 | 全文检索、分词、聚合 | 完整 SQL | 完整 SQL |
+| 对 S3 parquet | 不支持（ES 是另一份数据） | `httpfs` | `httpfs` |
+| 与 SQLite 联查 | 不支持 | `sqlite_scanner` | `sqlite_scanner` |
+
+## 4. 查询实现要点（方案 B）
+
+### 4.1 分区裁剪必须由代码做，不能指望 `hive_partitioning`
+
+我们的目录布局是**纯值**形式（`<archive_dir>/<类型>/<年>/<月>/<日>/*.parquet`），不是
+Hive 的 `key=value` 形式，所以 `hive_partitioning=1` **不适用**。正确做法是：
+
+1. 由 Go 侧根据查询的时间范围算出要覆盖的日期目录；
+2. 只把这些目录下的文件 glob 传给 DuckDB：
+
+```sql
+SELECT id, created_at, cluster_name, resource_type, resource_name, namespace,
+       operation_type, operation_source, success, error_message,
+       client_ip, user_agent, operator_id, operator_name
+FROM read_parquet([
+  '/var/log/kite/archive/audit_history/2026/09/19/*.parquet',
+  '/var/log/kite/archive/audit_history/2026/09/20/*.parquet'
+])
+WHERE created_at >= 1789910305000 AND success = false
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+`created_at` 在 parquet 里是毫秒 int64（见归档方案 §5），可以直接与毫秒时间戳比较。
+
+### 4.2 查询条件要抽成中立结构（这是主要重构点）
+
+现在 `archive_query.go` 的 `filters` 是 **ES DSL 的 `map[string]any`**（`{"term": {"method.keyword": "PUT"}}`），
+绑死在 ES 上。要支持"同一套条件 → ES 或 SQL"，必须先抽成中立形式：
+
+```go
+// 概念示意
+type condition struct {
+	Field string // 仅允许来自白名单（见 4.4）
+	Op    string // eq / contains / range
+	Value any
+}
+```
+
+然后两个翻译器：`toESQuery(conds)` 与 `toSQLWhere(conds)`。
+`archiveQuery`（kind / timeField / filters）这个外壳可以复用，改造集中在条件表示与两个翻译器。
+
+### 4.3 分页与计数
+
+- 分页：`LIMIT <size> OFFSET <(page-1)*size>` 拼接**整数**（不是字符串）。
+- 计数：另发一条 `SELECT count(*)`，或先取 `count(*)  OVER ()` 与数据一次性返回（DuckDB 支持窗口函数）。
+  两条语句会扫两遍文件，"一次查询带窗口"扫一遍更划算，但需要在 CLI 里一次执行多条语句（用 `-c` 拼 `;`）。
+
+### 4.4 安全（方案 B 的必答项）
+
+CLI 没有占位符，必须：
+
+- **字段名白名单**：只允许映射表里的名字（复用 `esField*` 那一组常量，另建 SQL 列名映射），拒绝其它任何标识符；
+- **值转义**：字符串值统一走 `'` → `''` 转义，并拒绝包含 NUL 的值；
+- **整数/布尔**：走类型断言后按数字/字面量拼接，绝不接受用户字符串直出；
+- **时间**：一律转成毫秒整数或 ISO 字符串后再转义；
+- **不把用户输入拼进路径**：`read_parquet` 的文件列表由代码生成（日期目录），不含用户串。
+
+> 方案 A 不存在这些约束（用 `?` 占位符），这是 A 相对 B 的一个实打实的优势。
+
+## 5. 性能评估
+
+结论：**扫描型查询（过滤 + 聚合）DuckDB 明显优于"Go 里手撸遍历 parquet"**，因为列裁剪、
+谓词下推、向量化执行都是 parquet-go 的行式 API 不具备的。合理预期是**数量级**差别，
+而不是百分比差别。
+
+待实测项（实施前必须先跑，不预设数字）：
+
+| 指标 | 测法 |
+|---|---|
+| 单文件扫描延迟 | 取一天真实归档文件（约 10 万行量级），跑 4.1 的查询 |
+| 多天扫描 | 7 天 / 30 天目录，观察是否线性 |
+| 进程启动开销 | `time duckdb -c "select 1"` |
+| 大结果集 | `LIMIT 500` 时 stdout JSON 的解析耗时 |
+| 内存峰值 | `/usr/bin/time -v` 观察 `Maximum resident set size` |
+| 与 ES 对比 | 同样条件下的 P50/P95 |
+
+另外：`deleteLocalAfterUpload=true` 时本地只留未上传的暂存文件，**单机场景建议关掉它**
+（`false`），否则归档全在 S3、本地没得可查 —— 这是本方案能成立的前提之一。
+
+## 6. 落地步骤（建议分三段）
+
+1. **只读本地**：条件抽象 + SQL 翻译器 + CLI 调用 + `/api/v1/admin/*-archive` 增加"本地方言"后端；
+   ES 未启用且 DuckDB 可用时走本地。
+2. **接 S3**：配置 `httpfs`（复用现有 S3 endpoint/AK/SK），支持查已上传的归档。
+3. **与 SQLite 联查**（可选）：`sqlite_scanner`，把"库里还在的记录"和"已归档的记录"一次查出来。
+
+每段都要带回归测试；CLI 调用部分用假 `duckdb` 脚本（输出固定 JSON）做单测，真实二进制留给联调。
+
+## 7. 风险与限制
+
+- **SQL 注入面**（方案 B 独有）：白名单 + 转义必须一次性做对，评审时重点看。
+- **镜像体积**：DuckDB CLI 约几十 MB，`distroless/static` 镜像会显著变大。
+- **扩展依赖**：`httpfs` / `sqlite_scanner` 需要首次使用时下载（离线环境需预装或打包进镜像）。
+- **双后端语义漂移**：ES 与 SQL 两种后端若翻译器不一致，会出现"同一条件两边结果不同"。缓解：条件抽象只有一份，两个翻译器各自单测。
+- **CLI 版本耦合**：输出格式（`-json`）与函数签名随版本变化，需要固定版本并写进镜像。
+- **不解决全文检索**：DuckDB 没有分词倒排，`contains` 只能做 `LIKE`/`ILIKE`；要全文检索仍需 ES。
+
+## 8. 结论与建议
+
+- **单机默认检索后端用 DuckDB**：它在拿到"SQL 查 parquet"能力的同时，不需要任何额外常驻组件。
+- **驱动选型（本方案的最终结论）**：**两种驱动都实现，按构建 tag 切换**，而不是二选一砍掉另一种：
+  - **默认构建用方案 A（Go SDK）**：引擎（libduckdb）静态链进二进制，部署不再需要外部
+    `duckdb` 文件，也没有每次查询的进程启动开销；代价是构建需要 gcc/g++、产物动态依赖
+    `libstdc++`/`libc`、交叉编译要各平台的预编译库；
+  - **`-tags duckdb_cli`** 用方案 B（CLI 子进程）：纯 Go、静态单二进制、4 个交叉编译目标
+    用它才成立，也是没有 C 工具链的环境与 SDK 出问题时的退路。
+  - 两者**查同一份 parquet、走同一套 SQL 与结果归一**，有跨驱动一致性测试保证结果逐字段
+    相同（§9.9），因此可以按部署环境自由选择，不需要改任何配置。
+- **群集/已有 ES 的部署继续用 ES**：单机与集群共用同一套中立查询条件，两套后端并存。
+
+## 9. 实施记录（2026-09-21，已落地）
+
+### 9.1 落地内容
+
+| 项 | 位置 | 说明 |
+|---|---|---|
+| 中立查询条件 | `pkg/audit/archive_condition.go` | `archiveCondition{field, op, value}` + 两个翻译器 `toESFilters` / `toSQLWhere`；列名白名单 + 字面量转义 |
+| DuckDB 后端 | `pkg/audit/archive_query_duckdb.go` | CLI 子进程（`exec.Command`，不经 shell）；列裁剪 + 分区裁剪 + `count(*) OVER ()` 一次拿总数；毫秒 → RFC3339 归一 |
+| 后端选择 | `pkg/audit/archive_backend.go` | **ES 优先 → DuckDB 回落**；两者都不可用时返回明确原因（HTTP 400），而不是空列表 |
+| 导出同样受益 | `pkg/audit/archive_export.go` | 导出改走同一个 `archiveSearcher` 接口，没有 ES 时也能导出 CSV |
+| 前端 | `archive-query.tsx`、`types/api.ts`、i18n | 展示「数据来源」（Elasticsearch / DuckDB）；不可用引导改为说明两种后端 |
+| 部署 | `Dockerfile` | 多阶段下载 DuckDB **musl 静态版**进运行时镜像（`DUCKDB_MIRROR` 可指向内网） |
+| **上传标记（数据安全）** | `pkg/audit/archive_marker.go` | 上传成功后落 `<文件>.uploaded`；本地清理**只删已上传的**；补传巡检据此跳过 |
+| 自监控补充 | `pkg/audit/metrics.go` | `kite_audit_archive_retained_unuploaded_files`：到期因未上传而保留的数量 |
+
+### 9.2 为什么必须先做「上传标记」
+
+配了 S3 但 `deleteLocalAfterUpload=false` 时，本地这份可能是**唯一副本**（上传失败、还没补传成功）。
+原来的清理只看 mtime 与容量，到期就删——一旦上传通道故障超过保留期，数据永久丢失。
+现在：清理只删带 `.uploaded` 标记的文件，未上传的宁可占盘也不删，并用指标暴露。
+
+顺带解决一个性能问题：补传巡检原先对**每个**本地文件做一次 S3 HEAD；有了标记可直接跳过。
+
+### 9.3 分层检索（本地热层 + S3 冷层）
+
+同一天的数据：**本地有目录就查本地，本地没有才回落到 S3**（两者互斥，不会一天查两遍）。
+配合 `deleteLocalAfterUpload=false`，保留期内的查询完全不碰网络。
+
+### 9.4 安全（CLI 方案的关键约束，§4.4 的落地）
+
+- SQL 由 `exec.Command` 直接传参（不经 shell），不存在 shell 注入面；
+- SQL 层：列名走 `allowedSQLColumns` 白名单；字符串值单引号翻倍、拒绝 NUL 字节；数字/布尔只走类型断言；
+- `read_parquet` 的路径完全由代码按日期生成，不含用户输入；
+- 时间范围：未指定默认 7 天，跨度硬上限 **90 天**（对象存储上「不限定范围」会 LIST 整桶）。
+
+### 9.5 实测（DuckDB 直查 COS 上的真实归档）
+
+DuckDB 1.5.5 + `SET s3_url_style='vhost'`（腾讯 COS 强制 virtual-hosted，与 minio-go 的
+`PathStyle` 是同一个坑）：
+
+| 项 | 结果 |
+|---|---|
+| 直查 parquet | ✅ 成功，列结构与 §5 schema 一致 |
+| 冷启动 count（含 httpfs 加载） | 855 ms |
+| 热身后 count | 290 ms |
+| 排序 + LIMIT 5 分页 | 277 ms |
+| 条件过滤 count | 344 ms |
+
+延迟主要是到对象存储的**网络往返**（本次数据仅 16 行），所以「缩小扫描范围」比「换更快的引擎」
+重要得多——分区裁剪、时间上限、列裁剪三件事都已在实现里落地。
+
+### 9.6 实施中踩到的坑（纸面推演不出来的）
+
+1. **DuckDB 对缺失 glob 是硬报错**：`read_parquet(['/a/*.parquet', '/b/*.parquet'])` 里只要有一个
+   路径匹配不到文件，**整个查询就失败**（`IO Error: No files found that match the pattern`），
+   而不是返回空集；且 1.5.5 的 `read_parquet` **没有 `ignore_errors` 参数**（那是 `read_csv` 的）。
+   → 两侧都必须自己保证路径存在：本地用 `filepath.Glob` 预检；S3 按月做一次 `ListObjects` 探测
+   （探测失败时降级为「只查本地」，而不是把一次 S3 抖动放大成检索不可用）。
+2. **minio-go 要求 `Secure` 与 endpoint 的 scheme 一致**：填 `https://...` 却忘了打开
+   「使用 TLS」会让 `NewS3Sink` 直接报错
+   （`Endpoint url scheme "https" conflicts with the secure option`）。
+   → `normalizeS3Endpoint` 以 endpoint 里写明的协议为准，自动对齐，消除这个易错点。
+3. **DuckDB 的 musl 版不是纯静态**：它的 interpreter 指向 `/lib/ld-musl-x86_64.so.1`，
+   在 `distroless/static` 里会报 `required file not found`。
+   → Dockerfile 里把 musl loader 一并拷进运行时镜像。
+
+### 9.7 后端选择（界面可切换）
+
+- 接口 `GET /api/v1/admin/archive-backends` 返回两个后端的可用性与默认值：
+
+  ```json
+  {"backends": [{"name": "elasticsearch", "available": true,  "default": true},
+                {"name": "duckdb",        "available": true,  "default": false}],
+   "default": "elasticsearch"}
+  ```
+
+- 规则：**默认走 DuckDB**（直接查本地 / S3 的 parquet，只要归档开着就天然可用，不需要额外
+  部署组件）；**ES 是可选后端**——确实把审计日志写进 ES、且需要它的检索能力时才主动选一次
+  （选择记在浏览器本地，不必每次重选）。没配置 ES 时该选项置灰并给出原因。
+  不可用的后端仍会返回（带 `reason`），管理员才知道「为什么选不了」。
+- 检索与导出都支持 `?backend=elasticsearch|duckdb` 强制指定；不传即 auto（**DuckDB → ES**）。
+  **显式指定的后端不可用时直接报错**，不会悄悄换成另一个后端让结果对不上。
+- **CLI 必须落在 PATH 里**（镜像里是 `/usr/local/bin/duckdb`）：早期版本靠 `KITE_DUCKDB_PATH`
+  指定，服务换一种方式重启就会丢掉这个环境变量，界面上表现为 DuckDB「未配置」。
+- 响应里带 `backend` 字段，界面显示「数据来源」，便于确认这次查的是哪一份数据。
+
+### 9.8 已知限制
+
+- **无全文检索**：`contains` 走 `ILIKE`，没有分词倒排；复杂全文检索仍需 ES；
+- **httpfs 需联网 INSTALL**：离线环境要预装或把扩展打包进镜像（两种驱动都一样）；
+- 驱动相关的限制（**已按驱动分开**，不再一概而论）：
+  - CLI 驱动：**版本耦合**（`-json` 输出随版本变化，镜像固定 `v1.5.5`，解析保持宽容）、
+    **进程启动开销**（每次查询几十 ms）；
+  - SDK 驱动：构建需要 CGO（gcc/g++）、产物动态依赖 `libstdc++`/`libc`（不能再放
+    `distroless/static`）、交叉编译要为每个平台准备 libduckdb（见 §9.9 的构建说明）。
+
+### 9.9 驱动切换：从 CLI 到 Go SDK（2026-09-21）
+
+**需求**：确定改用 DuckDB 的 Go SDK（进程内引擎），不再依赖外部的 `duckdb` 可执行文件。
+
+#### 落地方式：两种驱动并存，**默认走 SDK**
+
+抽出了驱动接口（`duckdbRunner`，见 `archive_query_duckdb.go`），两份实现并列存在。
+2026-09-21 起**默认构建用 SDK**（此前为了保住静态二进制是先落 CLI、SDK 作为显式开关）：
+
+| 构建 | 驱动 | 文件 |
+|---|---|---|
+| **默认**（`make backend` / `make build`） | **Go SDK（cgo，进程内引擎）** | `archive_query_duckdb_cgo.go` |
+| `make backend-cli`（`-tags duckdb_cli`） | CLI 子进程（纯 Go） | `archive_query_duckdb_cli_build.go` |
+
+```bash
+make backend        # 默认：CGO + 进程内 DuckDB 引擎（运行时不需要外部 duckdb 文件）
+make backend-cli    # 纯 Go：exec 外部 duckdb 可执行文件
+make cross-compile  # 四个平台一律走 duckdb_cli
+```
+
+**为什么保留纯 Go 版而不是删掉**：交叉编译（SDK 的 libduckdb 按平台分发，交叉编译要为每个
+目标再配一套 C 工具链）、没有 gcc/g++ 的构建环境、以及 SDK 真出问题时的退路。两者查同一份
+parquet、走同一套 SQL 与结果归一，有跨驱动一致性测试保证结果逐字段相同。
+
+#### 镜像与构建（2026-09-21 实测）
+
+- **构建镜像** `golang:1.26.8`（Debian 版，自带 gcc/g++ 14.2）——**不能用 alpine 版**：它只有
+  musl 工具链，还得联网装 build-base。
+- **运行基座** `openEuler 24.03 LTS-SP4`：glibc 与 libstdc++ 都是现成的，cgo 产物直接可跑
+  （实测 `ldd /app/kite` 全部依赖解析成功）。
+- **CA 证书与时区数据必须从构建镜像拷**：openEuler / ubuntu 这类精简基座**都不带**
+  ca-certificates（缺了所有 HTTPS 调用都会以 `x509: certificate signed by unknown authority`
+  失败），ubuntu 连 tzdata 都没有（归档按本地时区分 `年/月/日` 目录，缺了会静默退化成 UTC）。
+  各拷一份即可，不必在运行镜像里装包，也不必依赖网络。
+- **非 root 运行**：沿用原 `distroless/static(nonroot)` 的 uid/gid 65532，权限语义完全不变
+  （既有数据卷属主、K8s securityContext 都不用调整）。openEuler 基础镜像没装 shadow-utils
+  （没有 useradd），直接写 `/etc/passwd` / `/etc/group` 即可。
+- **构建缓存**：Dockerfile 给 `go mod download` 与 `go build` 都挂了 BuildKit cache mount。
+  实测**重复构建的 Go 编译阶段从 324 秒降到 105 秒**；首次仍是全量（约 13–14 分钟，主要是
+  前端依赖与 cgo 编译）。日常改代码迭代建议直接在宿主机 `make backend`（约 15–25 秒）。
+
+#### 实测对比
+
+| | CLI（`-tags duckdb_cli`） | SDK（默认，无 tag） |
+|---|---|---|
+| 产物大小 | 186 M | 305 M |
+| 链接方式 | `statically linked`（`not a dynamic executable`） | 动态依赖 `libstdc++ / libgcc_s / libm / libc` |
+| 外部文件 | 需要 `duckdb` 可执行文件在 PATH（镜像里是 `/usr/local/bin/duckdb`） | **不需要** |
+| 每次查询开销 | 一次进程启动（几十 ms，占 S3 查询总耗时的 10–15%） | 无进程启动，连接池复用引擎 |
+| 交叉编译 | 4 个目标保持可用 | 需各平台 libduckdb 与对应 C 工具链 |
+| 引擎版本 | CLI v1.5.5 | 内置 DuckDB **v1.4.4 LTS**（`duckdb-go v2.5.5`） |
+
+#### 实施中踩到的坑（都是实测出来的，值得记住）
+
+1. **UBIGINT 的类型漂移（最关键）**：CLI 的 `-json` 输出会把 `UBIGINT` 编码成**字符串**
+   （避免 JS 侧精度丢失），而 SDK 通过 `database/sql` 拿到的是**原生整数**。同一个查询，
+   `id` 一处是 `"2"`、一处是 `2`——前端就得为「同一个后端、不同驱动」写两套判断。
+   修法是在 SQL 里把这几列统一 `CAST(... AS BIGINT)`（`duckdbUint64Columns`），让一致性由
+   构造保证，而不是靠事后打补丁。**这个问题是「跨驱动一致性测试」抓出来的**，纯靠看代码
+   很难发现。
+2. **引擎是重量级资源，不能每请求新建**：检索后端是每次请求现构造的，而 SDK 的初始化是
+   「打开一个嵌入式引擎」，比 CLI 起进程贵得多。因此 SDK runner 按 S3 配置摘要**缓存**
+   （`duckdbRunnerCacheKey`），配置变了才回收重建。
+3. **一个连接 = 一个独立引擎**：`database/sql` 的每个连接都是独立的 DuckDB 实例（不共享
+   buffer pool）。所以连接数不是"连接池大小"而是"同时开几个引擎"，必须限制
+   `MaxOpenConns`、`threads`（DuckDB 默认按 CPU 核数开线程）与 `memory_limit`，
+   否则并发查询会把机器吃满。
+4. **扩展失败要能降级**：`INSTALL httpfs` 需要联网下载。SDK 在**每个连接初始化**时执行
+   （CLI 是拼进同一次调用），失败只告警——本地 parquet 查询不依赖 httpfs（parquet 扩展是
+   编译进 libduckdb 的），不该因为拉不到扩展就让整个后端不可用。
+5. **SDK 起不来要能回落**：保留 CLI 路径不只为交叉编译与无 CGO 环境，也是 SDK 的兜底（缺扩展、
+   受限的运行时、CPU 特性不匹配）。回落时把两个原因都报出来，而不是互相覆盖。
+
+#### 验证（2026-09-21 实测）
+
+| 项 | 结果 |
+|---|---|
+| 跨驱动一致性 | ✅ 同一份 parquet，SDK 与 CLI 的 `total`、命中数、逐字段值与类型**完全相同** |
+| SDK 查真实 parquet | ✅ 列裁剪、`count(*) OVER ()`、分页、毫秒→RFC3339 归一均与 CLI 一致 |
+| 本地热层检索 | ✅ `backend=duckdb`、`total=1311`，无回落 CLI 的告警 |
+| S3 冷层检索（RustFS） | ✅ 把本地目录置空后强制走 S3，返回 S3 上的真实记录（`total=1`） |
+| 默认构建回归 | ✅ `statically linked`；`go test ./pkg/audit` 全绿 |
+
+> 排查时的一个插曲：S3 查询一度返回 `total=0`，看着像 SDK 的问题。用 CLI 直查同一条
+> `s3://` 路径也报 404，才确认是**那个对象本身已不在桶里**，与驱动无关。这也是为什么
+> §9.9 的验证特意做了「只查 S3」的对照，而不是只看一个非空结果——否则很容易把
+> "对象不存在"误判成"代码有问题"。
+
+#### SDK 成为镜像默认的落地情况（2026-09-21 已完成）
+
+下面三处已按计划一次改齐，现在 Dockerfile 出的就是 SDK 版：
+
+1. **构建阶段**：`CGO_ENABLED=1`（**不用加 tag**——SDK 就是默认驱动），构建镜像换成 Debian 版
+   的 golang（自带 gcc/g++；alpine 版只有 musl 工具链，还得联网装 build-base）。
+2. **运行基座**（`RUNTIME_IMAGE`）：`distroless/static` → openEuler（glibc + libstdc++ 现成）。
+   运行用户的 uid/gid 仍是 65532，已有数据卷属主与 K8s securityContext 的语义不变。
+3. **不再需要 `duckdb` 可执行文件**：镜像里没有它，也不必再拉 CLI 版特有的那份 musl loader。
+
+> **build tag 是「反向」的，很容易记错**：需要显式指定的那个 tag 是 `duckdb_cli`，无 tag 走 SDK。
+> 所以 `CGO_ENABLED=0` **必须配 `-tags duckdb_cli`**——漏掉 tag 就成了「想要纯 Go，却仍在编译
+> cgo 驱动」，报 `build constraints exclude all Go files in .../duckdb-go-bindings/lib/linux-amd64`。
+> 这是**组合用错**，不是环境问题（我在核查时真踩过一次）。Makefile 的 `build-cli`、
+> `backend-cli` 与 `cross-compile` 都已经带上了这个 tag。
+
+`Makefile` 的 `cross-compile` 四个目标需要单独决策：SDK 驱动下它们要各平台的 libduckdb 与
+交叉 C 工具链；最省事的做法是**交叉编译继续用 CLI 驱动**（默认 tag），SDK 只用于单平台发布。

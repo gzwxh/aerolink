@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { Role } from '@/types/api'
 import { assignRole, unassignRole, useRoleList } from '@/lib/api'
 import { isProtectedRole, systemRoleLabel } from '@/lib/system-roles'
+import { translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -81,8 +82,8 @@ export function UserRoleAssignment({ open, onOpenChange, subject }: Props) {
       queryClient.invalidateQueries({ queryKey: ['apikey-list'] })
       queryClient.invalidateQueries({ queryKey: ['role-list'] })
       setSelected((s) => ({ ...s, [roleId]: !s[roleId] }))
-    } catch {
-      // 失败已由 API 客户端统一写入站内信
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 

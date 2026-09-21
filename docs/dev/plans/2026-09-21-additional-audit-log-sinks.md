@@ -1,0 +1,220 @@
+# 新增审计落地方式：VictoriaLogs 与 OpenObserve
+
+日期：2026-09-21
+状态：**已实现**（待确认点已拍板，见 §6；落地范围与取舍见 §7；剩「实际环境是否已部署
+VictoriaLogs / OpenObserve」属于部署侧确认）
+
+## 1. 背景
+
+审计日志的落地方式目前三选一互斥（`database` / `parquet` / `elasticsearch`，见
+`2026-09-20-audit-log-parquet-archive.md` §12.11/§12.13）。现在要在这三个之外再加两个：
+
+- **VictoriaMetrics / VictoriaLogs**（我方运维已有 VictoriaMetrics 体系）
+- **OpenObserve**
+
+需求口径与既有一致：**仍然是「三（五）选一、互斥」**，不共存；由 `auditSink` /
+`KITE_AUDIT_SINK` 在启动时指定，界面只读；写入失败不得影响请求，也不得静默丢记录。
+
+## 2. 一个必须先钉死的事实：VictoriaMetrics ≠ VictoriaLogs
+
+| 产品 | 存什么 | 能否存下审计记录 |
+|---|---|---|
+| **VictoriaMetrics**（单机 / 集群） | 时序指标（metric + labels + float 采样） | ❌ 只能存「某时刻某指标=某值」：资源名/操作者/错误信息/变更 YAML 这些**字段明细会被丢掉**，审计要求的「谁在什么时候对哪个对象做了什么」无法还原 |
+| **VictoriaLogs**（`vlogs`，9428） | 日志（按 stream 分区，LogsQL 检索） | ✅ 正是该产品的用途 |
+
+结论：**这里要的是 VictoriaLogs**（VictoriaMetrics 体系里的日志组件，与 VM 同一套部署习惯，
+也是普通做法：VM 收指标、VL 收日志）。若坚持「数据进 VictoriaMetrics」，那就不是审计日志的
+落地方式，而是「把审计事件聚合成指标」的另一个需求，需要单独讨论（且**不能**作为唯一存储）。
+
+> 部署前提：实际环境需已部署 VictoriaLogs（`victoria-logs`/`vlogs`）。若只有 VictoriaMetrics，
+> 需要先加部署 VL，否则这个 sink 无意义。
+
+### 2.1 已核实的接口（2026-09-21 查官方文档）
+
+**VictoriaLogs**（默认 `http://victorialogs:9428`）：
+
+| 用途 | 接口 |
+|---|---|
+| 写入（ES/OpenSearch bulk 兼容） | `POST /insert/elasticsearch/_bulk`，NDJSON（`{"create":{}}` + 文档），时间字段 `_time`（RFC3339 或 Unix 秒/毫秒…，`"0"` = 用服务端当前时间） |
+| 写入（JSON 行） | `POST /insert/jsonline?_stream_fields=…&_time_field=…&_msg_field=…` |
+| 检索 | `GET/POST /select/logsql/query?query=<LogsQL>&start=…&end=…&limit=…`，返回 NDJSON |
+| 保留 | 服务端 `-retentionPeriod`（按天分区），**没有**客户端删除过期数据的接口 |
+
+参考：<https://docs.victoriametrics.com/victorialogs/data-ingestion/>（上述 endpoint 与 `_time`
+格式已在该页核实）。
+
+**OpenObserve**（默认 `http://openobserve:5080`）：
+
+| 用途 | 接口 |
+|---|---|
+| 写入（JSON 数组，官方文档示例） | `POST /api/{org}/{stream}/_json`，HTTP Basic（`-u user:pass`），body 是记录数组 |
+| 写入（ES 兼容 bulk） | `POST /api/{org}/_bulk`（Logstash/Filebeat 的 ES output 用；我们优先用上面那个更直接的 `_json`） |
+| 检索 | `POST /api/{org}/{stream}/_search`（DSL 与 ES 接近但不保证等价，需实测） |
+| 保留 | 服务端按 stream 的 `data_retention`（天）；org 级默认值由部署侧配置。同样是服务端职责 |
+
+参考：<https://openobserve.ai/docs/ingestion/logs/curl/>（`_json` + Basic 认证已核实）。
+
+## 3. 设计
+
+### 3.1 sink 取值（仍是五选一互斥）
+
+```go
+const (
+    AuditSinkDatabase      = "database"        // 默认
+    AuditSinkParquet       = "parquet"
+    AuditSinkElasticsearch = "elasticsearch"
+    AuditSinkOpenObserve   = "openobserve"     // 新增
+    AuditSinkVictoriaLogs  = "victorialogs"    // 新增（不是 victoriametrics，理由见 §2）
+)
+```
+
+`NormalizeAuditSink` / `AuditSinkUses*` 谓词 / `ApplySinkExclusivity` 同步扩展；
+非法值仍然启动即失败。
+
+### 3.2 写入：复用「中立文档」，只换传输层
+
+现有链路里 `esDocumentFromMessage`（`pkg/audit/archive.go`）已经把 `AuditMessage` 映射成中立的
+`ESDocument{Kind, ID, At, Fields}`；ES sink 只负责「按天索引 + bulk」。新 sink 复用同一份映射，
+只替换三件事：
+
+| | ES | VictoriaLogs | OpenObserve |
+|---|---|---|---|
+| 端点 | `/_bulk` | `/insert/elasticsearch/_bulk`（或 `/insert/jsonline`） | `/api/{org}/{stream}/_json` |
+| 流/索引名 | `<prefix>-YYYY.MM.DD`（客户端按天分区） | **单 stream**（服务端按天分区，不再自己拼日期） | **单 stream**（同上） |
+| 时间字段 | `created_at`/`ts`（RFC3339） | 需补 `_time`（RFC3339，可与业务字段并存） | 需补 `_timestamp`（微秒；具体列名/单位按实例的 stream 设置确认） |
+| 认证 | basic / TLS | header（`AccountID`/`ProjectID` 多租户）+ TLS | basic（`user:pass`）+ TLS |
+
+> 关键设计取舍：**不自己按天切流**。ES 里我们管按天索引 + 自删过期索引（§12.12）；这两家
+> 由服务端按时间分区并自带保留，客户端再拼日期只会把 stream/索引数放大几千倍。相应地，**过期
+> 删除不再是我们的职责**（见 §3.4）。
+
+写入仍然走现有 `uploadPool`、失败计数与告警（`kite_audit_archive_failures_total`），
+退避重试沿用 ES 那套（4xx 不重试）。
+
+### 3.3 检索：必须实现（不是可选项）
+
+`sink≠database` 时，三个审计列表页、三个导出接口、归档检索页**全部**依赖归档查询后端
+（见 §12.11「读取分派」）。所以：
+
+- **OpenObserve**：实现 `archiveSearcher`，走它自己的 `_search`（SQL 模式）。它的 DSL 与 ES
+  相似但不保证等价（尤其我们目前依赖 ES 动态 mapping 的 `.keyword` 子字段做精确匹配），
+  所以**不用**它的 ES DSL，而用 SQL 检索：复用中立条件 → SQL 的翻译器（`toSQLWhere` /
+  `sqlLiteral` / `sqlIdentifier` 白名单，与 DuckDB 后端同一套），版本兼容性靠 §7.2 的隔离点保障。
+- **VictoriaLogs**：新增 LogsQL 翻译器，把中立的 `archiveCondition`（`eq` / `not_eq` /
+  `contains` / `in` + 时间窗）渲染成 LogsQL；分页用接口自带的 `limit` / `offset` 参数
+  （`limit=N` 返回 `_time` 最大的 N 条、`offset=M` 跳过前 M 条，正是列表页要的顺序，
+  不必再叠 `| sort`），总数用 `| stats count() total`。翻译器与 `toESFilters` /
+  `toSQLWhere` 并列，各自单测。
+
+两家的检索结果都要适配成与库查询**逐字段一致**的 camelCase（复用 `audit_view.go` 的
+`adaptArchiveHits`）。
+
+### 3.4 保留策略：这两家交给服务端
+
+| sink | 过期数据谁删 | 我们的动作 |
+|---|---|---|
+| parquet | 我们（文件滚留） | — |
+| elasticsearch | 我们（删过期按天索引） | — |
+| **victorialogs** | 服务端 `-retentionPeriod` | 客户端**不做**删除；界面上说明「保留天数对本 sink 不生效」 |
+| **openobserve** | 服务端 stream `data_retention` | 同上 |
+
+也就是说 `audit_settings.retentionDays` 对这两个 sink 不再具有执行力——**必须显式告知**，
+否则又是一个「配了没生效」的静默失效（这正是本项目最忌讳的）。
+
+### 3.5 配置模型与界面
+
+新增两个配置块（与 `ESArchive` 同构）：
+
+```go
+type OpenObserveArchive struct {
+    Enabled  bool         `json:"enabled"`
+    URLs     []string     `json:"urls"`      // 单节点即可，多地址做轮询
+    Org      string       `json:"org"`       // 默认 default
+    Stream   string       `json:"stream"`    // 默认 kite-audit
+    Username string       `json:"username"`  // 登录邮箱
+    Password SecretString `json:"password"`
+    TLSInsecureSkipVerify bool `json:"tlsInsecureSkipVerify"`
+}
+
+type VictoriaLogsArchive struct {
+    Enabled  bool         `json:"enabled"`
+    URLs     []string     `json:"urls"`
+    AccountID string      `json:"accountId"`  // 多租户（可空）
+    ProjectID string      `json:"projectId"`  // 多租户（可空）
+    Stream   string       `json:"stream"`     // 默认 kite-audit
+    TLSInsecureSkipVerify bool `json:"tlsInsecureSkipVerify"`
+}
+```
+
+- `sink=openobserve|victorialogs` 时对应块由 sink 推导为启用（同 ES 的处理，见 §12.13）。
+- 启动 fail-closed：`ValidateSinkTarget` 增加两条——URLs 为空即拒绝启动，与 parquet/es 一致。
+- UI：归档区块继续按 sink 置灰；新增两组的字段（地址/组织/stream/账号/TLS），
+  并在保留策略区块标注「当前 sink 的保留由服务端负责」。
+
+## 4. 安全性
+
+- 凭据一律 `SecretString`（不进日志、读取掩码、保存掩码回显）；沿用 `rejectStaleSecretAfterMove`。
+- `path` 字段仍不含 `RawQuery`（防 token 入归档，§5 schema）。
+- 不新增 AGPL/SSPL 依赖：两个 sink 都是**纯 HTTP + 现成的 standard library**（`net/http` +
+  `encoding/json`），无需引入任何第三方客户端库。这点对比 ES/minio 反而是优势。
+
+## 5. 工作量
+
+| 步骤 | 内容 | 依赖 |
+|---|---|---|
+| 1 | 配置模型 + 常量 + 校验 + 启动 fail-closed（`pkg/model`、`pkg/audit/sink_target.go`、`internal/config.go`） | 无 |
+| 2 | 写入：两个 bulk/JSON writer + 重试/指标（`pkg/audit/{openobserve,victorialogs}_sink.go`）+ 假 HTTP 单测 | 步骤 1 |
+| 3 | 检索：OO `_search` 适配（SQL 模式）+ VL LogsQL 翻译器 + 假服务单测 | 步骤 1；**OO 的接口需实例实测** |
+| 4 | UI（配置区块 + 置灰规则 + i18n）、文档（本文件、方案 §12.x、feature-code-index、部署样例）、端到端联调 | 步骤 2/3 |
+
+## 6. 待确认（已拍板，保留作决策依据）
+
+1. **VictoriaLogs 还是 VictoriaMetrics？** —— 拍板：**VictoriaLogs**（理由见 §2）。
+   若环境里只有 VictoriaMetrics，需要先部署 VL（或 `vlogs`），否则这个 sink 无意义。
+2. **sink 取值命名** —— 拍板：就叫 `victorialogs` / `openobserve`。
+3. **OpenObserve 的检索方式** —— 拍板：允许用它自己的等价接口（SQL 模式），但必须与它的
+   版本升级隔离（见 §7.2）。
+
+## 7. 实施记录（2026-09-21）
+
+### 7.1 落地范围
+
+| 层面 | 落地内容 |
+|---|---|
+| 取值 | `pkg/model/audit_record.go`：两个常量 + `NormalizeAuditSink` + `AuditSinkUses{VictoriaLogs,OpenObserve,ExternalLogs}` + `AuditSinkRetentionIsServerSide` |
+| 配置 | `pkg/model/audit_setting.go`：`VictoriaLogsArchive` / `OpenObserveArchive`（含 `normalize`）、`ApplySinkExclusivity` 五路收敛、默认 `stream=kite-audit` / `org=default` |
+| 启动 fail-closed | `pkg/audit/sink_target.go`：urls 为空即拒绝启动，与 parquet / ES 同口径 |
+| 写入 | `pkg/audit/logsink_http.go` 抽出 `documentSink`（中立文档 + 轮询/故障切换 + 3 次退避重试，4xx 不重试，`errLogSinkNotRetryable`）；`pkg/audit/victorialogs_sink.go`、`pkg/audit/openobserve_sink.go` |
+| 检索 | 两个 sink 各自实现 `archiveSearcher`；`archive_backend.go` 的后端注册表扩到四个（es / duckdb / victorialogs / openobserve），auto **跟随 sink** |
+| 保留 | 保留天数对这两家不生效（服务端负责）；`retention.go` 明确**不**为它们加删除逻辑；界面按 `retentionServerSide` 提示 |
+| 界面 | `audit-setting.tsx` 新增两组配置 + 保留策略提示；`archive-query.tsx` 后端选择器与引导文案；`zh.json` / `en.json` 同步 |
+| 部署样例 | `config.dev.yaml`（④⑤ 两段可直接抄）、`dev.env`、`charts/kite/values.yaml`、`deploy/*.yaml` |
+
+### 7.2 OpenObserve 的版本隔离怎么做
+
+它的 HTTP 接口在不同版本间有过调整，所以**「路径 + 请求体 + 响应体」只出现在
+`pkg/audit/openobserve_sink.go` 的少数几个类型与函数**里（文件头注释列了清单：
+`openObserveIngestPath` / `openObserveSearchPath` / `openObserveSearchRequest` /
+`openObserveSearchQuery` / `openObserveSearchResponse` / `parseOpenObserveTotal` /
+`insert` / `search`）。升级后接口变了，改动应当只落在这一处；单测用**固定的**请求/响应
+样本钉住形状，接口一变测试就失败，而不是静默查到错数据。
+
+同理，VictoriaLogs 侧只依赖两个稳定面：写入 `/insert/elasticsearch/_bulk`、检索
+`/select/logsql/query`（已在官方文档核实，见 §2.1）。
+
+### 7.3 两个必须知道的取舍
+
+1. **单 stream，不按天分名**：ES 是客户端按天建索引（`<prefix>-YYYY.MM.DD`）并自删过期
+   索引；这两家由服务端按时间分区，客户端再拼日期只会把 stream 数放大几千倍。
+2. **保留策略不由本进程执行**：没有客户端删除接口，`audit_settings.retentionDays` 对这两家
+   不生效——界面上已显式说明（`retentionServerSide`），避免「配了没生效」。
+
+### 7.4 验证
+
+```
+go build ./...
+go vet ./pkg/audit/... ./pkg/model/... ./internal/...
+go test -count=1 ./pkg/audit ./pkg/model ./pkg/resources ./pkg/middleware ./internal
+pnpm --dir ui exec tsc --noEmit -p tsconfig.app.json
+pnpm --dir ui exec vitest run src/i18n/locales.test.ts
+```

@@ -598,7 +598,7 @@ export function Terminal({
             >
               <IconPalette className="h-4 w-4" />
               <div
-                className="absolute -top-1 -right-1 w-3 h-3 rounded-full border border-gray-400"
+                className="absolute -top-1 -right-1 w-3 h-3 rounded-full border border-border"
                 style={{
                   backgroundColor: TERMINAL_THEMES[terminalTheme].background,
                 }}
@@ -631,7 +631,7 @@ export function Terminal({
                               <SelectItem key={key} value={key}>
                                 <div className="flex items-center gap-2">
                                   <div
-                                    className="w-3 h-3 rounded-full border border-gray-400"
+                                    className="w-3 h-3 rounded-full border border-border"
                                     style={{
                                       backgroundColor: theme.background,
                                     }}

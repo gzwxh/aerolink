@@ -330,7 +330,7 @@ export function UserManagement() {
                   className="h-8 w-8 rounded-full object-cover"
                 />
               ) : (
-                <Avatar.Fallback className="h-8 w-8 rounded-full bg-muted-foreground text-white flex items-center justify-center">
+                <Avatar.Fallback className="h-8 w-8 rounded-full bg-muted-foreground text-background flex items-center justify-center">
                   {row.original.username
                     .split(' ')
                     .map((part) => part[0])
@@ -830,7 +830,7 @@ export function UserManagement() {
                         <div
                           key={check.label}
                           className={`h-1 flex-1 rounded-full ${
-                            check.ok ? 'bg-green-500' : 'bg-muted'
+                            check.ok ? 'bg-success' : 'bg-muted'
                           }`}
                         />
                       ))}
@@ -840,9 +840,7 @@ export function UserManagement() {
                         <li
                           key={check.label}
                           className={
-                            check.ok
-                              ? 'text-green-600'
-                              : 'text-muted-foreground'
+                            check.ok ? 'text-success' : 'text-muted-foreground'
                           }
                         >
                           {check.ok ? '✓' : '○'} {check.label}

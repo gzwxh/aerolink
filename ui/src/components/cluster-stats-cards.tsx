@@ -54,8 +54,8 @@ export function ClusterStatsCards({
             value: stats.totalNodes,
             subValue: stats.readyNodes,
             icon: IconServer,
-            color: 'text-blue-600 dark:text-blue-400',
-            bgColor: 'bg-blue-50 dark:bg-blue-950/50',
+            color: 'text-info',
+            bgColor: 'bg-info/10',
             routePath: '/nodes',
           },
         ]),
@@ -64,24 +64,24 @@ export function ClusterStatsCards({
       value: stats.totalPods,
       subValue: stats.runningPods,
       icon: IconBox,
-      color: 'text-green-600 dark:text-green-400',
-      bgColor: 'bg-green-50 dark:bg-green-950/50',
+      color: 'text-success',
+      bgColor: 'bg-success/10',
       routePath: '/pods',
     },
     {
       label: t('nav.namespaces'),
       value: stats.totalNamespaces,
       icon: IconFolders,
-      color: 'text-purple-600 dark:text-purple-400',
-      bgColor: 'bg-purple-50 dark:bg-purple-950/50',
+      color: 'text-warning',
+      bgColor: 'bg-warning/10',
       routePath: '/namespaces',
     },
     {
       label: t('nav.services'),
       value: stats.totalServices,
       icon: IconNetwork,
-      color: 'text-orange-600 dark:text-orange-400',
-      bgColor: 'bg-orange-50 dark:bg-orange-950/50',
+      color: 'text-attention',
+      bgColor: 'bg-attention/10',
       routePath: '/services',
     },
   ]
@@ -125,12 +125,12 @@ export function ClusterStatsCards({
                         {stat.subValue === undefined ||
                         stat.subValue === stat.value ? (
                           <div className="flex items-center gap-1">
-                            <IconCircleCheckFilled className="size-4 text-green-600 flex-shrink-0" />
+                            <IconCircleCheckFilled className="size-4 text-success flex-shrink-0" />
                             All ready
                           </div>
                         ) : (
                           <div className="flex items-center gap-1">
-                            <IconAlertCircleFilled className="size-4 text-red-600 flex-shrink-0" />
+                            <IconAlertCircleFilled className="size-4 text-destructive flex-shrink-0" />
                             {stat.value - (stat.subValue || 0)} Not Ready
                           </div>
                         )}

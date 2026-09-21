@@ -57,6 +57,63 @@ func TestAuditRoutesAreReadOnly(t *testing.T) {
 	}
 }
 
+// 顶栏通知栏的路由接线：公告的读接口在受保护组（所有登录用户可读），写接口在管理面
+// 且未登录时必须被拒。
+//
+// 这里能验证的是「路由存在、方法正确、没被挂到公开组」；章节门禁（settings.notification）
+// 是中间件，路由表里看不到它的效果，由 pkg/middleware/system_settings_test.go 按章节覆盖。
+func TestAnnouncementRoutesAreRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	registerAdminRoutes(&r.RouterGroup, auth.NewAuthHandler(), new(cluster.ClusterManager), helm.NewHelmChartHandler())
+	protected := gin.New()
+	registerProtectedRoutes(&protected.RouterGroup, auth.NewAuthHandler(), new(cluster.ClusterManager), helm.NewHelmChartHandler())
+
+	adminRoutes := map[string]string{
+		"GET /api/v1/admin/announcements/":       http.MethodGet,
+		"POST /api/v1/admin/announcements/":      http.MethodPost,
+		"PUT /api/v1/admin/announcements/:id":    http.MethodPut,
+		"DELETE /api/v1/admin/announcements/:id": http.MethodDelete,
+	}
+	seen := make(map[string]bool, len(adminRoutes))
+	for _, route := range r.Routes() {
+		key := route.Method + " " + route.Path
+		want, ok := adminRoutes[key]
+		if !ok {
+			continue
+		}
+		seen[key] = true
+		if route.Method != want {
+			t.Fatalf("%s registered with the wrong method", key)
+		}
+	}
+	for key := range adminRoutes {
+		if !seen[key] {
+			t.Fatalf("no announcement endpoint registered at %s; update this guard", key)
+		}
+	}
+
+	// 未带凭据时必须 401：公告的管理接口不能被挂在公开组上。
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/announcements/", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated admin list status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	// 读接口：在受保护组里（未登录同样 401），不在管理面。
+	found := false
+	for _, route := range protected.Routes() {
+		if route.Path == "/api/v1/announcements" && route.Method == http.MethodGet {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("GET /api/v1/announcements is not registered on the protected group")
+	}
+}
+
 func TestRegisterBaseRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

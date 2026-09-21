@@ -280,6 +280,19 @@ export function LoginLog() {
                 'Review every sign-in attempt, successful or rejected, and its source IP'
               )}
             </p>
+            {/* 同 audit-log：数据来自归档时必须明示延迟。 */}
+            {loginData?.backend && (
+              <p className="text-muted-foreground mt-1 text-xs">
+                {t(
+                  'common.messages.archiveSourceNotice',
+                  '数据来自归档（{{backend}}），不含最近约 {{seconds}} 秒内的操作',
+                  {
+                    backend: loginData.backend,
+                    seconds: loginData.queryDelaySeconds ?? 120,
+                  }
+                )}
+              </p>
+            )}
           </div>
           <div className="flex shrink-0 items-center justify-end gap-2">
             <AuditTimeRangePicker

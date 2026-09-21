@@ -33,6 +33,55 @@ Kite 默认支持一些环境变量，来改变一些配置项的默认值。
 - **KITE_DB_MAX_IDLE_CONNS**：最大空闲连接数，默认 `10`。
 - **KITE_DB_CONN_MAX_LIFETIME_MINUTES**：连接最大存活时间（分钟），默认 `10`。
 
+## 审计与归档
+
+审计日志的落地方式是**五选一互斥**的，在**启动时**决定、管理页面只读（改存储方式需要重启）。
+
+- **KITE_AUDIT_SINK**：审计记录的落地方式，取值：
+
+  | 取值 | 说明 | 前置条件（不满足则拒绝启动） |
+  | --- | --- | --- |
+  | `database`（默认，不设即此值） | 只写数据库，行为与未配置时一致 | — |
+  | `parquet` | 只落本地 parquet 文件，可叠加 S3 远端副本 | 必须有归档目录（`KITE_AUDIT_ARCHIVE_DIR` 或配置文件里的 `auditArchive.localDir`） |
+  | `elasticsearch` | 只写 Elasticsearch | 必须先有节点地址（页面「审计设置 → Elasticsearch」或配置文件的 `auditArchive.elasticsearch.urls`） |
+  | `victorialogs` | 只写 VictoriaLogs（**不是** VictoriaMetrics：后者是时序库，存不下审计字段明细） | 必须先有节点地址（`auditArchive.victorialogs.urls`） |
+  | `openobserve` | 只写 OpenObserve | 必须先有节点地址（`auditArchive.openobserve.urls`） |
+
+  取值非法会**直接启动失败**（不会静默回落成 `database`）。也可以写在配置文件的 `auditSink`
+  字段里（配置文件优先），两种方式都只认启动时的值。
+
+  ```bash
+  # 只写数据库（默认，不设即此值）
+  # 不设置 KITE_AUDIT_SINK 即可
+
+  # 本地 parquet 文件（需同时给归档目录）
+  KITE_AUDIT_SINK=parquet
+  KITE_AUDIT_ARCHIVE_DIR=/var/log/kite/archive
+
+  # Elasticsearch（需先在页面或配置文件里填好地址）
+  KITE_AUDIT_SINK=elasticsearch
+
+  # VictoriaLogs（VictoriaMetrics 体系里的日志存储，默认端口 9428）
+  KITE_AUDIT_SINK=victorialogs
+
+  # OpenObserve（默认端口 5080）
+  KITE_AUDIT_SINK=openobserve
+  ```
+
+  用它们各自的地址、凭据（如 OpenObserve 的用户名/密码、S3 的 Access Key/Secret Key）时，
+  请在「审计设置 → 归档」页面里填，或写在配置文件的 `auditArchive` 段里（样例见仓库根目录的
+  `config.dev.yaml`）。多副本部署时，每一份副本都要配置同一个 `KITE_AUDIT_SINK`，否则记录会散到
+  不同存储里。
+
+  注意：当 sink 是 `victorialogs` / `openobserve` 时，过期数据由**服务端**负责（VictoriaLogs 的
+  `-retentionPeriod`、OpenObserve 的 stream `data_retention`），「审计设置」里的保留天数对它们不生效。
+
+- **KITE_AUDIT_ARCHIVE_DIR**：审计/访问日志的本地归档目录（`KITE_AUDIT_SINK=parquet` 且没在页面上
+  配 `localDir` 时的启动兜底）。多副本部署（`replicaCount > 1`）时必须把它指向**共享卷**
+  （RWX PVC / NFS 等）：每个副本只写自己产生的记录、检索读的又是本地目录，目录不共享就查不全。
+- **KITE_LOG_FILE**：klog（系统日志）落盘路径。设置后系统日志只写文件、不再写 stderr，便于日志
+  采集工具收集；等价于命令行 `-log_file <path> -logtostderr=false`（命令行优先）。
+
 ## 运行与运维
 
 - **KITE_BASE**：Kite 部署在子路径下时的基础路径（如 `/kite`）。

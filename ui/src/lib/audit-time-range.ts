@@ -1,15 +1,16 @@
 import {
-  addDays,
   addSeconds,
   endOfDay,
   format,
   isValid,
   parse,
-  startOfMonth,
-  startOfWeek,
   subDays,
   subMonths,
 } from 'date-fns'
+
+// 月历网格与通知栏的日期选择器共用（见 lib/date-time.ts）：两个面板必须同一套口径，
+// 这里再导出让既有引用（包括单测）不变。
+export { monthGridDays } from './date-time'
 
 /**
  * 审计日志时间范围的取值格式：本地时间字符串 `YYYY-MM-DD HH:mm:ss`。
@@ -81,11 +82,7 @@ export function toAuditQueryTimeRange(range: {
   return query
 }
 
-/** 单个月份面板的 42 个格子（6 周 × 7 天，周日起），前后补足相邻月份的日期。 */
-export function monthGridDays(month: Date): Date[] {
-  const first = startOfWeek(startOfMonth(month), { weekStartsOn: 0 })
-  return Array.from({ length: 42 }, (_, index) => addDays(first, index))
-}
+/** 单个月份面板的 42 个格子（6 周 × 7 天，周日起）。见 lib/date-time.ts 的实现。 */
 
 export const AUDIT_TIME_PRESETS = [
   'day',

@@ -46,7 +46,9 @@ func recordResourceHistory(cs *cluster.ClientSet, user pkgmodel.User, resource r
 		OperatorID:      pkgmodel.OperatorRef(user.ID),
 		OperatorName:    user.Username,
 	}
-	if dbErr := pkgmodel.DB.Create(&history).Error; dbErr != nil {
+	// 走统一入口：由 sink 决定落库还是直接归档。这里没有请求上下文（AI 工具调用链上
+	// 可能不在 HTTP 请求里），传 context.TODO() 表示"确实没有"（与传 nil 行为一致）。
+	if dbErr := pkgmodel.RecordAudit(context.TODO(), &history); dbErr != nil {
 		klog.Errorf("Failed to create resource history: %v", dbErr)
 	}
 }

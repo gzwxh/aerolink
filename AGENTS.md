@@ -67,6 +67,20 @@ Kite 是单二进制的 Kubernetes 控制台：Go 后端、`ui/` 下的 React/Vi
   `useUnsavedChangesGuard`（`ui/src/hooks/use-unsaved-changes-guard.ts`），并在旁边
   渲染 `UnsavedChangesConfirmDialog`，避免关闭时静默丢弃已填内容。
   `ui/src/components/ui/dialog.tsx` 里的原语要保持对此无感知。
+- 前端浏览器基线：**Chrome / Edge 111、Firefox 128、Safari / iOS 16.4**（依据与登记位置见
+  `ui/vite.config.ts` 的 `build.target` 注释，改动沿革见 `docs/dev/plans/2026-09-21-
+  theme-contrast-and-browser-baseline.md`）。低于基线的浏览器不保证效果，相关兼容问题不
+  当作缺陷；新引入的 CSS/JS 特性落在基线内即可，不必为更旧的浏览器加兜底。
+- 配色主题（`ui/src/styles/themes/*.css`）只改语义 token：文字类 token 之间的对比度要过
+  AA 4.5，描边保持「`--border` 是分隔线、`--input` 是表单边界且更实」的两层口径。这两条
+  由 `ui/src/styles/themes/theme-contrast.test.ts` 断言，改色后先跑它。
+- 状态色一律用语义 token（`success` / `info` / `warning` / `attention` / `destructive`
+  及其 `-foreground`）与中性 token，不要再写 Tailwind 色阶用具（`text-green-600`、
+  `bg-blue-50 dark:bg-blue-950/50` 这类）——它们不跟随配色主题，也躲过对比度断言。
+  软底/软描边用透明度修饰表达（`bg-success/10`、`border-success/25`），
+  语义与取值口径见 `docs/dev/plans/2026-09-21-semantic-status-color-tokens.md`。
+  例外：日志/终端主题（`ui/src/types/themes.ts`、`log-viewer-content.tsx` 的浮层 chrome）
+  跟随的是用户选的终端主题，不改。
 
 ## 生成文件（Generated files）
 

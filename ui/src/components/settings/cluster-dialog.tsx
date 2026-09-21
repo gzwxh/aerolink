@@ -42,7 +42,12 @@ function createClusterFormData(cluster?: Cluster | null) {
   return {
     name: cluster?.name || '',
     description: cluster?.description || '',
-    config: cluster?.config || '',
+    // 编辑时**不回填**配置。
+    //
+    // 后端存的是加密凭据：回显既泄露凭据，还会因为「原样提交回去 → 后端再加密一次」
+    // 而变成**双重加密**——真机上的表现就是「保存几次之后，配置框里变成一串 base64」。
+    // 要改就重新粘贴；要看请走受 MFA 保护的「查看当前配置」。
+    config: '',
     prometheusURL: cluster?.prometheusURL || '',
     enabled: cluster?.enabled ?? true,
     isDefault: cluster?.isDefault ?? false,
@@ -325,8 +330,8 @@ function ClusterDialogContent({
         </div>
 
         {formData.inCluster && (
-          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-700 dark:text-blue-300">
+          <div className="p-4 bg-info/10 rounded-lg border border-info/25">
+            <p className="text-sm text-info">
               {t(
                 'common.messages.inClusterConfiguration',
                 'This cluster uses the in-cluster service account configuration. No additional kubeconfig is required.'
@@ -335,8 +340,8 @@ function ClusterDialogContent({
           </div>
         )}
         {formData.clusterAgent && (
-          <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-700 dark:text-blue-300">
+          <div className="p-4 bg-info/10 rounded-lg border border-info/25">
+            <p className="text-sm text-info">
               {t(
                 'clusterManagement.dialog.clusterAgentDescription',
                 'Create the cluster first, then run the generated command inside the target cluster.'

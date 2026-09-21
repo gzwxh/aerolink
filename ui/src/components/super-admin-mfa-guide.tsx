@@ -25,10 +25,10 @@ export function SuperAdminMFAGuide() {
   }
 
   return (
-    <Card className="border-amber-500/40 bg-amber-500/5">
+    <Card className="border-warning/40 bg-warning/5">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <IconShieldLock className="h-4 w-4 text-amber-600" />
+          <IconShieldLock className="h-4 w-4 text-warning" />
           {t('superAdminMFA.title', '请为超级管理员账号绑定 MFA（多因素认证）')}
         </CardTitle>
       </CardHeader>

@@ -73,7 +73,6 @@ import {
   MetadataListCard,
 } from '@/components/pod-overview-sidebar'
 import { PodStatusIcon } from '@/components/pod-status-icon'
-import { ResourceIframeDialogContent } from '@/components/resource-iframe-dialog-content'
 import { SimpleTable } from '@/components/simple-table'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 import { WorkloadSummaryCard } from '@/components/workload-overview-parts'
@@ -152,7 +151,8 @@ function HelmReleaseResourceLink({
 }: {
   resource: HelmReleaseResource
 }) {
-  const [open, setOpen] = useState(false)
+  // 一律跳转（不再弹窗）：这个按钮本来就带 app-link 样式，看着就是链接，
+  // 点了却弹出内嵌窗口，最容易被当成 bug。
   const [searchParams] = useSearchParams()
   const path = getHelmReleaseResourcePath(resource)
   const label = resource.namespace
@@ -164,26 +164,13 @@ function HelmReleaseResourceLink({
     return <span className="font-medium">{label}</span>
   }
 
-  if (isIframe) {
-    return (
-      <Link to={`${path}?iframe=true`} className="font-medium app-link">
-        {label}
-      </Link>
-    )
-  }
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className="max-w-full truncate text-left font-medium app-link"
-        >
-          {label}
-        </button>
-      </DialogTrigger>
-      <ResourceIframeDialogContent title={resource.kind} path={path} />
-    </Dialog>
+    <Link
+      to={isIframe ? `${path}?iframe=true` : path}
+      className="font-medium app-link"
+    >
+      {label}
+    </Link>
   )
 }
 
@@ -577,8 +564,8 @@ function HelmReleaseHistoryTable({
       await rollbackHelmRelease(namespace, name, revision)
       toast.success(t('helm.messages.rollbackStarted'))
       await Promise.all([refetchHistory(), onRollbackComplete()])
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setRollingBackRevision(null)
     }
@@ -903,7 +890,7 @@ function HelmReleaseChartVersionDetail({
       {hasNewVersion ? (
         <Badge
           variant="outline"
-          className="shrink-0 border-amber-500/30 bg-amber-500/10 font-normal text-amber-700 dark:text-amber-300"
+          className="shrink-0 border-warning/25 bg-warning/10 font-normal text-warning"
         >
           {t('helm.messages.newVersionAvailable', {
             version: latestVersion,
@@ -1676,9 +1663,9 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
               onClick={() => setAutoUpgradeDialogOpen(true)}
             >
               {autoUpgradeLastError ? (
-                <IconExclamationCircle className="size-4 fill-red-500 dark:fill-red-400" />
+                <IconExclamationCircle className="size-4 fill-destructive" />
               ) : isAutoUpgradeEnabled ? (
-                <IconCircleCheckFilled className="size-4 fill-green-500 dark:fill-green-400" />
+                <IconCircleCheckFilled className="size-4 fill-success" />
               ) : null}
               {t('helm.actions.autoUpgrade')}
             </Button>

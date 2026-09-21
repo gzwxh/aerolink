@@ -75,7 +75,7 @@ export function AuditExportButton({
     try {
       setResult(await onExport())
     } catch (error) {
-      // 导出失败已由 API 客户端统一写入站内信，这里只补充即时反馈
+      // 导出失败的即时反馈（失败不再写站内信，这里就是唯一的反馈）
       toast.error(
         error instanceof Error
           ? error.message

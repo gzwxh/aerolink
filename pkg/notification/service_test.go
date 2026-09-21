@@ -42,10 +42,11 @@ func newNotificationTestDB(t *testing.T) {
 	})
 }
 
-// seedNotificationAdmin 建一个持有内置 admin 角色的账号：强制送达的安全事件要发给它。
-func seedNotificationAdmin(t *testing.T, username string) *model.User {
+// seedNotificationAdmin 建一个持有内置 admin 角色的账号（用户名固定为 "root"）：强制送达的
+// 安全事件要发给它。
+func seedNotificationAdmin(t *testing.T) *model.User {
 	t.Helper()
-	user := seedNotificationUser(t, username)
+	user := seedNotificationUser(t, "root")
 
 	var role model.Role
 	if err := model.DB.Where("name = ?", model.DefaultAdminRole.Name).First(&role).Error; err != nil {
@@ -59,7 +60,7 @@ func seedNotificationAdmin(t *testing.T, username string) *model.User {
 		SubjectType: model.SubjectTypeUser,
 		Subject:     user.Username,
 	}).Error; err != nil {
-		t.Fatalf("assigning the admin role to %s: %v", username, err)
+		t.Fatalf("assigning the admin role to %s: %v", user.Username, err)
 	}
 	return user
 }
@@ -88,12 +89,13 @@ func inAppCount(t *testing.T, userID uint) int {
 	return int(count)
 }
 
-// 站内信只发给**订阅了**该事件 + 站内信渠道的接收者。
+// 不带当事人的 SendEvent 只发给**订阅了**该事件 + 站内信渠道的接收者。
 //
-// 改前 SendEvent 还接受调用方传入的「额外接收人」（受影响的那个用户、全部管理员等），
-// 那条路径不看订阅，于是从没订阅过站内信的人也会收到 —— 现网就是这样：订阅表是空的，
-// 但通知表里有上千条。
-func TestSendEventDeliversInAppOnlyToSubscribers(t *testing.T) {
+// 收件人共三档：订阅者 + 当事人必收（需走 SendEventTo，见
+// target_user_events_test.go）+ 管理员必收。本用例锁的是不带当事人的那一档：
+// 上一轮删掉通用的「额外接收人」参数之前，这条路径不看订阅，现网订阅表是空的、
+// 通知表却有上千条。
+func TestSendEventWithoutExplicitRecipientOnlyReachesSubscribers(t *testing.T) {
 	newNotificationTestDB(t)
 	alice := seedNotificationUser(t, "alice")
 	bob := seedNotificationUser(t, "bob")
@@ -171,11 +173,12 @@ func seedNotificationTemplate(t *testing.T, event string) {
 	}
 }
 
-func seedAllUsersSubscription(t *testing.T, event, channel string) {
+// seedAllUsersSubscription 建一条「发给所有用户」的站内信订阅（渠道固定 inapp）。
+func seedAllUsersSubscription(t *testing.T, event string) {
 	t.Helper()
 	if err := model.DB.Create(&model.NotificationSubscription{
 		Event:        event,
-		Channel:      channel,
+		Channel:      model.NotificationChannelInApp,
 		ReceiverType: model.NotificationReceiverAllUsers,
 		Enabled:      true,
 	}).Error; err != nil {
@@ -205,7 +208,7 @@ func TestAllUsersSubscriptionExpandsAtDeliveryTime(t *testing.T) {
 	newNotificationTestDB(t)
 	alice := seedNotificationUser(t, "alice")
 	seedNotificationTemplate(t, model.NotificationEventRemoteLogin)
-	seedAllUsersSubscription(t, model.NotificationEventRemoteLogin, model.NotificationChannelInApp)
+	seedAllUsersSubscription(t, model.NotificationEventRemoteLogin)
 
 	// 订阅之后再入职一个账号。
 	carol := seedNotificationUser(t, "carol")
@@ -233,9 +236,9 @@ func TestAllUsersSubscriptionResolvesCurrentRecipients(t *testing.T) {
 	// alice 已停用：既不该收站内信，也不该收邮件。
 	setUserEnabled(t, alice.ID, false)
 
-	seedAllUsersSubscription(t, event, model.NotificationChannelInApp)
+	seedAllUsersSubscription(t, event)
 
-	users, _ := resolveRecipients(event)
+	users, _ := resolveRecipients(event, nil)
 	if containsID(users, alice.ID) {
 		t.Errorf("disabled user %d is still a recipient", alice.ID)
 	}
@@ -256,7 +259,7 @@ func TestAllUsersSubscriptionResolvesCurrentRecipients(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seeding user subscription: %v", err)
 	}
-	users, _ = resolveRecipients(event)
+	users, _ = resolveRecipients(event, nil)
 	if len(users) != 2 {
 		t.Fatalf("recipients = %v, want exactly bob and carol once each", users)
 	}
@@ -270,7 +273,7 @@ func TestAllUsersSubscriptionResolvesCurrentRecipients(t *testing.T) {
 		Update("channel", model.NotificationChannelEmail).Error; err != nil {
 		t.Fatalf("switching the all-users subscription to email: %v", err)
 	}
-	_, emails := resolveRecipients(event)
+	_, emails := resolveRecipients(event, nil)
 	if emails["bob@example.com"] != true {
 		t.Errorf("bob's address is missing from the email recipients: %v", emails)
 	}

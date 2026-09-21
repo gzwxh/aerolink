@@ -20,7 +20,7 @@ import {
 } from '@/lib/api'
 import { getPodStatus } from '@/lib/k8s'
 import { getResourceDetailPath } from '@/lib/resource-catalog'
-import { getAge } from '@/lib/utils'
+import { getAge, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -42,10 +42,10 @@ const POD_PHASES = [
 ] as const
 
 const PHASE_STYLES: Record<string, string> = {
-  Running: 'border-l-green-500',
-  Pending: 'border-l-blue-500',
-  Succeeded: 'border-l-yellow-500',
-  Failed: 'border-l-red-500',
+  Running: 'border-l-success',
+  Pending: 'border-l-info',
+  Succeeded: 'border-l-warning',
+  Failed: 'border-l-destructive',
   Unknown: 'border-l-muted-foreground/40',
 }
 
@@ -217,8 +217,8 @@ export function NamespaceDetailPage({ name }: { name: string }) {
       )
       queryClient.invalidateQueries()
       navigate('/namespaces')
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
       setDeleting(false)
     }
   }

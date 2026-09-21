@@ -79,6 +79,10 @@
 订阅才会发出**；要「所有用户都收到」，需要按用户逐个加订阅（或后续加一个「全体用户 / 按用户组」
 接收者类型）。
 
+> 本节口径已于后续修订：「当事人」（账号/权限被改的那个账号）改为受清单约束的必收，
+> 订阅语义收敛为「额外收件人」；同时前端失败上报链路（`operation_failed`）下线，
+> 失败改为只给即时弹窗。详见 `2026-09-21-notification-recipient-and-failure-feedback.md`。
+
 ## 6. 测试与验证
 
 - 单元/组件（vitest）：`SelectorBadges`、`ValueRows` 多行与遮罩、`splitSecretData`、

@@ -1,5 +1,5 @@
 # Makefile for Kite project
-.PHONY: help dev build clean test docker-build docker-run frontend backend install deps changelog e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-existing e2e-run-headed e2e-test e2e-test-headed
+.PHONY: help dev build build-cli rancherrbac clean test docker-build docker-run frontend backend backend-cli install deps changelog e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-existing e2e-run-headed e2e-test e2e-test-headed
 
 # Variables
 BINARY_NAME=kite
@@ -75,8 +75,14 @@ deps: ## Install frontend and backend dependencies
 .PHONY: build
 build: ## Build both frontend and backend (always rebuilds both)
 	cd $(UI_DIR) && pnpm run build
-	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
-	@echo "✅ Build completed successfully!"
+	CGO_ENABLED=1 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
+	@echo "✅ Build completed successfully! (parquet search uses the embedded DuckDB engine)"
+	@echo "🚀 Run './$(BINARY_NAME)' to start the server"
+
+build-cli: ## Build both frontend and backend without CGO (pure-Go duckdb CLI driver)
+	cd $(UI_DIR) && pnpm run build
+	CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
+	@echo "✅ Build completed successfully! (parquet search shells out to the duckdb binary)"
 	@echo "🚀 Run './$(BINARY_NAME)' to start the server"
 
 clean-frontend: ## Clean frontend build artifacts
@@ -91,12 +97,19 @@ clean: clean-frontend clean-backend ## Clean all build artifacts
 
 cross-compile: frontend ## Cross-compile for multiple architectures
 	@echo "🔄 Cross-compiling for multiple architectures..."
+	@echo "ℹ️  交叉编译走纯 Go 驱动（-tags duckdb_cli）：SDK 驱动的 libduckdb 是按平台分发的预编译"
+	@echo "    静态库，交叉编译要为每个目标再配一套 C 工具链；这几份产物需要目标机有 duckdb 可执行文件。"
 	mkdir -p bin
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-amd64 .
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-arm64 .
-	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-arm64 .
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe .
-	# GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-amd64 .
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-amd64 .
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-arm64 .
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-arm64 .
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe .
+	# GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-amd64 .
+
+# 授权迁移工具（Rancher → Kite 权限绑定组）的单文件构建。
+# 日常使用见 tools/rancherrbac/README.md：目标机上只要二进制 + 配置文件。
+rancherrbac: ## 打包授权迁移工具（参数透传给 scripts/build-rancherrbac.sh，如 -a 全平台）
+	sh scripts/build-rancherrbac.sh $(ARGS)
 
 package-release:
 	@echo "🔄 Packaging..."
@@ -140,9 +153,24 @@ GO_SOURCES := $(shell find . -type f -name '*.go' \
 	-not -path './e2e/*' \
 	-not -path './.git/*' 2>/dev/null)
 
-backend: ## Build backend only (always rebuilds)
-	@echo "🏗️ Building backend..."
-	CGO_ENABLED=0 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
+# 默认后端构建：parquet 检索用 DuckDB 的 **Go SDK（cgo，进程内引擎）**。
+#
+# 引擎（libduckdb，含 parquet 扩展）静态链进二进制，运行时不再需要外部 duckdb 可执行文件，
+# 也没有每次查询的进程启动开销。代价是构建需要 CGO（gcc/g++）、产物动态依赖
+# libstdc++/libc（运行镜像不能用 distroless/static），交叉编译见 cross-compile 的说明。
+backend: ## Build backend only (always rebuilds; CGO + embedded DuckDB engine)
+	@echo "🏗️ Building backend with the DuckDB Go SDK (CGO)..."
+	CGO_ENABLED=1 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
+
+# 纯 Go 后端构建（`-tags duckdb_cli`）：parquet 检索改为 exec 外部 duckdb 可执行文件。
+#
+# 与 backend 目标**只差检索驱动**，两者查同一份 parquet、走同一套 SQL 与结果归一
+# （pkg/audit/archive_query_duckdb.go），结果逐字段一致（有跨驱动一致性测试保证）。
+# 需要它的场景：交叉编译（SDK 要各平台的 libduckdb 与 C 工具链）、没有 gcc/g++ 的构建环境、
+# 以及 SDK 驱动出问题时的退路。用这个构建时，镜像/目标机要有 `duckdb` 可执行文件。
+backend-cli: ## Build backend without CGO (pure-Go duckdb CLI driver; needs the duckdb binary at runtime)
+	@echo "🏗️ Building backend with the pure-Go DuckDB CLI driver..."
+	CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 
 # Production targets
 run: backend ## Run the built application (loads dev.env when present)

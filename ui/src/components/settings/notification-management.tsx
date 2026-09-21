@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
-import { IconLock } from '@tabler/icons-react'
+import { IconLock, IconUserCheck } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -20,6 +20,7 @@ import {
   type NotificationReceiverType,
   type NotificationSetting,
 } from '@/lib/api'
+import { translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -49,15 +50,19 @@ import {
 } from '@/components/ui/tooltip'
 import { PasswordInput } from '@/components/password-input'
 
+import { AnnouncementManagement } from './announcement-management'
+
 /**
- * 通知管理：邮件服务器、消息模板与消息订阅。
+ * 通知管理：邮件服务器、通知栏公告、消息模板与消息订阅。
  * 事件策略（异地登录 / 不活跃禁用 / 密码过期）复用「安全管理」里的开关。
  */
 export function NotificationManagement() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') ?? 'email'
-  const tab = ['email', 'templates', 'subscriptions'].includes(tabParam)
+  const tab = ['email', 'announcements', 'templates', 'subscriptions'].includes(
+    tabParam
+  )
     ? tabParam
     : 'email'
 
@@ -76,6 +81,9 @@ export function NotificationManagement() {
         >
           <TabsContent value="email">
             <MailSettings />
+          </TabsContent>
+          <TabsContent value="announcements">
+            <AnnouncementManagement />
           </TabsContent>
           <TabsContent value="templates">
             <TemplateList />
@@ -134,8 +142,8 @@ function MailSettings() {
         queryKey: ['notification-setting'],
       })
       toast.success(t('notifications.messages.saved', '已保存'))
-    } catch {
-      // 失败已由 API 客户端统一写入站内信
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setSaving(false)
     }
@@ -146,8 +154,8 @@ function MailSettings() {
     try {
       await sendTestNotification(testRecipient)
       toast.success(t('notifications.messages.testSent', '测试邮件已发送'))
-    } catch {
-      // 失败已由 API 客户端统一写入站内信
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setTesting(false)
     }
@@ -352,8 +360,8 @@ function MailSettings() {
                     toast.success(
                       t('notifications.messages.dailyRan', '每日检查已执行')
                     )
-                  } catch {
-                    // 失败已由 API 客户端统一写入站内信
+                  } catch (error) {
+                    toast.error(translateError(error, t))
                   } finally {
                     setRunning(false)
                   }
@@ -560,6 +568,10 @@ function SubscriptionList() {
   // 「管理员必收、无法取消」的事件清单由后端下发（见 model.mandatoryAdminEvents）。
   const mandatoryEvents = subscriptions?.mandatoryEvents ?? []
   const isMandatory = (value: string) => mandatoryEvents.includes(value)
+  // 「当事人必收」同理（见 model.targetUserEvents）：这些事件一定会发给本人，
+  // 与订阅无关，界面要如实标注，否则管理员会以为必须为它们配订阅才有人收。
+  const targetUserEvents = subscriptions?.targetUserEvents ?? []
+  const isTargetUser = (value: string) => targetUserEvents.includes(value)
   const allSelected =
     eventOptions.length > 0 && selectedEvents.length === eventOptions.length
 
@@ -596,8 +608,8 @@ function SubscriptionList() {
           skipped: result.skipped.length,
         })
       )
-    } catch {
-      // 失败已由 API 客户端统一写入站内信
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -736,6 +748,21 @@ function SubscriptionList() {
                       </TooltipContent>
                     </Tooltip>
                   )}
+                  {isTargetUser(value) && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex text-muted-foreground">
+                          <IconUserCheck className="size-3.5" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        {t(
+                          'notifications.subscriptions.targetUser',
+                          '当事人必收'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </label>
               ))}
             </div>
@@ -745,6 +772,11 @@ function SubscriptionList() {
             {mandatoryEvents.length > 0 && (
               <p className="text-xs text-muted-foreground">
                 {t('notifications.subscriptions.mandatoryHint')}
+              </p>
+            )}
+            {targetUserEvents.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t('notifications.subscriptions.targetUserHint')}
               </p>
             )}
           </div>

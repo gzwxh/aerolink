@@ -42,9 +42,9 @@ export function PasswordRulesPanel({
             key={rule.label}
             className={`flex items-start gap-1.5 ${
               rule.ok
-                ? 'text-green-600'
+                ? 'text-success'
                 : touched
-                  ? 'text-red-600'
+                  ? 'text-destructive'
                   : 'text-foreground'
             }`}
           >

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { IconLoader } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { RelatedResources, ResourceType } from '@/types/api'
@@ -9,8 +10,6 @@ import {
   getResourceDetailPath,
   getResourceMetadata,
 } from '@/lib/resource-catalog'
-import { Dialog, DialogTrigger } from '@/components/ui/dialog'
-import { ResourceIframeDialogContent } from '@/components/resource-iframe-dialog-content'
 
 import { Column, SimpleTable } from './simple-table'
 import { Badge } from './ui/badge'
@@ -21,6 +20,7 @@ export function RelatedResourcesTable(props: {
   name: string
   namespace?: string
 }) {
+  const { t } = useTranslation()
   const { resource, name, namespace } = props
 
   const { data: relatedResources, isLoading } = useRelatedResources(
@@ -32,7 +32,7 @@ export function RelatedResourcesTable(props: {
   const relatedColumns = useMemo(
     (): Column<RelatedResources>[] => [
       {
-        header: 'Kind',
+        header: t('common.fields.type', '类型'),
         accessor: (rs: RelatedResources) => rs.type,
         align: 'left',
         cell: (value: unknown) => (
@@ -40,7 +40,7 @@ export function RelatedResourcesTable(props: {
         ),
       },
       {
-        header: 'Name',
+        header: t('common.fields.name', '名称'),
         accessor: (rs: RelatedResources) => rs,
         cell: (value: unknown) => {
           const rs = value as RelatedResources
@@ -48,27 +48,27 @@ export function RelatedResourcesTable(props: {
         },
       },
     ],
-    []
+    [t]
   )
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
         <IconLoader className="animate-spin mr-2" />
-        Loading related...
+        {t('common.messages.loading', '加载中...')}
       </div>
     )
   }
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Related</CardTitle>
+        <CardTitle>{t('common.tabs.related', '相关资源')}</CardTitle>
       </CardHeader>
       <CardContent>
         <SimpleTable
           data={relatedResources || []}
           columns={relatedColumns}
-          emptyMessage="No related found"
+          emptyMessage={t('common.messages.noData', '暂无数据')}
         />
       </CardContent>
     </Card>
@@ -76,7 +76,6 @@ export function RelatedResourcesTable(props: {
 }
 
 function RelatedResourceCell({ rs }: { rs: RelatedResources }) {
-  const [open, setOpen] = useState(false)
   const [searchParams] = useSearchParams()
   const metadata = getResourceMetadata(rs.type)
   const isIframe = searchParams.get('iframe') === 'true'
@@ -92,26 +91,15 @@ function RelatedResourceCell({ rs }: { rs: RelatedResources }) {
     return getCRDResourcePath(rs.type, rs.apiVersion!, rs.namespace, rs.name)
   }, [metadata?.type, rs])
 
-  if (isIframe) {
-    return (
-      <Link
-        to={`${path}?iframe=true`}
-        className="font-medium app-link cursor-pointer"
-      >
-        {rs.name}
-      </Link>
-    )
-  }
-
+  // 一律**跳转**，不再弹窗：相关资源就是「去那条资源上看一眼」，套一层弹窗时地址栏与
+  // 面包屑都不变，既没法在新标签页打开，也没法分享或后退，反而更容易迷失。
+  // iframe 模式（详情页本身被嵌在别的页面里）继续带 `iframe=true` 保持一致。
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <div className="font-medium app-link cursor-pointer">{rs.name}</div>
-      </DialogTrigger>
-      <ResourceIframeDialogContent
-        title={metadata?.singularLabel || rs.type}
-        path={path}
-      />
-    </Dialog>
+    <Link
+      to={isIframe ? `${path}?iframe=true` : path}
+      className="font-medium app-link cursor-pointer"
+    >
+      {rs.name}
+    </Link>
   )
 }

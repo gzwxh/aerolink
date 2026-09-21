@@ -1,3 +1,4 @@
+//nolint:dupl // 与 cluster_badge_icon.go 结构相同是有意为之：两张独立的表、各自的不变式，理由见那里的说明。
 package model
 
 import (

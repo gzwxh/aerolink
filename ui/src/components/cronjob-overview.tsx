@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { CronJob, Job } from 'kubernetes-types/batch/v1'
 import { Event as KubernetesEvent } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
@@ -10,7 +10,6 @@ import { getEventTime, getOwnerInfo } from '@/lib/k8s'
 import { cn, formatDate, getAge } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogTrigger } from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -19,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ResourceIframeDialogContent } from '@/components/resource-iframe-dialog-content'
 import {
   ContainerImagesList,
   WorkloadInfoBlock,
@@ -441,8 +439,7 @@ export function CronJobJobLink({
   job: Job
   className?: string
 }) {
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
+  // 一律跳转（不再弹窗）：CronJob 详情里的 Job 名，就是去 Job 详情页看一眼。
   const [searchParams] = useSearchParams()
   const jobName = job.metadata?.name || '-'
   const namespace = job.metadata?.namespace
@@ -463,40 +460,17 @@ export function CronJobJobLink({
     )
   }
 
-  if (isIframe) {
-    return (
-      <Link
-        to={`${path}?iframe=true`}
-        className={cn(
-          'app-link block max-w-full cursor-pointer truncate text-left font-mono',
-          className
-        )}
-        title={jobName}
-      >
-        {jobName}
-      </Link>
-    )
-  }
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'app-link block max-w-full cursor-pointer truncate text-left font-mono',
-            className
-          )}
-          title={jobName}
-        >
-          {jobName}
-        </button>
-      </DialogTrigger>
-      <ResourceIframeDialogContent
-        title={t('common.fields.job', 'Job')}
-        path={path}
-      />
-    </Dialog>
+    <Link
+      to={isIframe ? `${path}?iframe=true` : path}
+      className={cn(
+        'app-link block max-w-full cursor-pointer truncate text-left font-mono',
+        className
+      )}
+      title={jobName}
+    >
+      {jobName}
+    </Link>
   )
 }
 

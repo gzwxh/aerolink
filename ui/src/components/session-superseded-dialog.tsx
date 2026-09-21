@@ -38,8 +38,8 @@ export function SessionSupersededDialog() {
         className="max-w-md"
       >
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
-            <IconAlertTriangle className="h-5 w-5 text-amber-500" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/10">
+            <IconAlertTriangle className="h-5 w-5 text-warning" />
           </div>
           <div className="space-y-2">
             <h2 className="text-base font-semibold">

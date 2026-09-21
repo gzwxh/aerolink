@@ -13,10 +13,20 @@
   --muted-foreground: oklch(0.4313 0 0);
   --accent: oklch(0.9354 0.0456 94.8549);
   --accent-foreground: oklch(0.4015 0.0436 37.9587);
-  --destructive: oklch(0.6627 0.0978 20.0041);
+  --destructive: oklch(0.562 0.0978 20.0041);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.5538 0.0025 17.232);
-  --input: oklch(1 0 0);
+  --success: oklch(0.484 0.09 150);
+  --success-foreground: oklch(1 0 0);
+  --info: oklch(0.491 0.09 240);
+  --info-foreground: oklch(1 0 0);
+  --warning: oklch(0.494 0.1 92);
+  --warning-foreground: oklch(1 0 0);
+  --attention: oklch(0.502 0.1 50);
+  --attention-foreground: oklch(1 0 0);
+  /* 原值的明度只有 0.554，压在白卡片上是 4.8:1 的近黑分隔线（其余主题 1.2~2.0），
+     比表单边界还重。描边归回到与其他主题同一量级。 */
+  --border: oklch(0.865 0.0025 17.232);
+  --input: oklch(0.79 0 0);
   --ring: oklch(0.7058 0 0);
   --chart-1: oklch(0.3211 0 0);
   --chart-2: oklch(0.4495 0 0);
@@ -59,15 +69,25 @@
   --primary: oklch(0.7572 0 0);
   --primary-foreground: oklch(0.2891 0 0);
   --secondary: oklch(0.4676 0 0);
-  --secondary-foreground: oklch(0.8078 0 0);
+  --secondary-foreground: oklch(0.8945 0 0);
   --muted: oklch(0.3904 0 0);
-  --muted-foreground: oklch(0.7058 0 0);
-  --accent: oklch(0.9067 0 0);
-  --accent-foreground: oklch(0.3211 0 0);
+  --muted-foreground: oklch(0.77 0 0);
+  /* 原值照搬了浅色的 0.9067（近白），而 --accent 是 shadcn 原语的 hover / 选中填充，
+     暗色下菜单一悬停就是白底。改成与浅色对称的“深一档填充 + 亮字”。 */
+  --accent: oklch(0.3904 0 0);
+  --accent-foreground: oklch(0.8945 0 0);
   --destructive: oklch(0.7915 0.0491 18.241);
   --destructive-foreground: oklch(0.2891 0 0);
+  --success: oklch(0.77 0.09 150);
+  --success-foreground: oklch(0.2891 0 0);
+  --info: oklch(0.777 0.09 240);
+  --info-foreground: oklch(0.2891 0 0);
+  --warning: oklch(0.78 0.1 92);
+  --warning-foreground: oklch(0.2891 0 0);
+  --attention: oklch(0.789 0.1 50);
+  --attention-foreground: oklch(0.2891 0 0);
   --border: oklch(0.4276 0 0);
-  --input: oklch(0.3211 0 0);
+  --input: oklch(0.5 0 0);
   --ring: oklch(0.8078 0 0);
   --chart-1: oklch(0.9521 0 0);
   --chart-2: oklch(0.8576 0 0);
@@ -78,8 +98,8 @@
   --sidebar-foreground: oklch(0.8945 0 0);
   --sidebar-primary: oklch(0.7572 0 0);
   --sidebar-primary-foreground: oklch(0.2478 0 0);
-  --sidebar-accent: oklch(0.9067 0 0);
-  --sidebar-accent-foreground: oklch(0.3211 0 0);
+  --sidebar-accent: oklch(0.3904 0 0);
+  --sidebar-accent-foreground: oklch(0.8945 0 0);
   --sidebar-border: oklch(0.4276 0 0);
   --sidebar-ring: oklch(0.8078 0 0);
   --radius: 0.625rem;

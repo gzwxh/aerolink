@@ -10,6 +10,7 @@ import (
 	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/zxh326/kite/pkg/ai"
+	"github.com/zxh326/kite/pkg/announcement"
 	"github.com/zxh326/kite/pkg/apikeys"
 	"github.com/zxh326/kite/pkg/audit"
 	"github.com/zxh326/kite/pkg/auth"
@@ -165,6 +166,18 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	auditSettingAPI.GET("/", audit.GetAuditSetting)
 	auditSettingAPI.PUT("/", audit.UpdateAuditSetting)
 
+	// 归档检索：只读，走 ES（配置在「审计设置 → 归档」里）。与本地列表接口同构，
+	// 但检索的是已被 rolling 清理/上传到外部存储的历史记录。
+	// 可用后端列表：界面据此渲染后端选择器（Elasticsearch / DuckDB）。
+	adminAPI.GET("/archive-backends", requireAudit, audit.ArchiveBackends)
+	adminAPI.GET("/audit-history-archive", requireAudit, audit.QueryAuditHistoryArchive)
+	adminAPI.GET("/login-record-archive", requireAudit, audit.QueryLoginRecordArchive)
+	adminAPI.GET("/access-log-archive", requireAudit, audit.QueryAccessLogArchive)
+	// 归档导出（CSV）：过滤条件与上面的检索接口一致，响应头带条目数、时间范围与指纹。
+	adminAPI.GET("/audit-history-archive/export", requireAudit, audit.ExportAuditHistoryArchive)
+	adminAPI.GET("/login-record-archive/export", requireAudit, audit.ExportLoginRecordArchive)
+	adminAPI.GET("/access-log-archive/export", requireAudit, audit.ExportAccessLogArchive)
+
 	oauthProviderAPI := adminAPI.Group("/oauth-providers", requireAuthentication)
 	oauthProviderAPI.GET("/", authHandler.ListOAuthProviders)
 	oauthProviderAPI.POST("/", authHandler.CreateOAuthProvider)
@@ -283,6 +296,13 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	notificationSubscriptionAPI.PUT("/:id", notification.HandleUpdateNotificationSubscription)
 	notificationSubscriptionAPI.DELETE("/:id", notification.HandleDeleteNotificationSubscription)
 
+	// 顶栏通知栏公告：与「通知管理」同属 settings.notification（横幅是发给用户看的投递面）。
+	announcementAPI := adminAPI.Group("/announcements", requireNotification)
+	announcementAPI.GET("/", announcement.HandleListAnnouncements)
+	announcementAPI.POST("/", announcement.HandleCreateAnnouncement)
+	announcementAPI.PUT("/:id", announcement.HandleUpdateAnnouncement)
+	announcementAPI.DELETE("/:id", announcement.HandleDeleteAnnouncement)
+
 	templateAPI := adminAPI.Group("/templates", requireTemplates)
 	templateAPI.POST("/", templates.CreateTemplate)
 	templateAPI.PUT("/:id", templates.UpdateTemplate)
@@ -302,8 +322,9 @@ func registerProtectedRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, 
 	api.GET("/notifications", authHandler.RequireAuth(), notification.HandleListNotifications)
 	api.GET("/notifications/unread-count", authHandler.RequireAuth(), notification.HandleNotificationUnreadCount)
 	api.POST("/notifications/read", authHandler.RequireAuth(), notification.HandleMarkNotificationsRead)
-	api.POST("/notifications/client-events", authHandler.RequireAuth(), notification.HandleCreateClientNotification)
 	api.POST("/notifications/clear", authHandler.RequireAuth(), notification.HandleClearNotifications)
+	// 顶栏通知栏：当前生效的公告，所有登录用户可读（只读、无用户状态）。
+	api.GET("/announcements", authHandler.RequireAuth(), announcement.HandleListActiveAnnouncements)
 	defaultAPI := api.Group("")
 	defaultAPI.Use(authHandler.RequireAuth(), middleware.ClusterMiddleware(cm))
 	registerClusterProtectedRoutes(defaultAPI, helmChartsHandler)

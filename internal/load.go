@@ -69,6 +69,11 @@ func loadClusters() error {
 }
 
 func LoadConfigFromEnv() {
+	// 环境变量路径也要应用审计落地方式（KITE_AUDIT_SINK）：不提供配置文件时只有这条路
+	// （有配置文件时走 LoadConfigFromFile → applyConfig，app.go 里二者只会跑一个）。
+	// 漏了它的话，「只设 KITE_AUDIT_SINK、不挂 config.yaml」的部署会静静地按 database 跑。
+	applyAuditSink("")
+
 	if !common.IsSectionManaged("superUser") {
 		if err := loadUser(); err != nil {
 			klog.Warningf("Failed to migrate env to db user: %v", err)

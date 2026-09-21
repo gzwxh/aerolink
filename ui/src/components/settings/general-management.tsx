@@ -20,7 +20,6 @@ import {
   updateGeneralSetting,
   useGeneralSetting,
 } from '@/lib/api'
-import { reportOperationFailure } from '@/lib/error-reporter'
 import { SITE_NAME_MAX_LENGTH } from '@/lib/site-name'
 import { cn, translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -125,9 +124,7 @@ export function GeneralManagement() {
       )
     },
     onError: (error) => {
-      // 操作失败不再使用弹窗：写入当前用户的站内信，服务器不可达时
-      // 本地排队，恢复后自动补报（见 reportOperationFailure）。
-      reportOperationFailure(translateError(error, t))
+      toast.error(translateError(error, t))
     },
   })
 

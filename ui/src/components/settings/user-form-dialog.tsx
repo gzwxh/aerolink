@@ -10,6 +10,7 @@ import {
   DEFAULT_PASSWORD_LIMITS,
   isPasswordRulesValid,
 } from '@/lib/password-rules'
+import { translateError } from '@/lib/utils'
 import {
   useDraftDirty,
   useUnsavedChangesGuard,
@@ -159,8 +160,9 @@ export function UserFormDialog({ onClose }: { onClose: () => void }) {
         })
       )
       close()
-    } catch {
-      // 失败原因已由 API 客户端写入站内信，弹窗保留以便修改后重试。
+    } catch (error) {
+      // 弹窗保留以便修改后重试，同时给一次即时反馈。
+      toast.error(translateError(error, t))
     } finally {
       setSaving(false)
     }
@@ -300,7 +302,7 @@ export function UserFormDialog({ onClose }: { onClose: () => void }) {
                       aria-invalid={passwordTouched && !passwordValid}
                       className={
                         passwordTouched && !passwordValid
-                          ? 'border-red-500 focus-visible:ring-red-500'
+                          ? 'border-destructive focus-visible:ring-destructive'
                           : undefined
                       }
                     />

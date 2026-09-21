@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 import { ResourceHistory, ResourceType, ResourceTypeMap } from '@/types/api'
 import { applyResource, useResourceHistory } from '@/lib/api'
-import { formatDate } from '@/lib/utils'
+import { formatDate, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 
 import { Column, SimpleTable } from './simple-table'
@@ -95,7 +95,7 @@ export function ResourceHistoryTable<T extends ResourceType>({
       // 如果存在 refetch 函数，可以在这里调用
     } catch (error) {
       console.error('Failed to rollback resource:', error)
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      toast.error(translateError(error, t))
     } finally {
       setIsRollingBack(false)
     }
@@ -247,12 +247,26 @@ export function ResourceHistoryTable<T extends ResourceType>({
   }
 
   if (isError) {
+    // sink≠database 时后端明确回 501 + code（审计记录没落库，YAML 对比做不了）：这里给一句
+    // 说明，而不是拿「加载失败」的口气让管理员以为服务出了故障。
+    const requiresDatabaseSink =
+      (error as { code?: string } | null | undefined)?.code ===
+      'resource_history_requires_database_sink'
     return (
       <Card>
         <CardContent className="pt-6">
-          <div className="text-center text-destructive">
-            {t('resourceHistory.failedToLoadHistory')}: {error?.message}
-          </div>
+          {requiresDatabaseSink ? (
+            <div className="text-center text-sm text-muted-foreground">
+              {t(
+                'resourceHistory.requiresDatabaseSink',
+                '资源级变更历史需要审计记录落在数据库（auditSink=database，默认）。当前存储方式下本页不可用：parquet 默认不写资源 YAML，Elasticsearch 的文档也不含 YAML——两者都撑不起变更前后对比。'
+              )}
+            </div>
+          ) : (
+            <div className="text-center text-destructive">
+              {t('resourceHistory.failedToLoadHistory')}: {error?.message}
+            </div>
+          )}
         </CardContent>
       </Card>
     )

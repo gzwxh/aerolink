@@ -104,6 +104,15 @@ samp {
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-attention: var(--attention);
+  --color-attention-foreground: var(--attention-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -128,7 +137,9 @@ samp {
 }
 
 html {
-  font-size: var(--app-display-scale);
+  /* 兜底 95%：display-scale-provider 在 mount 后才把变量写上去，没有兜底值时
+     这条声明整条失效，首帧会先按 16px 排一遍再跳回缩放后的字号。 */
+  font-size: var(--app-display-scale, 95%);
   overscroll-behavior: none;
 }
 
@@ -164,34 +175,80 @@ body {
   }
 }
 
-/* 日志查看器连接指示灯的呼吸动画 */
+/* 日志查看器连接指示灯的呼吸动画。光晕颜色走 --glow（默认取状态色），
+   这样“未连接”的红点不会像以前那样盾着绿色光晕。 */
 @keyframes breathing {
   0%,
   100% {
     opacity: 0.5;
     transform: scale(1);
-    box-shadow: 0 0 2px rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 2px
+      color-mix(in oklab, var(--glow, var(--success)) 40%, transparent);
   }
   25% {
     opacity: 0.7;
     transform: scale(1.05);
-    box-shadow: 0 0 4px rgba(74, 222, 128, 0.6);
+    box-shadow: 0 0 4px
+      color-mix(in oklab, var(--glow, var(--success)) 60%, transparent);
   }
   50% {
     opacity: 1;
     transform: scale(1.1);
-    box-shadow: 0 0 8px rgba(74, 222, 128, 0.9);
+    box-shadow: 0 0 8px
+      color-mix(in oklab, var(--glow, var(--success)) 90%, transparent);
   }
   75% {
     opacity: 0.7;
     transform: scale(1.05);
-    box-shadow: 0 0 4px rgba(74, 222, 128, 0.6);
+    box-shadow: 0 0 4px
+      color-mix(in oklab, var(--glow, var(--success)) 60%, transparent);
   }
 }
 
 .breathing-indicator {
   animation: breathing 3s ease-in-out infinite;
 }
+
+/* 顶栏通知栏的滚动（见 components/announcement-bar.tsx）：
+   轨道里放的是「内容重复到铺满可视区」的两轮（每轮 repeat 份），位移 50% 正好一轮，
+   因此内容比可视区窄时也不会露空白；时长由组件按轮宽度算出来。 */
+@keyframes announcement-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.announcement-track {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* 每份内容的右侧留出循环间隔：副本宽度必须一致，-50% 的位移才对得上。 */
+.announcement-run {
+  display: inline-block;
+  white-space: nowrap;
+  padding-right: 2rem;
+}
+
+.announcement-track.is-scrolling {
+  animation: announcement-scroll var(--announcement-duration, 30s) linear
+    infinite;
+  /* 单独提一层，避免这行持续动画带动整个顶栏重绘。 */
+  will-change: transform;
+}
+
+.announcement-viewport:hover .announcement-track.is-scrolling {
+  animation-play-state: paused;
+}
+
+/* 这里**故意没有** `prefers-reduced-motion` 的覆盖分支。
+   是否滚动只看公告自己的配置（见 components/announcement-bar.tsx 的说明）：管理员已经按条
+   配置过，再被客户端偏好静默否决，会得到「勾了横向滚动却没滚、也没人说明为什么」——
+   比不尊重偏好更糟。动画本身很慢（60px/s），配置为不滚动时也仍有拖动与「展开全文」兜底。 */
 
 /* AI 对话的 markdown 样式 */
 @keyframes ai-dot-wave {

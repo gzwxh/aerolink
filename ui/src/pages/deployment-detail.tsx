@@ -27,6 +27,7 @@ import {
   servicesForWorkload,
   toSimpleContainer,
 } from '@/lib/k8s'
+import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -207,8 +208,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       )
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }, [t, deployment, name, namespace])
 
@@ -226,8 +227,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       )
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }, [t, deployment, name, namespace, scaleReplicas])
 
@@ -277,8 +278,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       toast.success(t('deployments.exposed', { service: name }))
       setIsExposeDialogOpen(false)
       await refetchRelatedResources()
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setIsExposing(false)
     }
@@ -322,8 +323,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
           })
         )
         setRefreshInterval(1000)
-      } catch {
-        // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+      } catch (error) {
+        toast.error(translateError(error, t))
       }
     },
     [deployment, name, namespace, t]

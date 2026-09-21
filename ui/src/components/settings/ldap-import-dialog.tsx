@@ -147,8 +147,8 @@ export function LDAPImportDialog({
       )
       queryClient.invalidateQueries({ queryKey: ['user-list'] })
       queryClient.invalidateQueries({ queryKey: ['ldap-setting'] })
-    } catch {
-      // 操作失败已由 API 客户端统一写入站内信，不再弹窗
+    } catch (error) {
+      toast.error(translateError(error, t))
     } finally {
       setImporting(false)
     }

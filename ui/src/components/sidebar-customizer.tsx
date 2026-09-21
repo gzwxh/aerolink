@@ -22,7 +22,7 @@ import {
   clearGlobalSidebarPreference,
   setGlobalSidebarPreference,
 } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -278,7 +278,7 @@ export function SidebarCustomizer({
         t('sidebar.setAsGlobalSuccess', 'Global sidebar updated successfully')
       )
     } catch (error) {
-      console.error('Failed to update global sidebar:', error)
+      toast.error(translateError(error, t))
     } finally {
       setIsPublishingGlobal(false)
     }
@@ -297,7 +297,7 @@ export function SidebarCustomizer({
         t('sidebar.unsetGlobalSuccess', 'Global sidebar disabled successfully')
       )
     } catch (error) {
-      console.error('Failed to clear global sidebar:', error)
+      toast.error(translateError(error, t))
     } finally {
       setIsClearingGlobal(false)
     }
@@ -755,7 +755,7 @@ export function SidebarCustomizer({
               {t('common.actions.customizeSidebar', 'Customize Sidebar')}
             </span>
             {hasUpdate && (
-              <span className="ml-auto size-2 rounded-full bg-red-500" />
+              <span className="ml-auto size-2 rounded-full bg-destructive" />
             )}
           </DropdownMenuItem>
         )}

@@ -442,14 +442,14 @@ export function LoginPage() {
               <CardTitle className="text-xl">{t('login.signIn')}</CardTitle>
               {/* 默认说明与管理员自定义登录提示二选一，避免两段文案重复冲突 */}
               {loginPromptLines.length === 0 && (
-                <CardDescription className="text-gray-600">
+                <CardDescription className="text-muted-foreground">
                   {t('login.subtitle')}
                 </CardDescription>
               )}
               {loginPromptLines.map((line, index) => (
                 <p
                   key={`${index}-${line}`}
-                  className="text-sm text-gray-500 mt-2"
+                  className="text-sm text-muted-foreground mt-2"
                 >
                   {line}
                 </p>
@@ -458,15 +458,15 @@ export function LoginPage() {
             <CardContent className="space-y-4">
               {error && (
                 <div className="space-y-3">
-                  <Alert className="border-red-200 bg-red-50">
-                    <AlertDescription className="text-red-700">
+                  <Alert className="border-destructive/25 bg-destructive/10">
+                    <AlertDescription className="text-destructive">
                       <div className="space-y-2">
                         <div className="font-semibold">
                           {getErrorMessage(error)?.title}
                         </div>
                         <div>{getErrorMessage(error)?.message}</div>
                         {getErrorMessage(error)?.details && (
-                          <div className="text-sm text-red-600 mt-2">
+                          <div className="text-sm text-destructive mt-2">
                             {getErrorMessage(error)?.details}
                           </div>
                         )}
@@ -487,7 +487,7 @@ export function LoginPage() {
                       >
                         {t('login.tryAgainDifferentAccount')}
                       </Button>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {t('login.tryAgainHint')}
                       </p>
                     </div>
@@ -497,8 +497,10 @@ export function LoginPage() {
 
               {!pendingMfaTicket && totalProviders === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-gray-600">{t('login.noLoginMethods')}</p>
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-muted-foreground">
+                    {t('login.noLoginMethods')}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
                     {t('login.configureAuth')}
                   </p>
                 </div>
@@ -508,7 +510,7 @@ export function LoginPage() {
                     <p className="text-sm font-medium">
                       {t('login.mfaPending.title')}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       {t('login.mfaPending.description')}
                     </p>
                   </div>

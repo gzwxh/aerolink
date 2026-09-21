@@ -107,9 +107,7 @@ export function ResourceCharts(props: ResourceChartsProps) {
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span className="font-medium text-blue-600">
-                        Requests
-                      </span>
+                      <span className="font-medium text-info">Requests</span>
                       <span className="font-mono">
                         {resource.request.toFixed(1)} {resource.unit}
                       </span>
@@ -118,10 +116,10 @@ export function ResourceCharts(props: ResourceChartsProps) {
                       <div
                         className={`h-2 rounded-full transition-all duration-300 ${
                           requestIsHigh
-                            ? 'bg-red-500'
+                            ? 'bg-destructive'
                             : requestIsMedium
-                              ? 'bg-yellow-500'
-                              : 'bg-blue-500'
+                              ? 'bg-warning'
+                              : 'bg-info'
                         }`}
                         style={{
                           width: `${Math.min(resource.requestPercentage, 100)}%`,
@@ -135,9 +133,7 @@ export function ResourceCharts(props: ResourceChartsProps) {
 
                   <div>
                     <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span className="font-medium text-orange-600">
-                        Limits
-                      </span>
+                      <span className="font-medium text-attention">Limits</span>
                       <span className="font-mono">
                         {resource.limit.toFixed(1)} {resource.unit}
                       </span>
@@ -146,10 +142,10 @@ export function ResourceCharts(props: ResourceChartsProps) {
                       <div
                         className={`h-2 rounded-full transition-all duration-300 ${
                           limitIsHigh
-                            ? 'bg-red-500'
+                            ? 'bg-destructive'
                             : limitIsMedium
-                              ? 'bg-yellow-500'
-                              : 'bg-orange-500'
+                              ? 'bg-warning'
+                              : 'bg-attention'
                         }`}
                         style={{
                           width: `${Math.min(resource.limitPercentage, 100)}%`,

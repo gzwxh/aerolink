@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -6,7 +6,6 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { getPodStatus } from '@/lib/k8s'
 import { cn, formatDate, getAge } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogTrigger } from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -16,7 +15,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { NodeLink } from '@/components/node-link'
-import { ResourceIframeDialogContent } from '@/components/resource-iframe-dialog-content'
 
 type TranslationFn = ReturnType<typeof useTranslation>['t']
 
@@ -108,7 +106,8 @@ export function WorkloadPodsCard({
 
 function WorkloadPodRow({ pod }: { pod: Pod }) {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
+  // 一律跳转（不再弹窗）：同一行的「节点」列用 NodeLink 本来就是跳转，
+  // Pod 名却弹窗的话，同一张表里两种交互很容易让人以为点错了。
   const [searchParams] = useSearchParams()
   const podStatus = getPodStatus(pod)
   const podName = pod.metadata?.name || '-'
@@ -127,28 +126,13 @@ function WorkloadPodRow({ pod }: { pod: Pod }) {
       <TableCell className="px-4 py-1.5">
         <div className="min-w-0 leading-tight">
           {path ? (
-            isIframe ? (
-              <Link
-                to={`${path}?iframe=true`}
-                className="app-link block max-w-full cursor-pointer truncate text-left font-mono"
-                title={podName}
-              >
-                {podName}
-              </Link>
-            ) : (
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <button
-                    type="button"
-                    className="app-link block max-w-full cursor-pointer truncate text-left font-mono"
-                    title={podName}
-                  >
-                    {podName}
-                  </button>
-                </DialogTrigger>
-                <ResourceIframeDialogContent title="Pod" path={path} />
-              </Dialog>
-            )
+            <Link
+              to={isIframe ? `${path}?iframe=true` : path}
+              className="app-link block max-w-full cursor-pointer truncate text-left font-mono"
+              title={podName}
+            >
+              {podName}
+            </Link>
           ) : (
             <span className="block max-w-full truncate font-mono">
               {podName}
@@ -214,10 +198,10 @@ function getPodStatusDotClassName(status: string) {
     status === 'Succeeded' ||
     status === 'Completed'
   ) {
-    return 'bg-emerald-500'
+    return 'bg-success'
   }
   if (status === 'Pending' || status === 'Unknown') {
-    return 'bg-yellow-500'
+    return 'bg-warning'
   }
   return 'bg-destructive'
 }

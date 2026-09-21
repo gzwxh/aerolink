@@ -148,7 +148,7 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 		if err != nil {
 			errMessage = err.Error()
 		}
-		model.DB.Create(&model.ResourceHistory{
+		applyHistory := model.ResourceHistory{
 			ClusterName:   cs.Name,
 			ResourceType:  resource,
 			ResourceName:  obj.GetName(),
@@ -162,7 +162,8 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 			UserAgent:     common.AuditUserAgent(c.Request.UserAgent()),
 			Success:       err == nil,
 			ErrorMessage:  errMessage,
-		})
+		}
+		_ = model.RecordAudit(c.Request.Context(), &applyHistory)
 
 		if err != nil {
 			respondApplyError(c, operation, err)

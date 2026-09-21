@@ -166,7 +166,6 @@ func (r *runner) writeChecks() {
 	r.expectStatus("创建 Namespace", "POST", base+"/namespaces/_all", map[string]any{
 		"apiVersion": "v1", "kind": "Namespace", "metadata": map[string]any{"name": newNS},
 	}, http.StatusOK, http.StatusCreated)
-
 }
 
 // verifyNoLeftovers 回查一遍：命名空间里不应再有 smoke- 开头的对象，

@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -228,19 +229,20 @@ func TestCopyAllDoesNotFireAuditHooks(t *testing.T) {
 	seedSource(t, source)
 	target := newTestDB(t, "target.db")
 
-	forwarded := 0
-	model.SetAuditForwarder(func(string) { forwarded++ })
-	t.Cleanup(func() { model.SetAuditForwarder(nil) })
+	// 外发回调是「追加注册」的（AddAuditForwarder），没有注销接口：这里只关心自己这个闭包
+	// 被调用了多少次，所以不需要清理，也不会被其它测试注册的回调影响。
+	var forwarded atomic.Int64
+	model.AddAuditForwarder(func(model.AuditMessage) { forwarded.Add(1) })
 
 	copyAll(t, source, target, 100)
-	if forwarded != 0 {
-		t.Errorf("the migration forwarded %d audit messages, want 0", forwarded)
+	if got := forwarded.Load(); got != 0 {
+		t.Errorf("the migration forwarded %d audit messages, want 0", got)
 	}
 
 	// 证明这个断言不是空转：同样的写入直接落库时钩子是会响的。
 	mustCreate(t, source, &model.LoginRecord{Username: "bob", IP: "10.0.0.2"})
-	if forwarded != 1 {
-		t.Errorf("a direct insert forwarded %d audit messages, want 1", forwarded)
+	if got := forwarded.Load(); got != 1 {
+		t.Errorf("a direct insert forwarded %d audit messages, want 1", got)
 	}
 }
 

@@ -15,6 +15,7 @@ import type { TFunction } from 'i18next'
 
 import { APIKeyManagement } from './apikey-management'
 import { AuditLog } from './audit-log'
+import { SystemLogSetting } from './audit-setting'
 import { ClusterManagement } from './cluster-management'
 import { GeneralManagement } from './general-management'
 import { NavigationManagement } from './navigation-management'
@@ -166,6 +167,19 @@ export const settingsSectionRegistry: SettingsSectionDefinition[] = [
     render: () => <NotificationManagement />,
     section: 'notification',
   },
+  {
+    value: 'systemLog',
+    labelKey: 'settings.tabs.systemLog',
+    defaultLabel: 'System Logs',
+    descriptionKey: 'audit.systemLog.description',
+    defaultDescription:
+      'Archive and format the access log (HTTP request log): retention, batch thresholds and output format.',
+    icon: IconServer,
+    render: () => <SystemLogSetting />,
+    // 访问日志归档本来就在 settings.audit 那份配置（audit_settings.archive.accessLog）里，
+    // 拆成独立导航项只是换个入口、不新增授权章节——门禁与接口保持同一把锁。
+    section: 'audit',
+  },
 ]
 
 /**
@@ -290,6 +304,11 @@ export const settingsSubTabs: Record<string, SettingsSubTabs> = {
         defaultLabel: 'Mail',
       },
       {
+        value: 'announcements',
+        labelKey: 'notifications.tabs.announcements',
+        defaultLabel: '通知栏',
+      },
+      {
         value: 'templates',
         labelKey: 'notifications.tabs.templates',
         defaultLabel: 'Templates',
@@ -323,6 +342,11 @@ export const settingsSubTabs: Record<string, SettingsSubTabs> = {
         value: 'password',
         labelKey: 'audit.tabs.password',
         defaultLabel: 'Password Change Logs',
+      },
+      {
+        value: 'archive',
+        labelKey: 'audit.tabs.archive',
+        defaultLabel: 'Archive Search',
       },
       {
         value: 'setting',

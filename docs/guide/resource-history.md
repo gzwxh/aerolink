@@ -6,6 +6,13 @@ Kite 会为集群中的 Kubernetes 资源记录操作历史（创建、更新、
 需要具备相应资源的“读”权限，才能查看其历史；具备“写”权限才能进行编辑或回滚。
 :::
 
+::: warning 需要审计记录落在数据库
+本页的变更历史与 YAML 对比**依赖审计记录落库**（`auditSink: database`，默认）。当部署把它改成
+`parquet` / `elasticsearch` / `victorialogs` / `openobserve` 时，本页会明确提示不可用，而不是显示空
+列表——parquet 默认不写资源 YAML，ES / VictoriaLogs / OpenObserve 的文档也不含 YAML，
+都撑不起变更前后对比。
+:::
+
 
 ## 功能概览
 

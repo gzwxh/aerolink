@@ -33,7 +33,7 @@ export function useSessionTakeoverNotice() {
       // 隐私模式等场景下 sessionStorage 不可用：退化为每次加载都提示一次。
     }
     toast.error(
-      <span className="font-semibold text-red-600 dark:text-red-400">
+      <span className="font-semibold text-destructive">
         {t(
           'session.takeoverNotice',
           '本次登录已让其他设备上的会话退出。如果这不是你本人的操作，请立即修改密码。'

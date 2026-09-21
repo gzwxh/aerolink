@@ -1,0 +1,129 @@
+package model
+
+import "time"
+
+// 公告级别：只决定横幅整体的强调方式（左侧色条 + 图标 + 淡底），
+// 正文里的文字颜色由内容自己的具名标记决定（见 plans/2026-09-21-announcement-bar.md §5）。
+const (
+	AnnouncementLevelInfo    = "info"
+	AnnouncementLevelWarning = "warning"
+	AnnouncementLevelDanger  = "danger"
+)
+
+// AnnouncementMaxContentLength 是正文长度上限。超限时报错而不是截断：
+// 截断会让管理员以为自己写的后半段发出去了。
+const AnnouncementMaxContentLength = 8192
+
+// AnnouncementMaxActive 是同时生效的公告条数上限。横幅只有一条滚动轨道，
+// 没有这个闸门时一次插入上百条会把所有用户的顶栏撑爆。
+const AnnouncementMaxActive = 20
+
+// AnnouncementLevels 返回受支持的级别，供接口校验与界面下拉使用。
+func AnnouncementLevels() []string {
+	return []string{AnnouncementLevelInfo, AnnouncementLevelWarning, AnnouncementLevelDanger}
+}
+
+// IsAnnouncementLevel 报告级别是否受支持。
+func IsAnnouncementLevel(level string) bool {
+	for _, value := range AnnouncementLevels() {
+		if value == level {
+			return true
+		}
+	}
+	return false
+}
+
+// Announcement 是管理员发布在页面顶栏的通知栏公告。
+//
+// 与 Notification（站内信）的差别：站内信绑定收件人、进铃铛、可标记已读；公告不绑定
+// 任何用户，只按「启用 + 生效窗口」决定是否出现在所有人的横幅里，也没有已读状态。
+// 因此两张表不共用，见 plans/2026-09-21-announcement-bar.md §3。
+type Announcement struct {
+	Model
+	Title    string `json:"title" gorm:"type:varchar(255);not null"`
+	Content  string `json:"content" gorm:"type:text"`
+	Level    string `json:"level" gorm:"type:varchar(20);not null;default:info"`
+	Priority int    `json:"priority" gorm:"not null;default:0;index"`
+	// Enabled 不能带 gorm 的 default 标签：GORM 对声明了 default 的字段会跳过零值，
+	// 于是「新建一条停用的公告」会被数据库默认值改写成启用（users.enabled 就是这样，
+	// 那边靠建号后显式回写 enabled 绕过）。这里直接把默认值去掉，靠入参决定。
+	Enabled bool `json:"enabled" gorm:"type:boolean;not null;index"`
+	// Scroll 决定这条公告在顶栏里是否横向滚动。
+	//
+	// 标签里的 `default:false` 有两个作用：SQLite 上 `ADD COLUMN ... NOT NULL` 不带默认值
+	// 会直接报错（测试里真踩到过）；而且默认值取 false 恰好与「Go 零值就是 false」一致，
+	// 所以 GORM「声明了 default 就跳过零值」那条规则在这里无害——显式 false 会落到 DB 的
+	// 默认值 false，结果相同。**别把它改成 default:true**：那样显式设的「不滚动」会在
+	// Create 时被跳过、永远存不进去（users.enabled 踩过同一个坑，见上面 Enabled 的注释）。
+	//
+	// 存量行加列后是 false，由 MigrateAnnouncementScrollBackfill 回填成 true。
+	Scroll    bool       `json:"scroll" gorm:"type:boolean;not null;default:false"`
+	StartAt   *time.Time `json:"startAt,omitempty" gorm:"index"`
+	EndAt     *time.Time `json:"endAt,omitempty" gorm:"index"`
+	CreatorID uint       `json:"creatorId" gorm:"index"`
+}
+
+func (Announcement) TableName() string {
+	return "announcements"
+}
+
+// ListActiveAnnouncements 返回当前生效的公告：已启用、已到生效时间、尚未过期。
+//
+// 过滤放在 SQL 里而不是取回来再挑：横幅是每个人打开页面都要读的，
+// 过期与未开始的公告不该被读出来。
+func ListActiveAnnouncements(now time.Time) ([]Announcement, error) {
+	var items []Announcement
+	err := DB.
+		Where("enabled = ?", true).
+		Where("start_at IS NULL OR start_at <= ?", now).
+		Where("end_at IS NULL OR end_at > ?", now).
+		Order("priority DESC, id DESC").
+		Find(&items).Error
+	return items, err
+}
+
+// ListAnnouncements 返回全部公告（含未生效、已停用、已过期），供管理界面使用。
+func ListAnnouncements() ([]Announcement, error) {
+	var items []Announcement
+	err := DB.Order("priority DESC, id DESC").Find(&items).Error
+	return items, err
+}
+
+// CountActiveAnnouncements 统计当前生效的公告条数，用于执行 AnnouncementMaxActive 上限。
+// 只数生效中的：停用与过期的公告不占用横幅，不必让它们卡住新增。
+func CountActiveAnnouncements(now time.Time) (int64, error) {
+	var count int64
+	err := DB.Model(&Announcement{}).
+		Where("enabled = ?", true).
+		Where("start_at IS NULL OR start_at <= ?", now).
+		Where("end_at IS NULL OR end_at > ?", now).
+		Count(&count).Error
+	return count, err
+}
+
+// GetAnnouncement 按 ID 取公告。
+func GetAnnouncement(id uint) (*Announcement, error) {
+	var item Announcement
+	if err := DB.First(&item, id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// MigrateAnnouncementScrollBackfill 给「升级前就存在的公告」补上 scroll = true。
+//
+// Scroll 是后加的列，AutoMigrate 给存量行填的是零值 false（= 不滚动），而历史行为一直是
+// 横向滚动——不回填的话，升级后所有老公告会突然停住不动。
+//
+// 只在「列刚被加出来」那一次执行：先问列在不在，再自己建，两次之间就是加列的那一刻。
+// 因此**必须在主 AutoMigrate 循环之前调用**（跑完主循环就分不清这列是新加的还是本就有）。
+// 全新安装时表还不存在，也按「刚加列」处理：空表上回填是无害的。
+func MigrateAnnouncementScrollBackfill() error {
+	if DB.Migrator().HasColumn(&Announcement{}, "Scroll") {
+		return nil
+	}
+	if err := DB.AutoMigrate(&Announcement{}); err != nil {
+		return err
+	}
+	return DB.Model(&Announcement{}).Where("scroll = ?", false).Update("scroll", true).Error
+}

@@ -19,8 +19,27 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// applyLogFileEnv 让 KITE_LOG_FILE 环境变量也能配置 klog 落盘（等价于 -log_file flag）。
+//
+// 必须在 flag.Parse() 之前调用：环境变量只提供默认值，命令行里显式给出的 flag 仍然优先。
+// 落文件后同时关掉 stderr 输出，避免同一份日志被写两遍（采集以文件为准）。
+func applyLogFileEnv() {
+	path := strings.TrimSpace(os.Getenv("KITE_LOG_FILE"))
+	if path == "" {
+		return
+	}
+	if err := flag.Set("log_file", path); err != nil {
+		log.Printf("Ignoring invalid KITE_LOG_FILE %q: %v", path, err)
+		return
+	}
+	if err := flag.Set("logtostderr", "false"); err != nil {
+		log.Printf("Failed to disable klog stderr output for KITE_LOG_FILE: %v", err)
+	}
+}
+
 func main() {
 	klog.InitFlags(nil)
+	applyLogFileEnv()
 	if len(os.Args) > 1 && os.Args[1] == "cluster-agent" {
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		err := clusteragent.Run(ctx, os.Args[2:])

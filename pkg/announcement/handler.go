@@ -1,0 +1,271 @@
+// Package announcement 实现顶栏通知栏：管理员发布的公告在这里读写，
+// 前端在页面顶端以滚动横幅展示（见 plans/2026-09-21-announcement-bar.md）。
+package announcement
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/model"
+	"gorm.io/gorm"
+)
+
+// maxTitleLength 与模型列宽一致（varchar(255)）：超限时数据库在非严格模式下会静默
+// 截断、严格模式下直接报错，两种都不如在这里显式拒绝。
+const maxTitleLength = 255
+
+type announcementRequest struct {
+	Title    string `json:"title"`
+	Content  string `json:"content"`
+	Level    string `json:"level"`
+	Priority int    `json:"priority"`
+	Enabled  bool   `json:"enabled"`
+	// Scroll 用指针区分「没传」与「显式传 false」：不带该字段的老客户端应当保持滚动这个
+	// 默认行为，而不是把公告改成停住。
+	Scroll  *bool  `json:"scroll"`
+	StartAt string `json:"startAt"`
+	EndAt   string `json:"endAt"`
+}
+
+// HandleListActiveAnnouncements 返回当前生效的公告，供所有登录用户读取。
+func HandleListActiveAnnouncements(c *gin.Context) {
+	items, err := model.ListActiveAnnouncements(time.Now())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load announcements"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+// HandleListAnnouncements 返回全部公告（含未生效、已停用、已过期），供管理界面使用。
+func HandleListAnnouncements(c *gin.Context) {
+	items, err := model.ListAnnouncements()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load announcements"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+func HandleCreateAnnouncement(c *gin.Context) {
+	var req announcementRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	item, err := buildAnnouncement(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// 上限只挡「这条现在就会出现在横幅里」的情况：排一条将来才生效的公告
+	// 不该被当前的条数卡住。
+	if isActive(*item, time.Now()) {
+		if !withinActiveLimit(c) {
+			return
+		}
+	}
+	item.CreatorID = currentUserID(c)
+	if err := model.DB.Create(item).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create announcement"})
+		return
+	}
+	c.JSON(http.StatusCreated, item)
+}
+
+func HandleUpdateAnnouncement(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	existing, err := model.GetAnnouncement(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "公告不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load announcement"})
+		return
+	}
+
+	var req announcementRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	updated, err := buildAnnouncement(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 它本来就在生效列表里时不必校验上限，否则第 20 条公告永远改不动。
+	if isActive(*updated, time.Now()) && !isActive(*existing, time.Now()) {
+		if !withinActiveLimit(c) {
+			return
+		}
+	}
+
+	existing.Title = updated.Title
+	existing.Content = updated.Content
+	existing.Level = updated.Level
+	existing.Priority = updated.Priority
+	existing.Enabled = updated.Enabled
+	existing.Scroll = updated.Scroll
+	existing.StartAt = updated.StartAt
+	existing.EndAt = updated.EndAt
+	// CreatorID 不覆盖：它记的是「谁发的」，改内容的人由操作日志留痕。
+	if err := model.DB.Save(existing).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save announcement"})
+		return
+	}
+	c.JSON(http.StatusOK, existing)
+}
+
+func HandleDeleteAnnouncement(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	result := model.DB.Delete(&model.Announcement{}, id)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete announcement"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "公告不存在"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "公告已删除"})
+}
+
+// withinActiveLimit 校验生效中的公告条数上限；超限时写好响应并返回 false。
+func withinActiveLimit(c *gin.Context) bool {
+	count, err := model.CountActiveAnnouncements(time.Now())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count announcements"})
+		return false
+	}
+	if count >= model.AnnouncementMaxActive {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "生效中的公告已达上限（" + strconv.Itoa(model.AnnouncementMaxActive) + " 条），请先停用或删除",
+		})
+		return false
+	}
+	return true
+}
+
+// buildAnnouncement 校验并归一化请求体。校验一律显式报错、不用默认值兜底：
+// 一条被悄悄改短的公告比一次报错难排查得多。
+func buildAnnouncement(req announcementRequest) (*model.Announcement, error) {
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, errors.New("请填写标题")
+	}
+	if len([]rune(title)) > maxTitleLength {
+		return nil, errors.New("标题过长（最多 255 字）")
+	}
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
+		return nil, errors.New("请填写内容")
+	}
+	if len([]rune(content)) > model.AnnouncementMaxContentLength {
+		return nil, errors.New("内容过长（最多 8192 字）")
+	}
+	level := strings.TrimSpace(req.Level)
+	if level == "" {
+		level = model.AnnouncementLevelInfo
+	}
+	if !model.IsAnnouncementLevel(level) {
+		return nil, errors.New("级别不合法")
+	}
+	if req.Priority < 0 {
+		return nil, errors.New("优先级不能为负数")
+	}
+
+	startAt, err := parseOptionalTime(req.StartAt)
+	if err != nil {
+		return nil, errors.New("生效时间格式不合法")
+	}
+	endAt, err := parseOptionalTime(req.EndAt)
+	if err != nil {
+		return nil, errors.New("结束时间格式不合法")
+	}
+	if startAt != nil && endAt != nil && !startAt.Before(*endAt) {
+		return nil, errors.New("结束时间必须晚于生效时间")
+	}
+
+	// 没传 scroll 时默认滚动：与历史行为一致，不带该字段的老客户端不会改变观感。
+	scroll := true
+	if req.Scroll != nil {
+		scroll = *req.Scroll
+	}
+
+	return &model.Announcement{
+		Title:    title,
+		Content:  content,
+		Level:    level,
+		Priority: req.Priority,
+		Enabled:  req.Enabled,
+		Scroll:   scroll,
+		StartAt:  startAt,
+		EndAt:    endAt,
+	}, nil
+}
+
+// isActive 判定一条公告在给定时刻是否出现在横幅里。
+// 口径必须与 model.ListActiveAnnouncements 的 SQL 条件一致。
+func isActive(item model.Announcement, now time.Time) bool {
+	if !item.Enabled {
+		return false
+	}
+	if item.StartAt != nil && item.StartAt.After(now) {
+		return false
+	}
+	if item.EndAt != nil && !item.EndAt.After(now) {
+		return false
+	}
+	return true
+}
+
+// parseOptionalTime 解析可空时间；空串表示「立即生效 / 永不过期」。
+// 前端用 datetime-local，按本地时区取值，可能不带秒。
+func parseOptionalTime(value string) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02T15:04"} {
+		if parsed, err := time.ParseInLocation(layout, value, time.Local); err == nil {
+			return &parsed, nil
+		}
+	}
+	return nil, errors.New("invalid time")
+}
+
+func parseID(c *gin.Context) (uint, bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return 0, false
+	}
+	return uint(id), true
+}
+
+// currentUserID 取自鉴权中间件写入上下文的当前账号（键为 "user"，见 pkg/auth）。
+// 取不到时返回 0：CreatorID 只用于界面展示与追责便利，不该阻断发布。
+func currentUserID(c *gin.Context) uint {
+	value, exists := c.Get("user")
+	if !exists {
+		return 0
+	}
+	user, ok := value.(model.User)
+	if !ok {
+		return 0
+	}
+	return user.ID
+}

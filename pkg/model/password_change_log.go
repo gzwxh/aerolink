@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -43,7 +44,16 @@ func RecordPasswordChange(userID uint, username string, operatorID uint, operato
 		Operator:   operatorName,
 		Source:     source,
 	}
-	if err := DB.Create(&entry).Error; err != nil {
+	// 本函数没有接收 context（调用方是改密流程），故传 context.TODO()：语义与 nil 相同，
+	// 但 staticcheck 的 SA1012 会拦下 nil。
+	if err := savePasswordChangeRecord(context.TODO(), &entry); err != nil {
 		klog.Errorf("failed to record password change of user %d: %v", userID, err)
+		return
+	}
+	// PasswordChangeLog 没有 AfterCreate hook（改造前改密记录完全不外发），sink=database 时
+	// 这里显式补一次外发，使它与操作/登录日志一致；sink≠database 时 savePasswordChangeRecord
+	// 已经转发过，不能重复。
+	if AuditSinkUsesDatabase() {
+		forwardAuditMessage(passwordChangeAuditMessage(&entry))
 	}
 }

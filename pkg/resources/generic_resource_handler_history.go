@@ -14,7 +14,32 @@ import (
 
 func (h *GenericResourceHandler[T, V]) registerCustomRoutes(group *gin.RouterGroup) {}
 
+// resourceHistoryUnsupportedCode 是「资源级变更历史在当前审计落地方式下不可用」的机器可读标识
+// （sink≠database）：界面据它给出说明，而不是把空列表当成「这个资源从没被改过」。
+const resourceHistoryUnsupportedCode = "resource_history_requires_database_sink"
+
+// rejectUnsupportedResourceHistory 在审计记录不落库时拒绝资源级变更历史，并说明原因。
+//
+// 它不是配置错误，而是这个能力在 sink≠database 时**不存在**：
+//   - sink=parquet：YAML 默认不写进 parquet（内容可能很大，见 includeResourceYAML）；
+//   - sink=elasticsearch：ES 文档按设计不含 YAML。
+//
+// 两者都撑不起「变更前后对比 → 回滚」这件事，所以明确返回 501 + code，让界面能说清原因。
+func rejectUnsupportedResourceHistory(c *gin.Context) bool {
+	if model.AuditSinkUsesDatabase() {
+		return false
+	}
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"error": "resource change history requires auditSink=database: the yaml diff needs the audit records in the database",
+		"code":  resourceHistoryUnsupportedCode,
+	})
+	return true
+}
+
 func (h *GenericResourceHandler[T, V]) ListHistory(c *gin.Context) {
+	if rejectUnsupportedResourceHistory(c) {
+		return
+	}
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	namespace := c.Param("namespace")
 	resourceName := c.Param("name")

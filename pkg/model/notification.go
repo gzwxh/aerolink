@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -40,6 +41,9 @@ const (
 	// 影响用户权限的 RBAC 变更。
 	NotificationEventRoleAssigned   = "role_assigned"
 	NotificationEventRoleUnassigned = "role_unassigned"
+	// NotificationEventScheduledTaskFailed 在后台定时任务（目前是 Helm release 自动升级）
+	// 执行失败时发给任务创建者：任务在他不在场的时候跑，失败原本只写进 scheduled_tasks。
+	NotificationEventScheduledTaskFailed = "scheduled_task_failed"
 	// NotificationEventMailDeliveryFailed 提醒管理员某条通知的 SMTP 投递失败。
 	// 它只走站内信，以免递归。
 	NotificationEventMailDeliveryFailed = "mail_delivery_failed"
@@ -232,12 +236,9 @@ const (
 	LoginResultSourceDenied = "source_denied"
 )
 
-// NotificationEventOperationFailed 标记由前端上报的一次操作失败（例如请求
-// 没能到达服务端）。这些记录只展示在站内信中。
-const NotificationEventOperationFailed = "operation_failed"
-
-// CreateUserNotification 为指定用户写入一条站内消息。与 SendEvent 不同，它绕过
-// 订阅与邮件投递：用于记录客户端自身观察到的失败，即便没有配置邮件也必须可见。
+// CreateUserNotification 为指定用户写入一条站内消息，绕过订阅与邮件。
+// 仅用于不受订阅支配的内部告警（目前是「通知邮件发送失败」：出问题的正是邮件通道，
+// 不能再依赖订阅来把它发出去）。账号/权限类事件走 SendEventTo 的「当事人必收」档。
 func CreateUserNotification(userID uint, event, title, content string) error {
 	if userID == 0 {
 		return errors.New("user id is required")
@@ -364,6 +365,20 @@ var defaultNotificationTemplates = map[string]struct {
 - 如果不是本人操作：说明密码可能已经泄露，请立即修改密码，管理员请尽快核实。
 `,
 	},
+	NotificationEventScheduledTaskFailed: {
+		Subject: "[Kite] 定时任务执行失败",
+		Body: `您好：
+
+您创建的定时任务「{{taskName}}」于 {{time}} 执行失败。
+
+  任务类型：{{taskType}}
+  集群：{{cluster}}
+  对象：{{key}}
+  失败原因：{{reason}}
+
+任务会在下一个计划时间重试。如需查看或调整，请到 Kite 控制台该任务的设置中查看「最近错误」。
+`,
+	},
 	NotificationEventMailDeliveryFailed: {
 		Subject: "[Kite] 通知邮件发送失败",
 		Body: `管理员您好：
@@ -408,6 +423,51 @@ func NotificationEventMandatoryForAdmins(event string) bool {
 	return false
 }
 
+// targetUserEvents 是「当事人必收」的事件：投递时必须送达当事人本人
+// （SendEventTo 传入的收件人），不看订阅。
+//
+// 与 mandatoryAdminEvents 的差别是收件人不同：那份清单保护的是「有人在动别人的账号/权限」
+// 这件事要让管理员知道；这份清单保护的是「我的账号/凭据/权限被改了」这件事要让本人知道。
+// 两者互相独立，同一个事件可以同时在两份清单里（例如 password_reset_by_admin）。
+//
+// 入选依据有两类：**事件描述的是当事人自己账号的状态或凭据变化**（凭据重置、账号启停/
+// 到期/被禁、密码过期、角色变更、会话被顶下线、异地登录），以及**当事人不在场时，他
+// 自己的东西出了结果**（他创建的定时任务执行失败）。这些消息如果本人看不到，事后就无从
+// 申诉与自查。
+//
+// 强制档不会因此变成群发：它只接受调用方传入的具体账号 ID，且调用方传的收件人本身就是
+// 被操作的那个账号（见 notification.resolveRecipients）。
+var targetUserEvents = []string{
+	NotificationEventRemoteLogin,
+	NotificationEventPasswordExpiring,
+	NotificationEventPasswordExpired,
+	NotificationEventAccountExpiring,
+	NotificationEventInactiveUserDisabled,
+	NotificationEventPasswordResetByAdmin,
+	NotificationEventMFAResetByAdmin,
+	NotificationEventAccountDisabled,
+	NotificationEventAccountEnabled,
+	NotificationEventRoleAssigned,
+	NotificationEventRoleUnassigned,
+	NotificationEventSessionTakeover,
+	NotificationEventScheduledTaskFailed,
+}
+
+// TargetUserEvents 返回「当事人必收」的事件清单（供接口下发与测试使用）。
+func TargetUserEvents() []string {
+	return append([]string(nil), targetUserEvents...)
+}
+
+// NotificationEventTargetsUser 报告某个事件是否必须送达当事人。
+func NotificationEventTargetsUser(event string) bool {
+	for _, value := range targetUserEvents {
+		if value == event {
+			return true
+		}
+	}
+	return false
+}
+
 // NotificationEventList 返回所有受支持的事件标识。
 func NotificationEventList() []string {
 	return []string{
@@ -423,6 +483,7 @@ func NotificationEventList() []string {
 		NotificationEventSessionTakeover,
 		NotificationEventRoleAssigned,
 		NotificationEventRoleUnassigned,
+		NotificationEventScheduledTaskFailed,
 		NotificationEventMailDeliveryFailed,
 	}
 }
@@ -755,18 +816,22 @@ func MarkAllNotificationsRead(userID uint) error {
 //
 // 仅成功登录参与「新 IP」判定；首次登录（无历史记录）不算异地，避免新账号就被提醒。
 func RecordLogin(userID uint, username, provider, ip, userAgent string) (bool, error) {
-	var previous int64
-	if err := DB.Model(&LoginRecord{}).
-		Where("user_id = ? AND ip = ?", userID, ip).
-		Count(&previous).Error; err != nil {
-		return false, err
+	// 「新 IP」判定要看历史登录记录，而库表只在 sink=database 时才有数据。其它 sink 下不做
+	// 这两个统计：既省掉必然为空的查询，也不会拿空表算出一个错误答案（见下方的返回值处理）。
+	var previous, total int64
+	if AuditSinkUsesDatabase() {
+		if err := DB.Model(&LoginRecord{}).
+			Where("user_id = ? AND ip = ?", userID, ip).
+			Count(&previous).Error; err != nil {
+			return false, err
+		}
+		if err := DB.Model(&LoginRecord{}).
+			Where("user_id = ?", userID).
+			Count(&total).Error; err != nil {
+			return false, err
+		}
 	}
-	var total int64
-	if err := DB.Model(&LoginRecord{}).
-		Where("user_id = ?", userID).
-		Count(&total).Error; err != nil {
-		return false, err
-	}
+
 	record := LoginRecord{
 		UserID:    userID,
 		Username:  username,
@@ -775,8 +840,14 @@ func RecordLogin(userID uint, username, provider, ip, userAgent string) (bool, e
 		UserAgent: truncateText(userAgent, 512),
 		Result:    LoginResultSuccess,
 	}
-	if err := DB.Create(&record).Error; err != nil {
+	// 这两个写入口没有接收 context（调用方是登录/改密逻辑），所以传 context.TODO()：
+	// 语义是「确实没有请求上下文」，与传 nil 一致，但 staticcheck 会拦下 nil。
+	if err := saveLoginRecord(context.TODO(), &record); err != nil {
 		return false, err
+	}
+	if !AuditSinkUsesDatabase() {
+		// 未落库时没有历史可比：返回 false（不误报异地登录）而不是编一个结果。
+		return false, nil
 	}
 	return previous == 0 && total > 0, nil
 }
@@ -795,7 +866,8 @@ func RecordLoginFailure(username, provider, ip, userAgent, reason string) error 
 		UserAgent: truncateText(userAgent, 512),
 		Result:    truncateText(reason, 50),
 	}
-	return DB.Create(&record).Error
+	// 同上：没有可传的请求上下文（见 RecordLogin）。
+	return saveLoginRecord(context.TODO(), &record)
 }
 
 // ListUsersForPasswordExpiry 返回所有已启用且有密码时间戳的本地账号，

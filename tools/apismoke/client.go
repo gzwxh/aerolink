@@ -52,7 +52,7 @@ func (c *client) request(method, path string, body any) (int, []byte, error) {
 	if err != nil {
 		return 0, nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return resp.StatusCode, nil, err
@@ -84,7 +84,7 @@ func (c *client) uploadFile(path, filename string, content []byte) (int, []byte,
 	if err != nil {
 		return 0, nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return resp.StatusCode, nil, err

@@ -40,6 +40,7 @@ import {
 } from '@/lib/api'
 import { ApiError } from '@/lib/api-client'
 import { isProtectedRole, systemRoleDescription } from '@/lib/system-roles'
+import { translateError } from '@/lib/utils'
 import { useCluster } from '@/hooks/use-cluster'
 import {
   useDraftDirty,
@@ -566,7 +567,7 @@ export function BindingGroupManagement() {
       </div>
 
       {pendingForCluster.length > 0 && (
-        <div className="flex items-start justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+        <div className="flex items-start justify-between gap-3 rounded-md border border-warning/40 bg-warning/5 p-3">
           <div className="space-y-0.5 text-sm">
             <p className="font-medium">
               {t(
@@ -658,7 +659,7 @@ export function BindingGroupManagement() {
                         {g.detached && (
                           <Badge
                             variant="outline"
-                            className="border-amber-500/50 text-amber-600"
+                            className="border-warning/40 text-warning"
                           >
                             {t('bindingGroup.retainedBadge', '保留')}
                           </Badge>
@@ -1100,6 +1101,8 @@ export function BindingGroupFormPage({
   )
   const [newNamespace, setNewNamespace] = useState('')
   const [saving, setSaving] = useState(false)
+  // 被占用的命名空间可能有上百条，给个筛选框（见下面的占用提示区）。
+  const [conflictFilter, setConflictFilter] = useState('')
 
   const { data: roles = [] } = useRoleList()
   const { data: clusterNamespaces = [] } = useQuery({
@@ -1169,6 +1172,19 @@ export function BindingGroupFormPage({
         .sort(([a], [b]) => a.localeCompare(b)),
     [namespaceOwners, namespaces]
   )
+
+  // 占用列表的展示：先按筛选词收窄，避免上百条平铺（见下面的限高滚动）。
+  const visibleConflicts = useMemo(() => {
+    const keyword = conflictFilter.trim().toLowerCase()
+    if (!keyword) {
+      return conflictingNamespaces
+    }
+    return conflictingNamespaces.filter(
+      ([namespace, owner]) =>
+        namespace.toLowerCase().includes(keyword) ||
+        owner.groupName.toLowerCase().includes(keyword)
+    )
+  }, [conflictingNamespaces, conflictFilter])
 
   // 已归属本组的命名空间始终保留，避免编辑时被默默解绑。
   const boundNamespaces = useMemo(
@@ -1412,8 +1428,8 @@ export function BindingGroupFormPage({
         prev.includes(namespace) ? prev : [...prev, namespace]
       )
       setNewNamespace('')
-    } catch {
-      // 错误已写入站内信
+    } catch (error) {
+      toast.error(translateError(error, t))
     }
   }
 
@@ -1672,39 +1688,68 @@ export function BindingGroupFormPage({
         )}
 
         {conflictingNamespaces.length > 0 && (
-          <div className="mt-3 space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
-            <p className="text-xs font-medium">
-              {t(
-                'bindingGroup.nsTakenTitle',
-                '以下命名空间已被其它权限绑定占用，已从可选列表中移除'
+          <div className="border-warning/40 bg-warning/5 mt-3 rounded-md border p-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium">
+                {t(
+                  'bindingGroup.nsTakenTitle',
+                  '以下命名空间已被其它权限绑定占用，已从可选列表中移除'
+                )}
+                {/* 带上总数：列表可能被筛过，只看条目数会误判。 */}
+                <span className="text-muted-foreground ml-1 font-normal tabular-nums">
+                  ({conflictingNamespaces.length})
+                </span>
+              </p>
+              {/* 数量多时才给筛选框：几个的话反而添乱。 */}
+              {conflictingNamespaces.length > 10 && (
+                <Input
+                  value={conflictFilter}
+                  onChange={(event) => setConflictFilter(event.target.value)}
+                  placeholder={t(
+                    'bindingGroup.nsTakenFilter',
+                    '筛选命名空间或绑定名'
+                  )}
+                  className="h-7 w-44 text-xs"
+                />
               )}
-            </p>
-            <div className="space-y-1">
-              {conflictingNamespaces.map(([namespace, owner]) => (
-                <div key={namespace} className="text-xs">
-                  <span className="font-mono font-medium">{namespace}</span>
+            </div>
+            {/* 限高滚动：命名空间可能上百个，平铺会把这一页撑得极长（真机反馈）。 */}
+            <div className="mt-1.5 max-h-48 space-y-1 overflow-y-auto pr-1">
+              {visibleConflicts.map(([namespace, owner]) => (
+                <div
+                  key={namespace}
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
+                >
+                  <span className="w-40 shrink-0 truncate font-mono font-medium">
+                    {namespace}
+                  </span>
                   <span className="text-muted-foreground">
-                    {' '}
                     ← {owner.groupName}
                   </span>
                   {owner.subjects.length > 0 && (
                     <span className="text-muted-foreground">
-                      {' '}
                       · {t('bindingGroup.nsTakenSubjects', '已授权')}{' '}
                       {owner.subjects.join('、')}
                     </span>
                   )}
                   {owner.roles.length > 0 && (
                     <span className="text-muted-foreground">
-                      {' '}
                       · {t('bindingGroup.nsTakenRoles', '角色')}{' '}
                       {owner.roles.join('、')}
                     </span>
                   )}
                 </div>
               ))}
+              {visibleConflicts.length === 0 && (
+                <p className="text-muted-foreground text-xs">
+                  {t(
+                    'bindingGroup.nsTakenNoMatch',
+                    '没有匹配的命名空间或绑定名'
+                  )}
+                </p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground mt-1.5 text-xs">
               {t(
                 'bindingGroup.nsTakenHint',
                 '需要改用这些命名空间时，请先在上面对应的权限绑定里保存（去掉该命名空间）解绑，再回到这里选择。'
