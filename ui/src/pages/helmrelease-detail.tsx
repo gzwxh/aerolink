@@ -73,7 +73,6 @@ import {
   MetadataListCard,
 } from '@/components/pod-overview-sidebar'
 import { PodStatusIcon } from '@/components/pod-status-icon'
-import { ResourceIframeDialogContent } from '@/components/resource-iframe-dialog-content'
 import { SimpleTable } from '@/components/simple-table'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 import { WorkloadSummaryCard } from '@/components/workload-overview-parts'
@@ -152,7 +151,8 @@ function HelmReleaseResourceLink({
 }: {
   resource: HelmReleaseResource
 }) {
-  const [open, setOpen] = useState(false)
+  // 一律跳转（不再弹窗）：这个按钮本来就带 app-link 样式，看着就是链接，
+  // 点了却弹出内嵌窗口，最容易被当成 bug。
   const [searchParams] = useSearchParams()
   const path = getHelmReleaseResourcePath(resource)
   const label = resource.namespace
@@ -164,26 +164,13 @@ function HelmReleaseResourceLink({
     return <span className="font-medium">{label}</span>
   }
 
-  if (isIframe) {
-    return (
-      <Link to={`${path}?iframe=true`} className="font-medium app-link">
-        {label}
-      </Link>
-    )
-  }
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className="max-w-full truncate text-left font-medium app-link"
-        >
-          {label}
-        </button>
-      </DialogTrigger>
-      <ResourceIframeDialogContent title={resource.kind} path={path} />
-    </Dialog>
+    <Link
+      to={isIframe ? `${path}?iframe=true` : path}
+      className="font-medium app-link"
+    >
+      {label}
+    </Link>
   )
 }
 

@@ -516,18 +516,11 @@ func (cm *ClusterManager) GetClusterKubeconfig(c *gin.Context) {
 		return
 	}
 
-	raw, err := cluster.Config.Value()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to decrypt the stored kubeconfig: " + err.Error(),
-		})
-		return
-	}
-	plain, ok := raw.(string)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "stored kubeconfig has an unexpected format"})
-		return
-	}
+	// cluster.Config 读出来时已经由 SecretString.Scan 解开，这里直接用字符串即可。
+	// 原来调的是 Value()——那是**加密**方法（写库时才用），会把明文再加密一次返回，
+	// 于是「查看当前配置」永远只给出一串 base64；而错误信息写的是 "failed to decrypt"，
+	// 可见是加密/解密用反了。
+	plain := string(cluster.Config)
 	if strings.TrimSpace(plain) == "" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "no kubeconfig stored for this cluster"})
 		return

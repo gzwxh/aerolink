@@ -3581,6 +3581,8 @@
     "nsTakenSubjects": "granted to",
     "nsTakenRoles": "roles",
     "nsTakenHint": "To use one of them here, first save the owning permission binding without that namespace, then pick it here.",
+    "nsTakenFilter": "Filter by namespace or binding",
+    "nsTakenNoMatch": "No namespace or binding matches",
     "nsConflictOnSave": "Namespace {{namespace}} belongs to the permission binding \"{{group}}\". Unbind it there before saving.",
     "saveBeforeCreateNs": "Save the permission binding before creating a namespace",
     "nsFilterPlaceholder": "Filter (namespace name)",

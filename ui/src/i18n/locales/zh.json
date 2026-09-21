@@ -3687,6 +3687,8 @@
     "nsTakenSubjects": "已授权",
     "nsTakenRoles": "角色",
     "nsTakenHint": "需要改用这些命名空间时，请先在上面对应的权限绑定里保存（去掉该命名空间）解绑，再回到这里选择。",
+    "nsTakenFilter": "筛选命名空间或绑定名",
+    "nsTakenNoMatch": "没有匹配的命名空间或绑定名",
     "nsConflictOnSave": "命名空间 {{namespace}} 已被权限绑定「{{group}}」占用，请先到那个绑定里解绑后再保存。",
     "saveBeforeCreateNs": "请先保存权限绑定后再创建命名空间",
     "nsFilterPlaceholder": "过滤（命名空间名称）",
