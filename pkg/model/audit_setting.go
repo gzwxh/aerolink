@@ -1,6 +1,8 @@
 package model
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -50,11 +52,53 @@ func NormalizeLogFormatWithDefault(value, fallback string) string {
 	}
 }
 
-// SyslogSetting 把审计记录同时外发到外部 syslog 服务器（P2-4）。
+// 日志外发方式：**二选一**（同一时刻只有一条链路生效）。
 //
-// 外发是「尽力而为」：失败只记日志，绝不影响审计记录的本地落库。
-type SyslogSetting struct {
-	Enabled  bool   `json:"enabled"`
+// 为什么是二选一而不是各自一个开关：同一批审计记录被两条链路各发一份时，运维只看其中一条
+// 就会以为日志齐全了——与 sink 必须互斥同一个道理。
+const (
+	// LogForwardModeSyslog 走 RFC5424 syslog（默认，行为与历史一致）。
+	LogForwardModeSyslog = "syslog"
+	// LogForwardModeKafka 把记录作为 JSON 消息投到 Kafka。
+	LogForwardModeKafka = "kafka"
+)
+
+// Kafka 的 SASL 认证机制；none 表示不做认证。
+const (
+	KafkaSASLNone        = "none"
+	KafkaSASLPlain       = "plain"
+	KafkaSASLScramSHA256 = "scram-sha-256"
+	KafkaSASLScramSHA512 = "scram-sha-512"
+)
+
+// KafkaSetting 是 Kafka 外发的连接参数。
+type KafkaSetting struct {
+	// Brokers 是 `host:port` 列表。
+	Brokers []string `json:"brokers"`
+	Topic   string   `json:"topic"`
+	// SASLMechanism 取值见 KafkaSASL* 常量。
+	SASLMechanism string `json:"saslMechanism"`
+	Username      string `json:"username"`
+	// Password 只写不回显（SecretString）：读取时给掩码，写入收到掩码则沿用库中原值。
+	Password SecretString `json:"password"`
+	// UseTLS 默认**开**：审计记录里有操作者、资源名与来源 IP，明文发到 broker 不是一个
+	// 可接受的默认值。内网的明文集群需要显式关掉（关掉是一次看得见的动作）。
+	UseTLS bool `json:"useTLS"`
+	// InsecureSkipVerify 仅 useTLS 时生效：跳过服务端证书校验（自签证书场景）。
+	InsecureSkipVerify bool `json:"tlsInsecureSkipVerify"`
+}
+
+// LogForwardSetting 是「日志外发」整块的设置：一个开关 + 一种方式（syslog 或 kafka）。
+//
+// 历史原因：这一块原先只有 syslog，所以它在 `audit_settings.data` 里的 JSON 键仍是 `syslog`
+// （见 AuditSettingData），现在同时承载 Kafka 的参数、由 `mode` 决定用哪一组。
+// **键名保持不变**：改键名会让升级后旧行里的外发配置静默回到默认值（等于悄悄关掉外发）。
+type LogForwardSetting struct {
+	Enabled bool `json:"enabled"`
+	// Mode 是外发方式：LogForwardModeSyslog（默认）或 LogForwardModeKafka。
+	Mode string `json:"mode"`
+
+	// —— 以下为 syslog 参数（mode=syslog 时生效）——
 	Network  string `json:"network"` // udp | tcp | tls
 	Address  string `json:"address"` // host:port
 	Tag      string `json:"tag"`     // APP-NAME 字段
@@ -63,6 +107,9 @@ type SyslogSetting struct {
 	Format string `json:"format"`
 	// InsecureSkipVerify 仅对 tls 生效：跳过服务端证书校验（自签证书场景）。
 	InsecureSkipVerify bool `json:"insecureSkipVerify"`
+
+	// —— 以下为 Kafka 参数（mode=kafka 时生效）——
+	Kafka KafkaSetting `json:"kafka"`
 }
 
 // StdoutSetting 把审计事件输出到**标准输出**，交由外部日志采集工具（Filebeat / Fluent Bit /
@@ -193,10 +240,14 @@ type ArchiveSetting struct {
 // 与安全设置一样存成单个 JSON blob，新增选项不需要逐字段迁移。
 type AuditSettingData struct {
 	// RetentionDays 为保留天数：0 = 永久保留；非 0 时不得小于 MinAuditRetentionDays。
-	RetentionDays int            `json:"retentionDays"`
-	Syslog        SyslogSetting  `json:"syslog"`
-	Stdout        StdoutSetting  `json:"stdout"`
-	Archive       ArchiveSetting `json:"archive"`
+	RetentionDays int `json:"retentionDays"`
+	// Forward 是日志外发（syslog / kafka 二选一）。
+	//
+	// JSON 键沿用历史的 `syslog`（当时只有 syslog）：改键名会让升级后旧行里的外发配置静默
+	// 回到默认值，等于悄然关掉外发。见 LogForwardSetting 的注释。
+	Forward LogForwardSetting `json:"syslog"`
+	Stdout  StdoutSetting     `json:"stdout"`
+	Archive ArchiveSetting    `json:"archive"`
 }
 
 type AuditSetting struct {
@@ -277,12 +328,18 @@ func DefaultArchiveSetting() ArchiveSetting {
 func DefaultAuditSettingData() AuditSettingData {
 	return AuditSettingData{
 		RetentionDays: AuditRetentionKeepForever,
-		Syslog: SyslogSetting{
+		Forward: LogForwardSetting{
 			Enabled:  false,
+			Mode:     LogForwardModeSyslog,
 			Network:  SyslogNetworkUDP,
 			Tag:      DefaultSyslogTag,
 			Facility: DefaultSyslogFacility,
 			Format:   LogFormatText,
+			Kafka: KafkaSetting{
+				SASLMechanism: KafkaSASLNone,
+				// 默认走 TLS（见 KafkaSetting.UseTLS 的注释）。
+				UseTLS: true,
+			},
 		},
 		// 标准输出默认开启：日志平台只收 stdout 时也应能查到审计事件。
 		Stdout: StdoutSetting{
@@ -306,27 +363,59 @@ func (d *AuditSettingData) Normalize() error {
 		return ErrAuditRetentionTooShort
 	}
 
-	d.Syslog.Network = strings.ToLower(strings.TrimSpace(d.Syslog.Network))
-	switch d.Syslog.Network {
-	case "", SyslogNetworkUDP:
-		d.Syslog.Network = SyslogNetworkUDP
-	case SyslogNetworkTCP, SyslogNetworkTLS:
+	d.Forward.Mode = strings.ToLower(strings.TrimSpace(d.Forward.Mode))
+	switch d.Forward.Mode {
+	case "", LogForwardModeSyslog:
+		d.Forward.Mode = LogForwardModeSyslog
+	case LogForwardModeKafka:
 	default:
-		return fmt.Errorf("unsupported syslog network %q", d.Syslog.Network)
+		// 不静默回落：写错了（比如 vector）必须让管理员当场看到，而不是悄悄按 syslog 发出去。
+		return fmt.Errorf("unsupported log forward mode %q", d.Forward.Mode)
 	}
 
-	d.Syslog.Address = strings.TrimSpace(d.Syslog.Address)
-	if d.Syslog.Enabled && d.Syslog.Address == "" {
-		return errors.New("syslog address is required when syslog forwarding is enabled")
+	d.Forward.Network = strings.ToLower(strings.TrimSpace(d.Forward.Network))
+	switch d.Forward.Network {
+	case "", SyslogNetworkUDP:
+		d.Forward.Network = SyslogNetworkUDP
+	case SyslogNetworkTCP, SyslogNetworkTLS:
+	default:
+		return fmt.Errorf("unsupported syslog network %q", d.Forward.Network)
 	}
-	d.Syslog.Tag = strings.TrimSpace(d.Syslog.Tag)
-	if d.Syslog.Tag == "" {
-		d.Syslog.Tag = DefaultSyslogTag
+
+	d.Forward.Address = strings.TrimSpace(d.Forward.Address)
+	d.Forward.Tag = strings.TrimSpace(d.Forward.Tag)
+	if d.Forward.Tag == "" {
+		d.Forward.Tag = DefaultSyslogTag
 	}
-	if d.Syslog.Facility < 0 || d.Syslog.Facility > 23 {
-		d.Syslog.Facility = DefaultSyslogFacility
+	if d.Forward.Facility < 0 || d.Forward.Facility > 23 {
+		d.Forward.Facility = DefaultSyslogFacility
 	}
-	d.Syslog.Format = NormalizeLogFormat(d.Syslog.Format)
+	d.Forward.Format = NormalizeLogFormat(d.Forward.Format)
+
+	if err := d.Forward.Kafka.normalize(); err != nil {
+		return err
+	}
+
+	// 只校验**当前生效**的那一种方式：另一种的参数缺了不影响运行，也就不该拦住保存
+	// （否则从 syslog 切到 kafka 时会被要求先把 syslog 地址填回去）。
+	if d.Forward.Enabled {
+		switch d.Forward.Mode {
+		case LogForwardModeKafka:
+			if len(d.Forward.Kafka.Brokers) == 0 {
+				return errors.New("kafka brokers are required when kafka forwarding is enabled")
+			}
+			if d.Forward.Kafka.Topic == "" {
+				return errors.New("kafka topic is required when kafka forwarding is enabled")
+			}
+			if d.Forward.Kafka.SASLMechanism != KafkaSASLNone && d.Forward.Kafka.Username == "" {
+				return errors.New("kafka username is required when kafka SASL is enabled")
+			}
+		default:
+			if d.Forward.Address == "" {
+				return errors.New("syslog address is required when syslog forwarding is enabled")
+			}
+		}
+	}
 	// 标准输出以 json 为默认：结构化才有采集价值，未知取值不应回落成 text。
 	d.Stdout.Format = NormalizeLogFormatWithDefault(d.Stdout.Format, LogFormatJSON)
 
@@ -414,7 +503,7 @@ func (s *S3Archive) normalize() error {
 
 // normalize 校正 ES 配置：清洗 URL 列表，启用时至少一个 URL，indexPrefix 为空回落默认值。
 func (e *ESArchive) normalize() error {
-	e.URLs = normalizeURLList(e.URLs)
+	e.URLs = normalizeStringList(e.URLs)
 	e.Username = strings.TrimSpace(e.Username)
 	e.IndexPrefix = strings.TrimSpace(e.IndexPrefix)
 	if e.IndexPrefix == "" {
@@ -428,7 +517,7 @@ func (e *ESArchive) normalize() error {
 
 // normalize 校正 VictoriaLogs 配置：清洗 URL 列表、stream 回落默认值，启用时至少一个 URL。
 func (v *VictoriaLogsArchive) normalize() error {
-	v.URLs = normalizeURLList(v.URLs)
+	v.URLs = normalizeStringList(v.URLs)
 	v.Stream = strings.TrimSpace(v.Stream)
 	if v.Stream == "" {
 		v.Stream = DefaultLogStream
@@ -443,7 +532,7 @@ func (v *VictoriaLogsArchive) normalize() error {
 
 // normalize 校正 OpenObserve 配置：清洗 URL 列表、org/stream 回落默认值，启用时至少一个 URL。
 func (o *OpenObserveArchive) normalize() error {
-	o.URLs = normalizeURLList(o.URLs)
+	o.URLs = normalizeStringList(o.URLs)
 	o.Org = strings.TrimSpace(o.Org)
 	if o.Org == "" {
 		o.Org = DefaultOpenObserveOrg
@@ -459,11 +548,27 @@ func (o *OpenObserveArchive) normalize() error {
 	return nil
 }
 
-// normalizeURLList 去掉空白项与首尾空格；空列表保持为空（由调用方按「是否启用」判定必填）。
-func normalizeURLList(urls []string) []string {
-	cleaned := make([]string, 0, len(urls))
-	for _, url := range urls {
-		if trimmed := strings.TrimSpace(url); trimmed != "" {
+// normalize 校正 Kafka 配置：清洗 brokers 列表与取值，SASL 机制非法时报错（不静默回落）。
+func (k *KafkaSetting) normalize() error {
+	k.Brokers = normalizeStringList(k.Brokers)
+	k.Topic = strings.TrimSpace(k.Topic)
+	k.Username = strings.TrimSpace(k.Username)
+	k.SASLMechanism = strings.ToLower(strings.TrimSpace(k.SASLMechanism))
+	switch k.SASLMechanism {
+	case "", KafkaSASLNone:
+		k.SASLMechanism = KafkaSASLNone
+	case KafkaSASLPlain, KafkaSASLScramSHA256, KafkaSASLScramSHA512:
+	default:
+		return fmt.Errorf("unsupported kafka sasl mechanism %q", k.SASLMechanism)
+	}
+	return nil
+}
+
+// normalizeStringList 去掉空白项与首尾空格；空列表保持为空（由调用方按「是否启用」判定必填）。
+func normalizeStringList(values []string) []string {
+	cleaned := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
 			cleaned = append(cleaned, trimmed)
 		}
 	}
@@ -496,6 +601,20 @@ func GetAuditSetting() (*AuditSettingData, error) {
 		return nil, err
 	}
 	return &data, nil
+}
+
+// AuditSettingRevision 返回当前审计设置**内容**的指纹（SHA-256 十六进制）。
+//
+// 用途：多副本部署下每个副本据此判断「库里的设置变了吗」（见 pkg/audit/setting_watcher.go）。
+// 比较内容而不是 UpdatedAt：各数据库对时间精度的截断行为不同（MySQL 默认秒级、SQLite 存字符串），
+// 用时间戳判断会漏掉同一秒内的第二次修改。
+func AuditSettingRevision() (string, error) {
+	var row AuditSetting
+	if err := DB.Select("data").First(&row, 1).Error; err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(row.Data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // UpdateAuditSetting 写入审计配置（已 Normalize 校验，取值非法时拒绝写入）。

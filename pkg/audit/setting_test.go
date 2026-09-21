@@ -126,6 +126,61 @@ func TestRejectStaleSecretAfterMove(t *testing.T) {
 	}
 }
 
+// Kafka 密码同理：换了 broker / 主题 / 用户名却沿用掩码，必须要求重填。
+func TestRejectStaleKafkaPasswordAfterMove(t *testing.T) {
+	withKafka := func() model.AuditSettingData {
+		setting := testArchiveSetting()
+		setting.Forward = model.LogForwardSetting{
+			Enabled: true,
+			Mode:    model.LogForwardModeKafka,
+			Kafka: model.KafkaSetting{
+				Brokers:       []string{"kafka-1:9092"},
+				Topic:         "kite-audit",
+				SASLMechanism: model.KafkaSASLPlain,
+				Username:      "kite",
+				Password:      model.SecretString("kafka-secret"),
+				UseTLS:        true,
+			},
+		}
+		return setting
+	}
+	current := withKafka()
+
+	cases := map[string]func(*model.AuditSettingData){
+		"换 broker 地址": func(s *model.AuditSettingData) { s.Forward.Kafka.Brokers = []string{"kafka-2:9092"} },
+		"换主题":         func(s *model.AuditSettingData) { s.Forward.Kafka.Topic = "another-topic" },
+		"换用户名":        func(s *model.AuditSettingData) { s.Forward.Kafka.Username = "someone-else" },
+		"关掉 TLS":      func(s *model.AuditSettingData) { s.Forward.Kafka.UseTLS = false },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			moved := withKafka()
+			moved.Forward.Kafka.Password = secretMask
+			mutate(&moved)
+			if err := rejectStaleSecretAfterMove(&moved, &current); err == nil {
+				t.Error("换了 Kafka 目标却沿用掩码密码，必须被拒绝")
+			}
+		})
+	}
+
+	// 只切方式（syslog / kafka）不算换目标：两种方式的参数各自独立，凭据仍然可用。
+	toggled := withKafka()
+	toggled.Forward.Kafka.Password = secretMask
+	toggled.Forward.Enabled = false
+	toggled.Forward.Mode = model.LogForwardModeSyslog
+	if err := rejectStaleSecretAfterMove(&toggled, &current); err != nil {
+		t.Errorf("只切外发方式时不该要求重填密码: %v", err)
+	}
+
+	// 重填了密码：放行。
+	renewed := withKafka()
+	renewed.Forward.Kafka.Brokers = []string{"kafka-2:9092"}
+	renewed.Forward.Kafka.Password = model.SecretString("another-secret")
+	if err := rejectStaleSecretAfterMove(&renewed, &current); err != nil {
+		t.Errorf("重填密码后应放行: %v", err)
+	}
+}
+
 // 掩码还原：没动密钥时沿用库中原值，动了就用新值。
 func TestRestoreMaskedSecrets(t *testing.T) {
 	current := testArchiveSetting()
@@ -151,10 +206,40 @@ func TestRestoreMaskedSecrets(t *testing.T) {
 	if ooUntouched.Archive.OpenObserve.Password != current.Archive.OpenObserve.Password {
 		t.Errorf("OpenObserve 密码掩码应还原为库中原值, got %q", ooUntouched.Archive.OpenObserve.Password)
 	}
+
+	// Kafka 密码：没动就沿用库中原值，新填的不被覆盖。
+	kafkaUntouched := testArchiveSetting()
+	kafkaUntouched.Forward.Kafka.Password = secretMask
+	restoreMaskedSecrets(&kafkaUntouched, &current)
+	if kafkaUntouched.Forward.Kafka.Password != current.Forward.Kafka.Password {
+		t.Errorf("Kafka 密码掩码应还原为库中原值, got %q", kafkaUntouched.Forward.Kafka.Password)
+	}
+	kafkaRenewed := testArchiveSetting()
+	kafkaRenewed.Forward.Kafka.Password = model.SecretString("brand-new-kafka")
+	restoreMaskedSecrets(&kafkaRenewed, &current)
+	if kafkaRenewed.Forward.Kafka.Password != model.SecretString("brand-new-kafka") {
+		t.Error("管理员新填的 Kafka 密码不该被还原覆盖")
+	}
+}
+
+// 接口出给浏览器的密钥一律是掩码（含 Kafka 密码）。
+func TestMaskAuditSecretsMasksKafkaPassword(t *testing.T) {
+	setting := testArchiveSetting()
+	setting.Archive.S3.SecretKey = model.SecretString("s3-secret")
+	setting.Forward.Kafka.Password = model.SecretString("kafka-secret")
+
+	maskAuditSecrets(&setting)
+
+	if setting.Forward.Kafka.Password != secretMask {
+		t.Errorf("Kafka 密码应以掩码下发, got %q", setting.Forward.Kafka.Password)
+	}
+	if setting.Archive.S3.SecretKey != secretMask {
+		t.Errorf("S3 密钥应以掩码下发, got %q", setting.Archive.S3.SecretKey)
+	}
 }
 
 // 变更摘要：地址类字段记前后值，密钥只记「changed」，**任何情况下都不得出现明文**。
-func TestArchiveSettingDiff(t *testing.T) {
+func TestAuditSettingDiff(t *testing.T) {
 	before := testArchiveSetting()
 	after := testArchiveSetting()
 	after.Archive.S3.SecretKey = model.SecretString("rotated-secret")
@@ -163,7 +248,7 @@ func TestArchiveSettingDiff(t *testing.T) {
 	after.Archive.OpenObserve.Password = model.SecretString("rotated-oo-secret")
 	after.Archive.VictoriaLogs.URLs = []string{"http://victorialogs-2:9428"}
 
-	summary := archiveSettingDiff(before, after)
+	summary := auditSettingDiff(before, after)
 	if !strings.Contains(summary, "s3.secretKey: changed") {
 		t.Errorf("S3 密钥变更应留痕: %s", summary)
 	}
@@ -185,7 +270,54 @@ func TestArchiveSettingDiff(t *testing.T) {
 		}
 	}
 
-	if diff := archiveSettingDiff(before, before); diff != "" {
+	if diff := auditSettingDiff(before, before); diff != "" {
+		t.Errorf("没有变化时不该产生摘要, got %q", diff)
+	}
+}
+
+// 日志外发的变更同样要留痕：换了外发方式（比如从 syslog 换成 kafka）是最该被追溯的改动之一，
+// 而密码仍然只能记「changed」。
+func TestAuditSettingDiffCoversLogForward(t *testing.T) {
+	before := testArchiveSetting()
+	before.Forward = model.LogForwardSetting{
+		Enabled: true,
+		Mode:    model.LogForwardModeSyslog,
+		Network: model.SyslogNetworkTCP,
+		Address: "log.example.com:514",
+		Tag:     "kite",
+		Format:  model.LogFormatText,
+		Kafka: model.KafkaSetting{
+			Brokers:       []string{"kafka-1:9092"},
+			Topic:         "kite-audit",
+			SASLMechanism: model.KafkaSASLPlain,
+			Username:      "kite",
+			Password:      model.SecretString("kafka-secret"),
+			UseTLS:        true,
+		},
+	}
+
+	after := before
+	after.Forward.Mode = model.LogForwardModeKafka
+	after.Forward.Kafka.Password = model.SecretString("rotated-kafka-secret")
+	after.Forward.Kafka.Topic = "kite-audit-2"
+
+	summary := auditSettingDiff(before, after)
+	if !strings.Contains(summary, "forward.mode: syslog -> kafka") {
+		t.Errorf("换外发方式应记下前后值: %s", summary)
+	}
+	if !strings.Contains(summary, "kafka.topic: kite-audit -> kite-audit-2") {
+		t.Errorf("Kafka 主题变更应记下前后值: %s", summary)
+	}
+	if !strings.Contains(summary, "kafka.password: changed") {
+		t.Errorf("Kafka 密码变更应留痕: %s", summary)
+	}
+	for _, secret := range []string{"kafka-secret", "rotated-kafka-secret"} {
+		if strings.Contains(summary, secret) {
+			t.Errorf("摘要绝不能包含密钥明文 %q:\n%s", secret, summary)
+		}
+	}
+
+	if diff := auditSettingDiff(before, before); diff != "" {
 		t.Errorf("没有变化时不该产生摘要, got %q", diff)
 	}
 }

@@ -99,7 +99,7 @@ func forwardToParquet(message model.AuditMessage) {
 
 // reloadArchiveConfig 按当前 sink 与最新配置（重）建归档运行时：sink=database 时**不建任何通道**，
 // parquet / elasticsearch / victorialogs / openobserve 各自只建自己那一条（五者互斥，见方案 §12.13）。
-// 与 reloadSyslogConfig 一样，由 UpdateAuditSetting 与启动时调用。
+// 由 applyAuditSettingChanges（保存设置 / 启动 / 多副本收敛轮询）统一调用。
 func reloadArchiveConfig() {
 	setting, err := model.GetAuditSetting()
 	if err != nil {

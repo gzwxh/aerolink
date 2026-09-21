@@ -7,105 +7,16 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/zxh326/kite/pkg/model"
-	"k8s.io/klog/v2"
 )
-
-// syslogQueueSize 是外发队列长度。审计记录的产生速率很低（人为操作 / 系统事件），
-// 这个容量足以吸收突发；队列满时丢弃并记日志，绝不在写库路径上阻塞。
-const syslogQueueSize = 1024
-
-// syslogWriteTimeout 单条外发的写超时。
-const syslogWriteTimeout = 5 * time.Second
 
 // syslogAppName 是 RFC5424 的 APP-NAME。
 const syslogAppName = "kite"
 
-var (
-	syslogOnce     sync.Once
-	syslogQueue    chan model.AuditMessage
-	syslogConfigMu sync.RWMutex
-	syslogConfig   model.SyslogSetting
-	syslogDropped  int64
-	syslogMu       sync.Mutex
-)
-
-// StartSyslogForwarder 启动审计记录的 syslog 外发（P2-4）。
-//
-// 外发是**尽力而为**：连接失败、队列满、目标不可达都不会影响审计记录在本地落库，
-// 也不会让调用方失败。默认关闭，由审计管理员在「日志审计 → 审计设置」里开启。
-func StartSyslogForwarder() {
-	syslogOnce.Do(func() {
-		syslogQueue = make(chan model.AuditMessage, syslogQueueSize)
-		// 模型层只负责把结构化记录交出来；渲染（key=value）与发送都在这里完成，
-		// 避免 model → audit 循环，也避免序列化逻辑散落在两层。
-		model.AddAuditForwarder(forwardToSyslog)
-		reloadSyslogConfig()
-		go syslogWorker()
-	})
-}
-
-// reloadSyslogConfig 重新读取外发配置（启动时与保存设置后调用）。
-func reloadSyslogConfig() {
-	setting, err := model.GetAuditSetting()
-	if err != nil {
-		klog.Errorf("syslog forwarding disabled: failed to load audit setting: %v", err)
-		return
-	}
-	syslogConfigMu.Lock()
-	syslogConfig = setting.Syslog
-	syslogConfigMu.Unlock()
-}
-
-// forwardToSyslog 把一条审计记录投递到外发队列。非阻塞：队列满时丢弃并计数。
-func forwardToSyslog(message model.AuditMessage) {
-	if syslogQueue == nil {
-		return
-	}
-	// 访问日志不进 syslog：量大，且它本来走 stdout 采集。保持不变以免改变既有行为。
-	if message.Kind == model.AuditKindAccess {
-		return
-	}
-	syslogConfigMu.RLock()
-	enabled := syslogConfig.Enabled
-	syslogConfigMu.RUnlock()
-	if !enabled {
-		return
-	}
-
-	select {
-	case syslogQueue <- message:
-	default:
-		syslogMu.Lock()
-		syslogDropped++
-		dropped := syslogDropped
-		syslogMu.Unlock()
-		// 每丢一条都记一行太吵，按 100 条打点。
-		if dropped%100 == 1 {
-			klog.Warningf("syslog forwarding queue is full, dropped %d audit message(s)", dropped)
-		}
-	}
-}
-
-func syslogWorker() {
-	for message := range syslogQueue {
-		syslogConfigMu.RLock()
-		config := syslogConfig
-		syslogConfigMu.RUnlock()
-		if !config.Enabled {
-			continue
-		}
-		if err := sendSyslog(config, message); err != nil {
-			klog.Warningf("failed to forward audit record to syslog %s/%s: %v", config.Network, config.Address, err)
-		}
-	}
-}
-
 // sendSyslog 把一条结构化审计记录渲染成 RFC5424 消息并发送。
-func sendSyslog(config model.SyslogSetting, message model.AuditMessage) error {
+func sendSyslog(config model.LogForwardSetting, message model.AuditMessage) error {
 	line := formatSyslogLineFor(config, message)
 	if line == "" {
 		// 未知分类：不发送，避免往日志服务器灌一条空消息。
@@ -124,39 +35,40 @@ func sendSyslog(config model.SyslogSetting, message model.AuditMessage) error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	if err := conn.SetWriteDeadline(time.Now().Add(syslogWriteTimeout)); err != nil {
+	if err := conn.SetWriteDeadline(time.Now().Add(logForwardWriteTimeout)); err != nil {
 		return err
 	}
 	_, err = conn.Write([]byte(formatSyslogMessage(config, line)))
 	return err
 }
 
-func dialSyslog(config model.SyslogSetting, address string) (net.Conn, error) {
+func dialSyslog(config model.LogForwardSetting, address string) (net.Conn, error) {
 	switch config.Network {
 	case model.SyslogNetworkTCP:
-		return net.DialTimeout("tcp", address, syslogWriteTimeout)
+		return net.DialTimeout("tcp", address, logForwardWriteTimeout)
 	case model.SyslogNetworkTLS:
 		host, _, err := net.SplitHostPort(address)
 		if err != nil {
 			host = address
 		}
 		return tls.DialWithDialer(
-			&net.Dialer{Timeout: syslogWriteTimeout},
+			&net.Dialer{Timeout: logForwardWriteTimeout},
 			"tcp",
 			address,
 			&tls.Config{
-				ServerName:         host,
+				ServerName: host,
+				// #nosec G402 -- 自签证书场景由管理员显式开启（与 ES / 外部日志存储同级）。
 				InsecureSkipVerify: config.InsecureSkipVerify,
 				MinVersion:         tls.VersionTLS12,
 			},
 		)
 	default:
-		return net.DialTimeout("udp", address, syslogWriteTimeout)
+		return net.DialTimeout("udp", address, logForwardWriteTimeout)
 	}
 }
 
 // formatSyslogLineFor 按配置选择正文格式：text（RFC5424 + key=value，默认）或 json。
-func formatSyslogLineFor(config model.SyslogSetting, message model.AuditMessage) string {
+func formatSyslogLineFor(config model.LogForwardSetting, message model.AuditMessage) string {
 	if model.NormalizeLogFormat(config.Format) == model.LogFormatJSON {
 		return formatSyslogLineJSON(message)
 	}
@@ -173,14 +85,17 @@ func formatSyslogLineFor(config model.SyslogSetting, message model.AuditMessage)
 	return line
 }
 
-// formatSyslogLineJSON 输出结构化正文：字段集与 §5 schema 一致，复用 ES 文档的映射，
-// 两侧字段名不会各自漂移。json 模式下不再带 "FAIL " 前缀，失败信息在 success/result 字段里。
-func formatSyslogLineJSON(message model.AuditMessage) string {
+// auditDocumentJSON 把一条审计记录渲染成结构化 JSON。
+//
+// syslog 的 json 格式与 Kafka 的消息体都用它：字段集与 ES 文档同构（复用
+// esDocumentFromMessage 的字段映射），两处不会各自漂移。
+// 第二个返回值为 false 表示分类未知——调用方应跳过，不要发一条空消息。
+func auditDocumentJSON(message model.AuditMessage) ([]byte, bool) {
 	doc := esDocumentFromMessage(message)
 	if doc.Kind == "" {
-		return ""
+		return nil, false
 	}
-	// kind 在写入 ES 时才注入 _source，这里显式带上，保证 json 正文与 ES 文档同构。
+	// kind 在写入 ES 时才注入 _source，这里显式带上，保证 JSON 文档与 ES 文档同构。
 	fields := make(map[string]any, len(doc.Fields)+1)
 	for key, value := range doc.Fields {
 		fields[key] = value
@@ -189,6 +104,16 @@ func formatSyslogLineJSON(message model.AuditMessage) string {
 
 	data, err := json.Marshal(fields)
 	if err != nil {
+		return nil, false
+	}
+	return data, true
+}
+
+// formatSyslogLineJSON 输出结构化正文（json 模式下不再带 "FAIL " 前缀，失败信息在
+// success/result 字段里）。
+func formatSyslogLineJSON(message model.AuditMessage) string {
+	data, ok := auditDocumentJSON(message)
+	if !ok {
 		return ""
 	}
 	return string(data)
@@ -298,7 +223,7 @@ func orDash(value string) string {
 //	<PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [kite@32473 ...] MSG
 //
 // PRI = facility*8 + severity（失败记录用 warning，其余用 informational）。
-func formatSyslogMessage(config model.SyslogSetting, message string) string {
+func formatSyslogMessage(config model.LogForwardSetting, message string) string {
 	facility := config.Facility
 	if facility < 0 || facility > 23 {
 		facility = model.DefaultSyslogFacility
@@ -334,11 +259,4 @@ func hostname() (string, error) {
 	}
 	hostnameCache = strings.TrimSuffix(name, ".")
 	return hostnameCache, nil
-}
-
-// SyslogDroppedCount 返回被丢弃的外发消息数（供排障查看）。
-func SyslogDroppedCount() int64 {
-	syslogMu.Lock()
-	defer syslogMu.Unlock()
-	return syslogDropped
 }

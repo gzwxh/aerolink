@@ -3275,9 +3275,15 @@
         "serverSideNotice": "Expiry for the current storage mode ({{sink}}) is handled by the server, so the retention days on this page do not apply to it: adjust retention in the server configuration (VictoriaLogs -retentionPeriod, OpenObserve stream data_retention)."
       },
       "syslog": {
-        "title": "Log forwarding (syslog)",
-        "description": "Forward audit records to an external syslog server as well. Forwarding is best effort and never affects local audit storage.",
+        "title": "Log forwarding",
+        "description": "Forward audit records to an external log service as well. Forwarding is best effort and never affects local audit storage.",
         "enabled": "Enable forwarding",
+        "mode": "Forwarding mode",
+        "modeHint": "Pick one: only a single mode is active at a time; the other mode's settings are kept but not used.",
+        "forwardMode": {
+          "syslog": "syslog (RFC5424)",
+          "kafka": "Kafka"
+        },
         "network": "Network",
         "address": "Server address",
         "addressHint": "Format host:port",
@@ -3290,7 +3296,32 @@
         "formatHint": "text is key=value; json emits structured fields (same field set as the archive).",
         "skipVerify": "Skip certificate verification",
         "skipVerifyHint": "TLS only. Enable when the server uses a self-signed certificate.",
-        "skipVerifyValue": "Do not verify the server certificate"
+        "skipVerifyValue": "Do not verify the server certificate",
+        "kafka": {
+          "brokers": "Brokers",
+          "brokersHint": "host:port, comma-separated for multiple brokers.",
+          "brokersRequired": "At least one broker is required when Kafka forwarding is enabled.",
+          "topic": "Topic",
+          "topicHint": "Audit records are published to this topic as JSON; the message key is the record kind, so records of the same kind land in one partition.",
+          "topicRequired": "A topic is required when Kafka forwarding is enabled.",
+          "sasl": "SASL authentication",
+          "saslHint": "none / PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512.",
+          "saslMechanism": {
+            "none": "None",
+            "plain": "PLAIN",
+            "scram-sha-256": "SCRAM-SHA-256",
+            "scram-sha-512": "SCRAM-SHA-512"
+          },
+          "username": "Username",
+          "usernameRequired": "A username is required when SASL authentication is enabled.",
+          "password": "Password",
+          "passwordHint": "Write-only: changing the brokers or username requires re-entering it.",
+          "useTLS": "Use TLS",
+          "useTLSHint": "Enabled by default: audit records carry the operator and source IP, so plaintext is not advisable.",
+          "skipVerify": "Skip certificate verification",
+          "skipVerifyHint": "TLS only. Enable when the broker uses a self-signed certificate.",
+          "skipVerifyValue": "Do not verify the broker certificate"
+        }
       },
       "stdout": {
         "title": "Standard output (log collection)",

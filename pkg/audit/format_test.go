@@ -72,12 +72,12 @@ func TestFormatSyslogLineForSwitchesFormat(t *testing.T) {
 		Result:   model.AuditResultSuccess,
 	}
 
-	textLine := formatSyslogLineFor(model.SyslogSetting{Format: model.LogFormatText}, message)
+	textLine := formatSyslogLineFor(model.LogForwardSetting{Format: model.LogFormatText}, message)
 	if !strings.HasPrefix(textLine, "event=login result=success") {
 		t.Errorf("text syslog line = %q", textLine)
 	}
 
-	jsonLine := formatSyslogLineFor(model.SyslogSetting{Format: model.LogFormatJSON}, message)
+	jsonLine := formatSyslogLineFor(model.LogForwardSetting{Format: model.LogFormatJSON}, message)
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(jsonLine), &parsed); err != nil {
 		t.Fatalf("json syslog line is not valid JSON: %v (%q)", err, jsonLine)
@@ -91,7 +91,7 @@ func TestFormatSyslogLineForSwitchesFormat(t *testing.T) {
 }
 
 func TestFormatSyslogLineJSONEmptyForUnknownKind(t *testing.T) {
-	got := formatSyslogLineFor(model.SyslogSetting{Format: model.LogFormatJSON}, model.AuditMessage{Kind: "unknown"})
+	got := formatSyslogLineFor(model.LogForwardSetting{Format: model.LogFormatJSON}, model.AuditMessage{Kind: "unknown"})
 	if got != "" {
 		t.Errorf("json line for unknown kind = %q, want empty", got)
 	}

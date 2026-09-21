@@ -88,9 +88,9 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 	scheduler.Start(ctx, cm)
 	auth.StartLDAPSync(ctx)
 	notification.StartDailyChecker(ctx)
-	// 审计记录保留策略（按天滚动，默认 0 = 永久保留）与 syslog 外发（默认关闭）。
+	// 审计记录保留策略（按天滚动，默认 0 = 永久保留）与日志外发（syslog / kafka，默认关闭）。
 	audit.StartRetentionWorker(ctx)
-	audit.StartSyslogForwarder()
+	audit.StartLogForwarder()
 	// 审计事件 → 标准输出（默认开启）：让只采集 stdout 的日志平台也能查到谁做了什么。
 	audit.StartAuditStdout()
 	// 审计链路的自监控指标（丢弃 / 失败 / 补传积压）挂到 /metrics。
@@ -102,6 +102,9 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 		klog.Fatalf("refusing to start: %v", err)
 	}
 	audit.StartParquetArchiver(ctx, common.AuditArchiveDir)
+	// 多副本下让审计设置收敛：每个副本低频比较库里的设置指纹，变了就重载各链路。
+	// 必须在上面各链路启动**之后**：此时内存里已是库里最新设置，只把指纹记下来。
+	audit.StartSettingWatcher(ctx)
 	// AI 待确认会话的过期回收。
 	ai.StartPendingSessionCleanup(ctx)
 	return cm, nil

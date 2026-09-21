@@ -3381,9 +3381,15 @@
         "serverSideNotice": "当前存储方式（{{sink}}）的过期清理由服务端负责，本页的保留天数对它不生效：请到服务端的保留配置里调整（VictoriaLogs 的 -retentionPeriod、OpenObserve 的 stream data_retention）。"
       },
       "syslog": {
-        "title": "日志外发（syslog）",
-        "description": "把审计记录同时外发到外部 syslog 服务器。外发是尽力而为，失败不会影响本地审计记录的落库。",
+        "title": "日志外发",
+        "description": "把审计记录同时外发到外部日志服务。外发是尽力而为，失败不会影响本地审计记录的落库。",
         "enabled": "启用外发",
+        "mode": "外发方式",
+        "modeHint": "二选一，同一时刻只有一种方式生效；另一种的参数会保留，但不外发。",
+        "forwardMode": {
+          "syslog": "syslog（RFC5424）",
+          "kafka": "Kafka"
+        },
         "network": "网络协议",
         "address": "服务器地址",
         "addressHint": "格式 host:port",
@@ -3396,7 +3402,32 @@
         "formatHint": "text 为 key=value 文本；json 输出结构化字段（与归档字段集一致）。",
         "skipVerify": "跳过证书校验",
         "skipVerifyHint": "仅 tls 生效。服务端使用自签证书时开启。",
-        "skipVerifyValue": "不校验服务端证书"
+        "skipVerifyValue": "不校验服务端证书",
+        "kafka": {
+          "brokers": "Broker 地址",
+          "brokersHint": "格式 host:port，多个用逗号分隔。",
+          "brokersRequired": "启用 Kafka 外发时必须填写至少一个 broker。",
+          "topic": "主题（topic）",
+          "topicHint": "审计记录的 JSON 会投到这个主题；消息 key 为记录分类，同类记录落同一分区。",
+          "topicRequired": "启用 Kafka 外发时必须填写主题。",
+          "sasl": "SASL 认证",
+          "saslHint": "不做认证 / PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512。",
+          "saslMechanism": {
+            "none": "不做认证",
+            "plain": "PLAIN",
+            "scram-sha-256": "SCRAM-SHA-256",
+            "scram-sha-512": "SCRAM-SHA-512"
+          },
+          "username": "用户名",
+          "usernameRequired": "启用 SASL 认证时必须填写用户名。",
+          "password": "密码",
+          "passwordHint": "只写不回显；换了地址或用户名需要重填。",
+          "useTLS": "使用 TLS",
+          "useTLSHint": "默认开启：审计记录含操作者与来源 IP，不建议明文发送。",
+          "skipVerify": "跳过证书校验",
+          "skipVerifyHint": "仅 TLS 生效。服务端使用自签证书时开启。",
+          "skipVerifyValue": "不校验服务端证书"
+        }
       },
       "stdout": {
         "title": "标准输出（日志采集）",

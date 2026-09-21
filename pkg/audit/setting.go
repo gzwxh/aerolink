@@ -14,7 +14,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// GetAuditSetting 返回审计章节的配置：保留策略 + syslog 外发。
+// GetAuditSetting 返回审计章节的配置：保留策略 + 日志外发。
 //
 // 路由：GET /api/v1/admin/audit-setting（需 settings.audit 的读权限）
 func GetAuditSetting(c *gin.Context) {
@@ -61,6 +61,9 @@ func maskAuditSecrets(setting *model.AuditSettingData) {
 	if setting.Archive.OpenObserve.Password != "" {
 		setting.Archive.OpenObserve.Password = secretMask
 	}
+	if setting.Forward.Kafka.Password != "" {
+		setting.Forward.Kafka.Password = secretMask
+	}
 }
 
 // restoreMaskedSecrets 在保存前把掩码占位符还原为库中已存的值：
@@ -77,6 +80,9 @@ func restoreMaskedSecrets(req *model.AuditSettingData, current *model.AuditSetti
 	}
 	if req.Archive.OpenObserve.Password == secretMask {
 		req.Archive.OpenObserve.Password = current.Archive.OpenObserve.Password
+	}
+	if req.Forward.Kafka.Password == secretMask {
+		req.Forward.Kafka.Password = current.Forward.Kafka.Password
 	}
 }
 
@@ -101,6 +107,10 @@ func rejectStaleSecretAfterMove(req, current *model.AuditSettingData) error {
 	if req.Archive.OpenObserve.Password == secretMask && ooTargetChanged(req.Archive.OpenObserve, current.Archive.OpenObserve) {
 		return errors.New("the OpenObserve organization / address / username changed: please re-enter the password " +
 			"(a masked value cannot be carried over to another deployment)")
+	}
+	if req.Forward.Kafka.Password == secretMask && kafkaTargetChanged(req.Forward.Kafka, current.Forward.Kafka) {
+		return errors.New("the Kafka address / topic / username changed: please re-enter the password " +
+			"(a masked value cannot be carried over to another cluster)")
 	}
 	return nil
 }
@@ -129,6 +139,17 @@ func ooTargetChanged(next, current model.OpenObserveArchive) bool {
 		next.Org != current.Org ||
 		next.Username != current.Username ||
 		next.TLSInsecureSkipVerify != current.TLSInsecureSkipVerify
+}
+
+// kafkaTargetChanged 判断 Kafka 的**访问目标**是否变化（开关不算）。
+//
+// 主题与 TLS 开关都算：它们决定了这条连接到底能不能用，密钥沿用到一个新主题上也几乎必然不对。
+func kafkaTargetChanged(next, current model.KafkaSetting) bool {
+	return !slices.Equal(next.Brokers, current.Brokers) ||
+		next.Topic != current.Topic ||
+		next.Username != current.Username ||
+		next.UseTLS != current.UseTLS ||
+		next.InsecureSkipVerify != current.InsecureSkipVerify
 }
 
 // probeArchiveTargets 在保存后主动访问一次目标存储，把「这份配置到底能不能用」当场告诉管理员。
@@ -170,6 +191,12 @@ func probeArchiveTargets(setting *model.AuditSettingData) []string {
 			warnings = append(warnings, "openobserve: "+err.Error())
 		}
 	}
+	// 日志外发与 sink 无关（它是额外副本，不是落点），所以不跟着 sink 判断。
+	if setting.Forward.Enabled && setting.Forward.Mode == model.LogForwardModeKafka {
+		if err := probeKafkaTarget(ctx, setting.Forward.Kafka); err != nil {
+			warnings = append(warnings, "kafka: "+err.Error())
+		}
+	}
 	return warnings
 }
 
@@ -209,14 +236,14 @@ func UpdateAuditSetting(c *gin.Context) {
 		return
 	}
 
-	// 保留策略 / 外发地址一变，外发器要立即按新配置工作。
-	reloadSyslogConfig()
-	// 标准输出的开关与格式同样热生效。
-	reloadStdoutConfig()
-	// 归档位置 / S3/ES 参数同样热生效（关闭时停掉运行时）。
-	reloadArchiveConfig()
+	// 保留策略 / 外发配置一变，外发器要立即按新配置工作；标准输出的开关与格式、
+	// 归档的位置与 S3/ES 参数同样热生效（关闭时停掉运行时）。
+	applyAuditSettingChanges()
+	// 记下已应用的指纹：否则本副本会在下一轮把同一份配置再重载一遍（归档运行时会
+	// 被无谓重建，见 setting_watcher.go）。
+	markAuditSettingApplied()
 
-	// 归档存储配置的变更单独留痕（管理接口本身的那条记录看不出"改了什么"）。
+	// 出口配置（归档 + 日志外发）的变更单独留痕（管理接口本身的那条记录看不出"改了什么"）。
 	recordArchiveSettingChange(c, current, setting)
 
 	response := gin.H{"setting": setting}
@@ -228,16 +255,16 @@ func UpdateAuditSetting(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// recordArchiveSettingChange 给归档存储配置的变更单独留一条审计记录。
+// recordArchiveSettingChange 给审计数据出口（归档 + 日志外发）的变更单独留一条审计记录。
 //
 // 管理接口的写操作本来就会被审计中间件记一条（`system/audit-setting`），但那条只有「改过审计
-// 设置」这个粒度，看不出**改了什么**、更看不出密钥有没有被动过。归档是审计数据的出口，出口
-// 地址被改掉是最需要被追溯的动作之一，所以这里额外记一条带摘要的记录。
+// 设置」这个粒度，看不出**改了什么**、更看不出密钥有没有被动过。出口地址被改掉是最需要被
+// 追溯的动作之一，所以这里额外记一条带摘要的记录。
 //
 // 摘要写进 `resource_yaml`：它默认不进 parquet、也不进检索用的结构化字段，正适合放这种
 // 又长又只是给人看的文本。密钥只记「是否变更」（changed / unchanged），绝不留明文。
 func recordArchiveSettingChange(c *gin.Context, before, after *model.AuditSettingData) {
-	summary := archiveSettingDiff(*before, *after)
+	summary := auditSettingDiff(*before, *after)
 	if summary == "" {
 		return
 	}
@@ -269,11 +296,11 @@ func recordArchiveSettingChange(c *gin.Context, before, after *model.AuditSettin
 	}
 }
 
-// archiveSettingDiff 生成归档相关配置的变更摘要；没有实质变化时返回空串。
+// auditSettingDiff 生成审计数据出口（归档 + 日志外发）的变更摘要；没有实质变化时返回空串。
 //
-// 比较的是**归档出口**（S3 / ES / 本地目录 / 开关），不含保留天数与攒批参数：那些是调优项，
-// 变了不值得单独留一条记录，管理接口的通用审计已经覆盖。
-func archiveSettingDiff(before, after model.AuditSettingData) string {
+// 比较的是**出口**（S3 / ES / 本地目录 / syslog / Kafka / 开关），不含保留天数与攒批参数：
+// 那些是调优项，变了不值得单独留一条记录，管理接口的通用审计已经覆盖。
+func auditSettingDiff(before, after model.AuditSettingData) string {
 	lines := make([]string, 0, 8)
 
 	changed := func(field, oldValue, newValue string) {
@@ -327,6 +354,24 @@ func archiveSettingDiff(before, after model.AuditSettingData) string {
 	changed("openobserve.username", before.Archive.OpenObserve.Username, after.Archive.OpenObserve.Username)
 	if before.Archive.OpenObserve.Password != after.Archive.OpenObserve.Password {
 		lines = append(lines, "openobserve.password: changed")
+	}
+
+	// 日志外发（syslog / kafka 二选一）：换了方式是最该留痕的一种改动。
+	changedBool("forward.enabled", before.Forward.Enabled, after.Forward.Enabled)
+	changed("forward.mode", before.Forward.Mode, after.Forward.Mode)
+	changed("forward.network", before.Forward.Network, after.Forward.Network)
+	changed("forward.address", before.Forward.Address, after.Forward.Address)
+	changed("forward.tag", before.Forward.Tag, after.Forward.Tag)
+	changed("forward.format", before.Forward.Format, after.Forward.Format)
+
+	changed("kafka.brokers", strings.Join(before.Forward.Kafka.Brokers, ","), strings.Join(after.Forward.Kafka.Brokers, ","))
+	changed("kafka.topic", before.Forward.Kafka.Topic, after.Forward.Kafka.Topic)
+	changed("kafka.saslMechanism", before.Forward.Kafka.SASLMechanism, after.Forward.Kafka.SASLMechanism)
+	changed("kafka.username", before.Forward.Kafka.Username, after.Forward.Kafka.Username)
+	changedBool("kafka.useTLS", before.Forward.Kafka.UseTLS, after.Forward.Kafka.UseTLS)
+	changedBool("kafka.tlsInsecureSkipVerify", before.Forward.Kafka.InsecureSkipVerify, after.Forward.Kafka.InsecureSkipVerify)
+	if before.Forward.Kafka.Password != after.Forward.Kafka.Password {
+		lines = append(lines, "kafka.password: changed")
 	}
 
 	return strings.Join(lines, "\n")

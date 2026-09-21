@@ -73,10 +73,10 @@ type AuditMessage struct {
 	LatencyMs  int64
 }
 
-// auditForwarders 是审计记录落库后的外发回调列表（syslog、parquet 等各注册一个）。
+// auditForwarders 是审计记录落库后的外发回调列表（日志外发、stdout、归档各注册一个）。
 //
 // 用回调而不是直接依赖：pkg/audit 需要读取 model，反向依赖会形成循环。
-// 回调在**落库之后**触发，且必须是非阻塞的（见 audit.forwardToSyslog 与
+// 回调在**落库之后**触发，且必须是非阻塞的（见 audit.forwardToLogForward 与
 // audit.forwardToParquet），绝不能在写库路径上阻塞请求。
 var (
 	auditForwardersMu sync.RWMutex
@@ -84,7 +84,7 @@ var (
 )
 
 // AddAuditForwarder 注册一个审计外发回调。重复调用会追加，不再覆盖：
-// syslog 与 parquet 归档各自是一个独立的 sink。
+// stdout、日志外发与 parquet 归档各自是一个独立的 sink。
 func AddAuditForwarder(forward func(AuditMessage)) {
 	if forward == nil {
 		return

@@ -8,7 +8,9 @@ import { toast } from 'sonner'
 import type {
   AccessLogArchiveSetting,
   AuditSetting as AuditSettingData,
+  KafkaSASLMechanism,
   LogFormat,
+  LogForwardMode,
   SyslogNetwork,
 } from '@/types/api'
 import { updateAuditSetting, useAuditSetting } from '@/lib/api'
@@ -29,12 +31,23 @@ const DEFAULT_FORM: AuditSettingData = {
   retentionDays: 0,
   syslog: {
     enabled: false,
+    mode: 'syslog',
     network: 'udp',
     address: '',
     tag: 'kite',
     facility: 13,
     format: 'text',
     insecureSkipVerify: false,
+    kafka: {
+      brokers: [],
+      topic: '',
+      saslMechanism: 'none',
+      username: '',
+      password: '',
+      // 与后端默认一致：审计记录含操作者与来源 IP，明文发到 broker 不是可接受的默认值。
+      useTLS: true,
+      tlsInsecureSkipVerify: false,
+    },
   },
   stdout: {
     enabled: true,
@@ -97,6 +110,16 @@ const DEFAULT_FORM: AuditSettingData = {
 
 const SYSLOG_NETWORKS: SyslogNetwork[] = ['udp', 'tcp', 'tls']
 
+/** 外发方式二选一（与后端 auditSink 那种「五选一互斥」不同：这是同一份记录的出口方式）。 */
+const LOG_FORWARD_MODES: LogForwardMode[] = ['syslog', 'kafka']
+
+const KAFKA_SASL_MECHANISMS: KafkaSASLMechanism[] = [
+  'none',
+  'plain',
+  'scram-sha-256',
+  'scram-sha-512',
+]
+
 /** 日志输出格式二选一：text 保持现状，json 输出结构化单行（不做任意模板）。 */
 const LOG_FORMATS: LogFormat[] = ['text', 'json']
 
@@ -151,7 +174,7 @@ function numberOrZero(value: string): number {
 /**
  * 日志审计 → 审计设置。
  *
- * 审计管理员唯一可写的审计配置：记录保留策略与 syslog 外发。审计记录本身只读
+ * 审计管理员唯一可写的审计配置：记录保留策略与日志外发。审计记录本身只读
  * ——没有任何手工删除入口，删除只可能由保留策略按时间自动滚动发生（并留痕）。
  */
 export function AuditSetting() {
@@ -207,8 +230,21 @@ export function AuditSetting() {
 
   const days = formData.retentionDays
   const retentionTooShort = days > 0 && days < minRetentionDays
+  // 只校验当前生效的那一种方式（与后端 Normalize 一致）：切到 kafka 时不该被"地址为空"拦住。
+  const forward = formData.syslog
   const syslogAddressMissing =
-    formData.syslog.enabled && !formData.syslog.address.trim()
+    forward.enabled && forward.mode === 'syslog' && !forward.address.trim()
+  const kafkaBrokersMissing =
+    forward.enabled &&
+    forward.mode === 'kafka' &&
+    forward.kafka.brokers.filter((broker) => broker.trim()).length === 0
+  const kafkaTopicMissing =
+    forward.enabled && forward.mode === 'kafka' && !forward.kafka.topic.trim()
+  const kafkaUsernameMissing =
+    forward.enabled &&
+    forward.mode === 'kafka' &&
+    forward.kafka.saslMechanism !== 'none' &&
+    !forward.kafka.username.trim()
 
   const archive = formData.archive
   // 启用 S3 / ES / 外部日志存储时关键连接信息必填，否则后端 Normalize 会拒绝保存。
@@ -227,14 +263,23 @@ export function AuditSetting() {
   const invalid =
     retentionTooShort ||
     syslogAddressMissing ||
+    kafkaBrokersMissing ||
+    kafkaTopicMissing ||
+    kafkaUsernameMissing ||
     s3Incomplete ||
     esIncomplete ||
     victoriaLogsIncomplete ||
     openObserveIncomplete
 
   // 系统设置里的写入口跟随后端章节级授权，只读时全部禁用。
-  const patchSyslog = (patch: Partial<AuditSettingData['syslog']>) =>
+  // 字段名仍是后端 JSON 里的 syslog（历史键名，不可改名，见 types/api.ts）。
+  const patchForward = (patch: Partial<AuditSettingData['syslog']>) =>
     setFormData((prev) => ({ ...prev, syslog: { ...prev.syslog, ...patch } }))
+  const patchKafka = (patch: Partial<AuditSettingData['syslog']['kafka']>) =>
+    setFormData((prev) => ({
+      ...prev,
+      syslog: { ...prev.syslog, kafka: { ...prev.syslog.kafka, ...patch } },
+    }))
   const patchStdout = (patch: Partial<AuditSettingData['stdout']>) =>
     setFormData((prev) => ({ ...prev, stdout: { ...prev.stdout, ...patch } }))
   const patchArchive = (patch: Partial<AuditSettingData['archive']>) =>
@@ -449,64 +494,43 @@ export function AuditSetting() {
         </SettingGroup>
 
         <SettingGroup
-          title={t('audit.setting.syslog.title', '日志外发（syslog）')}
+          title={t('audit.setting.syslog.title', '日志外发')}
           description={t(
             'audit.setting.syslog.description',
-            '把审计记录同时外发到外部 syslog 服务器。外发是尽力而为，失败不会影响本地审计记录的落库。'
+            '把审计记录同时外发到外部日志服务。外发是尽力而为，失败不会影响本地审计记录的落库。'
           )}
         >
           <SettingRow label={t('audit.setting.syslog.enabled', '启用外发')}>
             <Switch
               checked={formData.syslog.enabled}
               disabled={readOnly}
-              onCheckedChange={(checked) => patchSyslog({ enabled: checked })}
+              onCheckedChange={(checked) => patchForward({ enabled: checked })}
             />
           </SettingRow>
 
-          <SettingRow label={t('audit.setting.syslog.network', '网络协议')}>
-            <Select
-              value={formData.syslog.network}
-              disabled={readOnly}
-              onValueChange={(value) =>
-                patchSyslog({ network: value as SyslogNetwork })
-              }
-            >
-              <SelectTrigger className="max-w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SYSLOG_NETWORKS.map((network) => (
-                  <SelectItem key={network} value={network}>
-                    {network.toUpperCase()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </SettingRow>
-
           <SettingRow
-            label={t('audit.setting.syslog.format', '输出格式')}
+            label={t('audit.setting.syslog.mode', '外发方式')}
             hint={t(
-              'audit.setting.syslog.formatHint',
-              'text 为 key=value 文本；json 输出结构化字段（与归档字段集一致）。'
+              'audit.setting.syslog.modeHint',
+              '二选一，同一时刻只有一种方式生效；另一种的参数会保留，但不外发。'
             )}
           >
             <Select
-              value={formData.syslog.format}
+              value={formData.syslog.mode}
               disabled={readOnly}
               onValueChange={(value) =>
-                patchSyslog({ format: value as LogFormat })
+                patchForward({ mode: value as LogForwardMode })
               }
             >
               <SelectTrigger className="max-w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {LOG_FORMATS.map((format) => (
-                  <SelectItem key={format} value={format}>
+                {LOG_FORWARD_MODES.map((mode) => (
+                  <SelectItem key={mode} value={mode}>
                     {t(
-                      `audit.setting.logFormat.${format}`,
-                      format.toUpperCase()
+                      `audit.setting.syslog.forwardMode.${mode}`,
+                      mode.toUpperCase()
                     )}
                   </SelectItem>
                 ))}
@@ -514,90 +538,319 @@ export function AuditSetting() {
             </Select>
           </SettingRow>
 
-          <SettingRow
-            label={t('audit.setting.syslog.address', '服务器地址')}
-            hint={t('audit.setting.syslog.addressHint', '格式 host:port')}
-          >
-            <Input
-              value={formData.syslog.address}
-              placeholder="syslog.example.com:514"
-              disabled={readOnly}
-              onChange={(event) => patchSyslog({ address: event.target.value })}
-              className="max-w-80"
-            />
-            {syslogAddressMissing && (
-              <p className="mt-2 text-xs text-destructive">
-                {t(
-                  'audit.setting.syslog.addressRequired',
-                  '启用外发时必须填写服务器地址。'
+          {formData.syslog.mode === 'kafka' ? (
+            <>
+              <SettingRow
+                label={t('audit.setting.syslog.kafka.brokers', 'Broker 地址')}
+                hint={t(
+                  'audit.setting.syslog.kafka.brokersHint',
+                  '格式 host:port，多个用逗号分隔。'
                 )}
-              </p>
-            )}
-          </SettingRow>
-
-          <SettingRow
-            label={t('audit.setting.syslog.tag', '标签（APP-NAME）')}
-            hint={t(
-              'audit.setting.syslog.tagHint',
-              '外发消息里的应用名，便于在日志服务器上区分来源。'
-            )}
-          >
-            <Input
-              value={formData.syslog.tag}
-              placeholder="kite"
-              disabled={readOnly}
-              onChange={(event) => patchSyslog({ tag: event.target.value })}
-              className="max-w-40"
-            />
-          </SettingRow>
-
-          <SettingRow
-            label={t('audit.setting.syslog.facility', '设施（facility）')}
-            hint={t(
-              'audit.setting.syslog.facilityHint',
-              '默认 13（log audit），取值范围 0-23。'
-            )}
-          >
-            <Input
-              type="number"
-              min={0}
-              max={23}
-              value={formData.syslog.facility}
-              disabled={readOnly}
-              onChange={(event) => {
-                const parsed = Number.parseInt(event.target.value, 10)
-                patchSyslog({
-                  facility: Number.isNaN(parsed) ? 13 : parsed,
-                })
-              }}
-              className="max-w-32"
-            />
-          </SettingRow>
-
-          {formData.syslog.network === 'tls' && (
-            <SettingRow
-              label={t('audit.setting.syslog.skipVerify', '跳过证书校验')}
-              hint={t(
-                'audit.setting.syslog.skipVerifyHint',
-                '仅 tls 生效。服务端使用自签证书时开启。'
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={formData.syslog.insecureSkipVerify}
+              >
+                <Input
+                  value={formData.syslog.kafka.brokers.join(', ')}
+                  placeholder="kafka-1:9092, kafka-2:9092"
                   disabled={readOnly}
-                  onCheckedChange={(checked) =>
-                    patchSyslog({ insecureSkipVerify: checked })
+                  onChange={(event) =>
+                    patchKafka({ brokers: event.target.value.split(',') })
                   }
+                  className="max-w-80"
                 />
-                <Label className="text-sm text-muted-foreground">
-                  {t(
-                    'audit.setting.syslog.skipVerifyValue',
-                    '不校验服务端证书'
+                {kafkaBrokersMissing && (
+                  <p className="mt-2 text-xs text-destructive">
+                    {t(
+                      'audit.setting.syslog.kafka.brokersRequired',
+                      '启用 Kafka 外发时必须填写至少一个 broker。'
+                    )}
+                  </p>
+                )}
+              </SettingRow>
+
+              <SettingRow
+                label={t('audit.setting.syslog.kafka.topic', '主题（topic）')}
+                hint={t(
+                  'audit.setting.syslog.kafka.topicHint',
+                  '审计记录的 JSON 会投到这个主题；消息 key 为记录分类，同类记录落同一分区。'
+                )}
+              >
+                <Input
+                  value={formData.syslog.kafka.topic}
+                  placeholder="kite-audit"
+                  disabled={readOnly}
+                  onChange={(event) =>
+                    patchKafka({ topic: event.target.value })
+                  }
+                  className="max-w-80"
+                />
+                {kafkaTopicMissing && (
+                  <p className="mt-2 text-xs text-destructive">
+                    {t(
+                      'audit.setting.syslog.kafka.topicRequired',
+                      '启用 Kafka 外发时必须填写主题。'
+                    )}
+                  </p>
+                )}
+              </SettingRow>
+
+              <SettingRow
+                label={t('audit.setting.syslog.kafka.sasl', 'SASL 认证')}
+                hint={t(
+                  'audit.setting.syslog.kafka.saslHint',
+                  '不做认证 / PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512。'
+                )}
+              >
+                <Select
+                  value={formData.syslog.kafka.saslMechanism}
+                  disabled={readOnly}
+                  onValueChange={(value) =>
+                    patchKafka({ saslMechanism: value as KafkaSASLMechanism })
+                  }
+                >
+                  <SelectTrigger className="max-w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {KAFKA_SASL_MECHANISMS.map((mechanism) => (
+                      <SelectItem key={mechanism} value={mechanism}>
+                        {t(
+                          `audit.setting.syslog.kafka.saslMechanism.${mechanism}`,
+                          mechanism.toUpperCase()
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+
+              {formData.syslog.kafka.saslMechanism !== 'none' && (
+                <>
+                  <SettingRow
+                    label={t('audit.setting.syslog.kafka.username', '用户名')}
+                  >
+                    <Input
+                      value={formData.syslog.kafka.username}
+                      disabled={readOnly}
+                      onChange={(event) =>
+                        patchKafka({ username: event.target.value })
+                      }
+                      className="max-w-80"
+                    />
+                    {kafkaUsernameMissing && (
+                      <p className="mt-2 text-xs text-destructive">
+                        {t(
+                          'audit.setting.syslog.kafka.usernameRequired',
+                          '启用 SASL 认证时必须填写用户名。'
+                        )}
+                      </p>
+                    )}
+                  </SettingRow>
+
+                  <SettingRow
+                    label={t('audit.setting.syslog.kafka.password', '密码')}
+                    hint={t(
+                      'audit.setting.syslog.kafka.passwordHint',
+                      '只写不回显；换了地址或用户名需要重填。'
+                    )}
+                  >
+                    <Input
+                      type="password"
+                      value={formData.syslog.kafka.password}
+                      disabled={readOnly}
+                      onChange={(event) =>
+                        patchKafka({ password: event.target.value })
+                      }
+                      className="max-w-80"
+                    />
+                  </SettingRow>
+                </>
+              )}
+
+              <SettingRow
+                label={t('audit.setting.syslog.kafka.useTLS', '使用 TLS')}
+                hint={t(
+                  'audit.setting.syslog.kafka.useTLSHint',
+                  '默认开启：审计记录含操作者与来源 IP，不建议明文发送。'
+                )}
+              >
+                <Switch
+                  checked={formData.syslog.kafka.useTLS}
+                  disabled={readOnly}
+                  onCheckedChange={(checked) => patchKafka({ useTLS: checked })}
+                />
+              </SettingRow>
+
+              {formData.syslog.kafka.useTLS && (
+                <SettingRow
+                  label={t(
+                    'audit.setting.syslog.kafka.skipVerify',
+                    '跳过证书校验'
                   )}
-                </Label>
-              </div>
-            </SettingRow>
+                  hint={t(
+                    'audit.setting.syslog.kafka.skipVerifyHint',
+                    '仅 TLS 生效。服务端使用自签证书时开启。'
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={formData.syslog.kafka.tlsInsecureSkipVerify}
+                      disabled={readOnly}
+                      onCheckedChange={(checked) =>
+                        patchKafka({ tlsInsecureSkipVerify: checked })
+                      }
+                    />
+                    <Label className="text-sm text-muted-foreground">
+                      {t(
+                        'audit.setting.syslog.kafka.skipVerifyValue',
+                        '不校验服务端证书'
+                      )}
+                    </Label>
+                  </div>
+                </SettingRow>
+              )}
+            </>
+          ) : (
+            <>
+              <SettingRow label={t('audit.setting.syslog.network', '网络协议')}>
+                <Select
+                  value={formData.syslog.network}
+                  disabled={readOnly}
+                  onValueChange={(value) =>
+                    patchForward({ network: value as SyslogNetwork })
+                  }
+                >
+                  <SelectTrigger className="max-w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SYSLOG_NETWORKS.map((network) => (
+                      <SelectItem key={network} value={network}>
+                        {network.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+
+              <SettingRow
+                label={t('audit.setting.syslog.format', '输出格式')}
+                hint={t(
+                  'audit.setting.syslog.formatHint',
+                  'text 为 key=value 文本；json 输出结构化字段（与归档字段集一致）。'
+                )}
+              >
+                <Select
+                  value={formData.syslog.format}
+                  disabled={readOnly}
+                  onValueChange={(value) =>
+                    patchForward({ format: value as LogFormat })
+                  }
+                >
+                  <SelectTrigger className="max-w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOG_FORMATS.map((format) => (
+                      <SelectItem key={format} value={format}>
+                        {t(
+                          `audit.setting.logFormat.${format}`,
+                          format.toUpperCase()
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+
+              <SettingRow
+                label={t('audit.setting.syslog.address', '服务器地址')}
+                hint={t('audit.setting.syslog.addressHint', '格式 host:port')}
+              >
+                <Input
+                  value={formData.syslog.address}
+                  placeholder="syslog.example.com:514"
+                  disabled={readOnly}
+                  onChange={(event) =>
+                    patchForward({ address: event.target.value })
+                  }
+                  className="max-w-80"
+                />
+                {syslogAddressMissing && (
+                  <p className="mt-2 text-xs text-destructive">
+                    {t(
+                      'audit.setting.syslog.addressRequired',
+                      '启用外发时必须填写服务器地址。'
+                    )}
+                  </p>
+                )}
+              </SettingRow>
+
+              <SettingRow
+                label={t('audit.setting.syslog.tag', '标签（APP-NAME）')}
+                hint={t(
+                  'audit.setting.syslog.tagHint',
+                  '外发消息里的应用名，便于在日志服务器上区分来源。'
+                )}
+              >
+                <Input
+                  value={formData.syslog.tag}
+                  placeholder="kite"
+                  disabled={readOnly}
+                  onChange={(event) =>
+                    patchForward({ tag: event.target.value })
+                  }
+                  className="max-w-40"
+                />
+              </SettingRow>
+
+              <SettingRow
+                label={t('audit.setting.syslog.facility', '设施（facility）')}
+                hint={t(
+                  'audit.setting.syslog.facilityHint',
+                  '默认 13（log audit），取值范围 0-23。'
+                )}
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={formData.syslog.facility}
+                  disabled={readOnly}
+                  onChange={(event) => {
+                    const parsed = Number.parseInt(event.target.value, 10)
+                    patchForward({
+                      facility: Number.isNaN(parsed) ? 13 : parsed,
+                    })
+                  }}
+                  className="max-w-32"
+                />
+              </SettingRow>
+
+              {formData.syslog.network === 'tls' && (
+                <SettingRow
+                  label={t('audit.setting.syslog.skipVerify', '跳过证书校验')}
+                  hint={t(
+                    'audit.setting.syslog.skipVerifyHint',
+                    '仅 tls 生效。服务端使用自签证书时开启。'
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={formData.syslog.insecureSkipVerify}
+                      disabled={readOnly}
+                      onCheckedChange={(checked) =>
+                        patchForward({ insecureSkipVerify: checked })
+                      }
+                    />
+                    <Label className="text-sm text-muted-foreground">
+                      {t(
+                        'audit.setting.syslog.skipVerifyValue',
+                        '不校验服务端证书'
+                      )}
+                    </Label>
+                  </div>
+                </SettingRow>
+              )}
+            </>
           )}
         </SettingGroup>
 

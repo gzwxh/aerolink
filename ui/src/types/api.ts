@@ -1002,8 +1002,37 @@ export interface StdoutSetting {
   format: LogFormat
 }
 
-export interface SyslogSetting {
+/** 日志外发方式：**二选一**，同一时刻只有一条链路生效。 */
+export type LogForwardMode = 'syslog' | 'kafka'
+
+/** Kafka 的 SASL 认证机制，none 表示不做认证。 */
+export type KafkaSASLMechanism =
+  'none' | 'plain' | 'scram-sha-256' | 'scram-sha-512'
+
+/** Kafka 外发的连接参数（mode=kafka 时生效）。 */
+export interface KafkaSetting {
+  /** `host:port` 列表。 */
+  brokers: string[]
+  topic: string
+  saslMechanism: KafkaSASLMechanism
+  username: string
+  /** 只写不回显：读取时后端返回掩码，原样回传表示不修改。 */
+  password: string
+  /** 默认开启：审计记录含操作者与来源 IP，明文发到 broker 不是可接受的默认值。 */
+  useTLS: boolean
+  /** 仅 useTLS 时生效：跳过服务端证书校验（自签证书场景）。 */
+  tlsInsecureSkipVerify: boolean
+}
+
+/**
+ * 日志外发设置：一个开关 + 一种方式（syslog 或 kafka）。
+ *
+ * 注意字段名仍是后端 JSON 里的 `syslog`（历史键名，见 `AuditSetting.syslog`）。
+ */
+export interface LogForwardSetting {
   enabled: boolean
+  mode: LogForwardMode
+  /** —— 以下为 syslog 参数（mode=syslog 时生效）—— */
   network: SyslogNetwork
   /** host:port 形式 */
   address: string
@@ -1014,6 +1043,8 @@ export interface SyslogSetting {
   format: LogFormat
   /** 仅 tls 生效：跳过服务端证书校验（自签证书场景）。 */
   insecureSkipVerify: boolean
+  /** —— 以下为 Kafka 参数（mode=kafka 时生效）—— */
+  kafka: KafkaSetting
 }
 
 /**
@@ -1023,7 +1054,8 @@ export interface SyslogSetting {
  */
 export interface AuditSetting {
   retentionDays: number
-  syslog: SyslogSetting
+  /** 日志外发（syslog / kafka 二选一）；JSON 键沿用历史的 `syslog`，不可改名。 */
+  syslog: LogForwardSetting
   stdout: StdoutSetting
   archive: ArchiveSetting
 }

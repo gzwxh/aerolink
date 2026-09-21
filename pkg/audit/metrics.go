@@ -82,7 +82,7 @@ func (auditMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	stdoutDropped, _ := StdoutStats()
-	ch <- prometheus.MustNewConstMetric(forwardDroppedDesc, prometheus.CounterValue, float64(SyslogDroppedCount()), "syslog")
+	ch <- prometheus.MustNewConstMetric(forwardDroppedDesc, prometheus.CounterValue, float64(LogForwardDroppedCount()), logForwardModeLabel())
 	ch <- prometheus.MustNewConstMetric(forwardDroppedDesc, prometheus.CounterValue, float64(stdoutDropped), "stdout")
 	ch <- prometheus.MustNewConstMetric(forwardDroppedDesc, prometheus.CounterValue, float64(archiveDocDropped.Load()), auditSinkLabel())
 

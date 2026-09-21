@@ -3,7 +3,29 @@ package model
 import (
 	"strings"
 	"testing"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
+
+// setupAuditSettingTestDB 给需要读写 audit_settings 的用例准备一个内存库。
+func setupAuditSettingTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	originalDB := DB
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("opening test database: %v", err)
+	}
+	if err := db.AutoMigrate(&AuditSetting{}); err != nil {
+		t.Fatalf("migrating test database: %v", err)
+	}
+	DB = db
+	t.Cleanup(func() { DB = originalDB })
+	return db
+}
 
 func TestDefaultAuditSettingArchiveDefaults(t *testing.T) {
 	// 取**未经 Normalize** 的默认值：Normalize 会按 sink 落定通道开关（见 ApplySinkExclusivity），
@@ -261,22 +283,216 @@ func TestNormalizeLogFormat(t *testing.T) {
 
 func TestNormalizeKeepsLogFormats(t *testing.T) {
 	data := DefaultAuditSettingData()
-	data.Syslog.Format = "json"
+	data.Forward.Format = "json"
 	data.Archive.AccessLog.Format = "json"
 	if err := data.Normalize(); err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
-	if data.Syslog.Format != LogFormatJSON || data.Archive.AccessLog.Format != LogFormatJSON {
-		t.Errorf("json formats not preserved: syslog=%q access=%q", data.Syslog.Format, data.Archive.AccessLog.Format)
+	if data.Forward.Format != LogFormatJSON || data.Archive.AccessLog.Format != LogFormatJSON {
+		t.Errorf("json formats not preserved: syslog=%q access=%q", data.Forward.Format, data.Archive.AccessLog.Format)
 	}
 
 	bad := DefaultAuditSettingData()
-	bad.Syslog.Format = "xml"
+	bad.Forward.Format = "xml"
 	bad.Archive.AccessLog.Format = ""
 	if err := bad.Normalize(); err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
-	if bad.Syslog.Format != LogFormatText || bad.Archive.AccessLog.Format != LogFormatText {
-		t.Errorf("unknown formats should fall back to text: syslog=%q access=%q", bad.Syslog.Format, bad.Archive.AccessLog.Format)
+	if bad.Forward.Format != LogFormatText || bad.Archive.AccessLog.Format != LogFormatText {
+		t.Errorf("unknown formats should fall back to text: syslog=%q access=%q", bad.Forward.Format, bad.Archive.AccessLog.Format)
+	}
+}
+
+// 外发方式是**二选一**：只有当前生效的那一种方式的必填项会被校验。
+func TestNormalizeLogForwardValidatesOnlyActiveMode(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(*AuditSettingData)
+		wantErr string
+	}{
+		{
+			name:    "未知外发方式被拒绝而不是静默回落",
+			mutate:  func(d *AuditSettingData) { d.Forward.Mode = "vector" },
+			wantErr: "unsupported log forward mode",
+		},
+		{
+			name: "syslog 启用但没填地址",
+			mutate: func(d *AuditSettingData) {
+				d.Forward.Mode = LogForwardModeSyslog
+				d.Forward.Enabled = true
+			},
+			wantErr: "syslog address is required",
+		},
+		{
+			name: "kafka 启用但没填 brokers",
+			mutate: func(d *AuditSettingData) {
+				d.Forward.Mode = LogForwardModeKafka
+				d.Forward.Enabled = true
+				d.Forward.Kafka.Topic = "kite-audit"
+			},
+			wantErr: "kafka brokers are required",
+		},
+		{
+			name: "kafka 启用但没填 topic",
+			mutate: func(d *AuditSettingData) {
+				d.Forward.Mode = LogForwardModeKafka
+				d.Forward.Enabled = true
+				d.Forward.Kafka.Brokers = []string{"kafka:9092"}
+			},
+			wantErr: "kafka topic is required",
+		},
+		{
+			name: "kafka 开了 SASL 却没填用户名",
+			mutate: func(d *AuditSettingData) {
+				d.Forward.Mode = LogForwardModeKafka
+				d.Forward.Enabled = true
+				d.Forward.Kafka.Brokers = []string{"kafka:9092"}
+				d.Forward.Kafka.Topic = "kite-audit"
+				d.Forward.Kafka.SASLMechanism = KafkaSASLScramSHA512
+			},
+			wantErr: "kafka username is required",
+		},
+		{
+			name: "kafka 的 SASL 机制非法",
+			mutate: func(d *AuditSettingData) {
+				d.Forward.Kafka.SASLMechanism = "oauthbearer"
+			},
+			wantErr: "unsupported kafka sasl mechanism",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := DefaultAuditSettingData()
+			tc.mutate(&data)
+			err := data.Normalize()
+			if err == nil {
+				t.Fatal("Normalize() returned nil, want error")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("Normalize() error = %q, want it to mention %q", err, tc.wantErr)
+			}
+		})
+	}
+
+	// 反向：切到 kafka 时，旧方式的地址是空的也不该拦住保存（只校验生效的那一种）。
+	switched := DefaultAuditSettingData()
+	switched.Forward.Mode = LogForwardModeKafka
+	switched.Forward.Enabled = true
+	switched.Forward.Address = ""
+	switched.Forward.Kafka.Brokers = []string{" kafka-1:9092 ", "", "kafka-2:9092"}
+	switched.Forward.Kafka.Topic = " kite-audit "
+	if err := switched.Normalize(); err != nil {
+		t.Fatalf("切到 kafka 后不该被 syslog 的必填项拦住: %v", err)
+	}
+	if switched.Forward.Mode != LogForwardModeKafka {
+		t.Errorf("mode = %q, want %q", switched.Forward.Mode, LogForwardModeKafka)
+	}
+	if len(switched.Forward.Kafka.Brokers) != 2 || switched.Forward.Kafka.Brokers[1] != "kafka-2:9092" {
+		t.Errorf("brokers 未被清洗: %v", switched.Forward.Kafka.Brokers)
+	}
+	if switched.Forward.Kafka.Topic != "kite-audit" {
+		t.Errorf("topic 未去空白: %q", switched.Forward.Kafka.Topic)
+	}
+}
+
+// 空的 mode / SASL 机制要落到显式取值：下游不再需要把空串当默认值解释（少一处遗漏就少一处静默失效）。
+func TestNormalizeLogForwardDefaults(t *testing.T) {
+	data := DefaultAuditSettingData()
+	data.Forward.Mode = "  "
+	data.Forward.Kafka.SASLMechanism = "  "
+	if err := data.Normalize(); err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+	if data.Forward.Mode != LogForwardModeSyslog {
+		t.Errorf("空 mode = %q, want %q", data.Forward.Mode, LogForwardModeSyslog)
+	}
+	if data.Forward.Kafka.SASLMechanism != KafkaSASLNone {
+		t.Errorf("空 SASL 机制 = %q, want %q", data.Forward.Kafka.SASLMechanism, KafkaSASLNone)
+	}
+}
+
+// 升级前的行里外发配置存在历史的 `syslog` 键、没有 `mode` 也没有 `kafka` 子块：
+// 读取时必须落到位（不能因为键名/新字段就静默回默认值——那等于惄惄关掉外发）。
+func TestGetAuditSettingReadsLegacySyslogRow(t *testing.T) {
+	db := setupAuditSettingTestDB(t)
+
+	legacy := `{"retentionDays":90,"syslog":{"enabled":true,"network":"tcp",` +
+		`"address":"log.example.com:514","tag":"kite","facility":13,` +
+		`"format":"json","insecureSkipVerify":false},"stdout":{"enabled":false,"format":"text"}}`
+	if err := db.Create(&AuditSetting{Model: Model{ID: 1}, Data: JSONField(legacy)}).Error; err != nil {
+		t.Fatalf("seeding legacy row: %v", err)
+	}
+
+	setting, err := GetAuditSetting()
+	if err != nil {
+		t.Fatalf("GetAuditSetting() error = %v", err)
+	}
+
+	if !setting.Forward.Enabled || setting.Forward.Address != "log.example.com:514" {
+		t.Errorf("旧行的 syslog 配置没有落到 Forward: %+v", setting.Forward)
+	}
+	if setting.Forward.Network != SyslogNetworkTCP || setting.Forward.Format != LogFormatJSON {
+		t.Errorf("旧行的网络/格式没有保留: %+v", setting.Forward)
+	}
+	// 旧行没有 mode：要由默认值顶上来（而不是空串），否则界面选择器与下游分派都要额外猜一次。
+	if setting.Forward.Mode != LogForwardModeSyslog {
+		t.Errorf("mode = %q, want %q", setting.Forward.Mode, LogForwardModeSyslog)
+	}
+	if setting.Forward.Kafka.UseTLS != true || setting.Forward.Kafka.SASLMechanism != KafkaSASLNone {
+		t.Errorf("旧行缺失的 kafka 子块没有落成默认值: %+v", setting.Forward.Kafka)
+	}
+	if setting.RetentionDays != 90 {
+		t.Errorf("retentionDays = %d, want 90", setting.RetentionDays)
+	}
+	// 旧行里的 stdout 已关闭，不能被默认值（开启）覆盖。
+	if setting.Stdout.Enabled {
+		t.Error("旧行里的 stdout.enabled=false 被默认值覆盖了")
+	}
+}
+
+// 设置指纹只看内容：多副本收敛靠它判断「变了没有」。
+func TestAuditSettingRevisionFollowsContent(t *testing.T) {
+	setupAuditSettingTestDB(t)
+
+	if _, err := AuditSettingRevision(); err == nil {
+		t.Error("还没有设置行时应当报错（调用方据此走「安全地重载一次」的分支）")
+	}
+
+	if _, err := GetAuditSetting(); err != nil {
+		t.Fatalf("seeding the default setting: %v", err)
+	}
+	first, err := AuditSettingRevision()
+	if err != nil {
+		t.Fatalf("AuditSettingRevision() error = %v", err)
+	}
+	if first == "" {
+		t.Fatal("fingerprint is empty")
+	}
+
+	same, err := AuditSettingRevision()
+	if err != nil {
+		t.Fatalf("AuditSettingRevision() error = %v", err)
+	}
+	if same != first {
+		t.Errorf("未修改时指纹应当稳定: %q != %q", same, first)
+	}
+
+	setting, err := GetAuditSetting()
+	if err != nil {
+		t.Fatalf("GetAuditSetting() error = %v", err)
+	}
+	setting.Forward.Enabled = true
+	setting.Forward.Address = "log.example.com:514"
+	if _, err := UpdateAuditSetting(*setting); err != nil {
+		t.Fatalf("UpdateAuditSetting() error = %v", err)
+	}
+
+	changed, err := AuditSettingRevision()
+	if err != nil {
+		t.Fatalf("AuditSettingRevision() error = %v", err)
+	}
+	if changed == first {
+		t.Error("内容改了，指纹必须变（否则多副本不会收敛）")
 	}
 }
