@@ -241,6 +241,7 @@
 | 用户可配置偏好 | 见 `plans/2026-09-18-server-side-user-preferences.md`（当前分散在 localStorage） |
 | 改「谁必须绑定 MFA」/ 自助绑定口径 | `pkg/model/security_setting.go`（`MFARequiredFor`）→ `pkg/auth/middleware.go`（绑定引导拦截）→ `pkg/auth/login_handler.go`（登录挑战）→ `pkg/users/handler.go`（自助绑定）→ `ui/src/lib/mfa-enrollment.ts`（前端镜像）；口径见 `plans/2026-09-20-directory-user-mfa-enrollment.md` |
 | 换数据库（如切到 PostgreSQL 以扩副本） | `tools/dbmigrate`（搬数据）→ `pkg/common/common.go` 的 `DB_TYPE`/`DB_DSN` 环境变量 → `dev.env` / `charts/kite` 的 `db.*`；步骤与校验见 `plans/2026-09-20-sqlite-to-postgres-migration.md` |
+| 用 PostgreSQL 部署（清单 / Helm / systemd） | `deploy/install-postgres.yaml`（K8s 清单，与 `deploy/install-mysql.yaml` 互斥）→ `charts/kite` 的 `db.type=postgres`+`db.dsn` → `deploy/kite@.service` + `deploy/kite.env.example`（裸进程/多副本）；建库、DSN、连接数、校验与 PG 特有的坑见 `plans/2026-09-21-postgres-deployment.md`，PG 12 的参数与升级路径见 `plans/2026-09-20-pg12-now-and-upgrade-path.md` |
 | 从 Rancher 迁移授权 | `scripts/migrate-rancher-rbac.sh`（入口）/ `scripts/build-rancherrbac.sh`（打成单文件）→ `tools/rancherrbac`（PRTB / CRTB + 角色模板 → 权限绑定组与角色，组名用 Rancher 上的项目名、角色名用角色模板 ID，不加前缀）；支持配置文件（`-init-config` 生成模板），Rancher API 密钥拿不到时用 `-from-dir` 读导出的集合 JSON；命名空间的聚合接口只返回 `local` 集群，其余集群按 `/k8s/clusters/<集群 ID>/v1/namespaces` 补读（离线时对应 `k8s_clusters_<集群 ID>_v1_namespaces.json`）；步骤与排错见 `tools/rancherrbac/README.md`，映射口径与未验证项见 `plans/2026-09-21-rancher-rbac-migration.md` |
 
 ---

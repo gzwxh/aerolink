@@ -1,0 +1,216 @@
+# Kite Kubernetes 部署清单（外部 PostgreSQL 数据库版）
+#
+# 这是 deploy/install-mysql.yaml 的 PostgreSQL 版，两份是**互斥的替代方案**：
+#   Namespace / ServiceAccount / Secret / Deployment 的名字完全一样（都叫 kite），
+#   同一个集群里同时 apply 会互相覆盖。选一条路走。
+#
+# 使用前必改项（搜索 REPLACE-ME）：
+#   1. JWT_SECRET / KITE_ENCRYPT_KEY —— 用 `openssl rand -base64 32` 生成随机值。
+#      ⚠ KITE_ENCRYPT_KEY 用于加密存库的敏感数据（集群 kubeconfig、LDAP/SMTP/OAuth
+#      密码、AI Key 等），一旦投入使用不可更换，否则已保存的凭据将无法解密；
+#      请务必妥善备份（丢了等于所有集群要重新接入）。
+#      未设置时服务会拒绝启动（除非显式打开 KITE_ALLOW_INSECURE_SECRETS，生产禁用）。
+#   2. POSTGRES_DSN —— 替换为实际的 PostgreSQL 连接信息。
+#
+# 数据库要求（提前手动建好，Kite 不做建库）：
+#   -- 用超级用户执行
+#   CREATE DATABASE kite;
+#   CREATE ROLE kite LOGIN PASSWORD '你的密码';
+#   ALTER DATABASE kite OWNER TO kite;
+#   -- 不给 kite 角色 CREATEDB / CREATEROLE：应用不需要，给了只是扩大影响面。
+#   -- 数据表由 Kite 首次启动时自动迁移创建（AutoMigrate），无需手工建表。
+#
+# 数据库版本：PostgreSQL 12 及以上（12.12 / 12.22 / 13.23 / 18.6 已实测跑通，
+# 行为一致）。建库时请一并固定编码与排序规则——它们最难事后补：
+#   CREATE DATABASE kite ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' LC_CTYPE 'en_US.utf8'
+#     TEMPLATE template0;
+#   记下实际使用的 datcollate（现网是 en_US.utf8）：它由 glibc 提供，将来升级
+#   glibc 后可能需要 ALTER DATABASE kite REFRESH COLLATION VERSION; 并 REINDEX。
+#
+# 详细步骤、校验清单与已知坑见 docs/dev/plans/2026-09-21-postgres-deployment.md。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kite
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  # 集群里可能已有 Helm 管理的同名 CRB（旧 version 的 kite release），
+  # 用独立名字避免 apply 时覆盖它。
+  name: kite-postgres
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: kite
+    namespace: kite
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kite
+  namespace: kite
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kite-secret
+  namespace: kite
+type: Opaque
+stringData:
+  # openssl rand -base64 32 生成，妥善保存
+  JWT_SECRET: "3z7WBs8FsvXbFs1gPM6zs69iN0z6hyB2Id1rfSTseLU="
+  KITE_ENCRYPT_KEY: "3z7WBs8FsvXbFs1gPM6zs69iN0z6hyB2Id1rfSTseLU="
+  # pgx 支持两种写法，任选一种：
+  #
+  # ① key=value（本项目文档里用得最多）：
+  #   host=主机 port=端口 user=kite password=口令 dbname=kite sslmode=disable TimeZone=Asia/Shanghai
+  #   口令含空格或引号时用单引号包住并转义（\'）；含 @ : / 之类不需要转义。
+  #
+  # ② URL（口令里有特殊字符时更省事，按 URL 规则百分号编码）：
+  #   postgres://kite:%40pwd@主机:端口/kite?sslmode=disable&TimeZone=Asia%2FShanghai
+  #
+  # ⚠ TimeZone 必须显式写：漏写**不会报错**，只会让时间戳按服务端时区（官方镜像默认
+  #   Etc/UTC）解释，界面与审计日志里的时间整体偏移 8 小时。应用启动时会对此打 warning。
+  # ⚠ sslmode：现网 PG 在集群外、未开 TLS，用 disable；若开了 TLS 改为 require/verify-full。
+  # 现网库（10.100.117.8 上 docker 起的 kite-postgres12，PG 12.12）宿主端口是 5433，
+  # 集群内 Pod 通过节点 IP 访问，库与角色都是 kite（非超级用户）。
+  POSTGRES_DSN: "host=10.10.11.111 port=5432 user=postgres password=postgres dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: kite
+  name: kite
+  namespace: kite
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kite
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: kite
+    spec:
+      serviceAccountName: kite
+      containers:
+        - image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite:v1.0.0
+          imagePullPolicy: Always
+          name: kite
+          envFrom:
+            - secretRef:
+                name: kite-secret
+          env:
+            - name: DB_TYPE
+              value: postgres
+            - name: DB_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: kite-secret
+                  key: POSTGRES_DSN
+            - name: KITE_AUDIT_SINK
+              value: parquet
+            - name: KITE_AUDIT_ARCHIVE_DIR
+              value: /var/log/kite/archive
+            - name: KITE_LOG_FILE
+              value: /var/log/kite/kite.log
+            # 连接池：每个副本最多占这么多条连接，而 PostgreSQL 的 max_connections 是
+            # **全部客户端**的总坑位。硬约束：
+            #   副本数 × KITE_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ max_connections
+            # 现网库 max_connections=400：1 副本留默认 100 没问题；扩到 3 副本时
+            # 3 × 100 + 20 = 320 ≤ 400 也够，到 4 副本要么调大数据库侧、要么把这里降到 80。
+            # 另外 pg_dump / psql 也要占坑位，别把余量吃到 0。
+            # - name: KITE_DB_MAX_OPEN_CONNS
+            #   value: "100"
+            # - name: KITE_DB_MAX_IDLE_CONNS
+            #   value: "10"
+            # - name: KITE_DB_CONN_MAX_LIFETIME_MINUTES
+            #   value: "10"
+            # Kite 通过 in-cluster kubeconfig（ServiceAccount 令牌）访问本集群；
+            # 管理多集群时在页面上添加其它集群的 kubeconfig（加密后存于 PostgreSQL）。
+            # 反向代理/Ingress 场景下必须收紧为真实代理网段，防止伪造来源 IP：
+            - name: TRUSTED_PROXIES
+              value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+            # 审计日志的落地方式（五选一、互斥，**启动时**生效、页面只读）：
+            #   database（默认，不设即可） / parquet / elasticsearch / victorialogs / openobserve
+            #   ① parquet：必须同时给归档目录（KITE_AUDIT_ARCHIVE_DIR，或挂 config.yaml 配
+            #      auditArchive.localDir），否则会拒绝启动。S3 远端副本可在页面上另配。
+            #   ② elasticsearch：ES 地址必须先存在（页面先填好「审计设置 → ES」并保存，或用
+            #      config.yaml 的 auditArchive.elasticsearch.urls 播种），否则会拒绝启动。
+            #   ③ victorialogs：VictoriaLogs（**不是** VictoriaMetrics）地址必须先存在，同上。
+            #   ④ openobserve：OpenObserve 地址必须先存在，同上。
+            # 多副本时每个副本都要配同一个 KITE_AUDIT_SINK，否则记录会散到不同存储里。
+            # 归档与系统日志落盘（可选）：是否归档由上面的 auditSink 决定，
+            # 这里的归档目录只作启动兜底；KITE_LOG_FILE 让 klog 落文件、不再写 stderr。
+            # - name: KITE_AUDIT_SINK
+            #   value: parquet
+            # - name: KITE_AUDIT_ARCHIVE_DIR
+            #   value: /var/log/kite/archive
+            # - name: KITE_LOG_FILE
+            #   value: /var/log/kite/kite.log
+          # 与上面的 KITE_* 配套（emptyDir 仅 Pod 生命周期内保留，生产换 PVC；
+          # 多副本时归档目录必须是共享卷，否则检索查不全）：
+          # volumeMounts:
+          #   - name: kite-logs
+          #     mountPath: /var/log/kite
+          # volumes:
+          #   - name: kite-logs
+          #     emptyDir: {}
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+      # 保证重启策略与优雅退出
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: kite
+  name: kite
+  namespace: kite
+spec:
+  # 对外访问：http://<节点IP>:27862（集群允许的 nodePort 范围 20000-32767）。
+  # 固定端口是为了让 URL 稳定、可直接写进文档；冲突时改 nodePort 即可。
+  type: NodePort
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+      nodePort: 27862
+  selector:
+    app: kite

@@ -1,5 +1,9 @@
 # Kite Kubernetes 部署清单（外部 MySQL 数据库版）
 #
+# PostgreSQL 版见同目录的 install-postgres.yaml（现网用的是 PostgreSQL）。
+# 两份是**互斥的替代方案**：Namespace / ServiceAccount / Secret / Deployment 的名字
+# 完全一样（都叫 kite），同一个集群里同时 apply 会互相覆盖。
+#
 # 使用前必改项（搜索 REPLACE-ME）：
 #   1. JWT_SECRET / KITE_ENCRYPT_KEY —— 用 `openssl rand -base64 32` 生成随机值。
 #      ⚠ KITE_ENCRYPT_KEY 用于加密存库的敏感数据（集群 kubeconfig、LDAP/SMTP/OAuth
