@@ -138,7 +138,22 @@ type K8sClient struct {
 	MetricsClient *metricsclient.Clientset
 	CacheEnabled  bool // true when using controller-runtime informer cache
 
+	// Cache 是 manager 持有的 informer 缓存，只在该集群启用缓存时非 nil。
+	// 需要「订阅共享缓存、而不是每条 SSE 连接各建一条上游 watch」的调用方用它
+	// （见 pkg/resources 的 pod watch hub）；为 nil 时调用方应显式退回直连路径。
+	Cache cache.Cache
+
+	ctx    context.Context
 	cancel context.CancelFunc
+}
+
+// Done 在该客户端的缓存与客户端被停用（集群被移除或重建）后关闭。
+// 订阅共享缓存的调用方监听它来清理自己，避免指向已停用的客户端。
+func (c *K8sClient) Done() <-chan struct{} {
+	if c.ctx == nil {
+		return nil
+	}
+	return c.ctx.Done()
 }
 
 // NewClient 依据 rest.Config 创建 K8sClient
@@ -168,6 +183,7 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 	cacheEnabled := os.Getenv("DISABLE_CACHE") != "true"
 
 	var c client.Client
+	var informerCache cache.Cache
 	if !cacheEnabled {
 		c, err = client.New(config, client.Options{
 			Scheme: runtimeScheme,
@@ -218,6 +234,7 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 				"Consider increasing AEROLINK_CACHE_SYNC_TIMEOUT or setting DISABLE_CACHE=true", cacheSyncTimeout())
 		}
 		c = mgr.GetClient()
+		informerCache = mgr.GetCache()
 	}
 
 	return &K8sClient{
@@ -226,6 +243,8 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 		Configuration: config,
 		MetricsClient: metricsClient,
 		CacheEnabled:  cacheEnabled,
+		Cache:         informerCache,
+		ctx:           ctx,
 		cancel:        cancel,
 	}, nil
 }

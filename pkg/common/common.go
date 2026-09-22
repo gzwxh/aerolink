@@ -82,6 +82,11 @@ var (
 
 	AgentPodNamespace = "kube-system"
 
+	// MaxWatchPerUser 是单个用户在每个集群上允许并发持有的资源 watch（SSE）
+	// 连接数（AEROLINK_MAX_WATCH_PER_USER，默认 8；<=0 表示不限制）。
+	// 超限的新连接会被拒绝（429），前端据此降级为轮询。
+	MaxWatchPerUser = 8
+
 	// ConfigFilePath 是外部配置文件的路径（通过 AEROLINK_CONFIG_FILE 环境变量设置）
 	ConfigFilePath = ""
 
@@ -287,7 +292,7 @@ func loadServerEnvs() {
 	klog.Infof("Trusted proxies configured: %v", TrustedProxies)
 }
 
-// loadRuntimeEnvs 读取运行形态相关配置：命名空间、镜像、匿名访问与配置文件路径。
+// loadRuntimeEnvs 读取运行形态相关配置：命名空间、镜像、匿名访问、watch 并发上限与配置文件路径。
 func loadRuntimeEnvs() {
 	if ns := os.Getenv("NAMESPACE"); ns != "" {
 		AgentPodNamespace = ns
@@ -306,6 +311,16 @@ func loadRuntimeEnvs() {
 	if v := os.Getenv("ANONYMOUS_USER_ENABLED"); v == "true" {
 		AnonymousUserEnabled = true
 		klog.Warningf("Anonymous user is enabled, this is not secure for production!")
+	}
+	if v := Getenv("MAX_WATCH_PER_USER"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			MaxWatchPerUser = n
+			if n <= 0 {
+				klog.Warningf("AEROLINK_MAX_WATCH_PER_USER=%d disables the per-user watch connection limit", n)
+			}
+		} else {
+			klog.Warningf("Invalid AEROLINK_MAX_WATCH_PER_USER %q, keeping %d", v, MaxWatchPerUser)
+		}
 	}
 	if v := Getenv("CONFIG_FILE"); v != "" {
 		ConfigFilePath = v

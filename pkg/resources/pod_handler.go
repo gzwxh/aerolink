@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,10 +19,12 @@ import (
 	"github.com/zxh326/kite/pkg/cluster"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/kube"
+	"github.com/zxh326/kite/pkg/middleware"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/watch"
@@ -104,14 +107,59 @@ func GetPodMetrics(metricsMap map[string]metricsv1.PodMetrics, pod *corev1.Pod) 
 	}
 }
 
-func (h *PodHandler) ListMetrics(c *gin.Context) (map[string]metricsv1.PodMetrics, error) {
-	cs := c.MustGet("cluster").(*cluster.ClientSet)
+const defaultPodMetricsInterval = 15 * time.Second
+
+// podWatchPingInterval 是 SSE 保活注释（`: ping`）的间隔，与指标推送周期解耦：
+// 即使把 AEROLINK_POD_METRICS_INTERVAL 调大，心跳也不会跟着变慢。
+const podWatchPingInterval = 15 * time.Second
+
+// podMetricsInterval 返回周期推送 Pod 用量的间隔，可用 AEROLINK_POD_METRICS_INTERVAL
+// （秒）覆盖，默认与历史行为一致（15s）。
+func podMetricsInterval() time.Duration {
+	if v := common.Getenv("POD_METRICS_INTERVAL"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil && secs > 0 {
+			return time.Duration(secs) * time.Second
+		}
+	}
+	return defaultPodMetricsInterval
+}
+
+// podMetricsIntervalFn 供测试注入短周期。
+var podMetricsIntervalFn = podMetricsInterval
+
+// podMetricsUpdate 是周期推送的轻量用量变化。requests/limits 属于 Pod 规格，
+// 由 Pod 本体携带，不随周期变化，因此这里只带用量。
+type podMetricsUpdate struct {
+	Namespace   string `json:"namespace"`
+	Name        string `json:"name"`
+	CPUUsage    int64  `json:"cpuUsage"`
+	MemoryUsage int64  `json:"memoryUsage"`
+}
+
+// podUsageFromMetrics 汇总一个 PodMetrics 内所有容器的用量，
+// 口径与 GetPodMetrics 保持一致。
+func podUsageFromMetrics(m metricsv1.PodMetrics) (int64, int64) {
+	var cpuUsage, memUsage int64
+	for _, container := range m.Containers {
+		if cpuQuantity, ok := container.Usage["cpu"]; ok {
+			cpuUsage += cpuQuantity.MilliValue()
+		}
+		if memQuantity, ok := container.Usage["memory"]; ok {
+			memUsage += memQuantity.Value()
+		}
+	}
+	return cpuUsage, memUsage
+}
+
+// listPodMetrics 读取 Pod 用量并按 ns/name 建索引。结果只取决于集群与过滤条件、
+// 与登录用户无关，因此同一个周期内可以在该集群的所有连接之间共享（见 pod watch hub）。
+func listPodMetrics(ctx context.Context, cs *cluster.ClientSet, namespace, labelSelector string) (map[string]metricsv1.PodMetrics, error) {
 	var metricsList metricsv1.PodMetricsList
 	var listOpts []client.ListOption
-	if namespace := c.Param("namespace"); namespace != "" && namespace != common.AllNamespaces {
+	if namespace != "" && namespace != common.AllNamespaces {
 		listOpts = append(listOpts, client.InNamespace(namespace))
 	}
-	if labelSelector := c.Query("labelSelector"); labelSelector != "" {
+	if labelSelector != "" {
 		selector, err := metav1.ParseToLabelSelector(labelSelector)
 		if err != nil {
 			return nil, fmt.Errorf("invalid labelSelector parameter: %w", err)
@@ -122,15 +170,18 @@ func (h *PodHandler) ListMetrics(c *gin.Context) (map[string]metricsv1.PodMetric
 		}
 		listOpts = append(listOpts, client.MatchingLabelsSelector{Selector: labelSelectorOption})
 	}
-	if err := cs.K8sClient.List(c, &metricsList, listOpts...); err != nil {
+	if err := cs.K8sClient.List(ctx, &metricsList, listOpts...); err != nil {
 		klog.Warningf("Failed to list pod metrics: %v", err)
 	}
 
-	metricsMap := lo.KeyBy(metricsList.Items, func(item metricsv1.PodMetrics) string {
+	return lo.KeyBy(metricsList.Items, func(item metricsv1.PodMetrics) string {
 		return item.Namespace + "/" + item.Name
-	})
+	}), nil
+}
 
-	return metricsMap, nil
+func (h *PodHandler) ListMetrics(c *gin.Context) (map[string]metricsv1.PodMetrics, error) {
+	cs := c.MustGet("cluster").(*cluster.ClientSet)
+	return listPodMetrics(c.Request.Context(), cs, c.Param("namespace"), c.Query("labelSelector"))
 }
 
 func (h *PodHandler) List(c *gin.Context) {
@@ -742,13 +793,43 @@ func (h *PodHandler) recordFileAudit(c *gin.Context, cs *cluster.ClientSet, name
 	}
 }
 
-func writeSSE(c *gin.Context, event string, payload any) error {
+func setSSEHeaders(c *gin.Context) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache, no-transform")
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 	// 尝试分块流式传输
 	c.Writer.Header().Set("Transfer-Encoding", "chunked")
+}
+
+// initSSE 先把响应头与一条注释行写出去。上游 watch 建立前就写出响应头，
+// 客户端不必等第一个事件（最长一个推送周期）才拿到响应，避免一直 pending。
+func initSSE(c *gin.Context, clusterName string) error {
+	setSSEHeaders(c)
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return fmt.Errorf("streaming unsupported")
+	}
+
+	c.Writer.WriteHeaderNow()
+	connectedWritten, err := fmt.Fprint(c.Writer, ": connected\n\n")
+	if err != nil {
+		return err
+	}
+	// 服务端主动断开（event: close）后，浏览器按这个间隔重连，避免立刻回连打风暴。
+	retryWritten, err := fmt.Fprint(c.Writer, "retry: 5000\n\n")
+	if err != nil {
+		return err
+	}
+	flusher.Flush()
+
+	recordWatchBytes(clusterName, connectedWritten+retryWritten)
+	return nil
+}
+
+func writeSSE(c *gin.Context, clusterName string, event string, payload any) error {
+	setSSEHeaders(c)
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
@@ -759,13 +840,127 @@ func writeSSE(c *gin.Context, event string, payload any) error {
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(c.Writer, "event: %s\n", event); err != nil {
+	eventWritten, err := fmt.Fprintf(c.Writer, "event: %s\n", event)
+	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", b); err != nil {
+	dataWritten, err := fmt.Fprintf(c.Writer, "data: %s\n\n", b)
+	if err != nil {
 		return err
 	}
 	flusher.Flush()
+
+	middleware.WatchEventsPushed.WithLabelValues(clusterName, string(common.Pods), event).Inc()
+	recordWatchBytes(clusterName, eventWritten+dataWritten)
+	return nil
+}
+
+// recordWatchBytes 累计资源 watch 写出到客户端的字节数（未压缩口径）。
+func recordWatchBytes(clusterName string, written int) {
+	if written <= 0 {
+		return
+	}
+	middleware.WatchPushBytes.WithLabelValues(clusterName, string(common.Pods)).Add(float64(written))
+}
+
+// reducePod 按 reduce 参数裁剪 Pod 字段。裁剪只依赖 Pod 本身（与登录用户无关），
+// 事件推送与周期推送共用同一份口径。
+func reducePod(pod *corev1.Pod, reduce bool) *PodWithMetrics {
+	obj := &PodWithMetrics{Pod: pod}
+	if !reduce {
+		return obj
+	}
+	obj.Pod = pod.DeepCopy()
+	obj.ObjectMeta = metav1.ObjectMeta{
+		Name:              pod.Name,
+		Namespace:         pod.Namespace,
+		CreationTimestamp: pod.CreationTimestamp,
+		DeletionTimestamp: pod.DeletionTimestamp,
+		GenerateName:      pod.GenerateName,
+	}
+	obj.Spec = corev1.PodSpec{
+		NodeName: pod.Spec.NodeName,
+		InitContainers: lo.Map(pod.Spec.InitContainers, func(c corev1.Container, _ int) corev1.Container {
+			return corev1.Container{Name: c.Name, Image: c.Image, RestartPolicy: c.RestartPolicy}
+		}),
+		Containers: lo.Map(pod.Spec.Containers, func(c corev1.Container, _ int) corev1.Container {
+			return corev1.Container{Name: c.Name, Image: c.Image, RestartPolicy: c.RestartPolicy}
+		}),
+	}
+	return obj
+}
+
+// watchMetricsMap 取本周期用于推送的 Pod 用量：有共享 hub 且请求不带 labelSelector 时，
+// 复用该集群本周期的读取结果（省掉「每连接各读一次」的重复计算，P1）；
+// 带 labelSelector 或没有 hub 时退回每连接各自读取，结果始终与请求条件一致。
+func (h *PodHandler) watchMetricsMap(c *gin.Context, cs *cluster.ClientSet, hub *podWatchHub, namespace, labelSelector string, interval time.Duration) map[string]metricsv1.PodMetrics {
+	if hub != nil && labelSelector == "" {
+		metricsMap, err := hub.podMetricsMap(c.Request.Context(), cs, namespace, interval)
+		if err == nil {
+			return metricsMap
+		}
+		klog.V(2).Infof("shared pod metrics unavailable for cluster %s, falling back to per-connection read: %v", cs.Name, err)
+	}
+	metricsMap, _ := h.ListMetrics(c)
+	return metricsMap
+}
+
+// sendPodWatchSnapshot 用 informer 缓存的快照补上「直连 watch 会补发的那批 ADDED」。
+// 读缓存不产生 apiserver 请求，逐条仍走与事件相同的鉴权与裁剪口径。
+func (h *PodHandler) sendPodWatchSnapshot(
+	c *gin.Context,
+	cs *cluster.ClientSet,
+	user model.User,
+	namespace, labelSelector, fieldSelector string,
+	reduce bool,
+	metricsMap map[string]metricsv1.PodMetrics,
+) error {
+	var (
+		podList  corev1.PodList
+		listOpts []client.ListOption
+	)
+	if namespace != "" {
+		listOpts = append(listOpts, client.InNamespace(namespace))
+	}
+	if labelSelector != "" {
+		selector, err := metav1.ParseToLabelSelector(labelSelector)
+		if err != nil {
+			return fmt.Errorf("invalid labelSelector parameter: %w", err)
+		}
+		parsed, err := metav1.LabelSelectorAsSelector(selector)
+		if err != nil {
+			return fmt.Errorf("failed to convert labelSelector: %w", err)
+		}
+		listOpts = append(listOpts, client.MatchingLabelsSelector{Selector: parsed})
+	}
+	if err := cs.K8sClient.List(c.Request.Context(), &podList, listOpts...); err != nil {
+		return err
+	}
+
+	// fieldSelector 里可能有缓存不支持索引的字段，这里与 hub 的过滤口径保持一致，逐条匹配。
+	var fieldMatcher fields.Selector
+	if fieldSelector != "" {
+		parsed, err := fields.ParseSelector(fieldSelector)
+		if err != nil {
+			return fmt.Errorf("invalid fieldSelector parameter: %w", err)
+		}
+		fieldMatcher = parsed
+	}
+
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+		if fieldMatcher != nil && !fieldMatcher.Matches(podFieldSet(pod)) {
+			continue
+		}
+		if !rbac.CanAccessCurrent(user, string(common.Pods), string(common.VerbGet), cs.Name, pod.Namespace) {
+			continue
+		}
+		obj := reducePod(pod, reduce)
+		obj.Metrics = GetPodMetrics(metricsMap, pod)
+		if err := writeSSE(c, cs.Name, "added", obj); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -788,6 +983,22 @@ func (h *PodHandler) Watch(c *gin.Context) {
 	// 丢弃来自未授权命名空间的事件。
 	user := c.MustGet("user").(model.User)
 
+	// P3：按 (用户, 集群) 限制并发连接。超限时在建立上游 watch / 读用量之前就拒绝，
+	// 明确告知客户端（429），前端据此降级为轮询——而不是让一个人开几十个标签页
+	// 把连接数与推送量一起推上去。
+	release, ok := podWatchLimiter.acquire(user.Username, cs.Name, common.MaxWatchPerUser)
+	if !ok {
+		middleware.WatchRejected.WithLabelValues(cs.Name).Inc()
+		klog.V(2).Infof("pod watch rejected for user %s on cluster %s: over limit %d", user.Username, cs.Name, common.MaxWatchPerUser)
+		c.Header("Retry-After", strconv.Itoa(int(watchLimitRetryAfter.Seconds())))
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error": fmt.Sprintf("too many concurrent watch connections (limit %d per user per cluster)", common.MaxWatchPerUser),
+			"code":  watchLimitExceededCode,
+		})
+		return
+	}
+	defer release()
+
 	listOpts := metav1.ListOptions{}
 	if labelSelector != "" {
 		listOpts.LabelSelector = labelSelector
@@ -805,85 +1016,126 @@ func (h *PodHandler) Watch(c *gin.Context) {
 		klog.Warningf("Failed to list pod metrics: %v", err)
 	}
 
-	watchInterface, err := cs.K8sClient.ClientSet.CoreV1().Pods(ns).Watch(c.Request.Context(), listOpts)
-	if err != nil {
-		_ = writeSSE(c, "error", gin.H{"error": fmt.Sprintf("failed to start watch: %v", err)})
+	// 先把响应头与 retry 写出去：上游 watch 建立前客户端就能拿到响应头，
+	// 不必等第一个事件（最长一个推送周期）才结束 pending。
+	middleware.WatchConnections.WithLabelValues(cs.Name, string(common.Pods)).Inc()
+	defer middleware.WatchConnections.WithLabelValues(cs.Name, string(common.Pods)).Dec()
+
+	if err := initSSE(c, cs.Name); err != nil {
+		klog.Warningf("failed to init SSE stream: %v", err)
 		return
 	}
-	defer watchInterface.Stop()
 
-	// 保活心跳
-	ticker := time.NewTicker(15 * time.Second)
+	// P1：优先订阅集群级共享的 hub——上游 pod watch 从「每连接一条」降为「每集群一条」。
+	// 缓存不可用（DISABLE_CACHE=true 或客户端已停用）时显式退回直连 watch，不静默降级。
+	var (
+		watchEvents <-chan podWatchEvent
+		stopSource  func()
+	)
+	hub, hubErr := acquirePodWatchHub(cs)
+	if hubErr == nil {
+		subscription, err := hub.subscribe(ns, labelSelector, fieldSelector)
+		if err != nil {
+			hubErr = err
+		} else {
+			watchEvents = subscription.Events()
+			stopSource = subscription.Close
+			// 直连 watch 建立时 apiserver 会补发一批 ADDED 当作初始快照，
+			// hub 路径没有这一步，这里用缓存快照补上（不产生 apiserver 请求）。
+			if err := h.sendPodWatchSnapshot(c, cs, user, ns, labelSelector, fieldSelector, reduce, metricsMap); err != nil {
+				klog.Warningf("failed to send pod watch snapshot for cluster %s: %v", cs.Name, err)
+			}
+		}
+	}
+	if watchEvents == nil {
+		klog.V(2).Infof("pod watch for cluster %s uses direct watch: %v", cs.Name, hubErr)
+		events, stop, err := directPodWatch(c.Request.Context(), cs, ns, listOpts)
+		if err != nil {
+			_ = writeSSE(c, cs.Name, "error", gin.H{"error": fmt.Sprintf("failed to start watch: %v", err)})
+			return
+		}
+		watchEvents = events
+		stopSource = stop
+	}
+	defer stopSource()
+
+	// 指标推送与保活心跳各自独立定时器：心跳节奏不随 AEROLINK_POD_METRICS_INTERVAL 变化。
+	metricsInterval := podMetricsIntervalFn()
+	ticker := time.NewTicker(metricsInterval)
 	defer ticker.Stop()
+	pingTicker := time.NewTicker(podWatchPingInterval)
+	defer pingTicker.Stop()
 
 	flusher, _ := c.Writer.(http.Flusher)
+
+	// lastUsage 记录上一次下发的用量：周期内没有变化的 Pod 不再推送，
+	// 推送量因此与「变化量」成正比，而不是与 Pod 总数成正比。
+	// 每轮只保留当前仍可见的 Pod，Pod 消失后条目随之释放。
+	lastUsage := make(map[string][2]int64)
 
 	for {
 		select {
 		case <-c.Request.Context().Done():
-			_ = writeSSE(c, "close", gin.H{"message": "connection closed"})
+			_ = writeSSE(c, cs.Name, "close", gin.H{"message": "connection closed"})
 			return
+		case <-pingTicker.C:
+			_, _ = fmt.Fprintf(c.Writer, ": ping\n\n") // comment line per SSE
+			flusher.Flush()
 		case <-ticker.C:
-			metricsMap, _ = h.ListMetrics(c)
+			metricsMap = h.watchMetricsMap(c, cs, hub, ns, labelSelector, metricsInterval)
+			updates := make([]podMetricsUpdate, 0, len(metricsMap))
+			nextUsage := make(map[string][2]int64, len(metricsMap))
 			for _, metrics := range metricsMap {
 				if !rbac.CanAccessCurrent(user, string(common.Pods), string(common.VerbGet), cs.Name, metrics.Namespace) {
 					continue
 				}
-				pod, err := h.GetResource(c, metrics.Namespace, metrics.Name)
-				if err != nil {
-					klog.Warningf("Failed to get pod: %v", err)
+				// 与 GetPodMetrics 同一口径：没有容器用量时不下发，避免把数字刷成 0。
+				if len(metrics.Containers) == 0 {
 					continue
 				}
-				p := pod.(*corev1.Pod)
-				obj := &PodWithMetrics{Pod: p, Metrics: GetPodMetrics(metricsMap, p)}
-				_ = writeSSE(c, "modified", obj)
+				key := metrics.Namespace + "/" + metrics.Name
+				cpuUsage, memUsage := podUsageFromMetrics(metrics)
+				if prev, ok := lastUsage[key]; ok && prev[0] == cpuUsage && prev[1] == memUsage {
+					nextUsage[key] = prev
+					continue
+				}
+				nextUsage[key] = [2]int64{cpuUsage, memUsage}
+				updates = append(updates, podMetricsUpdate{
+					Namespace:   metrics.Namespace,
+					Name:        metrics.Name,
+					CPUUsage:    cpuUsage,
+					MemoryUsage: memUsage,
+				})
 			}
-			_, _ = fmt.Fprintf(c.Writer, ": ping\n\n") // comment line per SSE
-			flusher.Flush()
-		case event, ok := <-watchInterface.ResultChan():
+			lastUsage = nextUsage
+			if len(updates) > 0 {
+				_ = writeSSE(c, cs.Name, "metrics", updates)
+			}
+		case event, ok := <-watchEvents:
 			if !ok {
-				_ = writeSSE(c, "close", gin.H{"message": "watch channel closed"})
+				_ = writeSSE(c, cs.Name, "close", gin.H{"message": "watch channel closed"})
 				return
 			}
 
-			pod, ok := event.Object.(*corev1.Pod)
-			if !ok || pod == nil {
+			pod := event.Pod
+			if pod == nil {
 				continue
 			}
 			if !rbac.CanAccessCurrent(user, string(common.Pods), string(common.VerbGet), cs.Name, pod.Namespace) {
 				continue
 			}
 
-			obj := &PodWithMetrics{Pod: pod}
-			if reduce {
-				obj.Pod = pod.DeepCopy()
-				obj.ObjectMeta = metav1.ObjectMeta{
-					Name:              pod.Name,
-					Namespace:         pod.Namespace,
-					CreationTimestamp: pod.CreationTimestamp,
-					DeletionTimestamp: pod.DeletionTimestamp,
-					GenerateName:      pod.GenerateName,
-				}
-				obj.Spec = corev1.PodSpec{
-					NodeName: pod.Spec.NodeName,
-					InitContainers: lo.Map(pod.Spec.InitContainers, func(c corev1.Container, _ int) corev1.Container {
-						return corev1.Container{Name: c.Name, Image: c.Image, RestartPolicy: c.RestartPolicy}
-					}),
-					Containers: lo.Map(pod.Spec.Containers, func(c corev1.Container, _ int) corev1.Container {
-						return corev1.Container{Name: c.Name, Image: c.Image, RestartPolicy: c.RestartPolicy}
-					}),
-				}
-			}
+			obj := reducePod(pod, reduce)
 			obj.Metrics = GetPodMetrics(metricsMap, pod)
 			switch event.Type {
 			case watch.Added:
-				_ = writeSSE(c, "added", obj)
+				_ = writeSSE(c, cs.Name, "added", obj)
 			case watch.Modified:
-				_ = writeSSE(c, "modified", obj)
+				_ = writeSSE(c, cs.Name, "modified", obj)
 			case watch.Deleted:
-				_ = writeSSE(c, "deleted", obj)
+				_ = writeSSE(c, cs.Name, "deleted", obj)
 			case watch.Error:
-				_ = writeSSE(c, "error", gin.H{"error": "watch error"})
+				_ = writeSSE(c, cs.Name, "error", gin.H{"error": "watch error"})
 			default:
 				// 忽略
 			}

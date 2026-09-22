@@ -1,14 +1,17 @@
 package resources
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -253,7 +256,7 @@ func TestPodWatchRBACDoesNotJoinPermissionsAcrossRoles(t *testing.T) {
 	})
 
 	watchServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/pods" || r.URL.Query().Get("watch") != "true" {
+		if !strings.HasSuffix(r.URL.Path, "/pods") || r.URL.Query().Get("watch") != "true" {
 			http.NotFound(w, r)
 			return
 		}
@@ -1436,4 +1439,271 @@ func TestPodAPIDescribe(t *testing.T) {
 			t.Fatalf("describe handler calls = %d, want 0", calls)
 		}
 	})
+}
+
+// TestInitSSEWritesHeadersImmediately 覆盖 P2：上游 watch 建立之前就把响应头、
+// `: connected` 与 retry 写出去，客户端不必等首个事件。
+func TestInitSSEWritesHeadersImmediately(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+
+	if err := initSSE(c, "cluster-a"); err != nil {
+		t.Fatalf("initSSE returned error: %v", err)
+	}
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if got := recorder.Header().Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("Content-Type = %q, want text/event-stream", got)
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{": connected", "retry: 5000"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("initSSE 输出缺少 %q; body=%q", want, body)
+		}
+	}
+	if !recorder.Flushed {
+		t.Fatal("initSSE 应立刻 flush，否则客户端拿不到响应头")
+	}
+}
+
+// setTestPodMetricsInterval 缩短周期推送间隔；t.Cleanup 会恢复原值。
+func setTestPodMetricsInterval(t *testing.T, interval time.Duration) {
+	t.Helper()
+	original := podMetricsIntervalFn
+	podMetricsIntervalFn = func() time.Duration { return interval }
+	t.Cleanup(func() { podMetricsIntervalFn = original })
+}
+
+type podWatchSSEEvent struct {
+	name string
+	data string
+}
+
+// collectPodWatchSSE 在后台解析 SSE 事件流，直到流结束或 stop 被关闭。
+func collectPodWatchSSE(body io.Reader, stop <-chan struct{}) <-chan podWatchSSEEvent {
+	events := make(chan podWatchSSEEvent, 32)
+	go func() {
+		defer close(events)
+		scanner := bufio.NewScanner(body)
+		var current podWatchSSEEvent
+		for scanner.Scan() {
+			line := scanner.Text()
+			switch {
+			case strings.HasPrefix(line, "event: "):
+				current.name = strings.TrimPrefix(line, "event: ")
+			case strings.HasPrefix(line, "data: "):
+				current.data = strings.TrimPrefix(line, "data: ")
+			case line == "":
+				if current.name == "" {
+					continue
+				}
+				select {
+				case events <- current:
+				case <-stop:
+					return
+				}
+				current = podWatchSSEEvent{}
+			}
+		}
+		if err := scanner.Err(); err != nil && !errors.Is(err, context.Canceled) {
+			// 连接被测试主动关闭时的读错误是预期内的；辅助 goroutine 里无法调用
+			// t.Fatalf，其余错误也只能就此结束。
+			return
+		}
+	}()
+	return events
+}
+
+func waitPodWatchEvent(t *testing.T, events <-chan podWatchSSEEvent, name string, timeout time.Duration) podWatchSSEEvent {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				t.Fatalf("SSE 流在收到 %s 事件前结束", name)
+			}
+			if event.name == name {
+				return event
+			}
+		case <-deadline:
+			t.Fatalf("等待 %s 事件超时", name)
+		}
+	}
+}
+
+// TestPodWatchTickerPushesChangedMetricsOnly 覆盖 P0：周期推送只下发用量数字，
+// 且用量未变化时不再重复推送。
+func TestPodWatchTickerPushesChangedMetricsOnly(t *testing.T) {
+	setTestPodMetricsInterval(t, 50*time.Millisecond)
+
+	originalConfig := rbac.RBACConfig
+	t.Cleanup(func() { rbac.RBACConfig = originalConfig })
+
+	metricsPod := &metricsv1.PodMetrics{
+		ObjectMeta: metav1.ObjectMeta{Name: "busybox", Namespace: "default"},
+		Containers: []metricsv1.ContainerMetrics{{
+			Name: "app",
+			Usage: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+		}},
+	}
+	watchServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/pods") || r.URL.Query().Get("watch") != "true" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	t.Cleanup(watchServer.Close)
+
+	clientSet, err := kubernetes.NewForConfig(&rest.Config{Host: watchServer.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roles := []common.Role{{
+		Name:       "pod-default-reader",
+		Clusters:   []string{"cluster-a"},
+		Namespaces: []string{"default"},
+		Resources:  []string{string(common.Pods)},
+		Verbs:      []string{string(common.VerbGet)},
+	}}
+	rbac.RBACConfig = &common.RolesConfig{
+		Roles: roles,
+		RoleMapping: []common.RoleMapping{
+			{Name: "pod-default-reader", Users: []string{"alice"}},
+		},
+	}
+	fixture := newPodAPITestFixture(t, podAPITestConfig{
+		user:              model.User{Username: "alice", Roles: roles},
+		clusterAObjects:   []client.Object{metricsPod},
+		clusterAClientSet: clientSet,
+	})
+
+	server := httptest.NewServer(fixture.router)
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/api/v1/pods/default/watch?reduce=true", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("watch returned %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	events := collectPodWatchSSE(response.Body, stop)
+
+	first := waitPodWatchEvent(t, events, "metrics", 3*time.Second)
+	for _, unwanted := range []string{"status", "managedFields", `"spec"`, `"resources"`} {
+		if strings.Contains(first.data, unwanted) {
+			t.Fatalf("metrics 事件携带了 Pod 本体字段 %q; data=%s", unwanted, first.data)
+		}
+	}
+	if !strings.Contains(first.data, `"name":"busybox"`) || !strings.Contains(first.data, `"cpuUsage":100`) {
+		t.Fatalf("metrics 事件缺少用量; data=%s", first.data)
+	}
+
+	// 用量不变时后续周期不应再推 metrics（只保留心跳注释行）。
+	timeout := time.After(500 * time.Millisecond)
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			if event.name == "metrics" {
+				t.Fatalf("用量未变化时不应重复推送; data=%s", event.data)
+			}
+		case <-timeout:
+			return
+		}
+	}
+}
+
+// TestPodWatchReduceStripsHeavyFields 覆盖 P0 抽出的 reducePod 口径：
+// reduce=true 时事件里不带 status/managedFields，不带 reduce 时保持原样。
+func TestPodWatchReduceStripsHeavyFields(t *testing.T) {
+	originalConfig := rbac.RBACConfig
+	t.Cleanup(func() { rbac.RBACConfig = originalConfig })
+
+	podPayload := `{"type":"ADDED","object":{"apiVersion":"v1","kind":"Pod","metadata":{"name":"busybox","namespace":"default","managedFields":[{"manager":"kubelet"}]},"spec":{"containers":[{"name":"app","image":"busybox:1.36","resources":{"limits":{"cpu":"100m"}}}]},"status":{"phase":"Running"}}}`
+
+	roles := []common.Role{{
+		Name:       "pod-default-reader",
+		Clusters:   []string{"cluster-a"},
+		Namespaces: []string{"default"},
+		Resources:  []string{string(common.Pods)},
+		Verbs:      []string{string(common.VerbGet)},
+	}}
+	for _, reduce := range []bool{true, false} {
+		t.Run(fmt.Sprintf("reduce=%t", reduce), func(t *testing.T) {
+			watchServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasSuffix(r.URL.Path, "/pods") || r.URL.Query().Get("watch") != "true" {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = fmt.Fprintln(w, podPayload)
+			}))
+			t.Cleanup(watchServer.Close)
+
+			clientSet, err := kubernetes.NewForConfig(&rest.Config{Host: watchServer.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rbac.RBACConfig = &common.RolesConfig{
+				Roles: roles,
+				RoleMapping: []common.RoleMapping{
+					{Name: "pod-default-reader", Users: []string{"alice"}},
+				},
+			}
+			fixture := newPodAPITestFixture(t, podAPITestConfig{
+				user:              model.User{Username: "alice", Roles: roles},
+				clusterAClientSet: clientSet,
+			})
+
+			path := "/api/v1/pods/default/watch"
+			if reduce {
+				path += "?reduce=true"
+			}
+			response := performPodAPIRequest(t, fixture, http.MethodGet, path, "", nil)
+			if response.Code != http.StatusOK {
+				t.Fatalf("GET %s returned %d, want %d; body=%s", path, response.Code, http.StatusOK, response.Body.String())
+			}
+			body := response.Body.String()
+			if !strings.Contains(body, `"name":"busybox"`) || !strings.Contains(body, `"image":"busybox:1.36"`) {
+				t.Fatalf("GET %s 缺少 Pod 基本字段; body=%s", path, body)
+			}
+			if reduce {
+				for _, stripped := range []string{"managedFields", `"limits"`, `"cpu":"100m"`} {
+					if strings.Contains(body, stripped) {
+						t.Fatalf("reduce=true 仍带回字段 %q; body=%s", stripped, body)
+					}
+				}
+			} else {
+				for _, kept := range []string{"managedFields", `"limits"`, `"cpu":"100m"`} {
+					if !strings.Contains(body, kept) {
+						t.Fatalf("未开启 reduce 时不应裁剪字段 %q; body=%s", kept, body)
+					}
+				}
+			}
+		})
+	}
 }
