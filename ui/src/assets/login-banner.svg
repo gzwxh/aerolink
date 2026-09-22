@@ -13,10 +13,12 @@
       避免全屏背景"晃"。
     - SMIL 只在图像上下文（img）中播放，CSS background-image 会按静态帧渲染，所以
       登录页用 <img> 铺底而不是 backgroundImage。
-    - 风筝、风筝线、舵轮共用 2.6s 的"一拉一放"周期（keyTimes 必须一致），这是全图
-      的牵引记忆点。
+    - 高空的纸鸢就是品牌蓝翼（造型与 ui/src/assets/logo.svg 一致，只换了适配浅色天空的
+      配色并加了一圈白色光晕），风筝线、舵轮与它共用 2.6s 的"一拉一放"周期（keyTimes 必须
+      一致），这是全图的牵引记忆点；风筝线虚线里持续流动的信号、节点连线上转发的光点，
+      都在讲「连通每一个集群」。
 
-    主题：春日晴空放纸鸢。"鸢"是风筝、"Link"是风筝线与节点连线——右下的 Kubernetes
+    主题：春日晴空放鸢。"鸢"是风筝、"Link"是风筝线与节点连线——右下的 Kubernetes
     舵轮牵出一条虚线，连着高空的五彩纸鸢与一串脉冲节点，寓意"飞在 K8s 之上，连通
     每一个集群"。
 
@@ -55,6 +57,43 @@
       <stop offset="55%" stop-color="#1E88E5"/>
       <stop offset="100%" stop-color="#0D47A1"/>
     </radialGradient>
+
+    <!-- 品牌蓝翼（同 ui/src/assets/logo.svg）专用：羽翼 / 翼面 / 翼根辉光 -->
+    <linearGradient id="wingFeatherTop" x1="0%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#35A8F5"/>
+      <stop offset="100%" stop-color="#0B4FD0"/>
+    </linearGradient>
+    <linearGradient id="wingFeatherMid" x1="0%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#2A8FE8"/>
+      <stop offset="100%" stop-color="#0940B8"/>
+    </linearGradient>
+    <linearGradient id="wingFeatherLow" x1="0%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#1E75DC"/>
+      <stop offset="100%" stop-color="#072E9A"/>
+    </linearGradient>
+    <linearGradient id="wingLobeEdge" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#22BEEF"/>
+      <stop offset="100%" stop-color="#0B7CCC"/>
+    </linearGradient>
+    <radialGradient id="wingLobeFill" cx="45%" cy="85%" r="70%">
+      <stop offset="0%" stop-color="#E8FAFF" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#9FDFFF" stop-opacity="0.04"/>
+    </radialGradient>
+    <radialGradient id="wingHubBloom">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.75"/>
+      <stop offset="55%" stop-color="#CDEEFF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#CDEEFF" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 天空是浅色，蓝翼要有一圈白色光晕才不糊在背景上 -->
+    <filter id="skyGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="3.2" result="blur"/>
+      <feFlood flood-color="#FFFFFF" flood-opacity="0.8" result="halo"/>
+      <feComposite in="halo" in2="blur" operator="in" result="glowed"/>
+      <feMerge>
+        <feMergeNode in="glowed"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
   <!-- ============ 天空 ============ -->
@@ -155,6 +194,7 @@
   <!-- ============ 节点连线：脉冲的小节点，呼应"连通每一个集群" ============ -->
   <path d="M586 196 L646 226 L700 186" fill="none" stroke="#42A5F5" stroke-width="1.4" opacity="0.75">
     <animate attributeName="stroke-dasharray" values="4 5;10 5;4 5" dur="4s" repeatCount="indefinite"/>
+    <animate attributeName="stroke-dashoffset" values="0;-9" dur="1.5s" repeatCount="indefinite"/>
   </path>
   <g fill="#42A5F5">
     <animate attributeName="opacity" values="0.55;1;0.55" dur="3.2s" repeatCount="indefinite"/>
@@ -162,49 +202,101 @@
     <circle cx="646" cy="226" r="4.4"/>
     <circle cx="700" cy="186" r="3.6"/>
   </g>
+  <!-- 节点高光与沿连线转发的信号点 -->
+  <g fill="#EAF6FF">
+    <circle cx="586" cy="196" r="1.6"/>
+    <circle cx="646" cy="226" r="1.9"/>
+    <circle cx="700" cy="186" r="1.6"/>
+    <circle r="2.6">
+      <animateMotion dur="4.4s" repeatCount="indefinite" path="M586 196 L646 226 L700 186"/>
+    </circle>
+  </g>
 
-  <!-- ============ 风筝：2.6s 一拉一放的牵引节奏 ============ -->
+  <!-- ============ 品牌蓝翼（造型与 ui/src/assets/logo.svg 一致）：2.6s 一拉一放的牵引节奏 ============ -->
   <g transform="translate(720 80)">
     <animateTransform attributeName="transform" type="translate" values="0 0;-8 -18;0 0;4 -6;0 0" keyTimes="0;0.28;0.56;0.78;1" dur="2.6s" repeatCount="indefinite" additive="sum"/>
     <g>
       <animateTransform attributeName="transform" type="rotate" values="-2.5;1.5;-2.5" dur="2.6s" repeatCount="indefinite"/>
 
-      <!-- 尾飘带（三条，各自摆动） -->
-      <g fill="none" stroke-linecap="round">
-        <path stroke="#FF5252" stroke-width="6" opacity="0.95" d="M0 60 C 12 80 -8 92 6 112">
-          <animate attributeName="d" values="M0 60 C 12 80 -8 92 6 112;M0 60 C 4 78 16 94 -2 112;M0 60 C 12 80 -8 92 6 112" dur="1.35s" repeatCount="indefinite"/>
-        </path>
-        <path stroke="#81D4FA" stroke-width="5.5" opacity="0.95" d="M2 62 C 18 84 -4 100 12 124">
-          <animate attributeName="d" values="M2 62 C 18 84 -4 100 12 124;M2 62 C 10 82 22 98 -2 124;M2 62 C 18 84 -4 100 12 124" dur="1.5s" repeatCount="indefinite"/>
-        </path>
-        <path stroke="#8BC34A" stroke-width="5" opacity="0.95" d="M-2 60 C 6 88 16 98 2 120">
-          <animate attributeName="d" values="M-2 60 C 6 88 16 98 2 120;M-2 60 C 14 86 -2 100 14 118;M-2 60 C 6 88 16 98 2 120" dur="1.25s" repeatCount="indefinite"/>
-        </path>
-      </g>
+      <!-- 蓝翼：羽翼（三片，同一爪形按长度缩放）+ 翼面脉络（主脉 / 四条支脉 / 六个节点）+ 发光翼根。
+           翼根（logo 坐标 39.6,108.9）落在本组原风筝底部顶点 (0,62) 上，风筝线端点因此无需改动。 -->
+      <g transform="translate(0 62) scale(1.15) translate(-39.6 -108.9)" filter="url(#skyGlow)">
 
-      <!-- 鸢面：四象限拼色 + 两条弧带 + 圆点装饰 -->
-      <path d="M0 -62 L52 0 L0 62 L-52 0 Z" fill="#FF7043"/>
-      <path d="M0 -62 L0 0 L-52 0 Z" fill="#29B6F6"/>
-      <path d="M0 -62 L52 0 L0 0 Z" fill="#FFCA28"/>
-      <path d="M-52 0 L0 0 L0 62 Z" fill="#66BB6A"/>
-      <path d="M0 0 L52 0 L0 62 Z" fill="#AB47BC"/>
-      <path d="M-46 -22 C -14 -6 14 -6 46 -22" fill="none" stroke="#FF5252" stroke-width="8" opacity="0.95"/>
-      <path d="M-46 22 C -14 6 14 6 46 22" fill="none" stroke="#FFD54F" stroke-width="8" opacity="0.95"/>
-      <g fill="#FFF59D">
-        <circle cx="-20" cy="-32" r="3"/>
-        <circle cx="24" cy="-16" r="3"/>
-        <circle cx="-24" cy="28" r="3"/>
-        <circle cx="18" cy="36" r="3"/>
+        <g>
+          <g transform="translate(37.7 23) rotate(73.3) scale(0.82)">
+            <path d="M0 0 C 16 10 34 10 50 0 C 34 -6 16 -6 0 0 Z" fill="url(#wingFeatherTop)" fill-opacity="0.72" stroke="url(#wingFeatherTop)" stroke-width="2.32" stroke-linejoin="round"/>
+            <path d="M0 0 C 16 3.4 34 4 47 1.4" fill="none" stroke="#EAFBFF" stroke-width="1.22" stroke-linecap="round" opacity="0.9"/>
+            <circle cx="44" cy="2.6" r="2.68" fill="#F2FDFF"/>
+          </g>
+          <g transform="translate(27.2 42.4) rotate(57.9) scale(0.68)">
+            <path d="M0 0 C 16 10 34 10 50 0 C 34 -6 16 -6 0 0 Z" fill="url(#wingFeatherMid)" fill-opacity="0.72" stroke="url(#wingFeatherMid)" stroke-width="2.79" stroke-linejoin="round"/>
+            <path d="M0 0 C 16 3.4 34 4 47 1.4" fill="none" stroke="#EAFBFF" stroke-width="1.47" stroke-linecap="round" opacity="0.9"/>
+            <circle cx="44" cy="2.6" r="3.24" fill="#F2FDFF"/>
+          </g>
+          <g transform="translate(18 60.2) rotate(38.4) scale(0.54)">
+            <path d="M0 0 C 16 10 34 10 50 0 C 34 -6 16 -6 0 0 Z" fill="url(#wingFeatherLow)" fill-opacity="0.72" stroke="url(#wingFeatherLow)" stroke-width="3.52" stroke-linejoin="round"/>
+            <path d="M0 0 C 16 3.4 34 4 47 1.4" fill="none" stroke="#EAFBFF" stroke-width="1.85" stroke-linecap="round" opacity="0.9"/>
+            <circle cx="44" cy="2.6" r="4.07" fill="#F2FDFF"/>
+          </g>
+        </g>
+
+        <!-- 翼根辉光：随心跳呼吸 -->
+        <ellipse cx="58.4" cy="92.2" rx="21" ry="16" fill="url(#wingHubBloom)">
+          <animate attributeName="rx" values="19;22;19" dur="3.2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.8;1;0.8" dur="3.2s" repeatCount="indefinite"/>
+        </ellipse>
+
+        <path d="M118 17.5 C 121 23 121.5 40 121 50 C 120 66 113 83 98 94 C 90 99.5 82 102 74 103 C 62 105 48 105 38.9 108.9 C 44 100 47 89 52 80 C 60 67 72 56 90 46 C 97 41 108 33 118 17.5 Z" fill="url(#wingLobeFill)"/>
+        <path d="M118 17.5 C 121 23 121.5 40 121 50 C 120 66 113 83 98 94 C 90 99.5 82 102 74 103 C 62 105 48 105 38.9 108.9 C 44 100 47 89 52 80 C 60 67 72 56 90 46 C 97 41 108 33 118 17.5 Z" fill="none" stroke="url(#wingLobeEdge)" stroke-width="1.9" stroke-linejoin="round"/>
+
+        <g fill="none" stroke="#1E9BE0" stroke-width="1.05" stroke-linecap="round" opacity="0.9">
+          <path d="M58.4 92.2 C 70 80 82 58 90.2 44.2 C 98 33 110 23 118 17.5"/>
+          <path d="M84.9 53.3 C 97 51 110 49 121 47.5"/>
+          <path d="M76.2 70.1 C 87 72 99 76 107 83"/>
+          <path d="M58.4 92.2 C 63 96 67 99 71 103"/>
+          <path d="M58.4 92.2 C 56 92 52 91 48.6 90"/>
+        </g>
+
+        <g fill="#D8F6FF">
+          <circle cx="84.9" cy="53.3" r="2.6"/>
+          <circle cx="102.4" cy="30.1" r="2.4"/>
+          <circle cx="76.2" cy="70.1" r="2.2"/>
+          <circle cx="110.6" cy="49" r="2.2"/>
+          <circle cx="107" cy="83" r="2.2"/>
+          <circle cx="65.5" cy="97.9" r="2.2"/>
+        </g>
+
+        <!-- 沿主脉与支脉向外跑的信号 -->
+        <g fill="#F2FDFF">
+          <circle r="1.7">
+            <animateMotion dur="2.8s" repeatCount="indefinite" path="M58.4 92.2 C 70 80 82 58 90.2 44.2 C 98 33 110 23 118 17.5"/>
+          </circle>
+          <circle r="1.5">
+            <animateMotion dur="3.2s" begin="-1.4s" repeatCount="indefinite" path="M84.9 53.3 C 97 51 110 49 121 47.5"/>
+          </circle>
+          <circle r="1.5">
+            <animateMotion dur="2.4s" begin="-0.9s" repeatCount="indefinite" path="M58.4 92.2 C 63 96 67 99 71 103"/>
+          </circle>
+        </g>
+
+        <!-- 翼根节点：心跳脉冲 + 芯点 -->
+        <circle cx="58.4" cy="92.2" r="3.4" fill="none" stroke="#EAFEFF" stroke-width="1.3" opacity="0">
+          <animate attributeName="r" values="3.4;16" dur="3.2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.65;0" dur="3.2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="58.4" cy="92.2" r="4.2" fill="#17A8E6">
+          <animate attributeName="opacity" values="0.85;1;0.85" dur="3.2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="58.4" cy="92.2" r="1.8" fill="#FFFFFF"/>
       </g>
-      <!-- 黑色骨架与外框 -->
-      <path d="M0 -62 L52 0 L0 62 L-52 0 Z" fill="none" stroke="#111111" stroke-width="3.4" stroke-linejoin="round"/>
-      <path d="M0 -62 L0 62 M-52 0 L52 0" stroke="#111111" stroke-width="3"/>
     </g>
   </g>
 
   <!-- ============ 风筝线：虚线随牵引拉紧/放松，与风筝同一 2.6s 周期（端点跟住风筝底部顶点） ============ -->
   <path fill="none" stroke="#888888" stroke-width="1.6" stroke-dasharray="5 3.5" opacity="0.65" d="M500 248 C 556 244 646 208 720 142">
     <animate attributeName="d" values="M500 248 C 556 244 646 208 720 142;M500 248 C 552 226 638 172 712 124;M500 248 C 556 244 646 208 720 142;M500 248 C 560 240 650 200 724 136;M500 248 C 556 244 646 208 720 142" keyTimes="0;0.28;0.56;0.78;1" dur="2.6s" repeatCount="indefinite"/>
+    <!-- 虚线向翼侧流动（一格 = 5+3.5，负偏移即沿路径方向前进） -->
+    <animate attributeName="stroke-dashoffset" values="0;-8.5" dur="0.85s" repeatCount="indefinite"/>
   </path>
 
   <!-- ============ 草甸 ============ -->

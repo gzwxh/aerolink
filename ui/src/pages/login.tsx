@@ -45,7 +45,7 @@ import { LanguageToggle } from '@/components/language-toggle'
 
 // 登录页背景：春日放鸢的动画插画 + 下缘一条轻渐变。
 //
-// 插画主体（五彩菱形风筝、风筝线与舵轮）在画面右侧、草甸贴着下缘，所以用
+// 插画主体（品牌蓝翼、风筝线与舵轮）在画面右侧、草甸贴着下缘，所以用
 // object-cover object-right-bottom 锚在右下：窗口宽高比与插画不同时裁掉的
 // 是左上角的开阔天空，而不是风筝和草地。
 //
