@@ -5,32 +5,17 @@ This guide provides detailed instructions for installing AeroLink in a Kubernete
 ## Prerequisites
 
 - `kubectl` with cluster administrator privileges
-- Helm v4, or Helm v3.8+ for OCI chart installation
+- Helm v3.8+ (or v4)
 - MySQL/PostgreSQL database, or local storage for sqlite
 
 ## Installation Methods
 
 ### Method 1: Helm Chart (Recommended)
 
-Using Helm provides flexibility for configuration and upgrades:
-
-Install from OCI registry:
+Using Helm provides flexibility for configuration and upgrades. The in-repo chart already points its default image at the company SWR, so a plain install is enough:
 
 ```bash
-helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system --create-namespace
-```
-
-Or install from Helm repository:
-
-```bash
-# Add AeroLink repository
-helm repo add kite https://kite-org.github.io/kite/
-
-# Update repository information
-helm repo update
-
-# Install with default configuration
-helm install kite kite/kite -n kite-system --create-namespace
+helm install kite charts/kite -n kite-system --create-namespace
 ```
 
 #### Custom Installation
@@ -42,15 +27,12 @@ For complete configuration, refer to [Chart Values](../config/chart-values).
 Install with custom values:
 
 ```bash
-helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system -f values.yaml
-
-# Or use the Helm repository
-helm install kite kite/kite -n kite-system -f values.yaml
+helm install kite charts/kite -n kite-system -f values.yaml
 ```
 
 ### Method 2: YAML Manifest
 
-For quick deployment, you can directly apply the official installation YAML:
+For quick deployment, you can directly apply the installation YAML from the repository:
 
 ::: warning
 This method is not suitable for production environments, as it does not include any configuration related to persistence. You need to manually mount the persistence volume and set the environment variable `DB_DSN=/data/db.sqlite` to ensure that data is not lost. Alternatively, you can use an external database.
@@ -59,7 +41,7 @@ see [Persistence Issues](../faq#persistence-issues) for more details.
 :::
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/install.yaml
+kubectl apply -f deploy/install.yaml
 ```
 
 This method will install AeroLink with default configuration. For advanced customization, it's recommended to use the Helm Chart.
@@ -136,8 +118,8 @@ basePath: "/kite"
 
 - Or with Helm CLI:
 
-```fish
-helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system --create-namespace --set basePath="/kite"
+```bash
+helm install kite charts/kite -n kite-system --create-namespace --set basePath="/kite"
 ```
 
 Important notes:
@@ -192,7 +174,7 @@ helm uninstall kite -n kite-system
 ### YAML Uninstall
 
 ```bash
-kubectl delete -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/install.yaml
+kubectl delete -f deploy/install.yaml
 ```
 
 ## Next Steps

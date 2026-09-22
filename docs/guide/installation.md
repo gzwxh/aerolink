@@ -5,30 +5,17 @@
 ## 前提条件
 
 - 拥有集群管理员权限的 `kubectl`
-- Helm v4，或支持 OCI chart 的 Helm v3.8+
+- Helm v3.8+（或 v4）
 - MySQL/PostgreSQL 数据库，或本地存储用于 sqlite
 
 ## 安装方式
 
 ### 方式一：Helm Chart（推荐）
 
-使用 Helm 可灵活配置和升级鸢联 AeroLink：
+使用 Helm 可灵活配置和升级鸢联 AeroLink。仓库内的 chart 默认镜像已指向公司 SWR，可直接安装：
 
 ```bash
-helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system --create-namespace
-```
-
-或从 Helm 仓库安装：
-
-```bash
-# 添加鸢联 AeroLink 仓库
-helm repo add kite https://kite-org.github.io/kite/
-
-# 更新仓库信息
-helm repo update
-
-# 使用默认配置安装
-helm install kite kite/kite -n kite-system --create-namespace
+helm install kite charts/kite -n kite-system --create-namespace
 ```
 
 #### 自定义安装
@@ -40,10 +27,7 @@ helm install kite kite/kite -n kite-system --create-namespace
 使用自定义值安装：
 
 ```bash
-helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system -f values.yaml
-
-# 或使用 Helm 仓库
-helm install kite kite/kite -n kite-system -f values.yaml
+helm install kite charts/kite -n kite-system -f values.yaml
 ```
 
 #### 使用自建镜像安装
@@ -52,7 +36,7 @@ helm install kite kite/kite -n kite-system -f values.yaml
 
 ```bash
 helm install kite charts/kite -n kite-system --create-namespace \
-  --set image.repository=<registry>/<namespace>/kite \
+  --set image.repository=<registry>/<namespace>/aerolink \
   --set image.tag=<版本>
 ```
 
@@ -60,7 +44,7 @@ helm install kite charts/kite -n kite-system --create-namespace \
 
 ### 方式二：YAML 清单
 
-如需快速部署，可直接应用官方安装 YAML：
+如需快速部署，可直接应用仓库内的安装 YAML：
 
 ::: warning
 此方法不适合生产环境，因为他没有配置任何持久化相关内容，你需要手动挂载持久化卷并设置环境变量 `DB_DSN=/data/db.sqlite` 来确保数据不会丢失。或者也可以使用外部数据库。
@@ -69,7 +53,7 @@ helm install kite charts/kite -n kite-system --create-namespace \
 :::
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/install.yaml
+kubectl apply -f deploy/install.yaml
 ```
 
 此方法将使用默认配置安装鸢联 AeroLink。如需高级定制，建议使用 Helm Chart。
@@ -146,8 +130,8 @@ basePath: "/kite"
 
 - 或使用 Helm CLI：
 
-```fish
-helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system --create-namespace --set basePath="/kite"
+```bash
+helm install kite charts/kite -n kite-system --create-namespace --set basePath="/kite"
 ```
 
 说明：
@@ -201,7 +185,7 @@ helm uninstall kite -n kite-system
 ### YAML 卸载
 
 ```bash
-kubectl delete -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/install.yaml
+kubectl delete -f deploy/install.yaml
 ```
 
 ## 后续步骤

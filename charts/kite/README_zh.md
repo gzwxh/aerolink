@@ -1,6 +1,6 @@
 # kite
 
-![Version: 0.15.0](https://img.shields.io/badge/Version-0.15.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v0.15.0](https://img.shields.io/badge/AppVersion-v0.15.0-informational?style=flat-square)
+![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.0](https://img.shields.io/badge/AppVersion-v1.0.0-informational?style=flat-square)
 
 Kubernetes Dashboard —— Kite 的 Helm Chart。
 
@@ -8,30 +8,16 @@ Kubernetes Dashboard —— Kite 的 Helm Chart。
 
 ## 安装
 
-### 方式一：从 OCI 仓库安装（官方镜像）
+### 方式一：从仓库内的 chart 安装
+
+chart 的默认镜像就是公司 SWR 的 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`，直接安装即可：
 
 ```bash
-# 推荐安装到 kube-system 命名空间
-helm install kite oci://ghcr.io/kite-org/charts/kite -n kube-system
-
-# 或安装到自定义命名空间
-helm install kite oci://ghcr.io/kite-org/charts/kite -n my-namespace --create-namespace
+# 推荐安装到 kite-system 命名空间
+helm install kite charts/kite -n kite-system --create-namespace
 ```
 
-### 方式二：添加 Helm 仓库后安装
-
-```bash
-helm repo add kite https://kite-org.github.io/kite/
-helm repo update
-
-# 安装（推荐 kube-system）
-helm install kite kite/kite -n kube-system
-
-# 或安装到自定义命名空间
-helm install kite kite/kite -n my-namespace --create-namespace
-```
-
-### 方式三：使用本仓库的 chart 配合自建镜像
+### 方式二：使用本仓库的 chart 配合自建镜像
 
 ```bash
 # 个人仓库镜像
@@ -39,17 +25,14 @@ helm upgrade --install kite charts/kite -n kite-system --create-namespace \
   -f charts/kite/examples/swr-gzwxh.yaml
 ```
 
-镜像的构建与推送（含国内网络下的基础镜像、npm / Go 依赖源参数，以及 Docker Hub、gcr.io 不通时的处理）见[构建并推送 Kite 镜像](../../docs/guide/build-and-push-image.md)。
+镜像的构建与推送（含国内网络下的基础镜像、npm / Go 依赖源参数，以及 Docker Hub、gcr.io 不通时的处理）见[构建并推送鸢联 AeroLink 镜像](../../docs/guide/build-and-push-image.md)。
 
 > **提示**：华为云 SWR 个人版不接受 Helm OCI 制品（`helm push` 会报 `manifest invalid: Invalid image, fail to parse 'manifest.json'`），因此自建 chart 建议直接从仓库目录安装（`helm install kite charts/kite`），或用 `helm package` 生成 tgz 后通过其它渠道分发。
 
 ### 升级
 
 ```bash
-helm upgrade kite oci://ghcr.io/kite-org/charts/kite -n kube-system
-
-# 或使用 Helm 仓库
-helm upgrade kite kite/kite -n kube-system
+helm upgrade kite charts/kite -n kite-system
 ```
 
 ### 卸载
@@ -138,7 +121,7 @@ helm package charts/kite -d dist
 
 - [安装指南](../../docs/guide/installation.md)
 - [Chart Values 全量参数](../../docs/config/chart-values.md)
-- [构建并推送 Kite 镜像](../../docs/guide/build-and-push-image.md)
+- [构建并推送鸢联 AeroLink 镜像](../../docs/guide/build-and-push-image.md)
 - [配置文件（config.yaml）](../../docs/config/config-file.md)
 - [环境变量](../../docs/config/env.md)
 - [常见问题](../../docs/faq.md)
