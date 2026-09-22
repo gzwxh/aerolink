@@ -8,10 +8,14 @@ import {
 import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
   IconArrowLeft,
+  IconArrowsSort,
   IconDotsVertical,
   IconPencil,
   IconPlugConnected,
   IconPlus,
+  IconSearch,
+  IconSortAscending,
+  IconSortDescending,
   IconTrash,
 } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -310,6 +314,78 @@ function SubjectsCell({ lines }: { lines: SubjectLine[] }) {
   )
 }
 
+// 列表排序：点击表头在升序 / 降序之间切换，未排序的列给一个提示图标。
+type SortColumn = 'name' | 'roles' | 'namespaces' | 'subjects'
+
+function SortableHead({
+  column,
+  activeColumn,
+  descending,
+  onSort,
+  className,
+  children,
+}: {
+  column: SortColumn
+  activeColumn: SortColumn | null
+  descending: boolean
+  onSort: (column: SortColumn) => void
+  className?: string
+  children: ReactNode
+}) {
+  const { t } = useTranslation()
+  const active = activeColumn === column
+  return (
+    <TableHead
+      className={className}
+      aria-sort={active ? (descending ? 'descending' : 'ascending') : 'none'}
+    >
+      <button
+        type="button"
+        className={
+          active
+            ? 'text-primary inline-flex items-center gap-1'
+            : 'hover:text-primary inline-flex items-center gap-1'
+        }
+        title={t('bindingGroup.sortHint', '点击排序')}
+        onClick={() => onSort(column)}
+      >
+        {children}
+        {active ? (
+          descending ? (
+            <IconSortDescending className="h-3.5 w-3.5" />
+          ) : (
+            <IconSortAscending className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <IconArrowsSort className="text-muted-foreground/60 h-3.5 w-3.5" />
+        )}
+      </button>
+    </TableHead>
+  )
+}
+
+// 列表一行：原始绑定 + 后面几列要用的派生值，搜索与排序都基于同一份。
+interface BindingGroupRow {
+  group: BindingGroup
+  roleNames: string[]
+  namespaceNames: string[]
+  subjectLines: SubjectLine[]
+}
+
+// 排序值：按列取一个可比较的字符串，等值时保持原顺序（sort 稳定）。
+function sortValueOf(row: BindingGroupRow, column: SortColumn): string {
+  switch (column) {
+    case 'roles':
+      return row.roleNames.join(', ')
+    case 'namespaces':
+      return row.namespaceNames.join(', ')
+    case 'subjects':
+      return row.subjectLines.map((line) => line.label).join(', ')
+    default:
+      return row.group.name
+  }
+}
+
 // 成员候选来自系统用户列表，分页拉取一次取全。
 const MEMBER_PAGE_SIZE = 500
 
@@ -346,6 +422,12 @@ export function BindingGroupManagement() {
   const { data: clusters = [] } = useClusterList()
   const { currentCluster } = useCluster()
   const [showRetained, setShowRetained] = useState(false)
+  // 列表的搜索词与排序列（列表是前端一次取全，都在本地算）。
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<{
+    column: SortColumn
+    descending: boolean
+  } | null>(null)
   const [authorizationPromptClosed, setAuthorizationPromptClosed] =
     useState(false)
   const [promptSaving, setPromptSaving] = useState(false)
@@ -395,6 +477,52 @@ export function BindingGroupManagement() {
     () => [...groups, ...visibleRetained].filter((g) => !g.protected),
     [groups, visibleRetained]
   )
+
+  // 表格各行用到的派生值算一次，搜索、排序与渲染共用。
+  const decoratedRows = useMemo<BindingGroupRow[]>(
+    () =>
+      rows.map((group) => ({
+        group,
+        roleNames: bindingGroupRoles(group),
+        namespaceNames: (group.namespaces ?? []).map((n) => n.namespace),
+        subjectLines: bindingGroupSubjects(group, groupMembers),
+      })),
+    [rows, groupMembers]
+  )
+
+  const visibleRows = useMemo(() => {
+    const keyword = query.trim().toLowerCase()
+    const matched = keyword
+      ? decoratedRows.filter((row) =>
+          [
+            row.group.name,
+            row.group.cluster,
+            row.group.description ?? '',
+            ...row.roleNames,
+            ...row.namespaceNames,
+            ...row.subjectLines.flatMap((line) => [
+              line.label,
+              ...line.members,
+            ]),
+          ].some((value) => value.toLowerCase().includes(keyword))
+        )
+      : decoratedRows
+    if (!sort) return matched
+    const direction = sort.descending ? -1 : 1
+    return [...matched].sort(
+      (a, b) =>
+        sortValueOf(a, sort.column).localeCompare(sortValueOf(b, sort.column)) *
+        direction
+    )
+  }, [decoratedRows, query, sort])
+
+  // 点同一列切换升降序，点另一列从升序开始。
+  const toggleSort = (column: SortColumn) =>
+    setSort((prev) =>
+      prev?.column === column
+        ? { column, descending: !prev.descending }
+        : { column, descending: false }
+    )
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['binding-groups'] })
@@ -543,7 +671,7 @@ export function BindingGroupManagement() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {retainedGroups.length > 0 && (
             <Button
@@ -558,12 +686,26 @@ export function BindingGroupManagement() {
           )}
         </div>
 
-        {!readOnly && (
-          <Button onClick={openCreate} disabled={clusters.length === 0}>
-            <IconPlus className="h-4 w-4" />
-            {t('bindingGroup.add', '添加')}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <IconSearch className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t(
+                'bindingGroup.searchPlaceholder',
+                '搜索名称、描述、角色、命名空间或主体'
+              )}
+              className="w-64 pl-9"
+            />
+          </div>
+          {!readOnly && (
+            <Button onClick={openCreate} disabled={clusters.length === 0}>
+              <IconPlus className="h-4 w-4" />
+              {t('bindingGroup.add', '添加')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {pendingForCluster.length > 0 && (
@@ -607,10 +749,38 @@ export function BindingGroupManagement() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t('common.fields.name', '名称')}</TableHead>
-              <TableHead>{t('rbac.roles', '角色')}</TableHead>
-              <TableHead>Namespaces</TableHead>
-              <TableHead>{t('bindingGroup.subjects', '主体')}</TableHead>
+              <SortableHead
+                column="name"
+                activeColumn={sort?.column ?? null}
+                descending={sort?.descending ?? false}
+                onSort={toggleSort}
+              >
+                {t('common.fields.name', '名称')}
+              </SortableHead>
+              <SortableHead
+                column="roles"
+                activeColumn={sort?.column ?? null}
+                descending={sort?.descending ?? false}
+                onSort={toggleSort}
+              >
+                {t('rbac.roles', '角色')}
+              </SortableHead>
+              <SortableHead
+                column="namespaces"
+                activeColumn={sort?.column ?? null}
+                descending={sort?.descending ?? false}
+                onSort={toggleSort}
+              >
+                Namespaces
+              </SortableHead>
+              <SortableHead
+                column="subjects"
+                activeColumn={sort?.column ?? null}
+                descending={sort?.descending ?? false}
+                onSort={toggleSort}
+              >
+                {t('bindingGroup.subjects', '主体')}
+              </SortableHead>
               <TableHead className="w-16">
                 {t('common.actions.actions', '操作')}
               </TableHead>
@@ -635,13 +805,19 @@ export function BindingGroupManagement() {
                   {t('bindingGroup.empty', '暂无权限绑定')}
                 </TableCell>
               </TableRow>
+            ) : visibleRows.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-center text-muted-foreground"
+                >
+                  {t('bindingGroup.emptySearch', '没有匹配的权限绑定')}
+                </TableCell>
+              </TableRow>
             ) : (
-              rows.map((g) => {
-                const roleNames = bindingGroupRoles(g)
-                const namespaceNames = (g.namespaces ?? []).map(
-                  (n) => n.namespace
-                )
-                const subjectLines = bindingGroupSubjects(g, groupMembers)
+              visibleRows.map((row) => {
+                const g = row.group
+                const { roleNames, namespaceNames, subjectLines } = row
                 return (
                   <TableRow key={g.id}>
                     <TableCell>

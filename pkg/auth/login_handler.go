@@ -607,6 +607,11 @@ func (h *AuthHandler) completeThirdPartyLogin(c *gin.Context, user *model.User, 
 		notification.NotifySessionTakeover(*user, c.ClientIP(), c.GetHeader("User-Agent"))
 	}
 
+	// 与密码/LDAP 路径一致：成功登录必须留下登录日志（等保三级安全审计），并在该 IP 对这个
+	// 账号是新的时候提醒本人。这条路径此前整段跳过了这一步，于是 OIDC 登录在「登录日志」里
+	// 查不到任何记录。LastLoginAt 已由回调里的 FindWithSubOrUpsertUser 落库，这里不再重复写。
+	notification.NotifyRemoteLogin(c, user)
+
 	jwtToken, err := h.manager.GenerateJWT(user, refreshToken)
 	if err != nil {
 		return err

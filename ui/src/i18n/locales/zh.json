@@ -3715,7 +3715,10 @@
     "showRetained": "保留的权限绑定（{{count}}）",
     "bindHint": "绑定后该权限绑定下的命名空间、成员与角色授权立即恢复生效。",
     "retainedHint": "绑定后沿用保留的授权；如需重新规划，不绑定并新建权限绑定即可。",
-    "retainedTitle": "集群 {{cluster}} 有 {{count}} 个保留的权限绑定"
+    "retainedTitle": "集群 {{cluster}} 有 {{count}} 个保留的权限绑定",
+    "searchPlaceholder": "搜索名称、描述、角色、命名空间或主体",
+    "emptySearch": "没有匹配的权限绑定",
+    "sortHint": "点击排序"
   },
   "consoleRoles": {
     "protectedBadge": "系统维护",

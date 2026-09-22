@@ -3609,7 +3609,10 @@
     "showRetained": "Retained binding groups ({{count}})",
     "bindHint": "After binding, the namespaces, members and role grants under this binding group take effect again immediately.",
     "retainedHint": "Binding reuses the retained grants; to re-plan, skip binding and create a new binding group instead.",
-    "retainedTitle": "Cluster {{cluster}} has {{count}} retained binding group(s)"
+    "retainedTitle": "Cluster {{cluster}} has {{count}} retained binding group(s)",
+    "searchPlaceholder": "Search name, description, role, namespace or subject",
+    "emptySearch": "No matching permission binding",
+    "sortHint": "Click to sort"
   },
   "consoleRoles": {
     "protectedBadge": "System-managed",
