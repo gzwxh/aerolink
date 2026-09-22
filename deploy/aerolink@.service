@@ -1,0 +1,30 @@
+[Unit]
+Description=AeroLink console (replica on port %i)
+Documentation=file:/wxh/aerolink/docs/dev/plans/2026-09-20-multi-replica-deployment.md
+# 改名迁移：旧单元名 kite@.service 装过的实例，要先停用旧实例
+#（systemctl disable --now kite@<端口>），再用 aerolink@.service 在同一个端口启用；
+# 共享 env 文件也从 /etc/kite/kite.env 迁到 /etc/aerolink/aerolink.env
+#（旧文件里的 KITE_* 变量名仍可用，新名 AEROLINK_* 优先）。
+# 数据库在容器里（kite-postgres12），先等 docker 起来。即便顺序不对也不致命：
+# 连不上库时进程会 panic 退出，由 Restart=always 兜住重试。
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 一个实例一个端口：实例号就是端口号（aerolink@8081、aerolink@8082、aerolink@8083…）。
+# 共享配置（DB_DSN、两个密钥、连接池、代理网段）放在 EnvironmentFile 里，各副本一致。
+EnvironmentFile=/etc/aerolink/aerolink.env
+Environment=PORT=%i
+WorkingDirectory=/wxh/aerolink
+ExecStart=/wxh/aerolink/aerolink
+Restart=always
+RestartSec=3
+# 收到 TERM 时把在途请求处理完（容器/反向代理的摘除需要一点时间）
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
