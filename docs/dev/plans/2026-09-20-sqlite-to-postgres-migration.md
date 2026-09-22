@@ -47,7 +47,7 @@
 | 变量 | 目标值（PostgreSQL） | 说明 |
 | --- | --- | --- |
 | `DB_TYPE` | `postgres` | 不设 = sqlite |
-| `DB_DSN` | `host=127.0.0.1 user=kite password=<pwd> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai` | `TimeZone` 与写入时区必须一致 |
+| `DB_DSN` | `host=127.0.0.1 user=aerolink password=<pwd> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai` | `TimeZone` 与写入时区必须一致 |
 | `AEROLINK_DB_MAX_OPEN_CONNS` | 单副本先留 100；扩副本前按「副本数 × 单副本额度 ≤ pg `max_connections`」重算 | 默认 100 |
 | `AEROLINK_DB_MAX_IDLE_CONNS` | 10（默认） | |
 | `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` | 10（默认） | |
@@ -70,7 +70,7 @@ set -a; . /root/kite-secrets.env; set +a
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate \
     -target-type postgres \
-    -target-dsn 'host=127.0.0.1 user=kite password=<口令> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai'
+    -target-dsn 'host=127.0.0.1 user=aerolink password=<口令> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai'
 ```
 
 `-dry-run` 只读源库并打印行数对照，不建表也不写数据；`-batch-size` 默认 100。
@@ -159,7 +159,7 @@ set -a; . /root/kite-secrets.env; . ./dev.env; set +a
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate \
     -target-type postgres \
-    -target-dsn 'host=127.0.0.1 user=kite password=<新口令> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai'
+    -target-dsn 'host=127.0.0.1 user=aerolink password=<新口令> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai'
 ```
 
 想先不动库、只看会搬什么，加 `-dry-run`（只读源库 + 打印行数对照）。

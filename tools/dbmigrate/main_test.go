@@ -313,11 +313,11 @@ func TestValidateRejectsDangerousOrIncompleteOptions(t *testing.T) {
 }
 
 func TestMaskDSNHidesPasswords(t *testing.T) {
-	postgres := maskDSN(dbTypePostgres, "host=127.0.0.1 user=kite password=supersecret dbname=kite port=5432")
+	postgres := maskDSN(dbTypePostgres, "host=127.0.0.1 user=aerolink password=supersecret dbname=kite port=5432")
 	if strings.Contains(postgres, "supersecret") {
 		t.Errorf("postgres DSN still contains the password: %s", postgres)
 	}
-	mysqlDSN := maskDSN(dbTypeMySQL, "kite:supersecret@tcp(127.0.0.1:3306)/kite")
+	mysqlDSN := maskDSN(dbTypeMySQL, "aerolink:supersecret@tcp(127.0.0.1:3306)/kite")
 	if strings.Contains(mysqlDSN, "supersecret") {
 		t.Errorf("mysql DSN still contains the password: %s", mysqlDSN)
 	}

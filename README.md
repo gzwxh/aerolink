@@ -206,16 +206,16 @@ docker run -d --name aerolink --restart unless-stopped \
 
 # MySQL / MariaDB（注意 charset=utf8mb4，否则中文与 emoji 写入失败）
 -e DB_TYPE=mysql \
--e DB_DSN="kite:密码@tcp(10.0.0.5:3306)/kite?charset=utf8mb4&parseTime=true&loc=Local"
+-e DB_DSN="aerolink:密码@tcp(10.0.0.5:3306)/kite?charset=utf8mb4&parseTime=true&loc=Local"
 # 也接受 URL 写法；charset / parseTime / loc / timeout 没写时由程序补默认值
 # （charset=utf8mb4、parseTime=true、loc=Local、timeout=5s），DSN 里写明的值优先：
-# -e DB_DSN="mysql://kite:密码@tcp(10.0.0.5:3306)/kite"
+# -e DB_DSN="mysql://aerolink:密码@tcp(10.0.0.5:3306)/kite"
 
 # PostgreSQL
 -e DB_TYPE=postgres \
--e DB_DSN="host=10.0.0.5 user=kite password=密码 dbname=kite port=5432 sslmode=disable"
+-e DB_DSN="host=10.0.0.5 user=aerolink password=密码 dbname=kite port=5432 sslmode=disable"
 # 或 URL 写法：
-# -e DB_DSN="postgres://kite:密码@10.0.0.5:5432/kite?sslmode=disable"
+# -e DB_DSN="postgres://aerolink:密码@10.0.0.5:5432/kite?sslmode=disable"
 ```
 
 连接池可用 `AEROLINK_DB_MAX_OPEN_CONNS` / `AEROLINK_DB_MAX_IDLE_CONNS` / `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` 调整（见上表）。

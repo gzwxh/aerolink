@@ -237,7 +237,7 @@ cd /wxh/aerolink
 set -a; . /root/kite-secrets.env; set +a
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate -target-type postgres \
-    -target-dsn 'host=127.0.0.1 user=kite password=<kite 口令> dbname=kite port=5433 sslmode=disable TimeZone=Asia/Shanghai'
+    -target-dsn 'host=127.0.0.1 user=aerolink password=<aerolink 口令> dbname=kite port=5433 sslmode=disable TimeZone=Asia/Shanghai'
 ```
 
 从 18 搬到 12（若 18 上已有真实数据）：显式加 `-source-type postgres -source-dsn '<18 的 DSN>'`，
