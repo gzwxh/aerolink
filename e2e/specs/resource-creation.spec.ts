@@ -28,7 +28,7 @@ const clusterPath = `/api/v1/_clusters/${encodeURIComponent(cluster)}`
 
 // 节点上已缓存的 nginx（本环境镜像统一走华为云 SWR）。
 const PREPULLED_IMAGE =
-  'swr.cn-south-1.myhuaweicloud.com/dsy/docker.io/library/nginx:1.30.3'
+  'swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/nginx:1.30.3'
 
 const uniqueName = (kind: string) => `zz-e2e-${kind}-${Date.now().toString(36)}`
 

@@ -37,9 +37,9 @@ const clusterPath = `/api/v1/_clusters/${encodeURIComponent(cluster)}`
 
 // 节点上已缓存的 nginx（与 resource-creation.spec.ts 同一来源）。
 const PREPULLED_IMAGE =
-  'swr.cn-south-1.myhuaweicloud.com/dsy/docker.io/library/nginx:1.30.3'
+  'swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/nginx:1.30.3'
 const EDITED_IMAGE =
-  'swr.cn-south-1.myhuaweicloud.com/dsy/docker.io/library/nginx:1.30.2'
+  'swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/nginx:1.30.2'
 
 const uniqueName = (kind: string) => `zz-e2e-${kind}-${Date.now().toString(36)}`
 
