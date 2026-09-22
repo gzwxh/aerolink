@@ -12,11 +12,11 @@
 #   2. MYSQL_DSN —— 替换为实际的 MySQL 连接信息。
 #
 # 数据库要求（二选一，提前手动建好）：
-#   库名与账号名跟产品名无关，可自定；下面与 MYSQL_DSN 的模板里沿用 kite，
+#   库名与账号名跟产品名无关，可自定；下面与 MYSQL_DSN 的模板里沿用 aerolink，
 #   要改名就连 DSN 一起改（库名本身就占数据，改名是一次数据搬迁）。
-#   CREATE DATABASE kite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-#   CREATE USER 'kite'@'%' IDENTIFIED BY '你的密码';
-#   GRANT ALL PRIVILEGES ON kite.* TO 'kite'@'%';
+#   CREATE DATABASE aerolink CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+#   CREATE USER 'aerolink'@'%' IDENTIFIED BY '你的密码';
+#   GRANT ALL PRIVILEGES ON aerolink.* TO 'aerolink'@'%';
 #   -- 数据表由 鸢联 AeroLink 首次启动时自动迁移创建，无需手工建表。
 #
 # 数据库版本：MySQL 5.7 / 8.0 / 8.4 LTS 均可，推荐 8.0。
@@ -28,7 +28,7 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  # 集群里可能已有 Helm 管理的 CRB（release 名仍是 kite），
+  # 集群里可能已有 Helm 管理的 CRB（旧 release 名可能是 kite），
   # 用独立名字避免 apply 时覆盖它。
   name: aerolink-mysql
 roleRef:
@@ -63,7 +63,7 @@ stringData:
   # 密码含特殊字符（@ : / ( )）时需按驱动规则转义；也可将密码并入连接串后整体 base64。
   # 驱动按**最后一个** “@” 切分账号与地址，因此口令里带 @ 时不必额外转义。
   # MySQL 在集群外时，集群内 Pod 要能路由到该主机（通常写节点 IP 或内网域名）。
-  MYSQL_DSN: "root:REPLACE-ME-db-password@tcp(REPLACE-ME-db-host:3306)/kite?charset=utf8mb4&parseTime=True&loc=Local"
+  MYSQL_DSN: "root:REPLACE-ME-db-password@tcp(REPLACE-ME-db-host:3306)/aerolink?charset=utf8mb4&parseTime=True&loc=Local"
 ---
 apiVersion: apps/v1
 kind: Deployment

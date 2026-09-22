@@ -1,4 +1,4 @@
-# 用 PostgreSQL 部署 Kite（清单 / Helm / 裸进程三条路）
+# 用 PostgreSQL 部署鸢联 AeroLink（清单 / Helm / 裸进程三条路）
 
 - 状态：**现网即此形态**（PostgreSQL 12.12，宿主端口 5433；应用侧无需为 PG 做任何改动）
 - 触发：现网数据库选型是 PostgreSQL（不是 MySQL），需要一份与
@@ -14,8 +14,8 @@
 
 | 部署方式 | 用在哪 | 产物 |
 | --- | --- | --- |
-| **K8s 清单** | 已经有 K8s 集群、想让 Kite 跑在集群里 | `deploy/install-postgres.yaml`（本文 §4.1） |
-| **Helm Chart** | 同上，但要参数化 / 可升级 / 多环境 | `charts/kite` 的 `db.*`（本文 §4.2） |
+| **K8s 清单** | 已经有 K8s 集群、想让 鸢联 AeroLink 跑在集群里 | `deploy/install-postgres.yaml`（本文 §4.1） |
+| **Helm Chart** | 同上，但要参数化 / 可升级 / 多环境 | `charts/aerolink` 的 `db.*`（本文 §4.2） |
 | **裸进程 / systemd** | 直接跑在宿主机上（**现网就是这条**） | `deploy/aerolink@.service` + `/etc/aerolink/aerolink.env`（本文 §4.3） |
 
 三条路只有「怎么把 `DB_TYPE` / `DB_DSN` 送进进程」不同，数据库侧的准备工作完全一样。
@@ -28,7 +28,7 @@
 | --- | --- | --- |
 | 版本 | **PostgreSQL 12 及以上** | 12.12 / 12.22 / 13.23 / 18.6 已用同一二进制实测跑通（建表、登录、序列、并发会话、密文往返、重启都不掉）；代码只用到 PG 9.5 就有的语法。仓库根有 `pg_version_floor_test.go` 挡着不让后来者抬高下限。 |
 | 编码 | `UTF8` | 改不了，只能重建库。 |
-| 排序规则 | `en_US.utf8`（现网实测值） | 由 glibc 提供，排序结果随 glibc 版本变化。**把实际值记进运维文档**：将来升级 glibc 后可能要 `ALTER DATABASE kite REFRESH COLLATION VERSION;` 并 `REINDEX`（PG 13 起才记录排序规则版本，12 没有这一列）。 |
+| 排序规则 | `en_US.utf8`（现网实测值） | 由 glibc 提供，排序结果随 glibc 版本变化。**把实际值记进运维文档**：将来升级 glibc 后可能要 `ALTER DATABASE aerolink REFRESH COLLATION VERSION;` 并 `REINDEX`（PG 13 起才记录排序规则版本，12 没有这一列）。 |
 | 时区 | DSN 里显式写 `TimeZone=Asia/Shanghai` | 容器默认 `Etc/UTC`。漏写**不会报错**，只让界面与审计日志的时间整体偏移 8 小时；应用启动时会打 warning（`pkg/common/common.go` 的 `postgresDSNTimeZoneWarning`）。 |
 | 连接数 | `max_connections` 与「副本数 × 连接池」配套 | 默认 `100` 很小，而应用侧 `AEROLINK_DB_MAX_OPEN_CONNS` 默认也是 `100`。硬约束见下。 |
 
@@ -53,20 +53,22 @@
 
 ### 建库与建角色
 
-用超级用户执行，Kite 自己不建库：
+用超级用户执行，鸢联 AeroLink 自己不建库：
 
 ```sql
-CREATE DATABASE kite ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' LC_CTYPE 'en_US.utf8'
+CREATE DATABASE aerolink ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' LC_CTYPE 'en_US.utf8'
   TEMPLATE template0;
 CREATE ROLE aerolink LOGIN PASSWORD '你的密码';
-ALTER DATABASE kite OWNER TO aerolink;
+ALTER DATABASE aerolink OWNER TO aerolink;
 ```
 
 - **不给** `aerolink` 角色 `CREATEDB` / `CREATEROLE`：应用不需要，给了只是扩大影响面。
-- **已投产的库改角色名不必搬数据**（秒级完成）：用超级用户 `ALTER DATABASE kite OWNER TO aerolink;`，
-  再连到 `kite` 库 `REASSIGN OWNED BY kite TO aerolink;`，最后把 DSN 的 `user=` 改掉并重启应用。
+- **已投产的库改名字不必搬数据**（秒级完成）：沿用改名前的库（当时叫 `kite`）时，用超级用户执行
+  `ALTER DATABASE kite RENAME TO aerolink;`（需先断开所有连接），再连到 `aerolink` 库执行
+  `REASSIGN OWNED BY kite TO aerolink;`，最后把 DSN 的 `dbname=` / `user=` 改掉并重启应用。
   想做到零停机就在重启前给旧角色补一句权限（表与序列的 `GRANT ALL`），旧实例就不会因为换主人而报权限错。
-- 数据表由 Kite 首次启动时 `AutoMigrate` 自动创建，不用手工建表。
+  现网库已经是 `aerolink`（库名与角色名一致），下面按新名字写。
+- 数据表由鸢联 AeroLink 首次启动时 `AutoMigrate` 自动创建，不用手工建表。
 - 口令可以现在就按 SCRAM 存（PG 10+ 都支持，PG 14 起是默认值）：
 
   ```sql
@@ -83,10 +85,10 @@ ALTER DATABASE kite OWNER TO aerolink;
 
 ```bash
 # ① key=value（文档里用得最多）
-DB_DSN="host=10.100.117.8 port=5433 user=aerolink password=<口令> dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+DB_DSN="host=10.100.117.8 port=5433 user=aerolink password=<口令> dbname=aerolink sslmode=disable TimeZone=Asia/Shanghai"
 
 # ② URL（口令含特殊字符时更省事，按 URL 规则百分号编码）
-DB_DSN="postgres://aerolink:%40pwd@10.100.117.8:5433/kite?sslmode=disable&TimeZone=Asia%2FShanghai"
+DB_DSN="postgres://aerolink:%40pwd@10.100.117.8:5433/aerolink?sslmode=disable&TimeZone=Asia%2FShanghai"
 ```
 
 - `TimeZone` **必须写**（两种写法都认，大小写不敏感；也认 `options=-c timezone=...`）。
@@ -109,9 +111,9 @@ apply 会互相覆盖，选一条路走。逐项对照：
 | `DB_TYPE` | `mysql` | `postgres` |
 | Secret 里的 DSN 键 | `MYSQL_DSN` | `POSTGRES_DSN` |
 | ClusterRoleBinding 名 | `aerolink-mysql` | `aerolink-postgres` |
-| DSN 形式 | go-sql-driver：`user:pw@tcp(host:3306)/kite?...` | pgx：`host=... user=... dbname=... TimeZone=...` 或 `postgres://` |
+| DSN 形式 | go-sql-driver：`user:pw@tcp(host:3306)/aerolink?...` | pgx：`host=... user=... dbname=... TimeZone=...` 或 `postgres://` |
 | 额外字段 | `charset=utf8mb4`、`loc`（须与服务器 `time_zone` 一致） | `sslmode`、`TimeZone`（**必写**） |
-| 建库 | `CREATE DATABASE kite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` | `CREATE DATABASE kite ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' ...;` |
+| 建库 | `CREATE DATABASE aerolink CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` | `CREATE DATABASE aerolink ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' ...;` |
 | 搬数据后的额外一步 | 无（`AUTO_INCREMENT` 自己取 max+1） | **要修序列**（`setval`），`tools/dbmigrate` 已自动做 |
 
 用之前搜 `REPLACE-ME` 改三处：`JWT_SECRET`、`AEROLINK_ENCRYPT_KEY`、`POSTGRES_DSN`。
@@ -133,13 +135,13 @@ AI Key、MFA 密钥）：**一旦投入使用不可更换**，否则这些凭据
 
 ### 4.2 Helm Chart
 
-`charts/kite` 把 `db.type` / `db.dsn` 原样写进 Secret 的 `DB_TYPE` / `DB_DSN`，所以只要：
+`charts/aerolink` 把 `db.type` / `db.dsn` 原样写进 Secret 的 `DB_TYPE` / `DB_DSN`，所以只要：
 
 ```yaml
 # values-postgres.yaml
 db:
   type: postgres
-  dsn: "host=10.100.117.8 port=5433 user=aerolink password=<口令> dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+  dsn: "host=10.100.117.8 port=5433 user=aerolink password=<口令> dbname=aerolink sslmode=disable TimeZone=Asia/Shanghai"
 
 # 密钥：留空时 chart 会随机生成 AEROLINK_ENCRYPT_KEY，并在升级时从既有 Secret 里复用；
 # 只有在自管密钥（外部密钥存储）时才显式写。
@@ -147,7 +149,7 @@ db:
 ```
 
 ```bash
-helm install kite charts/kite -n kite-system --create-namespace -f values-postgres.yaml
+helm install aerolink charts/aerolink -n aerolink-system --create-namespace -f values-postgres.yaml
 ```
 
 要复用已有的 Secret（比如从清单版迁过来）就设 `secret.create: false` +
@@ -188,7 +190,7 @@ DB_TYPE=sqlite DB_DSN=dev.db \
 
 # 真搬
 cd /wxh/aerolink
-set -a; . /root/kite-secrets.env; set +a      # 带上与源库一致的 AEROLINK_ENCRYPT_KEY
+set -a; . /root/aerolink-secrets.env; set +a      # 带上与源库一致的 AEROLINK_ENCRYPT_KEY
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate -target-type postgres -target-dsn '<目标 DSN>'
 ```

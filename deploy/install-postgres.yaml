@@ -13,23 +13,25 @@
 #   2. POSTGRES_DSN —— 替换为实际的 PostgreSQL 连接信息。
 #
 # 数据库要求（提前手动建好，鸢联 AeroLink 不做建库）：
-#   库名与角色名跟产品名无关，可自定；下面与 POSTGRES_DSN 里沿用现网的库名 kite、
-#   角色名 aerolink，要改名就连 DSN 一起改（库名本身就占数据，改名是一次数据搬迁）。
+#   库名与角色名都叫 aerolink（与产品名一致，但不强求）。
 #   -- 用超级用户执行
-#   CREATE DATABASE kite;
+#   CREATE DATABASE aerolink;
 #   CREATE ROLE aerolink LOGIN PASSWORD '你的密码';
-#   ALTER DATABASE kite OWNER TO aerolink;
-#   -- 已投产的库改角色名不必搬数据，秒级完成：ALTER DATABASE kite OWNER TO aerolink;
-#   --   连到 kite 库执行 REASSIGN OWNED BY kite TO aerolink; 再把 DSN 的 user= 改掉即可。
+#   ALTER DATABASE aerolink OWNER TO aerolink;
+#   -- 沿用改名前的库（当时叫 kite）不必搬数据，秒级完成：
+#   --   ALTER DATABASE kite RENAME TO aerolink;          -- 库名（需先断开所有连接）
+#   --   ALTER DATABASE aerolink OWNER TO aerolink;
+#   --   连到 aerolink 库执行 REASSIGN OWNED BY kite TO aerolink;
+#   --   最后改掉 DSN 里的 dbname= / user= 并重启应用。
 #   -- 不给 aerolink 角色 CREATEDB / CREATEROLE：应用不需要，给了只是扩大影响面。
 #   -- 数据表由 鸢联 AeroLink 首次启动时自动迁移创建（AutoMigrate），无需手工建表。
 #
 # 数据库版本：PostgreSQL 12 及以上（12.12 / 12.22 / 13.23 / 18.6 已实测跑通，
 # 行为一致）。建库时请一并固定编码与排序规则——它们最难事后补：
-#   CREATE DATABASE kite ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' LC_CTYPE 'en_US.utf8'
+#   CREATE DATABASE aerolink ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' LC_CTYPE 'en_US.utf8'
 #     TEMPLATE template0;
 #   记下实际使用的 datcollate（现网是 en_US.utf8）：它由 glibc 提供，将来升级
-#   glibc 后可能需要 ALTER DATABASE kite REFRESH COLLATION VERSION; 并 REINDEX。
+#   glibc 后可能需要 ALTER DATABASE aerolink REFRESH COLLATION VERSION; 并 REINDEX。
 #
 # 详细步骤、校验清单与已知坑见 docs/dev/plans/2026-09-21-postgres-deployment.md。
 apiVersion: v1
@@ -40,7 +42,7 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  # 集群里可能已有 Helm 管理的 CRB（release 名仍是 kite），
+  # 集群里可能已有 Helm 管理的 CRB（旧 release 名可能是 kite），
   # 用独立名字避免 apply 时覆盖它。
   name: aerolink-postgres
 roleRef:
@@ -73,18 +75,18 @@ stringData:
   # pgx 支持两种写法，任选一种：
   #
   # ① key=value（本项目文档里用得最多）：
-  #   host=主机 port=端口 user=aerolink password=口令 dbname=kite sslmode=disable TimeZone=Asia/Shanghai
+  #   host=主机 port=端口 user=aerolink password=口令 dbname=aerolink sslmode=disable TimeZone=Asia/Shanghai
   #   口令含空格或引号时用单引号包住并转义（\'）；含 @ : / 之类不需要转义。
   #
   # ② URL（口令里有特殊字符时更省事，按 URL 规则百分号编码）：
-  #   postgres://aerolink:%40pwd@主机:端口/kite?sslmode=disable&TimeZone=Asia%2FShanghai
+  #   postgres://aerolink:%40pwd@主机:端口/aerolink?sslmode=disable&TimeZone=Asia%2FShanghai
   #
   # ⚠ TimeZone 必须显式写：漏写**不会报错**，只会让时间戳按服务端时区（官方镜像默认
   #   Etc/UTC）解释，界面与审计日志里的时间整体偏移 8 小时。应用启动时会对此打 warning。
   # ⚠ sslmode：PG 在集群外、未开 TLS 时用 disable；开了 TLS 改为 require / verify-full。
-  # ⚠ 库名沿用现网的 kite（与产品名无关），角色名是 aerolink；下面是连接串模板，改地址 /
+  # ⚠ 库名与角色名都是 aerolink；下面是连接串模板，改地址 /
   #   密码时只改这一行，上面的说明不必跟着改。
-  POSTGRES_DSN: "host=REPLACE-ME-db-host port=5432 user=aerolink password=JaAUuHlthKId5MXxGrtU dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+    POSTGRES_DSN: "host=REPLACE-ME-db-host port=5432 user=aerolink password=JaAUuHlthKId5MXxGrtU dbname=aerolink sslmode=disable TimeZone=Asia/Shanghai"
 ---
 apiVersion: apps/v1
 kind: Deployment

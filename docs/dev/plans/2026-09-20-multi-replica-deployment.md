@@ -8,9 +8,9 @@
 ## 1. 拓扑
 
 ```
-员工浏览器 ──► nginx :8080 ──┬─► kite :8081 ┐
-                             ├─► kite :8082 ├─► PostgreSQL 12.12 :5433
-                             └─► kite :8083 ┘      （容器 kite-postgres12）
+员工浏览器 ──► nginx :8080 ──┬─► aerolink :8081 ┐
+                             ├─► aerolink :8082 ├─► PostgreSQL 12.12 :5433
+                             └─► aerolink :8083 ┘      （容器 aerolink-postgres12）
 ```
 
 - 副本**无状态**：会话、登录失败计数、待验证票据、设置缓存、头像、集群 kubeconfig 全在 PostgreSQL 里；
@@ -20,7 +20,7 @@
 
 ### 为什么当时没走 K8s
 
-`charts/kite` 与 `deploy/install.yaml` 都能跑在 K8s 里（`replicaCount` + `db.type: postgres` 即可多副本），
+`charts/aerolink` 与 `deploy/install.yaml` 都能跑在 K8s 里（`replicaCount` + `db.type: postgres` 即可多副本），
 而本节点现状是「裸进程 + 宿主机 nginx」、宿主机又已经装了 nginx，所以先用最小改动落地。
 
 镜像这条限制已经松动：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0`

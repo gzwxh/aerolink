@@ -14,10 +14,10 @@
 #      密钥必须与 aerolink-secret 里的完全一致，否则会话失效、已保存的凭据解不开。
 #
 # 数据库要求（二选一，提前手动建好）：
-#   库名与账号名跟产品名无关，可自定；下面与 DB_DSN 里沿用现网的 kite。
-#   CREATE DATABASE kite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-#   CREATE USER 'kite'@'%' IDENTIFIED BY '你的密码';
-#   GRANT ALL PRIVILEGES ON kite.* TO 'kite'@'%';
+#   库名与账号名跟产品名无关，可自定；下面与 DB_DSN 里沿用现网库名 aerolink。
+#   CREATE DATABASE aerolink CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+#   CREATE USER 'aerolink'@'%' IDENTIFIED BY '你的密码';
+#   GRANT ALL PRIVILEGES ON aerolink.* TO 'aerolink'@'%';
 #   -- 数据表由 鸢联 AeroLink 首次启动时自动迁移创建，无需手工建表。
 #
 # 数据库版本：MySQL 5.7 / 8.0 / 8.4 LTS 均可，推荐 8.0。
