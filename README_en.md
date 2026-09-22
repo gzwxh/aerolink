@@ -172,15 +172,15 @@ SQLite (the default) is fine for a single instance; **multi-replica deployments 
 
 # MySQL / MariaDB (charset=utf8mb4 is required for non-ASCII text)
 -e DB_TYPE=mysql \
--e DB_DSN="kite:password@tcp(10.0.0.5:3306)/kite?charset=utf8mb4&parseTime=true&loc=Local"
+-e DB_DSN="aerolink:password@tcp(10.0.0.5:3306)/kite?charset=utf8mb4&parseTime=true&loc=Local"
 # a mysql:// URL is also accepted; charset / parseTime / loc / timeout are
 # defaulted by the app when absent (charset=utf8mb4, parseTime=true, loc=Local,
 # timeout=5s) and anything set in the DSN wins
 
 # PostgreSQL
 -e DB_TYPE=postgres \
--e DB_DSN="host=10.0.0.5 user=kite password=password dbname=kite port=5432 sslmode=disable"
-# or: postgres://kite:password@10.0.0.5:5432/kite?sslmode=disable
+-e DB_DSN="host=10.0.0.5 user=aerolink password=password dbname=kite port=5432 sslmode=disable"
+# or: postgres://aerolink:password@10.0.0.5:5432/kite?sslmode=disable
 ```
 
 Pool size is configurable via `AEROLINK_DB_MAX_OPEN_CONNS` / `AEROLINK_DB_MAX_IDLE_CONNS` / `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` (see the table above).

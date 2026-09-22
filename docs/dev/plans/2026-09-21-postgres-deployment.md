@@ -58,18 +58,21 @@
 ```sql
 CREATE DATABASE kite ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' LC_CTYPE 'en_US.utf8'
   TEMPLATE template0;
-CREATE ROLE kite LOGIN PASSWORD '你的密码';
-ALTER DATABASE kite OWNER TO kite;
+CREATE ROLE aerolink LOGIN PASSWORD '你的密码';
+ALTER DATABASE kite OWNER TO aerolink;
 ```
 
-- **不给** `kite` 角色 `CREATEDB` / `CREATEROLE`：应用不需要，给了只是扩大影响面。
+- **不给** `aerolink` 角色 `CREATEDB` / `CREATEROLE`：应用不需要，给了只是扩大影响面。
+- **已投产的库改角色名不必搬数据**（秒级完成）：用超级用户 `ALTER DATABASE kite OWNER TO aerolink;`，
+  再连到 `kite` 库 `REASSIGN OWNED BY kite TO aerolink;`，最后把 DSN 的 `user=` 改掉并重启应用。
+  想做到零停机就在重启前给旧角色补一句权限（表与序列的 `GRANT ALL`），旧实例就不会因为换主人而报权限错。
 - 数据表由 Kite 首次启动时 `AutoMigrate` 自动创建，不用手工建表。
 - 口令可以现在就按 SCRAM 存（PG 10+ 都支持，PG 14 起是默认值）：
 
   ```sql
   ALTER SYSTEM SET password_encryption = 'scram-sha-256';
   SELECT pg_reload_conf();
-  ALTER ROLE kite PASSWORD '同一个口令';   -- 重设才会用新算法重新哈希
+  ALTER ROLE aerolink PASSWORD '同一个口令';   -- 重设才会用新算法重新哈希
   ```
 
   改之前确认所有连接方都支持 SCRAM（本项目用的 pgx 支持，`psql` 10+ 支持）。
@@ -80,10 +83,10 @@ ALTER DATABASE kite OWNER TO kite;
 
 ```bash
 # ① key=value（文档里用得最多）
-DB_DSN="host=10.100.117.8 port=5433 user=kite password=<口令> dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+DB_DSN="host=10.100.117.8 port=5433 user=aerolink password=<口令> dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
 
 # ② URL（口令含特殊字符时更省事，按 URL 规则百分号编码）
-DB_DSN="postgres://kite:%40pwd@10.100.117.8:5433/kite?sslmode=disable&TimeZone=Asia%2FShanghai"
+DB_DSN="postgres://aerolink:%40pwd@10.100.117.8:5433/kite?sslmode=disable&TimeZone=Asia%2FShanghai"
 ```
 
 - `TimeZone` **必须写**（两种写法都认，大小写不敏感；也认 `options=-c timezone=...`）。
@@ -136,7 +139,7 @@ AI Key、MFA 密钥）：**一旦投入使用不可更换**，否则这些凭据
 # values-postgres.yaml
 db:
   type: postgres
-  dsn: "host=10.100.117.8 port=5433 user=kite password=<口令> dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+  dsn: "host=10.100.117.8 port=5433 user=aerolink password=<口令> dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
 
 # 密钥：留空时 chart 会随机生成 AEROLINK_ENCRYPT_KEY，并在升级时从既有 Secret 里复用；
 # 只有在自管密钥（外部密钥存储）时才显式写。

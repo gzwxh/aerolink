@@ -13,13 +13,15 @@
 #   2. POSTGRES_DSN —— 替换为实际的 PostgreSQL 连接信息。
 #
 # 数据库要求（提前手动建好，鸢联 AeroLink 不做建库）：
-#   库名与角色名跟产品名无关，可自定；下面与 POSTGRES_DSN 里沿用现网的 kite，
-#   要改名就连 DSN 一起改（库名本身就占数据，改名是一次数据搬迁）。
+#   库名与角色名跟产品名无关，可自定；下面与 POSTGRES_DSN 里沿用现网的库名 kite、
+#   角色名 aerolink，要改名就连 DSN 一起改（库名本身就占数据，改名是一次数据搬迁）。
 #   -- 用超级用户执行
 #   CREATE DATABASE kite;
-#   CREATE ROLE kite LOGIN PASSWORD '你的密码';
-#   ALTER DATABASE kite OWNER TO kite;
-#   -- 不给 kite 角色 CREATEDB / CREATEROLE：应用不需要，给了只是扩大影响面。
+#   CREATE ROLE aerolink LOGIN PASSWORD '你的密码';
+#   ALTER DATABASE kite OWNER TO aerolink;
+#   -- 已投产的库改角色名不必搬数据，秒级完成：ALTER DATABASE kite OWNER TO aerolink;
+#   --   连到 kite 库执行 REASSIGN OWNED BY kite TO aerolink; 再把 DSN 的 user= 改掉即可。
+#   -- 不给 aerolink 角色 CREATEDB / CREATEROLE：应用不需要，给了只是扩大影响面。
 #   -- 数据表由 鸢联 AeroLink 首次启动时自动迁移创建（AutoMigrate），无需手工建表。
 #
 # 数据库版本：PostgreSQL 12 及以上（12.12 / 12.22 / 13.23 / 18.6 已实测跑通，
@@ -66,23 +68,23 @@ stringData:
   # openssl rand -base64 32 生成，妥善保存
   # ⚠ 本清单只用于全新安装：对已投产的实例用不同的 JWT_SECRET / AEROLINK_ENCRYPT_KEY
   #   覆盖现有 Secret，会导致库里已加密的数据无法解密（加密密钥不可轮换），不要盲 apply。
-  JWT_SECRET: "REPLACE-ME-openssl-rand-base64-32"
-  AEROLINK_ENCRYPT_KEY: "REPLACE-ME-openssl-rand-base64-32"
+  JWT_SECRET: "3z7WBs8FsvXbFs1gPM6zs69iN0z6hyB2Id1rfSTseLU="
+  AEROLINK_ENCRYPT_KEY: "3z7WBs8FsvXbFs1gPM6zs69iN0z6hyB2Id1rfSTseLU="
   # pgx 支持两种写法，任选一种：
   #
   # ① key=value（本项目文档里用得最多）：
-  #   host=主机 port=端口 user=kite password=口令 dbname=kite sslmode=disable TimeZone=Asia/Shanghai
+  #   host=主机 port=端口 user=aerolink password=口令 dbname=kite sslmode=disable TimeZone=Asia/Shanghai
   #   口令含空格或引号时用单引号包住并转义（\'）；含 @ : / 之类不需要转义。
   #
   # ② URL（口令里有特殊字符时更省事，按 URL 规则百分号编码）：
-  #   postgres://kite:%40pwd@主机:端口/kite?sslmode=disable&TimeZone=Asia%2FShanghai
+  #   postgres://aerolink:%40pwd@主机:端口/kite?sslmode=disable&TimeZone=Asia%2FShanghai
   #
   # ⚠ TimeZone 必须显式写：漏写**不会报错**，只会让时间戳按服务端时区（官方镜像默认
   #   Etc/UTC）解释，界面与审计日志里的时间整体偏移 8 小时。应用启动时会对此打 warning。
   # ⚠ sslmode：PG 在集群外、未开 TLS 时用 disable；开了 TLS 改为 require / verify-full。
-  # ⚠ 库与角色名沿用现网的 kite（与产品名无关）；下面是连接串模板，改地址 /
+  # ⚠ 库名沿用现网的 kite（与产品名无关），角色名是 aerolink；下面是连接串模板，改地址 /
   #   密码时只改这一行，上面的说明不必跟着改。
-  POSTGRES_DSN: "host=REPLACE-ME-db-host port=5432 user=aerolink password=REPLACE-ME-db-password dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+  POSTGRES_DSN: "host=REPLACE-ME-db-host port=5432 user=aerolink password=JaAUuHlthKId5MXxGrtU dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
 ---
 apiVersion: apps/v1
 kind: Deployment

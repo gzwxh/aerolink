@@ -16,34 +16,34 @@ func TestPostgresDSNTimeZoneWarning(t *testing.T) {
 		{
 			name:   "关键字式没写 TimeZone",
 			dbType: "postgres",
-			dsn:    "host=127.0.0.1 user=kite password=pw dbname=kite port=5432 sslmode=disable",
+			dsn:    "host=127.0.0.1 user=aerolink password=pw dbname=kite port=5432 sslmode=disable",
 			want:   true,
 		},
 		{
 			name:   "关键字式写了 TimeZone",
 			dbType: "postgres",
-			dsn:    "host=127.0.0.1 user=kite password=pw dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai",
+			dsn:    "host=127.0.0.1 user=aerolink password=pw dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai",
 		},
 		{
 			name:   "关键字式大小写不敏感",
 			dbType: "postgres",
-			dsn:    "host=127.0.0.1 user=kite dbname=kite timezone=asia/shanghai",
+			dsn:    "host=127.0.0.1 user=aerolink dbname=kite timezone=asia/shanghai",
 		},
 		{
 			name:   "URL 式没写",
 			dbType: "postgres",
-			dsn:    "postgres://kite:pw@10.0.0.5:5432/kite?sslmode=disable",
+			dsn:    "postgres://aerolink:pw@10.0.0.5:5432/kite?sslmode=disable",
 			want:   true,
 		},
 		{
 			name:   "URL 式写了 TimeZone",
 			dbType: "postgres",
-			dsn:    "postgres://kite:pw@10.0.0.5:5432/kite?sslmode=disable&TimeZone=Asia%2FShanghai",
+			dsn:    "postgres://aerolink:pw@10.0.0.5:5432/kite?sslmode=disable&TimeZone=Asia%2FShanghai",
 		},
 		{
 			name:   "URL 式走 options",
 			dbType: "postgres",
-			dsn:    "postgres://kite:pw@10.0.0.5:5432/kite?sslmode=disable&options=-c%20timezone%3DAsia%2FShanghai",
+			dsn:    "postgres://aerolink:pw@10.0.0.5:5432/kite?sslmode=disable&options=-c%20timezone%3DAsia%2FShanghai",
 		},
 		{
 			name:   "空 DSN",
@@ -54,7 +54,7 @@ func TestPostgresDSNTimeZoneWarning(t *testing.T) {
 		{
 			name:   "密码里出现 timezone= 不算数",
 			dbType: "postgres",
-			dsn:    "host=127.0.0.1 user=kite password=timezone=xxx dbname=kite",
+			dsn:    "host=127.0.0.1 user=aerolink password=timezone=xxx dbname=kite",
 			want:   true,
 		},
 		{
@@ -65,7 +65,7 @@ func TestPostgresDSNTimeZoneWarning(t *testing.T) {
 		{
 			name:   "mysql 不检查",
 			dbType: "mysql",
-			dsn:    "kite:pw@tcp(10.0.0.5:3306)/kite",
+			dsn:    "aerolink:pw@tcp(10.0.0.5:3306)/kite",
 		},
 	}
 
