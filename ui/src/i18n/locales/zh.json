@@ -1523,6 +1523,7 @@
     "roleTypeBuiltin": "内置",
     "roleTypeCustom": "自定义",
     "deleteRoleImpact": "{{count}} 个用户或用户组正在使用该角色，删除会同时移除这些授权。",
+    "deleteRoleInUse": "该角色仍被 {{count}} 个权限绑定使用，请先到「权限绑定」里解除该角色的绑定，再删除角色。",
     "rolePermissionsEmpty": "未配置任何权限。",
     "noRoleDescription": "暂无描述。",
     "legacyPermissionsHint": "该角色按旧模型保存：每一行资源可用同一组操作（并集）。",

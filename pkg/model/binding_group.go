@@ -51,6 +51,30 @@ func CountBindingGroupsByCluster(cluster string) (int64, error) {
 	return count, err
 }
 
+// BindingGroupsUsingRole 返回以该角色给成员授权的权限绑定组（去重，按名称排序）。
+//
+// 角色的引用有两处：直接分配（role_assignments）与权限绑定组成员
+// （binding_group_members）。删角色会把两者一并删掉（见 DeleteRoleReferences），
+// 在界面上看到的就是「某个组里的授权少了一条、谁也不知道是哪次操作引起的」——
+// 删除前先用这里做判定，要求管理员到「权限绑定」里显式解绑。
+func BindingGroupsUsingRole(roleID uint) ([]BindingGroup, error) {
+	var groupIDs []uint
+	if err := DB.Model(&BindingGroupMember{}).
+		Where("role_id = ?", roleID).
+		Distinct().
+		Pluck("project_id", &groupIDs).Error; err != nil {
+		return nil, err
+	}
+	if len(groupIDs) == 0 {
+		return nil, nil
+	}
+	var groups []BindingGroup
+	if err := DB.Where("id IN ?", groupIDs).Order("name").Find(&groups).Error; err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
 // RetainBindingGroupsByCluster 保留集群下的权限绑定组：标记为 detached，配置保留但
 // 不再参与授权，等待集群重新导入后重新绑定。
 func RetainBindingGroupsByCluster(cluster string) (int64, error) {

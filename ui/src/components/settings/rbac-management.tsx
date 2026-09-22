@@ -10,7 +10,7 @@ import {
   IconShieldCheck,
   IconTrash,
 } from '@tabler/icons-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ColumnDef,
   getCoreRowModel,
@@ -28,7 +28,13 @@ import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { Role } from '@/types/api'
-import { deleteRole, useRoleList } from '@/lib/api'
+import {
+  deleteRole,
+  fetchBindingGroups,
+  useRoleList,
+  type BindingGroup,
+} from '@/lib/api'
+import { ApiError } from '@/lib/api-client'
 import {
   isProtectedRole,
   protectedRoleRank,
@@ -177,6 +183,39 @@ export function RBACManagement() {
     setDetailRoleName(null)
   }, [setDetailRoleName])
 
+  // 角色是否已被权限绑定引用：删角色会连带删掉绑定组里的成员行（等价于静默解绑
+  // 别人的授权），所以删除前先查出来，要求管理员到「权限绑定」里先解绑。
+  // 后端在 DELETE 上也做同样判定（并发兜底），这里只负责把话说在前面。
+  // 列表接口默认不返回「保留的」组（所属集群已删除），但它们一样持有成员行，
+  // 所以两份都要取：判定口径与后端的 BindingGroupsUsingRole 保持一致。
+  const { data: bindingGroups = [] } = useQuery({
+    queryKey: ['binding-groups', { roleUsage: true }],
+    queryFn: async () => [
+      ...(await fetchBindingGroups()),
+      ...(await fetchBindingGroups(undefined, { detached: true })),
+    ],
+  })
+
+  // 角色 ID → 使用它的权限绑定组（同一个组只记一次）。
+  const groupsByRole = useMemo(() => {
+    const map = new Map<number, BindingGroup[]>()
+    for (const group of bindingGroups) {
+      for (const member of group.members ?? []) {
+        const used = map.get(member.roleId)
+        if (!used) {
+          map.set(member.roleId, [group])
+        } else if (!used.some((item) => item.id === group.id)) {
+          used.push(group)
+        }
+      }
+    }
+    return map
+  }, [bindingGroups])
+
+  const groupsUsingDeleteTarget = deleteTarget
+    ? (groupsByRole.get(deleteTarget.id) ?? [])
+    : []
+
   const deleteMutation = useMutation({
     mutationFn: (role: Role) => deleteRole(role.id),
     onSuccess: (_data, role) => {
@@ -193,8 +232,25 @@ export function RBACManagement() {
         })
       )
     },
-    onError: (err: Error) => {
-      toast.error(err.message)
+    onError: (err: unknown) => {
+      // 竞态：本地看到的是旧数据，服务端仍然拒删。把最新的绑定关系拉回来，
+      // 让下一次打开删除弹窗能看到「用它的那几个组」。
+      if (
+        err instanceof ApiError &&
+        err.code === 'role_in_use_by_binding_group'
+      ) {
+        const params = (err.params ?? {}) as { count?: number }
+        queryClient.invalidateQueries({ queryKey: ['binding-groups'] })
+        toast.error(
+          t('rbac.deleteRoleInUse', {
+            count: params.count ?? 0,
+            defaultValue:
+              '该角色仍被 {{count}} 个权限绑定使用，请先到「权限绑定」里解除该角色的绑定，再删除角色。',
+          })
+        )
+        return
+      }
+      toast.error(err instanceof Error ? err.message : String(err))
     },
   })
 
@@ -465,6 +521,8 @@ export function RBACManagement() {
           resourceName={deleteTarget.name}
           resourceType={t('common.fields.role', '角色')}
           isDeleting={deleteMutation.isPending}
+          // 还被权限绑定引用时不允许确认：先解绑，避免删除时把组里的授权静默带走。
+          confirmDisabled={groupsUsingDeleteTarget.length > 0}
           onConfirm={() => void deleteMutation.mutate(deleteTarget)}
           additionalNote={t('rbac.deleteRoleImpact', {
             count: (deleteTarget.assignments ?? []).length,
@@ -472,18 +530,42 @@ export function RBACManagement() {
               '{{count}} 个用户或用户组正在使用该角色，删除会同时移除这些授权。',
           })}
           extraContent={
-            (deleteTarget.assignments ?? []).some(
-              (assignment) =>
-                assignment.subjectType === 'user' &&
-                assignment.subject === user?.username
-            ) ? (
-              <p className="text-xs text-destructive">
-                {t(
-                  'rbac.deleteOwnRoleWarning',
-                  '该角色正分配给你当前使用的账号：删除可能影响你自己的权限。'
-                )}
-              </p>
-            ) : undefined
+            <>
+              {groupsUsingDeleteTarget.length > 0 && (
+                <div className="space-y-1 text-xs text-destructive">
+                  <p>
+                    {t('rbac.deleteRoleInUse', {
+                      count: groupsUsingDeleteTarget.length,
+                      defaultValue:
+                        '该角色仍被 {{count}} 个权限绑定使用，请先到「权限绑定」里解除该角色的绑定，再删除角色。',
+                    })}
+                  </p>
+                  {/* 列出来才能直接去解绑：只给数量，管理员还要自己一个个翻。 */}
+                  <ul className="list-disc pl-4">
+                    {groupsUsingDeleteTarget.map((group) => (
+                      <li key={group.id}>
+                        {group.name}
+                        <span className="text-muted-foreground">
+                          （{group.cluster}）
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {(deleteTarget.assignments ?? []).some(
+                (assignment) =>
+                  assignment.subjectType === 'user' &&
+                  assignment.subject === user?.username
+              ) && (
+                <p className="text-xs text-destructive">
+                  {t(
+                    'rbac.deleteOwnRoleWarning',
+                    '该角色正分配给你当前使用的账号：删除可能影响你自己的权限。'
+                  )}
+                </p>
+              )}
+            </>
           }
         />
       )}

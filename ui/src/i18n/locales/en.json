@@ -1523,6 +1523,7 @@
     "roleTypeBuiltin": "Built-in",
     "roleTypeCustom": "Custom",
     "deleteRoleImpact": "{{count}} user(s) or user group(s) currently use this role; deleting it also removes those grants.",
+    "deleteRoleInUse": "This role is still used by {{count}} permission binding(s). Unbind it there before deleting the role.",
     "rolePermissionsEmpty": "No permissions configured.",
     "noRoleDescription": "No description yet.",
     "legacyPermissionsHint": "This role uses the legacy model: every resource shares the same union of verbs.",

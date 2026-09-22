@@ -575,6 +575,29 @@ func DeleteRole(c *gin.Context) {
 		})
 		return
 	}
+	// 角色还绑在权限绑定组里时不允许直接删除：删角色会连带删掉组成员行
+	// （见 deleteRoleReferences），对管理员来说就是「某个组的授权悄悄少了」，
+	// 事后无法归因。要求先到「权限绑定」里解绑，再回来删角色。
+	groups, err := model.BindingGroupsUsingRole(role.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check the role's binding groups: " + err.Error()})
+		return
+	}
+	if len(groups) > 0 {
+		names := make([]string, 0, len(groups))
+		for _, group := range groups {
+			names = append(names, fmt.Sprintf("%s (%s)", group.Name, group.Cluster))
+		}
+		c.JSON(http.StatusConflict, gin.H{
+			"error": fmt.Sprintf("the role is still used by %d permission binding group(s)", len(groups)),
+			"code":  "role_in_use_by_binding_group",
+			"params": gin.H{
+				"count":  len(groups),
+				"groups": strings.Join(names, ", "),
+			},
+		})
+		return
+	}
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {
 		if err := deleteRoleReferences(tx, role.ID); err != nil {
 			return err
@@ -590,9 +613,10 @@ func DeleteRole(c *gin.Context) {
 
 // deleteRoleReferences 删掉角色残留的引用（直接分配 + 权限绑定组成员）。
 //
-// 不做的话这些行会指向一个不存在的 role_id：既静默失效，又会在角色被重建后
-// （自增 ID 不同）继续悬空——而超级角色恰恰会被显式重建，悬空的成员行会让
-// 「超级权限绑定」组里的超级管理员拿不到权限。
+// 权限绑定组里的引用在正常路径上已被 DeleteRole 挡在前面（要求先解绑），这里保留
+// 作为兜底：并发下仍可能有成员行插进来。不做的话这些行会指向一个不存在的
+// role_id：既静默失效，又会在角色被重建后（自增 ID 不同）继续悬空——而超级角色
+// 恰恰会被显式重建，悬空的成员行会让「超级权限绑定」组里的超级管理员拿不到权限。
 func deleteRoleReferences(tx *gorm.DB, roleID uint) error {
 	return model.DeleteRoleReferences(tx, roleID)
 }

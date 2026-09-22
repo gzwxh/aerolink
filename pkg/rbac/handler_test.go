@@ -185,6 +185,84 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // 该用例用多个子�
 		}
 	})
 
+	t.Run("role bound in a permission binding group cannot be deleted", func(t *testing.T) {
+		// 删角色会连带删掉 permission binding 的成员行（等价于静默解绑别人的授权），
+		// 所以必须先到「权限绑定」里解绑——否则管理员事后无法判断授权为什么少了。
+		response := perform(http.MethodPost, "/roles", `{"name":"bound-role","resources":["pods"],"verbs":["get"]}`)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("create returned %d, want %d; body=%s", response.Code, http.StatusCreated, response.Body.String())
+		}
+		var created struct {
+			Role model.Role `json:"role"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+			t.Fatalf("decode create response: %v", err)
+		}
+		rolePath := "/roles/" + strconv.FormatUint(uint64(created.Role.ID), 10)
+
+		// 直接分配给一个用户：删除会连带移除这条授权，审计快照里要能看到。
+		response = perform(http.MethodPost, rolePath+"/assign", `{"subjectType":"user","subject":"alice"}`)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("assign returned %d, want %d; body=%s", response.Code, http.StatusCreated, response.Body.String())
+		}
+
+		group := model.BindingGroup{Cluster: "c1", Name: "bound-group"}
+		if err := db.Create(&group).Error; err != nil {
+			t.Fatalf("create binding group: %v", err)
+		}
+		member := model.BindingGroupMember{
+			ProjectID:   group.ID,
+			SubjectType: model.SubjectTypeUser,
+			Subject:     "alice",
+			RoleID:      created.Role.ID,
+		}
+		if err := db.Create(&member).Error; err != nil {
+			t.Fatalf("create binding group member: %v", err)
+		}
+
+		response = perform(http.MethodDelete, rolePath, "")
+		if response.Code != http.StatusConflict {
+			t.Fatalf("delete returned %d, want %d; body=%s", response.Code, http.StatusConflict, response.Body.String())
+		}
+		if !strings.Contains(response.Body.String(), "role_in_use_by_binding_group") {
+			t.Fatalf("expected the in-use code, got %s", response.Body.String())
+		}
+
+		// 被拒的删除也要能查到动的是谁、删掉的是什么：DELETE 没有请求体，只靠路径
+		// 审计里只会留下 `#6`，所以 handler 必须把角色名与快照交给中间件。
+		if auditDetail.ResourceName != "bound-role" {
+			t.Fatalf("audit resourceName = %q, want the role name", auditDetail.ResourceName)
+		}
+		if !strings.Contains(auditDetail.PreviousYAML, "name: bound-role") {
+			t.Fatalf("the audit snapshot must describe the role, got %q", auditDetail.PreviousYAML)
+		}
+		if !strings.Contains(auditDetail.PreviousYAML, "subject: alice") {
+			t.Fatalf("the audit snapshot must include the direct assignment, got %q", auditDetail.PreviousYAML)
+		}
+
+		// 拒绝删除不能有副作用：角色与成员行都要原样保留。
+		var stored model.Role
+		if err := db.First(&stored, created.Role.ID).Error; err != nil {
+			t.Fatalf("load role after blocked delete: %v", err)
+		}
+		var memberCount int64
+		if err := db.Model(&model.BindingGroupMember{}).Where("role_id = ?", created.Role.ID).Count(&memberCount).Error; err != nil {
+			t.Fatalf("count members: %v", err)
+		}
+		if memberCount != 1 {
+			t.Fatalf("member count after blocked delete = %d, want 1", memberCount)
+		}
+
+		// 在组里解绑之后，角色可以正常删除。
+		if err := db.Where("role_id = ?", created.Role.ID).Delete(&model.BindingGroupMember{}).Error; err != nil {
+			t.Fatalf("unbind member: %v", err)
+		}
+		response = perform(http.MethodDelete, rolePath, "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("delete after unbind returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+		}
+	})
+
 	t.Run("managed rbac rejects mutations", func(t *testing.T) {
 		common.SetManagedSections(map[string]bool{"rbac": true})
 		defer common.SetManagedSections(map[string]bool{})

@@ -22,6 +22,9 @@ interface DeleteConfirmationDialogProps {
   resourceType: string
   onConfirm: (force?: boolean, wait?: boolean) => void
   isDeleting?: boolean
+  // 调用方判定「现在不能删」（例如资源还被别处引用）：确认按钮保持不可点，
+  // 由 extraContent 说明原因与先做什么。
+  confirmDisabled?: boolean
   namespace?: string
   additionalNote?: string
   showAdditionalOptions?: boolean
@@ -36,6 +39,7 @@ export function DeleteConfirmationDialog({
   resourceType,
   onConfirm,
   isDeleting,
+  confirmDisabled,
   namespace,
   additionalNote,
   showAdditionalOptions = false,
@@ -60,7 +64,8 @@ export function DeleteConfirmationDialog({
     }
   }
 
-  const isConfirmDisabled = confirmationInput !== resourceName || isDeleting
+  const isConfirmDisabled =
+    confirmationInput !== resourceName || isDeleting || confirmDisabled
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
