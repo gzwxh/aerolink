@@ -23,7 +23,7 @@
 `charts/kite` 与 `deploy/install.yaml` 都能跑在 K8s 里（`replicaCount` + `db.type: postgres` 即可多副本），
 而本节点现状是「裸进程 + 宿主机 nginx」、宿主机又已经装了 nginx，所以先用最小改动落地。
 
-镜像这条限制已经松动：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite:v1.0.0`
+镜像这条限制已经松动：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0`
 现在可以公开拉取（2026-09-20 实测 `docker manifest inspect` 通过）。要走 K8s 还差一个入口层——
 该命名空间里没有 nginx 镜像，用集群已有的 ingress controller，或另推一个即可。
 
