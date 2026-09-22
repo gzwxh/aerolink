@@ -23,7 +23,7 @@ func TestNewS3SinkRequiresEndpointAndBucket(t *testing.T) {
 	if _, err := NewS3Sink(model.S3Archive{Enabled: true, Endpoint: "http://minio:9000"}); err == nil {
 		t.Fatal("NewS3Sink() without bucket returned nil error")
 	}
-	if _, err := NewS3Sink(model.S3Archive{Enabled: true, Bucket: "kite-audit"}); err == nil {
+	if _, err := NewS3Sink(model.S3Archive{Enabled: true, Bucket: "aerolink-audit"}); err == nil {
 		t.Fatal("NewS3Sink() without endpoint returned nil error")
 	}
 }
@@ -99,7 +99,7 @@ func newTestS3Sink(t *testing.T, endpoint string, deleteLocal bool) *S3Sink {
 		Enabled:                true,
 		Endpoint:               endpoint,
 		Region:                 "us-east-1",
-		Bucket:                 "kite-audit",
+		Bucket:                 "aerolink-audit",
 		PathStyle:              true,
 		DeleteLocalAfterUpload: deleteLocal,
 	})

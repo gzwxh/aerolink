@@ -13,7 +13,7 @@ import (
 )
 
 // syslogAppName 是 RFC5424 的 APP-NAME。
-const syslogAppName = "kite"
+const syslogAppName = "aerolink"
 
 // sendSyslog 把一条结构化审计记录渲染成 RFC5424 消息并发送。
 func sendSyslog(config model.LogForwardSetting, message model.AuditMessage) error {
@@ -220,7 +220,7 @@ func orDash(value string) string {
 
 // formatSyslogMessage 组装 RFC5424 消息：
 //
-//	<PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [kite@32473 ...] MSG
+//	<PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [aerolink@32473 ...] MSG
 //
 // PRI = facility*8 + severity（失败记录用 warning，其余用 informational）。
 func formatSyslogMessage(config model.LogForwardSetting, message string) string {

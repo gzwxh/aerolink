@@ -13,7 +13,7 @@ func archiveSettingOpenAll() model.ArchiveSetting {
 	archive.Enabled = true
 	archive.S3.Enabled = true
 	archive.S3.Endpoint = "http://minio:9000"
-	archive.S3.Bucket = "kite-audit"
+	archive.S3.Bucket = "aerolink-audit"
 	archive.Elasticsearch.Enabled = true
 	archive.Elasticsearch.URLs = []string{"http://es:9200"}
 	archive.VictoriaLogs.Enabled = true

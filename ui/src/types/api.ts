@@ -1134,7 +1134,7 @@ export interface OpenObserveArchiveSetting {
   urls: string[]
   /** 组织名（默认 default）。 */
   org: string
-  /** 日志流名（默认 kite-audit）。 */
+  /** 日志流名（默认 aerolink-audit）。 */
   stream: string
   username: string
   /** 只写不回显：读取时后端返回掩码，原样回传表示不修改。 */

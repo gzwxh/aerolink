@@ -128,7 +128,7 @@ type StdoutSetting struct {
 }
 
 // DefaultSyslogTag 是外发消息里默认的 APP-NAME。
-const DefaultSyslogTag = "kite"
+const DefaultSyslogTag = "aerolink"
 
 // DefaultSyslogFacility 默认使用 log audit（13）设施。
 const DefaultSyslogFacility = 13
@@ -208,7 +208,7 @@ type VictoriaLogsArchive struct {
 type OpenObserveArchive struct {
 	Enabled bool     `json:"enabled" yaml:"enabled"`
 	URLs    []string `json:"urls" yaml:"urls"`
-	// Org 是组织名（默认 default），Stream 是日志流名（默认 kite-audit）。
+	// Org 是组织名（默认 default），Stream 是日志流名（默认 aerolink-audit）。
 	Org      string `json:"org" yaml:"org"`
 	Stream   string `json:"stream" yaml:"stream"`
 	Username string `json:"username" yaml:"username"`
@@ -269,10 +269,10 @@ const (
 	DefaultArchiveFlushInterval   = 120             // 秒
 	DefaultAuditArchiveFlushRows  = 100000
 	DefaultAccessLogFlushRows     = 200000
-	DefaultESIndexPrefix          = "kite-audit"
+	DefaultESIndexPrefix          = "aerolink-audit"
 	// DefaultLogStream 是 VictoriaLogs / OpenObserve 的默认流名（这两家由服务端按时间分区，
 	// 不再自己拼日期，见 plans/2026-09-21-additional-audit-log-sinks.md §3.2）。
-	DefaultLogStream = "kite-audit"
+	DefaultLogStream = "aerolink-audit"
 	// DefaultOpenObserveOrg 是 OpenObserve 的默认组织名。
 	DefaultOpenObserveOrg = "default"
 )

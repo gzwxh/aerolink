@@ -122,7 +122,7 @@ func (s *ESSink) indexPrefix() string {
 	return s.config.IndexPrefix
 }
 
-// indexPattern 返回检索用的索引通配（跨天分区），如 `kite-audit-*`。
+// indexPattern 返回检索用的索引通配（跨天分区），如 `aerolink-audit-*`。
 func (s *ESSink) indexPattern() string {
 	return s.indexPrefix() + "-*"
 }

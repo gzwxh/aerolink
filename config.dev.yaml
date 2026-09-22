@@ -88,12 +88,12 @@ superUser:
 #        enabled: true
 #        endpoint: http://minio:9000      # 各厂商 endpoint 见方案文档 §8.1
 #        region: ""                       # COS 必填（如 ap-guangzhou）
-#        bucket: kite-audit
+#        bucket: aerolink-audit
 #        accessKey: ${AEROLINK_S3_ACCESS_KEY}
 #        secretKey: ${AEROLINK_S3_SECRET_KEY}
 #        pathStyle: true                  # MinIO/RustFS/Ceph 为 true，COS/OBS 为 false
 #        useTLS: false
-#        prefix: kite-audit/
+#        prefix: aerolink-audit/
 #        deleteLocalAfterUpload: false    # false = 本地留几天 + 全量同步 S3；true = 上传即删本地
 #
 # ③ elasticsearch——只写 ES（按天索引，可检索）：
@@ -103,7 +103,7 @@ superUser:
 #        urls: ["http://es:9200"]         # 必填，否则拒绝启动
 #        username: elastic
 #        password: ${AEROLINK_ES_PASSWORD}
-#        indexPrefix: kite-audit          # 索引名 <前缀>-YYYY.MM.DD
+#        indexPrefix: aerolink-audit          # 索引名 <前缀>-YYYY.MM.DD
 #
 # ④ victorialogs——只写 VictoriaLogs（VictoriaMetrics 体系里的日志存储，默认端口 9428）：
 #    注意：这里要的是 VictoriaLogs（vlogs），**不是** VictoriaMetrics：后者是时序库
@@ -113,7 +113,7 @@ superUser:
 #    auditArchive:
 #      victorialogs:
 #        urls: ["http://victorialogs:9428"]   # 必填，否则拒绝启动；多地址写在一行里
-#        stream: kite-audit                   # 日志流名（四类记录共用一个流）
+#        stream: aerolink-audit                   # 日志流名（四类记录共用一个流）
 #        accountId: ""                        # 多租户才填（请求头 AccountID），单租户留空
 #        projectId: ""                        # 多租户才填（请求头 ProjectID），单租户留空
 #        tlsInsecureSkipVerify: false
@@ -125,8 +125,8 @@ superUser:
 #      openobserve:
 #        urls: ["http://openobserve:5080"]    # 必填，否则拒绝启动
 #        org: default                         # 组织名，写入路径为 /api/{org}/{stream}/_json
-#        stream: kite-audit                   # 日志流名（四类记录共用一个流）
-#        username: kite@example.com           # Basic 认证用户名（通常是登录邮箱）
+#        stream: aerolink-audit                   # 日志流名（四类记录共用一个流）
+#        username: aerolink@example.com           # Basic 认证用户名（通常是登录邮箱）
 #        password: ${AEROLINK_OPENOBSERVE_PASSWORD}
 #        tlsInsecureSkipVerify: false
 #
@@ -164,12 +164,12 @@ auditArchive:
     enabled: false
     endpoint: http://minio:9000          # 各厂商 endpoint 见方案文档 §8.1
     region: ""                           # COS 必填，如 ap-guangzhou
-    bucket: kite-audit
+    bucket: aerolink-audit
     accessKey: ${AEROLINK_S3_ACCESS_KEY}
     secretKey: ${AEROLINK_S3_SECRET_KEY}
     pathStyle: true                      # MinIO/RustFS/Ceph 为 true，COS/OBS 为 false
     useTLS: false
-    prefix: kite-audit/
+    prefix: aerolink-audit/
     deleteLocalAfterUpload: false        # 默认 false = 本地留几天 + 全量同步 S3；true = 上传即删本地
   # 外部存储 Elasticsearch（检索，非归档）
   elasticsearch:
@@ -177,13 +177,13 @@ auditArchive:
     urls: ["http://es:9200"]
     username: ""
     password: ${AEROLINK_ES_PASSWORD}
-    indexPrefix: kite-audit
+    indexPrefix: aerolink-audit
     tlsInsecureSkipVerify: false
   # 外部存储 VictoriaLogs（日志存储，非 VictoriaMetrics；单 stream、服务端保留）
   victorialogs:
     enabled: false
     urls: ["http://victorialogs:9428"]
-    stream: kite-audit
+    stream: aerolink-audit
     accountId: ""                        # 多租户才填（请求头 AccountID）
     projectId: ""                        # 多租户才填（请求头 ProjectID）
     tlsInsecureSkipVerify: false
@@ -192,7 +192,7 @@ auditArchive:
     enabled: false
     urls: ["http://openobserve:5080"]
     org: default
-    stream: kite-audit
+    stream: aerolink-audit
     username: ""
     password: ${AEROLINK_OPENOBSERVE_PASSWORD}
     tlsInsecureSkipVerify: false

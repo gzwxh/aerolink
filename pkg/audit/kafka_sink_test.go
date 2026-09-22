@@ -67,7 +67,7 @@ func swapKafkaWriterFactory(t *testing.T, factory func(model.KafkaSetting) (kafk
 func testKafkaSetting() model.KafkaSetting {
 	return model.KafkaSetting{
 		Brokers:       []string{"kafka-1:9092", "kafka-2:9092"},
-		Topic:         "kite-audit",
+		Topic:         "aerolink-audit",
 		SASLMechanism: model.KafkaSASLNone,
 		UseTLS:        true,
 	}

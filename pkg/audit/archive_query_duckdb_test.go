@@ -134,7 +134,7 @@ func TestDuckDBBackendFallsBackToS3(t *testing.T) {
 		Enabled:  true,
 		Endpoint: "https://cos.ap-guangzhou.myqcloud.com",
 		Bucket:   "devops-1253764832",
-		Prefix:   "wxh-test/kite-audit-test",
+		Prefix:   "wxh-test/aerolink-audit-test",
 		Region:   "ap-guangzhou",
 		UseTLS:   true,
 		// PathStyle=false → virtual-hosted（腾讯 COS 强制要求）。
@@ -146,8 +146,8 @@ func TestDuckDBBackendFallsBackToS3(t *testing.T) {
 	// S3 上只有 09/21 有文件：09/22（时间范围内的另一天）必须被排除，
 	// 否则 DuckDB 会因为 glob 无匹配直接报错。
 	backend.s3Sink = fakeS3Lister{keys: map[string][]string{
-		"wxh-test/kite-audit-test/access_log/2026/09/": {
-			"wxh-test/kite-audit-test/access_log/2026/09/21/access_log-1.parquet",
+		"wxh-test/aerolink-audit-test/access_log/2026/09/": {
+			"wxh-test/aerolink-audit-test/access_log/2026/09/21/access_log-1.parquet",
 		},
 	}}
 
@@ -163,7 +163,7 @@ func TestDuckDBBackendFallsBackToS3(t *testing.T) {
 	if !strings.Contains(sql, "INSTALL httpfs") || !strings.Contains(sql, "LOAD httpfs") {
 		t.Errorf("查 S3 前应加载 httpfs:\n%s", sql)
 	}
-	wantPath := "s3://devops-1253764832/wxh-test/kite-audit-test/access_log/2026/09/21/*.parquet"
+	wantPath := "s3://devops-1253764832/wxh-test/aerolink-audit-test/access_log/2026/09/21/*.parquet"
 	if !strings.Contains(sql, wantPath) {
 		t.Errorf("SQL 应包含 S3 路径 %s:\n%s", wantPath, sql)
 	}

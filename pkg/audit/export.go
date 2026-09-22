@@ -80,7 +80,7 @@ func ExportAuditLogs(c *gin.Context) {
 		"resourceType", "resourceName", "success", "errorMessage", "clientIp", "userAgent",
 	}
 	from, to = effectiveTimeRange(from, to, dateOnly)
-	writeCSV(c, "kite-audit-logs", header, records, from, to)
+	writeCSV(c, "aerolink-audit-logs", header, records, from, to)
 }
 
 // ExportLoginLogs 把登录日志（含被拒绝的登录尝试）导出为 CSV。
@@ -121,7 +121,7 @@ func ExportLoginLogs(c *gin.Context) {
 
 	header := []string{"time", "username", "provider", "success", "reason", "ip", "userAgent"}
 	from, to = effectiveTimeRange(from, to, dateOnly)
-	writeCSV(c, "kite-login-logs", header, records, from, to)
+	writeCSV(c, "aerolink-login-logs", header, records, from, to)
 }
 
 // ExportPasswordChangeLogs 把改密日志导出为 CSV。
@@ -159,7 +159,7 @@ func ExportPasswordChangeLogs(c *gin.Context) {
 
 	header := []string{"time", "username", "operator", "source"}
 	from, to = effectiveTimeRange(from, to, dateOnly)
-	writeCSV(c, "kite-password-change-logs", header, records, from, to)
+	writeCSV(c, "aerolink-password-change-logs", header, records, from, to)
 }
 
 // writeCSV 输出 CSV，并把条目数、时间范围与内容指纹放进响应头（供界面提示与留档）。
@@ -210,7 +210,7 @@ func sha256Hex(content []byte) string {
 // 不直接用 KiteEncryptKey 当 HMAC 密钥：它是给存储凭据加密用的，混用会让同一份
 // 密钥承担两种用途。这里先做一次 SHA-256 派生（用途分隔），密钥本身仍然不进日志。
 func exportHMAC(content []byte) string {
-	seed := sha256.Sum256([]byte("kite-audit-export:" + common.KiteEncryptKey))
+	seed := sha256.Sum256([]byte("aerolink-audit-export:" + common.KiteEncryptKey))
 	mac := hmac.New(sha256.New, seed[:])
 	mac.Write(content)
 	return hex.EncodeToString(mac.Sum(nil))
