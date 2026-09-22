@@ -30,12 +30,11 @@ CLI	aero 或 alink
 
 ## 关于本仓库
 
-本仓库是 [kite-org/kite](https://github.com/kite-org/kite) 的定制分支（上游镜像：[gitee.com/gzwxh/kite](https://gitee.com/gzwxh/kite)），在内网 GitLab 维护，仅限公司内部使用。
+本仓库是 [kite-org/kite](https://github.com/kite-org/kite) 的定制分支，在内网 GitLab 维护，仅限公司内部使用。
 
 - 上游项目：<https://github.com/kite-org/kite>（文档：<https://kite.zzde.me>）
-- 上游镜像：<https://gitee.com/gzwxh/kite>
 - 内网仓库：`ssh://git@10.10.11.151:20222/teg/support-department/operation_rd_dept/aerolink.git`（开发分支 `release/v1.0.0`）
-- 中文文档：见 [`docs/`](./docs/index.md)--
+- 中文文档：见 [`docs/`](./docs/index.md)
 - 许可证：Apache-2.0（沿用上游）
 
 ## 二开新增与增强
