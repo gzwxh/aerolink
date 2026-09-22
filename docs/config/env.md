@@ -95,3 +95,11 @@
 - **AEROLINK_ENABLE_PPROF**：设为 `true` 时在 `localhost:6060` 开放 pprof（堆转储可能包含敏感信息，默认关闭）。
 - **AEROLINK_DISABLE_CSP**：设为 `true` 关闭 Content-Security-Policy 响应头（仅限开发）。
 - **AEROLINK_ALLOW_PRIVATE_REGISTRIES**：设为 `true` 允许镜像标签查询访问内网 / 回环地址的镜像仓库。
+- **AEROLINK_POD_METRICS_INTERVAL**：Pod 列表页实时推送里「用量（CPU / 内存数字）」的刷新间隔，
+  单位秒，默认 `15`。实时连接（SSE）只在用量**发生变化**时推一条 `event: metrics`，所以调大它
+  只会让数字刷新变慢、并不会减少连接本身的开销；设为非正数或非法值会回退到默认值。
+- **AEROLINK_MAX_WATCH_PER_USER**：单个用户在每个集群上允许并发持有的资源 watch（SSE）连接数，
+  默认 `8`。超限的新连接返回 `429`（响应体里的 `code` 为 `watch_limit_exceeded`），前端收到后自动
+  降级为轮询、并定期尝试把实时连接抢回来。多个标签页 / 多个详情页会各占一条连接，上限给得太紧会
+  让用户频繁落在轮询模式；设为 `0` 或负数表示不限制（仅建议临时排查用）。计数是**每副本**的，
+  多副本部署时同一个人实际能达到的总连接数约为「上限 × 副本数」，限流的精确度只在这个量级上。

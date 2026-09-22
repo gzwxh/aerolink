@@ -89,6 +89,15 @@ auditArchiveDir: ""
 # 留空表示维持默认（输出到 stderr）。
 logFile: ""
 
+# Pod 列表页周期推送用量（CPU/内存数字）的间隔，单位秒，注入 AEROLINK_POD_METRICS_INTERVAL。
+# 留空即默认 15，与历史行为一致；调大能进一步降低推送频率，代价是数字刷新变慢。
+podMetricsInterval: ""
+
+# 单个用户在每个集群上允许并发持有的资源 watch（SSE）连接数，注入 AEROLINK_MAX_WATCH_PER_USER。
+# 留空即默认 8；超限的新连接会被拒绝（429），前端自动降级为轮询。
+# 设为 0 表示不限制（仅建议用于临时排查，多标签页会把连接数与推送量一起推高）。
+maxWatchPerUser: ""
+
 # 归档 parquet 与 klog 日志的持久化卷。
 # 这两类文件都写在容器里，不挂卷时 Pod 重建即丢——生产建议开启（PVC 或 hostPath）。
 # 挂载点默认 /var/log/aerolink；归档目录 /var/log/aerolink/archive 位于其下，

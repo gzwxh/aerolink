@@ -87,6 +87,16 @@ spec:
             - name: AEROLINK_LOG_FILE
               value: {{ .Values.logFile }}
             {{- end }}
+            {{- if .Values.podMetricsInterval }}
+            # Pod 列表页周期推送用量的间隔（秒），留空时程序用默认 15s。
+            - name: AEROLINK_POD_METRICS_INTERVAL
+              value: {{ .Values.podMetricsInterval | quote }}
+            {{- end }}
+            {{- if .Values.maxWatchPerUser }}
+            # 单用户单集群的并发 watch 连接上限，留空时程序用默认 8。
+            - name: AEROLINK_MAX_WATCH_PER_USER
+              value: {{ .Values.maxWatchPerUser | quote }}
+            {{- end }}
           {{- with .Values.extraEnvs }}
           {{- toYaml . | nindent 12 }}
           {{- end }}
