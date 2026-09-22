@@ -61,7 +61,7 @@
 - 编码继续用 `UTF8`，别动。
 - 排序规则是 `glibc` 提供的：它的排序结果会随 glibc 版本变化。PG 13 起会给数据库记录
   「排序规则版本」，之后只要 glibc 变了，PG 15+ 会告警，需要执行
-  `ALTER DATABASE kite REFRESH COLLATION VERSION;`；如果文本列上有唯一索引或排序索引，
+  `ALTER DATABASE aerolink REFRESH COLLATION VERSION;`；如果文本列上有唯一索引或排序索引，
   还要 `REINDEX`，否则可能出现「索引与排序规则不一致」导致的查找异常。
 - 所以：**把 `datcollate` 记进运维文档**，升级后按上面两步走。若希望彻底不受 glibc 漂移影响，
   PG 15+ 可以改用 ICU 排序规则——但那是升级时重建库的事，现在（12）没有这个选项。
@@ -151,7 +151,7 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
   各版本的 release notes 过一遍。
 - 容器化部署下推荐 ②/①：`pg_upgrade` 要求新旧数据目录同机且旧二进制可用，容器里反而麻烦。
 - **升级后固定动作**：
-  1. `ALTER DATABASE kite REFRESH COLLATION VERSION;`（若 `datcollate` 没变则通常无副作用；
+  1. `ALTER DATABASE aerolink REFRESH COLLATION VERSION;`（若 `datcollate` 没变则通常无副作用；
      若变了，再 `REINDEX`）；
   2. 核对 `max_connections` 与连接池额度；
   3. PG 18 起官方镜像的 `PGDATA` 从 `/var/lib/postgresql/data` 改为
@@ -199,7 +199,7 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
 docker pull swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/postgres:12.12
 
 mkdir -p /data/postgresql12
-docker run -d --name kite-postgres12 --restart unless-stopped \
+docker run -d --name aerolink-postgres12 --restart unless-stopped \
   -p 5433:5432 \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD='<超管口令>' \
@@ -215,15 +215,15 @@ docker run -d --name kite-postgres12 --restart unless-stopped \
   所以这里挂载点和 18 那个容器不同，**不能互相复用**。
 - 端口用 `5433` 是刻意的：18 还占着 `5432`，并存期间两个都连得上。
 - 首次初始化要等（实测 12.12 约 60 秒，比新镜像慢），就绪判断：
-  `docker exec kite-postgres12 pg_isready -U postgres`，反复到出现 `accepting connections`。
+  `docker exec aerolink-postgres12 pg_isready -U postgres`，反复到出现 `accepting connections`。
 - `max_connections=400` 的来由见 §2.5；其余参数照抄现网那一套，别另起一组。
 
 ### 6.2 建业务角色
 
 ```sh
-docker exec kite-postgres12 psql -U postgres -c "CREATE DATABASE kite;"
-docker exec kite-postgres12 psql -U postgres -c "CREATE ROLE kite LOGIN PASSWORD '<kite 口令>';"
-docker exec kite-postgres12 psql -U postgres -c "ALTER DATABASE kite OWNER TO kite;"
+docker exec aerolink-postgres12 psql -U postgres -c "CREATE DATABASE aerolink;"
+docker exec aerolink-postgres12 psql -U postgres -c "CREATE ROLE aerolink LOGIN PASSWORD '<aerolink 口令>';"
+docker exec aerolink-postgres12 psql -U postgres -c "ALTER DATABASE aerolink OWNER TO aerolink;"
 ```
 
 不给 `kite` 角色 `CREATEDB` / `CREATEROLE`：应用不需要，给了只是扩大影响面。
@@ -237,7 +237,7 @@ cd /wxh/aerolink
 set -a; . /root/kite-secrets.env; set +a
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate -target-type postgres \
-    -target-dsn 'host=127.0.0.1 user=aerolink password=<aerolink 口令> dbname=kite port=5433 sslmode=disable TimeZone=Asia/Shanghai'
+    -target-dsn 'host=127.0.0.1 user=aerolink password=<aerolink 口令> dbname=aerolink port=5433 sslmode=disable TimeZone=Asia/Shanghai'
 ```
 
 从 18 搬到 12（若 18 上已有真实数据）：显式加 `-source-type postgres -source-dsn '<18 的 DSN>'`，
@@ -271,8 +271,8 @@ setsid nohup /wxh/aerolink/aerolink >> /data/logs/aerolink.log 2>&1 < /dev/null 
 
 | 项 | 值 |
 | --- | --- |
-| 数据库容器 | `kite-postgres12`（12.12），宿主端口 **5433**，数据目录 `/data/postgresql12` |
-| 业务库 / 角色 | `kite` 库，属主 `kite`（`rolsuper/rolcreatedb/rolcreaterole` 全为 `f`） |
+| 数据库容器 | `aerolink-postgres12`（12.12），宿主端口 **5433**，数据目录 `/data/postgresql12` |
+| 业务库 / 角色 | `aerolink` 库，属主 `aerolink`（`rolsuper/rolcreatedb/rolcreaterole` 全为 `f`） |
 | 口令存放 | `/root/kite-pg12-secrets.env`（600，超管 + `kite` 角色） |
 | 应用配置 | `dev.env`：`DB_TYPE=postgres`、`DB_DSN=...port=5433...TimeZone=Asia/Shanghai` |
 | 应用日志 | `/data/logs/aerolink.log` |
@@ -299,7 +299,7 @@ setsid nohup /wxh/aerolink/aerolink >> /data/logs/aerolink.log 2>&1 < /dev/null 
 tag 就绪后，操作只有三步（数据目录、端口、参数都不变）：
 
 ```sh
-docker stop kite-postgres12 && docker rm kite-postgres12
+docker stop aerolink-postgres12 && docker rm aerolink-postgres12
 # 用 §6.1 同一条 docker run，只把镜像换成 :12.22
 ```
 
@@ -340,20 +340,20 @@ AEROLINK_SMOKE_USER=super AEROLINK_SMOKE_PASSWORD='<口令>' \
 
 ```sh
 # 1) 克隆生产数据到一个临时库（同实例，走 tools/dbmigrate）
-docker exec kite-postgres12 psql -U postgres -c "CREATE DATABASE kite_smoke OWNER kite;"
+docker exec aerolink-postgres12 psql -U postgres -c "CREATE DATABASE aerolink_smoke OWNER aerolink;"
 DB_TYPE=postgres DB_DSN='<生产 DSN>' go run ./tools/dbmigrate \
-  -target-type postgres -target-dsn '<kite_smoke 的 DSN>'
+  -target-type postgres -target-dsn '<aerolink_smoke 的 DSN>'
 
 # 2) 让克隆库里的测试账号有一个已知口令（否则登录都不知用什么）
 #    用仓库自己的哈希：写一个临时 _test.go 调 utils.HashPassword，或用界面重置
 # 3) 用一个不占用的端口起实例（配置从 dev.env 取，只改库和端口）
-DB_TYPE=postgres DB_DSN='<kite_smoke 的 DSN>' PORT=38092 /wxh/aerolink/aerolink &
+DB_TYPE=postgres DB_DSN='<aerolink_smoke 的 DSN>' PORT=38092 /wxh/aerolink/aerolink &
 
-# 4) 对着它跑；跑完把 kite_smoke 删掉
+# 4) 对着它跑；跑完把 aerolink_smoke 删掉
 AEROLINK_SMOKE_USER=... AEROLINK_SMOKE_PASSWORD=... \
   go run ./tools/apismoke -base-url http://127.0.0.1:38092 -cluster dev -namespace devops \
     -write-namespace devops -ai -smtp -log-file /data/logs/aerolink.log
-docker exec kite-postgres12 psql -U postgres -c "DROP DATABASE kite_smoke;"
+docker exec aerolink-postgres12 psql -U postgres -c "DROP DATABASE aerolink_smoke;"
 ```
 
 多副本看 `2026-09-20-multi-replica-deployment.md`：同一份克隆库上起 2–3 个实例、用

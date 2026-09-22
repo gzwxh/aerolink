@@ -128,7 +128,7 @@ func TestEnsureEncryptionKeyKeepsUnknownRotationIntact(t *testing.T) {
 //
 // 默认用进程内 sqlite；设置 AEROLINK_TEST_PG_DSN 时改用真实 PostgreSQL：
 //
-//	AEROLINK_TEST_PG_DSN='host=127.0.0.1 user=aerolink password=... dbname=kite_empty port=5433 sslmode=disable TimeZone=Asia/Shanghai' \
+//	AEROLINK_TEST_PG_DSN='host=127.0.0.1 user=aerolink password=... dbname=aerolink_empty port=5433 sslmode=disable TimeZone=Asia/Shanghai' \
 //	    go test ./pkg/model -run MissingTable -v
 //
 // 这个开关不是可有可无的：下面这段容忍逻辑原先靠匹配驱动的错误文本来判断「表不存在」，

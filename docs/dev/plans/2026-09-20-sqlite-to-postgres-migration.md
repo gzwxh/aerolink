@@ -3,7 +3,7 @@
 - 状态：**拷贝工具已实现并实测**（sqlite → sqlite / PostgreSQL 各跑一遍，29 张表行数全部一致）；切流已于同日执行完毕（见下方声明）
 
 > **本文是 2026-09-20 当天的过程记录，现状已变**：文中作为目标库的 `kite-postgres`（PG 18，
-> 5432）与 `/data/postgresql` 已于同日退役删除；**切流已完成**，现网库是 `kite-postgres12`
+> 5432）与 `/data/postgresql` 已于同日退役删除；**切流已完成**，现网库是 `aerolink-postgres12`
 > （PG 12.12，宿主端口 **5433**）。新建/重建目标库请看
 > `2026-09-20-pg12-now-and-upgrade-path.md` §6，别再按本文去连 5432。
 - 相关：`docs/dev/plans/2026-09-20-multi-replica-shared-state.md`（§0 前置条件就是这件事）
@@ -47,7 +47,7 @@
 | 变量 | 目标值（PostgreSQL） | 说明 |
 | --- | --- | --- |
 | `DB_TYPE` | `postgres` | 不设 = sqlite |
-| `DB_DSN` | `host=127.0.0.1 user=aerolink password=<pwd> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai` | `TimeZone` 与写入时区必须一致 |
+| `DB_DSN` | `host=127.0.0.1 user=aerolink password=<pwd> dbname=aerolink port=5432 sslmode=disable TimeZone=Asia/Shanghai` | `TimeZone` 与写入时区必须一致 |
 | `AEROLINK_DB_MAX_OPEN_CONNS` | 单副本先留 100；扩副本前按「副本数 × 单副本额度 ≤ pg `max_connections`」重算 | 默认 100 |
 | `AEROLINK_DB_MAX_IDLE_CONNS` | 10（默认） | |
 | `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` | 10（默认） | |
@@ -70,7 +70,7 @@ set -a; . /root/kite-secrets.env; set +a
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate \
     -target-type postgres \
-    -target-dsn 'host=127.0.0.1 user=aerolink password=<口令> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai'
+    -target-dsn 'host=127.0.0.1 user=aerolink password=<口令> dbname=aerolink port=5432 sslmode=disable TimeZone=Asia/Shanghai'
 ```
 
 `-dry-run` 只读源库并打印行数对照，不建表也不写数据；`-batch-size` 默认 100。
@@ -107,7 +107,7 @@ sqlite3 dev.db ".backup /data/backup/dev.db.$(date +%F-%H%M)"
 ### 5.2 准备目标库
 
 > **2026-09-20 更新**：`kite-postgres`（PG 18）已退役、容器与 `/data/postgresql` 均已删除，
-> 现网库是 `kite-postgres12`（12.12，宿主端口 5433）。下面这段「复用现成的库」只作为当时的
+> 现网库是 `aerolink-postgres12`（12.12，宿主端口 5433）。下面这段「复用现成的库」只作为当时的
 > 记录保留，**要新建目标库请看 `2026-09-20-pg12-now-and-upgrade-path.md` §6**，别再去连 5432。
 
 （下面按「复用现成的 `kite-postgres`」写。若目标库要另建在 **PG 12.12** 容器里——新建容器、
@@ -129,7 +129,7 @@ docker exec kite-postgres pg_dump -U kite -d kite > /data/backup/pg-kite-before.
 ```sh
 PGPW=$(docker inspect kite-postgres --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^POSTGRES_PASSWORD=//p')
 docker exec -e PGPASSWORD="$PGPW" kite-postgres psql -U postgres -d postgres \
-  -c 'DROP DATABASE kite;' -c 'CREATE DATABASE kite;' -c 'ALTER DATABASE kite OWNER TO kite;'
+  -c 'DROP DATABASE aerolink;' -c 'CREATE DATABASE aerolink;' -c 'ALTER DATABASE aerolink OWNER TO aerolink;'
 ```
 
 （可选。§4 第 7 条已经让拷贝器自己清空目标表，所以不做这步也能搬；做它的好处是
@@ -159,7 +159,7 @@ set -a; . /root/kite-secrets.env; . ./dev.env; set +a
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate \
     -target-type postgres \
-    -target-dsn 'host=127.0.0.1 user=aerolink password=<新口令> dbname=kite port=5432 sslmode=disable TimeZone=Asia/Shanghai'
+    -target-dsn 'host=127.0.0.1 user=aerolink password=<新口令> dbname=aerolink port=5432 sslmode=disable TimeZone=Asia/Shanghai'
 ```
 
 想先不动库、只看会搬什么，加 `-dry-run`（只读源库 + 打印行数对照）。
