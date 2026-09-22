@@ -137,8 +137,8 @@ vi rancherrbac.yaml                           # 填地址、密钥、clusterMap
 ```bash
 export RANCHER_URL=https://rancher.example.com
 export RANCHER_TOKEN='token-xxxxx:yyyyy'   # Rancher 的 Access Key:Secret Key
-export KITE_URL=https://kite.example.com
-export KITE_TOKEN='kite1-xxxxxxxx'         # Kite 控制台创建的 API key
+export AEROLINK_URL=https://kite.example.com
+export AEROLINK_TOKEN='kite1-xxxxxxxx'         # Kite 控制台创建的 API key
 
 scripts/migrate-rancher-rbac.sh -cluster-map c-m-abc123=prod          # 看计划（只读）
 ```

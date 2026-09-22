@@ -19,7 +19,7 @@
 | 头像 `ON CONFLICT` upsert | ✅ | ✅ | ✅ | ✅ |
 | 同库重启（`AutoMigrate` 幂等 + kubeconfig 解密） | ✅ | ✅ | ✅ | ✅ |
 | `-v=10` 抓全量 SQL：无 13+ 语法 | ✅ | ✅ | ✅ | ✅ |
-| 应用日志无 W/E（除未设 `KITE_METRICS_TOKEN`） | ✅ | ✅ | ✅ | ✅ |
+| 应用日志无 W/E（除未设 `AEROLINK_METRICS_TOKEN`） | ✅ | ✅ | ✅ | ✅ |
 
 原因是我们只用到 PG 9.5 就有的一小组语法（`bigserial` / `timestamptz` / `bytea` /
 `CREATE INDEX IF NOT EXISTS` / `ON CONFLICT ... DO UPDATE` / `RETURNING`），DDL 全部由
@@ -100,7 +100,7 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
 | `shared_buffers` | `128MB`（16MB 单位下显示 16384） |
 | `wal_level` | `replica` |
 
-- 应用侧 `KITE_DB_MAX_OPEN_CONNS` 默认 100。**多副本时**：`副本数 × 100` 会直接打满
+- 应用侧 `AEROLINK_DB_MAX_OPEN_CONNS` 默认 100。**多副本时**：`副本数 × 100` 会直接打满
   `max_connections`，必须先在数据库侧上调，或把应用侧调小。
 - 要用的参数的**落地方式**：现网用 `docker run ... -c key=value` 传参（与既有的 18 容器一致，
   `docker inspect` 随时可查回全套参数），完整清单固化在 §6.1 那条命令里。之所以强调「要有
@@ -110,7 +110,7 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
 
 要数的不是「300 个人」，而是「同一瞬间有几个连接占着数据库」。两个口径：
 
-- 应用侧：**每个副本**的进程池上限是 `KITE_DB_MAX_OPEN_CONNS`（默认 100）。池子里的连接
+- 应用侧：**每个副本**的进程池上限是 `AEROLINK_DB_MAX_OPEN_CONNS`（默认 100）。池子里的连接
   **空闲时也占着坑位**，不会因为没人用就还回去。
 - 数据库侧：`max_connections` 是全部客户端加起来的总坑位，还要留几个给管理员 `psql`、备份
   `pg_dump` 和监控（`superuser_reserved_connections` 默认 3，实际只够一个人用）。
@@ -118,7 +118,7 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
 所以硬约束是：
 
 ```
-副本数 × KITE_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ max_connections
+副本数 × AEROLINK_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ max_connections
 ```
 
 | 部署形态 | 应用侧占用 | 至少要 | 建议值 |
@@ -128,7 +128,7 @@ ALTER ROLE kite PASSWORD '<同一个口令>';   -- 重设才会用新算法重�
 | 3 副本 | 300 | 320 | **400** |
 
 **结论：按 300 人、最多 3 副本，取 `max_connections=400`。** 再扩到 4 副本时，要么加到 500，
-要么把应用侧调成 `KITE_DB_MAX_OPEN_CONNS=80`（4 × 80 = 320）。
+要么把应用侧调成 `AEROLINK_DB_MAX_OPEN_CONNS=80`（4 × 80 = 320）。
 
 不要无脑往大调：每个坑位在数据库进程里都要占内存（基线几 MB，遇到排序/联表再按 `work_mem`
 涨），本机 30G 内存下 400 个坑位最坏按每连接 10MB 估也就 4G 左右，其余内存参数沿用现网
@@ -233,7 +233,7 @@ docker exec kite-postgres12 psql -U postgres -c "ALTER DATABASE kite OWNER TO ki
 从 SQLite 搬（首次切库，步骤与校验见 `2026-09-20-sqlite-to-postgres-migration.md` §5）：
 
 ```sh
-cd /wxh/kite
+cd /wxh/aerolink
 set -a; . /root/kite-secrets.env; set +a
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate -target-type postgres \
@@ -249,12 +249,12 @@ DB_TYPE=sqlite DB_DSN=dev.db \
 2. `make backend` 重建二进制后重启（Go 改动要靠这次重启才生效）。本节点实际用的重启命令：
 
 ```sh
-cd /wxh/kite && make backend
+cd /wxh/aerolink && make backend
 set -a; . ./dev.env; set +a
-setsid nohup /wxh/kite/kite >> /data/logs/kite.log 2>&1 < /dev/null &
+setsid nohup /wxh/aerolink/aerolink >> /data/logs/aerolink.log 2>&1 < /dev/null &
 ```
 
-日志在 `/data/logs/kite.log`。`dev.env` 就是本节点的生效配置——**别用不加载它的方式启动**，
+日志在 `/data/logs/aerolink.log`。`dev.env` 就是本节点的生效配置——**别用不加载它的方式启动**，
 否则会静默回落到 SQLite 的 `dev.db`，看到的是旧数据；
 3. 按切库文档 §5.6 的清单逐项校验：各表行数、能登录、3 个集群都能拉资源、MFA 能验码、
    新建一个角色/收藏确认主键不冲突；
@@ -275,7 +275,7 @@ setsid nohup /wxh/kite/kite >> /data/logs/kite.log 2>&1 < /dev/null &
 | 业务库 / 角色 | `kite` 库，属主 `kite`（`rolsuper/rolcreatedb/rolcreaterole` 全为 `f`） |
 | 口令存放 | `/root/kite-pg12-secrets.env`（600，超管 + `kite` 角色） |
 | 应用配置 | `dev.env`：`DB_TYPE=postgres`、`DB_DSN=...port=5433...TimeZone=Asia/Shanghai` |
-| 应用日志 | `/data/logs/kite.log` |
+| 应用日志 | `/data/logs/aerolink.log` |
 | 回滚资产 | `/data/backup/`：`dev.db.2026-09-20-1913`（SQLite 快照）、`kite.bin.old-20260920-1750`（旧二进制）、`dev.env.old-20260920-1750`、`pg18-all-2026-09-20-1922.sql`（退役前的 18 全量 dump） |
 | 18 容器 | **已退役**（2026-09-20 停用并删除容器、删除 `/data/postgresql`；删前确认无任何客户端连接，并留了上面那份 dump） |
 
@@ -314,15 +314,15 @@ docker stop kite-postgres12 && docker rm kite-postgres12
 
 ```sh
 # 只读检查（默认全跑）+ 扫服务端日志里的数据库错误
-KITE_SMOKE_USER=super KITE_SMOKE_PASSWORD='<口令>' \
+AEROLINK_SMOKE_USER=super AEROLINK_SMOKE_PASSWORD='<口令>' \
   go run ./tools/apismoke -base-url http://127.0.0.1:8080 \
-    -cluster dev -namespace devops -log-file /data/logs/kite.log
+    -cluster dev -namespace devops -log-file /data/logs/aerolink.log
 
 # 再加上写检查、AI 工具、邮件投递
-KITE_SMOKE_USER=super KITE_SMOKE_PASSWORD='<口令>' \
+AEROLINK_SMOKE_USER=super AEROLINK_SMOKE_PASSWORD='<口令>' \
   go run ./tools/apismoke -base-url http://127.0.0.1:8080 \
     -cluster dev -namespace devops -write-namespace devops \
-    -log-file /data/logs/kite.log -ai -smtp
+    -log-file /data/logs/aerolink.log -ai -smtp
 ```
 
 | 组 | 内容 | 什么时候跑 |
@@ -347,12 +347,12 @@ DB_TYPE=postgres DB_DSN='<生产 DSN>' go run ./tools/dbmigrate \
 # 2) 让克隆库里的测试账号有一个已知口令（否则登录都不知用什么）
 #    用仓库自己的哈希：写一个临时 _test.go 调 utils.HashPassword，或用界面重置
 # 3) 用一个不占用的端口起实例（配置从 dev.env 取，只改库和端口）
-DB_TYPE=postgres DB_DSN='<kite_smoke 的 DSN>' PORT=38092 /wxh/kite/kite &
+DB_TYPE=postgres DB_DSN='<kite_smoke 的 DSN>' PORT=38092 /wxh/aerolink/aerolink &
 
 # 4) 对着它跑；跑完把 kite_smoke 删掉
-KITE_SMOKE_USER=... KITE_SMOKE_PASSWORD=... \
+AEROLINK_SMOKE_USER=... AEROLINK_SMOKE_PASSWORD=... \
   go run ./tools/apismoke -base-url http://127.0.0.1:38092 -cluster dev -namespace devops \
-    -write-namespace devops -ai -smtp -log-file /data/logs/kite.log
+    -write-namespace devops -ai -smtp -log-file /data/logs/aerolink.log
 docker exec kite-postgres12 psql -U postgres -c "DROP DATABASE kite_smoke;"
 ```
 

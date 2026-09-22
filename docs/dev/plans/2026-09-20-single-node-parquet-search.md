@@ -88,8 +88,8 @@ SELECT id, created_at, cluster_name, resource_type, resource_name, namespace,
        operation_type, operation_source, success, error_message,
        client_ip, user_agent, operator_id, operator_name
 FROM read_parquet([
-  '/var/log/kite/archive/audit_history/2026/09/19/*.parquet',
-  '/var/log/kite/archive/audit_history/2026/09/20/*.parquet'
+  '/var/log/aerolink/archive/audit_history/2026/09/19/*.parquet',
+  '/var/log/aerolink/archive/audit_history/2026/09/20/*.parquet'
 ])
 WHERE created_at >= 1789910305000 AND success = false
 ORDER BY created_at DESC
@@ -266,7 +266,7 @@ DuckDB 1.5.5 + `SET s3_url_style='vhost'`（腾讯 COS 强制 virtual-hosted，�
   不可用的后端仍会返回（带 `reason`），管理员才知道「为什么选不了」。
 - 检索与导出都支持 `?backend=elasticsearch|duckdb` 强制指定；不传即 auto（**DuckDB → ES**）。
   **显式指定的后端不可用时直接报错**，不会悄悄换成另一个后端让结果对不上。
-- **CLI 必须落在 PATH 里**（镜像里是 `/usr/local/bin/duckdb`）：早期版本靠 `KITE_DUCKDB_PATH`
+- **CLI 必须落在 PATH 里**（镜像里是 `/usr/local/bin/duckdb`）：早期版本靠 `AEROLINK_DUCKDB_PATH`
   指定，服务换一种方式重启就会丢掉这个环境变量，界面上表现为 DuckDB「未配置」。
 - 响应里带 `backend` 字段，界面显示「数据来源」，便于确认这次查的是哪一份数据。
 
@@ -309,7 +309,7 @@ parquet、走同一套 SQL 与结果归一，有跨驱动一致性测试保证�
 - **构建镜像** `golang:1.26.8`（Debian 版，自带 gcc/g++ 14.2）——**不能用 alpine 版**：它只有
   musl 工具链，还得联网装 build-base。
 - **运行基座** `openEuler 24.03 LTS-SP4`：glibc 与 libstdc++ 都是现成的，cgo 产物直接可跑
-  （实测 `ldd /app/kite` 全部依赖解析成功）。
+  （实测 `ldd /app/aerolink` 全部依赖解析成功）。
 - **CA 证书与时区数据必须从构建镜像拷**：openEuler / ubuntu 这类精简基座**都不带**
   ca-certificates（缺了所有 HTTPS 调用都会以 `x509: certificate signed by unknown authority`
   失败），ubuntu 连 tzdata 都没有（归档按本地时区分 `年/月/日` 目录，缺了会静默退化成 UTC）。

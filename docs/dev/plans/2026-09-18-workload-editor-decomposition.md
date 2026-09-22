@@ -183,7 +183,7 @@ make e2e-run-existing KUBECONFIG=~/.kube/config \
   SPEC="specs/resource-creation.spec.ts"
 ```
 
-`KITE_E2E_CONTEXT_NAME` 就是 Kite 导入后的集群名（spec 用它拼 API 路径）；节点名给 `node-operations` 用。**注意 `node-operations.spec.ts` 会 cordon/drain 节点，单节点集群上不要随手跑。**
+`AEROLINK_E2E_CONTEXT_NAME` 就是 Kite 导入后的集群名（spec 用它拼 API 路径）；节点名给 `node-operations` 用。**注意 `node-operations.spec.ts` 会 cordon/drain 节点，单节点集群上不要随手跑。**
 
 **2026-09-18 实测基线**（对单节点 v1.32 真实集群，本轮变更的工作区）：
 

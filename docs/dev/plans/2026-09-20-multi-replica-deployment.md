@@ -34,35 +34,35 @@
 - **不能**：同一台机器上的三个副本共用同一份 CPU 与内存，**机器级瓶颈不会消失**。
   真正要「多节点」时：把副本放到不同机器上，nginx 的 upstream 换成那些机器的地址，
   数据库仍是同一个（PostgreSQL 已监听 `0.0.0.0:5433`，其它机器可直连；建议用防火墙限制来源）。
-  `deploy/kite@.service`、`deploy/nginx-kite.conf`、`deploy/kite.env.example` 三份产物对此不用改。
+  `deploy/aerolink@.service`、`deploy/nginx-aerolink.conf`、`deploy/aerolink.env.example` 三份产物对此不用改。
 
 ## 3. 容量口径
 
 ```
-副本数 × KITE_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ PostgreSQL 的 max_connections
+副本数 × AEROLINK_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ PostgreSQL 的 max_connections
 ```
 
 - 现网数据库 `max_connections=400`（见 PG 12 文档 §2.5 的算法），单副本 100 的话最多 3 个副本；
-  要跑 4 个以上就把 `KITE_DB_MAX_OPEN_CONNS` 调到 80，或同步上调 `max_connections`。
+  要跑 4 个以上就把 `AEROLINK_DB_MAX_OPEN_CONNS` 调到 80，或同步上调 `max_connections`。
 - 连接池是**每个副本**一份，且空闲连接也占着数据库坑位——这是最容易算错的地方。
 
 ## 4. 部署步骤（可粘贴）
 
 ```sh
 # 1) 共享配置（所有副本一份，只有 PORT 由 systemd 实例号给出）
-install -d -m 750 /etc/kite
-cp deploy/kite.env.example /etc/kite/kite.env
-chmod 600 /etc/kite/kite.env
-vi /etc/kite/kite.env                     # 改 DB_DSN 与两个密钥（与既有库配套，别换）
+install -d -m 750 /etc/aerolink
+cp deploy/aerolink.env.example /etc/aerolink/aerolink.env
+chmod 600 /etc/aerolink/aerolink.env
+vi /etc/aerolink/aerolink.env                     # 改 DB_DSN 与两个密钥（与既有库配套，别换）
 
 # 2) 装 unit（实例号 = 端口）
-install -m 644 deploy/kite@.service /etc/systemd/system/kite@.service
+install -m 644 deploy/aerolink@.service /etc/systemd/system/aerolink@.service
 systemctl daemon-reload
-systemctl enable --now kite@8081 kite@8082 kite@8083
-systemctl status 'kite@*' --no-pager       # 三个都应是 active (running)
+systemctl enable --now aerolink@8081 aerolink@8082 aerolink@8083
+systemctl status 'aerolink@*' --no-pager       # 三个都应是 active (running)
 
 # 3) 入口（nginx 已在宿主机上）
-install -m 644 deploy/nginx-kite.conf /etc/nginx/conf.d/kite.conf
+install -m 644 deploy/nginx-aerolink.conf /etc/nginx/conf.d/aerolink.conf
 nginx -t && systemctl reload nginx
 curl -s http://127.0.0.1:8080/healthz      # {"status":"ok"}
 
@@ -75,7 +75,7 @@ curl -s http://127.0.0.1:8080/healthz      # {"status":"ok"}
 
 ```sh
 for port in 8081 8082 8083; do
-  systemctl restart kite@$port
+  systemctl restart aerolink@$port
   sleep 5
 done
 ```
@@ -85,8 +85,8 @@ done
 
 ### 回滚
 
-- 摘副本：`systemctl disable --now kite@8083`（nginx 会把它踢出 upstream）。
-- 回单进程：`systemctl disable --now 'kite@*'`，`systemctl stop nginx`，再按旧方式起一个裸进程。
+- 摘副本：`systemctl disable --now aerolink@8083`（nginx 会把它踢出 upstream）。
+- 回单进程：`systemctl disable --now 'aerolink@*'`，`systemctl stop nginx`，再按旧方式起一个裸进程。
 - 数据库回滚见 PG 12 文档 §6.6。
 
 ## 5. 本次实测记录（2026-09-20，同一份生产数据克隆）
@@ -109,7 +109,7 @@ done
    调小（代价是更多次数据库读）。
 3. **日志分散**：每个副本各写一份日志，排查时要一起看。`tools/apismoke -log-file a,b,c`
    支持逗号分隔多个文件。
-4. **WebSocket（终端、日志跟随）经 nginx 需要 `Upgrade` 头**，`deploy/nginx-kite.conf`
+4. **WebSocket（终端、日志跟随）经 nginx 需要 `Upgrade` 头**，`deploy/nginx-aerolink.conf`
    里已经配好，并关掉了 SSE（AI 对话）需要的 `proxy_buffering`。
 5. 还没验的：跨副本的第三方 MFA 票据兑换（票据在库里、单实例已验证原子消费，跨副本由库层保证）；
    终端/日志的 WebSocket 经 nginx 的实测（本次没跑 WS 客户端）。

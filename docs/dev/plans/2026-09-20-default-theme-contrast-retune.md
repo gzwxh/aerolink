@@ -91,7 +91,7 @@ HEAD 与改动后的构建产物，得到下表：
 # 1. 构建（不要用默认 outDir，避免覆盖 static/）
 cd ui && node_modules/.bin/vite build --outDir /tmp/kite-css-check --emptyOutDir
 # 2. 静态托管 + Chromium 量测脚本按上面口径跑一遍
-#    （脚本里要处理 __KITE_BASE__ 前缀：产物 index.html 里的资源路径带该占位符，
+#    （脚本里要处理 __AEROLINK_BASE__ 前缀：产物 index.html 里的资源路径带该占位符，
 #      由二进制在托管时替换，静态服务器需要自行去掉它）
 ```
 
