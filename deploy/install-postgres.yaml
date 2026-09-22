@@ -80,7 +80,7 @@ stringData:
   # ⚠ sslmode：PG 在集群外、未开 TLS 时用 disable；开了 TLS 改为 require / verify-full。
   # ⚠ 库与角色名沿用现网的 kite（与产品名无关）；下面是现网实例的连接串，改地址 /
   #   密码时只改这一行，上面的说明不必跟着改。
-  POSTGRES_DSN: "host=10.10.11.111 port=5432 user=postgres password=postgres dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+  POSTGRES_DSN: "host=10.10.11.111 port=5432 user=aerolink password=JaAUuHlthKId5MXxGrtU dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
 ---
 apiVersion: apps/v1
 kind: Deployment
