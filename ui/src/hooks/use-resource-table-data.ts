@@ -34,6 +34,8 @@ export function useResourceTableData<T>({
     reduce: true,
     enabled: useSSE,
     labelSelector,
+    // 被限流时按同一节奏降级为轮询，观感与关掉 SSE 的页面一致。
+    fallbackPollInterval: refreshInterval,
   })
 
   const data = useMemo(

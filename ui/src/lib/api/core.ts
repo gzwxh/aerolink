@@ -724,6 +724,15 @@ export const useResources = <T extends ResourceType>(
   })
 }
 
+// 服务端明确拒绝（429 限流、403 无权限等）时，EventSource 的 readyState 会是 CLOSED，
+// 浏览器不会自动重连；而网络抖动、服务端主动断流是 CONNECTING，浏览器自己会重连。
+// 这里用数值常量而不是 EventSource.CLOSED：测试里的替身不一定带静态常量。
+const EVENT_SOURCE_CLOSED = 2
+
+// 被限流降级为轮询时的默认轮询间隔，以及「定期把 SSE 抢回来」的探测间隔。
+const WATCH_FALLBACK_POLL_INTERVAL = 5000
+const WATCH_STREAM_PROBE_INTERVAL = 30000
+
 // Hook：资源列表的 SSE watch（初始快照 + ADDED/MODIFIED/DELETED）
 export function useResourcesWatch<T extends ResourceType>(
   resource: T,
@@ -733,6 +742,10 @@ export function useResourcesWatch<T extends ResourceType>(
     fieldSelector?: string
     reduce?: boolean
     enabled?: boolean
+    /** 页面不可见时断开连接（默认开启），可见时立即重连并重新取快照。 */
+    pauseWhenHidden?: boolean
+    /** 被限流降级为轮询时的轮询间隔（毫秒，默认 5000）。 */
+    fallbackPollInterval?: number
   }
 ) {
   const [data, setData] = useState<ResourcesItems<T> | undefined>(undefined)
@@ -742,6 +755,21 @@ export function useResourcesWatch<T extends ResourceType>(
   const eventSourceRef = useRef<EventSource | null>(null)
   // refetch 的重连定时器：不记下来就可能在组件卸载后又建一条连接。
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 降级轮询的定时器，以及探测 SSE 是否可用的定时器。
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const streamProbeTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  )
+  // 是否处于「被服务端拒绝、降级为轮询」的状态。
+  const degradedRef = useRef(false)
+  // 让定时器与可见性监听都能调到最新的 connect，避免两个 useCallback 互相依赖。
+  const connectRef = useRef<() => void>(() => {})
+  // 是否已经收到过数据：重连时据此保留旧列表，只在首屏进加载态。
+  const hasDataRef = useRef(false)
+  // 上一次连接的 URL：用来区分「重连」与「切换集群 / 命名空间 / 资源」。
+  const lastUrlRef = useRef<string | null>(null)
+  // 连续重连次数：连接成功后清零，用于指数退避。
+  const reconnectAttemptRef = useRef(0)
 
   const buildUrl = useCallback(() => {
     const ns = namespace || '_all'
@@ -774,13 +802,87 @@ export function useResourcesWatch<T extends ResourceType>(
     }
   }, [])
 
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+    if (streamProbeTimerRef.current) {
+      clearInterval(streamProbeTimerRef.current)
+      streamProbeTimerRef.current = null
+    }
+    degradedRef.current = false
+  }, [])
+
+  // 停掉这条 watch 的一切：SSE 连接、重连定时器与降级轮询。
+  const stopAll = useCallback(() => {
+    disconnect()
+    stopPolling()
+  }, [disconnect, stopPolling])
+
+  // 取一次列表：与 useResources 同一条 REST 路径。只在拿不到 SSE 连接时才用
+  // （服务端按用户限流返回 429），拿到的整份列表直接当作最新状态。
+  const pollList = useCallback(async () => {
+    try {
+      const result = await fetchResources<ResourcesTypeMap[T]>(
+        resource,
+        namespace,
+        {
+          labelSelector: options?.labelSelector,
+          fieldSelector: options?.fieldSelector,
+          // 与 buildUrl 同一口径（默认裁剪），别让轮询拿回一份字段更全的列表。
+          reduce: options?.reduce !== false,
+        }
+      )
+      hasDataRef.current = true
+      setIsLoading(false)
+      setError(null)
+      setData(result.items as ResourcesItems<T>)
+    } catch (err) {
+      setIsLoading(false)
+      if (err instanceof Error) setError(err)
+    }
+  }, [
+    resource,
+    namespace,
+    options?.labelSelector,
+    options?.fieldSelector,
+    options?.reduce,
+  ])
+
+  const pollInterval =
+    options?.fallbackPollInterval && options.fallbackPollInterval > 0
+      ? options.fallbackPollInterval
+      : WATCH_FALLBACK_POLL_INTERVAL
+
+  // 服务端拒绝连接（如 429 限流）时的降级路径：改用轮询刷新，
+  // 同时定期探测 SSE 是否已经可用，可用就切回去（onopen 里停掉轮询）。
+  const startPolling = useCallback(() => {
+    if (degradedRef.current) return
+    degradedRef.current = true
+    void pollList()
+    pollTimerRef.current = setInterval(() => void pollList(), pollInterval)
+    streamProbeTimerRef.current = setInterval(
+      () => connectRef.current(),
+      WATCH_STREAM_PROBE_INTERVAL
+    )
+  }, [pollInterval, pollList])
+
   const connect = useCallback(() => {
     disconnect()
-    setData(undefined)
     if (options?.enabled === false) return
-    // 快照要等 watch 的首批事件才会到，这之前保持加载态（否则首屏会先闪一下空状态）。
-    setIsLoading(true)
     const url = buildUrl()
+    // 集群 / 命名空间 / 资源等参数变了就清空旧数据，避免短暂显示上一个集群的列表；
+    // 同一参数下的重连则保留旧数据，避免列表闪空或一直转圈。
+    if (url !== lastUrlRef.current) {
+      lastUrlRef.current = url
+      hasDataRef.current = false
+      // 换了目标就重新开始退避计数，别让上一个目标的失败拖慢新连接。
+      reconnectAttemptRef.current = 0
+      setData(undefined)
+    }
+    // 只有还没有任何数据时才进加载态（首个快照要等 watch 的首批事件）。
+    if (!hasDataRef.current) setIsLoading(true)
     setError(null)
     setIsConnected(false)
 
@@ -790,6 +892,10 @@ export function useResourcesWatch<T extends ResourceType>(
 
       es.onopen = () => {
         setIsConnected(true)
+        // 连接已建立：抢回来的连接要让降级轮询停下来。
+        stopPolling()
+        // 连接已建立，退避计数清零。
+        reconnectAttemptRef.current = 0
       }
 
       const getKey = (obj: ResourceTypeMap[T]) => {
@@ -800,6 +906,7 @@ export function useResourcesWatch<T extends ResourceType>(
 
       const upsert = (obj: string) => {
         const object = JSON.parse(obj) as ResourceTypeMap[T]
+        hasDataRef.current = true
         setIsLoading(false)
         setData((prev) => {
           const arr = prev ? [...prev] : []
@@ -815,6 +922,7 @@ export function useResourcesWatch<T extends ResourceType>(
 
       const remove = (obj: string) => {
         const object = JSON.parse(obj) as ResourceTypeMap[T]
+        hasDataRef.current = true
         setIsLoading(false)
         setData((prev) => {
           const arr = prev ? [...prev] : []
@@ -836,6 +944,50 @@ export function useResourcesWatch<T extends ResourceType>(
         remove(e.data)
       })
 
+      // Pods 的周期用量推送：服务端只下发用量数字，这里 merge 进已有行，
+      // 避免每 15s 重传整个 Pod 本体。其它资源不会收到该事件。
+      type PodMetricsUpdate = {
+        namespace: string
+        name: string
+        cpuUsage: number
+        memoryUsage: number
+      }
+      es.addEventListener('metrics', (e: MessageEvent<string>) => {
+        let updates: PodMetricsUpdate[]
+        try {
+          updates = JSON.parse(e.data) as PodMetricsUpdate[]
+        } catch {
+          return
+        }
+        if (!Array.isArray(updates) || updates.length === 0) return
+        hasDataRef.current = true
+        const byKey = new Map<string, PodMetricsUpdate>(
+          updates.map((u): [string, PodMetricsUpdate] => [
+            `${u.namespace}/${u.name}`,
+            u,
+          ])
+        )
+        setData((prev) => {
+          if (!prev) return prev
+          const next = prev.map((item) => {
+            const update = byKey.get(getKey(item as ResourceTypeMap[T]))
+            if (!update) return item
+            const withMetrics = item as ResourceTypeMap[T] & {
+              metrics?: Record<string, number> | null
+            }
+            return {
+              ...withMetrics,
+              metrics: {
+                ...(withMetrics.metrics ?? {}),
+                cpuUsage: update.cpuUsage,
+                memoryUsage: update.memoryUsage,
+              },
+            } as ResourceTypeMap[T]
+          })
+          return next as ResourcesItems<T>
+        })
+      })
+
       es.addEventListener('error', (e: MessageEvent) => {
         try {
           const payload = JSON.parse(e.data)
@@ -854,29 +1006,69 @@ export function useResourcesWatch<T extends ResourceType>(
         // 连接失败时也要收起加载态，否则会一直停在「加载中」。
         setIsLoading(false)
         setIsConnected(false)
+        // CLOSED 表示服务端明确拒绝（如 429 限流）：浏览器不会自动重连，
+        // 此时降级为轮询，别让页面一直停在「已断开」且不再刷新。
+        if (
+          eventSourceRef.current === es &&
+          es.readyState === EVENT_SOURCE_CLOSED
+        ) {
+          startPolling()
+        }
       }
     } catch (err) {
       if (err instanceof Error) setError(err)
       setIsLoading(false)
       setIsConnected(false)
     }
-  }, [buildUrl, disconnect, options?.enabled])
+  }, [buildUrl, disconnect, options?.enabled, startPolling, stopPolling])
+
+  // 定时器与可见性监听通过 ref 调用，避免与 connect 形成循环依赖。
+  connectRef.current = connect
 
   const refetch = useCallback(() => {
+    // 降级期间重新取一次列表就够了：再抢 SSE 也只会立刻被拒。
+    if (degradedRef.current) {
+      void pollList()
+      return
+    }
     disconnect()
-    reconnectTimerRef.current = setTimeout(connect, 100)
-  }, [disconnect, connect])
+    // 连续重连时指数退避（1s → 30s 封顶），避免服务端抖动时所有页面同时回连；
+    // 连接成功后在 onopen 里清零。
+    const delay = Math.min(1000 * 2 ** reconnectAttemptRef.current, 30000)
+    reconnectAttemptRef.current += 1
+    reconnectTimerRef.current = setTimeout(connect, delay)
+  }, [disconnect, connect, pollList])
 
   useEffect(() => {
     if (options?.enabled === false) return
     connect()
     return () => {
-      // disconnect 会一并清掉尚在等待的重连定时器。
-      disconnect()
+      // stopAll 会一并清掉尚在等待的重连定时器与降级轮询。
+      stopAll()
     }
-  }, [connect, disconnect, options?.enabled])
+  }, [connect, stopAll, options?.enabled])
 
-  return { data, isLoading, error, isConnected, refetch, stop: disconnect }
+  // 页面不可见时断开连接：一条 watch 会常驻占用一个上游流与一个浏览器连接名额，
+  // 而没人看的标签页不需要实时数据（服务端的连接数也随之下降）。
+  // 可见时立即重连，重新拿到一份快照。
+  useEffect(() => {
+    if (options?.pauseWhenHidden === false) return
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopAll()
+      } else {
+        connectRef.current()
+      }
+    }
+    // 挂载时就已经不可见（浏览器恢复会话会这样）：别白建一条连接。
+    if (document.hidden) stopAll()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [options?.pauseWhenHidden, stopAll])
+
+  return { data, isLoading, error, isConnected, refetch, stop: stopAll }
 }
 
 export const fetchResource = <T>(

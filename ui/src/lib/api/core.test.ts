@@ -12,6 +12,8 @@ class FakeEventSource {
   onopen: (() => void) | null = null
   onerror: (() => void) | null = null
   closed = false
+  // EventSource 的实例常量：1 = OPEN、0 = CONNECTING、2 = CLOSED。
+  readyState = 1
   private listeners = new Map<string, Listener[]>()
 
   constructor(readonly url: string) {
@@ -40,10 +42,33 @@ class FakeEventSource {
 const podEvent = (name: string) =>
   JSON.stringify({ metadata: { name, namespace: 'default' } })
 
+// 服务端明确拒绝连接（429 限流 / 403 无权限）时浏览器给的状态：
+// readyState 变 CLOSED 且不再自动重连。
+const rejectConnection = (source: FakeEventSource) => {
+  source.readyState = 2
+  source.onerror?.()
+}
+
+const setDocumentHidden = (hidden: boolean) => {
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    value: hidden,
+  })
+  document.dispatchEvent(new Event('visibilitychange'))
+}
+
+const listResponse = (items: unknown[] = []) =>
+  new Response(JSON.stringify({ items }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+
 describe('useResourcesWatch', () => {
   afterEach(() => {
     FakeEventSource.instances = []
     vi.unstubAllGlobals()
+    vi.useRealTimers()
+    setDocumentHidden(false)
   })
 
   // watch 的首批事件才是快照：这之前必须保持加载态，否则首屏会先闪一下空状态。
@@ -77,5 +102,114 @@ describe('useResourcesWatch', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect(FakeEventSource.instances).toHaveLength(1)
+  })
+
+  // 没人看的标签页不该占着上游 watch 与浏览器的连接名额。
+  it('页面不可见时断开连接，可见时重连', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+
+    renderHook(() => useResourcesWatch('pods', 'default'))
+    expect(FakeEventSource.instances).toHaveLength(1)
+
+    act(() => setDocumentHidden(true))
+    expect(FakeEventSource.instances[0].closed).toBe(true)
+
+    act(() => setDocumentHidden(false))
+    expect(FakeEventSource.instances).toHaveLength(2)
+    expect(FakeEventSource.instances[1].closed).toBe(false)
+  })
+
+  // pauseWhenHidden: false 的页面（如详情页）保持现有行为，切换标签页不影响连接。
+  it('pauseWhenHidden 为 false 时不断开连接', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+
+    renderHook(() =>
+      useResourcesWatch('pods', 'default', { pauseWhenHidden: false })
+    )
+    act(() => setDocumentHidden(true))
+
+    expect(FakeEventSource.instances).toHaveLength(1)
+    expect(FakeEventSource.instances[0].closed).toBe(false)
+  })
+
+  // 服务端限流（429）会让浏览器停止重连：此时必须降级为轮询，而不是让页面一直空转。
+  it('服务端拒绝连接时降级为轮询', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const fetchMock = vi.fn(async () => listResponse([podEvent('p1')]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useResourcesWatch('pods', 'default', { fallbackPollInterval: 2000 })
+    )
+
+    await act(async () => {
+      rejectConnection(FakeEventSource.instances[0])
+    })
+
+    await waitFor(() => expect(result.current.data).toHaveLength(1))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/pods/default')
+    expect(result.current.error).toBeNull()
+    expect(result.current.isLoading).toBe(false)
+    // 降级期间不再反复抢必然被拒的 SSE 连接。
+    expect(FakeEventSource.instances).toHaveLength(1)
+  })
+
+  // 网络抖动是 CONNECTING，浏览器自己会重连，不能误判成限流去轮询。
+  it('网络抖动不降级为轮询', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const fetchMock = vi.fn(async () => listResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderHook(() => useResourcesWatch('pods', 'default'))
+
+    await act(async () => {
+      FakeEventSource.instances[0].readyState = 0
+      FakeEventSource.instances[0].onerror?.()
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // 降级不是终点：等限流窗口过去要把 SSE 抢回来，抢回后停止轮询。
+  it('降级期间定期探测，连接恢复后停止轮询', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const fetchMock = vi.fn(async () => listResponse([podEvent('p1')]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderHook(() =>
+      useResourcesWatch('pods', 'default', { fallbackPollInterval: 2000 })
+    )
+
+    await act(async () => {
+      rejectConnection(FakeEventSource.instances[0])
+      await Promise.resolve()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+      await Promise.resolve()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    // 探测间隔到点：建一条新连接，onopen 后轮询必须停下。
+    await act(async () => {
+      vi.advanceTimersByTime(30000)
+    })
+    expect(FakeEventSource.instances).toHaveLength(2)
+
+    act(() => {
+      FakeEventSource.instances[1].onopen?.()
+    })
+    const callsAfterReconnect = fetchMock.mock.calls.length
+
+    await act(async () => {
+      vi.advanceTimersByTime(10000)
+      await Promise.resolve()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterReconnect)
   })
 })
