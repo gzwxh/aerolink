@@ -43,11 +43,11 @@ const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5'
 // 所以限制在 256 KiB 以内；数据 URL 会膨胀约 1/3，文件选择处再留一点余量。
 const MAX_LOGO_BYTES = 180 * 1024
 const DEFAULT_KUBECTL_IMAGE =
-  'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'
+  'swr.cn-south-1.myhuaweicloud.com/gzwxh/kubectl:latest'
 const DEFAULT_NODE_TERMINAL_IMAGE =
-  'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'
+  'swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest'
 const DEFAULT_CLUSTER_AGENT_IMAGE =
-  'swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest'
+  'swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest'
 
 interface GeneralSettingsFormData {
   aiAgentEnabled: boolean

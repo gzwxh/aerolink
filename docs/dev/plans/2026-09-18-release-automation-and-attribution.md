@@ -3,7 +3,7 @@
 - 对应总览报告中的第 **8** 项（P0 清单）
 - 状态：**基本实现**（2026-09-18）：阶段 1（A1-a）、2、3、4、5、6 均已完成；仅 **A3 的版本号规则**待决策
 - 实现记录：
-  - A1-a：`release.yaml` 的门禁由 `github.repository_owner == 'kite-org'` 改为 `vars.RELEASE_ENABLED == 'true'`；镜像目标改为 `vars.IMAGE_REPOSITORY`（默认 `swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite`，与 charts 一致），registry host 由首段推导，登录步骤按 ghcr.io / Docker Hub / 其他 registry 条件执行；chart 的 OCI 目标为 `vars.CHART_OCI_REPOSITORY`（空则跳过）；gh-pages index 作业单独用 `vars.HELM_INDEX_ENABLED` 开关；CI 构建用 `make cross-compile VERSION=<tag>` 保证产物版本与 tag 一致，Release 正文改用 `scripts/changelog.sh` 的分类产物。`deploy-demo.yml` 仍属上游专用，保留门禁并在文件头注明
+  - A1-a：`release.yaml` 的门禁由 `github.repository_owner == 'kite-org'` 改为 `vars.RELEASE_ENABLED == 'true'`；镜像目标改为 `vars.IMAGE_REPOSITORY`（默认 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite`，与 charts 一致），registry host 由首段推导，登录步骤按 ghcr.io / Docker Hub / 其他 registry 条件执行；chart 的 OCI 目标为 `vars.CHART_OCI_REPOSITORY`（空则跳过）；gh-pages index 作业单独用 `vars.HELM_INDEX_ENABLED` 开关；CI 构建用 `make cross-compile VERSION=<tag>` 保证产物版本与 tag 一致，Release 正文改用 `scripts/changelog.sh` 的分类产物。`deploy-demo.yml` 仍属上游专用，保留门禁并在文件头注明
   - A2 改用 `scripts/changelog.sh`（只用 git + sh，不依赖 `git-cliff`，内网可直接跑）+ `make changelog` + 生成的 `CHANGELOG.md`；若以后要用 git-cliff，把它换成 `cliff.toml` 即可
   - A3/A4：新增 `docs/dev/release-checklist.md`（含 CI 变量表）；`scripts/release.sh` 去掉 `set -x`、参数化 `CHART_DIR` / `TAG_PREFIX`、增加“工作区必须干净”前置检查；`.gitignore` 增加 `charts/*.tgz`
   - B1/B2：新增 `NOTICE`（不可核实的条目一律标 `待确认`，不作推测）与 `licenses/Apache-2.0.txt`（与 `LICENSE` 字节一致）；`README.md` / `README_en.md` 增加归属段并互相链接
@@ -72,7 +72,7 @@ if: ${{ github.repository_owner == 'kite-org' && startsWith(github.ref, 'refs/ta
 1. `make pre-commit` + `make test`（含 `go test` 与 `pnpm test`）
 2. 更新 `Makefile` 的 `VERSION`（或由 tag 推导，二选一并写死规则）
 3. `make cross-compile` → `make package-binaries`（产物落 `bin/`）
-4. 构建并推送镜像（`Dockerfile.binary`，目标 registry 用公司仓库，参考 charts 里已出现的 `swr.cn-south-1.myhuaweicloud.com/dsy/...`）
+4. 构建并推送镜像（`Dockerfile.binary`，目标 registry 用公司仓库，参考 charts 里已出现的 `swr.cn-south-1.myhuaweicloud.com/gzwxh/...`）
 5. `helm package charts/kite` → 推送 chart（OCI 或 oss/内网仓库）
 6. 打 tag、写发布说明（A2 产物）、附上二进制与 chart
 7. 发布后核对：`/api/v1/version` 返回值与 tag 一致（ldflags 是否真的注入）

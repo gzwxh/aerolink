@@ -16,10 +16,10 @@ const DefaultGeneralAIModel = "gpt-4o-mini"
 const DefaultGeneralAnthropicModel = "claude-sonnet-4-5"
 
 // DefaultGeneralKubectlImage 是默认的 kubectl 镜像。默认镜像都来自公司镜像仓库
-// （SWR，命名空间 “dsy”）。
-const DefaultGeneralKubectlImage = "swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest"
-const DefaultGeneralNodeTerminalImage = "swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest"
-const DefaultGeneralClusterAgentImage = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest"
+// （SWR，命名空间 “gzwxh”）。
+const DefaultGeneralKubectlImage = "swr.cn-south-1.myhuaweicloud.com/gzwxh/kubectl:latest"
+const DefaultGeneralNodeTerminalImage = "swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest"
+const DefaultGeneralClusterAgentImage = "swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest"
 
 const GeneralAIProviderOpenAI = "openai"
 const GeneralAIProviderAnthropic = "anthropic"
@@ -58,9 +58,9 @@ type GeneralSetting struct {
 	AIBaseURL             string       `json:"aiBaseUrl" gorm:"column:ai_base_url;type:varchar(500)"`
 	AIMaxTokens           int          `json:"aiMaxTokens" gorm:"column:ai_max_tokens;type:integer;default:16384"`
 	KubectlEnabled        bool         `json:"kubectlEnabled" gorm:"column:kubectl_enabled;type:boolean;not null;default:true"`
-	KubectlImage          string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'"`
-	NodeTerminalImage     string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'"`
-	ClusterAgentImage     string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest'"`
+	KubectlImage          string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/gzwxh/kubectl:latest'"`
+	NodeTerminalImage     string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest'"`
+	ClusterAgentImage     string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest'"`
 	PasswordLoginDisabled bool         `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
 	EnableMFA             bool         `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
 	LoginPrompt           string       `json:"loginPrompt" gorm:"column:login_prompt;type:text"`

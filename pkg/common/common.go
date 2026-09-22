@@ -36,12 +36,12 @@ var (
 	Base                 = ""
 
 	// Kite 在创建 pod/终端/agent 工作负载时拉取的镜像。它们
-	// 已镜像到公司仓库（SWR，组织 "dsy"），以便隔离网络
+	// 已镜像到公司仓库（SWR，组织 "gzwxh"），以便隔离网络
 	// 的集群也能拉取；每个都仍可通过环境变量或
 	// 设置界面覆盖。
-	NodeTerminalImage    = "swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest"
-	KubectlTerminalImage = "swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest"
-	ClusterAgentImage    = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest"
+	NodeTerminalImage    = "swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest"
+	KubectlTerminalImage = "swr.cn-south-1.myhuaweicloud.com/gzwxh/kubectl:latest"
+	ClusterAgentImage    = "swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest"
 	DBType               = "sqlite"
 	DBDSN                = "dev.db"
 

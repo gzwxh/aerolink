@@ -37,10 +37,6 @@ helm install kite kite/kite -n my-namespace --create-namespace
 # 个人仓库镜像
 helm upgrade --install kite charts/kite -n kite-system --create-namespace \
   -f charts/kite/examples/swr-gzwxh.yaml
-
-# 公司组织仓库镜像（通常为私有，需先创建拉取凭据 swr-dsy）
-helm upgrade --install kite charts/kite -n kite-system --create-namespace \
-  -f charts/kite/examples/swr-dsy.yaml
 ```
 
 镜像的构建与推送（含国内网络下的基础镜像、npm / Go 依赖源参数，以及 Docker Hub、gcr.io 不通时的处理）见[构建并推送 Kite 镜像](../../docs/guide/build-and-push-image.md)。
@@ -66,7 +62,7 @@ helm uninstall kite -n kube-system
 
 | 参数                                                       | 说明                                                     | 默认值                        |
 | ---------------------------------------------------------- | -------------------------------------------------------- | ----------------------------- |
-| `image.repository`                                         | 镜像仓库                                                 | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink`       |
+| `image.repository`                                         | 镜像仓库                                                 | `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`       |
 | `image.tag`                                                | 镜像标签，留空时使用 chart 的 `appVersion`               | `""`                          |
 | `imagePullSecrets`                                         | 私有镜像仓库的拉取凭据                                   | `[]`                          |
 | `replicaCount`                                             | 副本数（使用 SQLite 时请保持 1）                         | `1`                           |
@@ -122,13 +118,13 @@ config:
 ### 私有仓库拉取凭据
 
 ```bash
-kubectl create secret docker-registry swr-dsy -n kite-system \
+kubectl create secret docker-registry swr-gzwxh -n kite-system \
   --docker-server=swr.cn-south-1.myhuaweicloud.com \
   --docker-username='cn-south-1@<AK>' \
   --docker-password='<SK>'
 ```
 
-安装时引用：`--set imagePullSecrets[0].name=swr-dsy`。
+安装时引用：`--set imagePullSecrets[0].name=swr-gzwxh`。
 
 ## 本地校验与打包
 
@@ -152,7 +148,7 @@ helm package charts/kite -d dist
 公司尚未搭建 Helm 仓库，当前版本以 **`.tgz` 压缩包** 形式分发，随仓库一起维护：
 
 - 压缩包：`charts/kite-1.0.0.tgz`（由 `helm package charts/kite -d charts/` 生成）
-- 镜像：`swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0`（chart 默认值已指向公司 SWR）
+- 镜像：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0`（chart 默认值已指向公司 SWR）
 
 ### 安装
 

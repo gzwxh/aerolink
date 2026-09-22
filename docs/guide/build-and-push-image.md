@@ -43,9 +43,9 @@ Docker Hub（`node` / `golang`）与 gcr.io（`distroless`）在部分网络下�
 ```bash
 VERSION=$(bash scripts/get-version.sh)
 docker build \
-  --build-arg NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/node:24-alpine \
-  --build-arg GOLANG_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/golang:1.26-alpine \
-  --build-arg RUNTIME_IMAGE=swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.20 \
+  --build-arg NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/node:24-alpine \
+  --build-arg GOLANG_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26-alpine \
+  --build-arg RUNTIME_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20 \
   --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
   --build-arg GOPROXY=https://goproxy.cn,direct \
   --build-arg VERSION="$VERSION" \
@@ -60,9 +60,9 @@ docker build \
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `NODE_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/node:24-alpine` | 前端构建基础镜像（公司 SWR） |
-| `GOLANG_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/golang:1.26-alpine` | 后端构建基础镜像（公司 SWR） |
-| `RUNTIME_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.20` | 运行时基础镜像（公司 SWR） |
+| `NODE_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/node:24-alpine` | 前端构建基础镜像（公司 SWR） |
+| `GOLANG_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26-alpine` | 后端构建基础镜像（公司 SWR） |
+| `RUNTIME_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20` | 运行时基础镜像（公司 SWR） |
 | `NPM_REGISTRY` | `https://registry.npmjs.org` | 前端依赖源 |
 | `GOPROXY` | `https://proxy.golang.org,direct` | Go 模块代理 |
 | `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `dev` / `unknown` / `unknown` | 注入 `pkg/version`，展示在界面上 |
@@ -140,7 +140,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ## 四、用 Helm 部署自建镜像
 
-`charts/kite` 默认镜像是 `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink`，用 `--set` 覆盖即可：
+`charts/kite` 默认镜像是 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`，用 `--set` 覆盖即可：
 
 ```bash
 VERSION=$(bash scripts/get-version.sh)
@@ -168,16 +168,12 @@ helm upgrade --install kite charts/kite -n kite-system \
 
 ### 仓库内现成的 values 文件
 
-仓库里已经放了两份按镜像仓库写好的 values，直接 `-f` 引用即可：
+仓库里已经放了一份按镜像仓库写好的 values，直接 `-f` 引用即可：
 
 ```bash
 # 个人仓库
 helm upgrade --install kite charts/kite -n kite-system --create-namespace \
   -f charts/kite/examples/swr-gzwxh.yaml
-
-# 公司组织仓库（私有，需先创建拉取凭据）
-helm upgrade --install kite charts/kite -n kite-system --create-namespace \
-  -f charts/kite/examples/swr-dsy.yaml
 ```
 
 ### 发布 chart（可选）
@@ -218,7 +214,7 @@ sudo systemctl restart docker
 
 **运行时基础镜像拉不下来**
 
-默认取自公司 SWR（`swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.20`）。若构建机不在公司网络内，可换成公共镜像：
+默认取自公司 SWR（`swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20`）。若构建机不在公司网络内，可换成公共镜像：
 `--build-arg RUNTIME_IMAGE=alpine:3.20`（如需要 CA 证书/时区数据请自行在镜像中安装 `ca-certificates`、`tzdata`）。
 
 **`go mod download` 超时**

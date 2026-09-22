@@ -108,7 +108,7 @@ docker run -d --name aerolink -p 8080:8080 \
   -e DB_DSN=/app/data/kite.db \
   -e AEROLINK_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
 ```
 
 Production (generate secrets with `openssl rand -base64 32` and store them safely):
@@ -122,7 +122,7 @@ docker run -d --name aerolink --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://aerolink.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
 ```
 
 The first visit walks through creating the admin account; configure the remaining policies under Settings.
@@ -155,9 +155,9 @@ The first visit walks through creating the admin account; configure the remainin
 | `NAMESPACE` | empty | namespace for AeroLink's own agent/terminal pods |
 | `DISABLE_GZIP` | `false` | `true` disables response compression (proxy troubleshooting) |
 | `KUBECONFIG` / `AEROLINK_CONFIG_FILE` | empty | external kubeconfig / config file path |
-| `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest` | node terminal image (company SWR) |
-| `KUBECTL_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest` | kubectl terminal image (company SWR) |
-| `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest` | cluster agent image, same repository as the app (company SWR) |
+| `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest` | node terminal image (company SWR) |
+| `KUBECTL_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/kubectl:latest` | kubectl terminal image (company SWR) |
+| `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest` | cluster agent image, same repository as the app (company SWR) |
 | `AEROLINK_KUBE_API_QPS` / `AEROLINK_KUBE_API_BURST` | built-in | Kubernetes API rate limits |
 | `AEROLINK_CACHE_SYNC_TIMEOUT` | built-in | cluster cache sync timeout |
 | `DISABLE_CACHE` | no | `true` disables the resource cache (debugging) |
