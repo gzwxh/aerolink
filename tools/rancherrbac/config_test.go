@@ -17,8 +17,8 @@ func writeConfigFile(t *testing.T, name, content string) string {
 	return path
 }
 
-// clearEndpointEnv 清掉两端的环境变量（新旧名都清）：开发机 shell 里遗留的值会渗进
-// 用例，让「环境变量没给」的断言变得不可靠。
+// clearEndpointEnv 清掉两端的环境变量（含已退役的 KITE_*）：开发机 shell 里遗留的值会
+// 渗进用例，让「环境变量没给」的断言变得不可靠。
 func clearEndpointEnv(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
@@ -225,8 +225,8 @@ namespacesSource: v1
 	}
 }
 
-// AEROLINK_URL / AEROLINK_TOKEN 是新名；与旧名同时设置时以新名为准。
-func TestLoadOptionsPrefersAeroLinkEnvNames(t *testing.T) {
+// AEROLINK_URL / AEROLINK_TOKEN 是唯一的环境变量名；退役的 KITE_* 不再被读取。
+func TestLoadOptionsUsesAeroLinkEnvNames(t *testing.T) {
 	clearEndpointEnv(t)
 	t.Setenv("KITE_URL", "https://kite.from-old-env")
 	t.Setenv("KITE_TOKEN", "kite1-from-old-env")
@@ -238,22 +238,7 @@ func TestLoadOptionsPrefersAeroLinkEnvNames(t *testing.T) {
 		t.Fatalf("组装参数失败：%v", err)
 	}
 	if opts.aerolinkURL != "https://aerolink.from-env" || opts.aerolinkToken != "kite1-from-env" {
-		t.Fatalf("新名应当优先于旧名：%q / %q", opts.aerolinkURL, opts.aerolinkToken)
-	}
-}
-
-// 退役的 KITE_URL / KITE_TOKEN 在没设新名时仍然生效。
-func TestLoadOptionsAcceptsLegacyEnvNames(t *testing.T) {
-	clearEndpointEnv(t)
-	t.Setenv("KITE_URL", "https://kite.from-legacy-env")
-	t.Setenv("KITE_TOKEN", "kite1-from-legacy-env")
-
-	opts, err := loadOptions([]string{"-config", ""})
-	if err != nil {
-		t.Fatalf("组装参数失败：%v", err)
-	}
-	if opts.aerolinkURL != "https://kite.from-legacy-env" || opts.aerolinkToken != "kite1-from-legacy-env" {
-		t.Fatalf("旧名应当仍然生效：%q / %q", opts.aerolinkURL, opts.aerolinkToken)
+		t.Fatalf("应当只读 AEROLINK_*：%q / %q", opts.aerolinkURL, opts.aerolinkToken)
 	}
 }
 

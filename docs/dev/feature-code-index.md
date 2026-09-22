@@ -216,7 +216,7 @@
 - **审计**：管理类写操作由 `pkg/middleware/audit.go` 统一落 `resource_histories`；资源操作在 handler 内显式写（`recordHistory`）
 - **敏感值**：一律 `model.SecretString`，且不要打日志
 - **配置**：环境变量同时看 `pkg/common/common.go` 与 `charts/aerolink`（values/templates）；`internal/config.go` 管理的设置在 UI 上必须只读
-- **环境变量命名**：统一用 `AEROLINK_` 前缀，读取一律走 `pkg/common/env.go` 的 `common.Getenv("<后缀>")`（如 `common.Getenv("ENCRYPT_KEY")` 读 `AEROLINK_ENCRYPT_KEY`）。改名前的 `KITE_<后缀>` 作为**弃用兼容**保留：新名优先、旧名兜底并打一次告警（不硬切是因为已有部署的清单/Secret 里写的是旧名，不认旧名会让升级后的实例直接拒绝启动）。新增变量时不要绕过 `common.Getenv` 用 `os.Getenv`，否则会丢掉这层兼容
+- **环境变量命名**：统一用 `AEROLINK_` 前缀，读取一律走 `pkg/common/env.go` 的 `common.Getenv("<后缀>")`（如 `common.Getenv("ENCRYPT_KEY")` 读 `AEROLINK_ENCRYPT_KEY`）。新增变量时不要绕过 `common.Getenv` 用 `os.Getenv`，否则会漏掉前缀约定
 - **后台任务**：统一在 `app.go` 的 `initializeApp()` 启动（`scheduler.Start`、`auth.StartLDAPSync`、`notification.StartDailyChecker`、`audit.StartRetentionWorker`、`audit.StartSyslogForwarder`、`ai.StartPendingSessionCleanup`）——新增常驻任务放这里，不要在请求路径上起 goroutine
 
 ---

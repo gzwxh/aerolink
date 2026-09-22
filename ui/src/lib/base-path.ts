@@ -16,7 +16,7 @@ export function normalizeBasePath(basePath?: string): string {
 
   if (!basePathPattern.test(trimmedBasePath)) {
     throw new Error(
-      `Invalid AEROLINK_BASE "${trimmedBasePath}": expected slash-separated path segments containing only letters, digits, '.', '_', '-', or '~' (legacy KITE_BASE is also accepted)`
+      `Invalid AEROLINK_BASE "${trimmedBasePath}": expected slash-separated path segments containing only letters, digits, '.', '_', '-', or '~'`
     )
   }
 

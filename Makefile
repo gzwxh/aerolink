@@ -15,6 +15,11 @@ E2E_LDAP_CONTAINER ?= aerolink-e2e-ldap
 E2E_LDAP_PORT ?= 3389
 E2E_DEX_CONTAINER ?= aerolink-e2e-dex
 E2E_OAUTH_PORT ?= 5556
+# 外部身份夹具的地址。specs/external-auth.spec.ts 只从环境变量读这两个值，缺一个就整组跳过，
+# 所以在这里给出默认值（与 .github/workflows/e2e.yml 保持一致）。Dex 的 issuer 没有子路径，
+# 写成 http://host:5556/dex 会让 OIDC 发现请求 404。
+E2E_LDAP_URL ?= ldap://127.0.0.1:$(E2E_LDAP_PORT)
+E2E_OAUTH_ISSUER ?= http://127.0.0.1:$(E2E_OAUTH_PORT)
 # Existing-cluster mode (e2e-run-existing): KUBECONFIG must point at the cluster,
 # E2E_CLUSTER_NAME is the kubeconfig context AeroLink imports it as, and
 # E2E_NODE_NAME is the node the node-based specs look for.
@@ -289,15 +294,15 @@ e2e-setup-dex: ## Start the Dex service used by external-auth e2e
 
 e2e-run: e2e-kind-up e2e-stop-app ## Run e2e tests against the local kind cluster
 	@echo "🧪 Running e2e tests..."
-	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test $(SPEC)
+	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" AEROLINK_E2E_LDAP_URL="$(E2E_LDAP_URL)" AEROLINK_E2E_OAUTH_ISSUER="$(E2E_OAUTH_ISSUER)" pnpm exec playwright test $(SPEC)
 
 e2e-run-existing: e2e-stop-app ## Run e2e tests against an existing cluster (KUBECONFIG, E2E_CLUSTER_NAME, E2E_NODE_NAME)
 	@echo "🧪 Running e2e tests against an existing cluster..."
-	cd $(E2E_DIR) && KUBECONFIG="$(KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_CLUSTER_NAME)" AEROLINK_E2E_CONTEXT_NAME="$(E2E_CONTEXT_NAME)" AEROLINK_E2E_NODE_NAME="$(E2E_NODE_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test $(SPEC)
+	cd $(E2E_DIR) && KUBECONFIG="$(KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_CLUSTER_NAME)" AEROLINK_E2E_CONTEXT_NAME="$(E2E_CONTEXT_NAME)" AEROLINK_E2E_NODE_NAME="$(E2E_NODE_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" AEROLINK_E2E_LDAP_URL="$(E2E_LDAP_URL)" AEROLINK_E2E_OAUTH_ISSUER="$(E2E_OAUTH_ISSUER)" pnpm exec playwright test $(SPEC)
 
 e2e-run-headed: e2e-kind-up e2e-stop-app ## Run e2e tests in headed mode against the local kind cluster
 	@echo "🧪 Running headed e2e tests..."
-	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test --headed $(SPEC)
+	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" AEROLINK_E2E_LDAP_URL="$(E2E_LDAP_URL)" AEROLINK_E2E_OAUTH_ISSUER="$(E2E_OAUTH_ISSUER)" pnpm exec playwright test --headed $(SPEC)
 
 e2e-test: e2e-install e2e-install-browser e2e-run ## Run e2e tests against the local kind cluster
 

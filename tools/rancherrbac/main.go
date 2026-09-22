@@ -244,19 +244,19 @@ func looksLikeAPIKey(token string) bool {
 func run(opts options) error {
 	switch {
 	case opts.aerolinkURL == "":
-		return errors.New("缺少 AeroLink 地址：用 -aerolink-url、环境变量 AEROLINK_URL 或配置文件 aerolink.url 指定（旧名 -kite-url / KITE_URL / kite.url 仍可用）")
+		return errors.New("缺少 AeroLink 地址：用 -aerolink-url、环境变量 AEROLINK_URL 或配置文件 aerolink.url 指定（旧名 -kite-url / kite.url 仍可用）")
 	case opts.aerolinkToken == "":
-		return errors.New("缺少 AeroLink API key：用 -aerolink-token、环境变量 AEROLINK_TOKEN 或配置文件 aerolink.token 指定（旧名 -kite-token / KITE_TOKEN / kite.token 仍可用）")
+		return errors.New("缺少 AeroLink API key：用 -aerolink-token、环境变量 AEROLINK_TOKEN 或配置文件 aerolink.token 指定（旧名 -kite-token / kite.token 仍可用）")
 	case !looksLikeAPIKey(opts.aerolinkToken):
 		return errors.New("API key 应当以 aerolink 开头：请填控制台创建时给出的完整值（形如 aerolink1-xxxxxxxx；改名前的 kite1-xxxxxxxx 仍可用）")
 	}
 	// -cleanup 只动 AeroLink：给了 -prefix 就按前缀删，否则要先用计划算出到底该删哪些（见下）。
 	if opts.cleanup && opts.prefix != "" {
 		if opts.aerolinkURL == "" {
-			return errors.New("缺少 AeroLink 地址：用 -aerolink-url、环境变量 AEROLINK_URL 或配置文件 aerolink.url 指定（旧名 -kite-url / KITE_URL / kite.url 仍可用）")
+			return errors.New("缺少 AeroLink 地址：用 -aerolink-url、环境变量 AEROLINK_URL 或配置文件 aerolink.url 指定（旧名 -kite-url / kite.url 仍可用）")
 		}
 		if opts.aerolinkToken == "" {
-			return errors.New("缺少 AeroLink API key：用 -aerolink-token、环境变量 AEROLINK_TOKEN 或配置文件 aerolink.token 指定（旧名 -kite-token / KITE_TOKEN / kite.token 仍可用）")
+			return errors.New("缺少 AeroLink API key：用 -aerolink-token、环境变量 AEROLINK_TOKEN 或配置文件 aerolink.token 指定（旧名 -kite-token / kite.token 仍可用）")
 		}
 		return cleanupByPrefix(newAeroLinkClient(opts.aerolinkURL, opts.aerolinkToken, opts.aerolinkInsecure, opts.timeout, opts.verbose), opts)
 	}

@@ -39,13 +39,6 @@ describe('getSubPath', () => {
     expect(getSubPath()).toBe('/aerolink')
   })
 
-  it('falls back to the legacy KITE_BASE', () => {
-    vi.stubEnv('DEV', true)
-    vi.stubEnv('KITE_BASE', 'legacy/')
-
-    expect(getSubPath()).toBe('/legacy')
-  })
-
   it('reads the runtime base path in production', () => {
     vi.stubEnv('DEV', false)
     window.__dynamic_base__ = '/runtime/'
