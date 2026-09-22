@@ -828,7 +828,7 @@ func (r *subjectResolver) resolveGroup(principal, groupID, groupName string) (st
 		return "", false, ""
 	}
 	return r.applyGroupMap(derived), true, fmt.Sprintf(
-		"用户组 %s 在 Kite 侧按 %q 处理（从 principalId 推导），如与控制台里的组名不一致请用 --group-map 指定",
+		"用户组 %s 在 AeroLink 侧按 %q 处理（从 principalId 推导），如与控制台里的组名不一致请用 --group-map 指定",
 		principal, derived)
 }
 

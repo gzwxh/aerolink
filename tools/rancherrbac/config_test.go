@@ -17,14 +17,27 @@ func writeConfigFile(t *testing.T, name, content string) string {
 	return path
 }
 
+// clearEndpointEnv 清掉两端的环境变量（新旧名都清）：开发机 shell 里遗留的值会渗进
+// 用例，让「环境变量没给」的断言变得不可靠。
+func clearEndpointEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{
+		"RANCHER_URL", "RANCHER_TOKEN",
+		"AEROLINK_URL", "AEROLINK_TOKEN",
+		"KITE_URL", "KITE_TOKEN",
+	} {
+		t.Setenv(name, "")
+	}
+}
+
 func TestLoadConfigFileReadsYAML(t *testing.T) {
 	path := writeConfigFile(t, "rancherrbac.yaml", `
 rancher:
   url: https://rancher.example.com
   token: token-abc:def
   insecure: true
-kite:
-  url: https://kite.example.com
+aerolink:
+  url: https://aerolink.example.com
   token: kite1-secret
 clusterMap:
   local: dev
@@ -53,8 +66,8 @@ planOut: /tmp/plan.json
 	if cfg.Rancher.URL != "https://rancher.example.com" || cfg.Rancher.Token != "token-abc:def" || !cfg.Rancher.Insecure {
 		t.Fatalf("rancher = %#v", cfg.Rancher)
 	}
-	if cfg.Kite.URL != "https://kite.example.com" || cfg.Kite.Token != "kite1-secret" || cfg.Kite.Insecure {
-		t.Fatalf("kite = %#v", cfg.Kite)
+	if cfg.AeroLink.URL != "https://aerolink.example.com" || cfg.AeroLink.Token != "kite1-secret" || cfg.AeroLink.Insecure {
+		t.Fatalf("aerolink = %#v", cfg.AeroLink)
 	}
 	if cfg.ClusterMap["local"] != "dev" || cfg.ClusterMap["c-m-abc123"] != "prod" {
 		t.Fatalf("clusterMap = %#v", cfg.ClusterMap)
@@ -164,10 +177,8 @@ clusterMap:
 timeout: 30s
 namespacesSource: v1
 `)
+	clearEndpointEnv(t)
 	t.Setenv("RANCHER_URL", "https://rancher.from-env")
-	t.Setenv("RANCHER_TOKEN", "")
-	t.Setenv("KITE_URL", "")
-	t.Setenv("KITE_TOKEN", "")
 
 	opts, err := loadOptions([]string{"-config", path})
 	if err != nil {
@@ -214,6 +225,88 @@ namespacesSource: v1
 	}
 }
 
+// AEROLINK_URL / AEROLINK_TOKEN 是新名；与旧名同时设置时以新名为准。
+func TestLoadOptionsPrefersAeroLinkEnvNames(t *testing.T) {
+	clearEndpointEnv(t)
+	t.Setenv("KITE_URL", "https://kite.from-old-env")
+	t.Setenv("KITE_TOKEN", "kite1-from-old-env")
+	t.Setenv("AEROLINK_URL", "https://aerolink.from-env")
+	t.Setenv("AEROLINK_TOKEN", "kite1-from-env")
+
+	opts, err := loadOptions([]string{"-config", ""})
+	if err != nil {
+		t.Fatalf("组装参数失败：%v", err)
+	}
+	if opts.kiteURL != "https://aerolink.from-env" || opts.kiteToken != "kite1-from-env" {
+		t.Fatalf("新名应当优先于旧名：%q / %q", opts.kiteURL, opts.kiteToken)
+	}
+}
+
+// 退役的 KITE_URL / KITE_TOKEN 在没设新名时仍然生效。
+func TestLoadOptionsAcceptsLegacyEnvNames(t *testing.T) {
+	clearEndpointEnv(t)
+	t.Setenv("KITE_URL", "https://kite.from-legacy-env")
+	t.Setenv("KITE_TOKEN", "kite1-from-legacy-env")
+
+	opts, err := loadOptions([]string{"-config", ""})
+	if err != nil {
+		t.Fatalf("组装参数失败：%v", err)
+	}
+	if opts.kiteURL != "https://kite.from-legacy-env" || opts.kiteToken != "kite1-from-legacy-env" {
+		t.Fatalf("旧名应当仍然生效：%q / %q", opts.kiteURL, opts.kiteToken)
+	}
+}
+
+// 配置文件同时支持新的 aerolink: 与退役的 kite:，两者都写时以 aerolink 为准。
+func TestLoadOptionsPrefersAeroLinkConfigKey(t *testing.T) {
+	path := writeConfigFile(t, "rancherrbac.yaml", `
+kite:
+  url: https://kite.from-old-key
+  token: kite1-from-old-key
+aerolink:
+  url: https://aerolink.from-new-key
+  token: kite1-from-new-key
+`)
+	clearEndpointEnv(t)
+
+	opts, err := loadOptions([]string{"-config", path})
+	if err != nil {
+		t.Fatalf("组装参数失败：%v", err)
+	}
+	if opts.kiteURL != "https://aerolink.from-new-key" || opts.kiteToken != "kite1-from-new-key" {
+		t.Fatalf("aerolink: 应当优先于 kite:：%q / %q", opts.kiteURL, opts.kiteToken)
+	}
+}
+
+// 新参数名 -aerolink-* 是正式名；退役的 -kite-* 仍然接受，且两种取参方式都不受影响。
+func TestParseFlagsAcceptsLegacyNames(t *testing.T) {
+	cli, set, err := parseFlags([]string{
+		"-kite-url", "https://kite.from-cli",
+		"-kite-token=kite1-from-cli",
+		"--kite-insecure",
+	})
+	if err != nil {
+		t.Fatalf("解析参数失败：%v", err)
+	}
+	if cli.kiteURL != "https://kite.from-cli" || cli.kiteToken != "kite1-from-cli" || !cli.kiteInsecure {
+		t.Fatalf("旧参数名应当照旧生效：%#v", cli)
+	}
+	if !set["aerolink-url"] || !set["aerolink-token"] || !set["aerolink-insecure"] {
+		t.Fatalf("旧名应当归到新名下：%#v", set)
+	}
+
+	cli, set, err = parseFlags([]string{"-aerolink-url=https://aerolink.example.com", "-aerolink-token", "kite1-secret"})
+	if err != nil {
+		t.Fatalf("解析参数失败：%v", err)
+	}
+	if cli.kiteURL != "https://aerolink.example.com" || cli.kiteToken != "kite1-secret" {
+		t.Fatalf("新参数名应当生效：%#v", cli)
+	}
+	if !set["aerolink-url"] || !set["aerolink-token"] {
+		t.Fatalf("新参数名应当记入 set：%#v", set)
+	}
+}
+
 // 没给 -config 时按当前目录的默认文件名找；显式给了 -config "" 则不找。
 func TestLoadOptionsFindsConfigInWorkingDirectory(t *testing.T) {
 	dir := t.TempDir()
@@ -222,6 +315,7 @@ func TestLoadOptionsFindsConfigInWorkingDirectory(t *testing.T) {
 		t.Fatalf("写测试配置失败：%v", err)
 	}
 	t.Chdir(dir)
+	clearEndpointEnv(t)
 
 	opts, err := loadOptions(nil)
 	if err != nil {
@@ -274,7 +368,7 @@ func TestConfigTemplateIsLoadable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("模板解析失败：%v", err)
 	}
-	if cfg.Rancher.URL == "" || cfg.Kite.URL == "" || cfg.ClusterMap["local"] != "dev" {
+	if cfg.Rancher.URL == "" || cfg.AeroLink.URL == "" || cfg.ClusterMap["local"] != "dev" {
 		t.Fatalf("模板内容不完整：%#v", cfg)
 	}
 	// 模板会被直接拿来跑，不该带出「解析失败」。

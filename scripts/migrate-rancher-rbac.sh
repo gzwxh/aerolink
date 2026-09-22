@@ -1,5 +1,5 @@
 #!/bin/bash
-# 把 Rancher 的项目 / 集群授权迁移成 Kite 的权限绑定组。
+# 把 Rancher 的项目 / 集群授权迁移成 AeroLink 的权限绑定组。
 #
 # 这个脚本只是入口，真正的实现是 tools/rancherrbac（Go），优先用编译好的二进制，
 # 找不到才回退到 go run（开发机）。默认只读（dry-run），打印计划不写库；确认无误后加 -apply。
@@ -12,8 +12,8 @@
 # 也可以全部走命令行 / 环境变量：
 #   export RANCHER_URL=https://rancher.example.com
 #   export RANCHER_TOKEN='token-xxxxx:yyyyy'
-#   export KITE_URL=https://kite.example.com
-#   export KITE_TOKEN='kite1-xxxxxxxx'
+#   export AEROLINK_URL=https://aerolink.example.com   # 旧名 KITE_URL 仍可用
+#   export AEROLINK_TOKEN='kite1-xxxxxxxx'            # 旧名 KITE_TOKEN 仍可用
 #
 #   scripts/migrate-rancher-rbac.sh -cluster-map c-m-abc123=prod        # 看计划
 #   scripts/migrate-rancher-rbac.sh -cluster-map c-m-abc123=prod -apply # 落库

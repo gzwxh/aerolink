@@ -37,7 +37,10 @@ var autoConfigNames = []string{configFileName + ".yaml", configFileName + ".yml"
 // 「落库」写进去，之后每次只想看看计划的执行都会变成真写；清理那对更是危险。
 type fileConfig struct {
 	Rancher fileEndpoint `yaml:"rancher" json:"rancher"`
-	Kite    fileEndpoint `yaml:"kite" json:"kite"`
+	// AeroLink 是新的键名；Kite 是退役的旧键名，只为了不改老配置而保留，
+	// 两者同时给出时以 AeroLink 为准（见 applyConfig）。
+	AeroLink fileEndpoint `yaml:"aerolink" json:"aerolink"`
+	Kite     fileEndpoint `yaml:"kite" json:"kite"`
 
 	ClusterMap map[string]string `yaml:"clusterMap" json:"clusterMap"`
 	UserMap    map[string]string `yaml:"userMap" json:"userMap"`
@@ -56,7 +59,7 @@ type fileConfig struct {
 	Verbose            bool          `yaml:"verbose" json:"verbose"`
 }
 
-// fileEndpoint 是配置文件里 Rancher / Kite 两端的连接信息。
+// fileEndpoint 是配置文件里 Rancher / AeroLink（旧键名 kite）两端的连接信息。
 type fileEndpoint struct {
 	URL      string `yaml:"url" json:"url"`
 	Token    string `yaml:"token" json:"token"`
@@ -239,13 +242,16 @@ func applyConfig(opts *options, cfg fileConfig) {
 	// 设定更适合靠显式命令行覆盖（见 applyCLI）。
 	opts.rancherInsecure = opts.rancherInsecure || cfg.Rancher.Insecure
 
-	if cfg.Kite.URL != "" {
-		opts.kiteURL = cfg.Kite.URL
+	// kite 是退役的旧键名，aerolink 是新名；按顺序覆盖，两者都写时以 aerolink 为准。
+	for _, endpoint := range []fileEndpoint{cfg.Kite, cfg.AeroLink} {
+		if endpoint.URL != "" {
+			opts.kiteURL = endpoint.URL
+		}
+		if endpoint.Token != "" {
+			opts.kiteToken = endpoint.Token
+		}
+		opts.kiteInsecure = opts.kiteInsecure || endpoint.Insecure
 	}
-	if cfg.Kite.Token != "" {
-		opts.kiteToken = cfg.Kite.Token
-	}
-	opts.kiteInsecure = opts.kiteInsecure || cfg.Kite.Insecure
 
 	if cfg.NamespacesSource != "" {
 		opts.namespacesSource = cfg.NamespacesSource
@@ -285,8 +291,12 @@ func applyEnv(opts *options) {
 	}{
 		{"RANCHER_URL", &opts.rancherURL},
 		{"RANCHER_TOKEN", &opts.rancherToken},
+		// KITE_URL / KITE_TOKEN 是退役的旧名，保留兼容；列表按顺序覆盖，新名排在后面，
+		// 两个都设置时以新名为准。
 		{"KITE_URL", &opts.kiteURL},
+		{"AEROLINK_URL", &opts.kiteURL},
 		{"KITE_TOKEN", &opts.kiteToken},
+		{"AEROLINK_TOKEN", &opts.kiteToken},
 	} {
 		if value := envOr(item.key); value != "" {
 			*item.target = value
@@ -304,8 +314,8 @@ func applyCLI(opts *options, cli options, set map[string]bool) {
 	}{
 		{"rancher-url", cli.rancherURL, &opts.rancherURL},
 		{"rancher-token", cli.rancherToken, &opts.rancherToken},
-		{"kite-url", cli.kiteURL, &opts.kiteURL},
-		{"kite-token", cli.kiteToken, &opts.kiteToken},
+		{"aerolink-url", cli.kiteURL, &opts.kiteURL},
+		{"aerolink-token", cli.kiteToken, &opts.kiteToken},
 		{"plan-out", cli.planOut, &opts.planOut},
 		{"dump-dir", cli.dumpDir, &opts.dumpDir},
 		{"from-dir", cli.fromDir, &opts.fromDir},
@@ -318,7 +328,7 @@ func applyCLI(opts *options, cli options, set map[string]bool) {
 	}
 
 	opts.rancherInsecure = opts.rancherInsecure || (set["rancher-insecure"] && cli.rancherInsecure)
-	opts.kiteInsecure = opts.kiteInsecure || (set["kite-insecure"] && cli.kiteInsecure)
+	opts.kiteInsecure = opts.kiteInsecure || (set["aerolink-insecure"] && cli.kiteInsecure)
 	opts.skipClusterGrants = opts.skipClusterGrants || (set["skip-cluster-grants"] && cli.skipClusterGrants)
 	opts.replaceMembers = opts.replaceMembers || (set["replace-members"] && cli.replaceMembers)
 	opts.replaceNamespaces = opts.replaceNamespaces || (set["replace-namespaces"] && cli.replaceNamespaces)
@@ -399,7 +409,7 @@ func writeConfigTemplate(path string) error {
 	return nil
 }
 
-const configTemplate = `# Rancher → Kite 授权迁移的配置模板（rancherrbac -init-config 生成）。
+const configTemplate = `# Rancher → AeroLink 授权迁移的配置模板（rancherrbac -init-config 生成）。
 #
 # 用法：
 #   rancherrbac -config rancherrbac.yaml                       # 只读：打印计划
@@ -423,21 +433,22 @@ rancher:
   # Rancher 常用自签名证书；报 x509 之类的证书错误时置 true。
   insecure: true
 
-kite:
-  # Kite 控制台地址。
-  url: https://kite.example.com
-  # Kite 控制台 → 账号设置 → API Keys 新建，填完整的 kite1-xxxxxxxx。
+# AeroLink 控制台的连接信息（退役的旧键名 kite: 仍然可用，两个都写时以 aerolink 为准）。
+aerolink:
+  # AeroLink 控制台地址。
+  url: https://aerolink.example.com
+  # AeroLink 控制台 → 账号设置 → API Keys 新建，填完整的 kite1-xxxxxxxx。
   token: kite1-xxxxxxxx
   insecure: false
 
-# Rancher 集群 ID → Kite 集群名。同名时工具会自动匹配；匹配不上、或有多个同名集群时
+# Rancher 集群 ID → AeroLink 集群名。同名时工具会自动匹配；匹配不上、或有多个同名集群时
 # 必须在这里显式给出，否则该集群整体跳过（并写进报告的「提示与跳过项」）。
 clusterMap:
   local: dev
   # c-m-hrczlc8w: bigdata-center
 
 # 两边账号名 / 组名不一致时的对应关系，默认按名字原样对齐。
-# 用户组尤其常需要映射：AD / LDAP 组名是按 principalId 推导出来的，可能与 Kite 里
+# 用户组尤其常需要映射：AD / LDAP 组名是按 principalId 推导出来的，可能与 AeroLink 里
 # 目录同步过来的组名不同。
 userMap: {}
 groupMap: {}
@@ -464,7 +475,7 @@ verbose: false
 # ---------- 以下都有默认值，按需打开 ----------
 # 不迁移集群级绑定（CRTB）。默认迁移，并把集群级角色分摊到该集群的每个绑定组里。
 # skipClusterGrants: false
-# 绑定组的成员 / 命名空间按计划全量覆盖（默认与 Kite 里的既有配置取并集）。
+# 绑定组的成员 / 命名空间按计划全量覆盖（默认与 AeroLink 里的既有配置取并集）。
 # 打开会顶掉管理员手工加进去的成员，慎用。
 # replaceMembers: false
 # replaceNamespaces: false
@@ -478,20 +489,56 @@ verbose: false
 # planOut: ""
 `
 
+// legacyFlagNames 是退役的 -kite-* 参数名 → 新的 -aerolink-* 名。老脚本与既有笔记还在用它们，
+// 解析前统一把名字改回去，-help 里就只用列新名。
+var legacyFlagNames = map[string]string{
+	"kite-url":      "aerolink-url",
+	"kite-token":    "aerolink-token",
+	"kite-insecure": "aerolink-insecure",
+}
+
+// normalizeLegacyFlagNames 把参数里的退役名字换成新名。-kite-url 值、-kite-url=值、--kite-url=值
+// 三种写法都只改名字部分，取参方式仍由 flag 包决定。
+func normalizeLegacyFlagNames(args []string) []string {
+	normalized := make([]string, len(args))
+	for index, arg := range args {
+		normalized[index] = arg
+		if arg == "" || arg[0] != '-' {
+			continue
+		}
+		name, value, hasValue := strings.Cut(arg, "=")
+		trimmed := strings.TrimLeft(name, "-")
+		replacement, ok := legacyFlagNames[trimmed]
+		if !ok {
+			continue
+		}
+		renamed := name[:len(name)-len(trimmed)] + replacement
+		if hasValue {
+			renamed += "=" + value
+		}
+		normalized[index] = renamed
+	}
+	return normalized
+}
+
 // parseFlags 解析命令行。返回值里 cli 只带命令行上显式给出的值，
 // set 记录哪些参数是显式给出的（flag 包只在显式给出时才 Set）。
 func parseFlags(args []string) (options, map[string]bool, error) {
+	args = normalizeLegacyFlagNames(args)
 	fs := flag.NewFlagSet("rancherrbac", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.Usage = func() {
 		out := fs.Output()
-		_, _ = fmt.Fprint(out, "把 Rancher 上的项目 / 集群授权迁移成 Kite 的权限绑定组。\n"+
+		_, _ = fmt.Fprint(out, "把 Rancher 上的项目 / 集群授权迁移成 AeroLink 的权限绑定组。\n"+
 			"默认只读：只打印计划，不写任何东西；确认无误后加 -apply。\n\n"+
 			"用法：\n"+
-			"  rancherrbac -config rancherrbac.yaml           # 用配置文件（推荐）\n"+
-			"  rancherrbac -config rancherrbac.yaml -apply    # 确认计划后落库\n"+
-			"  rancherrbac -init-config rancherrbac.yaml      # 先生成一份配置模板\n"+
-			"  rancherrbac -kite-url ... -kite-token ...      # 也可以全部走命令行\n\n"+
+			"  rancherrbac -config rancherrbac.yaml                # 用配置文件（推荐）\n"+
+			"  rancherrbac -config rancherrbac.yaml -apply         # 确认计划后落库\n"+
+			"  rancherrbac -init-config rancherrbac.yaml           # 先生成一份配置模板\n"+
+			"  rancherrbac -aerolink-url ... -aerolink-token ...   # 也可以全部走命令行\n\n"+
+			"退役的旧名仍可用（与新名同时给出时以新名为准）：\n"+
+			"  -kite-url / -kite-token / -kite-insecure、环境变量 KITE_URL / KITE_TOKEN、\n"+
+			"  配置文件的 kite: 段落。\n\n"+
 			"参数（命令行 > 环境变量 > 配置文件 > 默认值）：\n")
 		fs.PrintDefaults()
 	}
@@ -508,13 +555,13 @@ func parseFlags(args []string) (options, map[string]bool, error) {
 	fs.StringVar(&cli.rancherToken, "rancher-token", "",
 		"Rancher API 密钥，形如 token-xxxxx:yyyyy（默认取 $RANCHER_TOKEN）")
 	fs.BoolVar(&cli.rancherInsecure, "rancher-insecure", false, "跳过 Rancher 的 TLS 证书校验")
-	fs.StringVar(&cli.kiteURL, "kite-url", "",
-		"Kite 地址，例如 https://kite.example.com（默认取 $KITE_URL）")
-	fs.StringVar(&cli.kiteToken, "kite-token", "",
-		"Kite API key，即控制台里的 kite<id>-<secret>（默认取 $KITE_TOKEN）")
-	fs.BoolVar(&cli.kiteInsecure, "kite-insecure", false, "跳过 Kite 的 TLS 证书校验")
+	fs.StringVar(&cli.kiteURL, "aerolink-url", "",
+		"AeroLink 地址，例如 https://aerolink.example.com（默认取 $AEROLINK_URL；旧名 -kite-url / $KITE_URL 仍可用）")
+	fs.StringVar(&cli.kiteToken, "aerolink-token", "",
+		"AeroLink API key，即控制台里的 kite<id>-<secret>（默认取 $AEROLINK_TOKEN；旧名 -kite-token / $KITE_TOKEN 仍可用）")
+	fs.BoolVar(&cli.kiteInsecure, "aerolink-insecure", false, "跳过 AeroLink 的 TLS 证书校验（旧名 -kite-insecure 仍可用）")
 
-	fs.BoolVar(&cli.apply, "apply", false, "真正写入 Kite；不加则只打印计划（dry-run）")
+	fs.BoolVar(&cli.apply, "apply", false, "真正写入 AeroLink；不加则只打印计划（dry-run）")
 	fs.StringVar(&cli.planOut, "plan-out", "", "把计划写成 JSON 文件，便于评审")
 	fs.StringVar(&cli.dumpDir, "dump-dir", "", "把 Rancher 拉到的原始数据落到该目录，便于核对字段")
 	fs.StringVar(&cli.fromDir, "from-dir", "",
@@ -531,9 +578,9 @@ func parseFlags(args []string) (options, map[string]bool, error) {
 		"权限绑定组命名空间按计划全量覆盖（默认与既有命名空间取并集）")
 	fs.BoolVar(&cli.widenResourceNames, "widen-resource-names", false,
 		"把限定对象名（resourceNames）的规则放宽到整个资源类型；默认跳过，因为放宽等于提权")
-	fs.Var(&cli.clusterMaps, "cluster-map", "Rancher 集群 ID → Kite 集群名，例如 c-m-abc123=prod（可重复）")
-	fs.Var(&cli.userMaps, "user-map", "Rancher 用户名 → Kite 用户名，例如 bob=robert（可重复）")
-	fs.Var(&cli.groupMaps, "group-map", "Rancher 用户组 → Kite 用户组，例如 devs=developers（可重复）")
+	fs.Var(&cli.clusterMaps, "cluster-map", "Rancher 集群 ID → AeroLink 集群名，例如 c-m-abc123=prod（可重复）")
+	fs.Var(&cli.userMaps, "user-map", "Rancher 用户名 → AeroLink 用户名，例如 bob=robert（可重复）")
+	fs.Var(&cli.groupMaps, "group-map", "Rancher 用户组 → AeroLink 用户组，例如 devs=developers（可重复）")
 	fs.DurationVar(&cli.timeout, "timeout", 0, "单个 HTTP 请求的超时时间")
 	fs.BoolVar(&cli.verbose, "v", false, "打印每个 HTTP 请求，便于排查")
 	fs.BoolVar(&cli.cleanup, "cleanup", false,

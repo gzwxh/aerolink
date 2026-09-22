@@ -302,7 +302,7 @@ func (index *resourceIndex) mapRoleTemplate(template rancherRoleTemplate, contex
 			continue
 		}
 		if len(rule.ResourceNames) > 0 && !opts.AllowResourceNameWidening {
-			notef("跳过限定对象名的规则（resourceNames=%s）：Kite 无法按对象名授权，放宽等于提权",
+			notef("跳过限定对象名的规则（resourceNames=%s）：AeroLink 无法按对象名授权，放宽等于提权",
 				strings.Join(rule.ResourceNames, ", "))
 			continue
 		}
@@ -350,7 +350,7 @@ func (index *resourceIndex) mapRoleTemplate(template rancherRoleTemplate, contex
 				}
 			}
 			if !resolved {
-				notef("跳过 Kite 未收录的资源 %s（apiGroups=%s，控制台没有这个资源面）",
+				notef("跳过 AeroLink 未收录的资源 %s（apiGroups=%s，控制台没有这个资源面）",
 					resource, strings.Join(groups, ", "))
 			}
 		}
