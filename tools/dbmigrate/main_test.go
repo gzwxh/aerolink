@@ -189,7 +189,7 @@ func TestCopyAllCopiesEveryRow(t *testing.T) {
 }
 
 // 反证：密文必须是用目标库的密钥重新加密过的新密文，而不是把源库的字节原样搬过去。
-// 否则「换库 + 换 KITE_ENCRYPT_KEY」这条路走不通，且搬运会掩盖密钥不匹配的问题。
+// 否则「换库 + 换 AEROLINK_ENCRYPT_KEY」这条路走不通，且搬运会掩盖密钥不匹配的问题。
 func TestCopyAllReencryptsSecrets(t *testing.T) {
 	useTestEncryptKey(t)
 	source := newTestDB(t, "source.db")
@@ -257,7 +257,7 @@ func TestReadSourceFailsWithTheWrongEncryptKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected readSource to fail with a mismatched encryption key")
 	}
-	if !strings.Contains(err.Error(), "KITE_ENCRYPT_KEY") {
+	if !strings.Contains(err.Error(), "AEROLINK_ENCRYPT_KEY") {
 		t.Errorf("the error should point at the encryption key, got: %v", err)
 	}
 }

@@ -71,7 +71,7 @@ func TestSecurityHeadersAllowNoThirdPartyScripts(t *testing.T) {
 }
 
 func TestSecurityHeadersDisabledByEnv(t *testing.T) {
-	t.Setenv("KITE_DISABLE_CSP", "true")
+	t.Setenv("AEROLINK_DISABLE_CSP", "true")
 
 	if got := runSecurityHeaders(t).Header().Get("Content-Security-Policy"); got != "" {
 		t.Fatalf("Content-Security-Policy = %q, want empty", got)

@@ -74,11 +74,11 @@ spec:
             - /app/aerolink
           args:
             - cluster-agent
-            - --server=$(KITE_SERVER)
+            - --server=$(AEROLINK_SERVER)
             - --token=$(CLUSTER_AGENT_TOKEN)
             - --public-key=$(CLUSTER_AGENT_PUBLIC_KEY)
           env:
-            - name: KITE_SERVER
+            - name: AEROLINK_SERVER
               value: %s
             - name: CLUSTER_AGENT_TOKEN
               valueFrom:

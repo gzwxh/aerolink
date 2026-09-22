@@ -18,14 +18,14 @@ import (
 var defaultKeyWarn sync.Once
 
 // WarnOnDefaultEncryptKey 提醒运维一次：用内置密钥写入的密钥材料
-// 在数据库泄露时会立刻失效，以及在轮换 KITE_ENCRYPT_KEY 之后
+// 在数据库泄露时会立刻失效，以及在轮换 AEROLINK_ENCRYPT_KEY 之后
 // 需要重新保存每一份凭据。
 func WarnOnDefaultEncryptKey() {
 	if common.KiteEncryptKey != "kite-default-encryption-key-change-in-production" {
 		return
 	}
 	defaultKeyWarn.Do(func() {
-		klog.Warningf("Storing a secret with the default KITE_ENCRYPT_KEY; anyone with database access can decrypt it. Set KITE_ENCRYPT_KEY and re-save all credentials (SMTP/LDAP/OAuth/cluster configs) afterwards.")
+		klog.Warningf("Storing a secret with the default AEROLINK_ENCRYPT_KEY; anyone with database access can decrypt it. Set AEROLINK_ENCRYPT_KEY and re-save all credentials (SMTP/LDAP/OAuth/cluster configs) afterwards.")
 	})
 }
 

@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	// 数据库连接池；可通过 KITE_DB_* 环境变量覆盖，
+	// 数据库连接池；可通过 AEROLINK_DB_* 环境变量覆盖，
 	// 以适应并发量不同的 MySQL/PostgreSQL 部署。
 	DBConnMaxLifetime = 10 * time.Minute
 	DBMaxOpenConns    = 100
@@ -47,8 +47,8 @@ var (
 
 	// DefaultKiteEncryptKey 只是开发用的引导值。用它加密的
 	// 密钥，任何拿到数据库的人都能解密，因此
-	// 生产部署必须设置 KITE_ENCRYPT_KEY（或
-	// 设置 KITE_REQUIRE_ENCRYPT_KEY=true 使其成为强制要求）。
+	// 生产部署必须设置 AEROLINK_ENCRYPT_KEY（或
+	// 设置 AEROLINK_REQUIRE_ENCRYPT_KEY=true 使其成为强制要求）。
 	DefaultKiteEncryptKey = "kite-default-encryption-key-change-in-production"
 	KiteEncryptKey        = DefaultKiteEncryptKey
 
@@ -81,10 +81,10 @@ var (
 
 	AgentPodNamespace = "kube-system"
 
-	// ConfigFilePath 是外部配置文件的路径（通过 KITE_CONFIG_FILE 环境变量设置）
+	// ConfigFilePath 是外部配置文件的路径（通过 AEROLINK_CONFIG_FILE 环境变量设置）
 	ConfigFilePath = ""
 
-	// AuditArchiveDir 是审计/访问日志的本地归档目录（KITE_AUDIT_ARCHIVE_DIR）。
+	// AuditArchiveDir 是审计/访问日志的本地归档目录（AEROLINK_AUDIT_ARCHIVE_DIR）。
 	// 只作启动兜底：审计设置里的 Archive.LocalDir 优先（见 pkg/model/audit_setting.go）。
 	AuditArchiveDir = ""
 
@@ -128,9 +128,9 @@ func LoadEnvs() {
 // loadSecretEnvs 先读秘钥类配置：后面的组会用到 AllowInsecureSecrets，
 // 所以它必须排在最前面。
 func loadSecretEnvs() {
-	// KITE_ALLOW_INSECURE_SECRETS 是本地开发唯一且显式的逃生开关；
+	// AEROLINK_ALLOW_INSECURE_SECRETS 是本地开发唯一且显式的逃生开关；
 	// 不开启时内置密钥会被直接拒绝。
-	if v := os.Getenv("KITE_ALLOW_INSECURE_SECRETS"); v != "" {
+	if v := Getenv("ALLOW_INSECURE_SECRETS"); v != "" {
 		AllowInsecureSecrets = strings.EqualFold(strings.TrimSpace(v), "true")
 	}
 
@@ -140,29 +140,29 @@ func loadSecretEnvs() {
 		// 而不是用它去签发会话。
 		if len(secret) < 32 {
 			if !AllowInsecureSecrets {
-				klog.Fatalf("JWT_SECRET is shorter than 32 bytes: refusing to start (use openssl rand -base64 32, or KITE_ALLOW_INSECURE_SECRETS=true for local development)")
+				klog.Fatalf("JWT_SECRET is shorter than 32 bytes: refusing to start (use openssl rand -base64 32, or AEROLINK_ALLOW_INSECURE_SECRETS=true for local development)")
 			}
 			klog.Warningf("JWT_SECRET is shorter than 32 bytes; use a longer random secret in production")
 		}
 	}
 
-	if key := os.Getenv("KITE_ENCRYPT_KEY"); key != "" {
+	if key := Getenv("ENCRYPT_KEY"); key != "" {
 		KiteEncryptKey = key
 		if len(key) < 32 {
-			klog.Warningf("KITE_ENCRYPT_KEY is shorter than 32 bytes; use a longer random value (openssl rand -base64 32)")
+			klog.Warningf("AEROLINK_ENCRYPT_KEY is shorter than 32 bytes; use a longer random value (openssl rand -base64 32)")
 		}
 	} else if requireEncryptKey() || !AllowInsecureSecrets {
-		klog.Fatalf("KITE_ENCRYPT_KEY is not set: refusing to start. Stored credentials (cluster kubeconfigs, LDAP/SMTP/OAuth passwords, AI keys) " +
-			"would be encrypted with the built-in public key. Set KITE_ENCRYPT_KEY=\"$(openssl rand -base64 32)\", or for local development run " +
-			"`make run` / `make dev` (they load dev.env) or set KITE_ALLOW_INSECURE_SECRETS=true.")
+		klog.Fatalf("AEROLINK_ENCRYPT_KEY is not set: refusing to start. Stored credentials (cluster kubeconfigs, LDAP/SMTP/OAuth passwords, AI keys) " +
+			"would be encrypted with the built-in public key. Set AEROLINK_ENCRYPT_KEY=\"$(openssl rand -base64 32)\", or for local development run " +
+			"`make run` / `make dev` (they load dev.env) or set AEROLINK_ALLOW_INSECURE_SECRETS=true.")
 	} else {
-		klog.Warningf("KITE_ENCRYPT_KEY is not set, using the built-in key because KITE_ALLOW_INSECURE_SECRETS=true. Never do this in production.")
+		klog.Warningf("AEROLINK_ENCRYPT_KEY is not set, using the built-in key because AEROLINK_ALLOW_INSECURE_SECRETS=true. Never do this in production.")
 	}
 }
 
-// requireEncryptKey 表示“即使处于本地开发模式也必须提供 KITE_ENCRYPT_KEY”。
+// requireEncryptKey 表示“即使处于本地开发模式也必须提供 AEROLINK_ENCRYPT_KEY”。
 func requireEncryptKey() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("KITE_REQUIRE_ENCRYPT_KEY")), "true")
+	return strings.EqualFold(strings.TrimSpace(Getenv("REQUIRE_ENCRYPT_KEY")), "true")
 }
 
 // loadDatabaseEnvs 读取数据库连接与连接池配置。
@@ -178,25 +178,25 @@ func loadDatabaseEnvs() {
 		DBType = dbType
 	}
 
-	if v := os.Getenv("KITE_DB_MAX_OPEN_CONNS"); v != "" {
+	if v := Getenv("DB_MAX_OPEN_CONNS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			DBMaxOpenConns = n
 		} else {
-			klog.Warningf("Invalid KITE_DB_MAX_OPEN_CONNS %q, keeping %d", v, DBMaxOpenConns)
+			klog.Warningf("Invalid AEROLINK_DB_MAX_OPEN_CONNS %q, keeping %d", v, DBMaxOpenConns)
 		}
 	}
-	if v := os.Getenv("KITE_DB_MAX_IDLE_CONNS"); v != "" {
+	if v := Getenv("DB_MAX_IDLE_CONNS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			DBMaxIdleConns = n
 		} else {
-			klog.Warningf("Invalid KITE_DB_MAX_IDLE_CONNS %q, keeping %d", v, DBMaxIdleConns)
+			klog.Warningf("Invalid AEROLINK_DB_MAX_IDLE_CONNS %q, keeping %d", v, DBMaxIdleConns)
 		}
 	}
-	if v := os.Getenv("KITE_DB_CONN_MAX_LIFETIME_MINUTES"); v != "" {
+	if v := Getenv("DB_CONN_MAX_LIFETIME_MINUTES"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			DBConnMaxLifetime = time.Duration(n) * time.Minute
 		} else {
-			klog.Warningf("Invalid KITE_DB_CONN_MAX_LIFETIME_MINUTES %q, keeping %s", v, DBConnMaxLifetime)
+			klog.Warningf("Invalid AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES %q, keeping %s", v, DBConnMaxLifetime)
 		}
 	}
 
@@ -256,7 +256,7 @@ func loadServerEnvs() {
 	if v := os.Getenv("DISABLE_GZIP"); v != "" {
 		DisableGZIP = v == "true"
 	}
-	if v := os.Getenv("KITE_BASE"); v != "" {
+	if v := Getenv("BASE"); v != "" {
 		if v[0] != '/' {
 			v = "/" + v
 		}
@@ -306,10 +306,10 @@ func loadRuntimeEnvs() {
 		AnonymousUserEnabled = true
 		klog.Warningf("Anonymous user is enabled, this is not secure for production!")
 	}
-	if v := os.Getenv("KITE_CONFIG_FILE"); v != "" {
+	if v := Getenv("CONFIG_FILE"); v != "" {
 		ConfigFilePath = v
 	}
-	if v := os.Getenv("KITE_AUDIT_ARCHIVE_DIR"); v != "" {
+	if v := Getenv("AUDIT_ARCHIVE_DIR"); v != "" {
 		AuditArchiveDir = strings.TrimSpace(v)
 	}
 }

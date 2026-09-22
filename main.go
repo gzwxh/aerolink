@@ -19,21 +19,21 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// applyLogFileEnv 让 KITE_LOG_FILE 环境变量也能配置 klog 落盘（等价于 -log_file flag）。
+// applyLogFileEnv 让 AEROLINK_LOG_FILE 环境变量也能配置 klog 落盘（等价于 -log_file flag）。
 //
 // 必须在 flag.Parse() 之前调用：环境变量只提供默认值，命令行里显式给出的 flag 仍然优先。
 // 落文件后同时关掉 stderr 输出，避免同一份日志被写两遍（采集以文件为准）。
 func applyLogFileEnv() {
-	path := strings.TrimSpace(os.Getenv("KITE_LOG_FILE"))
+	path := strings.TrimSpace(common.Getenv("LOG_FILE"))
 	if path == "" {
 		return
 	}
 	if err := flag.Set("log_file", path); err != nil {
-		log.Printf("Ignoring invalid KITE_LOG_FILE %q: %v", path, err)
+		log.Printf("Ignoring invalid AEROLINK_LOG_FILE %q: %v", path, err)
 		return
 	}
 	if err := flag.Set("logtostderr", "false"); err != nil {
-		log.Printf("Failed to disable klog stderr output for KITE_LOG_FILE: %v", err)
+		log.Printf("Failed to disable klog stderr output for AEROLINK_LOG_FILE: %v", err)
 	}
 }
 
@@ -51,9 +51,9 @@ func main() {
 	}
 	flag.Parse()
 	// pprof 会暴露堆转储（其中可能含明文密钥）与
-	// goroutine 栈，因此它是可选开启的：KITE_ENABLE_PPROF=true。
-	if strings.EqualFold(strings.TrimSpace(os.Getenv("KITE_ENABLE_PPROF")), "true") {
-		klog.Warningf("pprof is enabled on localhost:6060 (KITE_ENABLE_PPROF=true)")
+	// goroutine 栈，因此它是可选开启的：AEROLINK_ENABLE_PPROF=true。
+	if strings.EqualFold(strings.TrimSpace(common.Getenv("ENABLE_PPROF")), "true") {
+		klog.Warningf("pprof is enabled on localhost:6060 (AEROLINK_ENABLE_PPROF=true)")
 		go func() {
 			log.Println(http.ListenAndServe("localhost:6060", nil))
 		}()

@@ -134,7 +134,7 @@ func TestValidateSinkTarget(t *testing.T) {
 	t.Run("parquet 需要归档目录", func(t *testing.T) {
 		model.AuditSink = model.AuditSinkParquet
 		if err := ValidateSinkTarget(""); err == nil {
-			t.Error("sink=parquet 且既没有 localDir 也没有 KITE_AUDIT_ARCHIVE_DIR 时必须报错")
+			t.Error("sink=parquet 且既没有 localDir 也没有 AEROLINK_AUDIT_ARCHIVE_DIR 时必须报错")
 		}
 		// 环境变量给的默认目录也算数。
 		if err := ValidateSinkTarget(t.TempDir()); err != nil {

@@ -19,7 +19,7 @@ func TestGenerateManifest(t *testing.T) {
 		"name: cluster-admin",
 		"apiVersion: apps/v1\nkind: Deployment",
 		`image: "ghcr.io/kite-org/kite:v1.0"`,
-		"--server=$(KITE_SERVER)",
+		"--server=$(AEROLINK_SERVER)",
 		"--token=$(CLUSTER_AGENT_TOKEN)",
 		"value: \"https://kite.example.com\"",
 	}

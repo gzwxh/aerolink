@@ -72,7 +72,7 @@ var (
 // 开头那段说明）。多副本的正确性靠两件事保证：各副本写各自产生的记录（不重不漏），以及
 // 共享归档目录时文件名带本进程标识（见 parquet.go 的 writeFile）。
 //
-// defaultDir 是配置未指定目录时的兜底（来自 KITE_AUDIT_ARCHIVE_DIR）。
+// defaultDir 是配置未指定目录时的兜底（来自 AEROLINK_AUDIT_ARCHIVE_DIR）。
 func StartParquetArchiver(ctx context.Context, defaultDir string) {
 	archiveOnce.Do(func() {
 		archiveParentCtx = ctx
@@ -179,7 +179,7 @@ func newArchiveRuntime(parent context.Context, archive model.ArchiveSetting, def
 		dir = defaultDir
 	}
 	if dir == "" {
-		return nil, errors.New("archive directory is not configured (set localDir or KITE_AUDIT_ARCHIVE_DIR)")
+		return nil, errors.New("archive directory is not configured (set localDir or AEROLINK_AUDIT_ARCHIVE_DIR)")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create archive directory %s: %w", dir, err)

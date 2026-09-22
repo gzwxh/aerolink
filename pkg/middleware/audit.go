@@ -84,7 +84,7 @@ var adminAuditIdentifierKeys = []string{
 func AdminAudit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 管理路由挂在 common.Base 之下（见 main.buildEngine），而下面的前缀常量是
-		// 相对 /api/v1 的：设了 KITE_BASE 时不剥掉它，所有管理端写操作都会漏审计。
+		// 相对 /api/v1 的：设了 AEROLINK_BASE 时不剥掉它，所有管理端写操作都会漏审计。
 		path := strings.TrimPrefix(c.Request.URL.Path, common.Base)
 		if !strings.HasPrefix(path, adminAuditPathPrefix) {
 			c.Next()

@@ -15,7 +15,7 @@ import (
 // 起一个每写一条丢一条的实例：归档链路上的错误只打日志、不回压请求，静默丢记录正是最坏的结果
 // （等真需要查日志时才发现缺了一段）。
 //
-// defaultArchiveDir 是配置未指定归档目录时的兜底（来自 KITE_AUDIT_ARCHIVE_DIR）。
+// defaultArchiveDir 是配置未指定归档目录时的兜底（来自 AEROLINK_AUDIT_ARCHIVE_DIR）。
 func ValidateSinkTarget(defaultArchiveDir string) error {
 	setting, err := model.GetAuditSetting()
 	if err != nil {
@@ -26,7 +26,7 @@ func ValidateSinkTarget(defaultArchiveDir string) error {
 	case model.AuditSinkParquet:
 		if strings.TrimSpace(setting.Archive.LocalDir) == "" && strings.TrimSpace(defaultArchiveDir) == "" {
 			return errors.New(`audit sink is "parquet" but no archive directory is configured: ` +
-				`set auditArchive.localDir (config file or audit settings page) or KITE_AUDIT_ARCHIVE_DIR`)
+				`set auditArchive.localDir (config file or audit settings page) or AEROLINK_AUDIT_ARCHIVE_DIR`)
 		}
 		return nil
 	case model.AuditSinkElasticsearch:

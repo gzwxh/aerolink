@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/zxh326/kite/pkg/common"
 	"k8s.io/klog/v2"
 )
 
@@ -18,7 +18,7 @@ import (
 // 这个文件**没有构建 tag**：CLI 驱动是纯 Go 的，任何构建下都编译得进来。它有两重身份——
 // 默认构建下它就是唯一实现；带 `-tags duckdb_cgo` 时它是 SDK 初始化失败后的兜底，所以
 // 不能因为「切到 SDK」就把它删掉，否则一旦 SDK 不可用（缺扩展、裁过的镜像）就彻底没有检索。
-const duckdbPathEnv = "KITE_DUCKDB_PATH"
+const duckdbPathEnv = common.EnvPrefix + "DUCKDB_PATH"
 
 // duckdbCLIRunner 通过 exec 一个 duckdb 子进程执行 SQL。
 //
@@ -40,7 +40,7 @@ func newDuckDBCLIRunner() (*duckdbCLIRunner, error) {
 
 // duckdbExecutable 返回可执行文件路径（环境变量优先）。
 func duckdbExecutable() string {
-	if custom := strings.TrimSpace(os.Getenv(duckdbPathEnv)); custom != "" {
+	if custom := strings.TrimSpace(common.Getenv("DUCKDB_PATH")); custom != "" {
 		return custom
 	}
 	return "duckdb"

@@ -209,7 +209,7 @@ func applyConfig(path string, cfg *KiteConfig) AppliedSections {
 	return sections
 }
 
-// applyAuditSink 确定审计记录的落地方式（配置文件优先，其次 KITE_AUDIT_SINK 环境变量）。
+// applyAuditSink 确定审计记录的落地方式（配置文件优先，其次 AEROLINK_AUDIT_SINK 环境变量）。
 //
 // 取值非法时**直接启动失败**而不是回落 database：静默回落会让人以为配置生效了，
 // 而实际上审计记录去了另一个地方——这种"看起来正常"的错误在审计场景里代价最高。
@@ -224,7 +224,7 @@ var auditSinkResolved bool
 
 func applyAuditSink(value string) {
 	if strings.TrimSpace(value) == "" {
-		value = os.Getenv("KITE_AUDIT_SINK")
+		value = common.Getenv("AUDIT_SINK")
 	}
 	if strings.TrimSpace(value) == "" {
 		return // 未配置：保持默认 database，行为与改造前一致。
@@ -232,7 +232,7 @@ func applyAuditSink(value string) {
 
 	sink, err := model.NormalizeAuditSink(value)
 	if err != nil {
-		klog.Fatalf("Invalid audit sink %q (set via auditSink or KITE_AUDIT_SINK): %v", value, err)
+		klog.Fatalf("Invalid audit sink %q (set via auditSink or AEROLINK_AUDIT_SINK): %v", value, err)
 	}
 	if auditSinkResolved && model.AuditSink != sink {
 		klog.Warningf("Ignoring audit sink change %q -> %q from a config reload: "+

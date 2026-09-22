@@ -65,11 +65,11 @@ func TestLoadEnvs(t *testing.T) {
 	t.Setenv("CLUSTER_AGENT_IMAGE", "test-cluster-agent-image")
 	t.Setenv("DB_DSN", "test.db")
 	t.Setenv("DB_TYPE", "mysql")
-	t.Setenv("KITE_ENCRYPT_KEY", "test-encrypt-key")
+	t.Setenv("AEROLINK_ENCRYPT_KEY", "test-encrypt-key")
 	t.Setenv("ANONYMOUS_USER_ENABLED", "true")
 	t.Setenv("HOST", "example.com")
 	t.Setenv("DISABLE_GZIP", "false")
-	t.Setenv("KITE_BASE", "kite/")
+	t.Setenv("AEROLINK_BASE", "kite/")
 	t.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173, https://example.com ,,")
 	t.Setenv("TRUSTED_PROXIES", "10.42.0.0/16, 192.0.2.10 ,, ")
 
@@ -139,8 +139,8 @@ func TestLoadEnvs_BaseAlreadyHasLeadingSlash(t *testing.T) {
 		CORSAllowedOrigins = append([]string(nil), old.CORSAllowedOrigins...)
 	}()
 
-	t.Setenv("KITE_ENCRYPT_KEY", "test-encrypt-key")
-	t.Setenv("KITE_BASE", "/kite/")
+	t.Setenv("AEROLINK_ENCRYPT_KEY", "test-encrypt-key")
+	t.Setenv("AEROLINK_BASE", "/kite/")
 
 	LoadEnvs()
 
