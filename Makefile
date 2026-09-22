@@ -43,10 +43,16 @@ BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 # Build flags
-LDFLAGS=-ldflags "-s -w \
-	-X 'github.com/zxh326/kite/pkg/version.Version=$(VERSION)' \
-	-X 'github.com/zxh326/kite/pkg/version.BuildDate=$(BUILD_DATE)' \
-	-X 'github.com/zxh326/kite/pkg/version.CommitID=$(COMMIT_ID)'"
+# 这两行只做两件事：-s -w 去掉符号表与调试信息（体积小），-X 在链接期把值写进
+# pkg/version 的字符串变量。`github.com/zxh326/kite/...` 是 **Go 符号名**（= go.mod 的
+# module 路径 + 包 + 变量），不是网址：这里不发任何网络请求，$(VERSION) / $(BUILD_DATE)
+# / $(COMMIT_ID) 也都是本机求值（make 变量、date、git rev-parse），耗时微秒级。
+# 注意：整个 -ldflags "..." 必须留在 LDFLAGS 里，不能只留版本号——go build 需要的是
+# 「-ldflags + 参数」这一对，写成 LDFLAGS="v1.0.0" 会被当成包路径而报错。
+# LDFLAGS=-ldflags "-s -w \
+# 	-X 'github.com/zxh326/kite/pkg/version.Version=$(VERSION)' \
+# 	-X 'github.com/zxh326/kite/pkg/version.BuildDate=$(BUILD_DATE)' \
+# 	-X 'github.com/zxh326/kite/pkg/version.CommitID=$(COMMIT_ID)'"
 
 # 本机临时覆盖（不进版本库，见 .gitignore）：把 VERSION / LDFLAGS 这类本机专用值写进
 # Makefile.local，例如让本机构建的后端/前端显示另一个版本号而不改仓库里的 VERSION。
@@ -317,14 +323,13 @@ docs-build: ## Build documentation
 
 # ----- Docker 镜像 -----
 IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
-# 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径），
-# 这里只保留依赖源镜像（npm/go 代理）；直连环境可置空：
+# 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径）。
+# 后端依赖在仓库里 vendored（构建不下载 Go 模块），所以这里只剩前端依赖源；直连环境可置空：
 #   make image DOCKER_BUILD_ARGS=
 # --provenance=false --sbom=false：禁止 BuildKit 附加 provenance/SBOM 证明清单。
 # 带证明的镜像会以 OCI manifest list 推送，部分仓库（如华为云 SWR）无法解析，
 # 推送时报 "Invalid image, fail to parse 'manifest.json'"。
 DOCKER_BUILD_ARGS ?= --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
-	--build-arg GOPROXY=https://goproxy.cn,direct \
 	--provenance=false --sbom=false
 
 # 版本信息单独传，不放进 DOCKER_BUILD_ARGS：后者可能被置空以走直连环境，

@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    /* 同 tsconfig.app.json：不再用 `tsc -b`，靠 --incremental 复用上次检查结果。 */
+    "incremental": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "ES2022",
     "lib": ["ES2023"],

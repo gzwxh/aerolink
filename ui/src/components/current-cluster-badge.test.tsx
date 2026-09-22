@@ -46,4 +46,13 @@ describe('CurrentClusterBadge', () => {
 
     expect(screen.getByTitle('生产环境')).toHaveTextContent('生产环境')
   })
+
+  // 顶栏旁边就是侧边栏的集群选择器，集群名在那里已经写着，这里不再重复。
+  it('showName=false 时不显示集群名，图标与自定义说明仍在', () => {
+    render(<CurrentClusterBadge showName={false} />)
+
+    expect(screen.queryByText('devops-wxh')).toBeNull()
+    expect(screen.queryByTitle('当前集群')).toBeNull()
+    expect(screen.getByTitle('生产环境')).toHaveTextContent('生产环境')
+  })
 })

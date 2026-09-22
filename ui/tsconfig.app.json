@@ -3,6 +3,10 @@
     "paths": {
       "@/*": ["./src/*"]
     },
+    /* 构建走 `tsc --noEmit -p tsconfig.app.json` 而不是 `tsc -b`：build 模式下 noEmit
+       会让 TS 认为项目永远过期（找不到 src/App.js 这类产物），每次全量检查约 15s；
+       打开 --incremental 后重复检查降到约 2s。 */
+    "incremental": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "ES2022",
     "useDefineForClassFields": true,

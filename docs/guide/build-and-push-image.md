@@ -47,7 +47,6 @@ docker build \
   --build-arg GOLANG_IMAGE=golang:1.26.8 \
   --build-arg RUNTIME_IMAGE=alpine:3.23.2 \
   --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
-  --build-arg GOPROXY=https://goproxy.cn,direct \
   --build-arg VERSION="$VERSION" \
   -t aerolink:local .
 ```
@@ -63,8 +62,7 @@ docker build \
 | `NODE_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/node:24-alpine` | 前端构建基础镜像（公司 SWR） |
 | `GOLANG_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26.8` | 后端构建基础镜像（公司 SWR；必须是 **Debian 版**，cgo 编译需要 gcc/g++） |
 | `RUNTIME_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4` | 运行时基础镜像（公司 SWR） |
-| `NPM_REGISTRY` | `https://registry.npmjs.org` | 前端依赖源 |
-| `GOPROXY` | `https://proxy.golang.org,direct` | Go 模块代理 |
+| `NPM_REGISTRY` | `https://registry.npmjs.org` | 前端依赖源（Go 依赖走仓库里的 `vendor/`，构建不下载模块，因此没有 GOPROXY 参数） |
 | `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `v1.0.0` / `unknown` / `unknown` | 注入 `pkg/version`，展示在界面上 |
 
 ## 二、验证镜像
@@ -217,9 +215,9 @@ sudo systemctl restart docker
 默认取自公司 SWR（`swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4`）。若构建机不在公司网络内，可换成公共镜像：
 `--build-arg RUNTIME_IMAGE=alpine:3.23.2`（CA 证书与时区数据已由 Dockerfile 从构建镜像拷贝，基座里不需要再装 `ca-certificates`、`tzdata`）。
 
-**`go mod download` 超时**
+**构建报 `inconsistent vendoring`**
 
-用 `--build-arg GOPROXY=https://goproxy.cn,direct`。
+后端依赖走仓库里的 `vendor/`（构建过程不联网下载 Go 模块）。改过 `go.mod` / 升级依赖后，先在本机跑 `make deps`（`go mod tidy` + `go mod vendor`）并提交 `vendor/` 的变化，再构建即可。这是刻意留的 fail-closed：不一致时直接失败，而不是静默回源慢慢拉。
 
 **pnpm 报 `ERR_PNPM_IGNORED_BUILDS: esbuild`**
 

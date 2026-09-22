@@ -13,8 +13,15 @@ import { ClusterBadge, ClusterBadgeIcon } from '@/components/cluster-badge'
  * 徽章（图标 + 自定义说明）整体排在最前面：切错集群时它比集群名更快认出来。集群名用
  * 加大字号的徽章紧跟其后，不写「当前集群：」前缀——前缀只是重复的标签，字小又要多看
  * 一眼，真正要认的只有名字本身。
+ *
+ * `showName=false` 供顶栏使用：顶栏旁边就是侧边栏的集群选择器，集群名在那里已经写着，
+ * 再标一遍只是重复；图标与自定义说明保留，切错集群时仍能一眼看出来。
  */
-export function CurrentClusterBadge() {
+export function CurrentClusterBadge({
+  showName = true,
+}: {
+  showName?: boolean
+}) {
   const { t } = useTranslation()
   const { currentCluster, clusters } = useCluster()
 
@@ -28,14 +35,16 @@ export function CurrentClusterBadge() {
     <span className="inline-flex min-w-0 items-center gap-1.5">
       <ClusterBadgeIcon cluster={currentClusterData} size="sm" />
       <ClusterBadge cluster={currentClusterData} />
-      <Badge
-        variant="outline"
-        // 前缀不上界面，悬停时仍然能知道这个徽章是「当前集群」。
-        title={t('common.currentCluster', '当前集群')}
-        className="text-sm font-semibold"
-      >
-        {currentCluster}
-      </Badge>
+      {showName && (
+        <Badge
+          variant="outline"
+          // 前缀不上界面，悬停时仍然能知道这个徽章是「当前集群」。
+          title={t('common.currentCluster', '当前集群')}
+          className="text-sm font-semibold"
+        >
+          {currentCluster}
+        </Badge>
+      )}
     </span>
   )
 }

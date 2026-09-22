@@ -76,7 +76,7 @@ function LoginBackground({ children }: { children: ReactNode }) {
 
 export function LoginPage() {
   const { t } = useTranslation()
-  const { logoUrl, isCustomLogo, siteName } = useBranding()
+  const { logoUrl, siteName } = useBranding()
   // 登录页没有子页面标题：浏览器标签只展示控制台名称（同样受品牌配置控制）。
   usePageTitle('')
   const {
@@ -426,7 +426,7 @@ export function LoginPage() {
                 alt={siteName}
                 className={cn(
                   'h-10 w-10',
-                  !isCustomLogo && 'dark:invert',
+                  // 默认 logo 是自研的彩色蓝翼（自带透明底），浅色/深色下都不反色。
                   // 背景是插画（这一带是天空），用阴影把 logo 与标题托起来，
                   // 这样不必再给整幅背景压蒙层。
                   'drop-shadow-[0_1px_6px_rgba(255,255,255,0.9)] dark:drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]'

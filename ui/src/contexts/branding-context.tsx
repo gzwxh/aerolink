@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, type ReactNode } from 'react'
-import DefaultLogo from '@/assets/icon.svg'
+// 默认品牌标识：自研的彩色蓝翼（自带透明底，浅色/深色界面都不用反色，
+// 见 ui/src/assets/logo.svg 的动效契约）
+import DefaultLogo from '@/assets/logo.svg'
 
 import { useBootstrap } from '@/lib/api/bootstrap'
 

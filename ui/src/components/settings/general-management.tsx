@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import DefaultLogo from '@/assets/icon.svg'
+import DefaultLogo from '@/assets/logo.svg'
 import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
   IconLink,
@@ -582,8 +582,7 @@ export function GeneralManagement() {
               src={formData.logoUrl.trim() || DefaultLogo}
               alt={t('generalManagement.branding.preview', 'Logo 预览')}
               className={cn(
-                'h-10 w-10 shrink-0 rounded border object-contain p-1',
-                !formData.logoUrl.trim() && 'dark:invert'
+                'h-10 w-10 shrink-0 rounded border object-contain p-1'
               )}
             />
             <label

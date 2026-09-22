@@ -95,7 +95,7 @@ stringData:
   # ⚠ sslmode：PG 在集群外、未开 TLS 时用 disable；开了 TLS 改为 require / verify-full。
   # ⚠ 库名与角色名都是 aerolink；下面是连接串模板，改地址 /
   #   密码时只改这一行，上面的说明不必跟着改。
-  POSTGRES_DSN: "host=10.10.11.111 port=5432 user=postgres password=postgres dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+  POSTGRES_DSN: "host=10.10.11.111 port=5432 user=aerolink password=JaAUuHlthKId5 dbname=aerolink sslmode=disable TimeZone=Asia/Shanghai"
 ---
 apiVersion: apps/v1
 kind: Deployment

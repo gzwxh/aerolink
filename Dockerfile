@@ -1,11 +1,12 @@
 # Base images are pulled from the company registry (SWR) so the build works on
-# the restricted network. Override them for an ad-hoc build, e.g.
+# the restricted network. Go dependencies come from the vendored vendor/ tree
+# (the build downloads no modules at all); only the UI dependencies need an
+# npm registry. Override the base images for an ad-hoc build, e.g.
 #   docker build \
 #     --build-arg NODE_IMAGE=node:24-alpine \
 #     --build-arg GOLANG_IMAGE=golang:1.26 \
 #     --build-arg RUNTIME_IMAGE=alpine:3.23.2 \
 #     --build-arg NPM_REGISTRY=https://registry.npmjs.org \
-#     --build-arg GOPROXY=https://proxy.golang.org,direct \
 #     -t aerolink:local .
 ARG NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/node:24-alpine
 # 构建镜像必须是 **Debian 版**的 golang（不能用 alpine 版）：parquet 检索走 DuckDB 的
@@ -44,29 +45,20 @@ ARG VERSION=v1.0.0
 ARG BUILD_DATE=unknown
 ARG COMMIT_ID=unknown
 
-# Go module proxy used for the backend dependencies.
-ARG GOPROXY=https://proxy.golang.org,direct
-ENV GOPROXY=${GOPROXY}
-
-COPY go.mod ./
-COPY go.sum ./
-
-# BuildKit 缓存挂载：Go 的模块缓存与编译缓存**跨构建复用**。没有它的话，每次构建都在空缓存
-# 里从零编译整棵依赖树，这正是"容器里打包慢"的主因。两个 RUN 都要挂——download 与 build
-# 各自读写这两份缓存。
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
+# Go 依赖走仓库里的 vendor/（.dockerignore 并未排除它），所以后端构建**不会下载任何模块**：
+# 原来那步 `go mod download` 是唯一会走 GOPROXY 的环节，而代理失败时会回源 github.com，
+# 在受限网络里就是“构建卡在拉依赖”的根因。去掉之后镜像构建对 Go 侧完全离线。
+# 代价只有一个：go.mod / go.sum 与 vendor/ 不一致时构建会直接失败（inconsistent vendoring），
+# 本机跑 `make deps`（go mod tidy + go mod vendor）更新并提交 vendor/ 即可修复。
+# 这是刻意留的 fail-closed：比静默回源、每次构建快慢全看代理脸色要好。
 COPY . .
 
 COPY --from=frontend-builder /app/static ./static
 
 # parquet 检索走进程内 DuckDB 引擎（默认驱动，见 pkg/audit/archive_query_duckdb_cgo.go），
 # 所以运行镜像里不再需要 duckdb 可执行文件。
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 go build -mod=vendor -trimpath -ldflags="-s -w \
       -X 'github.com/zxh326/kite/pkg/version.Version=${VERSION}' \
       -X 'github.com/zxh326/kite/pkg/version.BuildDate=${BUILD_DATE}' \
       -X 'github.com/zxh326/kite/pkg/version.CommitID=${COMMIT_ID}'" -o aerolink .
