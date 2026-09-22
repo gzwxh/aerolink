@@ -15,10 +15,10 @@ This repository is the **company-internal fork** of the upstream project, curren
 
 ## About this repository
 
-This repository is a customized fork of [kite-org/kite](https://github.com/kite-org/kite), maintained on the internal GitLab and for internal use only.
+This repository is a customized fork of [kite-org/kite](https://github.com/kite-org/kite), maintained on the internal Gitea and for internal use only.
 
 - Upstream project: <https://github.com/kite-org/kite> (docs: <https://kite.zzde.me>)
-- Internal repository: `ssh://git@10.10.11.151:20222/teg/support-department/operation_rd_dept/aerolink.git` (branch `release/v1.0.0`)
+- Internal repository: `ssh://git@10.10.11.151:20222/teg/support-department/operation_rd_dept/aerolink.git` (web: <http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink>, branch `release/v1.0.0`)
 - English docs: see [`docs/en/`](./docs/en/index.md)
 - Chinese docs: see [`docs/`](./docs/index.md) and [`README.md`](./README.md)
 - License: Apache-2.0 (inherited from upstream)
