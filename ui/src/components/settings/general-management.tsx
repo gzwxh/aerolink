@@ -47,7 +47,7 @@ const DEFAULT_KUBECTL_IMAGE =
 const DEFAULT_NODE_TERMINAL_IMAGE =
   'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'
 const DEFAULT_CLUSTER_AGENT_IMAGE =
-  'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'
+  'swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest'
 
 interface GeneralSettingsFormData {
   aiAgentEnabled: boolean
@@ -213,7 +213,7 @@ export function GeneralManagement() {
       loginPrompt: formData.loginPrompt.trim(),
       // 显式传空串 = 恢复内置图标（后端同一套「出现即处理」语义）。
       logoUrl: formData.logoUrl.trim(),
-      // 空串 = 用默认名 Kite。
+      // 空串 = 用默认名。
       siteName: formData.siteName.trim(),
     }
     if (formData.aiApiKey.trim()) {
@@ -535,7 +535,7 @@ export function GeneralManagement() {
             <p className="text-xs text-muted-foreground">
               {t(
                 'generalManagement.branding.description',
-                '自定义控制台外观：名称与 logo 会用在侧边栏、登录页、初始化页与浏览器标签上；留空则用默认值（Kite + 内置图标）。仅管理员可改。'
+                '自定义控制台外观：名称与 logo 会用在侧边栏、登录页、初始化页与浏览器标签上；留空则用默认值（鸢联 AeroLink + 内置图标）。仅管理员可改。'
               )}
             </p>
           </div>
@@ -557,14 +557,14 @@ export function GeneralManagement() {
               }
               placeholder={t(
                 'generalManagement.branding.namePlaceholder',
-                'Kite'
+                '鸢联 AeroLink'
               )}
             />
             <div className="flex items-start justify-between gap-3">
               <p className="text-xs text-muted-foreground">
                 {t(
                   'generalManagement.branding.nameHint',
-                  '展示在侧边栏、登录页与浏览器标签上；最长 16 个字符（中文按 1 个算），过长时侧边栏会折成两行完整展示。留空则使用默认名称 Kite。'
+                  '展示在侧边栏、登录页与浏览器标签上；最长 16 个字符（中文按 1 个算），过长时侧边栏会折成两行完整展示。留空则使用默认名称 鸢联 AeroLink。'
                 )}
               </p>
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">

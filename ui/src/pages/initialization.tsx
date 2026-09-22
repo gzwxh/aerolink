@@ -443,7 +443,7 @@ export function InitializationPage() {
                         <p className="text-sm text-muted-foreground">
                           {t('common.messages.inClusterConfiguration', {
                             defaultValue:
-                              'Import clusters from inside the running Kite instance. No kubeconfig required.',
+                              'Import clusters from inside the running AeroLink instance. No kubeconfig required.',
                           })}
                         </p>
                       </div>

@@ -34,7 +34,7 @@ describe('usePageTitle', () => {
 
     const { unmount } = renderHook(() => usePageTitle('Dashboard'))
 
-    expect(document.title).toBe('Dashboard - Kite')
+    expect(document.title).toBe('Dashboard - 鸢联 AeroLink')
 
     unmount()
 

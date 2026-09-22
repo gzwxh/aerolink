@@ -941,7 +941,7 @@ export function AuditSetting() {
           >
             <Input
               value={archive.localDir}
-              placeholder="/var/log/kite/archive"
+              placeholder="/var/log/aerolink/archive"
               disabled={readOnly}
               onChange={(event) =>
                 patchArchive({ localDir: event.target.value })

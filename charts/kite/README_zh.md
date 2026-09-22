@@ -66,7 +66,7 @@ helm uninstall kite -n kube-system
 
 | 参数                                                       | 说明                                                     | 默认值                        |
 | ---------------------------------------------------------- | -------------------------------------------------------- | ----------------------------- |
-| `image.repository`                                         | 镜像仓库                                                 | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite`       |
+| `image.repository`                                         | 镜像仓库                                                 | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink`       |
 | `image.tag`                                                | 镜像标签，留空时使用 chart 的 `appVersion`               | `""`                          |
 | `imagePullSecrets`                                         | 私有镜像仓库的拉取凭据                                   | `[]`                          |
 | `replicaCount`                                             | 副本数（使用 SQLite 时请保持 1）                         | `1`                           |
@@ -152,7 +152,7 @@ helm package charts/kite -d dist
 公司尚未搭建 Helm 仓库，当前版本以 **`.tgz` 压缩包** 形式分发，随仓库一起维护：
 
 - 压缩包：`charts/kite-1.0.0.tgz`（由 `helm package charts/kite -d charts/` 生成）
-- 镜像：`swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:dsy-v1.0.0`（chart 默认值已指向公司 SWR）
+- 镜像：`swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:dsy-v1.0.0`（chart 默认值已指向公司 SWR）
 
 ### 安装
 

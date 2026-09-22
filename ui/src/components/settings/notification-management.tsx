@@ -283,7 +283,7 @@ function MailSettings() {
               <Input
                 id="smtpSenderName"
                 value={form.smtpSenderName}
-                placeholder="Kite"
+                placeholder="鸢联 AeroLink"
                 onChange={(event) =>
                   patch('smtpSenderName', event.target.value)
                 }

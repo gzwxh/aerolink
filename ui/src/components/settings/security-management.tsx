@@ -51,7 +51,7 @@ const DEFAULT_SECURITY_SETTING: SecuritySetting = {
   mfaThirdPartyEnabled: true,
   mfaStepUpEnabled: true,
   mfaVerifyTtlSeconds: 60,
-  otpIssuerName: 'Kite',
+  otpIssuerName: '鸢联 AeroLink',
   otpVerifyWindow: 2,
   userLoginFailLimit: 7,
   userLoginBlockMinutes: 30,
@@ -462,7 +462,7 @@ export function SecurityManagement() {
                       onChange={(event) =>
                         patch('otpIssuerName', event.target.value)
                       }
-                      placeholder="Kite"
+                      placeholder="鸢联 AeroLink"
                       className="max-w-80"
                     />
                   </SettingRow>
@@ -696,7 +696,7 @@ export function SecurityManagement() {
                         )}
                         hint={t(
                           'securitySettings.fields.rejectUnknownUsersHint',
-                          'Only accounts that already exist in Kite can sign in. Third-party sign-in matches an account by username and binds the identity to it on first sign-in.'
+                          'Only accounts that already exist in AeroLink can sign in. Third-party sign-in matches an existing account by username and binds the identity to it on first sign-in.'
                         )}
                       >
                         <Switch

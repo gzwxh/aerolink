@@ -6,7 +6,7 @@
 #     --build-arg RUNTIME_IMAGE=alpine:3.23.2 \
 #     --build-arg NPM_REGISTRY=https://registry.npmjs.org \
 #     --build-arg GOPROXY=https://proxy.golang.org,direct \
-#     -t kite:local .
+#     -t aerolink:local .
 ARG NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/node:24-alpine
 # 构建镜像必须是 **Debian 版**的 golang（不能用 alpine 版）：parquet 检索走 DuckDB 的
 # Go SDK（cgo 绑定），编译需要 gcc/g++。Debian 版官方镜像自带完整工具链（实测 gcc/g++
@@ -69,7 +69,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=1 go build -trimpath -ldflags="-s -w \
       -X 'github.com/zxh326/kite/pkg/version.Version=${VERSION}' \
       -X 'github.com/zxh326/kite/pkg/version.BuildDate=${BUILD_DATE}' \
-      -X 'github.com/zxh326/kite/pkg/version.CommitID=${COMMIT_ID}'" -o kite .
+      -X 'github.com/zxh326/kite/pkg/version.CommitID=${COMMIT_ID}'" -o aerolink .
 
 # Runtime image.
 FROM ${RUNTIME_IMAGE}
@@ -88,15 +88,15 @@ COPY --from=backend-builder /usr/share/zoneinfo /usr/share/zoneinfo
 # 运行用户：沿用 distroless/static(nonroot) 的 uid/gid 65532，这样换成 openEuler 后权限语义
 # 完全不变——已有的数据卷属主、K8s securityContext 都不用调整。
 # openEuler 基础镜像没装 shadow-utils（没有 useradd/groupadd），所以直接写 passwd/group。
-RUN printf 'kite:x:65532:65532::/app:/sbin/nologin\n' >> /etc/passwd && \
-    printf 'kite:x:65532:\n' >> /etc/group && \
-    mkdir -p /var/log/kite/archive && \
-    chown -R 65532:65532 /var/log/kite
+RUN printf 'aerolink:x:65532:65532::/app:/sbin/nologin\n' >> /etc/passwd && \
+    printf 'aerolink:x:65532:\n' >> /etc/group && \
+    mkdir -p /var/log/aerolink/archive && \
+    chown -R 65532:65532 /var/log/aerolink
 
 USER 65532
 
-COPY --from=backend-builder /app/kite .
+COPY --from=backend-builder /app/aerolink .
 
 EXPOSE 8080
 
-CMD ["./kite"]
+CMD ["./aerolink"]

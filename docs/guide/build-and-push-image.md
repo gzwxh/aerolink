@@ -13,7 +13,7 @@
 最简方式（使用官方默认源）：
 
 ```bash
-docker build -t kite:local .
+docker build -t aerolink:local .
 ```
 
 推荐同时注入版本信息，界面上会显示真实版本而不是 `dev`（与 Makefile 的注入方式一致）：
@@ -24,7 +24,7 @@ docker build \
   --build-arg VERSION="$VERSION" \
   --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --build-arg COMMIT_ID="$(git rev-parse --short HEAD)" \
-  -t kite:local .
+  -t aerolink:local .
 ```
 
 ::: tip 推送到不完全支持 OCI 的仓库时（华为云 SWR 等）
@@ -32,7 +32,7 @@ BuildKit 默认会给镜像附加 provenance / SBOM 清单，形成 manifest ind
 `Invalid image, fail to parse 'manifest.json'`。此时用下面两个参数重新构建即可：
 
 ```bash
-docker build --provenance=false --sbom=false --platform linux/amd64 -t kite:local .
+docker build --provenance=false --sbom=false --platform linux/amd64 -t aerolink:local .
 ```
 :::
 
@@ -49,7 +49,7 @@ docker build \
   --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
   --build-arg GOPROXY=https://goproxy.cn,direct \
   --build-arg VERSION="$VERSION" \
-  -t kite:local .
+  -t aerolink:local .
 ```
 
 ::: tip 更省事的做法
@@ -70,17 +70,17 @@ docker build \
 ## 二、验证镜像
 
 ```bash
-docker run -d --name kite -p 8080:8080 \
+docker run -d --name aerolink -p 8080:8080 \
   -v kite-data:/app/data \
   -e DB_DSN=/app/data/kite.db \
   -e KITE_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
-  kite:local
+  aerolink:local
 
 curl -I http://127.0.0.1:8080/        # 期望 HTTP 200
-docker logs kite | head              # 期望看到 Kite server started on port 8080
+docker logs aerolink | head              # 期望看到 Kite server started on port 8080
 
-docker rm -f kite
+docker rm -f aerolink
 ```
 
 > 缺少 `KITE_ENCRYPT_KEY` 时服务会拒绝启动（生产安全检查）；请妥善保存生成的密钥，更换 `KITE_ENCRYPT_KEY` 会使已保存的凭据无法解密。
@@ -101,12 +101,12 @@ docker login harbor.example.com                   # 自建 Harbor
 ```bash
 VERSION=$(bash scripts/get-version.sh)
 
-docker tag kite:local <registry>/<namespace>/kite:$VERSION
-docker push <registry>/<namespace>/kite:$VERSION
+docker tag aerolink:local <registry>/<namespace>/aerolink:$VERSION
+docker push <registry>/<namespace>/aerolink:$VERSION
 
 # 需要 latest 时再推一个
-docker tag kite:local <registry>/<namespace>/kite:latest
-docker push <registry>/<namespace>/kite:latest
+docker tag aerolink:local <registry>/<namespace>/aerolink:latest
+docker push <registry>/<namespace>/aerolink:latest
 ```
 
 ### 华为云 SWR 示例
@@ -116,8 +116,8 @@ docker push <registry>/<namespace>/kite:latest
 docker login -u cn-south-1@<你的AK> -p <你的SK> swr.cn-south-1.myhuaweicloud.com
 
 VERSION=$(bash scripts/get-version.sh)
-docker tag kite:local swr.cn-south-1.myhuaweicloud.com/<组织或用户名>/kite:$VERSION
-docker push swr.cn-south-1.myhuaweicloud.com/<组织或用户名>/kite:$VERSION
+docker tag aerolink:local swr.cn-south-1.myhuaweicloud.com/<组织或用户名>/aerolink:$VERSION
+docker push swr.cn-south-1.myhuaweicloud.com/<组织或用户名>/aerolink:$VERSION
 ```
 
 同一个 SWR 域名下如果有多个账号（例如个人仓库与组织仓库），由于 Docker 的凭据是按域名保存的，后登录会覆盖前一个账号。这时用独立的配置目录分别登录/推送：
@@ -126,28 +126,28 @@ docker push swr.cn-south-1.myhuaweicloud.com/<组织或用户名>/kite:$VERSION
 docker --config ~/.docker-personal login -u cn-south-1@<AK1> -p <SK1> swr.cn-south-1.myhuaweicloud.com
 docker --config ~/.docker-org      login -u cn-south-1@<AK2> -p <SK2> swr.cn-south-1.myhuaweicloud.com
 
-docker --config ~/.docker-org push swr.cn-south-1.myhuaweicloud.com/<组织>/kite:$VERSION
+docker --config ~/.docker-org push swr.cn-south-1.myhuaweicloud.com/<组织>/aerolink:$VERSION
 ```
 
 需要多架构（amd64 + arm64）时用 buildx：
 
 ```bash
-docker buildx create --name kite-builder --use
+docker buildx create --name aerolink-builder --use
 docker buildx build --platform linux/amd64,linux/arm64 \
   --build-arg RUNTIME_IMAGE=gcr.m.daocloud.io/distroless/static \
-  -t <registry>/<namespace>/kite:$VERSION --push .
+  -t <registry>/<namespace>/aerolink:$VERSION --push .
 ```
 
 ## 四、用 Helm 部署自建镜像
 
-`charts/kite` 默认镜像是 `ghcr.io/kite-org/kite`，用 `--set` 覆盖即可：
+`charts/kite` 默认镜像是 `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink`，用 `--set` 覆盖即可：
 
 ```bash
 VERSION=$(bash scripts/get-version.sh)
 
 helm upgrade --install kite charts/kite \
   -n kite-system --create-namespace \
-  --set image.repository=<registry>/<namespace>/kite \
+  --set image.repository=<registry>/<namespace>/aerolink \
   --set image.tag=$VERSION \
   --set image.pullPolicy=IfNotPresent
 ```
@@ -161,7 +161,7 @@ kubectl create secret docker-registry kite-regcred -n kite-system \
   --docker-password=<password>
 
 helm upgrade --install kite charts/kite -n kite-system \
-  --set image.repository=<registry>/<namespace>/kite \
+  --set image.repository=<registry>/<namespace>/aerolink \
   --set image.tag=$VERSION \
   --set imagePullSecrets[0].name=kite-regcred
 ```

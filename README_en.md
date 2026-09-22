@@ -36,11 +36,11 @@ This repository is a customized fork of [kite-org/kite](https://github.com/kite-
 
 ```bash
 make deps      # install frontend & backend dependencies
-make build     # build the frontend (embedded into static/) and the ./kite binary
+make build     # build the frontend (embedded into static/) and the ./aerolink binary
 make run       # start the server (loads dev.env automatically, port 8080)
 ```
 
-> Running `./kite` right after `make build` **refuses to start without secrets** — that is the intended startup check. For local debugging either:
+> Running `./aerolink` right after `make build` **refuses to start without secrets** — that is the intended startup check. For local debugging either:
 > - `make run` / `make dev`, which load the bundled `dev.env` (already contains 32+ byte `KITE_ENCRYPT_KEY` and `JWT_SECRET`) — recommended;
 > - or set `KITE_ALLOW_INSECURE_SECRETS=true` to fall back to the built-in keys (**local machines only**).
 
@@ -73,7 +73,7 @@ make dev DEV_ENV=dev.env.local
 Without make:
 
 ```bash
-set -a; . ./dev.env; set +a; ./kite
+set -a; . ./dev.env; set +a; ./aerolink
 ```
 
 > ⚠️ The keys in `dev.env` are public development values — any real deployment needs `openssl rand -base64 32`.
@@ -109,7 +109,7 @@ docker run -d --name kite -p 8080:8080 \
   -e DB_DSN=/app/data/kite.db \
   -e KITE_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
 
 Production (generate secrets with `openssl rand -base64 32` and store them safely):
@@ -123,7 +123,7 @@ docker run -d --name kite --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://kite.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
 
 The first visit walks through creating the admin account; configure the remaining policies under Settings.
@@ -158,7 +158,7 @@ The first visit walks through creating the admin account; configure the remainin
 | `KUBECONFIG` / `KITE_CONFIG_FILE` | empty | external kubeconfig / config file path |
 | `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest` | node terminal image (company SWR) |
 | `KUBECTL_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest` | kubectl terminal image (company SWR) |
-| `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest` | cluster agent image, same repository as the app (company SWR) |
+| `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest` | cluster agent image, same repository as the app (company SWR) |
 | `KITE_KUBE_API_QPS` / `KITE_KUBE_API_BURST` | built-in | Kubernetes API rate limits |
 | `KITE_CACHE_SYNC_TIMEOUT` | built-in | cluster cache sync timeout |
 | `DISABLE_CACHE` | no | `true` disables the resource cache (debugging) |

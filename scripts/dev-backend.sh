@@ -14,7 +14,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
-BINARY_NAME="${BINARY_NAME:-kite}"
+BINARY_NAME="${BINARY_NAME:-aerolink}"
 INTERVAL="${KITE_DEV_WATCH_INTERVAL:-1}"
 read -r -a RUN_ARGS <<< "${KITE_DEV_RUN_ARGS:--v=5}"
 

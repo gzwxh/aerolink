@@ -7,7 +7,7 @@ replicaCount: 1
 
 # 设置容器镜像，更多信息见：https://kubernetes.io/docs/concepts/containers/images/
 image:
-  repository: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite
+  repository: swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink
   # 设置镜像的拉取策略。
   pullPolicy: IfNotPresent
   # 覆盖镜像 tag，其默认值为 chart 的 appVersion。
@@ -61,7 +61,7 @@ basePath: ""
 #   extraEnvs:
 #     - name: KITE_AUDIT_SINK
 #       value: parquet
-#   auditArchiveDir: /var/log/kite/archive
+#   auditArchiveDir: /var/log/aerolink/archive
 #
 #   ② elasticsearch（ES 地址必须先存在，否则拒绝启动：先在页面把「审计设置 → ES」
 #      的地址/凭据填好保存，或走 config.enabled + config.yaml 的
@@ -91,20 +91,20 @@ logFile: ""
 
 # 归档 parquet 与 klog 日志的持久化卷。
 # 这两类文件都写在容器里，不挂卷时 Pod 重建即丢——生产建议开启（PVC 或 hostPath）。
-# 挂载点默认 /var/log/kite；归档目录 /var/log/kite/archive 位于其下，
+# 挂载点默认 /var/log/aerolink；归档目录 /var/log/aerolink/archive 位于其下，
 # 所以 auditArchiveDir 留空时正好落在卷内。
 # 多副本（replicaCount > 1）时必须用 **RWX 的共享 PVC**，不能用 hostPath / emptyDir：
 # 每个副本只写自己产生的审计记录，界面检索读的又是本地目录——目录不共享就查不全。
 auditPersistence:
   enabled: false
-  mountPath: /var/log/kite
+  mountPath: /var/log/aerolink
   # 使用已有 PVC（留空则回退到下面的 hostPath 或 emptyDir）
   pvc:
     enabled: false
     existingClaim: ""
   hostPath:
     enabled: false
-    path: /var/log/kite
+    path: /var/log/aerolink
     type: DirectoryOrCreate
 
 # 设为 true 以启用拥有完全管理员权限的匿名用户

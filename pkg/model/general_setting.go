@@ -19,7 +19,7 @@ const DefaultGeneralAnthropicModel = "claude-sonnet-4-5"
 // （SWR，命名空间 “dsy”）。
 const DefaultGeneralKubectlImage = "swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest"
 const DefaultGeneralNodeTerminalImage = "swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest"
-const DefaultGeneralClusterAgentImage = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest"
+const DefaultGeneralClusterAgentImage = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest"
 
 const GeneralAIProviderOpenAI = "openai"
 const GeneralAIProviderAnthropic = "anthropic"
@@ -60,7 +60,7 @@ type GeneralSetting struct {
 	KubectlEnabled        bool         `json:"kubectlEnabled" gorm:"column:kubectl_enabled;type:boolean;not null;default:true"`
 	KubectlImage          string       `json:"kubectlImage" gorm:"column:kubectl_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest'"`
 	NodeTerminalImage     string       `json:"nodeTerminalImage" gorm:"column:node_terminal_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest'"`
-	ClusterAgentImage     string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest'"`
+	ClusterAgentImage     string       `json:"clusterAgentImage" gorm:"column:cluster_agent_image;type:varchar(255);not null;default:'swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest'"`
 	PasswordLoginDisabled bool         `json:"passwordLoginDisabled" gorm:"column:password_login_disabled;type:boolean;not null;default:false"`
 	EnableMFA             bool         `json:"enableMFA" gorm:"column:enable_mfa;type:boolean;not null;default:true"`
 	LoginPrompt           string       `json:"loginPrompt" gorm:"column:login_prompt;type:text"`

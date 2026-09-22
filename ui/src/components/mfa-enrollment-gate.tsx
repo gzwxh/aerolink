@@ -139,7 +139,7 @@ export function MFAEnrollmentGate({ children }: { children: ReactNode }) {
                     )
                   : t(
                       'mfaEnrollment.directoryStepHint',
-                      '目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认。点击继续后显示绑定二维码，用身份验证器 App 扫码即可完成绑定。'
+                      '目录账号（LDAP）没有本地密码，鸢联 AeroLink 以你最近一次登录作为本人确认。点击继续后显示绑定二维码，用身份验证器 App 扫码即可完成绑定。'
                     )}
               </p>
               {needsPassword && (

@@ -6,10 +6,10 @@
 #
 # 推送镜像到公司仓库需要 SWR 组织（dsy）下的账号：
 #   docker --config ~/.docker-dsy login -u cn-south-1@<AK> -p <SK> swr.cn-south-1.myhuaweicloud.com
-#   docker tag kite:$VERSION swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:$VERSION
-#   docker --config ~/.docker-dsy push swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:$VERSION
+#   docker tag kite:$VERSION swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:$VERSION
+#   docker --config ~/.docker-dsy push swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:$VERSION
 image:
-  repository: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite
+  repository: swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink
   # 留空则回退到 Chart.appVersion；上面命令的 --set image.tag 已显式传入，不写死。
   tag: ""
   pullPolicy: IfNotPresent

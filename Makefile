@@ -2,10 +2,10 @@
 .PHONY: help dev build build-cli rancherrbac clean test docker-build docker-run frontend backend backend-cli install deps changelog e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-existing e2e-run-headed e2e-test e2e-test-headed
 
 # Variables
-BINARY_NAME=kite
+BINARY_NAME=aerolink
 UI_DIR=ui
 E2E_DIR=e2e
-DOCKER_IMAGE=kite
+DOCKER_IMAGE=aerolink
 DOCKER_TAG=latest
 E2E_KIND_NAME ?= kite-e2e
 E2E_PORT ?= 38080
@@ -115,17 +115,17 @@ package-release:
 	@echo "🔄 Packaging..."
 	tar -czvf bin/$(BINARY_NAME)-$(shell git describe --tags --match 'v*' | grep -oE 'v[0-9]+\.[0-9][0-9]*(\.[0-9]+)?').tar.gz bin/*
 
-package-binaries: ## Package each kite binary file separately
-	@echo "🔄 Packaging kite binaries separately..."
+package-binaries: ## Package each aerolink binary file separately
+	@echo "🔄 Packaging aerolink binaries separately..."
 	@VERSION=$$(git describe --tags --match 'v*' | grep -oE 'v[0-9]+\.[0-9][0-9]*(\.[0-9]+)?'); \
-	for file in bin/kite-*; do \
+	for file in bin/aerolink-*; do \
 		if [ -f "$$file" ]; then \
 			filename=$$(basename "$$file"); \
 			echo "📦 Packaging $$filename with version $$VERSION..."; \
 			tar -czvf "bin/$$filename-$$VERSION.tar.gz" "$$file"; \
 		fi; \
 	done
-	@echo "✅ All kite binaries packaged successfully!"
+	@echo "✅ All aerolink binaries packaged successfully!"
 
 changelog: ## Generate categorized release notes into CHANGELOG.md
 	@echo "📝 Generating CHANGELOG.md..."
@@ -309,7 +309,7 @@ docs-build: ## Build documentation
 	cd docs && pnpm run docs:build
 
 # ----- Docker 镜像 -----
-IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite:v1.0.0
+IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
 # 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径），
 # 这里只保留依赖源镜像（npm/go 代理）；直连环境可置空：
 #   make image DOCKER_BUILD_ARGS=

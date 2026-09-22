@@ -6,7 +6,7 @@
 #
 # 镜像构建与推送见 docs/guide/build-and-push-image.md。
 image:
-  repository: swr.cn-south-1.myhuaweicloud.com/gzwxh/kite
+  repository: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink
   # 留空则回退到 Chart.appVersion；上面命令的 --set image.tag 已显式传入，不写死。
   tag: ""
   pullPolicy: IfNotPresent

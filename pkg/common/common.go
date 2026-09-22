@@ -41,7 +41,7 @@ var (
 	// 设置界面覆盖。
 	NodeTerminalImage    = "swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest"
 	KubectlTerminalImage = "swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest"
-	ClusterAgentImage    = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest"
+	ClusterAgentImage    = "swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest"
 	DBType               = "sqlite"
 	DBDSN                = "dev.db"
 

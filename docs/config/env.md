@@ -56,7 +56,7 @@ Kite 默认支持一些环境变量，来改变一些配置项的默认值。
 
   # 本地 parquet 文件（需同时给归档目录）
   KITE_AUDIT_SINK=parquet
-  KITE_AUDIT_ARCHIVE_DIR=/var/log/kite/archive
+  KITE_AUDIT_ARCHIVE_DIR=/var/log/aerolink/archive
 
   # Elasticsearch（需先在页面或配置文件里填好地址）
   KITE_AUDIT_SINK=elasticsearch

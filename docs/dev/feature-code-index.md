@@ -268,7 +268,7 @@ make e2e-test            # Playwright + kind（spec 见 e2e/specs/*.spec.ts）
 
 ## 7. 容易踩的坑
 
-- `static/`、`kite`、`bin/` 是生成物，不要手改；前端改动要生效必须 `make frontend` / `make build`
+- `static/`、`aerolink`、`bin/` 是生成物，不要手改；前端改动要生效必须 `make frontend` / `make build`
 - `vendor/` 已入库，改依赖要同时处理 `go.mod`/`go.sum` 与 `vendor/`
 - `ui/src/lib/api.ts` 与 `ui/src/lib/api/` 目录同时存在（前者聚合导出），新增 API 模块别搞混
 - 根目录 `AGENTS.md` 与 `CLAUDE.md` 都是代理约定文件，改一个记得同步另一个

@@ -36,7 +36,7 @@ Kite 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维
 
 ```bash
 make deps      # 安装前后端依赖
-make build     # 构建前端(嵌入 static/) 与后端二进制 ./kite
+make build     # 构建前端(嵌入 static/) 与后端二进制 ./aerolink
 make run       # 启动（自动加载 dev.env，默认端口 8080）
 
 cd /wxh/kite && make build && make run
@@ -50,9 +50,9 @@ make build && make run
 
 启动后访问 <http://localhost:8080>；需要自动创建管理员 **admin / AdminPass!234** 时，在 `dev.env` 里启用 `KITE_CONFIG_FILE=config.dev.yaml`（默认注释掉）。
 
-> `make build` 后直接 `./kite` 会因为**缺少密钥而拒绝启动**（这是刻意设计的启动强校验）。本地调试两种方式：
+> `make build` 后直接 `./aerolink` 会因为**缺少密钥而拒绝启动**（这是刻意设计的启动强校验）。本地调试两种方式：
 > - `make run` / `make dev`：自动加载仓库自带的 `dev.env`（已含 ≥32 字节的 `KITE_ENCRYPT_KEY`、`JWT_SECRET`），推荐；
-> - 临时绕过：`KITE_ALLOW_INSECURE_SECRETS=true ./kite`（回退到内置默认密钥，**仅限本机**）。
+> - 临时绕过：`KITE_ALLOW_INSECURE_SECRETS=true ./aerolink`（回退到内置默认密钥，**仅限本机**）。
 
 受限网络下 `make build` 直接可用（前端依赖走 pnpm lockfile，后端使用 `vendor/`）。
 
@@ -84,7 +84,7 @@ make dev DEV_ENV=dev.env.local
 若不通过 make 启动：
 
 ```bash
-set -a; . ./dev.env; set +a; ./kite
+set -a; . ./dev.env; set +a; ./aerolink
 ```
 
 > ⚠️ `dev.env` 里的密钥是**公开的本地开发值**，任何真实环境都要换成 `openssl rand -base64 32`。
@@ -98,8 +98,8 @@ set -a; . ./dev.env; set +a; ./kite
 make image     # 构建镜像（默认 tag 见 Makefile 的 IMAGE 变量）
 make push      # 构建并推送到公司 SWR
 # 等价于：
-# docker build -t swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1 .
-# docker push  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+# docker build -t swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1 .
+# docker push  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
 
 受限网络下 `make image/push` 已内置国内镜像源参数（daocloud 基础镜像 + npmmirror + goproxy.cn），直连环境可用 `make image DOCKER_BUILD_ARGS=` 置空。
@@ -123,7 +123,7 @@ docker run -d --name kite -p 8080:8080 \
   -e DB_DSN=/app/data/kite.db \
   -e KITE_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
 
 生产推荐启动方式（含全部安全参数，密钥用 `openssl rand -base64 32` 生成并妥善保存）：
@@ -137,7 +137,7 @@ docker run -d --name kite --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://kite.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
 
 首次访问会引导创建管理员账号，之后在「系统设置」中完成其余策略配置。
@@ -173,7 +173,7 @@ docker run -d --name kite --restart unless-stopped \
 | `KITE_CONFIG_FILE` | 空 | 外部配置文件路径 |
 | `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest` | 节点终端 Pod 镜像（公司 SWR） |
 | `KUBECTL_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest` | Kubectl 终端 Pod 镜像（公司 SWR） |
-| `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest` | 集群 Agent 镜像，与应用镜像同一仓库（公司 SWR） |
+| `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest` | 集群 Agent 镜像，与应用镜像同一仓库（公司 SWR） |
 | `KITE_KUBE_API_QPS` / `KITE_KUBE_API_BURST` | 内置值 | 访问 K8s API 的限速参数，集群规模大时可上调 |
 | `KITE_CACHE_SYNC_TIMEOUT` | 内置值 | 集群缓存同步超时 |
 | `DISABLE_CACHE` | 否 | `true` 关闭资源缓存（调试用） |

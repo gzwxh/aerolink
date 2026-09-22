@@ -21,7 +21,7 @@
 | 类型 | 名称 | 说明 |
 | --- | --- | --- |
 | 变量 | `RELEASE_ENABLED` | 设为 `true` 才会跑（默认不跑，避免误触发发布） |
-| 变量 | `IMAGE_REPOSITORY` | 目标镜像，默认 `swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite`（与 `charts/kite/values.yaml` 的 `image.repository` 一致）；例如 `ghcr.io/<owner>/kite` |
+| 变量 | `IMAGE_REPOSITORY` | 目标镜像，默认 `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink`（与 `charts/kite/values.yaml` 的 `image.repository` 一致）；例如 `ghcr.io/<owner>/kite` |
 | 变量 | `CHART_OCI_REPOSITORY` | chart 的 OCI 目标，留空则不推 chart；例如 `oci://swr.cn-south-1.myhuaweicloud.com/dsy/devops/charts` |
 | 变量 | `HELM_INDEX_ENABLED` | 是否更新 gh-pages 上的 Helm index（上游的分发方式），本仓库默认关 |
 | Secret | `IMAGE_REGISTRY_USERNAME` / `IMAGE_REGISTRY_PASSWORD` | 非 ghcr.io 目标仓库的推送凭据（ghcr.io 用内置 `GITHUB_TOKEN`） |

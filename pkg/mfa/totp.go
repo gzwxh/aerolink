@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultIssuer = "Kite"
+	defaultIssuer = "鸢联 AeroLink"
 	secretSize    = 20
 	step          = 30
 	digits        = 6

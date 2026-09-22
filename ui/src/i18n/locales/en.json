@@ -740,7 +740,7 @@
     },
     "tabs": {
       "rolloutRevisions": "Rollout Revisions",
-      "kiteAudit": "Kite Audit"
+      "kiteAudit": "AeroLink Audit"
     }
   },
   "daemonsets": {
@@ -962,7 +962,7 @@
     "tryAgainHint": "You can try logging in with a different account that has the required permissions.",
     "noLoginMethods": "No login methods configured",
     "configureAuth": "Please configure authentication providers in your environment",
-    "footer": "© {{year}} Kite · {{company}}. All rights reserved.",
+    "footer": "© {{year}} AeroLink · {{company}}. All rights reserved.",
     "errors": {
       "accessDenied": "Access Denied",
       "authenticationFailed": "Authentication Failed",
@@ -1905,7 +1905,7 @@
       "general": "Manage console-wide switches: AI assistant, kubectl and node terminal, cluster agent and runtime settings.",
       "navigation": "Configure which groups and items the left navigation shows: reorder them, hide items or create new groups. Publishing the layout as the global sidebar applies it to users without a personal navigation setup.",
       "clusters": "Import Kubernetes clusters, enable or disable them, and remove the ones no longer in use.",
-      "apikeys": "Create and revoke the API keys used to call the Kite API.",
+      "apikeys": "Create and revoke the API keys used to call the AeroLink API.",
       "templates": "Maintain the templates offered when creating resources.",
       "user": "Manage console users and user groups: add or edit accounts, enable or disable sign-in, reset passwords, assign roles and maintain group membership.",
       "rbac": "Define roles (clusters, resources, actions) and permission bindings that bind users or groups to those roles.",
@@ -1985,10 +1985,10 @@
     },
     "branding": {
       "title": "Branding",
-      "description": "Customize the console appearance: the name and logo are used in the sidebar, the login page, the setup page and the browser tab. Leave them empty for the defaults (Kite + built-in icon). Administrators only.",
+      "description": "Customize the console appearance: the name and logo are used in the sidebar, the login page, the setup page and the browser tab. Leave them empty for the defaults (AeroLink + built-in icon). Administrators only.",
       "nameLabel": "Name",
-      "namePlaceholder": "Kite",
-      "nameHint": "Shown in the sidebar, on the login page and in the browser tab; at most 16 characters, and longer names wrap onto two lines in the sidebar so the whole name stays visible. Leave empty to use the default name Kite.",
+      "namePlaceholder": "AeroLink",
+      "nameHint": "Shown in the sidebar, on the login page and in the browser tab; at most 16 characters, and longer names wrap onto two lines in the sidebar so the whole name stays visible. Leave empty to use the default name AeroLink.",
       "nameCounter": "{{used}}/{{max}}",
       "preview": "Logo preview",
       "upload": "Choose image",
@@ -2178,7 +2178,7 @@
       }
     },
     "messages": {
-      "ldapDeleteNote": "This only removes the account from Kite. The user remains in the LDAP directory and can be imported again later.",
+      "ldapDeleteNote": "This only removes the account from AeroLink. The user remains in the LDAP directory and can be imported again later.",
       "ldapDeleted": "User deleted.",
       "mfaNotBound": "MFA not bound",
       "superAdminDisableHint": "The super administrator can be disabled, but only while another enabled account holds the administrator role. Binding MFA is the recommended protection instead.",
@@ -2204,7 +2204,7 @@
   },
   "settingsHint": {
     "title": "Complete Your Setup",
-    "description": "Configure essential settings to get the most out of Kite",
+    "description": "Configure essential settings to get the most out of AeroLink",
     "p8s": {
       "description": "Configure Prometheus"
     },
@@ -2313,7 +2313,7 @@
     "errors": {
       "loadFailed": "Failed to load clusters"
     },
-    "deleteConfirmation": "This action will only remove the current cluster's configuration in kite and will not delete any cluster resources.",
+    "deleteConfirmation": "This action will only remove the current cluster's configuration in AeroLink and will not delete any cluster resources.",
     "dialog": {
       "createTitle": "Add Cluster",
       "editTitle": "Edit Cluster",
@@ -2379,7 +2379,7 @@
   },
   "initialization": {
     "title": "Initial Setup",
-    "welcome": "Welcome! Let's set up your Kite dashboard",
+    "welcome": "Welcome! Let's set up your AeroLink dashboard",
     "subtitle": "Complete the following steps to get started",
     "description": "Configure your admin user and connect cluster",
     "step1": {
@@ -2624,7 +2624,7 @@
       "addRepositoryDescription": "Add a Helm repository to make its charts available. Supports classic (https://) and OCI (oci://) repositories; an OCI URL must point at a single chart.",
       "repositoryAdded": "Repository added",
       "repositoryDeleted": "Repository deleted",
-      "deleteRepositoryDescription": "This only removes the managed chart source from Kite. It does not delete remote charts or installed Helm releases.",
+      "deleteRepositoryDescription": "This only removes the managed chart source from AeroLink. It does not delete remote charts or installed Helm releases.",
       "noCharts": "No charts found",
       "noReadme": "No README found",
       "noValues": "No values found",
@@ -2632,7 +2632,7 @@
       "noVersions": "No versions found",
       "noChartUrl": "Chart package URL is missing.",
       "invalidValues": "Values must be a YAML object.",
-      "artifactHubTrafficNotice": "Security notice: Kite contacts <artifactHub>Artifact Hub</artifactHub> when searching or viewing chart information from this source. Kite only displays third-party data and is not responsible for its content.",
+      "artifactHubTrafficNotice": "Security notice: AeroLink contacts <artifactHub>Artifact Hub</artifactHub> when searching or viewing chart information from this source. AeroLink only displays third-party data and is not responsible for its content.",
       "installed": "Helm release installed"
     },
     "placeholders": {
@@ -3031,7 +3031,7 @@
     "description": "An administrator requires MFA for your account. Bind an authenticator app to continue.",
     "passwordStepHint": "To protect this session, verify your current password first. A QR code for binding will appear once verified — scan it with your authenticator app to finish.",
     "passwordLabel": "Current password",
-    "directoryStepHint": "Directory (LDAP) accounts have no local password here: Kite treats your most recent sign-in as the confirmation of identity. Continue to show the QR code and scan it with your authenticator app.",
+    "directoryStepHint": "Directory (LDAP) accounts have no local password here: AeroLink treats your most recent sign-in as the confirmation of identity. Continue to show the QR code and scan it with your authenticator app.",
     "reauthRequired": "To confirm it is you, binding an authenticator code requires a sign-in within the last 5 minutes. Sign out and back in, then return to bind.",
     "reauthAction": "Sign out and sign in again",
     "continue": "Continue",
@@ -3146,7 +3146,7 @@
       "sessionMaxHours": "Connection max lifetime (hours)",
       "sessionMaxHoursHint": "The connection is closed when it lasts longer than this.",
       "rejectUnknownUsers": "Existing users only",
-      "rejectUnknownUsersHint": "Only accounts that already exist in Kite can sign in. Third-party sign-in matches an existing account by username and binds the identity to it on first sign-in.",
+      "rejectUnknownUsersHint": "Only accounts that already exist in AeroLink can sign in. Third-party sign-in matches an existing account by username and binds the identity to it on first sign-in.",
       "loginSourceEnforced": "Restrict login source",
       "loginSourceEnforcedHint": "When enabled, only the addresses listed below can reach the console: sign-in and every subsequent request are rejected from elsewhere.",
       "loginSourceAllowlist": "Allowed login sources",
@@ -3578,8 +3578,10 @@
     "nsAfterCreate": "Namespaces can be bound or created after the permission binding is saved.",
     "nsExclusiveHint": "A namespace can belong to only one permission binding at a time. Unbind it in its current binding before it shows up here again.",
     "nsTakenTitle": "These namespaces belong to another permission binding and were removed from the list",
-    "nsTakenSubjects": "granted to",
-    "nsTakenRoles": "roles",
+    "nsTakenColumnNamespace": "Namespace",
+    "nsTakenColumnBinding": "Binding",
+    "nsTakenColumnSubjects": "Granted users / groups",
+    "nsTakenColumnRoles": "Roles",
     "nsTakenHint": "To use one of them here, first save the owning permission binding without that namespace, then pick it here.",
     "nsTakenFilter": "Filter by namespace or binding",
     "nsTakenNoMatch": "No namespace or binding matches",
@@ -3704,7 +3706,7 @@
         "otpauthUrl": "otpauth URL",
         "description": "Once an authenticator is bound, sign-in and sensitive operations ask for a one-time code.",
         "featureDisabled": "This deployment has authenticator codes turned off in Settings → General, so binding is unavailable. Ask an administrator to enable it first.",
-        "directoryHint": "Directory (LDAP) accounts have no local password here: Kite treats your most recent sign-in as the confirmation of identity. If you have not signed in recently, sign out and back in, then return to bind.",
+        "directoryHint": "Directory (LDAP) accounts have no local password here: AeroLink treats your most recent sign-in as the confirmation of identity. If you have not signed in recently, sign out and back in, then return to bind.",
         "reauthRequired": "To confirm it is you, binding an authenticator code requires a sign-in within the last 5 minutes. Sign out and back in, then return to bind.",
         "reauthAction": "Sign out and sign in again"
       }

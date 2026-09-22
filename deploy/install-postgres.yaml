@@ -1,7 +1,7 @@
-# Kite Kubernetes 部署清单（外部 PostgreSQL 数据库版）
+# 鸢联 AeroLink Kubernetes 部署清单（外部 PostgreSQL 数据库版）
 #
 # 这是 deploy/install-mysql.yaml 的 PostgreSQL 版，两份是**互斥的替代方案**：
-#   Namespace / ServiceAccount / Secret / Deployment 的名字完全一样（都叫 kite），
+#   Namespace / ServiceAccount / Secret / Deployment 的名字完全一样（都叫 aerolink），
 #   同一个集群里同时 apply 会互相覆盖。选一条路走。
 #
 # 使用前必改项（搜索 REPLACE-ME）：
@@ -12,13 +12,15 @@
 #      未设置时服务会拒绝启动（除非显式打开 KITE_ALLOW_INSECURE_SECRETS，生产禁用）。
 #   2. POSTGRES_DSN —— 替换为实际的 PostgreSQL 连接信息。
 #
-# 数据库要求（提前手动建好，Kite 不做建库）：
+# 数据库要求（提前手动建好，鸢联 AeroLink 不做建库）：
+#   库名与角色名跟产品名无关，可自定；下面与 POSTGRES_DSN 里沿用现网的 kite，
+#   要改名就连 DSN 一起改（库名本身就占数据，改名是一次数据搬迁）。
 #   -- 用超级用户执行
 #   CREATE DATABASE kite;
 #   CREATE ROLE kite LOGIN PASSWORD '你的密码';
 #   ALTER DATABASE kite OWNER TO kite;
 #   -- 不给 kite 角色 CREATEDB / CREATEROLE：应用不需要，给了只是扩大影响面。
-#   -- 数据表由 Kite 首次启动时自动迁移创建（AutoMigrate），无需手工建表。
+#   -- 数据表由 鸢联 AeroLink 首次启动时自动迁移创建（AutoMigrate），无需手工建表。
 #
 # 数据库版本：PostgreSQL 12 及以上（12.12 / 12.22 / 13.23 / 18.6 已实测跑通，
 # 行为一致）。建库时请一并固定编码与排序规则——它们最难事后补：
@@ -31,34 +33,34 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: kite
+  name: aerolink
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  # 集群里可能已有 Helm 管理的同名 CRB（旧 version 的 kite release），
+  # 集群里可能已有 Helm 管理的 CRB（release 名仍是 kite），
   # 用独立名字避免 apply 时覆盖它。
-  name: kite-postgres
+  name: aerolink-postgres
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin
 subjects:
   - kind: ServiceAccount
-    name: kite
-    namespace: kite
+    name: aerolink
+    namespace: aerolink
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kite
-  namespace: kite
+  name: aerolink
+  namespace: aerolink
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: kite-secret
-  namespace: kite
+  name: aerolink-secret
+  namespace: aerolink
 type: Opaque
 stringData:
   # openssl rand -base64 32 生成，妥善保存
@@ -75,23 +77,23 @@ stringData:
   #
   # ⚠ TimeZone 必须显式写：漏写**不会报错**，只会让时间戳按服务端时区（官方镜像默认
   #   Etc/UTC）解释，界面与审计日志里的时间整体偏移 8 小时。应用启动时会对此打 warning。
-  # ⚠ sslmode：现网 PG 在集群外、未开 TLS，用 disable；若开了 TLS 改为 require/verify-full。
-  # 现网库（10.100.117.8 上 docker 起的 kite-postgres12，PG 12.12）宿主端口是 5433，
-  # 集群内 Pod 通过节点 IP 访问，库与角色都是 kite（非超级用户）。
-  POSTGRES_DSN: "host=10.10.11.111 port=5432 user=postgres password=postgres dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
+  # ⚠ sslmode：PG 在集群外、未开 TLS 时用 disable；开了 TLS 改为 require / verify-full。
+  # ⚠ 库与角色名沿用现网的 kite（与产品名无关）；下面是现网实例的连接串，改地址 /
+  #   密码时只改这一行，上面的说明不必跟着改。
+  POSTGRES_DSN: "host=10.10.11.111 port=5432 user=aerolink password=JaAUuHlthKId5MXxGrtU dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: kite
-  name: kite
-  namespace: kite
+    app: aerolink
+  name: aerolink
+  namespace: aerolink
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kite
+      app: aerolink
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -100,30 +102,30 @@ spec:
   template:
     metadata:
       labels:
-        app: kite
+        app: aerolink
     spec:
-      serviceAccountName: kite
+      serviceAccountName: aerolink
       containers:
-        - image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite:v1.0.0
+        - image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
           imagePullPolicy: Always
-          name: kite
+          name: aerolink
           envFrom:
             - secretRef:
-                name: kite-secret
+                name: aerolink-secret
           env:
             - name: DB_TYPE
               value: postgres
             - name: DB_DSN
               valueFrom:
                 secretKeyRef:
-                  name: kite-secret
+                  name: aerolink-secret
                   key: POSTGRES_DSN
             - name: KITE_AUDIT_SINK
               value: parquet
             - name: KITE_AUDIT_ARCHIVE_DIR
-              value: /var/log/kite/archive
+              value: /var/log/aerolink/archive
             - name: KITE_LOG_FILE
-              value: /var/log/kite/kite.log
+              value: /var/log/aerolink/aerolink.log
             # 连接池：每个副本最多占这么多条连接，而 PostgreSQL 的 max_connections 是
             # **全部客户端**的总坑位。硬约束：
             #   副本数 × KITE_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ max_connections
@@ -136,7 +138,7 @@ spec:
             #   value: "10"
             # - name: KITE_DB_CONN_MAX_LIFETIME_MINUTES
             #   value: "10"
-            # Kite 通过 in-cluster kubeconfig（ServiceAccount 令牌）访问本集群；
+            # 鸢联 AeroLink 通过 in-cluster kubeconfig（ServiceAccount 令牌）访问本集群；
             # 管理多集群时在页面上添加其它集群的 kubeconfig（加密后存于 PostgreSQL）。
             # 反向代理/Ingress 场景下必须收紧为真实代理网段，防止伪造来源 IP：
             - name: TRUSTED_PROXIES
@@ -155,16 +157,16 @@ spec:
             # - name: KITE_AUDIT_SINK
             #   value: parquet
             # - name: KITE_AUDIT_ARCHIVE_DIR
-            #   value: /var/log/kite/archive
+            #   value: /var/log/aerolink/archive
             # - name: KITE_LOG_FILE
-            #   value: /var/log/kite/kite.log
+            #   value: /var/log/aerolink/aerolink.log
           # 与上面的 KITE_* 配套（emptyDir 仅 Pod 生命周期内保留，生产换 PVC；
           # 多副本时归档目录必须是共享卷，否则检索查不全）：
           # volumeMounts:
-          #   - name: kite-logs
-          #     mountPath: /var/log/kite
+          #   - name: aerolink-logs
+          #     mountPath: /var/log/aerolink
           # volumes:
-          #   - name: kite-logs
+          #   - name: aerolink-logs
           #     emptyDir: {}
           ports:
             - containerPort: 8080
@@ -199,9 +201,9 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: kite
-  name: kite
-  namespace: kite
+    app: aerolink
+  name: aerolink
+  namespace: aerolink
 spec:
   # 对外访问：http://<节点IP>:27862（集群允许的 nodePort 范围 20000-32767）。
   # 固定端口是为了让 URL 稳定、可直接写进文档；冲突时改 nodePort 即可。
@@ -213,4 +215,4 @@ spec:
       targetPort: 8080
       nodePort: 27862
   selector:
-    app: kite
+    app: aerolink

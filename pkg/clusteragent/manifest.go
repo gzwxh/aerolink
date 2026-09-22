@@ -71,7 +71,7 @@ spec:
         - name: cluster-agent
           image: %s
           command:
-            - /app/kite
+            - /app/aerolink
           args:
             - cluster-agent
             - --server=$(KITE_SERVER)
