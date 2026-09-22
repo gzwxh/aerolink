@@ -22,13 +22,14 @@ title: 托管 Kubernetes 集群配置
 
 为鸢联 AeroLink 创建一个专用的 Service Account,并使用其 token 进行认证。
 
-鸢联 AeroLink 提供了一个辅助创建的脚本
+鸢联 AeroLink 提供了辅助创建脚本 `scripts/generate-aerolink-kubeconfig.sh`（自包含，只依赖 `kubectl`，可直接拷到目标机运行）：
 
 ```sh
-wget https://raw.githubusercontent.com/kite-org/kite/refs/heads/main/scripts/generate-kite-kubeconfig.sh -O generate-kite-kubeconfig.sh
-chmod +x generate-kite-kubeconfig.sh
-./generate-kite-kubeconfig.sh
+chmod +x scripts/generate-aerolink-kubeconfig.sh
+./scripts/generate-aerolink-kubeconfig.sh
 ```
+
+默认创建 `kube-system/aerolink-admin`（ServiceAccount 与 ClusterRoleBinding 同名）、`aerolink-admin-token` Secret，并输出 `aerolink-kubeconfig.yaml`；命名空间与各名字可用 `NAMESPACE` / `SA_NAME` / `SECRET_NAME` / `OUTPUT_FILE` 覆盖，脚本另有 `cleanup` 子命令把创建过的资源删干净。
 
 #### 步骤:
 
@@ -38,20 +39,20 @@ chmod +x generate-kite-kubeconfig.sh
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kite-admin
+  name: aerolink-admin
   namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: kite-admin
+  name: aerolink-admin
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin
 subjects:
   - kind: ServiceAccount
-    name: kite-admin
+    name: aerolink-admin
     namespace: kube-system
 ```
 
@@ -61,10 +62,10 @@ subjects:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: kite-admin-token
+  name: aerolink-admin-token
   namespace: kube-system
   annotations:
-    kubernetes.io/service-account.name: kite-admin
+    kubernetes.io/service-account.name: aerolink-admin
 type: kubernetes.io/service-account-token
 ```
 
@@ -72,10 +73,10 @@ type: kubernetes.io/service-account-token
 
 ```bash
 # 获取 token
-TOKEN=$(kubectl get secret kite-admin-token -n kube-system -o jsonpath='{.data.token}' | base64 -d)
+TOKEN=$(kubectl get secret aerolink-admin-token -n kube-system -o jsonpath='{.data.token}' | base64 -d)
 
 # 获取 CA 证书
-CA_CERT=$(kubectl get secret kite-admin-token -n kube-system -o jsonpath='{.data.ca\.crt}')
+CA_CERT=$(kubectl get secret aerolink-admin-token -n kube-system -o jsonpath='{.data.ca\.crt}')
 
 # 获取 API Server 地址
 API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
@@ -84,22 +85,22 @@ API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.ser
 4. 生成 kubeconfig:
 
 ```bash
-cat > kite-kubeconfig.yaml <<EOF
+cat > aerolink-kubeconfig.yaml <<EOF
 apiVersion: v1
 kind: Config
 clusters:
 - cluster:
     certificate-authority-data: ${CA_CERT}
     server: ${API_SERVER}
-  name: kite-cluster
+  name: aerolink-cluster
 contexts:
 - context:
-    cluster: kite-cluster
-    user: kite-admin
-  name: kite-context
-current-context: kite-context
+    cluster: aerolink-cluster
+    user: aerolink-admin
+  name: aerolink-context
+current-context: aerolink-context
 users:
-- name: kite-admin
+- name: aerolink-admin
   user:
     token: ${TOKEN}
 EOF
