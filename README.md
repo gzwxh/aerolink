@@ -9,20 +9,25 @@
 鸢联 AeroLink 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维、可观测性、访问控制与 AI 辅助排障。
 本仓库为基于上游项目的**公司内部二开版本**，当前版本 `v1.0.0`。
 
-中文	鸢联
-英文	AeroLink
-域名	aerolink.gogdev.cn
-发音	/ˈeəroʊlɪŋk/，简单好读
-含义	Aero = 天空/航空，Link = 连接
-品牌故事	飞在 K8s 之上，连通每一个集群
-CLI	aero 或 alink
-包名	io.aerolink
-环境变量	AEROLINK_
-版本格式	AeroLink 1.0.0 (based on Kite x.y.z)
+| 项 | 取值 | 说明 |
+| --- | --- | --- |
+| 中文名 | 鸢联 | |
+| 英文名 | AeroLink | |
+| 域名 | aerolink.gogdev.cn | |
+| 发音 | /ˈeəroʊlɪŋk/ | 简单好读 |
+| 含义 | Aero = 天空/航空，Link = 连接 | |
+| 品牌故事 | 飞在 K8s 之上，连通每一个集群 | |
+| CLI 名 | `aero` 或 `alink` | 尚未落地：当前二进制名是 `aerolink` |
+| 包名 | io.aerolink | |
+| 环境变量前缀 | `AEROLINK_` | 改名前的 `KITE_` 前缀仍被接受（弃用兜底） |
+| 构建版本号 | `v1.0.0` | 机器可读的实际版本号：git tag、镜像 tag、`/api/v1/version` 与界面侧栏显示都用它 |
+| 品牌版本串 | `AeroLink 1.0.0 (based on Kite x.y.z)` | 面向人的展示写法，只出现在文档与发布说明里，把「我们的版本」与「所基于的上游版本」一并交代 |
 
-副标题：飞在 Kubernetes 之上，连通每一个集群
-口号：一线连万群，鸢飞控全局
-技术声明：本项目基于 Kite 二次开发，非 Kite 官方发行版。
+两个版本口径不要混用：`v1.0.0` 是构建与发布**实际使用**的版本号（`make image`、CI 的 tag 触发、镜像 tag 都按它走）；`AeroLink 1.0.0 (based on Kite x.y.z)` 只是给人看的写法。代码里没有任何地方生成后者，界面上显示的是前者。
+
+- **副标题**：飞在 Kubernetes 之上，连通每一个集群
+- **口号**：一线连万群，鸢飞控全局
+- **技术声明**：本项目基于 Kite 二次开发，非 Kite 官方发行版。
 
 [English](./README_en.md) · **中文**
 
