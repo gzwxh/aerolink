@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 )
 
@@ -414,11 +415,29 @@ func HandleDeleteNotificationSubscription(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
+	// 订阅的标识由「事件 + 接收者」组成，光看路径里的自增 ID 认不出删的是哪条订阅。
+	if subscription, err := model.GetNotificationSubscription(uint(id)); err == nil && subscription != nil {
+		c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+			ResourceName: subscriptionLabel(*subscription),
+			PreviousYAML: common.AdminAuditSnapshot(*subscription),
+		})
+	}
+
 	if err := model.DeleteNotificationSubscription(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete notification subscription"})
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// subscriptionLabel 把订阅压成一个可读标识：`事件 → 接收者`，例如
+// `audit.alert → admin@example.com`。
+func subscriptionLabel(subscription model.NotificationSubscription) string {
+	receiver := strings.TrimSpace(subscription.Receiver)
+	if receiver == "" {
+		receiver = "#" + strconv.FormatUint(uint64(subscription.ReceiverID), 10)
+	}
+	return strings.TrimSpace(subscription.Event) + " → " + receiver
 }
 
 // HandleListNotifications 返回当前用户的站内信。

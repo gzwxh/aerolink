@@ -165,3 +165,43 @@ func performAPIKeyRequest(router *gin.Engine, method string, path string, body s
 	router.ServeHTTP(recorder, request)
 	return recorder
 }
+
+// 删除 API 密钥时审计必须留下密钥名称与脱敏快照：密钥本身绝不能进审计日志。
+func TestDeleteAPIKeyRecordsAuditDetail(t *testing.T) {
+	setupAPIKeyTestDB(t)
+
+	var detail common.AdminAuditDetail
+	router := gin.New()
+	router.POST("/apikeys", CreateAPIKey)
+	router.DELETE("/apikeys/:id", func(c *gin.Context) {
+		DeleteAPIKey(c)
+		if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+			detail, _ = value.(common.AdminAuditDetail)
+		}
+	})
+
+	create := performAPIKeyRequest(router, http.MethodPost, "/apikeys", `{"name":"ci-deploy"}`)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d: %s", create.Code, http.StatusCreated, create.Body.String())
+	}
+	var created struct {
+		APIKey model.User `json:"apiKey"`
+	}
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decoding create response: %v", err)
+	}
+
+	deleted := performAPIKeyRequest(router, http.MethodDelete, fmt.Sprintf("/apikeys/%d", created.APIKey.ID), "")
+	if deleted.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want %d: %s", deleted.Code, http.StatusOK, deleted.Body.String())
+	}
+	if detail.ResourceName != "ci-deploy" {
+		t.Fatalf("audit resourceName = %q, want the key name", detail.ResourceName)
+	}
+	if !strings.Contains(detail.PreviousYAML, "username: ") {
+		t.Fatalf("audit snapshot must describe the key, got %q", detail.PreviousYAML)
+	}
+	if secret := string(created.APIKey.APIKey); secret != "" && strings.Contains(detail.PreviousYAML, secret) {
+		t.Fatalf("audit snapshot must not leak the key secret: %s", detail.PreviousYAML)
+	}
+}

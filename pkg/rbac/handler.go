@@ -555,10 +555,18 @@ func DeleteRole(c *gin.Context) {
 		return
 	}
 	var role model.Role
-	if err := model.DB.First(&role, uint(dbID)).Error; err != nil {
+	// Preload 直接分配：它们会随角色一起删掉，得进审计快照（见下面的审计详情）。
+	if err := model.DB.Preload("Assignments").First(&role, uint(dbID)).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "role not found"})
 		return
 	}
+	// 这条路由没有请求体，审计中间件只能从路径推断出 `#6`；把角色名与配置快照交出去，
+	// 三个分支（删除成功、受保护角色被拒、仍被权限绑定引用被拒）才都能查到动的是谁、
+	// 删掉的是什么。
+	c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+		ResourceName: role.Name,
+		PreviousYAML: common.AdminAuditSnapshot(role),
+	})
 	// 所有内置系统角色（系统管理员、安全管理员、审计管理员、只读管理员）均不可删除。
 	if model.IsProtectedRoleName(role.Name) {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -682,6 +690,10 @@ func UnassignRole(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "role not found"})
 		return
 	}
+	// 没有请求体：不补充的话审计里只有 `#6/assign`，看不出收回的是谁对哪个角色的分配。
+	c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+		ResourceName: fmt.Sprintf("%s ← %s:%s", role.Name, subjectType, subject),
+	})
 	if err := model.DB.Where("role_id = ? AND subject_type = ? AND subject = ?", uint(dbID), subjectType, subject).Delete(&model.RoleAssignment{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove assignment: " + err.Error()})
 		return

@@ -790,6 +790,13 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
+	// 账号删除不可逆：审计里必须留下账号名与它的配置快照（密钥字段由 AuditSnapshot
+	// 排除，见 model.User.AuditSnapshot）。
+	c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+		ResourceName: user.Username,
+		PreviousYAML: user.AuditSnapshot(),
+	})
+
 	// 本地用户与 LDAP 开通的用户可以直接从鸢联 AeroLink 删除。对
 	// LDAP 用户而言这只删除本地记录——绝不触碰 LDAP
 	// 目录。其它外部（OIDC）用户只能被停用。

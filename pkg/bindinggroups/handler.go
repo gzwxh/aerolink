@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/cluster"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
 	"gorm.io/gorm"
@@ -195,6 +196,12 @@ func (h *Handler) DeleteBindingGroup(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "this binding group is protected and cannot be deleted"})
 		return
 	}
+	// 组名 + 完整配置快照：权限绑定里存的是「谁在哪些命名空间上拿到哪些角色」，
+	// 删除后组成员行会被一并清掉，只有快照能说清删掉了哪些授权。
+	c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+		ResourceName: project.Name,
+		PreviousYAML: common.AdminAuditSnapshot(*project),
+	})
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("project_id = ?", project.ID).
 			Delete(&model.BindingGroupNamespace{}).Error; err != nil {

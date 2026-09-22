@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
@@ -59,6 +60,16 @@ func DeleteAPIKey(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
 		return
 	}
+
+	// 密钥本身（user.APIKey）由 AuditSnapshot 清掉，审计里只留密钥的名称与配置。
+	name := strings.TrimSpace(user.Name)
+	if name == "" {
+		name = user.Username
+	}
+	c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+		ResourceName: name,
+		PreviousYAML: user.AuditSnapshot(),
+	})
 
 	if err := model.DeleteUserByID(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete API key"})

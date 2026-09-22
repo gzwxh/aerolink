@@ -66,6 +66,15 @@ type User struct {
 	SidebarPreference string `json:"sidebar_preference,omitempty" gorm:"type:text"`
 }
 
+// AuditSnapshot 返回账号的审计快照（删除 / 禁用等管理操作落审计时使用）。
+//
+// password 与 mfa_secret 带 `json:"-"`，本来就不会进快照；apiKey（API 密钥账号的
+// 密钥）是普通字段，必须显式清掉——审计日志里绝不能出现密钥。
+func (u User) AuditSnapshot() string {
+	u.APIKey = ""
+	return common.AdminAuditSnapshot(u)
+}
+
 // MigrateDropUserWechatColumn 删除 User 表上遗留的 wechat 列：微信登录已下线、
 // Wechat 字段已从结构体移除，而 AutoMigrate 只加列不删列，所以启动时显式清理一次。
 // 先探测列是否存在，既保证可重复执行，也保证全新库（本就没有该列）能正常通过。

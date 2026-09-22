@@ -557,6 +557,12 @@ func (cm *ClusterManager) DeleteCluster(c *gin.Context) {
 		return
 	}
 
+	// 集群名与它的配置快照（kubeconfig 是凭据，见 clusterAuditSnapshot）。
+	c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+		ResourceName: cluster.Name,
+		PreviousYAML: clusterAuditSnapshot(*cluster),
+	})
+
 	// 集群是权限隔离的第一层：删除集群时权限绑定组必须显式选择处理方式。
 	// ?bindingGroups=delete 连同权限绑定组一起删除；默认保留（detached），
 	// 保留的权限绑定组不再参与授权，集群重新导入后可在权限管理页重新绑定。
@@ -599,6 +605,14 @@ func (cm *ClusterManager) DeleteCluster(c *gin.Context) {
 		"bindingGroupsDeleted":  bindingGroupsDeleted,
 		"bindingGroupsRetained": bindingGroupsRetained,
 	})
+}
+
+// clusterAuditSnapshot 返回集群的审计快照。Config 是 kubeconfig（凭据），必须排除；
+// 其余字段（名称、描述、Prometheus 地址、徽章、集群代理开关）正是排查「谁删了哪个集群」
+// 时要看的信息。集群代理的密钥字段带 `json:"-"`，不会进快照。
+func clusterAuditSnapshot(cluster model.Cluster) string {
+	cluster.Config = ""
+	return common.AdminAuditSnapshot(cluster)
 }
 
 func (cm *ClusterManager) ConnectClusterAgent(c *gin.Context) {

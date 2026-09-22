@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/zxh326/kite/pkg/utils"
@@ -73,5 +74,31 @@ func TestCheckPassword(t *testing.T) {
 	}
 	if CheckPassword(hash, "wrong") {
 		t.Fatal("CheckPassword() returned true for non-matching password")
+	}
+}
+
+// 审计快照用于记录「谁删了哪个账号、删掉的是什么配置」：必须带账号信息，且绝不能
+// 出现任何密钥（password / mfa_secret 由 `json:"-"` 排除，apiKey 在方法里显式清空）。
+func TestUserAuditSnapshotExcludesSecrets(t *testing.T) {
+	user := User{
+		Model:     Model{ID: 7},
+		Username:  "alice",
+		Provider:  AuthProviderPassword,
+		Enabled:   true,
+		Password:  "hashed-password-value",
+		MFASecret: "mfa-secret-value",
+		APIKey:    "api-key-secret-value",
+	}
+
+	snapshot := user.AuditSnapshot()
+	for _, want := range []string{"username: alice", "provider: password"} {
+		if !strings.Contains(snapshot, want) {
+			t.Fatalf("snapshot %q must contain %q", snapshot, want)
+		}
+	}
+	for _, secret := range []string{"hashed-password-value", "mfa-secret-value", "api-key-secret-value"} {
+		if strings.Contains(snapshot, secret) {
+			t.Fatalf("snapshot must not leak %q: %s", secret, snapshot)
+		}
 	}
 }

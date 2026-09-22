@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -537,5 +538,43 @@ func TestListBindingGroupsFiltersClusterAndDetached(t *testing.T) {
 	groups = decode(doRequest(t, h.ListBindingGroups, http.MethodGet, "/?detached=true", "", nil))
 	if len(groups) != 1 || groups[0].Name != "c1-retained" {
 		t.Fatalf("expected only the detached group, got %+v", groups)
+	}
+}
+
+// 删除权限绑定的审计记录必须带组名与快照：成员与命名空间随组一起删掉，
+// 只有快照能还原「谁在哪些命名空间上拿到过哪些角色」。
+func TestDeleteBindingGroupRecordsAuditDetail(t *testing.T) {
+	h := setupHandlerTestDB(t)
+	role := model.Role{Name: "pod-reader", Resources: []string{"pods"}, Verbs: []string{"get"}}
+	if err := model.DB.Create(&role).Error; err != nil {
+		t.Fatalf("seeding role: %v", err)
+	}
+	group := createGroup(t, h, "c1", "group")
+	if rec := setMembers(t, h, group.ID, []map[string]any{
+		{"subjectType": "user", "subject": "alice", "roleIds": []uint{role.ID}},
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("setting members: status %d body %s", rec.Code, rec.Body.String())
+	}
+
+	var detail common.AdminAuditDetail
+	router := gin.New()
+	router.DELETE("/:id", func(c *gin.Context) {
+		h.DeleteBindingGroup(c)
+		if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+			detail, _ = value.(common.AdminAuditDetail)
+		}
+	})
+
+	request := httptest.NewRequest(http.MethodDelete, "/"+strconv.FormatUint(uint64(group.ID), 10), nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("deleting group: status %d body %s", response.Code, response.Body.String())
+	}
+	if detail.ResourceName != "group" {
+		t.Fatalf("audit resourceName = %q, want the group name", detail.ResourceName)
+	}
+	if !strings.Contains(detail.PreviousYAML, "subject: alice") {
+		t.Fatalf("audit snapshot must include the member grant, got %q", detail.PreviousYAML)
 	}
 }

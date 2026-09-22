@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/helmutil"
 	"github.com/zxh326/kite/pkg/model"
 	"helm.sh/helm/v4/pkg/registry"
@@ -118,6 +119,12 @@ func (h *HelmChartHandler) DeleteRepository(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "repository not found"})
 		return
 	}
+
+	// 仓库名与配置快照。仓库口令（Password）带 `json:"-"`，不会进快照。
+	c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+		ResourceName: repository.Name,
+		PreviousYAML: common.AdminAuditSnapshot(repository),
+	})
 
 	if err := model.DB.Delete(&repository).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

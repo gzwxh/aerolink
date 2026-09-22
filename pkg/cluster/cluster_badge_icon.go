@@ -190,6 +190,11 @@ func DeleteClusterBadgeIcon(c *gin.Context) {
 		return
 	}
 
+	// 删的是集群上的图标：审计里记集群名（快照对一次图标删除没有额外价值）。
+	c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+		ResourceName: cluster.Name,
+	})
+
 	if err := model.DeleteClusterBadgeIcon(cluster.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete the badge icon"})
 		return

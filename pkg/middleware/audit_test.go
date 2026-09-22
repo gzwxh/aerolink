@@ -120,6 +120,52 @@ func TestAdminAuditTracesAuditLogReads(t *testing.T) {
 	}
 }
 
+// handler 可以补充本次操作的对象详情（见 common.AdminAuditDetail）：删除类接口没有
+// 请求体，只靠路径只能留下自增 ID，事后无法知道删的是哪个对象。
+func TestAdminAuditPrefersHandlerDetail(t *testing.T) {
+	operator := setupAdminAuditDB(t)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set("user", operator) })
+	router.Use(AdminAudit())
+	router.DELETE("/api/v1/admin/roles/:id", func(c *gin.Context) {
+		c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+			ResourceName: "developer",
+			PreviousYAML: "name: developer\ngrants:\n- resource: pods\n",
+		})
+		c.Status(http.StatusOK)
+	})
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/api/v1/admin/roles/6", nil))
+
+	rows := auditRows(t)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 audit row, got %d", len(rows))
+	}
+	if rows[0].ResourceName != "developer" {
+		t.Fatalf("resourceName = %q, want the handler-provided name", rows[0].ResourceName)
+	}
+	if rows[0].PreviousYAML != "name: developer\ngrants:\n- resource: pods\n" {
+		t.Fatalf("previousYaml = %q, want the handler-provided snapshot", rows[0].PreviousYAML)
+	}
+}
+
+// 没有补充详情时保持原口径：DELETE 退回路径里的自增 ID（`#6`）。
+func TestAdminAuditFallsBackToPathIdentifier(t *testing.T) {
+	operator := setupAdminAuditDB(t)
+
+	runAdminAudit(t, operator, http.MethodDelete, "/api/v1/admin/roles/6", http.StatusOK)
+
+	rows := auditRows(t)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 audit row, got %d", len(rows))
+	}
+	if rows[0].ResourceName != "#6" {
+		t.Fatalf("resourceName = %q, want the path identifier", rows[0].ResourceName)
+	}
+}
+
 // 其它管理接口的 GET 不写操作日志：否则浏览设置页就会把审计日志淹掉。
 func TestAdminAuditIgnoresOtherReads(t *testing.T) {
 	operator := setupAdminAuditDB(t)

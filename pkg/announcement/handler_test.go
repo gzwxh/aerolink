@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -456,4 +457,31 @@ func TestAdminListIncludesInactive(t *testing.T) {
 
 func ptrTime(value time.Time) *time.Time {
 	return &value
+}
+
+// 删除公告的审计记录必须带标题与快照：只留自增 ID 的话，事后认不出删的是哪条公告。
+func TestDeleteAnnouncementRecordsAuditDetail(t *testing.T) {
+	setupAnnouncementTestDB(t)
+	item := mustCreate(t, model.Announcement{Title: "待删除", Content: "x", Enabled: true})
+
+	var detail common.AdminAuditDetail
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.DELETE("/items/:id", func(c *gin.Context) {
+		HandleDeleteAnnouncement(c)
+		if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+			detail, _ = value.(common.AdminAuditDetail)
+		}
+	})
+
+	rec := doJSON(t, r, http.MethodDelete, fmt.Sprintf("/items/%d", item.ID), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	if detail.ResourceName != "待删除" {
+		t.Fatalf("audit resourceName = %q, want the announcement title", detail.ResourceName)
+	}
+	if !strings.Contains(detail.PreviousYAML, "title: 待删除") {
+		t.Fatalf("audit snapshot must contain the announcement, got %q", detail.PreviousYAML)
+	}
 }

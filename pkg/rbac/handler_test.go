@@ -58,7 +58,18 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // 该用例用多个子�
 		t.Fatalf("migrate database: %v", err)
 	}
 
+	// 捕获 handler 交给审计中间件的详情：生产链路上它由 middleware.AdminAudit 读取
+	// 并写进 resource_histories。
+	var auditDetail common.AdminAuditDetail
 	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Next()
+		if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+			if detail, ok := value.(common.AdminAuditDetail); ok {
+				auditDetail = detail
+			}
+		}
+	})
 	router.GET("/roles", ListRoles)
 	router.GET("/roles/:id", GetRole)
 	router.POST("/roles", CreateRole)

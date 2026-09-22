@@ -164,6 +164,17 @@ func (h *AuthHandler) DeleteOAuthProvider(c *gin.Context) {
 		return
 	}
 
+	// 名称 + 脱敏后的配置快照。clientSecret 按列表接口的同一口径替换成 `***`：
+	// 审计日志里绝不能出现密钥。
+	var provider model.OAuthProvider
+	if err := model.DB.First(&provider, uint(dbID)).Error; err == nil {
+		provider.ClientSecret = "***"
+		c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+			ResourceName: string(provider.Name),
+			PreviousYAML: common.AdminAuditSnapshot(provider),
+		})
+	}
+
 	if err := model.DeleteOAuthProvider(uint(dbID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to delete OAuth provider: " + err.Error(),

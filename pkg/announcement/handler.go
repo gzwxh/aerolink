@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"gorm.io/gorm"
 )
@@ -130,6 +131,14 @@ func HandleDeleteAnnouncement(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
 		return
+	}
+	// 公告的标题就是它的可读标识：只留自增 ID 的话，审计里认不出删掉的是哪条公告。
+	var announcement model.Announcement
+	if err := model.DB.First(&announcement, id).Error; err == nil {
+		c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+			ResourceName: announcement.Title,
+			PreviousYAML: common.AdminAuditSnapshot(announcement),
+		})
 	}
 	result := model.DB.Delete(&model.Announcement{}, id)
 	if result.Error != nil {

@@ -166,10 +166,24 @@ func recordAdminAudit(c *gin.Context, path, operation string, body []byte) {
 		errMsg = "HTTP " + strconv.Itoa(c.Writer.Status())
 	}
 
+	// handler 若补充了详情（见 common.AdminAuditDetail），优先采用：删除这类没有请求体
+	// 的接口只靠路径只能记下 `#6`，而删除最需要知道「删的是哪个对象、删掉的是什么」。
+	resourceName := adminAuditResourceName(segments, body)
+	previousYAML := ""
+	if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+		if detail, ok := value.(common.AdminAuditDetail); ok {
+			if name := strings.TrimSpace(detail.ResourceName); name != "" {
+				resourceName = name
+			}
+			previousYAML = detail.PreviousYAML
+		}
+	}
+
 	history := model.ResourceHistory{
 		ClusterName:     strings.TrimSpace(c.GetHeader(ClusterNameHeader)),
 		ResourceType:    adminAuditTypePrefix + resourceType,
-		ResourceName:    adminAuditResourceName(segments, body),
+		ResourceName:    resourceName,
+		PreviousYAML:    model.LongText(previousYAML),
 		OperationType:   operation,
 		OperationSource: "manual",
 		Success:         success,

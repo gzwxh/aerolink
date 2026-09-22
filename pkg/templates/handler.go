@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 )
 
@@ -75,6 +76,14 @@ func UpdateTemplate(c *gin.Context) {
 
 func DeleteTemplate(c *gin.Context) {
 	id := c.Param("id")
+	// 模板名 + YAML 快照：模板里就是资源的初始清单，删掉后只能靠审计追回内容。
+	var template model.ResourceTemplate
+	if err := model.DB.First(&template, id).Error; err == nil {
+		c.Set(common.AdminAuditDetailKey, common.AdminAuditDetail{
+			ResourceName: template.Name,
+			PreviousYAML: common.AdminAuditSnapshot(template),
+		})
+	}
 	if err := model.DB.Delete(&model.ResourceTemplate{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
