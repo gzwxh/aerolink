@@ -22,7 +22,7 @@ export interface BootstrapSession {
 /** 控制台外观：logoUrl 为空表示由前端使用内置图标。 */
 export interface BootstrapBranding {
   logoUrl: string
-  /** 控制台名称；为空表示由前端使用默认名 “Kite”。 */
+  /** 控制台名称；为空表示由前端使用默认名“鸢联 AeroLink”。 */
   siteName: string
 }
 

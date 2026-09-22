@@ -61,13 +61,13 @@ Cluster Agent 代拨 TCP
 命令行方式：
 
 ```bash
-kite cluster-agent --server='https://kite.example.com' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
+aerolink cluster-agent --server='https://kite.example.com' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
 ```
 
 `--server` 可以包含 Kite 的 Base Path。例如：
 
 ```bash
-kite cluster-agent --server='https://kite.example.com/kite' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
+aerolink cluster-agent --server='https://kite.example.com/kite' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
 ```
 
 Cluster Agent 会按需自动追加 `/api/v1/cluster-agent/register` 和 `/api/v1/cluster-agent/connect` 路径，`--server` 只需填写 Kite Server 的基础地址。
@@ -112,7 +112,7 @@ Cluster Agent 成功连接后，集群管理页面会显示为“已连接”。
 本地开发和测试时，可以显式指定 kubeconfig：
 
 ```bash
-kite cluster-agent \
+aerolink cluster-agent \
   --server='http://localhost:8080' \
   --token='<cluster-agent-token>' \
   --public-key='<registration-public-key>' \

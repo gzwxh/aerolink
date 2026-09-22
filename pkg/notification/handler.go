@@ -114,8 +114,8 @@ func HandleSendTestNotification(c *gin.Context) {
 	}
 
 	variables := map[string]string{"time": time.Now().Format(timeLayout)}
-	subject := "[Kite] 通知测试邮件"
-	body := RenderTemplate("这是一封来自 Kite 的测试邮件。\n\n发送时间：{{time}}\n", variables)
+	subject := "[鸢联] 通知测试邮件"
+	body := RenderTemplate("这是一封来自鸢联的测试邮件。\n\n发送时间：{{time}}\n", variables)
 	if template, err := model.GetNotificationTemplate(model.NotificationEventTest); err == nil && template != nil {
 		subject = RenderTemplate(template.Subject, variables)
 		body = RenderTemplate(template.Body, variables)

@@ -1112,7 +1112,7 @@ export interface GeneralSetting {
   loginPrompt: string
   /** 自定义 logo（http(s) 或 data: 地址）；为空表示使用内置图标。 */
   logoUrl: string
-  /** 控制台展示名称；为空表示使用默认名 Kite。 */
+  /** 控制台展示名称；为空表示使用默认名「鸢联 AeroLink」。 */
   siteName: string
 }
 
