@@ -90,8 +90,30 @@ func (u *User) Key() string {
 	return fmt.Sprintf("%d", u.ID)
 }
 
+// APIKeyPrefix 是 API key 的当前前缀（GetAPIKey 生成 `aerolink<id>-<secret>`）。
+const APIKeyPrefix = "aerolink"
+
+// legacyAPIKeyPrefix 是改名前的旧前缀。已签发的 key 仍是 `kite<id>-<secret>`，
+// 改名不能硬切——不认旧前缀会让所有存量 key 当场失效（集群 Agent、脚本、CI 都在用）。
+const legacyAPIKeyPrefix = "kite"
+
+// APIKeyToken 从 Authorization 头的值里剥掉前缀，返回 `<id>-<secret>`。
+//
+// 新旧前缀都认；两种都不匹配时返回 false，由调用方拒绝（fail-closed，
+// 不匹配的串并不是 key，不能当成 key 往库里查）。
+func APIKeyToken(authHeader string) (string, bool) {
+	if after, ok := strings.CutPrefix(authHeader, APIKeyPrefix); ok {
+		return after, true
+	}
+	after, ok := strings.CutPrefix(authHeader, legacyAPIKeyPrefix)
+	if !ok {
+		return "", false
+	}
+	return after, true
+}
+
 func (u *User) GetAPIKey() string {
-	return fmt.Sprintf("kite%d-%s", u.ID, string(u.APIKey))
+	return fmt.Sprintf("%s%d-%s", APIKeyPrefix, u.ID, string(u.APIKey))
 }
 
 func AddUser(user *User) error {

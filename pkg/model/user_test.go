@@ -33,8 +33,33 @@ func TestUserGetAPIKey(t *testing.T) {
 		APIKey: SecretString("secret"),
 	}
 
-	if got, want := user.GetAPIKey(), "kite42-secret"; got != want {
+	if got, want := user.GetAPIKey(), "aerolink42-secret"; got != want {
 		t.Fatalf("GetAPIKey() = %q, want %q", got, want)
+	}
+}
+
+// API key 的前缀改了名，但已签发的 key 仍是 `kite<id>-<secret>`，必须继续认：
+// 不认旧前缀等于把所有存量 key 当场作废（集群 Agent、脚本、CI 都在用）。
+func TestAPIKeyTokenAcceptsLegacyPrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		want   string
+		ok     bool
+	}{
+		{name: "current prefix", header: "aerolink42-secret", want: "42-secret", ok: true},
+		{name: "legacy prefix", header: "kite42-secret", want: "42-secret", ok: true},
+		{name: "no prefix", header: "42-secret", ok: false},
+		{name: "unknown prefix", header: "other42-secret", ok: false},
+		{name: "empty", header: "", ok: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := APIKeyToken(tc.header)
+			if ok != tc.ok || got != tc.want {
+				t.Fatalf("APIKeyToken(%q) = %q, %v; want %q, %v", tc.header, got, ok, tc.want, tc.ok)
+			}
+		})
 	}
 }
 
