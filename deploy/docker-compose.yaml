@@ -1,4 +1,4 @@
-# Kite Docker Compose 部署清单（外部 MySQL 数据库版）
+# 鸢联 AeroLink Docker Compose 部署清单（外部 MySQL 数据库版）
 #
 # 与 deploy/install-mysql.yaml 等价的单机部署方式：不需要 Kubernetes，只要一台
 # 能跑 docker compose 的机器。数据全部在外部 MySQL 里，容器本身无状态，
@@ -11,25 +11,26 @@
 #      请务必妥善备份。
 #   2. DB_DSN —— 替换为实际的 MySQL 连接信息。
 #      ⚠ 如果这套 Kite 要和已有实例（例如 K8s 里那套）共用同一个数据库，这两个
-#      密钥必须与 kite-secret 里的完全一致，否则会话失效、已保存的凭据解不开。
+#      密钥必须与 aerolink-secret 里的完全一致，否则会话失效、已保存的凭据解不开。
 #
 # 数据库要求（二选一，提前手动建好）：
+#   库名与账号名跟产品名无关，可自定；下面与 DB_DSN 里沿用现网的 kite。
 #   CREATE DATABASE kite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 #   CREATE USER 'kite'@'%' IDENTIFIED BY '你的密码';
 #   GRANT ALL PRIVILEGES ON kite.* TO 'kite'@'%';
-#   -- 数据表由 Kite 首次启动时自动迁移创建，无需手工建表。
+#   -- 数据表由 鸢联 AeroLink 首次启动时自动迁移创建，无需手工建表。
 #
 # 数据库版本：MySQL 5.7 / 8.0 / 8.4 LTS 均可，推荐 8.0。
 #
 # 启动：docker compose -f deploy/docker-compose.yaml up -d
 # 访问：http://<宿主机IP>:27862
-# 日志：docker logs -f kite
-# 项目名固定为 kite，避免默认取目录名 deploy。
-name: kite
+# 日志：docker logs -f aerolink
+# 项目名固定为 aerolink，避免默认取目录名 deploy。
+name: aerolink
 services:
-  kite:
+  aerolink:
     image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
-    container_name: kite
+    container_name: aerolink
     # 对应 install-mysql.yaml 的 restartPolicy: Always
     restart: unless-stopped
     # 对应 install-mysql.yaml 的 terminationGracePeriodSeconds
@@ -69,8 +70,8 @@ services:
       # 归档目录与系统日志落盘（可选，需要与下面的卷挂载配套）：
       # 归档目录只作启动兜底，实际值在「日志审计 → 审计设置 → 归档」里配置；
       # 系统日志（klog）设置后会落文件、不再写 stderr。
-      #KITE_AUDIT_ARCHIVE_DIR: /var/log/kite/archive
-      #KITE_LOG_FILE: /var/log/kite/kite.log
+      #KITE_AUDIT_ARCHIVE_DIR: /var/log/aerolink/archive
+      #KITE_LOG_FILE: /var/log/aerolink/aerolink.log
     # 首次启动且数据库里还没有任何集群时，Kite 会导入挂载进来的 kubeconfig
     # （internal/load.go：优先 $KUBECONFIG，其次 ~/.kube/config）；之后新增或
     # 修改集群请在页面上操作。
@@ -81,7 +82,7 @@ services:
     #  - /root/.kube/config:/kube/config:ro
     #  # 归档 parquet 与 klog 系统日志：挂出来容器重建才不丢（路径与上面的
     #  # KITE_AUDIT_ARCHIVE_DIR / KITE_LOG_FILE 对应）。
-    #  - /var/log/kite:/var/log/kite
+    #  - /var/log/aerolink:/var/log/aerolink
     # 镜像默认运行时是 distroless，容器内没有 curl/wget，因此不配置 healthcheck。
     # 需要健康检查时，用 Dockerfile 的 RUNTIME_IMAGE 参数换成带工具的镜像后再加：
     #healthcheck:

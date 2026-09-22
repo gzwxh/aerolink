@@ -98,14 +98,14 @@ DB_DSN="postgres://kite:%40pwd@10.100.117.8:5433/kite?sslmode=disable&TimeZone=A
 ### 4.1 K8s 清单：`deploy/install-postgres.yaml`
 
 这是 `deploy/install-mysql.yaml` 的 PostgreSQL 版，**两份互斥**：Namespace /
-ServiceAccount / Secret / Deployment 名字完全一样（都叫 `kite`），同一个集群里同时
+ServiceAccount / Secret / Deployment 名字完全一样（都叫 `aerolink`），同一个集群里同时
 apply 会互相覆盖，选一条路走。逐项对照：
 
 | 项 | MySQL 版 | PostgreSQL 版 |
 | --- | --- | --- |
 | `DB_TYPE` | `mysql` | `postgres` |
 | Secret 里的 DSN 键 | `MYSQL_DSN` | `POSTGRES_DSN` |
-| ClusterRoleBinding 名 | `kite-mysql` | `kite-postgres` |
+| ClusterRoleBinding 名 | `aerolink-mysql` | `aerolink-postgres` |
 | DSN 形式 | go-sql-driver：`user:pw@tcp(host:3306)/kite?...` | pgx：`host=... user=... dbname=... TimeZone=...` 或 `postgres://` |
 | 额外字段 | `charset=utf8mb4`、`loc`（须与服务器 `time_zone` 一致） | `sslmode`、`TimeZone`（**必写**） |
 | 建库 | `CREATE DATABASE kite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` | `CREATE DATABASE kite ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' ...;` |
@@ -118,10 +118,10 @@ apply 会互相覆盖，选一条路走。逐项对照：
 openssl rand -base64 32
 
 kubectl apply -f deploy/install-postgres.yaml
-kubectl -n kite rollout status deploy/kite
+kubectl -n aerolink rollout status deploy/aerolink
 
 # 访问：http://<节点IP>:27862（NodePort 固定 27862，冲突就改）
-kubectl -n kite get svc kite
+kubectl -n aerolink get svc aerolink
 ```
 
 `KITE_ENCRYPT_KEY` 用于加密存库的敏感数据（集群 kubeconfig、LDAP/SMTP/OAuth 密码、
@@ -222,9 +222,9 @@ PostgreSQL 专属的一条：GORM 建的是 `bigserial`，显式插入 ID 不会
 K8s 清单形态（改完 Secret 要重滚一次：`envFrom` 只在 Pod 重建时重新读取）：
 
 ```bash
-kubectl -n kite edit secret kite-secret      # 改 POSTGRES_DSN
-kubectl -n kite rollout restart deploy/kite
-kubectl -n kite rollout status deploy/kite
+kubectl -n aerolink edit secret aerolink-secret      # 改 POSTGRES_DSN
+kubectl -n aerolink rollout restart deploy/aerolink
+kubectl -n aerolink rollout status deploy/aerolink
 ```
 
 ## 8. PostgreSQL 特有的坑（遇到过或已知）

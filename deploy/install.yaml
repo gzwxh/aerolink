@@ -1,20 +1,20 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: kite
+  name: aerolink
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin
 subjects:
   - kind: ServiceAccount
-    name: kite
+    name: aerolink
     namespace: kube-system
 ---
 kind: ServiceAccount
 apiVersion: v1
 metadata:
-  name: kite
+  name: aerolink
   namespace: kube-system
 ---
 # 替换为随机值后再部署（openssl rand -base64 32 生成），并妥善保存：
@@ -22,7 +22,7 @@ metadata:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: kite-secret
+  name: aerolink-secret
   namespace: kube-system
 type: Opaque
 stringData:
@@ -33,28 +33,28 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: kite
-  name: kite
+    app: aerolink
+  name: aerolink
   namespace: kube-system
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kite
+      app: aerolink
   strategy: {}
   template:
     metadata:
       labels:
-        app: kite
+        app: aerolink
     spec:
-      serviceAccountName: kite
+      serviceAccountName: aerolink
       containers:
         - image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
           imagePullPolicy: IfNotPresent
-          name: kite
+          name: aerolink
           envFrom:
             - secretRef:
-                name: kite-secret
+                name: aerolink-secret
           # 审计日志的落地方式（五选一、互斥，**启动时**生效、页面只读）：
           #   database（默认，不设即可） / parquet / elasticsearch / victorialogs / openobserve
           #   ① parquet：必须同时给归档目录（KITE_AUDIT_ARCHIVE_DIR，或挂 config.yaml 配
@@ -69,12 +69,12 @@ spec:
           #   - name: KITE_AUDIT_SINK
           #     value: parquet
           #   - name: KITE_AUDIT_ARCHIVE_DIR
-          #     value: /var/log/kite/archive
+          #     value: /var/log/aerolink/archive
           #   - name: KITE_LOG_FILE
-          #     value: /var/log/kite/kite.log
+          #     value: /var/log/aerolink/aerolink.log
           # volumeMounts:
-          #   - name: kite-logs
-          #     mountPath: /var/log/kite
+          #   - name: aerolink-logs
+          #     mountPath: /var/log/aerolink
           resources:
             limits:
               cpu: 1000m
@@ -100,15 +100,15 @@ spec:
           # 与上面的 volumeMounts 配套。emptyDir 只在 Pod 生命周期内保留，
           # 归档与日志要跨重建保留时请换成 PVC。
           # volumes:
-          #   - name: kite-logs
+          #   - name: aerolink-logs
           #     emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: kite
-  name: kite
+    app: aerolink
+  name: aerolink
   namespace: kube-system
 spec:
   ports:
@@ -117,5 +117,5 @@ spec:
       protocol: TCP
       targetPort: 8080
   selector:
-    app: kite
+    app: aerolink
   type: ClusterIP
