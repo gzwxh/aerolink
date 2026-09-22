@@ -4,8 +4,8 @@
 
     造型：「一大三小」四片同族叶片。右侧大叶片由一道轮廓加一条主脉、四条支脉与六个节点
     构成，主脉与支脉交汇在叶根的发光节点上；左侧三片小叶片用同一套语言（外缘凸、内缘平，
-    收出尖头；一条中脉 + 一个端点小节点），沿大叶片的内侧折边等距排成一列，叶尖朝外、
-    叶柄贴着折边。小叶片是「鸢」，脉与节点是「Link」。叶片之间都留有空隙，互不叠压；
+    收出尖头；一条中脉 + 一个端点小节点），叶尖朝外散开，叶轴一起指向叶根那枚发光节点
+    （即全图最亮处），叶柄与节点之间留出等距空隙。小叶片是「鸢」，脉与节点是「Link」。叶片之间都留有空隙，互不叠压；
     全部为几何图形，不含文字，不依赖任何字体与外部资源。
 
     透明底（重要）：刻意不画底板 / 圆角方块。它要同时出现在浅色与深色界面
@@ -70,21 +70,21 @@
              沿翼面内侧折边等距排成一列：叶尖朝外、叶柄贴近折边（净距 6~11 单位，不叠压），
              与右侧叶片组成「一大三小」的同族关系 -->
         <g>
-          <g transform="translate(37.7 23) rotate(39.7) scale(0.82)">
+          <g transform="translate(37.7 23) rotate(73.3) scale(0.82)">
             <animate attributeName="opacity" values="0.88;1;0.88" dur="3.6s" repeatCount="indefinite" />
             <animateTransform attributeName="transform" type="translate" values="0 0;-0.8 -0.8;0 0" dur="3.6s" repeatCount="indefinite" additive="sum" />
             <path d="M0 0 C 16 10 34 10 50 0 C 34 -6 16 -6 0 0 Z" fill="url(#leafTop)" fill-opacity="0.72" stroke="url(#leafTop)" stroke-width="2.32" stroke-linejoin="round" />
             <path d="M0 0 C 16 3.4 34 4 47 1.4" fill="none" stroke="#9FE8FF" stroke-width="1.22" stroke-linecap="round" opacity="0.85" />
             <circle cx="44" cy="2.6" r="2.68" fill="#BFF1FF" />
           </g>
-          <g transform="translate(27.2 42.4) rotate(40.1) scale(0.68)">
+          <g transform="translate(27.2 42.4) rotate(57.9) scale(0.68)">
             <animate attributeName="opacity" values="0.88;1;0.88" dur="3.6s" begin="-1.2s" repeatCount="indefinite" />
             <animateTransform attributeName="transform" type="translate" values="0 0;-0.8 -0.8;0 0" dur="3.6s" begin="-1.2s" repeatCount="indefinite" additive="sum" />
             <path d="M0 0 C 16 10 34 10 50 0 C 34 -6 16 -6 0 0 Z" fill="url(#leafMid)" fill-opacity="0.72" stroke="url(#leafMid)" stroke-width="2.79" stroke-linejoin="round" />
             <path d="M0 0 C 16 3.4 34 4 47 1.4" fill="none" stroke="#9FE8FF" stroke-width="1.47" stroke-linecap="round" opacity="0.85" />
             <circle cx="44" cy="2.6" r="3.24" fill="#BFF1FF" />
           </g>
-          <g transform="translate(18 60.2) rotate(45.3) scale(0.54)">
+          <g transform="translate(18 60.2) rotate(38.4) scale(0.54)">
             <animate attributeName="opacity" values="0.88;1;0.88" dur="3.6s" begin="-2.4s" repeatCount="indefinite" />
             <animateTransform attributeName="transform" type="translate" values="0 0;-0.8 -0.8;0 0" dur="3.6s" begin="-2.4s" repeatCount="indefinite" additive="sum" />
             <path d="M0 0 C 16 10 34 10 50 0 C 34 -6 16 -6 0 0 Z" fill="url(#leafLow)" fill-opacity="0.72" stroke="url(#leafLow)" stroke-width="3.52" stroke-linejoin="round" />
