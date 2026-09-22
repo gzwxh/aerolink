@@ -1,5 +1,5 @@
-# Runtime base from the company registry (SWR, org "dsy").
-FROM swr.cn-south-1.myhuaweicloud.com/dsy/alpine:3.20
+# Runtime base from the company registry (SWR, org "gzwxh").
+FROM swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20
 ARG TARGETARCH
 
 WORKDIR /app

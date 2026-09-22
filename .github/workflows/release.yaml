@@ -11,9 +11,9 @@ on:
 #
 #   vars.RELEASE_ENABLED        必须显式设为 true 才会跑（默认不跑，避免误触发发布）
 #   vars.IMAGE_REPOSITORY       目标镜像，默认与 charts/kite/values.yaml 的 image.repository 一致
-#                               例：swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink / ghcr.io/<owner>/kite
+#                               例：swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink / ghcr.io/<owner>/kite
 #   vars.CHART_OCI_REPOSITORY   Helm chart 的 OCI 目标，留空则不推送 chart
-#                               例：oci://swr.cn-south-1.myhuaweicloud.com/dsy/devops/charts
+#                               例：oci://swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/charts
 #   vars.HELM_INDEX_ENABLED     是否更新 gh-pages 上的 Helm index（上游分发用，本仓库默认关）
 #   secrets.IMAGE_REGISTRY_USERNAME / IMAGE_REGISTRY_PASSWORD
 #                               非 ghcr.io 目标仓库的推送凭据（ghcr.io 用 GITHUB_TOKEN）
@@ -24,7 +24,7 @@ env:
   IMAGE_NAME: aerolink
   GO_VERSION: "1.26"
   NODE_VERSION: "24"
-  IMAGE_REPOSITORY: ${{ vars.IMAGE_REPOSITORY || 'swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink' }}
+  IMAGE_REPOSITORY: ${{ vars.IMAGE_REPOSITORY || 'swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink' }}
   CHART_OCI_REPOSITORY: ${{ vars.CHART_OCI_REPOSITORY }}
 
 jobs:

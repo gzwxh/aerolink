@@ -99,7 +99,7 @@ kubectl apply -f 'https://aerolink.example.com/api/v1/cluster-agent/manifest?gra
 kubectl apply -f kite-cluster-agent.yaml
 ```
 
-Deployment 使用的镜像由平台设置中的 **Cluster Agent Image** 配置，默认为 `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest`。通过 Secret 将 Token 注入 Cluster Agent 进程。
+Deployment 使用的镜像由平台设置中的 **Cluster Agent Image** 配置，默认为 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest`。通过 Secret 将 Token 注入 Cluster Agent 进程。
 
 ### 2. 在目标集群中启动
 

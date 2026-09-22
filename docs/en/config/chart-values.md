@@ -7,7 +7,7 @@ This document describes all available configuration options for the AeroLink Hel
 | Parameter          | Description                                                | Default                 |
 | ------------------ | ---------------------------------------------------------- | ----------------------- |
 | `replicaCount`     | Number of replicas                                         | `1`                     |
-| `image.repository` | Container image repository                                 | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink` |
+| `image.repository` | Container image repository                                 | `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink` |
 | `image.pullPolicy` | Image pull policy                                          | `IfNotPresent`          |
 | `image.tag`        | Image tag. If set, will override the chart's `appVersion`. | `""`                    |
 | `imagePullSecrets` | Image pull secrets for private repositories                | `[]`                    |
