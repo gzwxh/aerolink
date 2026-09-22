@@ -205,7 +205,7 @@ func TestClusterMutationsHonorManagedConfiguration(t *testing.T) {
 // 徽章同样遵守「没给的字段不动」，并且非法颜色 / 超长文本要被拒绝：
 // 颜色会进前端的内联样式，超限静默截断会让用户以为设置生效了。
 //
-//nolint:gocyclo // 该用例逐字段覆盖「部分更新 + 校验拒绍」的各条分支，拆开就看不到全貌。
+//nolint:gocyclo // 该用例逐字段覆盖「部分更新 + 校验拒绝」的各条分支，拆开就看不到全貌。
 func TestUpdateClusterBadgePartialUpdateAndValidation(t *testing.T) {
 	setupClusterHandlerTestDB(t)
 	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}

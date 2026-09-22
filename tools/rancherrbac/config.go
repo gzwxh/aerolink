@@ -547,7 +547,7 @@ func parseFlags(args []string) (options, map[string]bool, error) {
 	fs.StringVar(&cli.configPath, "config", "",
 		"配置文件路径（YAML 或 JSON）；不传时按 $"+configEnvVar+"、再按当前目录的 rancherrbac.yaml/.yml/.json 找")
 	fs.StringVar(&cli.initConfig, "init-config", "",
-		"生成一份带注释的配置模板到该路径，然后退出；文件已存在时拒绍覆盖")
+		"生成一份带注释的配置模板到该路径，然后退出；文件已存在时拒绝覆盖")
 	fs.BoolVar(&cli.showVersion, "version", false, "打印版本号并退出")
 
 	fs.StringVar(&cli.rancherURL, "rancher-url", "",

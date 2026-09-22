@@ -602,10 +602,10 @@ func TestCleanupPlanSkipsForeignObjects(t *testing.T) {
 	kite := newKiteClient(server.URL, "kite1-secret", false, 10*time.Second, false)
 	// 没有 -yes 时必须拒绘，一笔不写。
 	if err := cleanupPlan(kite, plan, options{}); err == nil {
-		t.Fatal("缺少 -yes 时应当拒绍执行")
+		t.Fatal("缺少 -yes 时应当拒绝执行")
 	}
 	if len(deleted) != 0 {
-		t.Fatalf("拒绍执行时不该发删除请求：%v", deleted)
+		t.Fatalf("拒绝执行时不该发删除请求：%v", deleted)
 	}
 
 	if err := cleanupPlan(kite, plan, options{yes: true}); err != nil {

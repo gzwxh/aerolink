@@ -125,7 +125,7 @@ AEROLINK_URL=https://aerolink-test.example.com ./rancherrbac -config prod.yaml
 scripts/build-rancherrbac.sh -a     # 开发机：构建全部平台并打包 → bin/rancherrbac-<version>.tar.gz
 # 或解压已有分发包，把二进制与这份 README 拷到能同时访问 Rancher 与 AeroLink 的机器
 
-./rancherrbac -init-config rancherrbac.yaml   # 生成带注释的模板（已存在则拒绍覆盖）
+./rancherrbac -init-config rancherrbac.yaml   # 生成带注释的模板（已存在则拒绝覆盖）
 vi rancherrbac.yaml                          # 填 rancher.url / token 与 aerolink.url / token
 chmod 600 rancherrbac.yaml                   # 里面有明文密钥
 ```
