@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 )
 
-const kiteBasePlaceholder = "__KITE_BASE__"
+const kiteBasePlaceholder = "__AEROLINK_BASE__"
 
 func InjectKiteBase(htmlContent string, base string) string {
 	assetBase := base

@@ -8,8 +8,8 @@ import {
 } from '../env'
 
 const baseURL = e2eBaseUrl
-const ldapURL = process.env.KITE_E2E_LDAP_URL
-const oauthIssuer = process.env.KITE_E2E_OAUTH_ISSUER
+const ldapURL = process.env.AEROLINK_E2E_LDAP_URL
+const oauthIssuer = process.env.AEROLINK_E2E_OAUTH_ISSUER
 
 const ldapUser = {
   username: 'ldap-e2e',

@@ -38,7 +38,7 @@ describe('normalizeBasePath', () => {
 
   it('rejects invalid path segments', () => {
     expect(() => normalizeBasePath('/kite app')).toThrow(
-      'Invalid KITE_BASE "/kite app"'
+      'Invalid AEROLINK_BASE "/kite app"'
     )
   })
 })

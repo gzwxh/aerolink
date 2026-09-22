@@ -7,7 +7,7 @@ import { authFile, e2eBaseUrl, englishStorageState } from './env'
 const e2eDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(e2eDir, '..')
 const baseURL = e2eBaseUrl
-const useSystemChrome = process.env.KITE_E2E_USE_SYSTEM_CHROME === 'true'
+const useSystemChrome = process.env.AEROLINK_E2E_USE_SYSTEM_CHROME === 'true'
 
 export default defineConfig({
   testDir: '.',
@@ -36,7 +36,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: useSystemChrome ? 'off' : 'retain-on-failure',
   },
-  webServer: process.env.KITE_E2E_BASE_URL
+  webServer: process.env.AEROLINK_E2E_BASE_URL
     ? undefined
     : {
         command: './scripts/e2e-start-app.sh',

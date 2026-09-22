@@ -7,8 +7,12 @@ import { defineConfig, type Plugin } from 'vite'
 import monacoEditorFeatures from './plugins/vite-plugin-monaco-editor.ts'
 import { normalizeBasePath } from './src/lib/base-path.ts'
 
-const devSubPath = normalizeBasePath(process.env.KITE_BASE)
-const runtimeBasePlaceholder = '__KITE_BASE__'
+const devSubPath = normalizeBasePath(
+  process.env.AEROLINK_BASE ?? process.env.KITE_BASE
+)
+// 产物 index.html 里的资源路径会写成这个占位符，由二进制在托管时替换成运行时基础路径
+// （见 pkg/utils/utils.go），两边必须保持一致。
+const runtimeBasePlaceholder = '__AEROLINK_BASE__'
 
 function getDevBase() {
   return devSubPath ? `${devSubPath}/` : '/'
@@ -99,7 +103,7 @@ export default defineConfig(({ command }) => ({
     }),
     runtimeBaseHtmlPlugin(),
   ],
-  envPrefix: ['VITE_', 'KITE_'],
+  envPrefix: ['VITE_', 'AEROLINK_', 'KITE_'],
   build: {
     outDir: '../static',
     emptyOutDir: true,

@@ -32,11 +32,18 @@ afterEach(() => {
 })
 
 describe('getSubPath', () => {
-  it('reads the dev base path from KITE_BASE', () => {
+  it('reads the dev base path from AEROLINK_BASE', () => {
     vi.stubEnv('DEV', true)
-    vi.stubEnv('KITE_BASE', 'kite/')
+    vi.stubEnv('AEROLINK_BASE', 'kite/')
 
     expect(getSubPath()).toBe('/kite')
+  })
+
+  it('falls back to the legacy KITE_BASE', () => {
+    vi.stubEnv('DEV', true)
+    vi.stubEnv('KITE_BASE', 'legacy/')
+
+    expect(getSubPath()).toBe('/legacy')
   })
 
   it('reads the runtime base path in production', () => {

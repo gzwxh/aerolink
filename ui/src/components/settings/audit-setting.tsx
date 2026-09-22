@@ -350,7 +350,7 @@ export function AuditSetting() {
           title={t('audit.setting.sink.title', '存储方式')}
           description={t(
             'audit.setting.sink.description',
-            '审计记录的落地方式（五者互斥），由配置文件 auditSink / 环境变量 KITE_AUDIT_SINK 在启动时指定，界面只读。'
+            '审计记录的落地方式（五者互斥），由配置文件 auditSink / 环境变量 AEROLINK_AUDIT_SINK 在启动时指定，界面只读。'
           )}
         >
           <SettingRow label={t('audit.setting.sink.label', '落地方式')}>
@@ -936,7 +936,7 @@ export function AuditSetting() {
             label={t('audit.setting.archive.localDir', '本地目录')}
             hint={t(
               'audit.setting.archive.localDirHint',
-              '留空使用环境变量 KITE_AUDIT_ARCHIVE_DIR 指定的默认目录。'
+              '留空使用环境变量 AEROLINK_AUDIT_ARCHIVE_DIR 指定的默认目录。'
             )}
           >
             <Input

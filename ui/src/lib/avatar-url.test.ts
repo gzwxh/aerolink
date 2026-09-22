@@ -48,7 +48,7 @@ describe('resolveAvatarSrc', () => {
   })
 
   it('子路径部署时补上前缀，否则浏览器会请求到根路径上', () => {
-    vi.stubEnv('KITE_BASE', '/kite')
+    vi.stubEnv('AEROLINK_BASE', '/kite')
 
     expect(resolveAvatarSrc('/api/users/7/avatar?v=3')).toBe(
       '/kite/api/users/7/avatar?v=3'
