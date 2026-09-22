@@ -5,7 +5,7 @@
 #   make run     # 仅后端（使用内嵌前端产物）
 #
 # 敏感值支持 ${ENV_VAR} 占位符，会从环境变量展开，例如：
-#   password: ${KITE_DEV_ADMIN_PASSWORD}
+#   password: ${AEROLINK_DEV_ADMIN_PASSWORD}
 #
 # ⚠️ 仅供本地开发：这里出现的口令/密钥不要用于任何真实环境。
 
@@ -34,7 +34,7 @@ superUser:
 #   enabled: true
 #   serverUrl: ldap://127.0.0.1:3389
 #   bindDn: cn=admin,dc=example,dc=org
-#   bindPassword: ${KITE_DEV_LDAP_PASSWORD}
+#   bindPassword: ${AEROLINK_DEV_LDAP_PASSWORD}
 #   userBaseDn: ou=users,dc=example,dc=org
 #   userFilter: (&(uid=%s)(objectClass=inetOrgPerson))
 #   usernameAttribute: uid
@@ -59,9 +59,9 @@ superUser:
 #   elasticsearch → 不写数据库，只写 Elasticsearch
 #   victorialogs  → 不写数据库，只写 VictoriaLogs（**不是** VictoriaMetrics，理由见 ④）
 #   openobserve   → 不写数据库，只写 OpenObserve
-# 由本文件 / 环境变量 KITE_AUDIT_SINK 在**启动时**决定（本文件优先），管理页面只读。
+# 由本文件 / 环境变量 AEROLINK_AUDIT_SINK 在**启动时**决定（本文件优先），管理页面只读。
 # 取值非法、或所选通道的落地目标没配好，会**直接启动失败**（不静默回落）：
-#   parquet 需要归档目录（下面 localDir 或 KITE_AUDIT_ARCHIVE_DIR）
+#   parquet 需要归档目录（下面 localDir 或 AEROLINK_AUDIT_ARCHIVE_DIR）
 #   elasticsearch 需要 elasticsearch.urls
 #   victorialogs 需要 victorialogs.urls
 #   openobserve 需要 openobserve.urls
@@ -82,15 +82,15 @@ superUser:
 # ② parquet——本地 parquet 文件；配上 S3 就是「本地留几天 + 全量同步 S3」：
 #    auditSink: parquet
 #    auditArchive:
-#      localDir: /var/log/kite/archive    # 必填（或用 KITE_AUDIT_ARCHIVE_DIR），否则拒绝启动
+#      localDir: /var/log/aerolink/archive    # 必填（或用 AEROLINK_AUDIT_ARCHIVE_DIR），否则拒绝启动
 #      retentionDays: 7                   # 本地保留天数（S3 上的副本不受它影响）
 #      s3:
 #        enabled: true
 #        endpoint: http://minio:9000      # 各厂商 endpoint 见方案文档 §8.1
 #        region: ""                       # COS 必填（如 ap-guangzhou）
 #        bucket: kite-audit
-#        accessKey: ${KITE_S3_ACCESS_KEY}
-#        secretKey: ${KITE_S3_SECRET_KEY}
+#        accessKey: ${AEROLINK_S3_ACCESS_KEY}
+#        secretKey: ${AEROLINK_S3_SECRET_KEY}
 #        pathStyle: true                  # MinIO/RustFS/Ceph 为 true，COS/OBS 为 false
 #        useTLS: false
 #        prefix: kite-audit/
@@ -102,7 +102,7 @@ superUser:
 #      elasticsearch:
 #        urls: ["http://es:9200"]         # 必填，否则拒绝启动
 #        username: elastic
-#        password: ${KITE_ES_PASSWORD}
+#        password: ${AEROLINK_ES_PASSWORD}
 #        indexPrefix: kite-audit          # 索引名 <前缀>-YYYY.MM.DD
 #
 # ④ victorialogs——只写 VictoriaLogs（VictoriaMetrics 体系里的日志存储，默认端口 9428）：
@@ -127,7 +127,7 @@ superUser:
 #        org: default                         # 组织名，写入路径为 /api/{org}/{stream}/_json
 #        stream: kite-audit                   # 日志流名（四类记录共用一个流）
 #        username: kite@example.com           # Basic 认证用户名（通常是登录邮箱）
-#        password: ${KITE_OPENOBSERVE_PASSWORD}
+#        password: ${AEROLINK_OPENOBSERVE_PASSWORD}
 #        tlsInsecureSkipVerify: false
 #
 # auditSink: database
@@ -142,7 +142,7 @@ superUser:
 # 之后管理员可在「审计设置」页面修改（页面配置优先于本文件）。
 auditArchive:
   enabled: false                 # 实际生效值由 auditSink 推导（sink=parquet 时才为 true）
-  localDir: /var/log/kite/archive  # 日志存放位置（空 = 用 KITE_AUDIT_ARCHIVE_DIR）
+  localDir: /var/log/aerolink/archive  # 日志存放位置（空 = 用 AEROLINK_AUDIT_ARCHIVE_DIR）
   retentionDays: 7               # 本地保留天数（存多久），0 = 不清理
   maxBytes: 10737418240          # 本地容量上限（10 GiB），0 = 不清理
   flush:
@@ -165,8 +165,8 @@ auditArchive:
     endpoint: http://minio:9000          # 各厂商 endpoint 见方案文档 §8.1
     region: ""                           # COS 必填，如 ap-guangzhou
     bucket: kite-audit
-    accessKey: ${KITE_S3_ACCESS_KEY}
-    secretKey: ${KITE_S3_SECRET_KEY}
+    accessKey: ${AEROLINK_S3_ACCESS_KEY}
+    secretKey: ${AEROLINK_S3_SECRET_KEY}
     pathStyle: true                      # MinIO/RustFS/Ceph 为 true，COS/OBS 为 false
     useTLS: false
     prefix: kite-audit/
@@ -176,7 +176,7 @@ auditArchive:
     enabled: false
     urls: ["http://es:9200"]
     username: ""
-    password: ${KITE_ES_PASSWORD}
+    password: ${AEROLINK_ES_PASSWORD}
     indexPrefix: kite-audit
     tlsInsecureSkipVerify: false
   # 外部存储 VictoriaLogs（日志存储，非 VictoriaMetrics；单 stream、服务端保留）
@@ -194,5 +194,5 @@ auditArchive:
     org: default
     stream: kite-audit
     username: ""
-    password: ${KITE_OPENOBSERVE_PASSWORD}
+    password: ${AEROLINK_OPENOBSERVE_PASSWORD}
     tlsInsecureSkipVerify: false
