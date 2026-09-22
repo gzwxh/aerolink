@@ -1,6 +1,6 @@
 # Installation Guide
 
-This guide provides detailed instructions for installing Kite in a Kubernetes environment.
+This guide provides detailed instructions for installing AeroLink in a Kubernetes environment.
 
 ## Prerequisites
 
@@ -23,7 +23,7 @@ helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system --create-nam
 Or install from Helm repository:
 
 ```bash
-# Add Kite repository
+# Add AeroLink repository
 helm repo add kite https://kite-org.github.io/kite/
 
 # Update repository information
@@ -62,13 +62,13 @@ see [Persistence Issues](../faq#persistence-issues) for more details.
 kubectl apply -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/install.yaml
 ```
 
-This method will install Kite with default configuration. For advanced customization, it's recommended to use the Helm Chart.
+This method will install AeroLink with default configuration. For advanced customization, it's recommended to use the Helm Chart.
 
-## Accessing Kite
+## Accessing AeroLink
 
 ### Port Forwarding (Testing Environment)
 
-During testing, you can quickly access Kite through port forwarding:
+During testing, you can quickly access AeroLink through port forwarding:
 
 ```bash
 kubectl port-forward -n kite-system svc/kite 8080:8080
@@ -76,7 +76,7 @@ kubectl port-forward -n kite-system svc/kite 8080:8080
 
 ### LoadBalancer Service
 
-If the cluster supports LoadBalancer, you can directly expose the Kite service:
+If the cluster supports LoadBalancer, you can directly expose the AeroLink service:
 
 ```bash
 kubectl patch svc kite -n kite-system -p '{"spec": {"type": "LoadBalancer"}}'
@@ -90,10 +90,10 @@ kubectl get svc kite -n kite-system
 
 ### Ingress (Recommended for Production)
 
-For production environments, it's recommended to expose Kite through an Ingress controller with TLS enabled:
+For production environments, it's recommended to expose AeroLink through an Ingress controller with TLS enabled:
 
 ::: warning
-Kite's log and web terminal features require websocket support.
+AeroLink's log and web terminal features require websocket support.
 Some Ingress controllers may require additional configuration to handle websockets correctly.
 :::
 
@@ -106,7 +106,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: kite.example.com
+    - host: aerolink.example.com
       http:
         paths:
           - path: /
@@ -118,13 +118,13 @@ spec:
                   number: 8080
   tls:
     - hosts:
-        - kite.example.com
-      secretName: kite-tls
+        - aerolink.example.com
+      secretName: aerolink-tls
 ```
 
 ## Serving under a subpath (basePath)
 
-If you want to serve Kite under a subpath (for example `https://example.com/kite`), use the Helm chart `basePath` value.
+If you want to serve AeroLink under a subpath (for example `https://example.com/kite`), use the Helm chart `basePath` value.
 
 How to set it:
 
@@ -148,21 +148,21 @@ Important notes:
 ingress:
   enabled: true
   hosts:
-    - host: kite.example.com
+    - host: aerolink.example.com
       paths:
         - path: /kite
           pathType: Prefix
 ```
 
-- OAuth / redirects: if you enable OAuth (or any external redirect flows), update the redirect URLs in your OAuth provider to include the base path, e.g. `https://kite.example.com/kite/oauth/callback`.
+- OAuth / redirects: if you enable OAuth (or any external redirect flows), update the redirect URLs in your OAuth provider to include the base path, e.g. `https://aerolink.example.com/kite/oauth/callback`.
 - Environment overrides: if you provide environment variables via `extraEnvs` or an existing secret, ensure `AEROLINK_BASE` is set consistently with the `basePath` value (otherwise behavior may differ).
 
 ## Verifying Installation
 
-After installation, you can access the dashboard to verify that Kite is deployed successfully. The expected interface is as follows:
+After installation, you can access the dashboard to verify that AeroLink is deployed successfully. The expected interface is as follows:
 
 ::: tip
-If you need to configure Kite through environment variables, please refer to [Environment Variables](../config/env).
+If you need to configure AeroLink through environment variables, please refer to [Environment Variables](../config/env).
 :::
 
 ![setup](../../screenshots/setup.png)
@@ -173,15 +173,15 @@ You can complete cluster setup according to the page prompts.
 
 ### Quick Setup with In-Cluster Mode
 
-For the simplest setup, select **`in-cluster`** as the cluster type. This option automatically uses the service account credentials that Kite is running with inside the cluster, requiring no additional configuration:
+For the simplest setup, select **`in-cluster`** as the cluster type. This option automatically uses the service account credentials that AeroLink is running with inside the cluster, requiring no additional configuration:
 
-- **No kubeconfig needed**: Kite will use its own service account to access the Kubernetes API
+- **No kubeconfig needed**: AeroLink will use its own service account to access the Kubernetes API
 - **Automatic authentication**: Works out of the box with the default RBAC permissions
-- **Ideal for single-cluster deployments**: Perfect when Kite is managing the same cluster it's running in
+- **Ideal for single-cluster deployments**: Perfect when AeroLink is managing the same cluster it's running in
 
-This is the recommended option for getting started quickly, especially in development or when Kite only needs to manage its own cluster.
+This is the recommended option for getting started quickly, especially in development or when AeroLink only needs to manage its own cluster.
 
-## Uninstalling Kite
+## Uninstalling AeroLink
 
 ### Helm Uninstall
 
@@ -197,7 +197,7 @@ kubectl delete -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/in
 
 ## Next Steps
 
-After Kite installation is complete, you can continue with:
+After AeroLink installation is complete, you can continue with:
 
 - [Adding Users](../config/user-management)
 - [Configuring RBAC](../config/rbac-config)

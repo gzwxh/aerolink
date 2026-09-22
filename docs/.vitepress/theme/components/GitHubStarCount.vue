@@ -4,7 +4,7 @@ import { onMounted, ref } from "vue";
 defineProps({
   ariaLabel: {
     type: String,
-    default: "View Kite stars on GitHub",
+    default: "View AeroLink stars on GitHub",
   },
 });
 

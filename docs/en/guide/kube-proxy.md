@@ -4,7 +4,7 @@ outline: deep
 
 # Kube Proxy
 
-Kite has a built-in kubectl Proxy feature that allows you to access Pods or Services directly through Kite without running `kubectl port-forward` locally.
+AeroLink has a built-in kubectl Proxy feature that allows you to access Pods or Services directly through AeroLink without running `kubectl port-forward` locally.
 
 ## How to Use
 

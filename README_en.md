@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="./docs/assets/logo.svg" alt="Kite Logo" width="128" height="128">
+<img src="./docs/assets/logo.svg" alt="AeroLink Logo" width="128" height="128">
 
-# Kite (internal fork)
+# AeroLink (internal fork)
 
 **All your clusters. One workspace.**
 
-Kite is a lightweight, open-source Kubernetes workspace for multi-cluster operations, observability, access control, and AI-assisted troubleshooting.
+AeroLink is a lightweight, open-source Kubernetes workspace for multi-cluster operations, observability, access control, and AI-assisted troubleshooting.
 This repository is the **company-internal fork** of the upstream project, currently at `v1.0.0`.
 
 **English** · [中文](./README.md)
@@ -104,26 +104,26 @@ The workdir inside the container is `/app` and SQLite defaults to `dev.db` (`/ap
 Local smoke test (**not for production** — security parameters omitted):
 
 ```bash
-docker run -d --name kite -p 8080:8080 \
-  -v kite-data:/app/data \
+docker run -d --name aerolink -p 8080:8080 \
+  -v aerolink-data:/app/data \
   -e DB_DSN=/app/data/kite.db \
   -e AEROLINK_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0
 ```
 
 Production (generate secrets with `openssl rand -base64 32` and store them safely):
 
 ```bash
-docker run -d --name kite --restart unless-stopped \
+docker run -d --name aerolink --restart unless-stopped \
   -p 8080:8080 \
-  -v /data/kite:/app/data \
+  -v /data/aerolink:/app/data \
   -e DB_DSN=/app/data/kite.db \
   -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
-  -e HOST=https://kite.example.com \
+  -e HOST=https://aerolink.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0
 ```
 
 The first visit walks through creating the admin account; configure the remaining policies under Settings.
@@ -138,7 +138,7 @@ The first visit walks through creating the admin account; configure the remainin
 | `AEROLINK_ALLOW_INSECURE_SECRETS` | no | `false` | **Local development only**: allows the built-in keys; without it a missing `AEROLINK_ENCRYPT_KEY` (or a `JWT_SECRET` shorter than 32 bytes) makes the server **refuse to start**. Never set it in production |
 | `JWT_SECRET` | **yes in production** | random per start | Session token signing key, ≥32 random bytes. Without it an ephemeral key is generated and **everyone is signed out on restart**; a value shorter than 32 bytes logs a warning |
 | `TRUSTED_PROXIES` | per deployment | private ranges | Only these direct peer IPs may supply `X-Forwarded-For` / `X-Real-IP`. Affects login lockout, IP allow/deny lists, remote-login notices and audit logs. **Set `none` when the container is exposed directly**, otherwise clients can spoof their IP and bypass IP-based throttling; behind Nginx/SLB list the proxy CIDRs |
-| `HOST` | yes when using HTTPS | empty | Public base URL (e.g. `https://kite.example.com`). Decides whether the session cookie gets the `Secure` flag — **without it an HTTPS deployment may send the cookie in clear text** |
+| `HOST` | yes when using HTTPS | empty | Public base URL (e.g. `https://aerolink.example.com`). Decides whether the session cookie gets the `Secure` flag — **without it an HTTPS deployment may send the cookie in clear text** |
 | `ANONYMOUS_USER_ENABLED` | no | `false` | `true` allows unauthenticated (read-only) access and logs a warning. **Never enable in production** |
 | `CORS_ALLOWED_ORIGINS` | no | empty (no CORS) | Comma separated allowed origins. Keep empty in production; only needed for the local Vite dev server, and logs a warning when set |
 
@@ -153,7 +153,7 @@ The first visit walks through creating the admin account; configure the remainin
 | `AEROLINK_DB_MAX_IDLE_CONNS` | `10` | idle connections; `0` keeps none |
 | `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | connection max lifetime in minutes |
 | `AEROLINK_BASE` | empty | sub-path deployment (e.g. `/kite`) |
-| `NAMESPACE` | empty | namespace for Kite's own agent/terminal pods |
+| `NAMESPACE` | empty | namespace for AeroLink's own agent/terminal pods |
 | `DISABLE_GZIP` | `false` | `true` disables response compression (proxy troubleshooting) |
 | `KUBECONFIG` / `AEROLINK_CONFIG_FILE` | empty | external kubeconfig / config file path |
 | `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest` | node terminal image (company SWR) |

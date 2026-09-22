@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: "Kite",
+  title: "鸢联 AeroLink",
   description: "一个现代 Kubernetes 仪表盘",
 
   sitemap: {
@@ -24,14 +24,14 @@ export default defineConfig({
     root: {
       label: "中文",
       lang: "zh-CN",
-      title: "Kite",
+      title: "鸢联 AeroLink",
       description: "一个现代 Kubernetes 仪表盘",
     },
     en: {
       label: "English",
       lang: "en",
       link: "/en/",
-      title: "Kite",
+      title: "AeroLink",
       description: "A modern Kubernetes dashboard",
       themeConfig: {
         nav: [
@@ -46,7 +46,7 @@ export default defineConfig({
             {
               text: "Introduction",
               items: [
-                { text: "What is Kite?", link: "/en/guide/" },
+                { text: "What is AeroLink?", link: "/en/guide/" },
                 { text: "Getting Started", link: "/en/guide/installation" },
               ],
             },
@@ -73,7 +73,7 @@ export default defineConfig({
                 { text: "Helm Management", link: "/en/guide/helm-management" },
                 { text: "AI Assistant", link: "/en/guide/ai-assistant" },
                 { text: "Web Terminal", link: "/en/guide/web-terminal" },
-                { text: "Kite Cluster Agent", link: "/en/guide/kite-cluster-agent" },
+                { text: "AeroLink Cluster Agent", link: "/en/guide/kite-cluster-agent" },
                 { text: "Resource History", link: "/en/guide/resource-history" },
                 { text: "Custom Sidebar", link: "/en/guide/custom-sidebar" },
                 { text: "Kube Proxy", link: "/en/guide/kube-proxy" },
@@ -152,7 +152,7 @@ export default defineConfig({
         {
           text: "介绍",
           items: [
-            { text: "什么是 Kite?", link: "/guide/" },
+            { text: "什么是鸢联 AeroLink?", link: "/guide/" },
             { text: "开始", link: "/guide/installation" },
           ],
         },
@@ -179,7 +179,7 @@ export default defineConfig({
             { text: "Helm 管理", link: "/guide/helm-management" },
             { text: "AI 助手", link: "/guide/ai-assistant" },
             { text: "Web 终端", link: "/guide/web-terminal" },
-            { text: "Kite Cluster Agent", link: "/guide/kite-cluster-agent" },
+            { text: "鸢联 AeroLink Cluster Agent", link: "/guide/kite-cluster-agent" },
             { text: "资源历史", link: "/guide/resource-history" },
             { text: "自定义侧边栏", link: "/guide/custom-sidebar" },
             { text: "Kube Proxy", link: "/guide/kube-proxy" },

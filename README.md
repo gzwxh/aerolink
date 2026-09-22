@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="./docs/assets/logo.svg" alt="Kite Logo" width="128" height="128">
+<img src="./docs/assets/logo.svg" alt="鸢联 AeroLink Logo" width="128" height="128">
 
-# Kite（内部二开版）
+# 鸢联 AeroLink（内部二开版）
 
 **所有集群，一个工作空间。**
 
-Kite 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维、可观测性、访问控制与 AI 辅助排障。
+鸢联 AeroLink 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维、可观测性、访问控制与 AI 辅助排障。
 本仓库为基于上游项目的**公司内部二开版本**，当前版本 `v1.0.0`。
 
 中文	鸢联
 英文	AeroLink
-域名建议	aerolink.io / aerolink.dev / aerolink.cloud
+域名	aerolink.gogdev.cn
 发音	/ˈeəroʊlɪŋk/，简单好读
 含义	Aero = 天空/航空，Link = 连接
 品牌故事	飞在 K8s 之上，连通每一个集群
@@ -113,8 +113,8 @@ set -a; . ./dev.env; set +a; ./aerolink
 make image     # 构建镜像（默认 tag 见 Makefile 的 IMAGE 变量）
 make push      # 构建并推送到公司 SWR
 # 等价于：
-# docker build -t swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1 .
-# docker push  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
+# docker build -t swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0 .
+# docker push  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0
 ```
 
 受限网络下 `make image/push` 已内置国内镜像源参数（daocloud 基础镜像 + npmmirror + goproxy.cn），直连环境可用 `make image DOCKER_BUILD_ARGS=` 置空。
@@ -133,26 +133,26 @@ make push      # 构建并推送到公司 SWR
 仅本地验证（**不要用于生产**，缺少安全参数）：
 
 ```bash
-docker run -d --name kite -p 8080:8080 \
-  -v kite-data:/app/data \
+docker run -d --name aerolink -p 8080:8080 \
+  -v aerolink-data:/app/data \
   -e DB_DSN=/app/data/kite.db \
   -e AEROLINK_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0
 ```
 
 生产推荐启动方式（含全部安全参数，密钥用 `openssl rand -base64 32` 生成并妥善保存）：
 
 ```bash
-docker run -d --name kite --restart unless-stopped \
+docker run -d --name aerolink --restart unless-stopped \
   -p 8080:8080 \
-  -v /data/kite:/app/data \
+  -v /data/aerolink:/app/data \
   -e DB_DSN=/app/data/kite.db \
   -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
-  -e HOST=https://kite.example.com \
+  -e HOST=https://aerolink.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0
 ```
 
 首次访问会引导创建管理员账号，之后在「系统设置」中完成其余策略配置。
@@ -167,7 +167,7 @@ docker run -d --name kite --restart unless-stopped \
 | `AEROLINK_ALLOW_INSECURE_SECRETS` | 否 | `false` | **仅供本地开发**：设为 `true` 才允许使用内置默认密钥（否则缺 `AEROLINK_ENCRYPT_KEY` 直接拒绝启动，`JWT_SECRET` 短于 32 字节同样拒绝）。生产环境**不要**设置 |
 | `JWT_SECRET` | **生产必填** | 启动时随机生成 | 会话 token 签名密钥，建议 ≥32 字节随机值。不设置时会自动生成临时密钥，**重启后所有人被强制登出**；设置后长度不足 32 字节会打印告警 |
 | `TRUSTED_PROXIES` | 按部署方式 | `127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16` | 只有这些直连 IP 提供的 `X-Forwarded-For` / `X-Real-IP` 会被采信。**直接影响**：登录失败锁定、IP 黑白名单、异地登录提醒、审计日志记录到的客户端 IP。**容器直连暴露（不经代理）时必须设为 `none`**，否则攻击者可伪造 `X-Forwarded-For` 绕过 IP 维度的限流与封禁；经 Nginx/SLB 时填代理网段 |
-| `HOST` | 走 HTTPS 时必填 | 空 | 站点外部访问地址（如 `https://kite.example.com`）。决定登录 Cookie 是否带 `Secure` 属性——**HTTPS 部署不设置此项，会话 Cookie 可能以明文经 HTTP 传输** |
+| `HOST` | 走 HTTPS 时必填 | 空 | 站点外部访问地址（如 `https://aerolink.example.com`）。决定登录 Cookie 是否带 `Secure` 属性——**HTTPS 部署不设置此项，会话 Cookie 可能以明文经 HTTP 传输** |
 | `ANONYMOUS_USER_ENABLED` | 否 | `false` | 设为 `true` 后**未登录即可访问**（只读匿名用户），且会打印安全告警。**严禁在生产开启**，仅用于开放演示环境 |
 | `CORS_ALLOWED_ORIGINS` | 否 | 空（不开 CORS） | 允许跨域访问的源，逗号分隔。**生产保持为空**；仅本地前端开发（如 `http://localhost:5173`）才需要，设置后会打印告警 |
 
@@ -182,7 +182,7 @@ docker run -d --name kite --restart unless-stopped \
 | `AEROLINK_DB_MAX_IDLE_CONNS` | `10` | 空闲连接数，`0` 表示不保留空闲连接 |
 | `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | 连接最长存活分钟数 |
 | `AEROLINK_BASE` | 空 | 子路径部署（如 `/kite`），适用于挂在反向代理子目录下 |
-| `NAMESPACE` | 空 | Kite 自身（Agent / 终端 Pod）所在命名空间 |
+| `NAMESPACE` | 空 | 鸢联 AeroLink 自身（Agent / 终端 Pod）所在命名空间 |
 | `DISABLE_GZIP` | `false` | `true` 关闭响应压缩（排查代理兼容问题时使用） |
 | `KUBECONFIG` | 空 | 外部 kubeconfig 路径（如需预置集群，一般通过界面添加即可） |
 | `AEROLINK_CONFIG_FILE` | 空 | 外部配置文件路径 |

@@ -1,4 +1,4 @@
-# 构建并推送 Kite 镜像
+# 构建并推送鸢联 AeroLink 镜像
 
 本篇介绍如何把当前源码打包成容器镜像、推送到自己的镜像仓库，再用 Helm 部署这套自建镜像。适合二次开发、内网私有仓库，以及 Docker Hub / gcr.io 访问受限的环境。
 
@@ -71,14 +71,14 @@ docker build \
 
 ```bash
 docker run -d --name aerolink -p 8080:8080 \
-  -v kite-data:/app/data \
+  -v aerolink-data:/app/data \
   -e DB_DSN=/app/data/kite.db \
   -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   aerolink:local
 
 curl -I http://127.0.0.1:8080/        # 期望 HTTP 200
-docker logs aerolink | head              # 期望看到 Kite server started on port 8080
+docker logs aerolink | head              # 期望看到 AeroLink server started on port 8080
 
 docker rm -f aerolink
 ```
@@ -155,7 +155,7 @@ helm upgrade --install kite charts/kite \
 私有仓库需要拉取凭据：
 
 ```bash
-kubectl create secret docker-registry kite-regcred -n kite-system \
+kubectl create secret docker-registry aerolink-regcred -n kite-system \
   --docker-server=<registry> \
   --docker-username=<user> \
   --docker-password=<password>
@@ -163,7 +163,7 @@ kubectl create secret docker-registry kite-regcred -n kite-system \
 helm upgrade --install kite charts/kite -n kite-system \
   --set image.repository=<registry>/<namespace>/aerolink \
   --set image.tag=$VERSION \
-  --set imagePullSecrets[0].name=kite-regcred
+  --set imagePullSecrets[0].name=aerolink-regcred
 ```
 
 ### 仓库内现成的 values 文件

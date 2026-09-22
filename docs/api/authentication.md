@@ -1,6 +1,6 @@
 # 认证
 
-Kite 支持通过 OAuth、密码用户、LDAP 和 MFA 进行页面登录，也支持通过 API 密钥进行程序化访问。API 密钥会以一个特殊用户身份完成认证，并沿用与页面登录用户相同的 RBAC 模型。
+鸢联 AeroLink 支持通过 OAuth、密码用户、LDAP 和 MFA 进行页面登录，也支持通过 API 密钥进行程序化访问。API 密钥会以一个特殊用户身份完成认证，并沿用与页面登录用户相同的 RBAC 模型。
 
 ## 页面登录
 
@@ -102,16 +102,16 @@ PUT /api/v1/admin/general-setting/
 
 ## 登录尝试封禁
 
-基于账号密码的登录会在连续失败时按客户端 IP 临时封禁。Kite 允许 1 分钟内最多 10 次错误密码或 MFA 验证失败；第 11 次失败会封禁该客户端 IP 的账号密码登录 5 分钟。
+基于账号密码的登录会在连续失败时按客户端 IP 临时封禁。鸢联 AeroLink 允许 1 分钟内最多 10 次错误密码或 MFA 验证失败；第 11 次失败会封禁该客户端 IP 的账号密码登录 5 分钟。
 
-当 Kite 运行在 Ingress 或负载均衡器后面时，封禁使用的客户端 IP 取决于 `TRUSTED_PROXIES` 配置。详见[环境变量](../config/env.md)。
+当鸢联 AeroLink 运行在 Ingress 或负载均衡器后面时，封禁使用的客户端 IP 取决于 `TRUSTED_PROXIES` 配置。详见[环境变量](../config/env.md)。
 
 ## API 密钥格式
 
 完整 API 密钥格式如下：
 
 ```text
-kite<ID>-<SECRET>
+aerolink<ID>-<SECRET>
 ```
 
 使用时直接把完整值放进 `Authorization` 请求头，不要加 `Bearer`。
@@ -143,7 +143,7 @@ API 密钥与普通用户共用同一套 RBAC 权限模型。
 curl \
   -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
-  https://kite.example.com/api/v1/pods/default
+  https://aerolink.example.com/api/v1/pods/default
 ```
 
 说明：

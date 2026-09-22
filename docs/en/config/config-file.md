@@ -1,14 +1,14 @@
 # Configuration File
 
-Kite supports loading cluster, OAuth/LDAP, and RBAC configuration from a YAML file. When a section is configured this way, it becomes **read-only** in the UI — users can view the settings but cannot modify them through the dashboard.
+AeroLink supports loading cluster, OAuth/LDAP, and RBAC configuration from a YAML file. When a section is configured this way, it becomes **read-only** in the UI — users can view the settings but cannot modify them through the dashboard.
 
 This is useful for GitOps workflows where configuration is version-controlled and applied via Helm.
 
-> Available in Kite `v0.10.0` and later.
+> Available in AeroLink `v0.10.0` and later.
 
 ## How It Works
 
-1. Kite reads a YAML config file from the path specified by the `AEROLINK_CONFIG_FILE` environment variable.
+1. AeroLink reads a YAML config file from the path specified by the `AEROLINK_CONFIG_FILE` environment variable.
 2. On every startup, the config is applied to the database, overwriting existing values for managed sections.
 3. Sensitive values in the config file support `${ENV_VAR}` placeholder expansion from environment variables.
 4. The UI automatically detects managed sections and displays them as read-only with an informational banner.
@@ -60,7 +60,7 @@ oauth:
 ldap:
   enabled: true
   serverUrl: "ldaps://ldap.example.com:636"
-  bindDn: "cn=svc-kite,ou=services,dc=example,dc=com"
+  bindDn: "cn=svc-aerolink,ou=services,dc=example,dc=com"
   bindPassword: "bind-password"
   userBaseDn: "ou=users,dc=example,dc=com"
   userFilter: "(uid=%s)"
@@ -117,7 +117,7 @@ Create and manage your own Kubernetes Secret containing the config file. This is
 **Step 2:** Create the Kubernetes Secret:
 
 ```bash
-kubectl create secret generic kite-config \
+kubectl create secret generic aerolink-config \
   --from-file=config.yaml=./config.yaml \
   -n <namespace>
 ```
@@ -127,7 +127,7 @@ kubectl create secret generic kite-config \
 ```yaml
 config:
   enabled: true
-  existingSecret: "kite-config"
+  existingSecret: "aerolink-config"
 ```
 
 ::: tip
