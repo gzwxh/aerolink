@@ -75,8 +75,8 @@ vi rancherrbac.yaml                            # 填地址与密钥
 ```
 
 环境变量只有这四个：`RANCHER_URL`、`RANCHER_TOKEN`、`AEROLINK_URL`、`AEROLINK_TOKEN`
-（外加定位配置文件的 `RANCHER_RBAC_CONFIG`）。退役的旧名 `KITE_URL` / `KITE_TOKEN` 仍然可用，
-与新名同时设置时以新名为准。集群 / 用户 / 用户组映射只能写在配置文件或命令行上。
+（外加定位配置文件的 `RANCHER_RBAC_CONFIG`）。退役的 `KITE_URL` / `KITE_TOKEN` 已不再被读取。
+集群 / 用户 / 用户组映射只能写在配置文件或命令行上。
 
 所以可以用「一份配置文件打底 + 临时用环境变量或命令行覆盖一端」：
 

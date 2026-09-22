@@ -8,12 +8,9 @@ declare global {
 
 export function getSubPath(): string {
   if (import.meta.env.DEV) {
-    // AEROLINK_BASE 是当前变量名，KITE_BASE 是旧名，仍兼容。
-    const devBasePath =
-      (import.meta.env.AEROLINK_BASE as string | undefined) ??
-      (import.meta.env.KITE_BASE as string | undefined)
-
-    return normalizeBasePath(devBasePath)
+    return normalizeBasePath(
+      import.meta.env.AEROLINK_BASE as string | undefined
+    )
   }
   return normalizeBasePath(window.__dynamic_base__)
 }

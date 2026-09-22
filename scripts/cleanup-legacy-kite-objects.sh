@@ -24,7 +24,7 @@
 #     必须先把旧实例 disable 掉，否则两个进程会抢同一个端口。迁移步骤见
 #     deploy/aerolink@.service 文件头的说明。
 #   - 共享环境变量文件：从 /etc/kite/kite.env 迁到 /etc/aerolink/aerolink.env
-#     （文件里的旧 KITE_* 变量名仍然生效，但建议换成 AEROLINK_*）。
+#     （文件里的变量名要一并换成 AEROLINK_*，旧名不再生效）。
 #   - 本脚本不碰任何数据卷里的文件（parquet 归档、sqlite 库），也不碰数据库。
 set -euo pipefail
 

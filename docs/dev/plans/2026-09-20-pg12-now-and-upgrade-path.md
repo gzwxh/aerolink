@@ -273,7 +273,7 @@ setsid nohup /wxh/aerolink/aerolink >> /data/logs/aerolink.log 2>&1 < /dev/null 
 | --- | --- |
 | 数据库容器 | `aerolink-postgres12`（12.12），宿主端口 **5433**，数据目录 `/data/postgresql12` |
 | 业务库 / 角色 | `aerolink` 库，属主 `aerolink`（`rolsuper/rolcreatedb/rolcreaterole` 全为 `f`） |
-| 口令存放 | `/root/kite-pg12-secrets.env`（600，超管 + `kite` 角色） |
+| 口令存放 | `/root/aerolink-pg12-secrets.env`（600，超管 + `aerolink` 角色） |
 | 应用配置 | `dev.env`：`DB_TYPE=postgres`、`DB_DSN=...port=5433...TimeZone=Asia/Shanghai` |
 | 应用日志 | `/data/logs/aerolink.log` |
 | 回滚资产 | `/data/backup/`：`dev.db.2026-09-20-1913`（SQLite 快照）、`kite.bin.old-20260920-1750`（旧二进制）、`dev.env.old-20260920-1750`、`pg18-all-2026-09-20-1922.sql`（退役前的 18 全量 dump） |

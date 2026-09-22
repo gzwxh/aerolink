@@ -117,10 +117,13 @@ async function configureLDAPViaUI(page: Page) {
   await page.goto('/settings?tab=oauth')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
+  // 设置页把「安全」整段包在一张外层卡片里，所以 `[data-slot="card"]` 会同时匹配外层卡片与
+  // 里面的 LDAP 卡片；取最后一张（DOM 里最靠内的那张）才是 LDAP 卡片。用 .first() 会拿到外层
+  // 卡片，Save 同时命中「密码登录」那张卡片里的按钮，触发 strict mode 报错。
   const ldapCard = page
     .locator('[data-slot="card"]')
     .filter({ has: page.getByText(/^LDAP$/) })
-    .first()
+    .last()
   const ldapSection = ldapCard
     .locator('div.rounded-lg.border')
     .filter({ has: page.getByText(/^LDAP$/) })
@@ -143,6 +146,31 @@ async function configureLDAPViaUI(page: Page) {
   await ldapCard.getByRole('button', { name: 'Save' }).click()
 
   await expect(page.getByText('Authentication settings updated')).toBeVisible()
+}
+
+// LDAP 登录只认已在本地开通的账号：目录里存在不等于能登录
+// （周期同步只对齐已导入的用户，从不开通新账号，见 pkg/auth/ldap_sync.go）。
+// 因此先走一次导入接口把用例账号开通出来。这一步是夹具准备、不是被测行为
+// （导入选择器自身的交互由设置页承载），所以和下面的权限绑定一样直接用接口。
+async function provisionLDAPUser(page: Page) {
+  const candidatesResponse = await page.request.get(
+    '/api/v1/admin/ldap-setting/users'
+  )
+  const candidatesBody = await candidatesResponse.text()
+  expect(candidatesResponse.status(), candidatesBody).toBe(200)
+
+  const usernames = (
+    JSON.parse(candidatesBody) as { users: Array<{ username: string }> }
+  ).users.map((candidate) => candidate.username)
+  expect(usernames, 'the LDAP fixture should expose directory users').toContain(
+    ldapUser.username
+  )
+
+  const importResponse = await page.request.post(
+    '/api/v1/admin/ldap-setting/users/import',
+    { data: { usernames: [ldapUser.username], enableImported: true } }
+  )
+  expect(importResponse.status(), await importResponse.text()).toBe(200)
 }
 
 async function configureOAuthViaUI(page: Page) {
@@ -399,6 +427,7 @@ test.describe('external auth', () => {
 
     try {
       await configureLDAPViaUI(adminPage)
+      await provisionLDAPUser(adminPage)
       await configureOAuthViaUI(adminPage)
       await configureUsernameClaimOAuthViaUI(adminPage)
       await configureRestrictedOAuthViaUI(adminPage)
@@ -507,8 +536,10 @@ test.describe('external auth', () => {
       await page.getByRole('button', { name: 'Sign In with LDAP' }).click()
 
       await expect(page).toHaveURL(/\/login/)
+      // 界面按后端错误码本地化（login_invalid_credentials → “Invalid username or
+      // password”），不再回显服务端的原始错误文本。
       await expect(page.getByRole('alert')).toContainText(
-        'invalid ldap credentials'
+        'Invalid username or password'
       )
     } finally {
       await context.close()

@@ -291,11 +291,7 @@ func applyEnv(opts *options) {
 	}{
 		{"RANCHER_URL", &opts.rancherURL},
 		{"RANCHER_TOKEN", &opts.rancherToken},
-		// KITE_URL / KITE_TOKEN 是退役的旧名，保留兼容；列表按顺序覆盖，新名排在后面，
-		// 两个都设置时以新名为准。
-		{"KITE_URL", &opts.aerolinkURL},
 		{"AEROLINK_URL", &opts.aerolinkURL},
-		{"KITE_TOKEN", &opts.aerolinkToken},
 		{"AEROLINK_TOKEN", &opts.aerolinkToken},
 	} {
 		if value := envOr(item.key); value != "" {
@@ -536,9 +532,8 @@ func parseFlags(args []string) (options, map[string]bool, error) {
 			"  rancherrbac -config rancherrbac.yaml -apply         # 确认计划后落库\n"+
 			"  rancherrbac -init-config rancherrbac.yaml           # 先生成一份配置模板\n"+
 			"  rancherrbac -aerolink-url ... -aerolink-token ...   # 也可以全部走命令行\n\n"+
-			"退役的旧名仍可用（与新名同时给出时以新名为准）：\n"+
-			"  -kite-url / -kite-token / -kite-insecure、环境变量 KITE_URL / KITE_TOKEN、\n"+
-			"  配置文件的 kite: 段落。\n\n"+
+			"退役的 -kite-url / -kite-token / -kite-insecure 与配置文件的 kite: 段落仍可用\n"+
+			"（与新名同时给出时以新名为准）；环境变量只认 AEROLINK_URL / AEROLINK_TOKEN。\n\n"+
 			"参数（命令行 > 环境变量 > 配置文件 > 默认值）：\n")
 		fs.PrintDefaults()
 	}
@@ -556,9 +551,9 @@ func parseFlags(args []string) (options, map[string]bool, error) {
 		"Rancher API 密钥，形如 token-xxxxx:yyyyy（默认取 $RANCHER_TOKEN）")
 	fs.BoolVar(&cli.rancherInsecure, "rancher-insecure", false, "跳过 Rancher 的 TLS 证书校验")
 	fs.StringVar(&cli.aerolinkURL, "aerolink-url", "",
-		"AeroLink 地址，例如 https://aerolink.example.com（默认取 $AEROLINK_URL；旧名 -kite-url / $KITE_URL 仍可用）")
+		"AeroLink 地址，例如 https://aerolink.example.com（默认取 $AEROLINK_URL；旧名 -kite-url 仍可用）")
 	fs.StringVar(&cli.aerolinkToken, "aerolink-token", "",
-		"AeroLink API key，即控制台里的 aerolink<id>-<secret>（默认取 $AEROLINK_TOKEN；旧名 -kite-token / $KITE_TOKEN 与改名前的 kite<id>-<secret> 仍可用）")
+		"AeroLink API key，即控制台里的 aerolink<id>-<secret>（默认取 $AEROLINK_TOKEN；旧名 -kite-token 与改名前的 kite<id>-<secret> 仍可用）")
 	fs.BoolVar(&cli.aerolinkInsecure, "aerolink-insecure", false, "跳过 AeroLink 的 TLS 证书校验（旧名 -kite-insecure 仍可用）")
 
 	fs.BoolVar(&cli.apply, "apply", false, "真正写入 AeroLink；不加则只打印计划（dry-run）")

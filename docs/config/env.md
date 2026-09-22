@@ -2,8 +2,8 @@
 
 鸢联 AeroLink 默认支持一些环境变量，来改变一些配置项的默认值。
 
-> **旧变量名仍可用**：此前的 `KITE_*` 变量名作为弃用回退继续被接受——服务端优先读
-> `AEROLINK_*`，未设置时回退到同名的 `KITE_*` 并打印一次告警。已有部署请迁移到新名称。
+注意：**改名前的 `KITE_*` 变量名已不再被读取**（改为 `AEROLINK_*` 时是硬切，没有兼容兜底）。
+已有部署请把清单 / Secret / env 文件里的变量名全部换掉，否则相关配置会当作未设置。
 
 - **AEROLINK_CONFIG_FILE**：配置文件路径。该功能仅适用于鸢联 AeroLink `v0.10.0` 及以上版本。设置后，鸢联 AeroLink 从该文件加载集群、OAuth、LDAP、RBAC 和超级用户设置。详见[配置文件](../config/config-file.md)。
 - **AEROLINK_USERNAME**：兼容旧配置的超级用户名环境变量。仅在未设置 `AEROLINK_CONFIG_FILE` 时，用于环境变量到数据库配置的迁移。

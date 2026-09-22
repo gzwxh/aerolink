@@ -61,8 +61,13 @@ test.describe('notification subscriptions', () => {
       .click()
     await page.getByRole('option', { name: 'All users' }).click()
 
-    // 「全体用户」不绑定具体账号，因此不需要填接收者，按钮必须已经可用。
-    const add = page.getByRole('button', { name: 'Add', exact: true })
+    // 订阅按「事件 × 接收者」逐条建：勾一个事件就建一条，断言才好确定条数。
+    // 事件多选默认一个都没勾（这时提交按钮是禁用的），先勾上第一个。
+    await page
+      .getByRole('checkbox', { name: /^Remote login notice/ })
+      .check()
+
+    const add = page.getByRole('button', { name: /^Add subscriptions \(/ })
     await expect(add).toBeEnabled()
     await add.click()
 

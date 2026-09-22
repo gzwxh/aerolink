@@ -2,9 +2,9 @@
 
 AeroLink supports several environment variables by default to change the default values of some configuration items.
 
-> **Deprecated names still work**: the older `KITE_*` variables remain accepted as a fallback — the
-> server reads `AEROLINK_*` first and falls back to the matching `KITE_*` with a one-time warning.
-> Existing deployments should migrate to the new names.
+Note: the older `KITE_*` names are **no longer read** (the switch to `AEROLINK_*` was a hard cut with
+no fallback). Existing deployments must rename every variable in their manifests, Secrets and env files,
+otherwise the setting counts as unset.
 
 - **AEROLINK_CONFIG_FILE**: Path to the configuration file. Available in AeroLink `v0.10.0` and later. When set, AeroLink loads cluster, OAuth, LDAP, RBAC, and super user settings from this file. See [Configuration File](/en/config/config-file) for details.
 - **AEROLINK_USERNAME**: Legacy environment variable for the initial administrator username. It is only used for env-to-DB migration when `AEROLINK_CONFIG_FILE` is not set.
