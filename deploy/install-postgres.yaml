@@ -14,9 +14,9 @@
 #      请务必妥善备份（丢了等于所有集群要重新接入，只能靠备份）。
 #      未设置时服务会拒绝启动（除非显式打开 AEROLINK_ALLOW_INSECURE_SECRETS，生产禁用）。
 #      JWT_SECRET 与旧值不同只会让已有会话失效（所有人重新登录一次），不丢数据。
-#   2. POSTGRES_DSN —— 替换为实际的 PostgreSQL 连接信息。下面这一行已经指向
-#      node1（10.100.117.8）宿主机 Docker 里的 aerolink-postgres12（宿主端口 5433，
-#      已实测 Pod 可直连）；换环境时只改这一行的 host / port / password。
+#   2. POSTGRES_DSN —— 替换为实际的 PostgreSQL 连接信息。下面这一行指向
+#      10.10.11.111:5432 的 kite 库（已实测：新代码连上去能正常启动，
+#      Schema 无需手工改，AutoMigrate 自动对齐）。换环境时只改这一行的 host / port / user / password。
 #
 # 数据库要求（提前手动建好，鸢联 AeroLink 不做建库）：
 #   库名与角色名都叫 aerolink（与产品名一致，但不强求）。
@@ -73,14 +73,14 @@ metadata:
   namespace: aerolink
 type: Opaque
 stringData:
-  # ⚠ 本清单当前复用已有数据库：两个值必须与该库原来在用的部署保持一致，不要盲改。
-  #   全新安装则用 `openssl rand -base64 32` 重新生成这两个值。
-  #   下面这个 AEROLINK_ENCRYPT_KEY 同时写在仓库的 dev.env 里（本地开发用），
-  #   复用现网库时先是让它保持一致、能启动，之后再按 README「加密密钥轮换」换掉：
-  #   必须先用旧值启动，在界面上逐个重新保存凭据（集群 / LDAP / OAuth / SMTP / AI），
-  #   才能切到新值。
+  # ⚠ 本清单复用已有数据库（10.10.11.111 的 kite 库）：两个值必须与该库原来在用的部署保持一致，
+  #   不要盲改。下面的 AEROLINK_ENCRYPT_KEY 就是那个库在用的密钥（库里的
+  #   encrypt_key_fingerprint 与它一致，已实测能解开 3 个集群的 kubeconfig）。
+  #   全新安装请用 `openssl rand -base64 32` 重新生成，不要沿用这两个值。
+  #   JWT_SECRET 与旧值不同只会让已有会话失效（重新登录一次）；同一个值兼作两用并不理想，
+  #   想换成独立的新值随时可以。
   JWT_SECRET: "3z7WBs8FsvXbFs1gPM6zs69iN0z6hyB2Id1rfSTseLU="
-  AEROLINK_ENCRYPT_KEY: "dev-only-encrypt-key-0123456789abcdef"
+  AEROLINK_ENCRYPT_KEY: "3z7WBs8FsvXbFs1gPM6zs69iN0z6hyB2Id1rfSTseLU="
   # pgx 支持两种写法，任选一种：
   #
   # ① key=value（本项目文档里用得最多）：
@@ -95,7 +95,7 @@ stringData:
   # ⚠ sslmode：PG 在集群外、未开 TLS 时用 disable；开了 TLS 改为 require / verify-full。
   # ⚠ 库名与角色名都是 aerolink；下面是连接串模板，改地址 /
   #   密码时只改这一行，上面的说明不必跟着改。
-  POSTGRES_DSN: "host=10.100.117.8 port=5433 user=aerolink password=JaAUuHlthKId5MXxGrtU dbname=aerolink sslmode=disable TimeZone=Asia/Shanghai"
+  POSTGRES_DSN: "host=10.10.11.111 port=5432 user=postgres password=postgres dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
 ---
 apiVersion: apps/v1
 kind: Deployment
