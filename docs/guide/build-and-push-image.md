@@ -6,7 +6,7 @@
 
 - 已安装 Docker，`docker version` 能看到 **Server** 段（只有 Client 说明守护进程没起来）。
 - 有一个可用的镜像仓库：Docker Hub、阿里云 ACR、腾讯云 TCR、自建 Harbor 等。
-- 已获取源码，根目录存在 `Dockerfile`（多阶段构建：前端 node → 后端 golang → 运行时 distroless）与 `charts/kite`。
+- 已获取源码，根目录存在 `Dockerfile`（多阶段构建：前端 node → 后端 golang → 运行时 openEuler）与 `charts/kite`。
 
 ## 一、构建镜像
 
@@ -19,7 +19,7 @@ docker build -t aerolink:local .
 推荐同时注入版本信息，界面上会显示真实版本而不是 `dev`（与 Makefile 的注入方式一致）：
 
 ```bash
-VERSION=$(bash scripts/get-version.sh)          # 例如 v0.15.1-p9-82911d0
+VERSION=$(bash scripts/get-version.sh)          # 例如 v1.0.1-p9-82911d0
 docker build \
   --build-arg VERSION="$VERSION" \
   --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -36,16 +36,16 @@ docker build --provenance=false --sbom=false --platform linux/amd64 -t aerolink:
 ```
 :::
 
-### 国内网络：替换基础镜像与依赖源
+### 构建机不在公司网络内时
 
-Docker Hub（`node` / `golang`）与 gcr.io（`distroless`）在部分网络下不可达，可用构建参数替换：
+默认基础镜像全部取自公司 SWR（见下表）；若构建机拉不到 SWR，可换成公共镜像并配好依赖源：
 
 ```bash
 VERSION=$(bash scripts/get-version.sh)
 docker build \
-  --build-arg NODE_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/node:24-alpine \
-  --build-arg GOLANG_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26-alpine \
-  --build-arg RUNTIME_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20 \
+  --build-arg NODE_IMAGE=node:24-alpine \
+  --build-arg GOLANG_IMAGE=golang:1.26.8 \
+  --build-arg RUNTIME_IMAGE=alpine:3.23.2 \
   --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
   --build-arg GOPROXY=https://goproxy.cn,direct \
   --build-arg VERSION="$VERSION" \
@@ -53,7 +53,7 @@ docker build \
 ```
 
 ::: tip 更省事的做法
-先给 Docker 配镜像加速（见「常见问题」），这样 `node` / `golang` 可以直接用默认名字拉取，只替换 gcr 与依赖源即可。
+先给 Docker 配镜像加速（见「常见问题」），这样 `node` / `golang` 可以直接用默认名字拉取，只替换基座与依赖源即可。
 :::
 
 构建参数速查：
@@ -61,11 +61,11 @@ docker build \
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `NODE_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/node:24-alpine` | 前端构建基础镜像（公司 SWR） |
-| `GOLANG_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26-alpine` | 后端构建基础镜像（公司 SWR） |
-| `RUNTIME_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20` | 运行时基础镜像（公司 SWR） |
+| `GOLANG_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26.8` | 后端构建基础镜像（公司 SWR；必须是 **Debian 版**，cgo 编译需要 gcc/g++） |
+| `RUNTIME_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4` | 运行时基础镜像（公司 SWR） |
 | `NPM_REGISTRY` | `https://registry.npmjs.org` | 前端依赖源 |
 | `GOPROXY` | `https://proxy.golang.org,direct` | Go 模块代理 |
-| `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `dev` / `unknown` / `unknown` | 注入 `pkg/version`，展示在界面上 |
+| `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `v1.0.0` / `unknown` / `unknown` | 注入 `pkg/version`，展示在界面上 |
 
 ## 二、验证镜像
 
@@ -134,7 +134,7 @@ docker --config ~/.docker-org push swr.cn-south-1.myhuaweicloud.com/<组织>/aer
 ```bash
 docker buildx create --name aerolink-builder --use
 docker buildx build --platform linux/amd64,linux/arm64 \
-  --build-arg RUNTIME_IMAGE=gcr.m.daocloud.io/distroless/static \
+  --build-arg RUNTIME_IMAGE=alpine:3.23.2 \
   -t <registry>/<namespace>/aerolink:$VERSION --push .
 ```
 
@@ -180,7 +180,7 @@ helm upgrade --install kite charts/kite -n kite-system --create-namespace \
 
 ```bash
 helm package charts/kite -d dist
-helm push dist/kite-0.15.0.tgz oci://<registry>/<namespace>
+helm push dist/kite-1.0.0.tgz oci://<registry>/<namespace>
 ```
 
 ::: warning 华为云 SWR 个人版不接受 Helm OCI 制品
@@ -214,8 +214,8 @@ sudo systemctl restart docker
 
 **运行时基础镜像拉不下来**
 
-默认取自公司 SWR（`swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20`）。若构建机不在公司网络内，可换成公共镜像：
-`--build-arg RUNTIME_IMAGE=alpine:3.20`（如需要 CA 证书/时区数据请自行在镜像中安装 `ca-certificates`、`tzdata`）。
+默认取自公司 SWR（`swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4`）。若构建机不在公司网络内，可换成公共镜像：
+`--build-arg RUNTIME_IMAGE=alpine:3.23.2`（CA 证书与时区数据已由 Dockerfile 从构建镜像拷贝，基座里不需要再装 `ca-certificates`、`tzdata`）。
 
 **`go mod download` 超时**
 

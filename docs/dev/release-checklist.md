@@ -46,7 +46,7 @@
 
 ```bash
 make changelog                    # 生成 CHANGELOG.md（分类发布说明）
-sh scripts/changelog.sh --from v0.15.0 --to HEAD   # 只生成某个区间的发布说明
+sh scripts/changelog.sh --from v1.0.0 --to HEAD   # 只生成某个区间的发布说明
 sh scripts/release.sh 1.0.1       # bump chart 版本 → commit → tag v1.0.1
 ```
 
