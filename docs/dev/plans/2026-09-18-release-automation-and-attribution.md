@@ -31,7 +31,7 @@ if: ${{ github.repository_owner == 'kite-org' && startsWith(github.ref, 'refs/ta
 
 | 关注点 | 现状 |
 | --- | --- |
-| 版本号 | `Makefile` 的 `VERSION`（当前 `dsy-v1.0.0`）+ `scripts/get-version.sh`（从 git tag 推导）+ 构建时 ldflags 注入，前端侧边栏通过 `/api/v1/version` 展示；本机覆盖走 gitignored 的 `Makefile.local` |
+| 版本号 | `Makefile` 的 `VERSION`（当前 `v1.0.0`）+ `scripts/get-version.sh`（从 git tag 推导）+ 构建时 ldflags 注入，前端侧边栏通过 `/api/v1/version` 展示；本机覆盖走 gitignored 的 `Makefile.local` |
 | 发布脚本 | `scripts/release.sh` 只做一件事：bump `charts/kite/Chart.yaml` + `README.md` 版本 → commit → `git tag`（`set -x`，硬编码 `CHART_DIR`） |
 | 发布说明 | `softprops/action-gh-release` 的 `generate_release_notes: true`（GitHub 自动生成"What's Changed"），**无分类聚合**，无 release-drafter |
 | 其他工作流 | `ci.yml`（build + golangci-lint + pre-commit + test）、`e2e.yml`、`docs-ci.yml`、`build-preview-docker-image.yml` 可用（无组织门禁） |

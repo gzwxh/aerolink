@@ -107,7 +107,7 @@ func ExportAuditHistoryArchive(c *gin.Context) {
 	}
 	respondArchiveExport(c, archiveExportRequest{
 		kind:      ESKindAuditHistory,
-		name:      "kite-audit-logs-archive",
+		name:      "aerolink-audit-logs-archive",
 		timeField: esFieldCreatedAt,
 		columns:   auditHistoryArchiveColumns,
 		filters:   filters,
@@ -122,7 +122,7 @@ func ExportLoginRecordArchive(c *gin.Context) {
 	}
 	respondArchiveExport(c, archiveExportRequest{
 		kind:      ESKindLoginRecord,
-		name:      "kite-login-logs-archive",
+		name:      "aerolink-login-logs-archive",
 		timeField: esFieldCreatedAt,
 		columns:   loginRecordArchiveColumns,
 		filters:   filters,
@@ -140,7 +140,7 @@ func ExportPasswordChangeRecordArchive(c *gin.Context) {
 	}
 	respondArchiveExport(c, archiveExportRequest{
 		kind:      ESKindPasswordChangeLog,
-		name:      "kite-password-change-logs-archive",
+		name:      "aerolink-password-change-logs-archive",
 		timeField: esFieldCreatedAt,
 		columns:   passwordChangeArchiveColumns,
 		filters:   filters,
@@ -155,7 +155,7 @@ func ExportAccessLogArchive(c *gin.Context) {
 	}
 	respondArchiveExport(c, archiveExportRequest{
 		kind:      ESKindAccessLog,
-		name:      "kite-access-logs-archive",
+		name:      "aerolink-access-logs-archive",
 		timeField: esFieldTimestamp,
 		columns:   accessLogArchiveColumns,
 		filters:   filters,

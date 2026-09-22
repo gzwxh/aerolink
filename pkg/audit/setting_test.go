@@ -22,26 +22,26 @@ func testArchiveSetting() model.AuditSettingData {
 				SecretKey: model.SecretString("real-secret"),
 				PathStyle: false,
 				UseTLS:    true,
-				Prefix:    "wxh-test/kite-audit-test",
+				Prefix:    "wxh-test/aerolink-audit-test",
 			},
 			Elasticsearch: model.ESArchive{
 				Enabled:     true,
 				URLs:        []string{"http://es:9200"},
 				Username:    "elastic",
 				Password:    model.SecretString("es-secret"),
-				IndexPrefix: "kite-audit",
+				IndexPrefix: "aerolink-audit",
 			},
 			VictoriaLogs: model.VictoriaLogsArchive{
 				Enabled: true,
 				URLs:    []string{"http://victorialogs:9428"},
-				Stream:  "kite-audit",
+				Stream:  "aerolink-audit",
 			},
 			OpenObserve: model.OpenObserveArchive{
 				Enabled:  true,
 				URLs:     []string{"http://openobserve:5080"},
 				Org:      "default",
-				Stream:   "kite-audit",
-				Username: "kite@example.com",
+				Stream:   "aerolink-audit",
+				Username: "aerolink@example.com",
 				Password: model.SecretString("oo-secret"),
 			},
 		},
@@ -73,7 +73,7 @@ func TestRejectStaleSecretAfterMove(t *testing.T) {
 	tweaked := testArchiveSetting()
 	tweaked.Archive.S3.SecretKey = secretMask
 	tweaked.Archive.S3.DeleteLocalAfterUpload = true
-	tweaked.Archive.S3.Prefix = "wxh-test/kite-audit-test"
+	tweaked.Archive.S3.Prefix = "wxh-test/aerolink-audit-test"
 	if err := rejectStaleSecretAfterMove(&tweaked, &current); err != nil {
 		t.Errorf("只改归档策略时不该要求重填密钥: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestRejectStaleSecretAfterMove(t *testing.T) {
 	// 只换流名只是换个采集目标，凭据仍然可用，不该要求重填。
 	ooStream := testArchiveSetting()
 	ooStream.Archive.OpenObserve.Password = secretMask
-	ooStream.Archive.OpenObserve.Stream = "kite-audit-2"
+	ooStream.Archive.OpenObserve.Stream = "aerolink-audit-2"
 	if err := rejectStaleSecretAfterMove(&ooStream, &current); err != nil {
 		t.Errorf("只换 stream 时不该要求重填密码: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestRejectStaleKafkaPasswordAfterMove(t *testing.T) {
 			Mode:    model.LogForwardModeKafka,
 			Kafka: model.KafkaSetting{
 				Brokers:       []string{"kafka-1:9092"},
-				Topic:         "kite-audit",
+				Topic:         "aerolink-audit",
 				SASLMechanism: model.KafkaSASLPlain,
 				Username:      "kite",
 				Password:      model.SecretString("kafka-secret"),
@@ -288,7 +288,7 @@ func TestAuditSettingDiffCoversLogForward(t *testing.T) {
 		Format:  model.LogFormatText,
 		Kafka: model.KafkaSetting{
 			Brokers:       []string{"kafka-1:9092"},
-			Topic:         "kite-audit",
+			Topic:         "aerolink-audit",
 			SASLMechanism: model.KafkaSASLPlain,
 			Username:      "kite",
 			Password:      model.SecretString("kafka-secret"),
@@ -299,13 +299,13 @@ func TestAuditSettingDiffCoversLogForward(t *testing.T) {
 	after := before
 	after.Forward.Mode = model.LogForwardModeKafka
 	after.Forward.Kafka.Password = model.SecretString("rotated-kafka-secret")
-	after.Forward.Kafka.Topic = "kite-audit-2"
+	after.Forward.Kafka.Topic = "aerolink-audit-2"
 
 	summary := auditSettingDiff(before, after)
 	if !strings.Contains(summary, "forward.mode: syslog -> kafka") {
 		t.Errorf("换外发方式应记下前后值: %s", summary)
 	}
-	if !strings.Contains(summary, "kafka.topic: kite-audit -> kite-audit-2") {
+	if !strings.Contains(summary, "kafka.topic: aerolink-audit -> aerolink-audit-2") {
 		t.Errorf("Kafka 主题变更应记下前后值: %s", summary)
 	}
 	if !strings.Contains(summary, "kafka.password: changed") {

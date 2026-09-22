@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/zxh326/kite/pkg/common"
 )
 
 // maxResponseBytes 限制单次响应读取量：本工具只做存在性/字段校验，不需要完整大对象。
@@ -92,8 +94,8 @@ func (r *runner) expectStatus(name, method, path string, body any, want ...int) 
 func main() {
 	var opts options
 	flag.StringVar(&opts.baseURL, "base-url", "http://127.0.0.1:8080", "实例地址")
-	flag.StringVar(&opts.username, "username", os.Getenv("KITE_SMOKE_USER"), "管理员用户名（默认取 KITE_SMOKE_USER）")
-	flag.StringVar(&opts.password, "password", os.Getenv("KITE_SMOKE_PASSWORD"), "口令（默认取 KITE_SMOKE_PASSWORD）")
+	flag.StringVar(&opts.username, "username", common.Getenv("SMOKE_USER"), "管理员用户名（默认取 AEROLINK_SMOKE_USER）")
+	flag.StringVar(&opts.password, "password", common.Getenv("SMOKE_PASSWORD"), "口令（默认取 AEROLINK_SMOKE_PASSWORD）")
 	flag.StringVar(&opts.cluster, "cluster", "", "集群名（默认取列表里的第一个）")
 	flag.StringVar(&opts.namespace, "namespace", "", "只读检查用的命名空间（默认取集群里第一个非系统命名空间）")
 	flag.StringVar(&opts.writeNamespace, "write-namespace", "", "写检查的命名空间；给了才会跑写检查，请用一个可以随便破坏的命名空间")
@@ -106,7 +108,7 @@ func main() {
 	flag.Parse()
 
 	if opts.username == "" || opts.password == "" {
-		fmt.Fprintln(os.Stderr, "缺少凭据：请用 -username/-password 或环境变量 KITE_SMOKE_USER/KITE_SMOKE_PASSWORD")
+		fmt.Fprintln(os.Stderr, "缺少凭据：请用 -username/-password 或环境变量 AEROLINK_SMOKE_USER/AEROLINK_SMOKE_PASSWORD")
 		os.Exit(2)
 	}
 

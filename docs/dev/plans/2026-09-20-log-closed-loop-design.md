@@ -104,12 +104,12 @@ Fluent Bit 片段（示意）：
 [OUTPUT]
     Name   es
     Match  audit.*
-    Index  kite-audit
+    Index  aerolink-audit
 ```
 
 ## 6. 告警规则（自监控）
 
-指标（`/metrics`，与其它指标共用 `KITE_METRICS_TOKEN` 保护）：
+指标（`/metrics`，与其它指标共用 `AEROLINK_METRICS_TOKEN` 保护）：
 
 | 指标 | 含义 |
 |---|---|
@@ -123,7 +123,7 @@ Prometheus 规则建议：
 
 ```yaml
 groups:
-  - name: kite-audit-pipeline
+  - name: aerolink-audit-pipeline
     rules:
       - alert: KiteAuditRecordsDropped
         expr: increase(kite_audit_archive_dropped_total[5m]) > 0

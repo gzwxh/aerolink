@@ -45,7 +45,7 @@ func kafkaForwardConfig() model.LogForwardSetting {
 		Mode:    model.LogForwardModeKafka,
 		Kafka: model.KafkaSetting{
 			Brokers:       []string{"kafka:9092"},
-			Topic:         "kite-audit",
+			Topic:         "aerolink-audit",
 			SASLMechanism: model.KafkaSASLNone,
 			UseTLS:        true,
 		},

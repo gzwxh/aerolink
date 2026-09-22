@@ -52,9 +52,9 @@ jobs:
       E2E_KUBECONFIG: ${{ github.workspace }}/kite-e2e.kubeconfig
       KIND_LOGS_DIR: ${{ github.workspace }}/kind-logs
       E2E_PORT: "38080"
-      KITE_E2E_LDAP_URL: ldap://127.0.0.1:3389
-      KITE_E2E_OAUTH_ISSUER: http://127.0.0.1:5556
-      KITE_E2E_USE_SYSTEM_CHROME: "true"
+      AEROLINK_E2E_LDAP_URL: ldap://127.0.0.1:3389
+      AEROLINK_E2E_OAUTH_ISSUER: http://127.0.0.1:5556
+      AEROLINK_E2E_USE_SYSTEM_CHROME: "true"
 
     steps:
       - name: Checkout code

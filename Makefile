@@ -31,7 +31,9 @@ LOAD_DEV_ENV = if [ -f "$(abspath $(DEV_ENV))" ]; then set -a; . "$(abspath $(DE
 
 # Version information
 # 发布版本号（前端展示与镜像构建共用）；发新版时修改这里。
-VERSION ?= dsy-v1.0.0
+# 形式与 git tag 一致（vX.Y.Z）：CI 发布用 tag 覆盖这里，本地构建用这个默认值，
+# 两边格式相同，界面展示与 /api/v1/version 才对得上。
+VERSION ?= v1.0.0
 BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
@@ -106,7 +108,7 @@ cross-compile: frontend ## Cross-compile for multiple architectures
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe .
 	# GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-amd64 .
 
-# 授权迁移工具（Rancher → Kite 权限绑定组）的单文件构建。
+# 授权迁移工具（Rancher → AeroLink 权限绑定组）的单文件构建。
 # 日常使用见 tools/rancherrbac/README.md：目标机上只要二进制 + 配置文件。
 rancherrbac: ## 打包授权迁移工具（参数透传给 scripts/build-rancherrbac.sh，如 -a 全平台）
 	sh scripts/build-rancherrbac.sh $(ARGS)
@@ -287,15 +289,15 @@ e2e-setup-dex: ## Start the Dex service used by external-auth e2e
 
 e2e-run: e2e-kind-up e2e-stop-app ## Run e2e tests against the local kind cluster
 	@echo "🧪 Running e2e tests..."
-	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" KITE_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" KITE_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test $(SPEC)
+	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test $(SPEC)
 
 e2e-run-existing: e2e-stop-app ## Run e2e tests against an existing cluster (KUBECONFIG, E2E_CLUSTER_NAME, E2E_NODE_NAME)
 	@echo "🧪 Running e2e tests against an existing cluster..."
-	cd $(E2E_DIR) && KUBECONFIG="$(KUBECONFIG)" KITE_E2E_CLUSTER_NAME="$(E2E_CLUSTER_NAME)" KITE_E2E_CONTEXT_NAME="$(E2E_CONTEXT_NAME)" KITE_E2E_NODE_NAME="$(E2E_NODE_NAME)" KITE_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test $(SPEC)
+	cd $(E2E_DIR) && KUBECONFIG="$(KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_CLUSTER_NAME)" AEROLINK_E2E_CONTEXT_NAME="$(E2E_CONTEXT_NAME)" AEROLINK_E2E_NODE_NAME="$(E2E_NODE_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test $(SPEC)
 
 e2e-run-headed: e2e-kind-up e2e-stop-app ## Run e2e tests in headed mode against the local kind cluster
 	@echo "🧪 Running headed e2e tests..."
-	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" KITE_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" KITE_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test --headed $(SPEC)
+	cd $(E2E_DIR) && KUBECONFIG="$(E2E_KUBECONFIG)" AEROLINK_E2E_CLUSTER_NAME="$(E2E_KIND_NAME)" AEROLINK_E2E_PORT="$(E2E_PORT)" pnpm exec playwright test --headed $(SPEC)
 
 e2e-test: e2e-install e2e-install-browser e2e-run ## Run e2e tests against the local kind cluster
 

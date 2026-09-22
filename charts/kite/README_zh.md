@@ -152,7 +152,7 @@ helm package charts/kite -d dist
 公司尚未搭建 Helm 仓库，当前版本以 **`.tgz` 压缩包** 形式分发，随仓库一起维护：
 
 - 压缩包：`charts/kite-1.0.0.tgz`（由 `helm package charts/kite -d charts/` 生成）
-- 镜像：`swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:dsy-v1.0.0`（chart 默认值已指向公司 SWR）
+- 镜像：`swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0`（chart 默认值已指向公司 SWR）
 
 ### 安装
 

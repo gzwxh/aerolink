@@ -131,8 +131,8 @@ AfterCreate × 3 ─> forwardAuditMessage(msg) ─> forwarder 回调列表
 
 ### 6.2 具体落地
 
-- **klog**：默认打 stderr；`-log_file=/var/log/kite/kite.log -log_file_max_size=512
-  -logtostderr=false` 可改为只落文件（零代码）；`/var/log/kite` 挂可写卷。
+- **klog**：默认打 stderr；`-log_file=/var/log/aerolink/aerolink.log -log_file_max_size=512
+  -logtostderr=false` 可改为只落文件（零代码）；`/var/log/aerolink` 挂可写卷。
 - **访问日志**：`Formatter` 里调 `audit.RecordAccessLog`（进归档）+ 按 `format` 输出到 stdout，
   详见 `docs/dev/plans/2026-09-20-system-log-archive.md` §2。
 - **输出格式（已实现）**：klog 用自带 `--logging-format=text|json`（部署侧 flag，零代码）；
@@ -202,7 +202,7 @@ flush 成 parquet 后若 S3 启用，上传到 `prefix`（沿用 `<类型>/<年>
 > - 端到端验证结果见 §12.9。
 
 > **腾讯云 COS 实测（2026-09-21，`devops-1253764832` / `ap-guangzhou`）**：端到端通过——
-> parquet 按 `<prefix>/<类型>/<年>/<月>/<日>/<文件名>` 落桶（实测前缀 `wxh-test/kite-audit-test/`），
+> parquet 按 `<prefix>/<类型>/<年>/<月>/<日>/<文件名>` 落桶（实测前缀 `wxh-test/aerolink-audit-test/`），
 > 回读校验字节一致（`PAR1` 魔数正常）。
 >
 > 连接参数：`endpoint=https://cos.ap-guangzhou.myqcloud.com`（**不带桶名**，桶名走独立字段）、
@@ -281,8 +281,8 @@ type ESArchive struct {
 
 ### 9.2 配置来源（三级，后者覆盖前者）
 
-1. **环境变量 / 配置文件**（启动兜底，只读）：`KITE_AUDIT_ARCHIVE_DIR`（本地目录）、
-   `KITE_LOG_FILE`（klog 文件路径）。`config.yaml` 增加 `auditArchive` 块作为**初始
+1. **环境变量 / 配置文件**（启动兜底，只读）：`AEROLINK_AUDIT_ARCHIVE_DIR`（本地目录）、
+   `AEROLINK_LOG_FILE`（klog 文件路径）。`config.yaml` 增加 `auditArchive` 块作为**初始
    播种值**——DB 无归档配置时写入 `audit_settings`。
 2. **`audit_settings` 表（真身）**：管理员在「审计设置」页配置位置、时长、S3/ES 参数；
    该页属阶段 2，阶段 1 界面只读、仅经 `UpdateAuditSetting` 接口或 config 播种写入。
@@ -293,7 +293,7 @@ type ESArchive struct {
 ```yaml
 auditArchive:
   enabled: false            # 本地开发默认关闭
-  localDir: /var/log/kite/archive
+  localDir: /var/log/aerolink/archive
   retentionDays: 7
   maxBytes: 10737418240
   accessLog:
@@ -303,37 +303,37 @@ auditArchive:
   s3:
     enabled: false
     endpoint: http://minio:9000
-    bucket: kite-audit
-    accessKey: ${KITE_S3_ACCESS_KEY}
-    secretKey: ${KITE_S3_SECRET_KEY}
+    bucket: aerolink-audit
+    accessKey: ${AEROLINK_S3_ACCESS_KEY}
+    secretKey: ${AEROLINK_S3_SECRET_KEY}
     pathStyle: true
     deleteLocalAfterUpload: false  # 默认：本地留几天 + 全量同步 S3（true = 上传即删本地）
   elasticsearch:
     enabled: false
     urls: ["http://es:9200"]
-    indexPrefix: kite-audit
+    indexPrefix: aerolink-audit
 ```
 
 ### 9.4 charts / 部署
 
 **已实现**：`charts/kite/values.yaml` 增加 `auditArchiveDir`、`logFile`、`auditPersistence`
 （`volumeMounts` + `volumes`，支持 existingClaim / hostPath / emptyDir 三选，与
-`db.sqlite.persistence` 同一套写法）；`deployment.yaml` 注入 `KITE_AUDIT_ARCHIVE_DIR`、
-`KITE_LOG_FILE` 并挂载持久卷。`deploy/docker-compose.yaml`、`deploy/install.yaml`、
+`db.sqlite.persistence` 同一套写法）；`deployment.yaml` 注入 `AEROLINK_AUDIT_ARCHIVE_DIR`、
+`AEROLINK_LOG_FILE` 并挂载持久卷。`deploy/docker-compose.yaml`、`deploy/install.yaml`、
 `deploy/install-mysql.yaml` 已同步（给出环境变量与卷的示例）。
 
 **sink 的可照抄样例（2026-09-21）**：五种落地方式的选择都给了可直接抄的片段——
 `config.dev.yaml`（`auditSink` ①〜⑤ 段样例：database / parquet+S3 / elasticsearch /
 VictoriaLogs / OpenObserve，见 §12.14）、`charts/kite/values.yaml`
-（`extraEnvs: KITE_AUDIT_SINK` + `auditArchiveDir` 的配对写法）、`dev.env`、
+（`extraEnvs: AEROLINK_AUDIT_SINK` + `auditArchiveDir` 的配对写法）、`dev.env`、
 `deploy/docker-compose.yaml` 与 `deploy/install*.yaml`（环境变量示例，带“为什么拒绝启动”的说明）。
 样例一律强调前置条件：parquet 必须有归档目录，elasticsearch / victorialogs / openobserve
 必须先有地址。
 
-> 环境变量 `KITE_AUDIT_SINK` 可以**单独使用**（不挂 config.yaml）：之前只挂 config 文件的那条路
+> 环境变量 `AEROLINK_AUDIT_SINK` 可以**单独使用**（不挂 config.yaml）：之前只挂 config 文件的那条路
 > 才认它，现已补在 `LoadConfigFromEnv`（见 §12.13）。
 
-> klog 落盘有两条等价路径：环境变量 `KITE_LOG_FILE`（程序据此设置 `-log_file` 并关闭 stderr），
+> klog 落盘有两条等价路径：环境变量 `AEROLINK_LOG_FILE`（程序据此设置 `-log_file` 并关闭 stderr），
 > 或直接传 `-log_file -logtostderr=false` flag（命令行优先）。归档的 S3/ES 参数走
 > `config.yaml` 的 `auditArchive` 播种（§9.3），不在 values 里再开一套。
 
@@ -402,7 +402,7 @@ func (w *ParquetWriter) Close() error
 （schema/阈值独立，见系统日志方案 §2）。
 
 **步骤 6：启动接线 + klog 落文件** —— `pkg/common/common.go`、`app.go`：环境变量
-`KITE_AUDIT_ARCHIVE_DIR`、`KITE_LOG_FILE`；`StartParquetArchiver()` 启动各 writer +
+`AEROLINK_AUDIT_ARCHIVE_DIR`、`AEROLINK_LOG_FILE`；`StartParquetArchiver()` 启动各 writer +
 清理协程、优雅退出 `Close()`；klog `-log_file -logtostderr=false` 由部署注入、零 Go 代码。
 
 ### 10.3 阶段 2 详细路径（后续：S3 + ES + 查询 + UI 同期）
@@ -735,7 +735,7 @@ openobserve / kafka。
 | `parquet` | 不写库，直接落 parquet（+ 可选 S3 远端副本） | DuckDB 查 parquet |
 | `elasticsearch` | 不写库，直接写 ES | ES 检索 |
 
-配置项：`auditSink:` 或环境变量 `KITE_AUDIT_SINK`。取值非法**启动即失败**，不静默回落——
+配置项：`auditSink:` 或环境变量 `AEROLINK_AUDIT_SINK`。取值非法**启动即失败**，不静默回落——
 配错了必须让部署者立刻知道，而不是以为配置生效了却写去了别处。
 
 **统一写入口**：`model.RecordAudit`（新增）+ `RecordLogin` / `RecordLoginFailure` /
@@ -884,7 +884,7 @@ parquet/S3/ES）。结果是同一批审计记录散在多处、**每处都不�
 
 | 情况 | 旧行为 | 现行为 |
 |---|---|---|
-| `sink=parquet` 但没有 `localDir` 也无 `KITE_AUDIT_ARCHIVE_DIR` | 日志一行 error，之后记录全丢 | 启动失败（`audit.ValidateSinkTarget` → `klog.Fatalf`） |
+| `sink=parquet` 但没有 `localDir` 也无 `AEROLINK_AUDIT_ARCHIVE_DIR` | 日志一行 error，之后记录全丢 | 启动失败（`audit.ValidateSinkTarget` → `klog.Fatalf`） |
 | `sink=elasticsearch` 但没有节点地址（或 ES 开关没开） | 日志一行 error，之后记录全丢 | 启动失败；保存时也拒绝（ES 通道由 sink 推导为启用，`normalize` 要求 urls） |
 
 启动校验放在 `app.go`、在 `StartParquetArchiver` 之前（此时 DB 就绪、配置文件与环境变量都已应用）。
@@ -896,7 +896,7 @@ sink 变更**（只警告、保持启动值）。理由是热改会产生半生�
 却没重建，例如 database→parquet 的热切换会让之后的审计记录**直接丢掉**。切换存储必须重启。
 
 另一个让环境变量失效的漏点也一并修掉：不提供配置文件时 `applyConfig` 根本不会跑（`LoadConfigFromFile`
-在 path 为空时直接 return），所以「只设 `KITE_AUDIT_SINK`、不挂 `config.yaml`」的部署会静静按 database
+在 path 为空时直接 return），所以「只设 `AEROLINK_AUDIT_SINK`、不挂 `config.yaml`」的部署会静静按 database
 跑——部署者以为切了存储，实际没切。现已补在 `LoadConfigFromEnv` 里（有配置文件时走
 `LoadConfigFromFile`，两条路 app.go 只会走一条）。回归用例：`TestLoadConfigFromEnvAppliesAuditSink`
 （去掉那一行就会失败，做过对照）。
@@ -950,7 +950,7 @@ sink 变更**（只警告、保持启动值）。理由是热改会产生半生�
 
 #### b) 怎么设（照抄即可）
 
-配置文件（`config.yaml` 的 `auditSink`，**优先**）或者环境变量 `KITE_AUDIT_SINK`，都在**启动时**生效，
+配置文件（`config.yaml` 的 `auditSink`，**优先**）或者环境变量 `AEROLINK_AUDIT_SINK`，都在**启动时**生效，
 管理页面只读。五种取值对应的完整配置段见仓库根目录 `config.dev.yaml`（①〜⑤）；环境变量方式的
 换行写法与取值清单见 `dev.env`、`charts/kite/values.yaml` 与 `deploy/*.yaml` 的注释。
 
@@ -962,7 +962,7 @@ auditSink: victorialogs
 auditArchive:
   victorialogs:
     urls: ["http://victorialogs:9428"]   # 必填，否则拒绝启动
-    stream: kite-audit                   # 单 stream，四类记录靠 kind 区分
+    stream: aerolink-audit                   # 单 stream，四类记录靠 kind 区分
 
 # ⑤ OpenObserve（默认 5080）
 auditSink: openobserve
@@ -970,12 +970,12 @@ auditArchive:
   openobserve:
     urls: ["http://openobserve:5080"]    # 必填，否则拒绝启动
     org: default
-    stream: kite-audit
+    stream: aerolink-audit
     username: kite@example.com
-    password: ${KITE_OPENOBSERVE_PASSWORD}
+    password: ${AEROLINK_OPENOBSERVE_PASSWORD}
 ```
 
-只设环境变量时：`KITE_AUDIT_SINK=victorialogs`（或 `openobserve`）。注意与 parquet / ES 同理：
+只设环境变量时：`AEROLINK_AUDIT_SINK=victorialogs`（或 `openobserve`）。注意与 parquet / ES 同理：
 **只有环境变量、不挂配置文件**也会生效（§12.13 b 修过的那个漏点）；多副本部署每份副本都要写同一个值。
 
 #### c) 与既有约定一致的地方

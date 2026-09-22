@@ -9,6 +9,7 @@
 dev.db
 *.db
 kite
+aerolink
 
 # Local development credentials and overrides
 # `config.dev.yaml` auto-creates admin/AdminPass!234, `dev.env*` holds development

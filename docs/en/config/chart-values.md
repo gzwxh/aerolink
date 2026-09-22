@@ -1,6 +1,6 @@
 # Chart Values
 
-This document describes all available configuration options for the Kite Helm Chart.
+This document describes all available configuration options for the AeroLink Helm Chart.
 
 ## Basic Configuration
 
@@ -14,7 +14,7 @@ This document describes all available configuration options for the Kite Helm Ch
 | `nameOverride`     | Override chart name                                        | `""`                    |
 | `fullnameOverride` | Override full name                                         | `""`                    |
 | `debug`            | Enable debug mode                                          | `false`                 |
-| `basePath`         | Base path where Kite is served. See notes below.           | `""`                    |
+| `basePath`         | Base path where AeroLink is served. See notes below.           | `""`                    |
 
 ## Authentication & Security
 
@@ -55,13 +55,13 @@ This document describes all available configuration options for the Kite Helm Ch
 
 ## Outbound Requests
 
-Kite makes no outbound requests at all: no update check, no telemetry. Instances only talk to the API servers of their own cluster (plus any cluster you add in the UI) and the configured database; `/api/v1/version` returns local build information only.
+AeroLink makes no outbound requests at all: no update check, no telemetry. Instances only talk to the API servers of their own cluster (plus any cluster you add in the UI) and the configured database; `/api/v1/version` returns local build information only.
 
 ## Application Configuration
 
-Kite supports loading cluster, OAuth/LDAP, and RBAC configuration from a YAML config file. When enabled, managed sections become read-only in the UI.
+AeroLink supports loading cluster, OAuth/LDAP, and RBAC configuration from a YAML config file. When enabled, managed sections become read-only in the UI.
 
-Available in Kite `v0.10.0` and later.
+Available in AeroLink `v0.10.0` and later.
 
 See [Configuration File](./config-file) for the full config file format, usage examples, and reference.
 

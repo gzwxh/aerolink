@@ -165,7 +165,7 @@ func TestTerminalAgentsUseExpectedSecurityConfigurationAndCleanupScope(t *testin
 	unrelated := &corev1.Pod{}
 	unrelated.Name = "unrelated"
 	unrelated.Namespace = common.AgentPodNamespace
-	unrelated.Labels = map[string]string{"kite.io/kubectl-session": "session-b"}
+	unrelated.Labels = map[string]string{"aerolink.io/kubectl-session": "session-b"}
 	if err := client.Create(ctx, unrelated); err != nil {
 		t.Fatalf("creating unrelated pod: %v", err)
 	}

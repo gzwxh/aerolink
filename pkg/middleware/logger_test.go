@@ -36,7 +36,7 @@ func TestLoggerPathExcludesQueryString(t *testing.T) {
 	router.GET("/thing", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	request := httptest.NewRequest(http.MethodGet, "/thing?token=secret-value", nil)
-	request.Header.Set("User-Agent", "kite-test-agent/1.0")
+	request.Header.Set("User-Agent", "aerolink-test-agent/1.0")
 	router.ServeHTTP(httptest.NewRecorder(), request)
 
 	line := output.String()

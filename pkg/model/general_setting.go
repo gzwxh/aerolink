@@ -71,7 +71,7 @@ type GeneralSetting struct {
 	// “Kite”（与 logoUrl 一样由公开的 bootstrap 接口下发）。
 	SiteName  string       `json:"siteName" gorm:"column:site_name;type:varchar(100)"`
 	JWTSecret SecretString `json:"-" gorm:"column:jwt_secret;type:text"`
-	// EncryptKeyFingerprint 记录数据库中已有行是用哪个 KITE_ENCRYPT_KEY 加密的，
+	// EncryptKeyFingerprint 记录数据库中已有行是用哪个 AEROLINK_ENCRYPT_KEY 加密的，
 	// 这样从内置默认密钥切换出去时可以走迁移，
 	// 而不是把所有已存密钥悄悄弄坏。
 	EncryptKeyFingerprint   string `json:"-" gorm:"column:encrypt_key_fingerprint;type:varchar(64)"`

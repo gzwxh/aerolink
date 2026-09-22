@@ -52,7 +52,7 @@
 | `GET` | `/api/users/:id/avatar` | 返回图片字节；`Content-Type` 取白名单值，`Cache-Control: private, max-age=31536000, immutable` + `ETag`；无头像 404 |
 
 - **路径不带 base path**：库里存 `/api/users/...`，前端用 `withSubPath()` 补前缀（与
-  `apiClient` 的做法一致），这样改 `KITE_BASE` 不会让库里存的历史 URL 失效。
+  `apiClient` 的做法一致），这样改 `AEROLINK_BASE` 不会让库里存的历史 URL 失效。
 - **`?v=<version>`** 用于缓存失效：每次上传版本 +1，URL 变了，浏览器不会拿旧图。
 - **鉴权**：三者都只要登录。头像本身不敏感（用户列表里所有管理员都能看到），
   而按「只能读自己」判定会让用户列表里的头像全部 404，收益也不存在。

@@ -4,7 +4,7 @@
 #
 # 为什么要轮询：inotifywait / fswatch / entr / air 都需要额外安装系统工具，而开发环境
 # （WSL、macOS、容器）不一定有。轮询没有依赖，代价是改动后约 1 秒生效（可用
-# KITE_DEV_WATCH_INTERVAL 调整）。前端的热更新由 vite 负责，这里只管后端。
+# AEROLINK_DEV_WATCH_INTERVAL 调整）。前端的热更新由 vite 负责，这里只管后端。
 #
 # 为什么也盯 static/：前端资源是通过 //go:embed 编进二进制的，跑在 :8080 上的服务
 # 不会自动看到 `make frontend` 的产物。把 static/ 纳入监听后，构建完前端（约 1 秒）
@@ -15,8 +15,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 BINARY_NAME="${BINARY_NAME:-aerolink}"
-INTERVAL="${KITE_DEV_WATCH_INTERVAL:-1}"
-read -r -a RUN_ARGS <<< "${KITE_DEV_RUN_ARGS:--v=5}"
+INTERVAL="${AEROLINK_DEV_WATCH_INTERVAL:-1}"
+read -r -a RUN_ARGS <<< "${AEROLINK_DEV_RUN_ARGS:--v=5}"
 
 # 本地开发环境变量（存在时）：与 Makefile 的 LOAD_DEV_ENV 行为一致。
 DEV_ENV="${DEV_ENV:-dev.env}"

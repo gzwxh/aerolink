@@ -459,7 +459,7 @@ func TestBuildPlanSkipsUnmappedCluster(t *testing.T) {
 	if len(plan.Groups) != 0 || len(plan.Roles) != 0 {
 		t.Fatalf("未映射集群不应产生任何写入：%#v", plan)
 	}
-	if len(plan.Notes) == 0 || !strings.Contains(strings.Join(plan.Notes, "\n"), "未映射到 Kite 集群") {
+	if len(plan.Notes) == 0 || !strings.Contains(strings.Join(plan.Notes, "\n"), "未映射到 AeroLink 集群") {
 		t.Fatalf("应说明未映射的集群：%v", plan.Notes)
 	}
 }

@@ -45,7 +45,7 @@ host: ""
 # 示例："/kite"
 basePath: ""
 
-# 审计/访问日志的本地归档目录（注入 KITE_AUDIT_ARCHIVE_DIR）。
+# 审计/访问日志的本地归档目录（注入 AEROLINK_AUDIT_ARCHIVE_DIR）。
 # 只作启动兜底：生效值在「日志审计 → 审计设置 → 归档」里配置。
 # 留空表示只依赖数据库里的配置。
 # 注意：`auditSink: parquet` 时归档目录是**唯一落点**，既没配 localDir 又没配本项时
@@ -54,12 +54,12 @@ basePath: ""
 # 每个副本只写自己产生的记录，检索要看到全部记录就得读同一个目录（见方案 §12.15d）。
 #
 # 审计日志的落地方式（database 默认 / parquet / elasticsearch / victorialogs / openobserve，
-# 五选一互斥）由 config.yaml 的 auditSink 或 KITE_AUDIT_SINK 在启动时决定，页面只读。
+# 五选一互斥）由 config.yaml 的 auditSink 或 AEROLINK_AUDIT_SINK 在启动时决定，页面只读。
 # 多副本部署每份副本都要写同一个值，否则记录会散到不同地方。用环境变量时：
 #
 #   ① parquet（配合上面的 auditArchiveDir 一起给）
 #   extraEnvs:
-#     - name: KITE_AUDIT_SINK
+#     - name: AEROLINK_AUDIT_SINK
 #       value: parquet
 #   auditArchiveDir: /var/log/aerolink/archive
 #
@@ -67,24 +67,24 @@ basePath: ""
 #      的地址/凭据填好保存，或走 config.enabled + config.yaml 的
 #      auditArchive.elasticsearch.urls 播种）
 #   extraEnvs:
-#     - name: KITE_AUDIT_SINK
+#     - name: AEROLINK_AUDIT_SINK
 #       value: elasticsearch
 #
 #   ③ victorialogs（VictoriaLogs，**不是** VictoriaMetrics；地址必须先存在，否则拒绝启动）
 #   extraEnvs:
-#     - name: KITE_AUDIT_SINK
+#     - name: AEROLINK_AUDIT_SINK
 #       value: victorialogs
 #
 #   ④ openobserve（地址必须先存在，否则拒绝启动）
 #   extraEnvs:
-#     - name: KITE_AUDIT_SINK
+#     - name: AEROLINK_AUDIT_SINK
 #       value: openobserve
 #
 # 或者不用环境变量，直接走 config.enabled=true + 含 config.yaml 的 Secret
 # （内容里写 `auditSink: parquet`，示例见仓库根目录 config.dev.yaml）。
 auditArchiveDir: ""
 
-# klog（系统日志）的落盘路径，注入 KITE_LOG_FILE 环境变量：程序据此设置 -log_file
+# klog（系统日志）的落盘路径，注入 AEROLINK_LOG_FILE 环境变量：程序据此设置 -log_file
 # 并关闭 stderr 输出（-logtostderr=false），即「系统日志只落文件、由采集工具收集」。
 # 留空表示维持默认（输出到 stderr）。
 logFile: ""
@@ -131,7 +131,7 @@ secret:
   # 若设置，Deployment 会使用这个已有的 secret 名称而不是自动生成的名称（当 `create: true` 时忽略）。
   # 必须包含所有必需的键。
   #  JWT_SECRET
-  #  KITE_ENCRYPT_KEY
+  #  AEROLINK_ENCRYPT_KEY
   #  DB_TYPE 支持的值：sqlite、postgres、mysql（未设置时默认为 sqlite）
   #  DB_DSN（sqlite 时不需要）
   # 若设置，chart 中的 db.dsn 与 db.type 值将被忽略。

@@ -1,6 +1,6 @@
 # Authentication
 
-Kite supports interactive login through OAuth, password users, LDAP, and MFA, plus programmatic access through API keys. API keys authenticate as special users and follow the same RBAC model as interactive users.
+AeroLink supports interactive login through OAuth, password users, LDAP, and MFA, plus programmatic access through API keys. API keys authenticate as special users and follow the same RBAC model as interactive users.
 
 ## Interactive login
 
@@ -107,16 +107,16 @@ Relevant request fields:
 
 ## Login attempt blocking
 
-Credential-based logins are temporarily blocked by client IP after repeated invalid password or MFA attempts. Kite allows up to 10 failures within 1 minute; the next failure blocks further credential login attempts from that client IP for 5 minutes.
+Credential-based logins are temporarily blocked by client IP after repeated invalid password or MFA attempts. AeroLink allows up to 10 failures within 1 minute; the next failure blocks further credential login attempts from that client IP for 5 minutes.
 
-When Kite runs behind an ingress or load balancer, the client IP used by this limiter depends on `TRUSTED_PROXIES`. See [Environment Variables](/en/config/env#environment-variables) for how to configure trusted proxy ranges.
+When AeroLink runs behind an ingress or load balancer, the client IP used by this limiter depends on `TRUSTED_PROXIES`. See [Environment Variables](/en/config/env#environment-variables) for how to configure trusted proxy ranges.
 
 ## API key format
 
 The full API key format is:
 
 ```text
-kite<ID>-<SECRET>
+aerolink<ID>-<SECRET>
 ```
 
 Use the full value directly in the `Authorization` header. Do not prepend `Bearer`.
@@ -148,7 +148,7 @@ Example:
 curl \
   -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
-  https://kite.example.com/api/v1/pods/default
+  https://aerolink.example.com/api/v1/pods/default
 ```
 
 Notes:

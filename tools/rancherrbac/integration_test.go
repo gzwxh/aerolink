@@ -761,7 +761,7 @@ func TestKiteAuthErrorExplainsReason(t *testing.T) {
 		t.Fatal("应当返回鉴权错误")
 	}
 	message := explainAuthError(err).Error()
-	if !strings.Contains(message, "Kite API key 无效") {
+	if !strings.Contains(message, "AeroLink API key 无效") {
 		t.Fatalf("错误信息缺少可操作提示：%s", message)
 	}
 }

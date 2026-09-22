@@ -1,4 +1,4 @@
-# 构建并推送 Kite 镜像
+# 构建并推送鸢联 AeroLink 镜像
 
 本篇介绍如何把当前源码打包成容器镜像、推送到自己的镜像仓库，再用 Helm 部署这套自建镜像。适合二次开发、内网私有仓库，以及 Docker Hub / gcr.io 访问受限的环境。
 
@@ -71,19 +71,19 @@ docker build \
 
 ```bash
 docker run -d --name aerolink -p 8080:8080 \
-  -v kite-data:/app/data \
+  -v aerolink-data:/app/data \
   -e DB_DSN=/app/data/kite.db \
-  -e KITE_ENCRYPT_KEY="$(openssl rand -base64 32)" \
+  -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   aerolink:local
 
 curl -I http://127.0.0.1:8080/        # 期望 HTTP 200
-docker logs aerolink | head              # 期望看到 Kite server started on port 8080
+docker logs aerolink | head              # 期望看到 AeroLink server started on port 8080
 
 docker rm -f aerolink
 ```
 
-> 缺少 `KITE_ENCRYPT_KEY` 时服务会拒绝启动（生产安全检查）；请妥善保存生成的密钥，更换 `KITE_ENCRYPT_KEY` 会使已保存的凭据无法解密。
+> 缺少 `AEROLINK_ENCRYPT_KEY` 时服务会拒绝启动（生产安全检查）；请妥善保存生成的密钥，更换 `AEROLINK_ENCRYPT_KEY` 会使已保存的凭据无法解密。
 
 ## 三、推送到镜像仓库
 
@@ -155,7 +155,7 @@ helm upgrade --install kite charts/kite \
 私有仓库需要拉取凭据：
 
 ```bash
-kubectl create secret docker-registry kite-regcred -n kite-system \
+kubectl create secret docker-registry aerolink-regcred -n kite-system \
   --docker-server=<registry> \
   --docker-username=<user> \
   --docker-password=<password>
@@ -163,7 +163,7 @@ kubectl create secret docker-registry kite-regcred -n kite-system \
 helm upgrade --install kite charts/kite -n kite-system \
   --set image.repository=<registry>/<namespace>/aerolink \
   --set image.tag=$VERSION \
-  --set imagePullSecrets[0].name=kite-regcred
+  --set imagePullSecrets[0].name=aerolink-regcred
 ```
 
 ### 仓库内现成的 values 文件
@@ -192,7 +192,7 @@ helm push dist/kite-0.15.0.tgz oci://<registry>/<namespace>
 :::
 
 ::: warning 生产环境务必设置加密密钥
-`KITE_ENCRYPT_KEY` 用于加密用户密码、OAuth clientSecret、kubeconfig 等敏感数据，不设置会使用不安全的默认密钥。可通过 `--set env.KITE_ENCRYPT_KEY=...`（或 chart 对应的 values 字段）注入，详见[环境变量](../config/env.md)。
+`AEROLINK_ENCRYPT_KEY` 用于加密用户密码、OAuth clientSecret、kubeconfig 等敏感数据，不设置会使用不安全的默认密钥。可通过 `--set env.AEROLINK_ENCRYPT_KEY=...`（或 chart 对应的 values 字段）注入，详见[环境变量](../config/env.md)。
 :::
 
 更多安装选项（Ingress、子路径部署、端口转发、卸载等）见[安装指南](./installation.md)；chart 的全部可配置项见 [Chart Values](../config/chart-values.md)。

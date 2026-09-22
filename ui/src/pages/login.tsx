@@ -43,19 +43,20 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Footer } from '@/components/footer'
 import { LanguageToggle } from '@/components/language-toggle'
 
-// 登录页背景：横幅插画 + 上下两条轻渐变。
+// 登录页背景：春日放鸢的动画插画 + 下缘一条轻渐变。
 //
-// 插画（900×320）的主体云端商城在画面右上角，所以用 object-cover object-right-bottom
-// 锚在右下：窗口宽高比与插画不同时裁掉的是左上角的天空，而不是商城和购物袋。
+// 插画主体（五彩菱形风筝、风筝线与舵轮）在画面右侧、草甸贴着下缘，所以用
+// object-cover object-right-bottom 锚在右下：窗口宽高比与插画不同时裁掉的
+// 是左上角的开阔天空，而不是风筝和草地。
 //
-// 这里不再整幅压蒙层（会把整个插画的颜色冲淡），只在两条文字带上留一点点背景色：
-// 站点标题与语言切换落在深蓝天空上、页脚落在绿色草甸上，纯靠背景色垫一下才能
-// 在浅色/深色两种主题下都读得清。中间画面保持插画原色。登录卡片本身不透明，
-// 不受影响。
+// 这里不在整幅插画上压蒙层（会把颜色冲淡），只在下缘留一条薄背景色：
+// 页脚落在绿色草甸上，纯靠背景色垫一下才能在浅色/深色两种主题下都读得清。
+// 标题区落在天空上，由标题自身的阴影护读（见下面的 text-shadow）。
+// 登录卡片本身不透明，不受影响。
 //
-// 插画里的云漂移、包裹飞行等都是 SVG SMIL 动画——SMIL 只在图像上下文（img）
-// 中播放，CSS background-image 里会被浏览器按静态帧渲染，因此这里用 <img>
-// 铺底而不是 backgroundImage。
+// 插画里的云漂移、燕子飞行、风筝拉放与舵轮自转都是 SVG SMIL 动画——SMIL 只在
+// 图像上下文（img）中播放，CSS background-image 里会被浏览器按静态帧渲染，
+// 因此这里用 <img> 铺底而不是 backgroundImage。
 function LoginBackground({ children }: { children: ReactNode }) {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
@@ -411,7 +412,7 @@ export function LoginPage() {
   return (
     <LoginBackground>
       {/* Language Toggle - Top Right */}
-      {/* 右上角压在插画的光斑上，给个浅底以保证图标在两种主题下都看得见 */}
+      {/* 右上角压在插画的太阳光晕上，给个浅底以保证图标在两种主题下都看得见 */}
       <div className="absolute top-6 right-6 z-10 rounded-full bg-background/50 backdrop-blur-sm">
         <LanguageToggle />
       </div>
@@ -426,7 +427,7 @@ export function LoginPage() {
                 className={cn(
                   'h-10 w-10',
                   !isCustomLogo && 'dark:invert',
-                  // 背景是插画（这一带是深蓝天空），用阴影把 logo 与标题托起来，
+                  // 背景是插画（这一带是天空），用阴影把 logo 与标题托起来，
                   // 这样不必再给整幅背景压蒙层。
                   'drop-shadow-[0_1px_6px_rgba(255,255,255,0.9)] dark:drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]'
                 )}

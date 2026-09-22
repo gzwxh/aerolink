@@ -40,7 +40,7 @@ func TestArchiveBackendFollowsSink(t *testing.T) {
 			setting.Archive.LocalDir = t.TempDir()
 			setting.Archive.S3.Enabled = true
 			setting.Archive.S3.Endpoint = "http://minio:9000"
-			setting.Archive.S3.Bucket = "kite-audit"
+			setting.Archive.S3.Bucket = "aerolink-audit"
 			setting.Archive.Elasticsearch.URLs = []string{"http://es:9200"}
 			setting.Archive.VictoriaLogs.URLs = []string{"http://victorialogs:9428"}
 			setting.Archive.OpenObserve.URLs = []string{"http://openobserve:5080"}

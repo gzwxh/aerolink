@@ -40,7 +40,7 @@ WORKDIR /app
 
 # Build metadata baked into the binary (same variables as the Makefile, see
 # pkg/version). Defaults keep a plain `docker build` working.
-ARG VERSION=dsy-v1.0.0
+ARG VERSION=v1.0.0
 ARG BUILD_DATE=unknown
 ARG COMMIT_ID=unknown
 

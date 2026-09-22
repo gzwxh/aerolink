@@ -157,14 +157,14 @@ func TestPruneExpiredAuditRecordsDeletesExpiredESIndices(t *testing.T) {
 
 	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.Local)
 
-	fake := newFakeESIndices(t, "kite-audit-2026.01.01", "kite-audit-2026.09.20")
+	fake := newFakeESIndices(t, "aerolink-audit-2026.01.01", "aerolink-audit-2026.09.20")
 	fake.listErr = true // 先用「索引还不存在」的 ES 验证永久保留不碰 ES
 
 	setting := model.DefaultAuditSettingData()
 	setting.Archive.Elasticsearch = model.ESArchive{
 		Enabled:     true,
 		URLs:        []string{fake.server.URL},
-		IndexPrefix: "kite-audit",
+		IndexPrefix: "aerolink-audit",
 	}
 	if _, err := model.UpdateAuditSetting(setting); err != nil {
 		t.Fatalf("saving audit setting: %v", err)
@@ -188,7 +188,7 @@ func TestPruneExpiredAuditRecordsDeletesExpiredESIndices(t *testing.T) {
 	if deleted := PruneExpiredAuditRecords(now); deleted != 0 {
 		t.Fatalf("库表里没有记录时 deleted = %d, want 0", deleted)
 	}
-	if len(fake.deleted) != 1 || fake.deleted[0] != "kite-audit-2026.01.01" {
+	if len(fake.deleted) != 1 || fake.deleted[0] != "aerolink-audit-2026.01.01" {
 		t.Fatalf("deleted indices = %v, want only the expired one", fake.deleted)
 	}
 }

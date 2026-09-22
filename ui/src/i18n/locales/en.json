@@ -3246,7 +3246,7 @@
       },
       "sink": {
         "title": "Storage",
-        "description": "Where audit records are written (mutually exclusive). Decided at startup by auditSink / KITE_AUDIT_SINK, read-only here.",
+        "description": "Where audit records are written (mutually exclusive). Decided at startup by auditSink / AEROLINK_AUDIT_SINK, read-only here.",
         "label": "Destination",
         "database": "Database",
         "parquet": "Local parquet files",
@@ -3341,7 +3341,7 @@
         "enabled": "Enable archiving",
         "enabledHint": "Decided by the storage mode: parquet files are written only when sink=parquet, and this cannot be turned on otherwise.",
         "localDir": "Local directory",
-        "localDirHint": "Leave empty to use the directory from KITE_AUDIT_ARCHIVE_DIR.",
+        "localDirHint": "Leave empty to use the directory from AEROLINK_AUDIT_ARCHIVE_DIR.",
         "retentionDays": "Local retention (days)",
         "retentionDaysHint": "0 means no time-based cleanup.",
         "maxBytes": "Local size limit (bytes)",

@@ -14,8 +14,8 @@ GET /api/v1/admin/roles/
 
 ```bash
 curl \
-  -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/roles/
+  -H "Authorization: aerolink1-adminsecret" \
+  https://aerolink.example.com/api/v1/admin/roles/
 ```
 
 响应示例：
@@ -75,7 +75,7 @@ Content-Type: application/json
 ```bash
 curl \
   -X POST \
-  -H "Authorization: kite1-adminsecret" \
+  -H "Authorization: aerolink1-adminsecret" \
   -H "Content-Type: application/json" \
   -d '{
     "name":"namespace-editor",
@@ -84,7 +84,7 @@ curl \
     "resources":["deployments","pods","services"],
     "verbs":["get","create","update","delete","log"]
   }' \
-  https://kite.example.com/api/v1/admin/roles/
+  https://aerolink.example.com/api/v1/admin/roles/
 ```
 
 ## 更新角色
@@ -169,8 +169,8 @@ DELETE /api/v1/admin/roles/:id
 ```bash
 curl \
   -X DELETE \
-  -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/roles/3
+  -H "Authorization: aerolink1-adminsecret" \
+  https://aerolink.example.com/api/v1/admin/roles/3
 ```
 
 响应示例：
@@ -207,10 +207,10 @@ Content-Type: application/json
 ```bash
 curl \
   -X POST \
-  -H "Authorization: kite1-adminsecret" \
+  -H "Authorization: aerolink1-adminsecret" \
   -H "Content-Type: application/json" \
   -d '{"subjectType":"group","subject":"platform-team"}' \
-  https://kite.example.com/api/v1/admin/roles/3/assign
+  https://aerolink.example.com/api/v1/admin/roles/3/assign
 ```
 
 ## 移除角色分配
@@ -224,6 +224,6 @@ DELETE /api/v1/admin/roles/:id/assign?subjectType=user&subject=alice
 ```bash
 curl \
   -X DELETE \
-  -H "Authorization: kite1-adminsecret" \
-  "https://kite.example.com/api/v1/admin/roles/3/assign?subjectType=group&subject=platform-team"
+  -H "Authorization: aerolink1-adminsecret" \
+  "https://aerolink.example.com/api/v1/admin/roles/3/assign?subjectType=group&subject=platform-team"
 ```

@@ -23,7 +23,7 @@ const mfaTicketTTL = 5 * time.Minute
 
 // mfaTicketSigningPrefix 做域分隔，让这张票据的 HMAC 不会与同样使用
 // JwtSecret 的其它签名（JWT、MFA 信任 cookie）互相顶替。
-const mfaTicketSigningPrefix = "kite-mfa-pending:"
+const mfaTicketSigningPrefix = "aerolink-mfa-pending:"
 
 // errMFATicketInvalid 覆盖签名不对、格式不对、过期等情况。对外只说「票据不可用」，
 // 不区分是哪一种，免得给探测者反馈。

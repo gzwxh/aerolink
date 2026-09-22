@@ -28,10 +28,10 @@ const content = {
     languageHref: "/",
     languageLabel: "中文",
     languageCode: "zh-CN",
-    homeLabel: "Kite home",
+    homeLabel: "AeroLink home",
     navigationLabel: "Primary navigation",
     skipLabel: "Skip to content",
-    starLabel: "View Kite stars on GitHub",
+    starLabel: "View AeroLink stars on GitHub",
     nav: {
       docs: "Docs",
       community: "Community",
@@ -41,7 +41,7 @@ const content = {
       firstLine: "All your clusters.",
       secondLine: "One workspace.",
       description:
-        "Kite is the lightweight, open-source Kubernetes workspace for clusters, observability, access control, and AI operations.",
+        "AeroLink is the lightweight, open-source Kubernetes workspace for clusters, observability, access control, and AI operations.",
       primaryAction: "Get started",
       secondaryAction: "View on GitHub",
     },
@@ -54,12 +54,12 @@ const content = {
       { icon: IconShieldCheck, label: "RBAC" },
       { icon: IconGitBranch, label: "GitOps friendly" },
     ],
-    strengthsLabel: "Kite strengths",
+    strengthsLabel: "AeroLink strengths",
     platform: {
       title:
         "The control plane for platform teams—observe, operate, and govern any Kubernetes environment from a single workspace.",
       description:
-        "Kite brings clusters, workloads, access, and AI together in one fast, extensible interface. Ship with confidence and sleep better at night.",
+        "AeroLink brings clusters, workloads, access, and AI together in one fast, extensible interface. Ship with confidence and sleep better at night.",
     },
     features: [
       {
@@ -92,10 +92,10 @@ const content = {
       titleFirstLine: "One workspace.",
       titleSecondLine: "All your clusters.",
       description:
-        "From cluster health to workloads and events, Kite gives you the real-time context to move fast and stay safe.",
+        "From cluster health to workloads and events, AeroLink gives you the real-time context to move fast and stay safe.",
       link: "Explore the guide",
       imageAlt:
-        "Kite dashboard showing Kubernetes cluster resources and live health signals",
+        "AeroLink dashboard showing Kubernetes cluster resources and live health signals",
     },
     productDetails: [
       {
@@ -106,7 +106,7 @@ const content = {
           "Inspect status, configuration, events, conditions, and related workloads in one place. Move from a symptom to the context you need without jumping between tools.",
         image: detailScreenshot,
         imageAlt:
-          "Kite Kubernetes resource detail page showing workload status, pods, events, related resources, labels, and configuration",
+          "AeroLink Kubernetes resource detail page showing workload status, pods, events, related resources, labels, and configuration",
         imageWidth: 3118,
         imageHeight: 2250,
         mediaLeft: true,
@@ -119,7 +119,7 @@ const content = {
           "Browse charts, manage repositories, and install, upgrade, or review releases alongside the Kubernetes resources they create.",
         image: helmScreenshot,
         imageAlt:
-          "Kite Helm release page showing deployment status, related resources, release history, and configuration",
+          "AeroLink Helm release page showing deployment status, related resources, release history, and configuration",
         imageWidth: 3118,
         imageHeight: 2250,
         mediaLeft: false,
@@ -132,7 +132,7 @@ const content = {
           "Keep access governed with role-based permissions and a clear audit trail of user activity and resource changes across your clusters.",
         image: auditScreenshot,
         imageAlt:
-          "Kite audit log showing operators, Kubernetes resource changes, clusters, status, and reviewable diffs",
+          "AeroLink audit log showing operators, Kubernetes resource changes, clusters, status, and reviewable diffs",
         imageWidth: 3118,
         imageHeight: 2250,
         mediaLeft: true,
@@ -146,10 +146,10 @@ const content = {
     languageHref: "/en/",
     languageLabel: "English",
     languageCode: "en",
-    homeLabel: "Kite 首页",
+    homeLabel: "鸢联 AeroLink 首页",
     navigationLabel: "主导航",
     skipLabel: "跳至主要内容",
-    starLabel: "在 GitHub 上查看 Kite 星标数",
+    starLabel: "在 GitHub 上查看鸢联 AeroLink 星标数",
     nav: {
       docs: "文档",
       community: "社区",
@@ -159,7 +159,7 @@ const content = {
       firstLine: "所有集群。",
       secondLine: "一个工作空间。",
       description:
-        "Kite 是轻量、开源的 Kubernetes 工作空间，将集群管理、可观测性、访问控制和 AI 运维整合在一起。",
+        "鸢联 AeroLink 是轻量、开源的 Kubernetes 工作空间，将集群管理、可观测性、访问控制和 AI 运维整合在一起。",
       primaryAction: "快速开始",
       secondaryAction: "查看 GitHub",
     },
@@ -172,12 +172,12 @@ const content = {
       { icon: IconShieldCheck, label: "RBAC" },
       { icon: IconGitBranch, label: "GitOps 友好" },
     ],
-    strengthsLabel: "Kite 核心能力",
+    strengthsLabel: "鸢联 AeroLink 核心能力",
     platform: {
       title:
         "面向平台团队的控制面——在一个工作空间中观察、运维并治理任意 Kubernetes 环境。",
       description:
-        "Kite 将集群、工作负载、权限和 AI 汇聚到快速、可扩展的界面中，让交付更可靠，让日常运维更从容。",
+        "鸢联 AeroLink 将集群、工作负载、权限和 AI 汇聚到快速、可扩展的界面中，让交付更可靠，让日常运维更从容。",
     },
     features: [
       {
@@ -210,9 +210,9 @@ const content = {
       titleFirstLine: "一个工作空间。",
       titleSecondLine: "管理所有集群。",
       description:
-        "从集群健康状态到工作负载与事件，Kite 提供实时上下文，帮助团队快速且安全地采取行动。",
+        "从集群健康状态到工作负载与事件，鸢联 AeroLink 提供实时上下文，帮助团队快速且安全地采取行动。",
       link: "浏览使用指南",
-      imageAlt: "Kite 仪表盘展示 Kubernetes 集群资源和实时健康状态",
+      imageAlt: "鸢联 AeroLink 仪表盘展示 Kubernetes 集群资源和实时健康状态",
     },
     productDetails: [
       {
@@ -222,7 +222,7 @@ const content = {
         description:
           "在同一处查看状态、配置、事件、条件和相关工作负载，从异常现象直接抵达排障所需的信息。",
         image: detailScreenshot,
-        imageAlt: "Kite Kubernetes 资源详情页展示状态、Pod、事件、关联资源、标签和配置",
+        imageAlt: "鸢联 AeroLink Kubernetes 资源详情页展示状态、Pod、事件、关联资源、标签和配置",
         imageWidth: 3118,
         imageHeight: 2250,
         mediaLeft: true,
@@ -234,7 +234,7 @@ const content = {
         description:
           "浏览 Chart、管理仓库，并在其创建的 Kubernetes 资源旁完成 Release 的安装、升级与检查。",
         image: helmScreenshot,
-        imageAlt: "Kite Helm Release 页面展示部署状态、关联资源、发布历史和配置",
+        imageAlt: "鸢联 AeroLink Helm Release 页面展示部署状态、关联资源、发布历史和配置",
         imageWidth: 3118,
         imageHeight: 2250,
         mediaLeft: false,
@@ -246,7 +246,7 @@ const content = {
         description:
           "通过基于角色的权限和清晰的审计记录，管理用户访问与跨集群资源变更。",
         image: auditScreenshot,
-        imageAlt: "Kite 审计日志展示操作用户、Kubernetes 资源变更、集群、状态和差异",
+        imageAlt: "鸢联 AeroLink 审计日志展示操作用户、Kubernetes 资源变更、集群、状态和差异",
         imageWidth: 3118,
         imageHeight: 2250,
         mediaLeft: true,
@@ -269,7 +269,7 @@ const copy = computed(() =>
       <div class="site-shell site-header__inner">
         <a class="brand" :href="copy.homeHref" :aria-label="copy.homeLabel">
           <img src="/logo.svg" alt="" width="35" height="35" />
-          <span>Kite</span>
+          <span>AeroLink</span>
         </a>
 
         <nav class="site-nav" :aria-label="copy.navigationLabel">
@@ -432,7 +432,7 @@ const copy = computed(() =>
       <div class="site-shell site-footer__inner">
         <div>
           <img src="/logo.svg" alt="" width="35" height="35" />
-          <strong>Kite</strong>
+          <strong>AeroLink</strong>
         </div>
         <a
           class="arrow-link"

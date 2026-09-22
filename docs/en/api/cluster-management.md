@@ -14,8 +14,8 @@ Example:
 
 ```bash
 curl \
-  -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/clusters/
+  -H "Authorization: aerolink1-adminsecret" \
+  https://aerolink.example.com/api/v1/admin/clusters/
 ```
 
 Response example:
@@ -74,7 +74,7 @@ Example:
 ```bash
 curl \
   -X POST \
-  -H "Authorization: kite1-adminsecret" \
+  -H "Authorization: aerolink1-adminsecret" \
   -H "Content-Type: application/json" \
   -d '{
     "name":"demo-cluster",
@@ -84,7 +84,7 @@ curl \
     "inCluster":false,
     "isDefault":true
   }' \
-  https://kite.example.com/api/v1/admin/clusters/
+  https://aerolink.example.com/api/v1/admin/clusters/
 ```
 
 Response example:
@@ -124,13 +124,13 @@ Example:
 ```bash
 curl \
   -X PUT \
-  -H "Authorization: kite1-adminsecret" \
+  -H "Authorization: aerolink1-adminsecret" \
   -H "Content-Type: application/json" \
   -d '{
     "description":"production cluster",
     "enabled":true
   }' \
-  https://kite.example.com/api/v1/admin/clusters/1
+  https://aerolink.example.com/api/v1/admin/clusters/1
 ```
 
 Response example:
@@ -172,9 +172,9 @@ Example:
 ```bash
 curl \
   -X POST \
-  -H "Authorization: kite1-adminsecret" \
+  -H "Authorization: aerolink1-adminsecret" \
   -F "file=@./icon.png" \
-  https://kite.example.com/api/v1/admin/clusters/1/badge-icon
+  https://aerolink.example.com/api/v1/admin/clusters/1/badge-icon
 ```
 
 Response example:
@@ -212,8 +212,8 @@ Example:
 ```bash
 curl \
   -X DELETE \
-  -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/clusters/1/badge-icon
+  -H "Authorization: aerolink1-adminsecret" \
+  https://aerolink.example.com/api/v1/admin/clusters/1/badge-icon
 ```
 
 Response example:
@@ -238,8 +238,8 @@ Example:
 
 ```bash
 curl \
-  -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/clusters/1/badge-icon -o icon.png
+  -H "Authorization: aerolink1-adminsecret" \
+  https://aerolink.example.com/api/v1/clusters/1/badge-icon -o icon.png
 ```
 
 - Returns the image bytes with `Content-Type: image/png` or `image/jpeg`, plus an `ETag`
@@ -261,8 +261,8 @@ Example:
 ```bash
 curl \
   -X DELETE \
-  -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/clusters/1
+  -H "Authorization: aerolink1-adminsecret" \
+  https://aerolink.example.com/api/v1/admin/clusters/1
 ```
 
 Response example:

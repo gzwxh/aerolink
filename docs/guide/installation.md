@@ -1,6 +1,6 @@
 # 安装指南
 
-本指南详细介绍如何在 Kubernetes 环境下安装 Kite。
+本指南详细介绍如何在 Kubernetes 环境下安装鸢联 AeroLink。
 
 ## 前提条件
 
@@ -12,7 +12,7 @@
 
 ### 方式一：Helm Chart（推荐）
 
-使用 Helm 可灵活配置和升级 Kite：
+使用 Helm 可灵活配置和升级鸢联 AeroLink：
 
 ```bash
 helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system --create-namespace
@@ -21,7 +21,7 @@ helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system --create-nam
 或从 Helm 仓库安装：
 
 ```bash
-# 添加 Kite 仓库
+# 添加鸢联 AeroLink 仓库
 helm repo add kite https://kite-org.github.io/kite/
 
 # 更新仓库信息
@@ -48,7 +48,7 @@ helm install kite kite/kite -n kite-system -f values.yaml
 
 #### 使用自建镜像安装
 
-如果你已经把源码打包成自己的镜像（见[构建并推送 Kite 镜像](./build-and-push-image.md)），用仓库内的 chart 安装并覆盖镜像地址：
+如果你已经把源码打包成自己的镜像（见[构建并推送鸢联 AeroLink 镜像](./build-and-push-image.md)），用仓库内的 chart 安装并覆盖镜像地址：
 
 ```bash
 helm install kite charts/kite -n kite-system --create-namespace \
@@ -56,7 +56,7 @@ helm install kite charts/kite -n kite-system --create-namespace \
   --set image.tag=<版本>
 ```
 
-私有仓库还需要配置拉取凭据（`--set imagePullSecrets[0].name=kite-regcred`）。
+私有仓库还需要配置拉取凭据（`--set imagePullSecrets[0].name=aerolink-regcred`）。
 
 ### 方式二：YAML 清单
 
@@ -72,13 +72,13 @@ helm install kite charts/kite -n kite-system --create-namespace \
 kubectl apply -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/install.yaml
 ```
 
-此方法将使用默认配置安装 Kite。如需高级定制，建议使用 Helm Chart。
+此方法将使用默认配置安装鸢联 AeroLink。如需高级定制，建议使用 Helm Chart。
 
-## 访问 Kite
+## 访问鸢联 AeroLink
 
 ### 端口转发（测试环境）
 
-测试期间可通过端口转发快速访问 Kite：
+测试期间可通过端口转发快速访问鸢联 AeroLink：
 
 ```bash
 kubectl port-forward -n kite-system svc/kite 8080:8080
@@ -86,7 +86,7 @@ kubectl port-forward -n kite-system svc/kite 8080:8080
 
 ### LoadBalancer 服务
 
-如集群支持 LoadBalancer，可直接暴露 Kite 服务：
+如集群支持 LoadBalancer，可直接暴露鸢联 AeroLink 服务：
 
 ```bash
 kubectl patch svc kite -n kite-system -p '{"spec": {"type": "LoadBalancer"}}'
@@ -100,10 +100,10 @@ kubectl get svc kite -n kite-system
 
 ### Ingress（生产环境推荐）
 
-生产环境建议通过 Ingress 控制器并启用 TLS 暴露 Kite：
+生产环境建议通过 Ingress 控制器并启用 TLS 暴露鸢联 AeroLink：
 
 ::: warning
-Kite 的日志和 Web 终端功能需支持 websocket。
+鸢联 AeroLink 的日志和 Web 终端功能需支持 websocket。
 部分 Ingress 控制器可能需额外配置以正确处理 websocket。
 :::
 
@@ -116,7 +116,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: kite.example.com
+    - host: aerolink.example.com
       http:
         paths:
           - path: /
@@ -128,13 +128,13 @@ spec:
                   number: 8080
   tls:
     - hosts:
-        - kite.example.com
-      secretName: kite-tls
+        - aerolink.example.com
+      secretName: aerolink-tls
 ```
 
 ## 在子路径下部署（basePath）
 
-如果您希望将 Kite 部署在一个子路径下，例如 `https://example.com/kite`，可以使用 Helm Chart 的 `basePath` 值来配置。
+如果您希望将鸢联 AeroLink 部署在一个子路径下，例如 `https://example.com/kite`，可以使用 Helm Chart 的 `basePath` 值来配置。
 
 如何设置：
 
@@ -158,20 +158,20 @@ helm install kite oci://ghcr.io/kite-org/charts/kite -n kite-system --create-nam
 ingress:
   enabled: true
   hosts:
-    - host: kite.example.com
+    - host: aerolink.example.com
       paths:
         - path: /kite
           pathType: Prefix
 ```
 
-- OAuth / 重定向：如果启用了 OAuth 或其他外部重定向，请在 OAuth 提供方中将重定向 URL 更新为包含子路径，例如 `https://kite.example.com/kite/oauth/callback`。
+- OAuth / 重定向：如果启用了 OAuth 或其他外部重定向，请在 OAuth 提供方中将重定向 URL 更新为包含子路径，例如 `https://aerolink.example.com/kite/oauth/callback`。
 
 ## 验证安装
 
-安装完成后，可访问仪表盘验证 Kite 是否部署成功。预期界面如下：
+安装完成后，可访问仪表盘验证鸢联 AeroLink 是否部署成功。预期界面如下：
 
 ::: tip
-如需通过环境变量配置 Kite，请参考 [环境变量](../config/env.md)。
+如需通过环境变量配置鸢联 AeroLink，请参考 [环境变量](../config/env.md)。
 :::
 
 ![setup](../screenshots/setup.png)
@@ -182,15 +182,15 @@ ingress:
 
 ### 使用 In-Cluster 模式快速接入
 
-最简配置方式是选择集群类型为 **`in-cluster`**。该选项会自动使用 Kite 在集群内运行时所用的 ServiceAccount 凭据，无需额外配置：
+最简配置方式是选择集群类型为 **`in-cluster`**。该选项会自动使用鸢联 AeroLink 在集群内运行时所用的 ServiceAccount 凭据，无需额外配置：
 
-- **无需 kubeconfig**：Kite 使用自身的 ServiceAccount 访问 Kubernetes API
+- **无需 kubeconfig**：鸢联 AeroLink 使用自身的 ServiceAccount 访问 Kubernetes API
 - **自动完成认证**：基于默认的 RBAC 权限即可开箱使用
-- **适合单集群部署**：当 Kite 管理的正是它自身所在的集群时最为合适
+- **适合单集群部署**：当鸢联 AeroLink 管理的正是它自身所在的集群时最为合适
 
-这是快速上手最推荐的方式，尤其适用于开发环境，或 Kite 只需要管理自身集群的场景。
+这是快速上手最推荐的方式，尤其适用于开发环境，或鸢联 AeroLink 只需要管理自身集群的场景。
 
-## 卸载 Kite
+## 卸载鸢联 AeroLink
 
 ### Helm 卸载
 
@@ -206,7 +206,7 @@ kubectl delete -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/in
 
 ## 后续步骤
 
-Kite 安装完成后，您可以继续：
+鸢联 AeroLink 安装完成后，您可以继续：
 
 - [添加用户](../config/user-management.md)
 - [配置 RBAC](../config/rbac-config.md)

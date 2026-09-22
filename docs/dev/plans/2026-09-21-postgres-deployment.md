@@ -8,7 +8,7 @@
   - `docs/dev/plans/2026-09-20-sqlite-to-postgres-migration.md`（首次从 SQLite 切库 + `tools/dbmigrate`）
   - `docs/dev/plans/2026-09-20-pg12-now-and-upgrade-path.md`（PG 12 的参数、排序规则、升级路径；本文 §2 的取值都来自它）
   - `docs/dev/plans/2026-09-20-multi-replica-deployment.md`（多副本部署产物）
-  - `deploy/install-postgres.yaml`（K8s 清单）、`deploy/kite.env.example`（裸进程/多副本的环境文件）
+  - `deploy/install-postgres.yaml`（K8s 清单）、`deploy/aerolink.env.example`（裸进程/多副本的环境文件）
 
 ## 1. 三条路，先选一条
 
@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | **K8s 清单** | 已经有 K8s 集群、想让 Kite 跑在集群里 | `deploy/install-postgres.yaml`（本文 §4.1） |
 | **Helm Chart** | 同上，但要参数化 / 可升级 / 多环境 | `charts/kite` 的 `db.*`（本文 §4.2） |
-| **裸进程 / systemd** | 直接跑在宿主机上（**现网就是这条**） | `deploy/kite@.service` + `/etc/kite/kite.env`（本文 §4.3） |
+| **裸进程 / systemd** | 直接跑在宿主机上（**现网就是这条**） | `deploy/aerolink@.service` + `/etc/aerolink/aerolink.env`（本文 §4.3） |
 
 三条路只有「怎么把 `DB_TYPE` / `DB_DSN` 送进进程」不同，数据库侧的准备工作完全一样。
 
@@ -30,12 +30,12 @@
 | 编码 | `UTF8` | 改不了，只能重建库。 |
 | 排序规则 | `en_US.utf8`（现网实测值） | 由 glibc 提供，排序结果随 glibc 版本变化。**把实际值记进运维文档**：将来升级 glibc 后可能要 `ALTER DATABASE kite REFRESH COLLATION VERSION;` 并 `REINDEX`（PG 13 起才记录排序规则版本，12 没有这一列）。 |
 | 时区 | DSN 里显式写 `TimeZone=Asia/Shanghai` | 容器默认 `Etc/UTC`。漏写**不会报错**，只让界面与审计日志的时间整体偏移 8 小时；应用启动时会打 warning（`pkg/common/common.go` 的 `postgresDSNTimeZoneWarning`）。 |
-| 连接数 | `max_connections` 与「副本数 × 连接池」配套 | 默认 `100` 很小，而应用侧 `KITE_DB_MAX_OPEN_CONNS` 默认也是 `100`。硬约束见下。 |
+| 连接数 | `max_connections` 与「副本数 × 连接池」配套 | 默认 `100` 很小，而应用侧 `AEROLINK_DB_MAX_OPEN_CONNS` 默认也是 `100`。硬约束见下。 |
 
 连接数的硬约束（**这是最容易踩的一条**）：
 
 ```text
-副本数 × KITE_DB_MAX_OPEN_CONNS + 20（管理 / 备份 / 监控余量） ≤ max_connections
+副本数 × AEROLINK_DB_MAX_OPEN_CONNS + 20（管理 / 备份 / 监控余量） ≤ max_connections
 ```
 
 连接池里的连接**空闲时也占着坑位**，不会还回去。按 300 人、最多 3 副本算：
@@ -111,10 +111,10 @@ apply 会互相覆盖，选一条路走。逐项对照：
 | 建库 | `CREATE DATABASE kite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` | `CREATE DATABASE kite ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' ...;` |
 | 搬数据后的额外一步 | 无（`AUTO_INCREMENT` 自己取 max+1） | **要修序列**（`setval`），`tools/dbmigrate` 已自动做 |
 
-用之前搜 `REPLACE-ME` 改三处：`JWT_SECRET`、`KITE_ENCRYPT_KEY`、`POSTGRES_DSN`。
+用之前搜 `REPLACE-ME` 改三处：`JWT_SECRET`、`AEROLINK_ENCRYPT_KEY`、`POSTGRES_DSN`。
 
 ```bash
-# 生成两个密钥（各一次，KITE_ENCRYPT_KEY 生成后必须备份）
+# 生成两个密钥（各一次，AEROLINK_ENCRYPT_KEY 生成后必须备份）
 openssl rand -base64 32
 
 kubectl apply -f deploy/install-postgres.yaml
@@ -124,7 +124,7 @@ kubectl -n aerolink rollout status deploy/aerolink
 kubectl -n aerolink get svc aerolink
 ```
 
-`KITE_ENCRYPT_KEY` 用于加密存库的敏感数据（集群 kubeconfig、LDAP/SMTP/OAuth 密码、
+`AEROLINK_ENCRYPT_KEY` 用于加密存库的敏感数据（集群 kubeconfig、LDAP/SMTP/OAuth 密码、
 AI Key、MFA 密钥）：**一旦投入使用不可更换**，否则这些凭据全部解不开；未设置时服务
 直接拒绝启动。丢了等于所有集群要重新接入。
 
@@ -138,7 +138,7 @@ db:
   type: postgres
   dsn: "host=10.100.117.8 port=5433 user=kite password=<口令> dbname=kite sslmode=disable TimeZone=Asia/Shanghai"
 
-# 密钥：留空时 chart 会随机生成 KITE_ENCRYPT_KEY，并在升级时从既有 Secret 里复用；
+# 密钥：留空时 chart 会随机生成 AEROLINK_ENCRYPT_KEY，并在升级时从既有 Secret 里复用；
 # 只有在自管密钥（外部密钥存储）时才显式写。
 # encryptKey: ""
 ```
@@ -148,23 +148,23 @@ helm install kite charts/kite -n kite-system --create-namespace -f values-postgr
 ```
 
 要复用已有的 Secret（比如从清单版迁过来）就设 `secret.create: false` +
-`secret.existingSecret: <名称>`，它必须包含 `JWT_SECRET`、`KITE_ENCRYPT_KEY`、`DB_TYPE`、
+`secret.existingSecret: <名称>`，它必须包含 `JWT_SECRET`、`AEROLINK_ENCRYPT_KEY`、`DB_TYPE`、
 `DB_DSN` 四个键，此时 `db.type` / `db.dsn` 被忽略。多副本用 chart 的 `replicaCount`，
 并按 §2 重算 `max_connections` / 连接池。
 
 ### 4.3 裸进程 / systemd（现网形态）
 
-现网是在宿主机上直接跑二进制，多副本用 systemd 模板单元 `deploy/kite@.service`：
-实例号即端口（`kite@8081`、`8082`…），共享配置放 `/etc/kite/kite.env`（600）。
-按 `deploy/kite.env.example` 抄一份，里面已经写好 PostgreSQL 版的 `DB_TYPE` / `DB_DSN` /
+现网是在宿主机上直接跑二进制，多副本用 systemd 模板单元 `deploy/aerolink@.service`：
+实例号即端口（`aerolink@8081`、`8082`…），共享配置放 `/etc/aerolink/aerolink.env`（600）。
+按 `deploy/aerolink.env.example` 抄一份，里面已经写好 PostgreSQL 版的 `DB_TYPE` / `DB_DSN` /
 连接池 / 两个密钥 / `TRUSTED_PROXIES`。
 
 ```bash
-sudo install -m 600 deploy/kite.env.example /etc/kite/kite.env
-sudo vi /etc/kite/kite.env                 # 按 REPLACE-ME 改
-sudo cp deploy/kite@.service /etc/systemd/system/
+sudo install -m 600 deploy/aerolink.env.example /etc/aerolink/aerolink.env
+sudo vi /etc/aerolink/aerolink.env                 # 按 REPLACE-ME 改
+sudo cp deploy/aerolink@.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now kite@8081      # 需要几个副本就起几个实例
+sudo systemctl enable --now aerolink@8081      # 需要几个副本就起几个实例
 ```
 
 - 数据库在容器里时单元文件已经 `After=docker.service`；连不上库进程会退出，
@@ -179,19 +179,19 @@ sudo systemctl enable --now kite@8081      # 需要几个副本就起几个实�
 
 ```bash
 # 干跑：只读源库、打印行数对照，不动目标库
-cd /wxh/kite
+cd /wxh/aerolink
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate -dry-run -target-type postgres -target-dsn '<目标 DSN>'
 
 # 真搬
-cd /wxh/kite
-set -a; . /root/kite-secrets.env; set +a      # 带上与源库一致的 KITE_ENCRYPT_KEY
+cd /wxh/aerolink
+set -a; . /root/kite-secrets.env; set +a      # 带上与源库一致的 AEROLINK_ENCRYPT_KEY
 DB_TYPE=sqlite DB_DSN=dev.db \
   go run ./tools/dbmigrate -target-type postgres -target-dsn '<目标 DSN>'
 ```
 
 方向不限：`sqlite` / `mysql` / `postgres` 之间任意组合都能搬（`-source-type` /
-`-source-dsn` 显式指定源）。**必须用与源库一致的 `KITE_ENCRYPT_KEY`**：密钥不对会在
+`-source-dsn` 显式指定源）。**必须用与源库一致的 `AEROLINK_ENCRYPT_KEY`**：密钥不对会在
 动目标库之前就解密失败并中止。
 
 PostgreSQL 专属的一条：GORM 建的是 `bigserial`，显式插入 ID 不会推进序列，工具会逐表

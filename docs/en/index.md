@@ -1,7 +1,7 @@
 ---
 layout: false
 title: All your clusters. One workspace.
-description: Kite is the lightweight, open-source Kubernetes workspace for clusters, observability, access control, and AI operations.
+description: AeroLink is the lightweight, open-source Kubernetes workspace for clusters, observability, access control, and AI operations.
 head:
   - - link
     - rel: preload

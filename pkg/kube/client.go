@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/zxh326/kite/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -38,11 +39,11 @@ const (
 )
 
 // cacheSyncTimeout 返回已配置的缓存同步超时，可通过
-// KITE_CACHE_SYNC_TIMEOUT 环境变量（单位：秒）覆盖。大型/远程集群上
+// AEROLINK_CACHE_SYNC_TIMEOUT 环境变量（单位：秒）覆盖。大型/远程集群上
 // informer 的首次 LIST 可能耗时很久，因此默认值
 // 给得比较宽松，并仍可针对边界情况调整。
 func cacheSyncTimeout() time.Duration {
-	if v := os.Getenv("KITE_CACHE_SYNC_TIMEOUT"); v != "" {
+	if v := common.Getenv("CACHE_SYNC_TIMEOUT"); v != "" {
 		if secs, err := strconv.Atoi(v); err == nil && secs > 0 {
 			return time.Duration(secs) * time.Second
 		}
@@ -51,10 +52,10 @@ func cacheSyncTimeout() time.Duration {
 }
 
 // kubeAPIQPS 返回 Kubernetes API 客户端的 QPS 上限，可通过
-// KITE_KUBE_API_QPS 环境变量覆盖。默认 50（client-go 默认是 5，
+// AEROLINK_KUBE_API_QPS 环境变量覆盖。默认 50（client-go 默认是 5，
 // 对大型/远程集群在首次缓存同步期间来说太低了）。
 func kubeAPIQPS() float32 {
-	if v := os.Getenv("KITE_KUBE_API_QPS"); v != "" {
+	if v := common.Getenv("KUBE_API_QPS"); v != "" {
 		if qps, err := strconv.ParseFloat(v, 32); err == nil && qps > 0 {
 			return float32(qps)
 		}
@@ -63,10 +64,10 @@ func kubeAPIQPS() float32 {
 }
 
 // kubeAPIBurst 返回 Kubernetes API 客户端的突发上限，
-// 可通过 KITE_KUBE_API_BURST 环境变量覆盖。默认 100（client-go
+// 可通过 AEROLINK_KUBE_API_BURST 环境变量覆盖。默认 100（client-go
 // 默认是 10）。
 func kubeAPIBurst() int {
-	if v := os.Getenv("KITE_KUBE_API_BURST"); v != "" {
+	if v := common.Getenv("KUBE_API_BURST"); v != "" {
 		if burst, err := strconv.Atoi(v); err == nil && burst > 0 {
 			return burst
 		}
@@ -144,7 +145,7 @@ type K8sClient struct {
 func NewClient(config *rest.Config) (*K8sClient, error) {
 	// 调整 QPS/Burst，使大型/远程集群上首次缓存同步的 LIST
 	// 不会被 client-go 的默认值（QPS=5、Burst=10）限流。
-	// 这些值可通过 KITE_KUBE_API_QPS 与 KITE_KUBE_API_BURST 覆盖。
+	// 这些值可通过 AEROLINK_KUBE_API_QPS 与 AEROLINK_KUBE_API_BURST 覆盖。
 	// 在 rest.Config 上显式设置的值（例如来自 kubeconfig）会被保留。
 	if config.QPS == 0 {
 		config.QPS = kubeAPIQPS()
@@ -214,7 +215,7 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 			cancel()
 			return nil, fmt.Errorf("failed to wait for cache sync (timeout: %s); "+
 				"the cluster may be too large or the API server too slow. "+
-				"Consider increasing KITE_CACHE_SYNC_TIMEOUT or setting DISABLE_CACHE=true", cacheSyncTimeout())
+				"Consider increasing AEROLINK_CACHE_SYNC_TIMEOUT or setting DISABLE_CACHE=true", cacheSyncTimeout())
 		}
 		c = mgr.GetClient()
 	}

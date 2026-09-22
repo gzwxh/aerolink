@@ -13,7 +13,7 @@ VictoriaLogs / OpenObserve」属于部署侧确认）
 - **OpenObserve**
 
 需求口径与既有一致：**仍然是「三（五）选一、互斥」**，不共存；由 `auditSink` /
-`KITE_AUDIT_SINK` 在启动时指定，界面只读；写入失败不得影响请求，也不得静默丢记录。
+`AEROLINK_AUDIT_SINK` 在启动时指定，界面只读；写入失败不得影响请求，也不得静默丢记录。
 
 ## 2. 一个必须先钉死的事实：VictoriaMetrics ≠ VictoriaLogs
 
@@ -130,7 +130,7 @@ type OpenObserveArchive struct {
     Enabled  bool         `json:"enabled"`
     URLs     []string     `json:"urls"`      // 单节点即可，多地址做轮询
     Org      string       `json:"org"`       // 默认 default
-    Stream   string       `json:"stream"`    // 默认 kite-audit
+    Stream   string       `json:"stream"`    // 默认 aerolink-audit
     Username string       `json:"username"`  // 登录邮箱
     Password SecretString `json:"password"`
     TLSInsecureSkipVerify bool `json:"tlsInsecureSkipVerify"`
@@ -141,7 +141,7 @@ type VictoriaLogsArchive struct {
     URLs     []string     `json:"urls"`
     AccountID string      `json:"accountId"`  // 多租户（可空）
     ProjectID string      `json:"projectId"`  // 多租户（可空）
-    Stream   string       `json:"stream"`     // 默认 kite-audit
+    Stream   string       `json:"stream"`     // 默认 aerolink-audit
     TLSInsecureSkipVerify bool `json:"tlsInsecureSkipVerify"`
 }
 ```
@@ -182,7 +182,7 @@ type VictoriaLogsArchive struct {
 | 层面 | 落地内容 |
 |---|---|
 | 取值 | `pkg/model/audit_record.go`：两个常量 + `NormalizeAuditSink` + `AuditSinkUses{VictoriaLogs,OpenObserve,ExternalLogs}` + `AuditSinkRetentionIsServerSide` |
-| 配置 | `pkg/model/audit_setting.go`：`VictoriaLogsArchive` / `OpenObserveArchive`（含 `normalize`）、`ApplySinkExclusivity` 五路收敛、默认 `stream=kite-audit` / `org=default` |
+| 配置 | `pkg/model/audit_setting.go`：`VictoriaLogsArchive` / `OpenObserveArchive`（含 `normalize`）、`ApplySinkExclusivity` 五路收敛、默认 `stream=aerolink-audit` / `org=default` |
 | 启动 fail-closed | `pkg/audit/sink_target.go`：urls 为空即拒绝启动，与 parquet / ES 同口径 |
 | 写入 | `pkg/audit/logsink_http.go` 抽出 `documentSink`（中立文档 + 轮询/故障切换 + 3 次退避重试，4xx 不重试，`errLogSinkNotRetryable`）；`pkg/audit/victorialogs_sink.go`、`pkg/audit/openobserve_sink.go` |
 | 检索 | 两个 sink 各自实现 `archiveSearcher`；`archive_backend.go` 的后端注册表扩到四个（es / duckdb / victorialogs / openobserve），auto **跟随 sink** |

@@ -23,7 +23,7 @@ import (
 // loadGeneralSettingAfterKeyMigration 读入通用设置，并在需要时先校正加密密钥。
 //
 // 前半段必须在设置行存在之后马上跑：加密密钥的指纹就保存在那一行，从内置默认
-// 密钥切换到 KITE_ENCRYPT_KEY 时要重写已存的密文，密钥不匹配则明确报错，而不是
+// 密钥切换到 AEROLINK_ENCRYPT_KEY 时要重写已存的密文，密钥不匹配则明确报错，而不是
 // 逐个 secret 地失败。而后半段的重读不能省：密钥刚切换时第一次读取会因为解不开
 // jwt_secret 而失败，只有迁移后重读才能把存库的会话密钥取回来，否则下面的哨兵
 // 检查会拒绝启动（表现为「切换密钥后首次启动起不来，重启一次才行」）。
@@ -53,7 +53,7 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 	// 哨兵值，说明所有路径都失败了，用它签发会话
 	// 会让任何人都能伪造管理员令牌。
 	if common.JwtSecret == common.DefaultJWTSecret {
-		klog.Fatalf("refusing to start: no usable JWT secret (set JWT_SECRET, or KITE_ALLOW_INSECURE_SECRETS=true for local development)")
+		klog.Fatalf("refusing to start: no usable JWT secret (set JWT_SECRET, or AEROLINK_ALLOW_INSECURE_SECRETS=true for local development)")
 	}
 
 	rbac.InitRBAC()

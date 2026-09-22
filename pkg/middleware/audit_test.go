@@ -47,7 +47,7 @@ func runAdminAudit(t *testing.T, operator model.User, method, path string, statu
 	router.Any(path, func(c *gin.Context) { c.Status(status) })
 
 	request := httptest.NewRequest(method, path, nil)
-	request.Header.Set("User-Agent", "kite-test-agent/1.0")
+	request.Header.Set("User-Agent", "aerolink-test-agent/1.0")
 	request.RemoteAddr = "203.0.113.7:51234"
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -80,7 +80,7 @@ func TestAdminAuditRecordsSourceOfChange(t *testing.T) {
 	if row.ClientIP != "203.0.113.7" {
 		t.Fatalf("clientIp = %q, want the request address", row.ClientIP)
 	}
-	if row.UserAgent != "kite-test-agent/1.0" {
+	if row.UserAgent != "aerolink-test-agent/1.0" {
 		t.Fatalf("userAgent = %q, want the request User-Agent", row.UserAgent)
 	}
 	if row.OperatorName != "alice" {
@@ -132,7 +132,7 @@ func TestAdminAuditIgnoresOtherReads(t *testing.T) {
 	}
 }
 
-// 管理路由挂在 common.Base 之下（见 main.buildEngine）：设了 KITE_BASE 时前缀匹配
+// 管理路由挂在 common.Base 之下（见 main.buildEngine）：设了 AEROLINK_BASE 时前缀匹配
 // 必须先把 base 剥掉，否则管理端写操作与审计读取都会漏审计。
 func TestAdminAuditRespectsBasePath(t *testing.T) {
 	operator := setupAdminAuditDB(t)
@@ -147,7 +147,7 @@ func TestAdminAuditRespectsBasePath(t *testing.T) {
 
 	rows := auditRows(t)
 	if len(rows) != 2 {
-		t.Fatalf("expected 2 admin audit rows under KITE_BASE, got %d", len(rows))
+		t.Fatalf("expected 2 admin audit rows under AEROLINK_BASE, got %d", len(rows))
 	}
 	if rows[0].OperationType != "update" || rows[0].ResourceType != "system/general-setting" {
 		t.Fatalf("row 0 = %q/%q, want update/system/general-setting", rows[0].OperationType, rows[0].ResourceType)

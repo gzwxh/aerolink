@@ -289,7 +289,7 @@ class ApiClient {
 
 export const API_BASE_URL = '/api/v1'
 
-// 从 `attachment; filename="kite-audit-logs-20260101-120000.csv"` 里取出文件名。
+// 从 `attachment; filename="aerolink-audit-logs-20260101-120000.csv"` 里取出文件名。
 function filenameFromDisposition(header: string | null): string {
   if (!header) return 'download'
   const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header)

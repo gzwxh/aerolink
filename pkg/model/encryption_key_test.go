@@ -126,9 +126,9 @@ func TestEnsureEncryptionKeyKeepsUnknownRotationIntact(t *testing.T) {
 
 // openMissingTableDB 返回一个「一张表都没建」的空库，用来验证「表还不存在时也要能启动」。
 //
-// 默认用进程内 sqlite；设置 KITE_TEST_PG_DSN 时改用真实 PostgreSQL：
+// 默认用进程内 sqlite；设置 AEROLINK_TEST_PG_DSN 时改用真实 PostgreSQL：
 //
-//	KITE_TEST_PG_DSN='host=127.0.0.1 user=kite password=... dbname=kite_empty port=5433 sslmode=disable TimeZone=Asia/Shanghai' \
+//	AEROLINK_TEST_PG_DSN='host=127.0.0.1 user=kite password=... dbname=kite_empty port=5433 sslmode=disable TimeZone=Asia/Shanghai' \
 //	    go test ./pkg/model -run MissingTable -v
 //
 // 这个开关不是可有可无的：下面这段容忍逻辑原先靠匹配驱动的错误文本来判断「表不存在」，
@@ -138,7 +138,7 @@ func openMissingTableDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
 	var dialector gorm.Dialector
-	if dsn := strings.TrimSpace(os.Getenv("KITE_TEST_PG_DSN")); dsn != "" {
+	if dsn := strings.TrimSpace(os.Getenv("AEROLINK_TEST_PG_DSN")); dsn != "" {
 		dialector = postgres.Open(dsn)
 	} else {
 		dialector = sqlite.Open("file:" + t.Name() + "?mode=memory&cache=shared")
@@ -150,7 +150,7 @@ func openMissingTableDB(t *testing.T) *gorm.DB {
 	if db.Migrator().HasTable("general_settings") {
 		t.Fatalf(
 			"这个用例需要空库，但 general_settings 已存在（%s）：%s",
-			db.Name(), "KITE_TEST_PG_DSN 请指向一个从未做过 AutoMigrate 的库")
+			db.Name(), "AEROLINK_TEST_PG_DSN 请指向一个从未做过 AutoMigrate 的库")
 	}
 
 	previousDB := DB
@@ -172,7 +172,7 @@ func TestEncryptionKeyToleratesMissingTables(t *testing.T) {
 	}
 
 	// 从未用过的功能表不存在时，密钥迁移要跳过它们并正常提交，而不是整体失败——
-	// 否则「换 KITE_ENCRYPT_KEY」在 PostgreSQL 上会直接失败。
+	// 否则「换 AEROLINK_ENCRYPT_KEY」在 PostgreSQL 上会直接失败。
 	migrated, err := migrateEncryptedColumns("old-key", "new-key")
 	if err != nil {
 		t.Fatalf("migrateEncryptedColumns() on a database without tables: %v", err)

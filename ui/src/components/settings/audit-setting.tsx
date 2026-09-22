@@ -84,13 +84,13 @@ const DEFAULT_FORM: AuditSettingData = {
       urls: [],
       username: '',
       password: '',
-      indexPrefix: 'kite-audit',
+      indexPrefix: 'aerolink-audit',
       tlsInsecureSkipVerify: false,
     },
     victorialogs: {
       enabled: false,
       urls: [],
-      stream: 'kite-audit',
+      stream: 'aerolink-audit',
       accountId: '',
       projectId: '',
       tlsInsecureSkipVerify: false,
@@ -99,7 +99,7 @@ const DEFAULT_FORM: AuditSettingData = {
       enabled: false,
       urls: [],
       org: 'default',
-      stream: 'kite-audit',
+      stream: 'aerolink-audit',
       username: '',
       password: '',
       tlsInsecureSkipVerify: false,
@@ -350,7 +350,7 @@ export function AuditSetting() {
           title={t('audit.setting.sink.title', '存储方式')}
           description={t(
             'audit.setting.sink.description',
-            '审计记录的落地方式（五者互斥），由配置文件 auditSink / 环境变量 KITE_AUDIT_SINK 在启动时指定，界面只读。'
+            '审计记录的落地方式（五者互斥），由配置文件 auditSink / 环境变量 AEROLINK_AUDIT_SINK 在启动时指定，界面只读。'
           )}
         >
           <SettingRow label={t('audit.setting.sink.label', '落地方式')}>
@@ -575,7 +575,7 @@ export function AuditSetting() {
               >
                 <Input
                   value={formData.syslog.kafka.topic}
-                  placeholder="kite-audit"
+                  placeholder="aerolink-audit"
                   disabled={readOnly}
                   onChange={(event) =>
                     patchKafka({ topic: event.target.value })
@@ -936,7 +936,7 @@ export function AuditSetting() {
             label={t('audit.setting.archive.localDir', '本地目录')}
             hint={t(
               'audit.setting.archive.localDirHint',
-              '留空使用环境变量 KITE_AUDIT_ARCHIVE_DIR 指定的默认目录。'
+              '留空使用环境变量 AEROLINK_AUDIT_ARCHIVE_DIR 指定的默认目录。'
             )}
           >
             <Input
@@ -1150,7 +1150,7 @@ export function AuditSetting() {
           <SettingRow label={t('audit.setting.archive.s3.bucket', 'Bucket')}>
             <Input
               value={archive.s3.bucket}
-              placeholder="kite-audit"
+              placeholder="aerolink-audit"
               disabled={readOnly}
               onChange={(event) => patchS3({ bucket: event.target.value })}
               className="max-w-60"
@@ -1203,7 +1203,7 @@ export function AuditSetting() {
           >
             <Input
               value={archive.s3.prefix}
-              placeholder="kite-audit"
+              placeholder="aerolink-audit"
               disabled={readOnly}
               onChange={(event) => patchS3({ prefix: event.target.value })}
               className="max-w-60"
@@ -1337,7 +1337,7 @@ export function AuditSetting() {
           >
             <Input
               value={archive.elasticsearch.indexPrefix}
-              placeholder="kite-audit"
+              placeholder="aerolink-audit"
               disabled={readOnly}
               onChange={(event) => patchES({ indexPrefix: event.target.value })}
               className="max-w-60"
@@ -1420,7 +1420,7 @@ export function AuditSetting() {
           >
             <Input
               value={archive.victorialogs.stream}
-              placeholder="kite-audit"
+              placeholder="aerolink-audit"
               disabled={readOnly}
               onChange={(event) =>
                 patchVictoriaLogs({ stream: event.target.value })
@@ -1572,7 +1572,7 @@ export function AuditSetting() {
           >
             <Input
               value={archive.openobserve.stream}
-              placeholder="kite-audit"
+              placeholder="aerolink-audit"
               disabled={readOnly}
               onChange={(event) =>
                 patchOpenObserve({ stream: event.target.value })

@@ -16,7 +16,7 @@ import (
 
 // TrustCookieName 把该浏览器标记为最近已完成 MFA 验证。时间窗来自安全
 // 设置中的 "MFA verification validity"（秒）。
-const TrustCookieName = "kite_mfa_trust"
+const TrustCookieName = "aerolink_mfa_trust"
 
 const defaultTrustTTL = 60 * time.Second
 

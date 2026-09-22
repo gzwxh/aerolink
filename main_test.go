@@ -292,7 +292,7 @@ func TestSetupStatic(t *testing.T) {
 	})
 }
 
-// 从内置密钥切到 KITE_ENCRYPT_KEY 的首次启动必须能直接起来：存库的 jwt_secret 要先
+// 从内置密钥切到 AEROLINK_ENCRYPT_KEY 的首次启动必须能直接起来：存库的 jwt_secret 要先
 // 由密钥迁移重写、再被重新读回来，否则 initializeApp 的哨兵检查会 Fatalf
 // （表现为切换密钥后必须重启一次）。
 func TestLoadGeneralSettingReadsStoredJWTSecretAfterKeyMigration(t *testing.T) {
@@ -327,7 +327,7 @@ func TestLoadGeneralSettingReadsStoredJWTSecretAfterKeyMigration(t *testing.T) {
 		t.Fatalf("expected a stored JWT secret, got %q", stored)
 	}
 
-	// 运维配置了 KITE_ENCRYPT_KEY 后重启：新进程里会话密钥回到哨兵值。
+	// 运维配置了 AEROLINK_ENCRYPT_KEY 后重启：新进程里会话密钥回到哨兵值。
 	common.KiteEncryptKey = "production-key-0123456789"
 	common.JwtSecret = common.DefaultJWTSecret
 

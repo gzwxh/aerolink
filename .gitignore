@@ -48,6 +48,9 @@ docs/.vitepress/cache
 /aerolink
 # 旧名字的产物：二进制名从 kite 改成 aerolink 之前构建出来的，仍不进库
 /kite
+# 直接 `go build ./tools/rancherrbac/...` 会把它落在仓库根目录（Makefile 的
+# rancherrbac 目标走 scripts/build-rancherrbac.sh，产物在 bin/）
+/rancherrbac
 !charts/kite
 
 # 打包好的 Helm chart（`helm package charts/kite/` 会在仓库根目录生成

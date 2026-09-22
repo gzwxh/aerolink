@@ -108,7 +108,7 @@ klog 日志是自由文本，塞进 parquet 只能得到「一行一列 message�
 （或 KLOG 环境变量）里加：
 
 ```text
--log_file=/var/log/kite/kite.log
+-log_file=/var/log/aerolink/aerolink.log
 -log_file_max_size=512          # 单个文件上限 MB，触发轮转
 -logtostderr=false              # 只写文件、不再重复打 stderr（见下）
 ```
@@ -147,14 +147,14 @@ klog 相关 flag 语义（实现时按最终选型核对）：
 
 环境变量与 klog 落点：
 
-- `KITE_AUDIT_ARCHIVE_DIR`：本地归档根目录（默认 `/var/log/kite/archive`）。
-- `KITE_LOG_FILE`：klog 文本日志文件路径（默认空 = 不落文件）。
-- klog 启动参数：`-log_file=$KITE_LOG_FILE -log_file_max_size=512 -logtostderr=false`。
+- `AEROLINK_AUDIT_ARCHIVE_DIR`：本地归档根目录（默认 `/var/log/aerolink/archive`）。
+- `AEROLINK_LOG_FILE`：klog 文本日志文件路径（默认空 = 不落文件）。
+- klog 启动参数：`-log_file=$AEROLINK_LOG_FILE -log_file_max_size=512 -logtostderr=false`。
 
 charts / compose 同步：
 
-- `auditArchive.enabled` 时，`/var/log/kite` 挂可写卷（PVC/hostPath），同时覆盖
-  `KITE_AUDIT_ARCHIVE_DIR`（parquet 目录）与 `KITE_LOG_FILE`（klog 文件）两个落点。
+- `auditArchive.enabled` 时，`/var/log/aerolink` 挂可写卷（PVC/hostPath），同时覆盖
+  `AEROLINK_AUDIT_ARCHIVE_DIR`（parquet 目录）与 `AEROLINK_LOG_FILE`（klog 文件）两个落点。
 - klog 的 `-log_file -logtostderr=false` 由 `args` 注入 deployment。
 
 ## 5. 实施计划（与主文档对齐）

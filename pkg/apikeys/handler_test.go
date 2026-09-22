@@ -57,7 +57,7 @@ func TestAPIKeyLifecycleControlsAuthentication(t *testing.T) {
 		t.Fatalf("listed API keys = %#v", listed.APIKeys)
 	}
 	fullKey := string(listed.APIKeys[0].APIKey)
-	wantPrefix := fmt.Sprintf("kite%d-", created.APIKey.ID)
+	wantPrefix := fmt.Sprintf("%s%d-", model.APIKeyPrefix, created.APIKey.ID)
 	if !strings.HasPrefix(fullKey, wantPrefix) || !strings.HasSuffix(fullKey, string(created.APIKey.APIKey)) {
 		t.Fatalf("listed API key = %q, want prefix %q and created secret", fullKey, wantPrefix)
 	}
@@ -66,7 +66,11 @@ func TestAPIKeyLifecycleControlsAuthentication(t *testing.T) {
 	authRecorder := httptest.NewRecorder()
 	authContext, _ := gin.CreateTestContext(authRecorder)
 	authContext.Request = httptest.NewRequest(http.MethodGet, "/protected", nil)
-	authHandler.RequireAPIKeyAuth(authContext, strings.TrimPrefix(fullKey, "kite"))
+	keyToken, ok := model.APIKeyToken(fullKey)
+	if !ok {
+		t.Fatalf("APIKeyToken(%q) did not accept the issued key", fullKey)
+	}
+	authHandler.RequireAPIKeyAuth(authContext, keyToken)
 	if authContext.IsAborted() {
 		t.Fatalf("created API key was rejected: %s", authRecorder.Body.String())
 	}
@@ -83,7 +87,11 @@ func TestAPIKeyLifecycleControlsAuthentication(t *testing.T) {
 	rejectedRecorder := httptest.NewRecorder()
 	rejectedContext, _ := gin.CreateTestContext(rejectedRecorder)
 	rejectedContext.Request = httptest.NewRequest(http.MethodGet, "/protected", nil)
-	authHandler.RequireAPIKeyAuth(rejectedContext, strings.TrimPrefix(fullKey, "kite"))
+	keyToken, ok = model.APIKeyToken(fullKey)
+	if !ok {
+		t.Fatalf("APIKeyToken(%q) did not accept the issued key", fullKey)
+	}
+	authHandler.RequireAPIKeyAuth(rejectedContext, keyToken)
 	if !rejectedContext.IsAborted() || rejectedRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("deleted API key authentication status = %d, aborted=%v", rejectedRecorder.Code, rejectedContext.IsAborted())
 	}

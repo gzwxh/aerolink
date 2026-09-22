@@ -91,7 +91,8 @@ func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
 		}
 		authHeader := c.GetHeader("Authorization")
 		if authHeader != "" {
-			if after, ok := strings.CutPrefix(authHeader, "kite"); ok {
+			// 认新旧两种前缀（旧前缀是改名前的存量 key），见 model.APIKeyToken。
+			if after, ok := model.APIKeyToken(authHeader); ok {
 				h.RequireAPIKeyAuth(c, after)
 				return
 			}

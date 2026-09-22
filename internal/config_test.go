@@ -157,7 +157,7 @@ func TestApplyAuditSinkIgnoresRuntimeChanges(t *testing.T) {
 	}
 }
 
-// 只设环境变量、不挂配置文件时，KITE_AUDIT_SINK 也必须生效：app.go 在「有配置文件」与「只有环境
+// 只设环境变量、不挂配置文件时，AEROLINK_AUDIT_SINK 也必须生效：app.go 在「有配置文件」与「只有环境
 // 变量」两条路里只会走一条，两边都得认得这个变量，否则部署者以为配了、实际还是 database。
 func TestLoadConfigFromEnvAppliesAuditSink(t *testing.T) {
 	setupTestDB(t)
@@ -170,14 +170,14 @@ func TestLoadConfigFromEnvAppliesAuditSink(t *testing.T) {
 	auditSinkResolved = false
 	model.AuditSink = model.AuditSinkDatabase
 
-	t.Setenv("KITE_AUDIT_SINK", "parquet")
+	t.Setenv("AEROLINK_AUDIT_SINK", "parquet")
 	// 指向一个不存在的 kubeconfig：避免用例去读开发机上的 ~/.kube/config。
 	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "absent-kubeconfig"))
 
 	LoadConfigFromEnv()
 
 	if model.AuditSink != model.AuditSinkParquet {
-		t.Fatalf("KITE_AUDIT_SINK=parquet 未生效, sink = %q", model.AuditSink)
+		t.Fatalf("AEROLINK_AUDIT_SINK=parquet 未生效, sink = %q", model.AuditSink)
 	}
 }
 

@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/subtle"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -69,11 +68,11 @@ func metricsAuth(token string) gin.HandlerFunc {
 
 func registerBaseRoutes(r *gin.RouterGroup) {
 	// 指标端点需要能被 Prometheus 访问，而它无法携带会话
-	// cookie。设置 KITE_METRICS_TOKEN 可要求 "Authorization: Bearer <token>"，
+	// cookie。设置 AEROLINK_METRICS_TOKEN 可要求 "Authorization: Bearer <token>"，
 	// 而不是让该端点完全开放。
-	metricsToken := strings.TrimSpace(os.Getenv("KITE_METRICS_TOKEN"))
+	metricsToken := strings.TrimSpace(common.Getenv("METRICS_TOKEN"))
 	if metricsToken == "" {
-		klog.Warningf("KITE_METRICS_TOKEN is not set: /metrics is exposed without authentication")
+		klog.Warningf("AEROLINK_METRICS_TOKEN is not set: /metrics is exposed without authentication")
 	}
 	r.GET("/metrics", metricsAuth(metricsToken), gin.WrapH(promhttp.HandlerFor(promclient.Gatherers{
 		promclient.DefaultGatherer,

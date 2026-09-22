@@ -29,7 +29,7 @@ import (
 const (
 	clusterAgentTokenSize = 32
 	manifestGrantTimeout  = 10 * time.Minute
-	manifestGrantAAD      = "kite:cluster-agent-manifest-grant:v1"
+	manifestGrantAAD      = "aerolink:cluster-agent-manifest-grant:v1"
 )
 
 var ErrInvalidManifestGrant = errors.New("invalid manifest grant")

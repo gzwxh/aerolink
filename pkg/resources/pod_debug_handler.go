@@ -169,7 +169,7 @@ func (h *PodHandler) DebugCopy(c *gin.Context) {
 			Name:      req.CopyTo,
 			Namespace: namespace,
 			Annotations: map[string]string{
-				"kite.io/debug-container": req.TargetContainerName,
+				"aerolink.io/debug-container": req.TargetContainerName,
 			},
 		},
 		Spec: *pod.Spec.DeepCopy(),

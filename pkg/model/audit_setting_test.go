@@ -62,7 +62,7 @@ func TestApplySinkExclusivity(t *testing.T) {
 		data.Archive.Enabled = true
 		data.Archive.S3.Enabled = true
 		data.Archive.S3.Endpoint = "http://minio:9000"
-		data.Archive.S3.Bucket = "kite-audit"
+		data.Archive.S3.Bucket = "aerolink-audit"
 		data.Archive.Elasticsearch.Enabled = true
 		data.Archive.Elasticsearch.URLs = []string{"http://es:9200"}
 		data.Archive.VictoriaLogs.Enabled = true
@@ -194,7 +194,7 @@ func TestNormalizeRejectsInvalidArchive(t *testing.T) {
 		{
 			name:   "s3 enabled without endpoint",
 			sink:   AuditSinkParquet,
-			mutate: func(d *AuditSettingData) { d.Archive.S3 = S3Archive{Enabled: true, Bucket: "kite-audit"} },
+			mutate: func(d *AuditSettingData) { d.Archive.S3 = S3Archive{Enabled: true, Bucket: "aerolink-audit"} },
 			want:   "endpoint",
 		},
 		{
@@ -246,7 +246,7 @@ func TestNormalizeArchiveTrimsS3AndES(t *testing.T) {
 	data := DefaultAuditSettingData()
 	data.Archive.S3.Enabled = true
 	data.Archive.S3.Endpoint = "  http://minio:9000  "
-	data.Archive.S3.Bucket = "  kite-audit "
+	data.Archive.S3.Bucket = "  aerolink-audit "
 	data.Archive.S3.Prefix = " /kite/audit/ "
 	data.Archive.Elasticsearch.Enabled = true
 	data.Archive.Elasticsearch.URLs = []string{" http://es:9200 ", "", "   "}
@@ -254,7 +254,7 @@ func TestNormalizeArchiveTrimsS3AndES(t *testing.T) {
 	if err := data.Normalize(); err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
-	if data.Archive.S3.Endpoint != "http://minio:9000" || data.Archive.S3.Bucket != "kite-audit" {
+	if data.Archive.S3.Endpoint != "http://minio:9000" || data.Archive.S3.Bucket != "aerolink-audit" {
 		t.Errorf("S3 endpoint/bucket not trimmed: %+v", data.Archive.S3)
 	}
 	if data.Archive.S3.Prefix != "kite/audit" {
@@ -330,7 +330,7 @@ func TestNormalizeLogForwardValidatesOnlyActiveMode(t *testing.T) {
 			mutate: func(d *AuditSettingData) {
 				d.Forward.Mode = LogForwardModeKafka
 				d.Forward.Enabled = true
-				d.Forward.Kafka.Topic = "kite-audit"
+				d.Forward.Kafka.Topic = "aerolink-audit"
 			},
 			wantErr: "kafka brokers are required",
 		},
@@ -349,7 +349,7 @@ func TestNormalizeLogForwardValidatesOnlyActiveMode(t *testing.T) {
 				d.Forward.Mode = LogForwardModeKafka
 				d.Forward.Enabled = true
 				d.Forward.Kafka.Brokers = []string{"kafka:9092"}
-				d.Forward.Kafka.Topic = "kite-audit"
+				d.Forward.Kafka.Topic = "aerolink-audit"
 				d.Forward.Kafka.SASLMechanism = KafkaSASLScramSHA512
 			},
 			wantErr: "kafka username is required",
@@ -383,7 +383,7 @@ func TestNormalizeLogForwardValidatesOnlyActiveMode(t *testing.T) {
 	switched.Forward.Enabled = true
 	switched.Forward.Address = ""
 	switched.Forward.Kafka.Brokers = []string{" kafka-1:9092 ", "", "kafka-2:9092"}
-	switched.Forward.Kafka.Topic = " kite-audit "
+	switched.Forward.Kafka.Topic = " aerolink-audit "
 	if err := switched.Normalize(); err != nil {
 		t.Fatalf("切到 kafka 后不该被 syslog 的必填项拦住: %v", err)
 	}
@@ -393,7 +393,7 @@ func TestNormalizeLogForwardValidatesOnlyActiveMode(t *testing.T) {
 	if len(switched.Forward.Kafka.Brokers) != 2 || switched.Forward.Kafka.Brokers[1] != "kafka-2:9092" {
 		t.Errorf("brokers 未被清洗: %v", switched.Forward.Kafka.Brokers)
 	}
-	if switched.Forward.Kafka.Topic != "kite-audit" {
+	if switched.Forward.Kafka.Topic != "aerolink-audit" {
 		t.Errorf("topic 未去空白: %q", switched.Forward.Kafka.Topic)
 	}
 }

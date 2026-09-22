@@ -231,7 +231,7 @@ func TestCreateClusterAgentClusterServerURLDerivation(t *testing.T) {
 	body := strings.NewReader(`{"name":"agent-fwd","clusterAgent":true}`)
 	req := httptest.NewRequest(http.MethodPost, "/clusters", body)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Forwarded-Host", "kite.example.com")
+	req.Header.Set("X-Forwarded-Host", "aerolink.example.com")
 	req.Header.Set("X-Forwarded-Proto", "https")
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -243,8 +243,8 @@ func TestCreateClusterAgentClusterServerURLDerivation(t *testing.T) {
 		t.Fatalf("decoding response: %v", err)
 	}
 	serverURL, _ := result["clusterAgentServer"].(string)
-	if !strings.HasPrefix(serverURL, "https://kite.example.com") {
-		t.Errorf("serverURL = %q, want https://kite.example.com prefix", serverURL)
+	if !strings.HasPrefix(serverURL, "https://aerolink.example.com") {
+		t.Errorf("serverURL = %q, want https://aerolink.example.com prefix", serverURL)
 	}
 }
 

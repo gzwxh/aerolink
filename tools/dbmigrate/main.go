@@ -5,7 +5,7 @@
 //   - 目标环境不一定有这些客户端（容器运行时里连 shell 都没有）；
 //   - 时间列在各方言里的存储形式不同（SQLite 存的是带纳秒与时区偏移的字符串），
 //     逐条走 GORM 模型读写可以复用应用本身那套类型转换，不必手工改写 SQL 文本；
-//   - SecretString 列是 AES-GCM 密文，必须用与源库相同的 KITE_ENCRYPT_KEY 解密，
+//   - SecretString 列是 AES-GCM 密文，必须用与源库相同的 AEROLINK_ENCRYPT_KEY 解密，
 //     再按目标库配置的密钥重新加密，这只有走模型才能做到。
 //
 // 步骤与切流注意事项见 docs/dev/plans/2026-09-20-sqlite-to-postgres-migration.md。
@@ -183,9 +183,9 @@ func sqlitePath(dsn string) string {
 // 而搬数据只关心加密密钥。密钥不对时读取源库会立刻解密失败（fail-closed），
 // 不会静默搬一堆解不开的密文过去。
 func applyEncryptKey() {
-	key := strings.TrimSpace(os.Getenv("KITE_ENCRYPT_KEY"))
+	key := strings.TrimSpace(common.Getenv("ENCRYPT_KEY"))
 	if key == "" {
-		klog.Warningf("KITE_ENCRYPT_KEY is not set: reading and writing secrets with the built-in " +
+		klog.Warningf("AEROLINK_ENCRYPT_KEY is not set: reading and writing secrets with the built-in " +
 			"default key. This is correct only when the source also used that key.")
 		return
 	}
@@ -236,7 +236,7 @@ func readSource(db *gorm.DB) ([]*table, error) {
 		rows := reflect.New(reflect.SliceOf(reflect.TypeOf(m)))
 		if err := db.Find(rows.Interface()).Error; err != nil {
 			return nil, fmt.Errorf("reading source table %s: %w "+
-				"(a decryption error here means KITE_ENCRYPT_KEY does not match the source)", name, err)
+				"(a decryption error here means AEROLINK_ENCRYPT_KEY does not match the source)", name, err)
 		}
 		tables = append(tables, &table{
 			name:  name,

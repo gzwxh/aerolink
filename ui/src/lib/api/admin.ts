@@ -759,7 +759,7 @@ export const exportAuditLogs = (
   appendTimeRange(params, range)
   return downloadFile(
     `/admin/audit-logs/export?${params.toString()}`,
-    'kite-audit-logs.csv'
+    'aerolink-audit-logs.csv'
   )
 }
 
@@ -854,7 +854,7 @@ export const exportLoginLogs = async (
   appendTimeRange(params, range)
   return downloadFile(
     `/admin/login-logs/export?${params.toString()}`,
-    'kite-login-logs.csv'
+    'aerolink-login-logs.csv'
   )
 }
 
@@ -920,7 +920,7 @@ export const exportPasswordChangeLogs = async (
   appendTimeRange(params, range)
   return downloadFile(
     `/admin/password-change-logs/export?${params.toString()}`,
-    'kite-password-change-logs.csv'
+    'aerolink-password-change-logs.csv'
   )
 }
 

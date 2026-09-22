@@ -2,11 +2,11 @@
 
 ## 数据共享
 
-Kite 不收集任何数据，也不会向第三方上报使用情况。上游的匿名统计（umami）已从这个
+鸢联 AeroLink 不收集任何数据，也不会向第三方上报使用情况。上游的匿名统计（umami）已从这个
 内部分支中整体移除：没有统计开关，没有注入的脚本，服务端下发的
 `Content-Security-Policy` 也不放行任何第三方来源。
 
-Kite 也不会查询上游发布：没有更新检查，没有任何指向 `api.github.com` 的请求。
+鸢联 AeroLink 也不会查询上游发布：没有更新检查，没有任何指向 `api.github.com` 的请求。
 
 ## 权限问题
 
@@ -22,15 +22,15 @@ Kite 也不会查询上游发布：没有更新检查，没有任何指向 `api.
 
 ## 托管 Kubernetes 集群连接问题
 
-如果您使用托管 Kubernetes 集群（AKS、EKS、GKE 等）并在将集群添加到 Kite 时遇到身份验证错误，这通常是因为默认的 kubeconfig 使用了需要 CLI 工具（如 `kubelogin`、`aws` 或 `gcloud`）的 `exec` 插件。
+如果您使用托管 Kubernetes 集群（AKS、EKS、GKE 等）并在将集群添加到鸢联 AeroLink 时遇到身份验证错误，这通常是因为默认的 kubeconfig 使用了需要 CLI 工具（如 `kubelogin`、`aws` 或 `gcloud`）的 `exec` 插件。
 
-Kite 作为服务端应用运行，无法执行这些客户端身份验证工具。相反，您应该使用基于 Service Account token 的身份验证。
+鸢联 AeroLink 作为服务端应用运行，无法执行这些客户端身份验证工具。相反，您应该使用基于 Service Account token 的身份验证。
 
 请参考[托管 Kubernetes 集群配置指南](./config/managed-k8s-auth.md)，了解如何创建和使用 Service Account token 进行身份验证的详细说明。
 
 ## 持久化相关
 
-Kite 支持使用 SQLite、MySQL 或 PostgreSQL 作为数据库。
+鸢联 AeroLink 支持使用 SQLite、MySQL 或 PostgreSQL 作为数据库。
 
 你可以通过环境变量 `DB_DSN` 来配置数据库连接字符串，`DB_TYPE` 来指定数据库类型（默认为 `sqlite`）。
 
@@ -47,7 +47,7 @@ Kite 支持使用 SQLite、MySQL 或 PostgreSQL 作为数据库。
 panic: failed to connect database: unable to open database file: out of memory (14)
 ```
 
-此问题与 Kite 使用的纯 Go SQLite 驱动有关（为避免 CGO 依赖）。该驱动在访问某些存储后端上的数据
+此问题与鸢联 AeroLink 使用的纯 Go SQLite 驱动有关（为避免 CGO 依赖）。该驱动在访问某些存储后端上的数据
 库文件时存在限制。
 
 **解决方案**：添加 SQLite 连接选项以提高与 hostPath 存储的兼容性。在 Helm values 中设置：
@@ -66,13 +66,13 @@ db:
 
 ## 如何更改字体
 
-Kite 默认提供五种字体：系统默认、`Maple Mono`、`JetBrains Mono`，以及中文优先的宋体与楷体。
+鸢联 AeroLink 默认提供五种字体：系统默认、`Maple Mono`、`JetBrains Mono`，以及中文优先的宋体与楷体。
 
 宋体与楷体随二进制分发，是 SIL OFL 1.1 字体的界面子集（来源见 `NOTICE`）：宋体派生自思源宋体 CN，楷体派生自寒蝉正楷体；两者只覆盖 GB2312 与界面文案，且只有 400 字重，粗体由浏览器合成。字体栈与生成脚本见 `ui/src/components/font-provider.tsx` 与 `scripts/build-font-subsets.sh`。
 
 如果您想使用其他字体，则需要自己构建项目。
 
-用 make 构建 kite，并在 `./ui/src/styles/base.css` 中更改字体
+用 make 构建鸢联 AeroLink，并在 `./ui/src/styles/base.css` 中更改字体
 
 ```css
 @font-face {
@@ -92,7 +92,7 @@ body {
 }
 ```
 
-## 我如何为 Kite 做出贡献？
+## 我如何为鸢联 AeroLink 做出贡献？
 
 我们欢迎贡献！您可以：
 

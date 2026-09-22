@@ -1,14 +1,14 @@
 # 配置文件
 
-Kite 支持通过 YAML 配置文件来管理集群、OAuth/LDAP 和 RBAC 配置。通过配置文件管理的部分在 UI 中将变为**只读**——用户可以查看配置但无法通过界面修改。
+鸢联 AeroLink 支持通过 YAML 配置文件来管理集群、OAuth/LDAP 和 RBAC 配置。通过配置文件管理的部分在 UI 中将变为**只读**——用户可以查看配置但无法通过界面修改。
 
 这对于 GitOps 工作流非常有用，配置可以版本控制并通过 Helm 部署。
 
-> 该功能仅适用于 Kite `v0.10.0` 及以上版本。
+> 该功能仅适用于鸢联 AeroLink `v0.10.0` 及以上版本。
 
 ## 工作原理
 
-1. Kite 从 `KITE_CONFIG_FILE` 环境变量指定的路径读取 YAML 配置文件。
+1. 鸢联 AeroLink 从 `AEROLINK_CONFIG_FILE` 环境变量指定的路径读取 YAML 配置文件。
 2. 每次启动时，配置都会应用到数据库，覆盖已管理部分的现有值。
 3. 配置文件中的敏感值支持 `${ENV_VAR}` 占位符，从环境变量中展开。
 4. UI 自动检测已管理的部分，以只读模式显示并附带提示横幅。
@@ -60,7 +60,7 @@ oauth:
 ldap:
   enabled: true
   serverUrl: "ldaps://ldap.example.com:636"
-  bindDn: "cn=svc-kite,ou=services,dc=example,dc=com"
+  bindDn: "cn=svc-aerolink,ou=services,dc=example,dc=com"
   bindPassword: "bind-password"
   userBaseDn: "ou=users,dc=example,dc=com"
   userFilter: "(uid=%s)"
@@ -117,7 +117,7 @@ rbac:
 **步骤 2：** 创建 Kubernetes Secret：
 
 ```bash
-kubectl create secret generic kite-config \
+kubectl create secret generic aerolink-config \
   --from-file=config.yaml=./config.yaml \
   -n <namespace>
 ```
@@ -127,7 +127,7 @@ kubectl create secret generic kite-config \
 ```yaml
 config:
   enabled: true
-  existingSecret: "kite-config"
+  existingSecret: "aerolink-config"
 ```
 
 ::: tip
@@ -305,7 +305,7 @@ config:
 | `auditSink`   | string | 落地方式：`database`（默认）、`parquet`、`elasticsearch`、`victorialogs`、`openobserve`（**五选一互斥**）           | 否   |
 | `auditArchive`| object | 归档设置（本地 parquet / S3 / Elasticsearch / VictoriaLogs / OpenObserve），实际生效的只有 `auditSink` 对应的那一条 | 否   |
 
-取值非法或所选通道的落地目标没配好（如 `parquet` 没有归档目录、`elasticsearch` 没有节点地址）时，Kite 会**拒绝启动**，不会静默回落。完整的可照抄样例（含五种落地方式）见仓库根目录的 `config.dev.yaml`，或参见[环境变量](./env.md)里的 `KITE_AUDIT_SINK`。
+取值非法或所选通道的落地目标没配好（如 `parquet` 没有归档目录、`elasticsearch` 没有节点地址）时，鸢联 AeroLink 会**拒绝启动**，不会静默回落。完整的可照抄样例（含五种落地方式）见仓库根目录的 `config.dev.yaml`，或参见[环境变量](./env.md)里的 `AEROLINK_AUDIT_SINK`。
 
 ## 行为说明
 

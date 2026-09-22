@@ -7,7 +7,7 @@
 ## 1. 本地发布清单（A3）
 
 - [ ] **1. 跑完整检查**：`make pre-commit` + `make test`（含 `go test` 与 `pnpm test`），全部通过。
-- [ ] **2. 确定版本号规则**：二选一并写死规则——改 `Makefile` 的 `VERSION`（当前 `dsy-v1.0.0`），或完全由 git tag 推导（`scripts/get-version.sh`）。不要两种并存。**（该二选一仍未定，见 §5）**
+- [ ] **2. 确定版本号规则**：统一用 tag 形式 `vX.Y.Z`。`Makefile` 的 `VERSION` 与 `charts/kite/Chart.yaml` 的 `appVersion` 都写这个形式（默认 `v1.0.0`），CI 发布再用 tag 覆盖 `VERSION`；`scripts/get-version.sh` 推导出的也是同一形式。不要引入 `dsy-` 之类的额外前缀，也不要与 tag 形式并存两种写法。
 - [ ] **3. 交叉编译并打包**：`make cross-compile` → `make package-binaries`，确认产物落在 `bin/`。
 - [ ] **4. 构建并推送镜像**：使用 `Dockerfile.binary`，目标 registry 用公司仓库（参考 `Makefile` 的 `IMAGE`，如 `swr.cn-south-1.myhuaweicloud.com/dsy/...`）。`make image` / `make push`。
 - [ ] **5. 打包并推送 chart**：`helm package charts/kite`，推送 chart（OCI 或内网/oss 仓库）。注意打包产物不得入库（见 §3）。
@@ -52,6 +52,5 @@ sh scripts/release.sh 1.0.1       # bump chart 版本 → commit → tag v1.0.1
 
 ## 5. 仍待决策
 
-- **版本号规则二选一**（§1 第 2 步）：`Makefile` 的 `VERSION` 与 `scripts/get-version.sh` 的 tag 推导目前并存，需要选一条写死。
 - **`ui/src/assets/login-banner.svg`**：✅ 已处理——2026-09-18 重画为自研素材（不再引用 AGPL 项目图纸，并在图内加入公司/部门品牌底纹），`NOTICE` 已改为「自研 / Apache-2.0」。
 - **`deploy-demo.yml`**：上游专用（把 demo 分支推到 ghcr.io 并重启上游的演示实例），保留 `kite-org` 门禁并在文件头注明；若要改成公司演示环境，需另立方案。

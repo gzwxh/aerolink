@@ -70,21 +70,21 @@ spec:
               value: {{ (printf "%s/%s?%s" .Values.db.sqlite.persistence.mountPath .Values.db.sqlite.persistence.filename .Values.db.sqlite.options) }}
             {{- end }}
             {{- if .Values.basePath }}
-            - name: KITE_BASE
+            - name: AEROLINK_BASE
               value: {{ .Values.basePath }}
             {{- end }}
             {{- if .Values.config.enabled }}
-            - name: KITE_CONFIG_FILE
+            - name: AEROLINK_CONFIG_FILE
               value: /etc/kite/config.yaml
             {{- end }}
             {{- if .Values.auditArchiveDir }}
-            - name: KITE_AUDIT_ARCHIVE_DIR
+            - name: AEROLINK_AUDIT_ARCHIVE_DIR
               value: {{ .Values.auditArchiveDir }}
             {{- end }}
             {{- if .Values.logFile }}
             # klog 落盘：程序读取该环境变量后设置 -log_file 并关闭 stderr 输出
             #（显式传 -log_file flag 的方式仍然有效）。
-            - name: KITE_LOG_FILE
+            - name: AEROLINK_LOG_FILE
               value: {{ .Values.logFile }}
             {{- end }}
           {{- with .Values.extraEnvs }}

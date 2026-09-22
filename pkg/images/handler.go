@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/cluster"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
 	"github.com/zxh326/kite/pkg/utils"
@@ -24,7 +24,7 @@ import (
 // 就无法把服务端当作 SSRF 探针，去打集群内部或者云
 // 元数据服务。
 func allowPrivateRegistries() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("KITE_ALLOW_PRIVATE_REGISTRIES")), "true")
+	return strings.EqualFold(strings.TrimSpace(common.Getenv("ALLOW_PRIVATE_REGISTRIES")), "true")
 }
 
 // blockedRegistryHost 报告该 host 是否指向本地网络。

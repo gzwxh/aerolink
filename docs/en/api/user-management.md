@@ -44,8 +44,8 @@ Example:
 
 ```bash
 curl \
-  -H "Authorization: kite1-adminsecret" \
-  "https://kite.example.com/api/v1/admin/users/?page=1&size=20&search=alice&sortOrder=desc"
+  -H "Authorization: aerolink1-adminsecret" \
+  "https://aerolink.example.com/api/v1/admin/users/?page=1&size=20&search=alice&sortOrder=desc"
 ```
 
 Response example:
@@ -96,10 +96,10 @@ Example:
 ```bash
 curl \
   -X POST \
-  -H "Authorization: kite1-adminsecret" \
+  -H "Authorization: aerolink1-adminsecret" \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"change-me","name":"Alice"}' \
-  https://kite.example.com/api/v1/admin/users/
+  https://aerolink.example.com/api/v1/admin/users/
 ```
 
 ## Update a user
@@ -128,10 +128,10 @@ Example:
 ```bash
 curl \
   -X PUT \
-  -H "Authorization: kite1-adminsecret" \
+  -H "Authorization: aerolink1-adminsecret" \
   -H "Content-Type: application/json" \
   -d '{"name":"Alice Zhang"}' \
-  https://kite.example.com/api/v1/admin/users/12
+  https://aerolink.example.com/api/v1/admin/users/12
 ```
 
 Which fields apply to which account:
@@ -204,8 +204,8 @@ Example:
 ```bash
 curl \
   -X DELETE \
-  -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/users/12
+  -H "Authorization: aerolink1-adminsecret" \
+  https://aerolink.example.com/api/v1/admin/users/12
 ```
 
 Response example:

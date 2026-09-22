@@ -227,7 +227,7 @@ func explainAuthError(err error) error {
 	hint := ""
 	switch {
 	case statusError.Status == http.StatusUnauthorized:
-		hint = "：Kite API key 无效或已停用。请求头里的值应当是控制台创建时给出的那份完整 API key（形如 kite1-xxxxxxxx）"
+		hint = "：AeroLink API key 无效或已停用。请求头里的值应当是控制台创建时给出的那份完整 API key（形如 kite1-xxxxxxxx）"
 	case strings.Contains(statusError.Body, "mfa_verification_required"):
 		hint = "：该账号开启了 MFA 二次校验，API key 无法完成校验。请换一个未强制 MFA 的管理员账号生成 API key"
 	case statusError.Status == http.StatusForbidden:

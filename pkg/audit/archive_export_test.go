@@ -65,7 +65,7 @@ func newPagedFakeES(t *testing.T, total int) *httptest.Server {
 
 func newExportTestSink(t *testing.T, urls []string) *ESSink {
 	t.Helper()
-	sink, err := NewESSink(model.ESArchive{Enabled: true, URLs: urls, IndexPrefix: "kite-audit"})
+	sink, err := NewESSink(model.ESArchive{Enabled: true, URLs: urls, IndexPrefix: "aerolink-audit"})
 	if err != nil {
 		t.Fatalf("NewESSink() error = %v", err)
 	}

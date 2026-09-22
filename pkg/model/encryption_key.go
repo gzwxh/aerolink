@@ -33,7 +33,7 @@ func encryptionKeyFingerprint(key string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// EnsureEncryptionKey 让配置的 KITE_ENCRYPT_KEY 与真正加密了已存密钥的
+// EnsureEncryptionKey 让配置的 AEROLINK_ENCRYPT_KEY 与真正加密了已存密钥的
 // 那个 key 保持一致。
 //
 // 数据库会记住在用密钥的指纹，这样部署可以从内置默认密钥切换出去而不丢数据：
@@ -80,23 +80,23 @@ func EnsureEncryptionKey() {
 			if err != nil {
 				// 什么都没有写入（迁移是原子的）：之前的
 				// 密钥依然能解开所有已存密钥。
-				klog.Errorf("failed to re-encrypt stored secrets with KITE_ENCRYPT_KEY: %v. "+
+				klog.Errorf("failed to re-encrypt stored secrets with AEROLINK_ENCRYPT_KEY: %v. "+
 					"Stored secrets are unchanged and readable with the previously configured key; "+
-					"restore that KITE_ENCRYPT_KEY (or re-save every credential before switching).", err)
+					"restore that AEROLINK_ENCRYPT_KEY (or re-save every credential before switching).", err)
 				return
 			}
 			if err := saveEncryptionKeyFingerprint(fingerprint); err != nil {
 				klog.Errorf("secrets were re-encrypted but the key fingerprint could not be stored: %v", err)
 				return
 			}
-			klog.Warningf("KITE_ENCRYPT_KEY is now configured: re-encrypted %d stored secret(s) that used the built-in key", migrated)
+			klog.Warningf("AEROLINK_ENCRYPT_KEY is now configured: re-encrypted %d stored secret(s) that used the built-in key", migrated)
 			// 刚用裸 SQL 重写了 general_settings 的加密列（jwt_secret / ai_api_key），
 			// 缓存里那份是旧密文解出来的值，必须回源——启动流程正是靠随后的重读把
 			// 库里的会话密钥推回内存（见 loadGeneralSettingAfterKeyMigration）。
 			InvalidateGeneralSettingCache()
 			return
 		}
-		klog.Errorf("KITE_ENCRYPT_KEY does not match the key that encrypted the stored data. " +
+		klog.Errorf("AEROLINK_ENCRYPT_KEY does not match the key that encrypted the stored data. " +
 			"Secrets (cluster kubeconfigs, LDAP/SMTP/OAuth passwords, AI keys) will fail to decrypt. " +
 			"Restore the previous key, or start with the old key, re-save every credential, then switch.")
 	}

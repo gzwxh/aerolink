@@ -62,22 +62,22 @@ func (g *restClientGetter) ToRESTMapper() (meta.RESTMapper, error) {
 func (g *restClientGetter) ToRawKubeConfigLoader() clientcmd.ClientConfig {
 	config := clientcmdapi.Config{
 		Clusters: map[string]*clientcmdapi.Cluster{
-			"kite": {Server: g.config.Host},
+			"aerolink": {Server: g.config.Host},
 		},
 		AuthInfos: map[string]*clientcmdapi.AuthInfo{
-			"kite": {},
+			"aerolink": {},
 		},
 		Contexts: map[string]*clientcmdapi.Context{
-			"kite": {
-				Cluster:   "kite",
-				AuthInfo:  "kite",
+			"aerolink": {
+				Cluster:   "aerolink",
+				AuthInfo:  "aerolink",
 				Namespace: g.namespace,
 			},
 		},
-		CurrentContext: "kite",
+		CurrentContext: "aerolink",
 	}
 	return clientcmd.NewDefaultClientConfig(config, &clientcmd.ConfigOverrides{
-		CurrentContext: "kite",
+		CurrentContext: "aerolink",
 		Context: clientcmdapi.Context{
 			Namespace: g.namespace,
 		},

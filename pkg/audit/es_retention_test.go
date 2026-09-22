@@ -62,7 +62,7 @@ func (f *fakeESIndices) sink(t *testing.T) *ESSink {
 	sink, err := NewESSink(model.ESArchive{
 		Enabled:     true,
 		URLs:        []string{f.server.URL},
-		IndexPrefix: "kite-audit",
+		IndexPrefix: "aerolink-audit",
 	})
 	if err != nil {
 		t.Fatalf("NewESSink() error = %v", err)
@@ -73,12 +73,12 @@ func (f *fakeESIndices) sink(t *testing.T) *ESSink {
 // 按天索引的删除粒度是「整天」：只有整天的数据都过期才删，且只删认得出来的本应用索引。
 func TestESSinkDeleteIndicesBefore(t *testing.T) {
 	fake := newFakeESIndices(t,
-		"kite-audit-2026.06.01", // 整天早于截止时间
-		"kite-audit-2026.07.02", // 一天结束正好等于截止时间（整天已过期，属边界）
-		"kite-audit-2026.07.03", // 截止时间所在的那天：还有记录在保留期内
-		"kite-audit-2026.09.20", // 还在保留期内
-		"other-app-2026.06.01",  // 不是本应用的索引
-		"kite-audit-not-a-day",  // 后缀不是日期
+		"aerolink-audit-2026.06.01", // 整天早于截止时间
+		"aerolink-audit-2026.07.02", // 一天结束正好等于截止时间（整天已过期，属边界）
+		"aerolink-audit-2026.07.03", // 截止时间所在的那天：还有记录在保留期内
+		"aerolink-audit-2026.09.20", // 还在保留期内
+		"other-app-2026.06.01",      // 不是本应用的索引
+		"aerolink-audit-not-a-day",  // 后缀不是日期
 	)
 	now := time.Date(2026, 9, 21, 0, 0, 0, 0, time.Local)
 	cutoff := now.AddDate(0, 0, -80) // 正好是 2026-07-03 00:00
@@ -89,13 +89,13 @@ func TestESSinkDeleteIndicesBefore(t *testing.T) {
 	}
 
 	sort.Strings(deleted)
-	want := []string{"kite-audit-2026.06.01", "kite-audit-2026.07.02"}
+	want := []string{"aerolink-audit-2026.06.01", "aerolink-audit-2026.07.02"}
 	if strings.Join(deleted, ",") != strings.Join(want, ",") {
 		t.Errorf("deleted = %v, want %v", deleted, want)
 	}
 
 	// 列索引要按前缀通配、并带上 json 格式；被关掉的索引也要能列出来（否则磁盘回收不了）。
-	if !strings.Contains(fake.listPath, "_cat/indices/kite-audit-*") ||
+	if !strings.Contains(fake.listPath, "_cat/indices/aerolink-audit-*") ||
 		!strings.Contains(fake.listPath, "format=json") ||
 		!strings.Contains(fake.listPath, "open%2Cclosed") {
 		t.Errorf("_cat/indices request = %q, want the prefix pattern, json format and open,closed", fake.listPath)
@@ -118,28 +118,28 @@ func TestESSinkDeleteIndicesBeforeWithoutIndices(t *testing.T) {
 
 // 多副本下同一个索引可能被另一个副本先删掉：那说明目标已达成，不能当成失败。
 func TestESSinkDeleteIndicesBeforeToleratesAlreadyDeletedIndex(t *testing.T) {
-	fake := newFakeESIndices(t, "kite-audit-2026.01.01")
-	fake.deleteSt["kite-audit-2026.01.01"] = http.StatusNotFound
+	fake := newFakeESIndices(t, "aerolink-audit-2026.01.01")
+	fake.deleteSt["aerolink-audit-2026.01.01"] = http.StatusNotFound
 
 	deleted, err := fake.sink(t).DeleteIndicesBefore(context.Background(), time.Now())
 	if err != nil {
 		t.Fatalf("已被删除的索引不该报错, got %v", err)
 	}
-	if len(deleted) != 1 || deleted[0] != "kite-audit-2026.01.01" {
+	if len(deleted) != 1 || deleted[0] != "aerolink-audit-2026.01.01" {
 		t.Errorf("deleted = %v, want the already-gone index to count as deleted", deleted)
 	}
 }
 
 // 一个索引删失败不能拖累其它索引（否则一个权限问题会让保留策略整体停摆）。
 func TestESSinkDeleteIndicesBeforeKeepsGoingAfterFailure(t *testing.T) {
-	fake := newFakeESIndices(t, "kite-audit-2026.01.01", "kite-audit-2026.01.02")
-	fake.deleteSt["kite-audit-2026.01.01"] = http.StatusForbidden
+	fake := newFakeESIndices(t, "aerolink-audit-2026.01.01", "aerolink-audit-2026.01.02")
+	fake.deleteSt["aerolink-audit-2026.01.01"] = http.StatusForbidden
 
 	deleted, err := fake.sink(t).DeleteIndicesBefore(context.Background(), time.Now())
 	if err == nil {
 		t.Fatal("被拒绝的删除必须作为错误返回，而不是静默吞掉")
 	}
-	if len(deleted) != 1 || deleted[0] != "kite-audit-2026.01.02" {
+	if len(deleted) != 1 || deleted[0] != "aerolink-audit-2026.01.02" {
 		t.Errorf("deleted = %v, want the second index to be deleted anyway", deleted)
 	}
 }

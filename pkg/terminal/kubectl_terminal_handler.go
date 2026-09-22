@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	kubectlAdminSA = "kite-kubectl-admin"
+	kubectlAdminSA = "aerolink-kubectl-admin"
 )
 
 type KubectlTerminalHandler struct {
@@ -102,8 +102,8 @@ func (h *KubectlTerminalHandler) HandleKubectlTerminalWebSocket(c *gin.Context) 
 // ensureAdminServiceAccount 在不存在时创建一次 cluster-admin 的 ServiceAccount。
 func (h *KubectlTerminalHandler) ensureAdminServiceAccount(ctx context.Context, cs *cluster.ClientSet) error {
 	labels := map[string]string{
-		"app.kubernetes.io/managed-by": "kite",
-		"kite.io/component":            "kubectl-terminal",
+		"app.kubernetes.io/managed-by": "aerolink",
+		"aerolink.io/component":        "kubectl-terminal",
 	}
 
 	sa := &corev1.ServiceAccount{
@@ -151,9 +151,9 @@ func (h *KubectlTerminalHandler) createKubectlAgent(ctx context.Context, cs *clu
 			Name:      podName,
 			Namespace: common.AgentPodNamespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/managed-by": "kite",
-				"kite.io/component":            "kubectl-terminal",
-				"kite.io/kubectl-session":      instanceID,
+				"app.kubernetes.io/managed-by": "aerolink",
+				"aerolink.io/component":        "kubectl-terminal",
+				"aerolink.io/kubectl-session":  instanceID,
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -188,7 +188,7 @@ func (h *KubectlTerminalHandler) cleanupPod(cs *cluster.ClientSet, instanceID st
 	ctx := context.TODO()
 	opts := []client.DeleteAllOfOption{
 		client.InNamespace(common.AgentPodNamespace),
-		client.MatchingLabels{"kite.io/kubectl-session": instanceID},
+		client.MatchingLabels{"aerolink.io/kubectl-session": instanceID},
 		client.PropagationPolicy(metav1.DeletePropagationBackground),
 	}
 	return cs.K8sClient.DeleteAllOf(ctx, &corev1.Pod{}, opts...)

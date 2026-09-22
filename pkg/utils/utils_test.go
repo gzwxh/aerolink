@@ -9,12 +9,12 @@ import (
 )
 
 func TestInjectKiteBase(t *testing.T) {
-	html := `<html><head><link rel="modulepreload" href="__KITE_BASE__/assets/index.js"><script type="module" src="__KITE_BASE__/assets/main.js"></script></head></html>`
+	html := `<html><head><link rel="modulepreload" href="__AEROLINK_BASE__/assets/index.js"><script type="module" src="__AEROLINK_BASE__/assets/main.js"></script></head></html>`
 
 	t.Run("subpath", func(t *testing.T) {
 		got := InjectKiteBase(html, "/kite")
 
-		if strings.Contains(got, "__KITE_BASE__") {
+		if strings.Contains(got, "__AEROLINK_BASE__") {
 			t.Fatalf("placeholder should be replaced: %s", got)
 		}
 		if strings.Contains(got, "<base ") {

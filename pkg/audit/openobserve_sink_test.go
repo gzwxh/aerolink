@@ -179,7 +179,7 @@ func TestOpenObserveSinkWriteDoesNotRetryClientErrors(t *testing.T) {
 }
 
 func TestOpenObserveSQLRendersConditions(t *testing.T) {
-	sink := newOpenObserveSink(t, model.OpenObserveArchive{Stream: "kite-audit"}, "http://openobserve:5080")
+	sink := newOpenObserveSink(t, model.OpenObserveArchive{Stream: "aerolink-audit"}, "http://openobserve:5080")
 
 	cases := []struct {
 		name    string
@@ -225,7 +225,7 @@ func TestOpenObserveSQLRendersConditions(t *testing.T) {
 			}
 
 			// kind 是四类记录共用一个流时的唯一区分依据，必须始终出现在 WHERE 里。
-			for _, want := range append([]string{"kind = 'audit_history'", `FROM "kite-audit"`, "ORDER BY _timestamp DESC"}, tc.want...) {
+			for _, want := range append([]string{"kind = 'audit_history'", `FROM "aerolink-audit"`, "ORDER BY _timestamp DESC"}, tc.want...) {
 				if !strings.Contains(sql, want) {
 					t.Errorf("SQL 缺少 %q:\n%s", want, sql)
 				}
@@ -238,7 +238,7 @@ func TestOpenObserveSQLRendersConditions(t *testing.T) {
 }
 
 func TestOpenObserveSQLRejectsUnsupportedKindAndUnsafeStream(t *testing.T) {
-	sink := newOpenObserveSink(t, model.OpenObserveArchive{Stream: "kite-audit"}, "http://openobserve:5080")
+	sink := newOpenObserveSink(t, model.OpenObserveArchive{Stream: "aerolink-audit"}, "http://openobserve:5080")
 	if _, err := sink.openObserveSQL(archiveQuery{kind: "unknown", timeField: esFieldCreatedAt}); err == nil {
 		t.Error("未知 kind 必须报错，而不是查出一堆无关记录")
 	}
@@ -269,7 +269,7 @@ func TestOpenObserveSinkSearchPinsRequestShapeAndParsesResponse(t *testing.T) {
 		atomic.AddInt32(&hitCount, 1)
 	})
 
-	sink := newOpenObserveSink(t, model.OpenObserveArchive{Org: "default", Stream: "kite-audit"}, server.URL)
+	sink := newOpenObserveSink(t, model.OpenObserveArchive{Org: "default", Stream: "aerolink-audit"}, server.URL)
 
 	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)

@@ -131,7 +131,7 @@ class（含 `bg-muted` 的 `thead`、`[data-slot=table-head]`、`hover:bg-muted/
 
 ```
 cd ui && node_modules/.bin/vite build --outDir /tmp/kite-css-emerald --emptyOutDir
-# 静态服务器需去掉产物里的 __KITE_BASE__ 前缀（由二进制在托管时替换）
+# 静态服务器需去掉产物里的 __AEROLINK_BASE__ 前缀（由二进制在托管时替换）
 # 把 html 的 class 置为 color-emerald / "dark color-emerald" 后量 [data-slot=...] 的计算样式
 ```
 

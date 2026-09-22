@@ -35,10 +35,10 @@ func newFakeES(t *testing.T, path, body *string, response string) *httptest.Serv
 }
 
 func TestESSinkIndexNameByDay(t *testing.T) {
-	sink := &ESSink{config: model.ESArchive{IndexPrefix: "kite-audit"}}
+	sink := &ESSink{config: model.ESArchive{IndexPrefix: "aerolink-audit"}}
 	at := time.Date(2026, 9, 20, 10, 30, 0, 0, time.UTC)
-	if got := sink.IndexName(at); got != "kite-audit-2026.09.20" {
-		t.Fatalf("IndexName() = %q, want kite-audit-2026.09.20", got)
+	if got := sink.IndexName(at); got != "aerolink-audit-2026.09.20" {
+		t.Fatalf("IndexName() = %q, want aerolink-audit-2026.09.20", got)
 	}
 
 	empty := &ESSink{}
@@ -51,7 +51,7 @@ func TestESSinkIndexWritesBulkNDJSON(t *testing.T) {
 	var path, body string
 	server := newFakeES(t, &path, &body, `{"errors":false,"items":[]}`)
 
-	sink, err := NewESSink(model.ESArchive{Enabled: true, URLs: []string{server.URL}, IndexPrefix: "kite-audit"})
+	sink, err := NewESSink(model.ESArchive{Enabled: true, URLs: []string{server.URL}, IndexPrefix: "aerolink-audit"})
 	if err != nil {
 		t.Fatalf("NewESSink() error = %v", err)
 	}
@@ -72,7 +72,7 @@ func TestESSinkIndexWritesBulkNDJSON(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("bulk body has %d lines, want 2:\n%s", len(lines), body)
 	}
-	if !strings.Contains(lines[0], `"_index":"kite-audit-2026.09.20"`) || !strings.Contains(lines[0], `"_id":"42"`) {
+	if !strings.Contains(lines[0], `"_index":"aerolink-audit-2026.09.20"`) || !strings.Contains(lines[0], `"_id":"42"`) {
 		t.Errorf("bulk action line = %s", lines[0])
 	}
 	if !strings.Contains(lines[1], `"kind":"audit_history"`) {
@@ -94,7 +94,7 @@ func TestESSinkIndexGroupsByDay(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	sink, err := NewESSink(model.ESArchive{Enabled: true, URLs: []string{server.URL}, IndexPrefix: "kite-audit"})
+	sink, err := NewESSink(model.ESArchive{Enabled: true, URLs: []string{server.URL}, IndexPrefix: "aerolink-audit"})
 	if err != nil {
 		t.Fatalf("NewESSink() error = %v", err)
 	}
@@ -110,7 +110,7 @@ func TestESSinkIndexGroupsByDay(t *testing.T) {
 	if len(bodies) != 2 {
 		t.Fatalf("got %d bulk requests, want 2 (one per day)", len(bodies))
 	}
-	if !strings.Contains(bodies[0], "kite-audit-2026.09.19") || !strings.Contains(bodies[1], "kite-audit-2026.09.20") {
+	if !strings.Contains(bodies[0], "aerolink-audit-2026.09.19") || !strings.Contains(bodies[1], "aerolink-audit-2026.09.20") {
 		t.Errorf("documents were not grouped per day:\n%s\n%s", bodies[0], bodies[1])
 	}
 }
@@ -141,7 +141,7 @@ func TestESSinkSearchBuildsDSL(t *testing.T) {
 	server := newFakeES(t, &path, &body,
 		`{"hits":{"total":{"value":1},"hits":[{"_source":{"kind":"audit_history","id":7}}]}}`)
 
-	sink, err := NewESSink(model.ESArchive{Enabled: true, URLs: []string{server.URL}, IndexPrefix: "kite-audit"})
+	sink, err := NewESSink(model.ESArchive{Enabled: true, URLs: []string{server.URL}, IndexPrefix: "aerolink-audit"})
 	if err != nil {
 		t.Fatalf("NewESSink() error = %v", err)
 	}
@@ -157,8 +157,8 @@ func TestESSinkSearchBuildsDSL(t *testing.T) {
 		t.Fatalf("Search() error = %v", err)
 	}
 
-	if path != "/kite-audit-*/_search" {
-		t.Errorf("search path = %q, want /kite-audit-*/_search", path)
+	if path != "/aerolink-audit-*/_search" {
+		t.Errorf("search path = %q, want /aerolink-audit-*/_search", path)
 	}
 	if result.Total != 1 || len(result.Hits) != 1 {
 		t.Fatalf("Search() = total %d, hits %d; want 1/1", result.Total, len(result.Hits))
