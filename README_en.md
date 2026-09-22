@@ -19,7 +19,7 @@ This repository is a customized fork of [kite-org/kite](https://github.com/kite-
 
 - Upstream project: <https://github.com/kite-org/kite> (docs: <https://kite.zzde.me>)
 - Upstream mirror: <https://gitee.com/gzwxh/kite>
-- Internal repository: `ssh://git@10.10.11.151:20222/teg/support-department/operation_rd_dept/kite.git` (branch `release/v1.0.0`)
+- Internal repository: `ssh://git@10.10.11.151:20222/teg/support-department/operation_rd_dept/aerolink.git` (branch `release/v1.0.0`)
 - English docs: see [`docs/en/`](./docs/en/index.md)
 - Chinese docs: see [`docs/`](./docs/index.md) and [`README.md`](./README.md)
 - License: Apache-2.0 (inherited from upstream)
@@ -41,8 +41,8 @@ make run       # start the server (loads dev.env automatically, port 8080)
 ```
 
 > Running `./aerolink` right after `make build` **refuses to start without secrets** — that is the intended startup check. For local debugging either:
-> - `make run` / `make dev`, which load the bundled `dev.env` (already contains 32+ byte `KITE_ENCRYPT_KEY` and `JWT_SECRET`) — recommended;
-> - or set `KITE_ALLOW_INSECURE_SECRETS=true` to fall back to the built-in keys (**local machines only**).
+> - `make run` / `make dev`, which load the bundled `dev.env` (already contains 32+ byte `AEROLINK_ENCRYPT_KEY` and `JWT_SECRET`) — recommended;
+> - or set `AEROLINK_ALLOW_INSECURE_SECRETS=true` to fall back to the built-in keys (**local machines only**).
 
 ## Local development
 
@@ -50,7 +50,7 @@ The repository ships two ready-to-use defaults, so no manual environment setup i
 
 | File | Purpose |
 | --- | --- |
-| `dev.env` | Local variables: `PORT` / `DB_DSN` / `KITE_ENCRYPT_KEY` / `JWT_SECRET` (32+ byte development values that satisfy the startup checks) / `KITE_CONFIG_FILE` |
+| `dev.env` | Local variables: `PORT` / `DB_DSN` / `AEROLINK_ENCRYPT_KEY` / `JWT_SECRET` (32+ byte development values that satisfy the startup checks) / `AEROLINK_CONFIG_FILE` |
 | `config.dev.yaml` | Config file: creates the administrator **admin / AdminPass!234** on first start and imports `~/.kube/config` when no cluster exists |
 
 ```bash
@@ -93,9 +93,9 @@ Behind a restricted network the mirror build args are preconfigured; on a direct
 ### 2. Run the container
 
 > ⚠️ **Before upgrading or restarting**
-> 1. **`KITE_ENCRYPT_KEY` must be set** — otherwise the server **refuses to start** (data encrypted with the built-in key is effectively plaintext, so this is a deliberate hard failure).
->    - Automatic migration **only applies to a database that has been using the built-in default key**: upgrading from such an older build, add `KITE_ENCRYPT_KEY="$(openssl rand -base64 32)"` and restart (the log shows `re-encrypted N stored secret(s)`). **If the database already uses another custom key you cannot switch directly** — startup is refused; see section 6 for the rotation steps.
->    - Local development only: `KITE_ALLOW_INSECURE_SECRETS=true` falls back to the built-in key with a warning. **Never use it in production.** It does **not** rescue a database already encrypted with another key — startup is still refused.
+> 1. **`AEROLINK_ENCRYPT_KEY` must be set** — otherwise the server **refuses to start** (data encrypted with the built-in key is effectively plaintext, so this is a deliberate hard failure).
+>    - Automatic migration **only applies to a database that has been using the built-in default key**: upgrading from such an older build, add `AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)"` and restart (the log shows `re-encrypted N stored secret(s)`). **If the database already uses another custom key you cannot switch directly** — startup is refused; see section 6 for the rotation steps.
+>    - Local development only: `AEROLINK_ALLOW_INSECURE_SECRETS=true` falls back to the built-in key with a warning. **Never use it in production.** It does **not** rescue a database already encrypted with another key — startup is still refused.
 > 2. **If `JWT_SECRET` is set explicitly it must be at least 32 bytes**, otherwise startup fails as well (when it is unset a random secret is generated and stored).
 > 3. Both checks log their outcome — review the first startup log.
 
@@ -107,7 +107,7 @@ Local smoke test (**not for production** — security parameters omitted):
 docker run -d --name kite -p 8080:8080 \
   -v kite-data:/app/data \
   -e DB_DSN=/app/data/kite.db \
-  -e KITE_ENCRYPT_KEY=dev-only-key \
+  -e AEROLINK_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
   swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
@@ -119,7 +119,7 @@ docker run -d --name kite --restart unless-stopped \
   -p 8080:8080 \
   -v /data/kite:/app/data \
   -e DB_DSN=/app/data/kite.db \
-  -e KITE_ENCRYPT_KEY="$(openssl rand -base64 32)" \
+  -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://kite.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
@@ -134,8 +134,8 @@ The first visit walks through creating the admin account; configure the remainin
 
 | Variable | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `KITE_ENCRYPT_KEY` | **yes in production** | hardcoded default | Encrypts every stored secret (SMTP/LDAP/OAuth passwords, cluster kubeconfigs, VM keys, AI keys). With the default value **anyone holding the database can decrypt all credentials**. Switching away from the built-in default re-encrypts the stored data automatically (see "Encryption key rotation"); later rotations require re-saving every credential first |
-| `KITE_ALLOW_INSECURE_SECRETS` | no | `false` | **Local development only**: allows the built-in keys; without it a missing `KITE_ENCRYPT_KEY` (or a `JWT_SECRET` shorter than 32 bytes) makes the server **refuse to start**. Never set it in production |
+| `AEROLINK_ENCRYPT_KEY` | **yes in production** | hardcoded default | Encrypts every stored secret (SMTP/LDAP/OAuth passwords, cluster kubeconfigs, VM keys, AI keys). With the default value **anyone holding the database can decrypt all credentials**. Switching away from the built-in default re-encrypts the stored data automatically (see "Encryption key rotation"); later rotations require re-saving every credential first |
+| `AEROLINK_ALLOW_INSECURE_SECRETS` | no | `false` | **Local development only**: allows the built-in keys; without it a missing `AEROLINK_ENCRYPT_KEY` (or a `JWT_SECRET` shorter than 32 bytes) makes the server **refuse to start**. Never set it in production |
 | `JWT_SECRET` | **yes in production** | random per start | Session token signing key, ≥32 random bytes. Without it an ephemeral key is generated and **everyone is signed out on restart**; a value shorter than 32 bytes logs a warning |
 | `TRUSTED_PROXIES` | per deployment | private ranges | Only these direct peer IPs may supply `X-Forwarded-For` / `X-Real-IP`. Affects login lockout, IP allow/deny lists, remote-login notices and audit logs. **Set `none` when the container is exposed directly**, otherwise clients can spoof their IP and bypass IP-based throttling; behind Nginx/SLB list the proxy CIDRs |
 | `HOST` | yes when using HTTPS | empty | Public base URL (e.g. `https://kite.example.com`). Decides whether the session cookie gets the `Secure` flag — **without it an HTTPS deployment may send the cookie in clear text** |
@@ -149,18 +149,18 @@ The first visit walks through creating the admin account; configure the remainin
 | `PORT` | `8080` | listen port (already `EXPOSE`d) |
 | `DB_TYPE` | `sqlite` | `sqlite` / `mysql` / `postgres`; anything else aborts startup |
 | `DB_DSN` | `dev.db` | connection string — see “Database options” below for MySQL/PostgreSQL examples |
-| `KITE_DB_MAX_OPEN_CONNS` | `100` | max open connections (raise for busy MySQL/PostgreSQL instances; invalid values are ignored with a warning) |
-| `KITE_DB_MAX_IDLE_CONNS` | `10` | idle connections; `0` keeps none |
-| `KITE_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | connection max lifetime in minutes |
-| `KITE_BASE` | empty | sub-path deployment (e.g. `/kite`) |
+| `AEROLINK_DB_MAX_OPEN_CONNS` | `100` | max open connections (raise for busy MySQL/PostgreSQL instances; invalid values are ignored with a warning) |
+| `AEROLINK_DB_MAX_IDLE_CONNS` | `10` | idle connections; `0` keeps none |
+| `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | connection max lifetime in minutes |
+| `AEROLINK_BASE` | empty | sub-path deployment (e.g. `/kite`) |
 | `NAMESPACE` | empty | namespace for Kite's own agent/terminal pods |
 | `DISABLE_GZIP` | `false` | `true` disables response compression (proxy troubleshooting) |
-| `KUBECONFIG` / `KITE_CONFIG_FILE` | empty | external kubeconfig / config file path |
+| `KUBECONFIG` / `AEROLINK_CONFIG_FILE` | empty | external kubeconfig / config file path |
 | `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest` | node terminal image (company SWR) |
 | `KUBECTL_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest` | kubectl terminal image (company SWR) |
 | `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest` | cluster agent image, same repository as the app (company SWR) |
-| `KITE_KUBE_API_QPS` / `KITE_KUBE_API_BURST` | built-in | Kubernetes API rate limits |
-| `KITE_CACHE_SYNC_TIMEOUT` | built-in | cluster cache sync timeout |
+| `AEROLINK_KUBE_API_QPS` / `AEROLINK_KUBE_API_BURST` | built-in | Kubernetes API rate limits |
+| `AEROLINK_CACHE_SYNC_TIMEOUT` | built-in | cluster cache sync timeout |
 | `DISABLE_CACHE` | no | `true` disables the resource cache (debugging) |
 
 ### 4. Database options
@@ -184,7 +184,7 @@ SQLite (the default) is fine for a single instance; **multi-replica deployments 
 # or: postgres://kite:password@10.0.0.5:5432/kite?sslmode=disable
 ```
 
-Pool size is configurable via `KITE_DB_MAX_OPEN_CONNS` / `KITE_DB_MAX_IDLE_CONNS` / `KITE_DB_CONN_MAX_LIFETIME_MINUTES` (see the table above).
+Pool size is configurable via `AEROLINK_DB_MAX_OPEN_CONNS` / `AEROLINK_DB_MAX_IDLE_CONNS` / `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` (see the table above).
 
 > Note: the session idle/lifetime limits (security settings) live in **process memory** and reset on restart; with multiple replicas each replica counts its own state — use MySQL/PostgreSQL and keep JWT/cookie lifetimes tight. Single-device login relies on the same in-memory state and therefore applies across replicas only for sign-ins handled by that replica.
 
@@ -195,16 +195,16 @@ Pool size is configurable via `KITE_DB_MAX_OPEN_CONNS` / `KITE_DB_MAX_IDLE_CONNS
 3. When exposed directly without a proxy, set `TRUSTED_PROXIES=none`;
 4. WebSocket upgrades must be allowed (terminals, pod exec, log following) on the same origin as the page.
 
-### 6. Encryption key rotation (KITE_ENCRYPT_KEY)
+### 6. Encryption key rotation (AEROLINK_ENCRYPT_KEY)
 
 Stored values are ciphertext, so switching the key without care makes cluster kubeconfigs and LDAP/SMTP/OAuth passwords unreadable:
 
 | Scenario | What to do |
 |---|---|
-| **Upgrading from the built-in default** | Set `KITE_ENCRYPT_KEY=<new key>` and restart: every stored secret is re-encrypted automatically. Look for `re-encrypted N stored secret(s)` in the log |
+| **Upgrading from the built-in default** | Set `AEROLINK_ENCRYPT_KEY=<new key>` and restart: every stored secret is re-encrypted automatically. Look for `re-encrypted N stored secret(s)` in the log |
 | **Rotating an existing custom key** | Start with the **old** key → re-save every credential in the UI (clusters, LDAP, OAuth, SMTP, AI) → then switch to the new key |
 | **Key configured by mistake** | The log reports `Stored secrets are unchanged and readable with the previously configured key`; nothing is corrupted (rotation is transactional) — restore the previous key |
-| **Production guard rail** | Set `KITE_REQUIRE_ENCRYPT_KEY=true` so a missing `KITE_ENCRYPT_KEY` fails the startup |
+| **Production guard rail** | Set `AEROLINK_REQUIRE_ENCRYPT_KEY=true` so a missing `AEROLINK_ENCRYPT_KEY` fails the startup |
 
 > The rotation decides from the actual ciphertext (not just a stored fingerprint), so databases created before this mechanism existed are migrated as well.
 

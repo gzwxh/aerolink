@@ -216,6 +216,7 @@
 - **审计**：管理类写操作由 `pkg/middleware/audit.go` 统一落 `resource_histories`；资源操作在 handler 内显式写（`recordHistory`）
 - **敏感值**：一律 `model.SecretString`，且不要打日志
 - **配置**：环境变量同时看 `pkg/common/common.go` 与 `charts/kite`（values/templates）；`internal/config.go` 管理的设置在 UI 上必须只读
+- **环境变量命名**：统一用 `AEROLINK_` 前缀，读取一律走 `pkg/common/env.go` 的 `common.Getenv("<后缀>")`（如 `common.Getenv("ENCRYPT_KEY")` 读 `AEROLINK_ENCRYPT_KEY`）。改名前的 `KITE_<后缀>` 作为**弃用兼容**保留：新名优先、旧名兜底并打一次告警（不硬切是因为已有部署的清单/Secret 里写的是旧名，不认旧名会让升级后的实例直接拒绝启动）。新增变量时不要绕过 `common.Getenv` 用 `os.Getenv`，否则会丢掉这层兼容
 - **后台任务**：统一在 `app.go` 的 `initializeApp()` 启动（`scheduler.Start`、`auth.StartLDAPSync`、`notification.StartDailyChecker`、`audit.StartRetentionWorker`、`audit.StartSyslogForwarder`、`ai.StartPendingSessionCleanup`）——新增常驻任务放这里，不要在请求路径上起 goroutine
 
 ---
@@ -233,7 +234,7 @@
 | 新增通知事件 | `pkg/model/notification.go`（事件常量 + 默认模板 + `NotificationEventList`；需要送达当事人时同时登记进 `targetUserEvents`，否则 `SendEventTo` 的收件人会被忽略）→ 触发点（`pkg/notification/*`、`pkg/users/*`、`pkg/scheduler/*` 等）→ i18n |
 | 改「通知发给谁」 | `pkg/model/notification.go`（接收者类型常量 + `ListEnabledUsers`）→ `pkg/notification/service.go` 的 `resolveRecipients`（投递时展开）→ `pkg/notification/handler.go`（创建订阅的校验）→ `ui/src/components/settings/notification-management.tsx`；口径见 `plans/2026-09-20-notification-all-users-recipient.md` |
 | 新增审计字段 | `pkg/model/resource_history.go` → 写入点（`pkg/middleware/audit.go` 或 handler）→ `pkg/audit/export.go` → 前端表格列 |
-| 新增环境变量 | `pkg/common/common.go` → `charts/kite/values.yaml` + `charts/kite/templates/deployment.yaml` → 两个 README 参数表 |
+| 新增环境变量 | `pkg/common/common.go`（或对应包）→ 用 `common.Getenv` 读取 → `charts/kite/values.yaml` + `charts/kite/templates/deployment.yaml` → 两个 README 参数表；前缀与兼容口径见 §4 |
 | 新增后端接口 | `routes.go`（选对分组/权限门）→ handler → `pkg/model`（如需落库）→ `ui/src/lib/api/*.ts` |
 | 新增前端页面 | `ui/src/pages/*.tsx` → `ui/src/routes.tsx` → 文案进两个 locale |
 | 换 / 加界面字体 | 字体栈 `ui/src/components/font-provider.tsx`（`FONT_STACKS`）→ 选项列表 `ui/src/components/account/appearance-section.tsx`（`FONTS`）→ 文案 `userMenu.fonts.*`（两个 locale）→ `@font-face` 加进 `ui/src/styles/base.css`。中文字体体积大，用 `scripts/build-font-subsets.sh` 生成 GB2312 子集并提交产物，来源与许可证登记到 `NOTICE` 与 `licenses/` |
@@ -241,7 +242,8 @@
 | 用户可配置偏好 | 见 `plans/2026-09-18-server-side-user-preferences.md`（当前分散在 localStorage） |
 | 改「谁必须绑定 MFA」/ 自助绑定口径 | `pkg/model/security_setting.go`（`MFARequiredFor`）→ `pkg/auth/middleware.go`（绑定引导拦截）→ `pkg/auth/login_handler.go`（登录挑战）→ `pkg/users/handler.go`（自助绑定）→ `ui/src/lib/mfa-enrollment.ts`（前端镜像）；口径见 `plans/2026-09-20-directory-user-mfa-enrollment.md` |
 | 换数据库（如切到 PostgreSQL 以扩副本） | `tools/dbmigrate`（搬数据）→ `pkg/common/common.go` 的 `DB_TYPE`/`DB_DSN` 环境变量 → `dev.env` / `charts/kite` 的 `db.*`；步骤与校验见 `plans/2026-09-20-sqlite-to-postgres-migration.md` |
-| 用 PostgreSQL 部署（清单 / Helm / systemd） | `deploy/install-postgres.yaml`（K8s 清单，与 `deploy/install-mysql.yaml` 互斥）→ `charts/kite` 的 `db.type=postgres`+`db.dsn` → `deploy/kite@.service` + `deploy/kite.env.example`（裸进程/多副本）；建库、DSN、连接数、校验与 PG 特有的坑见 `plans/2026-09-21-postgres-deployment.md`，PG 12 的参数与升级路径见 `plans/2026-09-20-pg12-now-and-upgrade-path.md` |
+| 用 PostgreSQL 部署（清单 / Helm / systemd） | `deploy/install-postgres.yaml`（K8s 清单，与 `deploy/install-mysql.yaml` 互斥）→ `charts/kite` 的 `db.type=postgres`+`db.dsn` → `deploy/aerolink@.service` + `deploy/aerolink.env.example`（裸进程/多副本）；建库、DSN、连接数、校验与 PG 特有的坑见 `plans/2026-09-21-postgres-deployment.md`，PG 12 的参数与升级路径见 `plans/2026-09-20-pg12-now-and-upgrade-path.md` |
+| 清理改名前的遗留对象（kite → aerolink） | `scripts/cleanup-legacy-kite-objects.sh`（默认 dry-run，`-y` 才真删；旧 `service/kite` 占着 NodePort 27862，不清掉新清单 apply 会失败）；systemd 侧的迁移见 `deploy/aerolink@.service` 文件头 |
 | 从 Rancher 迁移授权 | `scripts/migrate-rancher-rbac.sh`（入口）/ `scripts/build-rancherrbac.sh`（打成单文件）→ `tools/rancherrbac`（PRTB / CRTB + 角色模板 → 权限绑定组与角色，组名用 Rancher 上的项目名、角色名用角色模板 ID，不加前缀）；支持配置文件（`-init-config` 生成模板），Rancher API 密钥拿不到时用 `-from-dir` 读导出的集合 JSON；命名空间的聚合接口只返回 `local` 集群，其余集群按 `/k8s/clusters/<集群 ID>/v1/namespaces` 补读（离线时对应 `k8s_clusters_<集群 ID>_v1_namespaces.json`）；步骤与排错见 `tools/rancherrbac/README.md`，映射口径与未验证项见 `plans/2026-09-21-rancher-rbac-migration.md` |
 
 ---

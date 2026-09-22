@@ -127,7 +127,7 @@ The Cluster Agent then uses the API server and credentials from the kubeconfig's
 
 - The Cluster Agent Token currently has no expiry. As long as the corresponding cluster exists and is enabled, it can be used to reconnect. Disabling a cluster closes its established Cluster Agent sessions and rejects reconnection attempts. The Cluster Agent keeps retrying, and re-enabling the cluster allows it to reconnect with the original token.
 - The Kite database stores only the token hash. The raw token is shown only once after cluster creation, so save it somewhere safe immediately.
-- The X25519 private key is encrypted at rest with `KITE_ENCRYPT_KEY`. The public key is pinned in the generated Cluster Agent command and Deployment manifest.
+- The X25519 private key is encrypted at rest with `AEROLINK_ENCRYPT_KEY`. The public key is pinned in the generated Cluster Agent command and Deployment manifest.
 - There is no dedicated token rotation endpoint yet. If a token leaks, delete and recreate the Cluster Agent cluster to generate a new token.
 - `--token` appears in process arguments and shell history. Restrict login and process-viewing permissions on the Cluster Agent host, and never paste the real token into logs, tickets, or chats.
 
