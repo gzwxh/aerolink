@@ -36,7 +36,7 @@ Kite 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维
 
 ```bash
 make deps      # 安装前后端依赖
-make build     # 构建前端(嵌入 static/) 与后端二进制 ./kite
+make build     # 构建前端(嵌入 static/) 与后端二进制 ./aerolink
 make run       # 启动（自动加载 dev.env，默认端口 8080）
 
 cd /wxh/kite && make build && make run
@@ -50,9 +50,9 @@ make build && make run
 
 启动后访问 <http://localhost:8080>；需要自动创建管理员 **admin / AdminPass!234** 时，在 `dev.env` 里启用 `KITE_CONFIG_FILE=config.dev.yaml`（默认注释掉）。
 
-> `make build` 后直接 `./kite` 会因为**缺少密钥而拒绝启动**（这是刻意设计的启动强校验）。本地调试两种方式：
+> `make build` 后直接 `./aerolink` 会因为**缺少密钥而拒绝启动**（这是刻意设计的启动强校验）。本地调试两种方式：
 > - `make run` / `make dev`：自动加载仓库自带的 `dev.env`（已含 ≥32 字节的 `KITE_ENCRYPT_KEY`、`JWT_SECRET`），推荐；
-> - 临时绕过：`KITE_ALLOW_INSECURE_SECRETS=true ./kite`（回退到内置默认密钥，**仅限本机**）。
+> - 临时绕过：`KITE_ALLOW_INSECURE_SECRETS=true ./aerolink`（回退到内置默认密钥，**仅限本机**）。
 
 受限网络下 `make build` 直接可用（前端依赖走 pnpm lockfile，后端使用 `vendor/`）。
 
@@ -84,7 +84,7 @@ make dev DEV_ENV=dev.env.local
 若不通过 make 启动：
 
 ```bash
-set -a; . ./dev.env; set +a; ./kite
+set -a; . ./dev.env; set +a; ./aerolink
 ```
 
 > ⚠️ `dev.env` 里的密钥是**公开的本地开发值**，任何真实环境都要换成 `openssl rand -base64 32`。

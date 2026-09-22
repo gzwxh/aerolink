@@ -21,7 +21,7 @@ on:
 # 镜像 host 由 IMAGE_REPOSITORY 首段推导：带点或带端口的是 registry，否则按 Docker Hub 处理。
 
 env:
-  IMAGE_NAME: kite
+  IMAGE_NAME: aerolink
   GO_VERSION: "1.26"
   NODE_VERSION: "24"
   IMAGE_REPOSITORY: ${{ vars.IMAGE_REPOSITORY || 'swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink' }}
@@ -189,7 +189,7 @@ jobs:
           # 用 scripts/changelog.sh 的分类产物作正文，而不是托管平台自动汇总的 commit 列表。
           body_path: release-notes.md
           files: |
-            bin/kite-*-${{ steps.check_version.outputs.tag_name }}.tar.gz
+            bin/aerolink-*-${{ steps.check_version.outputs.tag_name }}.tar.gz
             kite-*.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

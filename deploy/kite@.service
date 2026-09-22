@@ -13,7 +13,7 @@ Type=simple
 EnvironmentFile=/etc/kite/kite.env
 Environment=PORT=%i
 WorkingDirectory=/wxh/kite
-ExecStart=/wxh/kite/kite
+ExecStart=/wxh/kite/aerolink
 Restart=always
 RestartSec=3
 # 收到 TERM 时把在途请求处理完（容器/反向代理的摘除需要一点时间）

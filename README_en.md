@@ -36,11 +36,11 @@ This repository is a customized fork of [kite-org/kite](https://github.com/kite-
 
 ```bash
 make deps      # install frontend & backend dependencies
-make build     # build the frontend (embedded into static/) and the ./kite binary
+make build     # build the frontend (embedded into static/) and the ./aerolink binary
 make run       # start the server (loads dev.env automatically, port 8080)
 ```
 
-> Running `./kite` right after `make build` **refuses to start without secrets** — that is the intended startup check. For local debugging either:
+> Running `./aerolink` right after `make build` **refuses to start without secrets** — that is the intended startup check. For local debugging either:
 > - `make run` / `make dev`, which load the bundled `dev.env` (already contains 32+ byte `KITE_ENCRYPT_KEY` and `JWT_SECRET`) — recommended;
 > - or set `KITE_ALLOW_INSECURE_SECRETS=true` to fall back to the built-in keys (**local machines only**).
 
@@ -73,7 +73,7 @@ make dev DEV_ENV=dev.env.local
 Without make:
 
 ```bash
-set -a; . ./dev.env; set +a; ./kite
+set -a; . ./dev.env; set +a; ./aerolink
 ```
 
 > ⚠️ The keys in `dev.env` are public development values — any real deployment needs `openssl rand -base64 32`.

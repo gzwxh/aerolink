@@ -44,7 +44,10 @@ docs/.vitepress/dist
 docs/node_modules
 docs/.vitepress/cache
 
-kite
+# 根目录的构建产物（make build 的二进制）
+/aerolink
+# 旧名字的产物：二进制名从 kite 改成 aerolink 之前构建出来的，仍不进库
+/kite
 !charts/kite
 
 # 打包好的 Helm chart（`helm package charts/kite/` 会在仓库根目录生成
