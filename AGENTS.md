@@ -84,7 +84,7 @@ Kite 是单二进制的 Kubernetes 控制台：Go 后端、`ui/` 下的 React/Vi
 
 ## 生成文件（Generated files）
 
-- 不要手工编辑 `static/`、`kite`、`bin/` 或依赖/缓存目录。前端产物用 `make frontend`
+- 不要手工编辑 `static/`、`aerolink`、`bin/` 或依赖/缓存目录。前端产物用 `make frontend`
   重新生成。
 - 只有在依赖确实变化时才改 `go.sum`、`ui/pnpm-lock.yaml`、`e2e/pnpm-lock.yaml`。
 

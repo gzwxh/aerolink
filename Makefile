@@ -108,7 +108,7 @@ cross-compile: frontend ## Cross-compile for multiple architectures
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe .
 	# GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-amd64 .
 
-# 授权迁移工具（Rancher → Kite 权限绑定组）的单文件构建。
+# 授权迁移工具（Rancher → AeroLink 权限绑定组）的单文件构建。
 # 日常使用见 tools/rancherrbac/README.md：目标机上只要二进制 + 配置文件。
 rancherrbac: ## 打包授权迁移工具（参数透传给 scripts/build-rancherrbac.sh，如 -a 全平台）
 	sh scripts/build-rancherrbac.sh $(ARGS)

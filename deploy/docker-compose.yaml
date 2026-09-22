@@ -29,7 +29,7 @@
 name: aerolink
 services:
   aerolink:
-    image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
+    image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.0
     container_name: aerolink
     # 对应 install-mysql.yaml 的 restartPolicy: Always
     restart: unless-stopped
