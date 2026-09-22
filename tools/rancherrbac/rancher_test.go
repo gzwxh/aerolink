@@ -348,7 +348,7 @@ func TestBuildPlanComposesGroups(t *testing.T) {
 		},
 	}
 
-	plan := buildPlan(data, []kiteCluster{{ID: 1, Name: "prod"}}, options{
+	plan := buildPlan(data, []aerolinkCluster{{ID: 1, Name: "prod"}}, options{
 		clusterMaps: kvFlag{values: map[string]string{}},
 		userMaps:    kvFlag{values: map[string]string{}},
 		groupMaps:   kvFlag{values: map[string]string{}},
@@ -357,7 +357,7 @@ func TestBuildPlanComposesGroups(t *testing.T) {
 		t.Fatalf("权限绑定组数量 = %d：%#v", len(plan.Groups), plan.Groups)
 	}
 	group := plan.Groups[0]
-	if group.KiteCluster != "prod" || group.Name != "默认" {
+	if group.AeroLinkCluster != "prod" || group.Name != "默认" {
 		t.Fatalf("权限绑定组 = %#v", group)
 	}
 	if strings.Join(group.Namespaces, ",") != "default,dev" {
@@ -417,7 +417,7 @@ func TestBuildPlanCoversAllNamespacesWhenClusterBindingsExist(t *testing.T) {
 		},
 	}
 
-	plan := buildPlan(data, []kiteCluster{{ID: 1, Name: "prod"}}, options{
+	plan := buildPlan(data, []aerolinkCluster{{ID: 1, Name: "prod"}}, options{
 		clusterMaps: kvFlag{values: map[string]string{}},
 		userMaps:    kvFlag{values: map[string]string{}},
 		groupMaps:   kvFlag{values: map[string]string{}},
@@ -451,7 +451,7 @@ func TestBuildPlanSkipsUnmappedCluster(t *testing.T) {
 		}},
 	}
 
-	plan := buildPlan(data, []kiteCluster{{ID: 1, Name: "prod"}}, options{
+	plan := buildPlan(data, []aerolinkCluster{{ID: 1, Name: "prod"}}, options{
 		clusterMaps: kvFlag{values: map[string]string{}},
 		userMaps:    kvFlag{values: map[string]string{}},
 		groupMaps:   kvFlag{values: map[string]string{}},
@@ -465,7 +465,7 @@ func TestBuildPlanSkipsUnmappedCluster(t *testing.T) {
 }
 
 func TestMergeMembersUnionsExisting(t *testing.T) {
-	existing := []kiteMember{
+	existing := []aerolinkMember{
 		{SubjectType: "user", Subject: "bob", Namespace: "", RoleID: 7},
 	}
 	group := groupPlan{
@@ -501,28 +501,28 @@ func TestMergeMembersUnionsExisting(t *testing.T) {
 		{SubjectType: "user", Subject: "carol", Roles: []string{"project-owner"}},
 	}}, roleIDs, options{}, known, true)
 	if len(missing) != 1 || missing[0] != "carol" {
-		t.Fatalf("应报告 Kite 里还不存在的账号：%v", missing)
+		t.Fatalf("应报告鸢联 AeroLink 里还不存在的账号：%v", missing)
 	}
 }
 
-func TestResolveKiteCluster(t *testing.T) {
-	kiteClusters := []kiteCluster{{ID: 1, Name: "prod"}, {ID: 2, Name: "dev"}}
+func TestResolveAeroLinkCluster(t *testing.T) {
+	aerolinkClusters := []aerolinkCluster{{ID: 1, Name: "prod"}, {ID: 2, Name: "dev"}}
 
-	name, ok, _ := resolveKiteCluster(rancherCluster{ID: "c-m-abc", DisplayName: "prod"}, kiteClusters, map[string]string{})
+	name, ok, _ := resolveAeroLinkCluster(rancherCluster{ID: "c-m-abc", DisplayName: "prod"}, aerolinkClusters, map[string]string{})
 	if !ok || name != "prod" {
 		t.Fatalf("按名字匹配失败：%q ok=%v", name, ok)
 	}
 
-	name, ok, _ = resolveKiteCluster(rancherCluster{ID: "c-m-abc", DisplayName: "生产集群"}, kiteClusters,
+	name, ok, _ = resolveAeroLinkCluster(rancherCluster{ID: "c-m-abc", DisplayName: "生产集群"}, aerolinkClusters,
 		map[string]string{"c-m-abc": "dev"})
 	if !ok || name != "dev" {
 		t.Fatalf("显式映射应优先生效：%q ok=%v", name, ok)
 	}
 
-	if _, ok, reason := resolveKiteCluster(rancherCluster{ID: "c-m-abc", DisplayName: "生产集群"}, kiteClusters, map[string]string{}); ok || reason == "" {
+	if _, ok, reason := resolveAeroLinkCluster(rancherCluster{ID: "c-m-abc", DisplayName: "生产集群"}, aerolinkClusters, map[string]string{}); ok || reason == "" {
 		t.Fatalf("同名缺失时应给出可执行的说明：ok=%v reason=%q", ok, reason)
 	}
-	if _, ok, reason := resolveKiteCluster(rancherCluster{ID: "c-m-abc", DisplayName: "生产集群"}, kiteClusters,
+	if _, ok, reason := resolveAeroLinkCluster(rancherCluster{ID: "c-m-abc", DisplayName: "生产集群"}, aerolinkClusters,
 		map[string]string{"c-m-abc": "ghost"}); ok || !strings.Contains(reason, "不存在") {
 		t.Fatalf("映射到不存在的集群应报错：ok=%v reason=%q", ok, reason)
 	}

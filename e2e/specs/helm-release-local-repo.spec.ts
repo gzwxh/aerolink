@@ -23,7 +23,7 @@ import { e2eContextName } from '../env'
  *
  * 为什么自带一个仓库：公网 chart 源（kite-org.github.io、Artifact Hub）在内网环境
  * 到不了（会 502）。这里用本机临时目录现场打一个 chart（0.1.0 / 0.2.0 两个版本），
- * 用 python3 -m http.server 提供静态 Helm 仓库，测试进程与 Kite 在同一台机器上，
+ * 用 python3 -m http.server 提供静态 Helm 仓库，测试进程与鸢联 AeroLink 在同一台机器上，
  * 因此完全离线可跑。
  *
  * chart 只有一个模板：ConfigMap <release>-zz-e2e，data.message 取自
@@ -45,7 +45,7 @@ let repoUrl = ''
 
 const chartManifest = (version: string) => `apiVersion: v2
 name: ${chartName}
-description: Kite e2e chart
+description: AeroLink e2e chart
 version: ${version}
 appVersion: "1.0"
 `
@@ -148,7 +148,7 @@ async function expectConfigMapMessage(
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
 
 test.beforeAll(async () => {
-  repoDir = mkdtempSync(join(tmpdir(), 'kite-e2e-helm-'))
+  repoDir = mkdtempSync(join(tmpdir(), 'aerolink-e2e-helm-'))
   const chartDir = join(repoDir, 'chart')
   const packageDir = join(repoDir, 'repo')
   mkdirSync(join(chartDir, 'templates'), { recursive: true })

@@ -45,7 +45,7 @@
 | `db.sqlite.persistence.hostPath.path`     | hostPath 路径                         | `/path/to/host/dir` |
 | `db.sqlite.persistence.hostPath.type`     | hostPath 类型                         | `DirectoryOrCreate` |
 | `db.sqlite.persistence.mountPath`         | 容器内的挂载路径                      | `/data`             |
-| `db.sqlite.persistence.filename`          | 挂载路径内的 sqlite 文件名            | `kite.db`           |
+| `db.sqlite.persistence.filename`          | 挂载路径内的 sqlite 文件名            | `aerolink.db`       |
 
 ## 环境变量
 
@@ -137,7 +137,7 @@ rbac:
 ```yaml
 ingress:
   hosts:
-    - host: kite.zzde.me
+    - host: aerolink.gogdev.cn
       paths:
         - path: /
           pathType: ImplementationSpecific

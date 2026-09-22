@@ -8,8 +8,9 @@ export function VersionInfo() {
   const handleCommitClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // GitHub 仓库 URL——可以改成你仓库的地址
-    const repoUrl = 'https://github.com/zxh326/kite'
+    // 内部仓库地址（提交链到内部 Gitea）；与 README「关于本仓库」里的地址一致。
+    const repoUrl =
+      'http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink'
     const commitUrl = `${repoUrl}/commit/${versionInfo.commitId}`
     window.open(commitUrl, '_blank')
   }
@@ -20,7 +21,7 @@ export function VersionInfo() {
       <button
         onClick={handleCommitClick}
         className="hover:text-primary/80 hover:underline transition-colors cursor-pointer"
-        title={`View commit ${versionInfo.commitId} on GitHub`}
+        title={`查看提交 ${versionInfo.commitId}`}
       >
         {versionInfo.commitId.slice(0, 7)}
       </button>

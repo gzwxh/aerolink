@@ -67,17 +67,17 @@ aerolink cluster-agent --server='https://aerolink.example.com' --token='<cluster
 `--server` 可以包含鸢联 AeroLink 的 Base Path。例如：
 
 ```bash
-aerolink cluster-agent --server='https://aerolink.example.com/kite' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
+aerolink cluster-agent --server='https://aerolink.example.com/aerolink' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
 ```
 
 Cluster Agent 会按需自动追加 `/api/v1/cluster-agent/register` 和 `/api/v1/cluster-agent/connect` 路径，`--server` 只需填写鸢联 AeroLink Server 的基础地址。
 
 Kubernetes YAML 方式会创建以下资源：
 
-- `kube-system` 命名空间中的 `kite-cluster-agent-token` Secret，用于保存 Cluster Agent Token。
-- `kube-system` 命名空间中的 `kite-cluster-agent` ServiceAccount。
+- `kube-system` 命名空间中的 `aerolink-cluster-agent-token` Secret，用于保存 Cluster Agent Token。
+- `kube-system` 命名空间中的 `aerolink-cluster-agent` ServiceAccount。
 - 将该 ServiceAccount 绑定到 `cluster-admin` 的 ClusterRoleBinding。
-- `kube-system` 命名空间中的单副本 `kite-cluster-agent` Deployment。
+- `kube-system` 命名空间中的单副本 `aerolink-cluster-agent` Deployment。
 
 可以通过以下两种方式部署：
 
@@ -96,7 +96,7 @@ kubectl apply -f 'https://aerolink.example.com/api/v1/cluster-agent/manifest?gra
 在连接信息对话框中复制 YAML 并保存为文件后，可以直接部署：
 
 ```bash
-kubectl apply -f kite-cluster-agent.yaml
+kubectl apply -f aerolink-cluster-agent.yaml
 ```
 
 Deployment 使用的镜像由平台设置中的 **Cluster Agent Image** 配置，默认为 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest`。通过 Secret 将 Token 注入 Cluster Agent 进程。

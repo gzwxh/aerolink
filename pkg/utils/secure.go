@@ -21,7 +21,7 @@ var defaultKeyWarn sync.Once
 // 在数据库泄露时会立刻失效，以及在轮换 AEROLINK_ENCRYPT_KEY 之后
 // 需要重新保存每一份凭据。
 func WarnOnDefaultEncryptKey() {
-	if common.KiteEncryptKey != "kite-default-encryption-key-change-in-production" {
+	if common.EncryptKey != "kite-default-encryption-key-change-in-production" {
 		return
 	}
 	defaultKeyWarn.Do(func() {
@@ -43,11 +43,11 @@ func CheckPasswordHash(password, hash string) bool {
 }
 
 func EncryptString(input string) (string, error) {
-	return EncryptStringWithKey(common.KiteEncryptKey, input)
+	return EncryptStringWithKey(common.EncryptKey, input)
 }
 
 func DecryptString(encrypted string) (string, error) {
-	return DecryptStringWithKey(common.KiteEncryptKey, encrypted)
+	return DecryptStringWithKey(common.EncryptKey, encrypted)
 }
 
 // EncryptStringWithKey 用显式指定的密钥加密。供加密密钥

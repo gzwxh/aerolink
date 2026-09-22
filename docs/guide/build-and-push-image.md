@@ -6,7 +6,7 @@
 
 - 已安装 Docker，`docker version` 能看到 **Server** 段（只有 Client 说明守护进程没起来）。
 - 有一个可用的镜像仓库：Docker Hub、阿里云 ACR、腾讯云 TCR、自建 Harbor 等。
-- 已获取源码，根目录存在 `Dockerfile`（多阶段构建：前端 node → 后端 golang → 运行时 openEuler）与 `charts/kite`。
+- 已获取源码，根目录存在 `Dockerfile`（多阶段构建：前端 node → 后端 golang → 运行时 openEuler）与 `charts/aerolink`。
 
 ## 一、构建镜像
 
@@ -72,7 +72,7 @@ docker build \
 ```bash
 docker run -d --name aerolink -p 8080:8080 \
   -v aerolink-data:/app/data \
-  -e DB_DSN=/app/data/kite.db \
+  -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   aerolink:local
@@ -140,13 +140,13 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ## 四、用 Helm 部署自建镜像
 
-`charts/kite` 默认镜像是 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`，用 `--set` 覆盖即可：
+`charts/aerolink` 默认镜像是 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`，用 `--set` 覆盖即可：
 
 ```bash
 VERSION=$(bash scripts/get-version.sh)
 
-helm upgrade --install kite charts/kite \
-  -n kite-system --create-namespace \
+helm upgrade --install aerolink charts/aerolink \
+  -n aerolink-system --create-namespace \
   --set image.repository=<registry>/<namespace>/aerolink \
   --set image.tag=$VERSION \
   --set image.pullPolicy=IfNotPresent
@@ -155,12 +155,12 @@ helm upgrade --install kite charts/kite \
 私有仓库需要拉取凭据：
 
 ```bash
-kubectl create secret docker-registry aerolink-regcred -n kite-system \
+kubectl create secret docker-registry aerolink-regcred -n aerolink-system \
   --docker-server=<registry> \
   --docker-username=<user> \
   --docker-password=<password>
 
-helm upgrade --install kite charts/kite -n kite-system \
+helm upgrade --install aerolink charts/aerolink -n aerolink-system \
   --set image.repository=<registry>/<namespace>/aerolink \
   --set image.tag=$VERSION \
   --set imagePullSecrets[0].name=aerolink-regcred
@@ -172,19 +172,19 @@ helm upgrade --install kite charts/kite -n kite-system \
 
 ```bash
 # 个人仓库
-helm upgrade --install kite charts/kite -n kite-system --create-namespace \
-  -f charts/kite/examples/swr-gzwxh.yaml
+helm upgrade --install aerolink charts/aerolink -n aerolink-system --create-namespace \
+  -f charts/aerolink/examples/swr-gzwxh.yaml
 ```
 
 ### 发布 chart（可选）
 
 ```bash
-helm package charts/kite -d dist
-helm push dist/kite-1.0.0.tgz oci://<registry>/<namespace>
+helm package charts/aerolink -d dist
+helm push dist/aerolink-1.0.0.tgz oci://<registry>/<namespace>
 ```
 
 ::: warning 华为云 SWR 个人版不接受 Helm OCI 制品
-向 SWR 推送 chart 会报 `manifest invalid: Invalid image, fail to parse 'manifest.json'`（SWR 只解析容器镜像清单）。这种情况下直接从仓库目录安装即可：`helm install kite charts/kite`，或把 `helm package` 生成的 tgz 通过其它渠道分发。
+向 SWR 推送 chart 会报 `manifest invalid: Invalid image, fail to parse 'manifest.json'`（SWR 只解析容器镜像清单）。这种情况下直接从仓库目录安装即可：`helm install aerolink charts/aerolink`，或把 `helm package` 生成的 tgz 通过其它渠道分发。
 :::
 
 ::: warning 生产环境务必设置加密密钥

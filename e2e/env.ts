@@ -9,11 +9,11 @@ export const authFile = resolve(e2eDir, '.auth', 'admin.json')
 export const adminUser = {
   username: process.env.AEROLINK_E2E_ADMIN_USERNAME || 'admin',
   name: process.env.AEROLINK_E2E_ADMIN_NAME || 'AeroLink Admin',
-  password: process.env.AEROLINK_E2E_ADMIN_PASSWORD || 'KiteE2E!2345',
+  password: process.env.AEROLINK_E2E_ADMIN_PASSWORD || 'AeroLinkE2E!2345',
 }
 
 export const kindClusterName =
-  process.env.AEROLINK_E2E_CLUSTER_NAME || 'kite-e2e'
+  process.env.AEROLINK_E2E_CLUSTER_NAME || 'aerolink-e2e'
 
 // 被测集群的节点名。kind 暴露的单个节点名为
 // `<cluster>-control-plane`；真实集群会报告自己的节点名，因此也允许
@@ -21,7 +21,7 @@ export const kindClusterName =
 export const e2eNodeName =
   process.env.AEROLINK_E2E_NODE_NAME || `${kindClusterName}-control-plane`
 
-// 套件从中导入集群的 kubeconfig context。Kite 会用 context 名来命名导入的
+// 套件从中导入集群的 kubeconfig context。鸢联 AeroLink 会用 context 名来命名导入的
 // 集群，因此它同时也是 API 与界面使用的集群名。
 // kind 的 context 带 `kind-` 前缀；真实 kubeconfig 的 context
 // 原样使用。

@@ -87,7 +87,7 @@
 
 ## 运行与运维
 
-- **AEROLINK_BASE**：鸢联 AeroLink 部署在子路径下时的基础路径（如 `/kite`）。
+- **AEROLINK_BASE**：鸢联 AeroLink 部署在子路径下时的基础路径（如 `/aerolink`）。
 - **CORS_ALLOWED_ORIGINS**：允许跨域的来源列表（逗号分隔），仅建议开发环境使用。
 - **DISABLE_GZIP**：设为 `true` 关闭 gzip 响应压缩（默认已关闭）。
 - **NAMESPACE**：终端 / kubectl Agent Pod 创建所在的 Kubernetes 命名空间，默认 `kube-system`。

@@ -59,9 +59,19 @@ describe('getFavorites', () => {
   })
 
   it('returns an empty list for invalid JSON', () => {
-    localStorage.setItem('cluster-a-kite-favorites', '{')
+    localStorage.setItem('cluster-a-aerolink-favorites', '{')
 
     expect(getFavorites()).toEqual([])
+  })
+
+  it('migrates favorites stored under the legacy key', () => {
+    localStorage.setItem('cluster-a-kite-favorites', JSON.stringify([resource]))
+
+    expect(getFavorites()).toEqual([resource])
+    expect(localStorage.getItem('cluster-a-kite-favorites')).toBeNull()
+    expect(localStorage.getItem('cluster-a-aerolink-favorites')).toBe(
+      JSON.stringify([resource])
+    )
   })
 })
 
@@ -69,7 +79,7 @@ describe('favorites storage helpers', () => {
   it('saves and reads favorites for the current cluster', () => {
     saveFavorites([resource])
 
-    expect(localStorage.getItem('cluster-a-kite-favorites')).toBe(
+    expect(localStorage.getItem('cluster-a-aerolink-favorites')).toBe(
       JSON.stringify([resource])
     )
     expect(getFavorites()).toEqual([resource])

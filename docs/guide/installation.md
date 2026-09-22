@@ -15,7 +15,7 @@
 使用 Helm 可灵活配置和升级鸢联 AeroLink。仓库内的 chart 默认镜像已指向公司 SWR，可直接安装：
 
 ```bash
-helm install kite charts/kite -n kite-system --create-namespace
+helm install aerolink charts/aerolink -n aerolink-system --create-namespace
 ```
 
 #### 自定义安装
@@ -27,7 +27,7 @@ helm install kite charts/kite -n kite-system --create-namespace
 使用自定义值安装：
 
 ```bash
-helm install kite charts/kite -n kite-system -f values.yaml
+helm install aerolink charts/aerolink -n aerolink-system -f values.yaml
 ```
 
 #### 使用自建镜像安装
@@ -35,7 +35,7 @@ helm install kite charts/kite -n kite-system -f values.yaml
 如果你已经把源码打包成自己的镜像（见[构建并推送鸢联 AeroLink 镜像](./build-and-push-image.md)），用仓库内的 chart 安装并覆盖镜像地址：
 
 ```bash
-helm install kite charts/kite -n kite-system --create-namespace \
+helm install aerolink charts/aerolink -n aerolink-system --create-namespace \
   --set image.repository=<registry>/<namespace>/aerolink \
   --set image.tag=<版本>
 ```
@@ -65,7 +65,7 @@ kubectl apply -f deploy/install.yaml
 测试期间可通过端口转发快速访问鸢联 AeroLink：
 
 ```bash
-kubectl port-forward -n kite-system svc/kite 8080:8080
+kubectl port-forward -n aerolink-system svc/aerolink 8080:8080
 ```
 
 ### LoadBalancer 服务
@@ -73,13 +73,13 @@ kubectl port-forward -n kite-system svc/kite 8080:8080
 如集群支持 LoadBalancer，可直接暴露鸢联 AeroLink 服务：
 
 ```bash
-kubectl patch svc kite -n kite-system -p '{"spec": {"type": "LoadBalancer"}}'
+kubectl patch svc aerolink -n aerolink-system -p '{"spec": {"type": "LoadBalancer"}}'
 ```
 
 获取分配的 IP：
 
 ```bash
-kubectl get svc kite -n kite-system
+kubectl get svc aerolink -n aerolink-system
 ```
 
 ### Ingress（生产环境推荐）
@@ -95,8 +95,8 @@ kubectl get svc kite -n kite-system
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: kite
-  namespace: kite-system
+  name: aerolink
+  namespace: aerolink-system
 spec:
   ingressClassName: nginx
   rules:
@@ -107,7 +107,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: kite
+                name: aerolink
                 port:
                   number: 8080
   tls:
@@ -118,20 +118,20 @@ spec:
 
 ## 在子路径下部署（basePath）
 
-如果您希望将鸢联 AeroLink 部署在一个子路径下，例如 `https://example.com/kite`，可以使用 Helm Chart 的 `basePath` 值来配置。
+如果您希望将鸢联 AeroLink 部署在一个子路径下，例如 `https://example.com/aerolink`，可以使用 Helm Chart 的 `basePath` 值来配置。
 
 如何设置：
 
 - 在 `values.yaml` 中：
 
 ```yaml
-basePath: "/kite"
+basePath: "/aerolink"
 ```
 
 - 或使用 Helm CLI：
 
 ```bash
-helm install kite charts/kite -n kite-system --create-namespace --set basePath="/kite"
+helm install aerolink charts/aerolink -n aerolink-system --create-namespace --set basePath="/aerolink"
 ```
 
 说明：
@@ -144,11 +144,11 @@ ingress:
   hosts:
     - host: aerolink.example.com
       paths:
-        - path: /kite
+        - path: /aerolink
           pathType: Prefix
 ```
 
-- OAuth / 重定向：如果启用了 OAuth 或其他外部重定向，请在 OAuth 提供方中将重定向 URL 更新为包含子路径，例如 `https://aerolink.example.com/kite/oauth/callback`。
+- OAuth / 重定向：如果启用了 OAuth 或其他外部重定向，请在 OAuth 提供方中将重定向 URL 更新为包含子路径，例如 `https://aerolink.example.com/aerolink/oauth/callback`。
 
 ## 验证安装
 
@@ -179,7 +179,7 @@ ingress:
 ### Helm 卸载
 
 ```bash
-helm uninstall kite -n kite-system
+helm uninstall aerolink -n aerolink-system
 ```
 
 ### YAML 卸载

@@ -8,51 +8,51 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// 审计链路自监控指标的描述符，统一用 kite_ 前缀（与项目其它指标一致）。
+// 审计链路自监控指标的描述符，统一用 aerolink_ 前缀（与项目其它指标一致）。
 //
 // 这一组指标的作用是**把闭环合上**：日志系统自己坏了（丢记录、传不上去、写不进磁盘）必须能
 // 从 /metrics 看出来，而不是等到真的需要查日志时才发现缺了一段。
 // 见 docs/dev/plans/2026-09-20-log-closed-loop-design.md 第 ⑦ 环。
 var (
 	archiveWrittenDesc = prometheus.NewDesc(
-		"kite_audit_archive_written_total",
+		"aerolink_audit_archive_written_total",
 		"Number of audit records successfully written into local parquet archive files.",
 		[]string{"kind"}, nil,
 	)
 	archiveDroppedDesc = prometheus.NewDesc(
-		"kite_audit_archive_dropped_total",
+		"aerolink_audit_archive_dropped_total",
 		"Number of audit records dropped because the parquet write buffer was full.",
 		[]string{"kind"}, nil,
 	)
 	forwardDroppedDesc = prometheus.NewDesc(
-		"kite_audit_forward_dropped_total",
+		"aerolink_audit_forward_dropped_total",
 		"Number of audit records dropped because a forwarding queue was full.",
 		[]string{"sink"}, nil,
 	)
 	archiveFailuresDesc = prometheus.NewDesc(
-		"kite_audit_archive_failures_total",
+		"aerolink_audit_archive_failures_total",
 		"Number of failures while flushing, uploading, indexing or deleting audit archive records.",
 		[]string{"stage"}, nil,
 	)
 	archivePendingDesc = prometheus.NewDesc(
-		"kite_audit_archive_pending_files",
+		"aerolink_audit_archive_pending_files",
 		"Number of local archive files seen by the last upload-retry scan (a growing value means uploads keep failing).",
 		nil, nil,
 	)
 	archiveRetainedUnuploadedDesc = prometheus.NewDesc(
-		"kite_audit_archive_retained_unuploaded_files",
+		"aerolink_audit_archive_retained_unuploaded_files",
 		"Number of expired archive files kept by the last cleanup run because they are not uploaded yet (disk grows, but no data loss).",
 		nil, nil,
 	)
 	// 队列指标的作用是**提前发现堵**：积压持续上涨、或背压开始增长，都说明下游（磁盘 / S3 /
 	// ES）跟不上。这时记录还没丢，是扩容或排查的最佳时机，而不是等 dropped 指标动了才反应。
 	archiveQueueDesc = prometheus.NewDesc(
-		"kite_audit_archive_queue_depth",
+		"aerolink_audit_archive_queue_depth",
 		"Number of queued archive tasks waiting for a worker (disk = writing parquet files, upload = s3 uploads / es bulk writes).",
 		[]string{"pool"}, nil,
 	)
 	archiveBackpressureDesc = prometheus.NewDesc(
-		"kite_audit_archive_queue_backpressure_total",
+		"aerolink_audit_archive_queue_backpressure_total",
 		"Number of archive tasks run synchronously because the pool queue was full (a growing value means the downstream cannot keep up).",
 		[]string{"pool"}, nil,
 	)

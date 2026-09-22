@@ -25,9 +25,9 @@ import (
 func setupAvatarTestDB(t *testing.T) *model.User {
 	t.Helper()
 	originalDB := model.DB
-	originalEncryptKey := common.KiteEncryptKey
+	originalEncryptKey := common.EncryptKey
 	originalJWTSecret := common.JwtSecret
-	common.KiteEncryptKey = "users-avatar-test-key"
+	common.EncryptKey = "users-avatar-test-key"
 	common.JwtSecret = "users-avatar-test-jwt-secret"
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -50,7 +50,7 @@ func setupAvatarTestDB(t *testing.T) *model.User {
 			_ = sqlDB.Close()
 		}
 		model.DB = originalDB
-		common.KiteEncryptKey = originalEncryptKey
+		common.EncryptKey = originalEncryptKey
 		common.JwtSecret = originalJWTSecret
 	})
 	return user

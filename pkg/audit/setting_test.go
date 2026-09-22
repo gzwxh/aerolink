@@ -12,7 +12,7 @@ func testArchiveSetting() model.AuditSettingData {
 	return model.AuditSettingData{
 		Archive: model.ArchiveSetting{
 			Enabled:  true,
-			LocalDir: "/var/log/kite/archive",
+			LocalDir: "/var/log/aerolink/archive",
 			S3: model.S3Archive{
 				Enabled:   true,
 				Endpoint:  "https://cos.ap-guangzhou.myqcloud.com",
@@ -137,7 +137,7 @@ func TestRejectStaleKafkaPasswordAfterMove(t *testing.T) {
 				Brokers:       []string{"kafka-1:9092"},
 				Topic:         "aerolink-audit",
 				SASLMechanism: model.KafkaSASLPlain,
-				Username:      "kite",
+				Username:      "aerolink",
 				Password:      model.SecretString("kafka-secret"),
 				UseTLS:        true,
 			},
@@ -284,13 +284,13 @@ func TestAuditSettingDiffCoversLogForward(t *testing.T) {
 		Mode:    model.LogForwardModeSyslog,
 		Network: model.SyslogNetworkTCP,
 		Address: "log.example.com:514",
-		Tag:     "kite",
+		Tag:     "aerolink",
 		Format:  model.LogFormatText,
 		Kafka: model.KafkaSetting{
 			Brokers:       []string{"kafka-1:9092"},
 			Topic:         "aerolink-audit",
 			SASLMechanism: model.KafkaSASLPlain,
-			Username:      "kite",
+			Username:      "aerolink",
 			Password:      model.SecretString("kafka-secret"),
 			UseTLS:        true,
 		},

@@ -9,7 +9,7 @@ export function isNativeUser(user?: UserItem | null): boolean {
 }
 
 /**
- * 能否在 Kite 里删除该账号：本地账号与 LDAP 账号可以（LDAP 只删本地记录，目录里的
+ * 能否在 AeroLink 里删除该账号：本地账号与 LDAP 账号可以（LDAP 只删本地记录，目录里的
  * 用户不受影响）；OIDC 账号由身份源管辖，内置超级管理员永远不可删。
  */
 export function isDeletableUser(user?: UserItem | null): boolean {

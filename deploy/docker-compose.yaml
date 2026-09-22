@@ -10,7 +10,7 @@
 #      密码、AI Key 等），一旦投入使用不可更换，否则已保存的凭据将无法解密；
 #      请务必妥善备份。
 #   2. DB_DSN —— 替换为实际的 MySQL 连接信息。
-#      ⚠ 如果这套 Kite 要和已有实例（例如 K8s 里那套）共用同一个数据库，这两个
+#      ⚠ 如果这套鸢联 AeroLink 要和已有实例（例如 K8s 里那套）共用同一个数据库，这两个
 #      密钥必须与 aerolink-secret 里的完全一致，否则会话失效、已保存的凭据解不开。
 #
 # 数据库要求（二选一，提前手动建好）：
@@ -52,7 +52,7 @@ services:
       TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
       # 通过 HTTPS 反向代理暴露时打开，且要与实际访问协议一致：否则登录 Cookie
       # 会带 Secure 标记，在 HTTP 下被浏览器丢弃。
-      #HOST: "https://kite.example.com"
+      #HOST: "https://aerolink.gogdev.cn"
       # 需首次启动自动导入 kubeconfig 时取消注释，并把下面 volumes 的挂载一起打开。
       #KUBECONFIG: /kube/config
       # 审计日志的落地方式（五选一、互斥，**启动时**生效、页面只读）：
@@ -72,7 +72,7 @@ services:
       # 系统日志（klog）设置后会落文件、不再写 stderr。
       #AEROLINK_AUDIT_ARCHIVE_DIR: /var/log/aerolink/archive
       #AEROLINK_LOG_FILE: /var/log/aerolink/aerolink.log
-    # 首次启动且数据库里还没有任何集群时，Kite 会导入挂载进来的 kubeconfig
+    # 首次启动且数据库里还没有任何集群时，鸢联 AeroLink 会导入挂载进来的 kubeconfig
     # （internal/load.go：优先 $KUBECONFIG，其次 ~/.kube/config）；之后新增或
     # 修改集群请在页面上操作。
     # ⚠ 宿主机路径不存在时 docker 会创建一个同名空目录，请改成实际路径；

@@ -51,7 +51,7 @@ type createPasswordUser struct {
 	ExpiresAt *time.Time `json:"expiresAt"`
 	// Enabled 为激活状态，缺省（nil）时按激活处理。
 	Enabled *bool `json:"enabled"`
-	// Groups 为本地（Kite）用户组名列表，创建时一并建立成员关系。
+	// Groups 为本地（鸢联 AeroLink）用户组名列表，创建时一并建立成员关系。
 	Groups []string `json:"groups"`
 	// Roles 为系统角色名列表，创建后立即分配。
 	Roles []string `json:"roles"`
@@ -517,7 +517,7 @@ func recentlyAuthenticated(user *model.User) bool {
 func SetupCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	if !user.CanSelfEnrollMFA() {
-		// OIDC / 第三方身份源的二次验证由 IdP 负责，Kite 不提供自助绑定
+		// OIDC / 第三方身份源的二次验证由 IdP 负责，鸢联 AeroLink 不提供自助绑定
 		// （见 model.(*User).CanSelfEnrollMFA 与 MFARequiredFor）。
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": "mfa self-enrollment is not available for this account",
@@ -769,11 +769,11 @@ func ensureMFAEnabled(c *gin.Context) bool {
 	return true
 }
 
-// DeleteUser 从 Kite 本地数据库中删除一个用户。
+// DeleteUser 从鸢联 AeroLink 本地数据库中删除一个用户。
 //
 // 路由：DELETE /api/v1/admin/users/:id（仅管理员）。
 //
-// 只允许删除「身份归属于 Kite 本地」或「由 LDAP 同步」的账号：
+// 只允许删除「身份归属于鸢联 AeroLink 本地」或「由 LDAP 同步」的账号：
 // 对 LDAP 用户而言这里只删除本地记录，绝不会去改动 LDAP 目录；
 // 纯 OIDC 身份不能在此删除（下次登录会被重新创建），需要改用禁用。
 // 具体判定见 isDeletableUser。
@@ -790,7 +790,7 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	// 本地用户与 LDAP 开通的用户可以直接从 Kite 删除。对
+	// 本地用户与 LDAP 开通的用户可以直接从鸢联 AeroLink 删除。对
 	// LDAP 用户而言这只删除本地记录——绝不触碰 LDAP
 	// 目录。其它外部（OIDC）用户只能被停用。
 	if !isDeletableUser(user.Provider) {
@@ -822,7 +822,7 @@ func DeleteUser(c *gin.Context) {
 }
 
 // isDeletableUser 报告该账号是否可以直接从本地
-// Kite 数据库中移除。API key 的伪用户单独管理，
+// 鸢联 AeroLink 数据库中移除。API key 的伪用户单独管理，
 // 从不出现在常规用户列表中。
 func isDeletableUser(provider string) bool {
 	return provider == "" ||

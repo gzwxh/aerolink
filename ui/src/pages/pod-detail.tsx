@@ -78,7 +78,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
     namespace
   )
   const attachContainerName =
-    pod?.metadata?.annotations?.['kite.io/debug-container']
+    pod?.metadata?.annotations?.['aerolink.io/debug-container']
 
   useEffect(() => {
     if (!pod || !pod?.spec?.containers?.length) {

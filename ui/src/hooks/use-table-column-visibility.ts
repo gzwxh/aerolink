@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { VisibilityState } from '@tanstack/react-table'
 
+import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
+
 /**
  * 表格「显示哪些列」的偏好：与资源列表（/deployments 等）同一套交互——齿轮菜单勾选 +
  * localStorage 持久化，配合 `<TableColumnToggle table={table} />` 使用。
@@ -15,6 +17,8 @@ export function useTableColumnVisibility(
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     () => {
       try {
+        // 旧产品名时期写下的 key（`kite-*`）在这里一次性搬到 `aerolink-*`。
+        migrateLegacyKiteStorageKey(localStorage, storageKey)
         const stored = localStorage.getItem(storageKey)
         if (!stored) return { ...defaults }
         return { ...defaults, ...(JSON.parse(stored) as VisibilityState) }

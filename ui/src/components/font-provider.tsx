@@ -9,8 +9,8 @@ const FONT_STACKS: Record<FontOption, string> = {
   system: 'var(--font-sans)',
   maple: "'Maple Mono', var(--font-sans)",
   jetbrains: "'JetBrains Mono', var(--font-sans)",
-  serif: "'Kite Song SC', 'Songti SC', SimSun, 'Noto Serif CJK SC', serif",
-  kai: "'Kite Kai', 'Kaiti SC', KaiTi, STKaiti, serif",
+  serif: "'AeroLink Song SC', 'Songti SC', SimSun, 'Noto Serif CJK SC', serif",
+  kai: "'AeroLink Kai', 'Kaiti SC', KaiTi, STKaiti, serif",
 }
 
 type FontProviderProps = {

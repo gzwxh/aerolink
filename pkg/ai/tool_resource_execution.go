@@ -790,7 +790,7 @@ func executeApplyResource(ctx context.Context, cs *cluster.ClientSet, user pkgmo
 		return fmt.Sprintf("Error finding %s/%s: %v", resource.Kind, obj.GetName(), getErr), true
 	}
 
-	err = cs.K8sClient.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), client.FieldOwner("kite-ai-agent"))
+	err = cs.K8sClient.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj), client.FieldOwner("aerolink-ai-agent"))
 	currentYAML := ""
 	if err == nil {
 		current := buildObjectForResource(resource)

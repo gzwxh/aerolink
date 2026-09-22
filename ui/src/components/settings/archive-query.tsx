@@ -17,6 +17,7 @@ import {
   useClusterList,
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
+import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +46,9 @@ type ArchiveRow = Record<string, unknown>
 
 const ARCHIVE_KINDS: ArchiveKind[] = ['audit', 'login', 'access']
 const ACCESS_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+
+/** 本地记住的「检索后端」偏好键（旧键名随产品改名迁移）。 */
+const ARCHIVE_BACKEND_STORAGE_KEY = 'aerolink-archive-query-backend'
 
 /** 可选的检索后端（与后端 archiveBackendName 一一对应）：用于校验本地记住的选择。 */
 const ARCHIVE_BACKENDS: ArchiveBackend[] = [
@@ -100,7 +104,7 @@ export function ArchiveQuery() {
     pageSize: 20,
   })
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
-    'kite-archive-query-columnVisibility'
+    'aerolink-archive-query-columnVisibility'
   )
   const [timeRange, setTimeRange] = useState<AuditTimeRange>(() =>
     defaultAuditTimeRange()
@@ -113,7 +117,8 @@ export function ArchiveQuery() {
   // 留空表示「用服务端给的默认后端」（默认跟随 sink）。不同存储方式下可用的后端不同，
   // 有特定检索需求的部署主动选一次即可，所以把选择记在本地，不必每次进来重选。
   const [backend, setBackend] = useState<ArchiveBackend | ''>(() => {
-    const saved = window.localStorage.getItem('kite-archive-query-backend')
+    migrateLegacyKiteStorageKey(localStorage, ARCHIVE_BACKEND_STORAGE_KEY)
+    const saved = window.localStorage.getItem(ARCHIVE_BACKEND_STORAGE_KEY)
     return ARCHIVE_BACKENDS.includes(saved as ArchiveBackend)
       ? (saved as ArchiveBackend)
       : ''
@@ -461,7 +466,7 @@ export function ArchiveQuery() {
                   resetPage()
                   setBackend(value as ArchiveBackend)
                   window.localStorage.setItem(
-                    'kite-archive-query-backend',
+                    ARCHIVE_BACKEND_STORAGE_KEY,
                     value
                   )
                 }}

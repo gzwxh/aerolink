@@ -32,13 +32,13 @@ describe('normalizeBasePath', () => {
   })
 
   it('normalizes a path with and without a leading slash', () => {
-    expect(normalizeBasePath('kite/')).toBe('/kite')
-    expect(normalizeBasePath('/kite/app/')).toBe('/kite/app')
+    expect(normalizeBasePath('aerolink/')).toBe('/aerolink')
+    expect(normalizeBasePath('/aerolink/app/')).toBe('/aerolink/app')
   })
 
   it('rejects invalid path segments', () => {
-    expect(() => normalizeBasePath('/kite app')).toThrow(
-      'Invalid AEROLINK_BASE "/kite app"'
+    expect(() => normalizeBasePath('/aerolink app')).toThrow(
+      'Invalid AEROLINK_BASE "/aerolink app"'
     )
   })
 })

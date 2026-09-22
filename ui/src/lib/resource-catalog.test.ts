@@ -11,9 +11,9 @@ import {
 
 describe('getResourceFormEditPath', () => {
   it('命名空间级资源的路径带命名空间段', () => {
-    expect(getResourceFormEditPath('secrets', 'kite-secret', 'kite')).toBe(
-      '/secrets/kite/kite-secret/edit'
-    )
+    expect(
+      getResourceFormEditPath('secrets', 'aerolink-secret', 'aerolink')
+    ).toBe('/secrets/aerolink/aerolink-secret/edit')
     expect(
       getResourceFormEditPath('configmaps', 'nginx conf', 'kube-system')
     ).toBe('/configmaps/kube-system/nginx%20conf/edit')

@@ -32,7 +32,7 @@ const liveService = (): Service =>
       name: 'web',
       namespace: 'default',
       labels: { 'app.kubernetes.io/name': 'web' },
-      annotations: { 'kite.internal/note': 'keep me' },
+      annotations: { 'aerolink.internal/note': 'keep me' },
       resourceVersion: '12345',
       uid: 'uid-1',
     },
@@ -165,7 +165,7 @@ describe('service 表单数据层', () => {
       'app.kubernetes.io/name': 'web',
     })
     expect(updated.metadata?.annotations).toEqual({
-      'kite.internal/note': 'keep me',
+      'aerolink.internal/note': 'keep me',
     })
   })
 

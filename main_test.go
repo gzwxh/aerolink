@@ -224,7 +224,7 @@ func TestSetupStatic(t *testing.T) {
 		common.Base = oldBase
 	}()
 
-	common.Base = "/kite"
+	common.Base = "/aerolink"
 
 	r := gin.New()
 	setupStatic(r)
@@ -237,13 +237,13 @@ func TestSetupStatic(t *testing.T) {
 		if rec.Code != http.StatusFound {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
 		}
-		if location := rec.Header().Get("Location"); location != "/kite/" {
-			t.Fatalf("Location = %q, want %q", location, "/kite/")
+		if location := rec.Header().Get("Location"); location != "/aerolink/" {
+			t.Fatalf("Location = %q, want %q", location, "/aerolink/")
 		}
 	})
 
 	t.Run("serves index for ui routes with base injected", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/kite/overview", nil)
+		req := httptest.NewRequest(http.MethodGet, "/aerolink/overview", nil)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 
@@ -251,7 +251,7 @@ func TestSetupStatic(t *testing.T) {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 		}
 		body := rec.Body.String()
-		if !strings.Contains(body, `<script src="/kite/config.js"></script>`) {
+		if !strings.Contains(body, `<script src="/aerolink/config.js"></script>`) {
 			t.Fatalf("body missing external dynamic base script")
 		}
 		if strings.Contains(body, "window.__dynamic_base__") {
@@ -263,14 +263,14 @@ func TestSetupStatic(t *testing.T) {
 	})
 
 	t.Run("serves config.js with the runtime base", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/kite/config.js", nil)
+		req := httptest.NewRequest(http.MethodGet, "/aerolink/config.js", nil)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 		}
-		if got := rec.Body.String(); got != `window.__dynamic_base__="/kite";` {
+		if got := rec.Body.String(); got != `window.__dynamic_base__="/aerolink";` {
 			t.Fatalf("config.js body = %q", got)
 		}
 		if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/javascript") {
@@ -279,7 +279,7 @@ func TestSetupStatic(t *testing.T) {
 	})
 
 	t.Run("returns api 404 for missing api route", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/kite/api/missing", nil)
+		req := httptest.NewRequest(http.MethodGet, "/aerolink/api/missing", nil)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 
@@ -307,17 +307,17 @@ func TestLoadGeneralSettingReadsStoredJWTSecretAfterKeyMigration(t *testing.T) {
 	}
 
 	originalDB := model.DB
-	originalKey := common.KiteEncryptKey
+	originalKey := common.EncryptKey
 	originalSecret := common.JwtSecret
 	model.DB = db
 	t.Cleanup(func() {
 		model.DB = originalDB
-		common.KiteEncryptKey = originalKey
+		common.EncryptKey = originalKey
 		common.JwtSecret = originalSecret
 	})
 
 	// 内置密钥生效期间落库：此时生成并存储了随机会话密钥。
-	common.KiteEncryptKey = common.DefaultKiteEncryptKey
+	common.EncryptKey = common.DefaultEncryptKey
 	common.JwtSecret = common.DefaultJWTSecret
 	if _, err := model.GetGeneralSetting(); err != nil {
 		t.Fatalf("seeding general setting: %v", err)
@@ -328,7 +328,7 @@ func TestLoadGeneralSettingReadsStoredJWTSecretAfterKeyMigration(t *testing.T) {
 	}
 
 	// 运维配置了 AEROLINK_ENCRYPT_KEY 后重启：新进程里会话密钥回到哨兵值。
-	common.KiteEncryptKey = "production-key-0123456789"
+	common.EncryptKey = "production-key-0123456789"
 	common.JwtSecret = common.DefaultJWTSecret
 
 	loadGeneralSettingAfterKeyMigration()

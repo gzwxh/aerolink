@@ -42,7 +42,7 @@ export function PasswordChangeLog() {
   // 列显示偏好：与资源列表（/deployments 等）一致，齿轮菜单勾选 + 持久化。
   // 日志是全局数据，键不带集群前缀。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
-    'kite-password-change-logs-columnVisibility'
+    'aerolink-password-change-logs-columnVisibility'
   )
   const [userId, setUserId] = useState<number | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState('')

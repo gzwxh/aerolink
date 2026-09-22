@@ -6,12 +6,12 @@ set -euo pipefail
 #
 # 用法：scripts/release.sh <version> [chart-dir]
 #   version    目标版本号（不带前缀，例如 1.0.0）
-#   chart-dir  Helm chart 目录，默认 charts/kite
+#   chart-dir  Helm chart 目录，默认 charts/aerolink
 #
 # 可用环境变量覆盖：CHART_DIR、TAG_PREFIX（默认 v）。
 
 version="${1:-}"
-CHART_DIR="${2:-${CHART_DIR:-charts/kite}}"
+CHART_DIR="${2:-${CHART_DIR:-charts/aerolink}}"
 TAG_PREFIX="${TAG_PREFIX:-v}"
 
 if [ -z "$version" ]; then

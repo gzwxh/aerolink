@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Kite 是单二进制的 Kubernetes 控制台：Go 后端、`ui/` 下的 React/Vite 前端，前端
+鸢联 AeroLink 是单二进制的 Kubernetes 控制台：Go 后端、`ui/` 下的 React/Vite 前端，前端
 产物从 `static/` 嵌入到二进制里。
 
 本仓库是上游 [kite-org/kite](https://github.com/kite-org/kite)（Apache-2.0）的
@@ -39,7 +39,7 @@ Kite 是单二进制的 Kubernetes 控制台：Go 后端、`ui/` 下的 React/Vi
 - 新增或重命名资源面时，同步 `pkg/common/resource.go`、`pkg/resources/handler.go`、
   `ui/src/lib/resource-catalog.ts`，以及相关路由/页面/组件。
 - 需要持久化的敏感值一律用 `model.SecretString` 存储；任何情况下都不要把密钥写进日志。
-- 改动运行时环境变量时，同时检查 `pkg/common/common.go` 与 `charts/kite` 下对应的
+- 改动运行时环境变量时，同时检查 `pkg/common/common.go` 与 `charts/aerolink` 下对应的
   values/模板。由 `internal/config.go` 管理的设置在界面上必须保持只读。
 - 提交信息用中文描述，但保留 Conventional Commits 的英文类型前缀（`feat` / `fix` /
   `chore`…）：`scripts/changelog.sh` 按前缀分类，写成中文前缀会全部落到「未分类」。

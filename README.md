@@ -137,7 +137,7 @@ make push      # 构建并推送到公司 SWR
 ```bash
 docker run -d --name aerolink -p 8080:8080 \
   -v aerolink-data:/app/data \
-  -e DB_DSN=/app/data/kite.db \
+  -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
   swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
@@ -149,7 +149,7 @@ docker run -d --name aerolink -p 8080:8080 \
 docker run -d --name aerolink --restart unless-stopped \
   -p 8080:8080 \
   -v /data/aerolink:/app/data \
-  -e DB_DSN=/app/data/kite.db \
+  -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://aerolink.example.com \
@@ -179,11 +179,11 @@ docker run -d --name aerolink --restart unless-stopped \
 | --- | --- | --- |
 | `PORT` | `8080` | 服务监听端口（容器已 `EXPOSE 8080`） |
 | `DB_TYPE` | `sqlite` | 可选 `sqlite` / `mysql` / `postgres`，非法值直接启动失败 |
-| `DB_DSN` | `dev.db` | 数据库连接，写法见下方「数据库选择」。SQLite 建议改到挂载卷内（如 `/app/data/kite.db`） |
+| `DB_DSN` | `dev.db` | 数据库连接，写法见下方「数据库选择」。SQLite 建议改到挂载卷内（如 `/app/data/aerolink.db`） |
 | `AEROLINK_DB_MAX_OPEN_CONNS` | `100` | 最大连接数（MySQL/PostgreSQL 高并发时上调，非法值忽略并告警） |
 | `AEROLINK_DB_MAX_IDLE_CONNS` | `10` | 空闲连接数，`0` 表示不保留空闲连接 |
 | `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | 连接最长存活分钟数 |
-| `AEROLINK_BASE` | 空 | 子路径部署（如 `/kite`），适用于挂在反向代理子目录下 |
+| `AEROLINK_BASE` | 空 | 子路径部署（如 `/aerolink`），适用于挂在反向代理子目录下 |
 | `NAMESPACE` | 空 | 鸢联 AeroLink 自身（Agent / 终端 Pod）所在命名空间 |
 | `DISABLE_GZIP` | `false` | `true` 关闭响应压缩（排查代理兼容问题时使用） |
 | `KUBECONFIG` | 空 | 外部 kubeconfig 路径（如需预置集群，一般通过界面添加即可） |
@@ -202,7 +202,7 @@ docker run -d --name aerolink --restart unless-stopped \
 ```bash
 # SQLite（默认，单实例）
 -e DB_TYPE=sqlite \
--e DB_DSN=/app/data/kite.db
+-e DB_DSN=/app/data/aerolink.db
 
 # MySQL / MariaDB（注意 charset=utf8mb4，否则中文与 emoji 写入失败）
 -e DB_TYPE=mysql \
@@ -239,10 +239,10 @@ docker run -d --name aerolink --restart unless-stopped \
   ```bash
   # 正确：WAL + 5s 忙等待（busy_timeout 驱动本身已默认 5000，可省略）
   -e DB_TYPE=sqlite \
-  -e DB_DSN="/app/data/kite.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+  -e DB_DSN="/app/data/aerolink.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 
   # 错误：mattn/go-sqlite3 风格的参数会被本驱动静默忽略（等于没配）
-  # -e DB_DSN="/app/data/kite.db?_journal_mode=WAL&_busy_timeout=5000"
+  # -e DB_DSN="/app/data/aerolink.db?_journal_mode=WAL&_busy_timeout=5000"
   ```
 
   未开 WAL 时 SQLite 是「读写互斥」，多人同时操作容易出现 `database is locked`；开启 WAL 后读写可并行，但仍**只能单副本**（PV 为 `ReadWriteOnce`，且 WAL 不适合放在 NFS 等网络存储上）。

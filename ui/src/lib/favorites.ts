@@ -1,13 +1,21 @@
 import { SearchResult } from '@/lib/api'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
+import { migrateLegacyStorageKey } from '@/lib/storage-migration'
 
-const FAVORITES_STORAGE_KEY = 'kite-favorites'
+const FAVORITES_STORAGE_KEY = 'aerolink-favorites'
+// 旧产品名时期的键名，随集群前缀一起迁移。
+const LEGACY_FAVORITES_STORAGE_KEY = 'kite-favorites'
 
 /**
  * 从 localStorage 读取收藏
  */
 export const getFavorites = (): SearchResult[] => {
   try {
+    migrateLegacyStorageKey(
+      localStorage,
+      getClusterScopedStorageKey(LEGACY_FAVORITES_STORAGE_KEY),
+      getClusterScopedStorageKey(FAVORITES_STORAGE_KEY)
+    )
     const favorites = localStorage.getItem(
       getClusterScopedStorageKey(FAVORITES_STORAGE_KEY)
     )

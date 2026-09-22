@@ -45,7 +45,7 @@ func EnsureEncryptionKey() {
 		return
 	}
 
-	current := common.KiteEncryptKey
+	current := common.EncryptKey
 	fingerprint := encryptionKeyFingerprint(current)
 	previous, err := storedEncryptionKeyFingerprint()
 	if err != nil {
@@ -71,12 +71,12 @@ func EnsureEncryptionKey() {
 		// 模型钩子），所以手动让读缓存失效。
 		InvalidateGeneralSettingCache()
 		return
-	case current == common.DefaultKiteEncryptKey:
+	case current == common.DefaultEncryptKey:
 		// 没有可迁移的目标：内置密钥本就不该继续使用。
 		klog.Warningf("stored secrets cannot be read with the built-in encryption key")
 	default:
-		if defaultReadable, _ := probeEncryptionKey(common.DefaultKiteEncryptKey); defaultReadable {
-			migrated, err := migrateEncryptedColumns(common.DefaultKiteEncryptKey, current)
+		if defaultReadable, _ := probeEncryptionKey(common.DefaultEncryptKey); defaultReadable {
+			migrated, err := migrateEncryptedColumns(common.DefaultEncryptKey, current)
 			if err != nil {
 				// 什么都没有写入（迁移是原子的）：之前的
 				// 密钥依然能解开所有已存密钥。

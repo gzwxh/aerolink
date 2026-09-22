@@ -164,7 +164,7 @@ export function UserGroupsTab() {
   // 列显示偏好：与资源列表（/deployments 等）一致，用齿轮菜单勾选，并持久化。
   // 用户组列表是全局数据，不带集群前缀。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
-    'kite-user-groups-columnVisibility'
+    'aerolink-user-groups-columnVisibility'
   )
 
   const [showAddGroup, setShowAddGroup] = useState(false)

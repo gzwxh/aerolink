@@ -95,7 +95,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const loginSucceededFlag = 'kite_just_logged_in'
+const loginSucceededFlag = 'aerolink_just_logged_in'
 
 // markLoginSucceeded 在同一标签页内记住刚刚登录成功，
 // 使认证提供方能在用户对象可用后展示一次简短的确认 toast——

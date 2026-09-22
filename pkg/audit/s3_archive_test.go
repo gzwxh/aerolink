@@ -35,10 +35,10 @@ func TestS3SinkObjectKey(t *testing.T) {
 		input  string
 		want   string
 	}{
-		{name: "with prefix", prefix: "kite", input: "audit_history/2026/09/20/a.parquet", want: "kite/audit_history/2026/09/20/a.parquet"},
+		{name: "with prefix", prefix: "aerolink", input: "audit_history/2026/09/20/a.parquet", want: "aerolink/audit_history/2026/09/20/a.parquet"},
 		{name: "empty prefix", prefix: "", input: "audit_history/2026/09/20/a.parquet", want: "audit_history/2026/09/20/a.parquet"},
-		{name: "prefix keeps slashes normalized", prefix: "/kite/", input: "/audit_history/a.parquet", want: "kite/audit_history/a.parquet"},
-		{name: "windows separators normalized", prefix: "kite", input: `audit_history\2026\a.parquet`, want: "kite/audit_history/2026/a.parquet"},
+		{name: "prefix keeps slashes normalized", prefix: "/aerolink/", input: "/audit_history/a.parquet", want: "aerolink/audit_history/a.parquet"},
+		{name: "windows separators normalized", prefix: "aerolink", input: `audit_history\2026\a.parquet`, want: "aerolink/audit_history/2026/a.parquet"},
 	}
 
 	for _, tc := range cases {

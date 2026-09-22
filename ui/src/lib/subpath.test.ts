@@ -34,9 +34,9 @@ afterEach(() => {
 describe('getSubPath', () => {
   it('reads the dev base path from AEROLINK_BASE', () => {
     vi.stubEnv('DEV', true)
-    vi.stubEnv('AEROLINK_BASE', 'kite/')
+    vi.stubEnv('AEROLINK_BASE', 'aerolink/')
 
-    expect(getSubPath()).toBe('/kite')
+    expect(getSubPath()).toBe('/aerolink')
   })
 
   it('falls back to the legacy KITE_BASE', () => {
@@ -57,10 +57,10 @@ describe('getSubPath', () => {
 describe('withSubPath', () => {
   it('prefixes paths when a subpath exists', () => {
     vi.stubEnv('DEV', false)
-    window.__dynamic_base__ = '/kite'
+    window.__dynamic_base__ = '/aerolink'
 
-    expect(withSubPath('api/v1')).toBe('/kite/api/v1')
-    expect(withSubPath('/api/v1')).toBe('/kite/api/v1')
+    expect(withSubPath('api/v1')).toBe('/aerolink/api/v1')
+    expect(withSubPath('/api/v1')).toBe('/aerolink/api/v1')
   })
 
   it('returns the original path when no subpath is configured', () => {
@@ -74,10 +74,10 @@ describe('getWebSocketUrl', () => {
   it('builds a dev websocket URL with the current subpath', () => {
     vi.stubEnv('DEV', false)
     vi.stubEnv('NODE_ENV', 'development')
-    window.__dynamic_base__ = '/kite'
+    window.__dynamic_base__ = '/aerolink'
 
     expect(getWebSocketUrl('ws/logs')).toBe(
-      `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//localhost:8080/kite/ws/logs`
+      `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//localhost:8080/aerolink/ws/logs`
     )
   })
 })

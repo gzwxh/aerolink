@@ -302,7 +302,7 @@ func addDirectoryUser(t *testing.T, username, provider string) *model.User {
 	return user
 }
 
-// OIDC / 第三方身份源的二次验证由 IdP 负责：Kite 里既没有可校验的口令，
+// OIDC / 第三方身份源的二次验证由 IdP 负责：鸢联 AeroLink 里既没有可校验的口令，
 // 也不该提供绑定入口，否则用户会卡在一个走不完的绑定向导里。
 func TestSetupCurrentUserMFADeniesAccountsThatCannotSelfEnroll(t *testing.T) {
 	setupUserHandlerTestDB(t)
@@ -318,7 +318,7 @@ func TestSetupCurrentUserMFADeniesAccountsThatCannotSelfEnroll(t *testing.T) {
 	}
 }
 
-// LDAP 账号在 Kite 侧没有可校验的口令，再认证改用「近期重新登录过」：
+// LDAP 账号在鸢联 AeroLink 侧没有可校验的口令，再认证改用「近期重新登录过」：
 // 登录时间就是 user_sessions.started_at，只有真正走完登录流程才会刷新。
 func TestSetupCurrentUserMFAForLDAPRequiresARecentSignIn(t *testing.T) {
 	setupUserHandlerTestDB(t)
@@ -496,9 +496,9 @@ func loadStoredUser(t *testing.T, id uint64) *model.User {
 func setupUserHandlerTestDB(t *testing.T) *model.User {
 	t.Helper()
 	originalDB := model.DB
-	originalEncryptKey := common.KiteEncryptKey
+	originalEncryptKey := common.EncryptKey
 	originalJWTSecret := common.JwtSecret
-	common.KiteEncryptKey = "users-handler-test-key"
+	common.EncryptKey = "users-handler-test-key"
 	common.JwtSecret = "users-handler-test-jwt-secret"
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -538,7 +538,7 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 			_ = sqlDB.Close()
 		}
 		model.DB = originalDB
-		common.KiteEncryptKey = originalEncryptKey
+		common.EncryptKey = originalEncryptKey
 		common.JwtSecret = originalJWTSecret
 	})
 	return user

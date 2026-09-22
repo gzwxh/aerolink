@@ -12,7 +12,7 @@
 示例：
 
 ```bash
--H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+-H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
 -H "x-cluster-name: demo-cluster"
 ```
 
@@ -63,7 +63,7 @@ DELETE /api/v1/<resource>/_all/<name>
 ```bash
 curl \
   -X POST \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   -H "Content-Type: application/json" \
   -d '{
@@ -90,7 +90,7 @@ curl \
 ```bash
 curl \
   -X PUT \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   -H "Content-Type: application/json" \
   -d '{
@@ -122,7 +122,7 @@ curl \
 ```bash
 curl \
   -X PATCH \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   -H "Content-Type: application/json" \
   -d '{
@@ -138,7 +138,7 @@ curl \
 ```bash
 curl \
   -X PATCH \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   -H "Content-Type: application/json" \
   -d '{
@@ -146,7 +146,7 @@ curl \
       "template": {
         "metadata": {
           "annotations": {
-            "kite.kubernetes.io/restartedAt": "2026-04-20T12:00:00Z"
+            "aerolink.kubernetes.io/restartedAt": "2026-04-20T12:00:00Z"
           }
         }
       }
@@ -162,7 +162,7 @@ curl \
 ```bash
 curl \
   -X DELETE \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   https://aerolink.example.com/api/v1/configmaps/default/example-config
 ```
@@ -178,7 +178,7 @@ curl \
 ```bash
 curl \
   -X DELETE \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   "https://aerolink.example.com/api/v1/deployments/default/example-app?force=true&wait=false"
 ```
@@ -192,7 +192,7 @@ curl \
 ```bash
 curl \
   -X PATCH \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   -H "Content-Type: application/json" \
   -d '{

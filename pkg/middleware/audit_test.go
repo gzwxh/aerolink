@@ -137,13 +137,13 @@ func TestAdminAuditIgnoresOtherReads(t *testing.T) {
 func TestAdminAuditRespectsBasePath(t *testing.T) {
 	operator := setupAdminAuditDB(t)
 	originalBase := common.Base
-	common.Base = "/kite"
+	common.Base = "/aerolink"
 	t.Cleanup(func() { common.Base = originalBase })
 
-	runAdminAudit(t, operator, http.MethodPut, "/kite/api/v1/admin/general-setting", http.StatusOK)
-	runAdminAudit(t, operator, http.MethodGet, "/kite/api/v1/admin/audit-logs", http.StatusOK)
+	runAdminAudit(t, operator, http.MethodPut, "/aerolink/api/v1/admin/general-setting", http.StatusOK)
+	runAdminAudit(t, operator, http.MethodGet, "/aerolink/api/v1/admin/audit-logs", http.StatusOK)
 	// base 之下的普通资源写操作不属于管理接口，不该被记。
-	runAdminAudit(t, operator, http.MethodPut, "/kite/api/v1/pods/default", http.StatusOK)
+	runAdminAudit(t, operator, http.MethodPut, "/aerolink/api/v1/pods/default", http.StatusOK)
 
 	rows := auditRows(t)
 	if len(rows) != 2 {

@@ -740,7 +740,7 @@
     },
     "tabs": {
       "rolloutRevisions": "Rollout Revisions",
-      "kiteAudit": "AeroLink Audit"
+      "aerolinkAudit": "AeroLink Audit"
     }
   },
   "daemonsets": {
@@ -1477,14 +1477,14 @@
     "roleId": "Role ID",
     "roleIdReadonlyHint": "The role ID is what authorization is evaluated against and cannot be changed after creation.",
     "privilegesTitle": "Privileges",
-    "privilegesSubtitle": "Permissions are prefixed by source: Kubernetes resources use k8s and console-owned settings use kite, in the form <source>:<resource>:<action>. This page is view and search only.",
+    "privilegesSubtitle": "Permissions are prefixed by source: Kubernetes resources use k8s and console-owned settings use aerolink, in the form <source>:<resource>:<action>. This page is view and search only.",
     "privilegeId": "Privilege ID",
     "privilegeType": "Type",
     "privilegeName": "Name",
     "privilegePermission": "Permission",
     "privilegeFilterPlaceholder": "Filter (e.g. pods)",
     "privilegeAllVerbs": "All verbs",
-    "privilegeHint": "Privileges come from the Privileges tab: one operation on one resource is one privilege. The settings family (settings / settings.<section>, i.e. kite:settings*) is carried by the built-in roles (system, security and audit administrators manage it fully; the read-only administrator only has get) and is not offered here.",
+    "privilegeHint": "Privileges come from the Privileges tab: one operation on one resource is one privilege. The settings family (settings / settings.<section>, i.e. aerolink:settings*) is carried by the built-in roles (system, security and audit administrators manage it fully; the read-only administrator only has get) and is not offered here.",
     "editRoleTitle": "Edit role: {{name}}",
     "viewRoleTitle": "View role: {{name}}",
     "protectedRoleReadonlyHint": "Protected built-in role: its rules are maintained in code and can only be viewed, not modified or deleted.",

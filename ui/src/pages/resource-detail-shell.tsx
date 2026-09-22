@@ -84,7 +84,7 @@ interface ResourceDetailShellProps<T> {
   defaultTab?: string
   /**
    * 用于权限校验的资源；默认为 `resourceType`。
-   * 对 Kite 已知的资源会自动做操作门控，传一个值
+   * 对 AeroLink 已知的资源会自动做操作门控，传一个值
    * 可以为其它资源（例如 CRD）强制开启门控。
    */
   permissionResource?: string
@@ -136,7 +136,7 @@ export function ResourceDetailShell<T>({
   const listPath = getResourceListPath(resourceType)
 
   // 过去所有操作默认可见，导致只读用户看到后端本会拒绝的
-  // 按钮。现在对 Kite 已知的资源默认做门控；
+  // 按钮。现在对 AeroLink 已知的资源默认做门控；
   // 未知的 CR 保持原有行为。
   const can = useCan()
   const permissionTarget = permissionResource ?? resourceType

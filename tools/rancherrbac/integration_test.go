@@ -15,7 +15,7 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 )
 
-// 这组用例用两个桩服务把整条链路跑一遍：Rancher 侧的字段名、Kite 侧的接口路径与
+// 这组用例用两个桩服务把整条链路跑一遍：Rancher 侧的字段名、鸢联 AeroLink 侧的接口路径与
 // 请求体、鉴权头、以及「先建角色再写绑定组」的顺序。真实环境不好频繁演练迁移，
 // 这些契约就靠这里守住。
 
@@ -110,8 +110,8 @@ func stubRancher(t *testing.T, requests *[]recordedRequest) *httptest.Server {
 	return server
 }
 
-// stubKite 返回一个最小的 Kite 桩，并把收到的请求记下来供断言。
-func stubKite(t *testing.T, requests *[]recordedRequest) *httptest.Server {
+// stubAeroLink 返回一个最小的鸢联 AeroLink 桩，并把收到的请求记下来供断言。
+func stubAeroLink(t *testing.T, requests *[]recordedRequest) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body := map[string]any{}
@@ -146,7 +146,7 @@ func stubKite(t *testing.T, requests *[]recordedRequest) *httptest.Server {
 		case (r.Method == http.MethodPut || r.Method == http.MethodDelete):
 			_, _ = w.Write([]byte(`{"success": true}`))
 		default:
-			t.Errorf("Kite 桩收到未预期的请求：%s %s", r.Method, r.URL.Path)
+			t.Errorf("鸢联 AeroLink 桩收到未预期的请求：%s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
@@ -155,15 +155,15 @@ func stubKite(t *testing.T, requests *[]recordedRequest) *httptest.Server {
 }
 
 func TestMigrationEndToEndAgainstStubs(t *testing.T) {
-	var rancherRequests, kiteRequests []recordedRequest
+	var rancherRequests, aerolinkRequests []recordedRequest
 	rancherServer := stubRancher(t, &rancherRequests)
-	kiteServer := stubKite(t, &kiteRequests)
+	aerolinkServer := stubAeroLink(t, &aerolinkRequests)
 
 	opts := options{
 		rancherURL:       rancherServer.URL,
 		rancherToken:     "token-abc:def",
-		kiteURL:          kiteServer.URL,
-		kiteToken:        "kite1-secret",
+		aerolinkURL:      aerolinkServer.URL,
+		aerolinkToken:    "kite1-secret",
 		namespacesSource: sourceAuto,
 		timeout:          10 * time.Second,
 		clusterMaps:      kvFlag{values: map[string]string{}},
@@ -172,28 +172,28 @@ func TestMigrationEndToEndAgainstStubs(t *testing.T) {
 	}
 
 	rancher := newRancherClient(opts.rancherURL, opts.rancherToken, false, opts.timeout, false, "")
-	kite := newKiteClient(opts.kiteURL, opts.kiteToken, false, opts.timeout, false)
+	aerolink := newAeroLinkClient(opts.aerolinkURL, opts.aerolinkToken, false, opts.timeout, false)
 
-	kiteClusters, err := kite.clusters()
+	aerolinkClusters, err := aerolink.clusters()
 	if err != nil {
-		t.Fatalf("读取 Kite 集群失败：%v", err)
+		t.Fatalf("读取鸢联 AeroLink 集群失败：%v", err)
 	}
 	data, err := loadRancherData(rancher, opts)
 	if err != nil {
 		t.Fatalf("读取 Rancher 失败：%v", err)
 	}
-	plan := buildPlan(data, kiteClusters, opts)
+	plan := buildPlan(data, aerolinkClusters, opts)
 
 	if len(plan.Roles) != 2 || len(plan.Groups) != 1 {
 		t.Fatalf("计划 = %#v", plan)
 	}
-	if err := applyPlan(kite, plan, opts); err != nil {
+	if err := applyPlan(aerolink, plan, opts); err != nil {
 		t.Fatalf("写入失败：%v", err)
 	}
 
 	assertRancherRequestsAreReadOnly(t, rancherRequests)
-	assertKiteRoleRequests(t, kiteRequests)
-	assertKiteBindingGroupRequests(t, kiteRequests)
+	assertAeroLinkRoleRequests(t, aerolinkRequests)
+	assertAeroLinkBindingGroupRequests(t, aerolinkRequests)
 }
 
 // Rancher 侧：全程带 Bearer 认证，且只读。
@@ -212,13 +212,13 @@ func assertRancherRequestsAreReadOnly(t *testing.T, requests []recordedRequest) 
 	}
 }
 
-// Kite 侧：认证头是原样的 API key；项目角色的资源通配必须已展开。
-func assertKiteRoleRequests(t *testing.T, requests []recordedRequest) {
+// 鸢联 AeroLink 侧：认证头是原样的 API key；项目角色的资源通配必须已展开。
+func assertAeroLinkRoleRequests(t *testing.T, requests []recordedRequest) {
 	t.Helper()
 	byName := map[string]recordedRequest{}
 	for _, request := range requests {
 		if request.auth != "kite1-secret" {
-			t.Fatalf("Kite 认证头 = %q", request.auth)
+			t.Fatalf("鸢联 AeroLink 认证头 = %q", request.auth)
 		}
 		if request.method == http.MethodPost && request.path == "/api/v1/admin/roles/" {
 			name, _ := request.body["name"].(string)
@@ -243,8 +243,8 @@ func assertKiteRoleRequests(t *testing.T, requests []recordedRequest) {
 	}
 }
 
-// Kite 侧：命名空间与成员按计划写入，且用创建角色返回的 ID 建立关联。
-func assertKiteBindingGroupRequests(t *testing.T, requests []recordedRequest) {
+// 鸢联 AeroLink 侧：命名空间与成员按计划写入，且用创建角色返回的 ID 建立关联。
+func assertAeroLinkBindingGroupRequests(t *testing.T, requests []recordedRequest) {
 	t.Helper()
 	var namespaceRequest, memberRequest *recordedRequest
 	for i := range requests {
@@ -308,10 +308,10 @@ func TestApplyPlanIsIdempotent(t *testing.T) {
 		Grants []common.ResourceGrant `json:"grants"`
 	}
 	type groupState struct {
-		ID         uint               `json:"id"`
-		Cluster    string             `json:"cluster"`
-		Name       string             `json:"name"`
-		Namespaces []kiteNamespaceRef `json:"namespaces"`
+		ID         uint                   `json:"id"`
+		Cluster    string                 `json:"cluster"`
+		Name       string                 `json:"name"`
+		Namespaces []aerolinkNamespaceRef `json:"namespaces"`
 	}
 
 	var requests []recordedRequest
@@ -358,7 +358,7 @@ func TestApplyPlanIsIdempotent(t *testing.T) {
 			group := groups[id]
 			group.Namespaces = nil
 			for _, raw := range body["namespaces"].([]any) {
-				group.Namespaces = append(group.Namespaces, kiteNamespaceRef{Namespace: raw.(string)})
+				group.Namespaces = append(group.Namespaces, aerolinkNamespaceRef{Namespace: raw.(string)})
 			}
 			writeJSON(t, w, map[string]any{"success": true})
 		case strings.HasSuffix(r.URL.Path, "/members") && r.Method == http.MethodGet:
@@ -394,18 +394,18 @@ func TestApplyPlanIsIdempotent(t *testing.T) {
 			Grants: []common.ResourceGrant{{Resource: "pods", Verbs: []string{"get", "log"}}},
 		}},
 		Groups: []groupPlan{{
-			KiteCluster: "prod",
-			Name:        "默认",
-			Namespaces:  []string{"default", "dev"},
+			AeroLinkCluster: "prod",
+			Name:            "默认",
+			Namespaces:      []string{"default", "dev"},
 			Members: []memberPlan{
 				{SubjectType: "user", Subject: "alice", Roles: []string{"project-owner"}},
 				{SubjectType: "group", Subject: "devs", Roles: []string{"project-owner"}},
 			},
 		}},
 	}
-	kite := newKiteClient(server.URL, "kite1-secret", false, 10*time.Second, false)
+	aerolink := newAeroLinkClient(server.URL, "kite1-secret", false, 10*time.Second, false)
 
-	if err := applyPlan(kite, plan, options{}); err != nil {
+	if err := applyPlan(aerolink, plan, options{}); err != nil {
 		t.Fatalf("第一次写入失败：%v", err)
 	}
 	writes := 0
@@ -419,7 +419,7 @@ func TestApplyPlanIsIdempotent(t *testing.T) {
 	}
 
 	requests = nil
-	if err := applyPlan(kite, plan, options{}); err != nil {
+	if err := applyPlan(aerolink, plan, options{}); err != nil {
 		t.Fatalf("第二次写入失败：%v", err)
 	}
 	for _, request := range requests {
@@ -500,8 +500,8 @@ func TestApplyPlanSkipsUnchangedRole(t *testing.T) {
 		Description: "由授权迁移导入：角色模板 project-owner（project 上下文）",
 		Grants:      []common.ResourceGrant{{Resource: "pods", Verbs: []string{"get", "log"}}},
 	}}}
-	kite := newKiteClient(server.URL, "kite1-secret", false, 10*time.Second, false)
-	if err := applyPlan(kite, plan, options{}); err != nil {
+	aerolink := newAeroLinkClient(server.URL, "kite1-secret", false, 10*time.Second, false)
+	if err := applyPlan(aerolink, plan, options{}); err != nil {
 		t.Fatalf("写入失败：%v", err)
 	}
 	for _, request := range requests {
@@ -536,8 +536,8 @@ func TestApplyPlanDoesNotOverwriteForeignRole(t *testing.T) {
 		Description: "由授权迁移导入：角色模板 project-owner（project 上下文）",
 		Grants:      []common.ResourceGrant{{Resource: "pods", Verbs: []string{"get", "delete"}}},
 	}}}
-	kite := newKiteClient(server.URL, "kite1-secret", false, 10*time.Second, false)
-	if err := applyPlan(kite, plan, options{}); err != nil {
+	aerolink := newAeroLinkClient(server.URL, "kite1-secret", false, 10*time.Second, false)
+	if err := applyPlan(aerolink, plan, options{}); err != nil {
 		t.Fatalf("写入失败：%v", err)
 	}
 	for _, request := range requests {
@@ -547,15 +547,15 @@ func TestApplyPlanDoesNotOverwriteForeignRole(t *testing.T) {
 	}
 }
 
-// 未映射的集群不该产生任何 Kite 写入，也不该访问它的授权数据。
+// 未映射的集群不该产生任何鸢联 AeroLink 写入，也不该访问它的授权数据。
 func TestApplyPlanNoopOnEmptyPlan(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("空计划不该发起写入：%s %s", r.Method, r.URL.Path)
 	}))
 	t.Cleanup(server.Close)
 
-	kite := newKiteClient(server.URL, "kite1-secret", false, 10*time.Second, false)
-	if err := applyPlan(kite, &migrationPlan{}, options{}); err != nil {
+	aerolink := newAeroLinkClient(server.URL, "kite1-secret", false, 10*time.Second, false)
+	if err := applyPlan(aerolink, &migrationPlan{}, options{}); err != nil {
 		t.Fatalf("空计划应当直接返回：%v", err)
 	}
 }
@@ -593,22 +593,22 @@ func TestCleanupPlanSkipsForeignObjects(t *testing.T) {
 			{Name: "cluster-member", Description: "由授权迁移导入：角色模板 cluster-member（cluster 上下文）"},
 		},
 		Groups: []groupPlan{{
-			KiteCluster: "prod",
-			Name:        "默认",
-			Description: "由授权迁移导入：集群 c-1 / 项目 c-1:p-1",
+			AeroLinkCluster: "prod",
+			Name:            "默认",
+			Description:     "由授权迁移导入：集群 c-1 / 项目 c-1:p-1",
 		}},
 	}
 
-	kite := newKiteClient(server.URL, "kite1-secret", false, 10*time.Second, false)
+	aerolink := newAeroLinkClient(server.URL, "kite1-secret", false, 10*time.Second, false)
 	// 没有 -yes 时必须拒绘，一笔不写。
-	if err := cleanupPlan(kite, plan, options{}); err == nil {
+	if err := cleanupPlan(aerolink, plan, options{}); err == nil {
 		t.Fatal("缺少 -yes 时应当拒绝执行")
 	}
 	if len(deleted) != 0 {
 		t.Fatalf("拒绝执行时不该发删除请求：%v", deleted)
 	}
 
-	if err := cleanupPlan(kite, plan, options{yes: true}); err != nil {
+	if err := cleanupPlan(aerolink, plan, options{yes: true}); err != nil {
 		t.Fatalf("清理失败：%v", err)
 	}
 	removed := map[string]bool{}
@@ -748,15 +748,15 @@ func TestCollectionFileName(t *testing.T) {
 	}
 }
 
-func TestKiteAuthErrorExplainsReason(t *testing.T) {
+func TestAeroLinkAuthErrorExplainsReason(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error": "Invalid API key"}`))
 	}))
 	t.Cleanup(server.Close)
 
-	kite := newKiteClient(server.URL, "kite1-wrong", false, 10*time.Second, false)
-	_, err := kite.clusters()
+	aerolink := newAeroLinkClient(server.URL, "kite1-wrong", false, 10*time.Second, false)
+	_, err := aerolink.clusters()
 	if err == nil {
 		t.Fatal("应当返回鉴权错误")
 	}

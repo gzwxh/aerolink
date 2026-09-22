@@ -45,7 +45,7 @@ This document describes all available configuration options for the AeroLink Hel
 | `db.sqlite.persistence.hostPath.path`     | hostPath path                                             | `/path/to/host/dir` |
 | `db.sqlite.persistence.hostPath.type`     | hostPath type                                             | `DirectoryOrCreate` |
 | `db.sqlite.persistence.mountPath`         | Mount path inside container                               | `/data`             |
-| `db.sqlite.persistence.filename`          | SQLite filename inside mountPath                          | `kite.db`           |
+| `db.sqlite.persistence.filename`          | SQLite filename inside mountPath                          | `aerolink.db`       |
 
 ## Environment Variables
 
@@ -137,7 +137,7 @@ rbac:
 ```yaml
 ingress:
   hosts:
-    - host: kite.zzde.me
+    - host: aerolink.gogdev.cn
       paths:
         - path: /
           pathType: ImplementationSpecific

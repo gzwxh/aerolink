@@ -206,7 +206,7 @@ const liveStorageClass = (): StorageClass =>
       name: 'fast-ssd',
       uid: 'uid-1',
       labels: { keep: 'me' },
-      annotations: { 'kite.internal/note': 'keep me' },
+      annotations: { 'aerolink.internal/note': 'keep me' },
     },
     provisioner: 'rancher.io/local-path',
     reclaimPolicy: 'Delete',
@@ -283,7 +283,7 @@ describe('StorageClass 编辑（只放行可变字段）', () => {
     expect(updated.allowedTopologies).toBeUndefined()
     // 元数据（标签、我们自己的注解）不能被清掉。
     expect(updated.metadata?.labels).toEqual({ keep: 'me' })
-    expect(updated.metadata?.annotations?.['kite.internal/note']).toBe(
+    expect(updated.metadata?.annotations?.['aerolink.internal/note']).toBe(
       'keep me'
     )
   })

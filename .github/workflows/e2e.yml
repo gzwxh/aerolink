@@ -48,8 +48,8 @@ jobs:
     timeout-minutes: 30
 
     env:
-      E2E_KIND_NAME: kite-e2e
-      E2E_KUBECONFIG: ${{ github.workspace }}/kite-e2e.kubeconfig
+      E2E_KIND_NAME: aerolink-e2e
+      E2E_KUBECONFIG: ${{ github.workspace }}/aerolink-e2e.kubeconfig
       KIND_LOGS_DIR: ${{ github.workspace }}/kind-logs
       E2E_PORT: "38080"
       AEROLINK_E2E_LDAP_URL: ldap://127.0.0.1:3389
@@ -117,8 +117,8 @@ jobs:
       - name: Collect external auth logs
         if: always()
         run: |
-          docker logs kite-e2e-ldap > "${GITHUB_WORKSPACE}/kite-e2e-ldap.log" 2>&1 || true
-          docker logs kite-e2e-dex > "${GITHUB_WORKSPACE}/kite-e2e-dex.log" 2>&1 || true
+          docker logs aerolink-e2e-ldap > "${GITHUB_WORKSPACE}/aerolink-e2e-ldap.log" 2>&1 || true
+          docker logs aerolink-e2e-dex > "${GITHUB_WORKSPACE}/aerolink-e2e-dex.log" 2>&1 || true
 
       - name: Upload E2E artifacts
         if: always()
@@ -129,5 +129,5 @@ jobs:
             e2e/playwright-report
             e2e/test-results
             ${{ env.KIND_LOGS_DIR }}
-            ${{ github.workspace }}/kite-e2e-ldap.log
-            ${{ github.workspace }}/kite-e2e-dex.log
+            ${{ github.workspace }}/aerolink-e2e-ldap.log
+            ${{ github.workspace }}/aerolink-e2e-dex.log

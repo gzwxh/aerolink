@@ -9,15 +9,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 )
 
-const kiteBasePlaceholder = "__AEROLINK_BASE__"
+const assetBasePlaceholder = "__AEROLINK_BASE__"
 
-func InjectKiteBase(htmlContent string, base string) string {
+func InjectAssetBase(htmlContent string, base string) string {
 	assetBase := base
 	if assetBase == "/" {
 		assetBase = ""
 	}
 
-	htmlContent = strings.ReplaceAll(htmlContent, kiteBasePlaceholder, html.EscapeString(assetBase))
+	htmlContent = strings.ReplaceAll(htmlContent, assetBasePlaceholder, html.EscapeString(assetBase))
 
 	// 运行时 base 必须在 SPA 的打包产物执行之前送达。它不能是
 	// 内联 <script>：服务端下发的 Content-Security-Policy 是

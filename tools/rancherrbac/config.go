@@ -37,7 +37,7 @@ var autoConfigNames = []string{configFileName + ".yaml", configFileName + ".yml"
 // 「落库」写进去，之后每次只想看看计划的执行都会变成真写；清理那对更是危险。
 type fileConfig struct {
 	Rancher fileEndpoint `yaml:"rancher" json:"rancher"`
-	// AeroLink 是新的键名；Kite 是退役的旧键名，只为了不改老配置而保留，
+	// AeroLink 是新的键名；`kite` 是退役的旧键名，只为了不改老配置而保留，
 	// 两者同时给出时以 AeroLink 为准（见 applyConfig）。
 	AeroLink fileEndpoint `yaml:"aerolink" json:"aerolink"`
 	Kite     fileEndpoint `yaml:"kite" json:"kite"`
@@ -245,12 +245,12 @@ func applyConfig(opts *options, cfg fileConfig) {
 	// kite 是退役的旧键名，aerolink 是新名；按顺序覆盖，两者都写时以 aerolink 为准。
 	for _, endpoint := range []fileEndpoint{cfg.Kite, cfg.AeroLink} {
 		if endpoint.URL != "" {
-			opts.kiteURL = endpoint.URL
+			opts.aerolinkURL = endpoint.URL
 		}
 		if endpoint.Token != "" {
-			opts.kiteToken = endpoint.Token
+			opts.aerolinkToken = endpoint.Token
 		}
-		opts.kiteInsecure = opts.kiteInsecure || endpoint.Insecure
+		opts.aerolinkInsecure = opts.aerolinkInsecure || endpoint.Insecure
 	}
 
 	if cfg.NamespacesSource != "" {
@@ -293,10 +293,10 @@ func applyEnv(opts *options) {
 		{"RANCHER_TOKEN", &opts.rancherToken},
 		// KITE_URL / KITE_TOKEN 是退役的旧名，保留兼容；列表按顺序覆盖，新名排在后面，
 		// 两个都设置时以新名为准。
-		{"KITE_URL", &opts.kiteURL},
-		{"AEROLINK_URL", &opts.kiteURL},
-		{"KITE_TOKEN", &opts.kiteToken},
-		{"AEROLINK_TOKEN", &opts.kiteToken},
+		{"KITE_URL", &opts.aerolinkURL},
+		{"AEROLINK_URL", &opts.aerolinkURL},
+		{"KITE_TOKEN", &opts.aerolinkToken},
+		{"AEROLINK_TOKEN", &opts.aerolinkToken},
 	} {
 		if value := envOr(item.key); value != "" {
 			*item.target = value
@@ -314,8 +314,8 @@ func applyCLI(opts *options, cli options, set map[string]bool) {
 	}{
 		{"rancher-url", cli.rancherURL, &opts.rancherURL},
 		{"rancher-token", cli.rancherToken, &opts.rancherToken},
-		{"aerolink-url", cli.kiteURL, &opts.kiteURL},
-		{"aerolink-token", cli.kiteToken, &opts.kiteToken},
+		{"aerolink-url", cli.aerolinkURL, &opts.aerolinkURL},
+		{"aerolink-token", cli.aerolinkToken, &opts.aerolinkToken},
 		{"plan-out", cli.planOut, &opts.planOut},
 		{"dump-dir", cli.dumpDir, &opts.dumpDir},
 		{"from-dir", cli.fromDir, &opts.fromDir},
@@ -328,7 +328,7 @@ func applyCLI(opts *options, cli options, set map[string]bool) {
 	}
 
 	opts.rancherInsecure = opts.rancherInsecure || (set["rancher-insecure"] && cli.rancherInsecure)
-	opts.kiteInsecure = opts.kiteInsecure || (set["aerolink-insecure"] && cli.kiteInsecure)
+	opts.aerolinkInsecure = opts.aerolinkInsecure || (set["aerolink-insecure"] && cli.aerolinkInsecure)
 	opts.skipClusterGrants = opts.skipClusterGrants || (set["skip-cluster-grants"] && cli.skipClusterGrants)
 	opts.replaceMembers = opts.replaceMembers || (set["replace-members"] && cli.replaceMembers)
 	opts.replaceNamespaces = opts.replaceNamespaces || (set["replace-namespaces"] && cli.replaceNamespaces)
@@ -380,7 +380,7 @@ func mergeMap(target, overlay map[string]string) {
 	}
 }
 
-// warnIfConfigIsReadableByOthers 提醒配置文件的权限：里面有 Rancher 与 Kite 的密钥。
+// warnIfConfigIsReadableByOthers 提醒配置文件的权限：里面有 Rancher 与鸢联 AeroLink 的密钥。
 func warnIfConfigIsReadableByOthers(path string) {
 	if runtime.GOOS == "windows" {
 		return
@@ -437,8 +437,8 @@ rancher:
 aerolink:
   # AeroLink 控制台地址。
   url: https://aerolink.example.com
-  # AeroLink 控制台 → 账号设置 → API Keys 新建，填完整的 kite1-xxxxxxxx。
-  token: kite1-xxxxxxxx
+  # AeroLink 控制台 → 账号设置 → API Keys 新建，填完整的 aerolink1-xxxxxxxx。
+  token: aerolink1-xxxxxxxx
   insecure: false
 
 # Rancher 集群 ID → AeroLink 集群名。同名时工具会自动匹配；匹配不上、或有多个同名集群时
@@ -555,11 +555,11 @@ func parseFlags(args []string) (options, map[string]bool, error) {
 	fs.StringVar(&cli.rancherToken, "rancher-token", "",
 		"Rancher API 密钥，形如 token-xxxxx:yyyyy（默认取 $RANCHER_TOKEN）")
 	fs.BoolVar(&cli.rancherInsecure, "rancher-insecure", false, "跳过 Rancher 的 TLS 证书校验")
-	fs.StringVar(&cli.kiteURL, "aerolink-url", "",
+	fs.StringVar(&cli.aerolinkURL, "aerolink-url", "",
 		"AeroLink 地址，例如 https://aerolink.example.com（默认取 $AEROLINK_URL；旧名 -kite-url / $KITE_URL 仍可用）")
-	fs.StringVar(&cli.kiteToken, "aerolink-token", "",
-		"AeroLink API key，即控制台里的 kite<id>-<secret>（默认取 $AEROLINK_TOKEN；旧名 -kite-token / $KITE_TOKEN 仍可用）")
-	fs.BoolVar(&cli.kiteInsecure, "aerolink-insecure", false, "跳过 AeroLink 的 TLS 证书校验（旧名 -kite-insecure 仍可用）")
+	fs.StringVar(&cli.aerolinkToken, "aerolink-token", "",
+		"AeroLink API key，即控制台里的 aerolink<id>-<secret>（默认取 $AEROLINK_TOKEN；旧名 -kite-token / $KITE_TOKEN 与改名前的 kite<id>-<secret> 仍可用）")
+	fs.BoolVar(&cli.aerolinkInsecure, "aerolink-insecure", false, "跳过 AeroLink 的 TLS 证书校验（旧名 -kite-insecure 仍可用）")
 
 	fs.BoolVar(&cli.apply, "apply", false, "真正写入 AeroLink；不加则只打印计划（dry-run）")
 	fs.StringVar(&cli.planOut, "plan-out", "", "把计划写成 JSON 文件，便于评审")

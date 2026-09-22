@@ -98,7 +98,7 @@ func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 
 func (h *NodeTerminalHandler) createNodeAgent(ctx context.Context, cs *cluster.ClientSet, nodeName, image string) (string, error) {
 	podName := utils.GenerateNodeAgentName(nodeName)
-	// 定义 kite node agent 的 pod spec
+	// 定义 aerolink node agent 的 pod spec
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -156,7 +156,7 @@ func (h *NodeTerminalHandler) createNodeAgent(ctx context.Context, cs *cluster.C
 	if err := cs.K8sClient.Get(ctx, namespacedName, object); err == nil {
 		if utils.IsPodErrorOrSuccess(object) {
 			if err := cs.K8sClient.Delete(ctx, object); err != nil {
-				return "", fmt.Errorf("failed to delete existing kite node agent pod: %w", err)
+				return "", fmt.Errorf("failed to delete existing aerolink node agent pod: %w", err)
 			}
 			// 删除是异步的；紧随其后的 Create 会失败
 			// 并报 "object is being deleted"，直到 API Server 完成删除。
@@ -171,7 +171,7 @@ func (h *NodeTerminalHandler) createNodeAgent(ctx context.Context, cs *cluster.C
 				return false, getErr
 			})
 			if err != nil {
-				return "", fmt.Errorf("timed out waiting for the old kite node agent pod %s to be deleted: %w", podName, err)
+				return "", fmt.Errorf("timed out waiting for the old aerolink node agent pod %s to be deleted: %w", podName, err)
 			}
 		} else {
 			return podName, nil
@@ -181,7 +181,7 @@ func (h *NodeTerminalHandler) createNodeAgent(ctx context.Context, cs *cluster.C
 	// 创建 pod
 	err := cs.K8sClient.Create(ctx, pod)
 	if err != nil {
-		return "", fmt.Errorf("failed to create kite node agent pod: %w", err)
+		return "", fmt.Errorf("failed to create aerolink node agent pod: %w", err)
 	}
 
 	return podName, nil

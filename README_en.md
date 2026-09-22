@@ -105,7 +105,7 @@ Local smoke test (**not for production** — security parameters omitted):
 ```bash
 docker run -d --name aerolink -p 8080:8080 \
   -v aerolink-data:/app/data \
-  -e DB_DSN=/app/data/kite.db \
+  -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
   swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
@@ -117,7 +117,7 @@ Production (generate secrets with `openssl rand -base64 32` and store them safel
 docker run -d --name aerolink --restart unless-stopped \
   -p 8080:8080 \
   -v /data/aerolink:/app/data \
-  -e DB_DSN=/app/data/kite.db \
+  -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://aerolink.example.com \
@@ -151,7 +151,7 @@ The first visit walks through creating the admin account; configure the remainin
 | `AEROLINK_DB_MAX_OPEN_CONNS` | `100` | max open connections (raise for busy MySQL/PostgreSQL instances; invalid values are ignored with a warning) |
 | `AEROLINK_DB_MAX_IDLE_CONNS` | `10` | idle connections; `0` keeps none |
 | `AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES` | `10` | connection max lifetime in minutes |
-| `AEROLINK_BASE` | empty | sub-path deployment (e.g. `/kite`) |
+| `AEROLINK_BASE` | empty | sub-path deployment (e.g. `/aerolink`) |
 | `NAMESPACE` | empty | namespace for AeroLink's own agent/terminal pods |
 | `DISABLE_GZIP` | `false` | `true` disables response compression (proxy troubleshooting) |
 | `KUBECONFIG` / `AEROLINK_CONFIG_FILE` | empty | external kubeconfig / config file path |
@@ -168,7 +168,7 @@ SQLite (the default) is fine for a single instance; **multi-replica deployments 
 
 ```bash
 # SQLite (default)
--e DB_TYPE=sqlite -e DB_DSN=/app/data/kite.db
+-e DB_TYPE=sqlite -e DB_DSN=/app/data/aerolink.db
 
 # MySQL / MariaDB (charset=utf8mb4 is required for non-ASCII text)
 -e DB_TYPE=mysql \

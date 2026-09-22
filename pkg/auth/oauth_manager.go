@@ -90,7 +90,7 @@ func (om *OAuthManager) GenerateJWT(user *model.User, refreshToken string) (stri
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-			Issuer:    "Kite",
+			Issuer:    "AeroLink",
 		},
 	}
 

@@ -3,7 +3,7 @@
  * 名称、来源、范围徽标完全一致。
  *
  * 一条权限 = 一个资源上的一个操作，权限串是 <来源>:<资源>:<操作>（例如 k8s:pods:get、
- * kite:settings:update），ALL 表示该资源上的全部操作。来源在后端也是分开判定的：设置族
+ * aerolink:settings:update），ALL 表示该资源上的全部操作。来源在后端也是分开判定的：设置族
  * （settings / settings.<章节>）必须显式授权，通配 * 不覆盖它（见 pkg/rbac/rbac.go 的
  * roleAllows 与 settingsRoleAllows）。
  */
@@ -22,8 +22,8 @@ import {
   resourceCatalog,
 } from '@/lib/resource-catalog'
 
-/** 权限来源：Kubernetes API 资源用 k8s，控制台自身（设置族）用 kite。 */
-export type PermissionSource = 'k8s' | 'kite'
+/** 权限来源：Kubernetes API 资源用 k8s，控制台自身（设置族）用 aerolink。 */
+export type PermissionSource = 'k8s' | 'aerolink'
 
 /** 资源范围：决定条目行尾的徽标。 */
 export type PermissionScope = 'wildcard' | 'settings' | 'cluster' | 'namespaced'
@@ -71,9 +71,9 @@ export function permissionScopeOf(resource: string): PermissionScope {
   return isClusterScopedResource(resource) ? 'cluster' : 'namespaced'
 }
 
-/** 资源归属：设置族归控制台自身（kite），其余（含通配 *）都是 Kubernetes API 资源。 */
+/** 资源归属：设置族归控制台自身（aerolink），其余（含通配 *）都是 Kubernetes API 资源。 */
 export function permissionSourceOf(resource: string): PermissionSource {
-  return isSettingsResource(resource) ? 'kite' : 'k8s'
+  return isSettingsResource(resource) ? 'aerolink' : 'k8s'
 }
 
 /** 资源的展示名：设置族用章节名，其余用资源目录里的标题。 */

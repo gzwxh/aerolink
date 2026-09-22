@@ -287,14 +287,14 @@ func TestArchiveFileNameIncludesInstanceToken(t *testing.T) {
 
 // 实例标识由「主机名 + 进程号」算出：同一实例必须稳定，不同进程/不同主机必须不同。
 func TestArchiveInstanceTokenDistinguishesProcesses(t *testing.T) {
-	same := archiveInstanceTokenFor("kite-0", 1234)
-	if same != archiveInstanceTokenFor("kite-0", 1234) {
+	same := archiveInstanceTokenFor("aerolink-0", 1234)
+	if same != archiveInstanceTokenFor("aerolink-0", 1234) {
 		t.Error("同一实例的标识必须稳定")
 	}
-	if same == archiveInstanceTokenFor("kite-0", 5678) {
+	if same == archiveInstanceTokenFor("aerolink-0", 5678) {
 		t.Error("同一主机上的不同进程必须有不同标识")
 	}
-	if same == archiveInstanceTokenFor("kite-1", 1234) {
+	if same == archiveInstanceTokenFor("aerolink-1", 1234) {
 		t.Error("不同主机上的同号进程必须有不同标识")
 	}
 	if len(same) != 8 {

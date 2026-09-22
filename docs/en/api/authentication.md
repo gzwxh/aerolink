@@ -122,7 +122,7 @@ aerolink<ID>-<SECRET>
 Use the full value directly in the `Authorization` header. Do not prepend `Bearer`.
 
 ```http
-Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ## Where to configure it
@@ -146,7 +146,7 @@ Example:
 
 ```bash
 curl \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   https://aerolink.example.com/api/v1/pods/default
 ```

@@ -16,8 +16,8 @@ import { e2eContextName } from '../env'
 //   2. kube/proxy.go 把解码后的路径交给 url.JoinPath，后者按字面
 //      清理 ..，使攻击者得以逃出 /proxy/ 片段。
 //   3. 清理后的 URL（例如 /api/v1/namespaces/kube-system/secrets）会带上
-//      Kite 自己的 SA 凭据发往 Kubernetes API Server
-//      （charts/kite/values.yaml 授予 resources:["*"]、verbs:["*"]）。
+//      鸢联 AeroLink 自己的 SA 凭据发往 Kubernetes API Server
+//      （charts/aerolink/values.yaml 授予 resources:["*"]、verbs:["*"]）。
 //   4. handler.go 只校验来源命名空间上的 pods/services:get，
 //      因此在 "default" 中有 pods:get 的只读用户能读取 kube-system 的 secret。
 //
@@ -149,7 +149,7 @@ test('proxy path escape via encoded .. cannot bypass RBAC to read secrets', asyn
       data: {
         apiVersion: 'v1',
         kind: 'Pod',
-        metadata: { name: podName, labels: { 'e2e.kite.io/test': suffix } },
+        metadata: { name: podName, labels: { 'e2e.aerolink.io/test': suffix } },
         spec: {
           containers: [
             { name: 'pause', image: 'registry.k8s.io/pause:3.10.1' },
@@ -219,14 +219,14 @@ test('proxy path escape via encoded .. cannot bypass RBAC to read secrets', asyn
 
     // --- 利用：用编码后的 .. 逃出 /proxy/ → /api/v1/namespaces/kube-system/secrets
     //
-    // 发给 Kite 的 URL：
+    // 发给鸢联 AeroLink 的 URL：
     //   /api/v1/_clusters/<cluster>/namespaces/default/pods/<pod>/proxy/%2e%2e/%2e%2e/%2e%2e/%2e%2e/kube-system/secrets
     //
     // Gin 会把解码后的 .. 片段透传给 kube/proxy.go，后者此前
     // 调用 url.JoinPath(host, "api/v1/namespaces", "default", "pods", <pod>,
     // "proxy", "/../../../../kube-system/secrets") 并把它清理为
     //   <k8s-api-host>/api/v1/namespaces/kube-system/secrets
-    // 然后以 Kite 的 SA（默认 chart 中是 cluster-admin）发送。
+    // 然后以鸢联 AeroLink 的 SA（默认 chart 中是 cluster-admin）发送。
     const dotdot = '%2e%2e'
     const escapeDepth = 4 // proxy -> pods -> default -> namespaces/
     const exploitPath = `${clusterPath}/namespaces/default/pods/${encodeURIComponent(
@@ -329,7 +329,7 @@ test('proxy path escape via encoded .. cannot bypass RBAC to read secrets', asyn
 
     // --- 健全性检查：合法的（不逃逸的）proxy 路径仍然可用 ------
     // 该 pod 运行 pause，因此 Kubernetes 可能返回上游的 400/404/503。
-    // 验证请求没有被 Kite 的 proxy 路径校验或
+    // 验证请求没有被鸢联 AeroLink 的 proxy 路径校验或
     // RBAC 在到达 Kubernetes 之前拒绝。
     const legitimatePath = `${clusterPath}/namespaces/default/pods/${encodeURIComponent(
       podName

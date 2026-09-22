@@ -14,7 +14,7 @@ func TestLoadEnvs(t *testing.T) {
 		KubectlTerminalImage string
 		DBDSN                string
 		DBType               string
-		KiteEncryptKey       string
+		EncryptKey           string
 		AnonymousUserEnabled bool
 		Host                 string
 		DisableGZIP          bool
@@ -29,7 +29,7 @@ func TestLoadEnvs(t *testing.T) {
 		KubectlTerminalImage: KubectlTerminalImage,
 		DBDSN:                DBDSN,
 		DBType:               DBType,
-		KiteEncryptKey:       KiteEncryptKey,
+		EncryptKey:           EncryptKey,
 		AnonymousUserEnabled: AnonymousUserEnabled,
 		Host:                 Host,
 		DisableGZIP:          DisableGZIP,
@@ -45,7 +45,7 @@ func TestLoadEnvs(t *testing.T) {
 		KubectlTerminalImage = old.KubectlTerminalImage
 		DBDSN = old.DBDSN
 		DBType = old.DBType
-		KiteEncryptKey = old.KiteEncryptKey
+		EncryptKey = old.EncryptKey
 		AnonymousUserEnabled = old.AnonymousUserEnabled
 		Host = old.Host
 		DisableGZIP = old.DisableGZIP
@@ -69,7 +69,7 @@ func TestLoadEnvs(t *testing.T) {
 	t.Setenv("ANONYMOUS_USER_ENABLED", "true")
 	t.Setenv("HOST", "example.com")
 	t.Setenv("DISABLE_GZIP", "false")
-	t.Setenv("AEROLINK_BASE", "kite/")
+	t.Setenv("AEROLINK_BASE", "aerolink/")
 	t.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173, https://example.com ,,")
 	t.Setenv("TRUSTED_PROXIES", "10.42.0.0/16, 192.0.2.10 ,, ")
 
@@ -96,8 +96,8 @@ func TestLoadEnvs(t *testing.T) {
 	if DBType != "mysql" {
 		t.Fatalf("DBType = %q, want %q", DBType, "mysql")
 	}
-	if KiteEncryptKey != "test-encrypt-key" {
-		t.Fatalf("KiteEncryptKey = %q, want %q", KiteEncryptKey, "test-encrypt-key")
+	if EncryptKey != "test-encrypt-key" {
+		t.Fatalf("EncryptKey = %q, want %q", EncryptKey, "test-encrypt-key")
 	}
 	if !AnonymousUserEnabled {
 		t.Fatalf("AnonymousUserEnabled = %v, want true", AnonymousUserEnabled)
@@ -108,8 +108,8 @@ func TestLoadEnvs(t *testing.T) {
 	if DisableGZIP {
 		t.Fatalf("DisableGZIP = %v, want false", DisableGZIP)
 	}
-	if Base != "/kite" {
-		t.Fatalf("Base = %q, want %q", Base, "/kite")
+	if Base != "/aerolink" {
+		t.Fatalf("Base = %q, want %q", Base, "/aerolink")
 	}
 
 	wantOrigins := []string{"http://localhost:5173", "https://example.com"}
@@ -125,26 +125,26 @@ func TestLoadEnvs(t *testing.T) {
 
 func TestLoadEnvs_BaseAlreadyHasLeadingSlash(t *testing.T) {
 	old := struct {
-		KiteEncryptKey     string
+		EncryptKey         string
 		Base               string
 		CORSAllowedOrigins []string
 	}{
-		KiteEncryptKey:     KiteEncryptKey,
+		EncryptKey:         EncryptKey,
 		Base:               Base,
 		CORSAllowedOrigins: append([]string(nil), CORSAllowedOrigins...),
 	}
 	defer func() {
-		KiteEncryptKey = old.KiteEncryptKey
+		EncryptKey = old.EncryptKey
 		Base = old.Base
 		CORSAllowedOrigins = append([]string(nil), old.CORSAllowedOrigins...)
 	}()
 
 	t.Setenv("AEROLINK_ENCRYPT_KEY", "test-encrypt-key")
-	t.Setenv("AEROLINK_BASE", "/kite/")
+	t.Setenv("AEROLINK_BASE", "/aerolink/")
 
 	LoadEnvs()
 
-	if Base != "/kite" {
-		t.Fatalf("Base = %q, want %q", Base, "/kite")
+	if Base != "/aerolink" {
+		t.Fatalf("Base = %q, want %q", Base, "/aerolink")
 	}
 }

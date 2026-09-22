@@ -4,7 +4,7 @@ import { SITE_NAME_MAX_LENGTH, splitSiteName } from './site-name'
 
 describe('splitSiteName', () => {
   it('短名称原样返回一行', () => {
-    expect(splitSiteName('Kite')).toEqual(['Kite'])
+    expect(splitSiteName('AeroLink')).toEqual(['AeroLink'])
     expect(splitSiteName('运维平台')).toEqual(['运维平台'])
   })
 

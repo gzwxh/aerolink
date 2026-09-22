@@ -34,7 +34,7 @@ const DEFAULT_FORM: AuditSettingData = {
     mode: 'syslog',
     network: 'udp',
     address: '',
-    tag: 'kite',
+    tag: 'aerolink',
     facility: 13,
     format: 'text',
     insecureSkipVerify: false,
@@ -793,7 +793,7 @@ export function AuditSetting() {
               >
                 <Input
                   value={formData.syslog.tag}
-                  placeholder="kite"
+                  placeholder="aerolink"
                   disabled={readOnly}
                   onChange={(event) =>
                     patchForward({ tag: event.target.value })

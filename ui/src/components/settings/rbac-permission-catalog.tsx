@@ -127,7 +127,7 @@ export function RBACPermissionCatalog() {
             <p className="mt-1 text-sm text-muted-foreground">
               {t(
                 'rbac.privilegesSubtitle',
-                '权限按来源加前缀：Kubernetes 资源用 k8s，控制台自身（设置族）用 kite，格式为 <来源>:<资源>:<操作>。本页仅支持查看与搜索。'
+                '权限按来源加前缀：Kubernetes 资源用 k8s，控制台自身（设置族）用 aerolink，格式为 <来源>:<资源>:<操作>。本页仅支持查看与搜索。'
               )}
             </p>
           </div>

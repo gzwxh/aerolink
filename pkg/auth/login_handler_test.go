@@ -57,7 +57,7 @@ func TestSetCookieSecure(t *testing.T) {
 		common.Host = "https://aerolink.example.com"
 		rec := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(rec)
-		c.Request = httptest.NewRequest(http.MethodGet, "http://kite.local", nil)
+		c.Request = httptest.NewRequest(http.MethodGet, "http://aerolink.local", nil)
 
 		setCookieSecure(c, "auth_token", "value", 600)
 
@@ -80,7 +80,7 @@ func TestSetCookieSecure(t *testing.T) {
 		common.Host = ""
 		rec := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(rec)
-		req := httptest.NewRequest(http.MethodGet, "http://kite.local", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://aerolink.local", nil)
 		req.Header.Set("X-Forwarded-Proto", "https")
 		c.Request = req
 
@@ -95,7 +95,7 @@ func TestSetCookieSecure(t *testing.T) {
 		common.Host = ""
 		rec := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(rec)
-		c.Request = httptest.NewRequest(http.MethodGet, "http://kite.local", nil)
+		c.Request = httptest.NewRequest(http.MethodGet, "http://aerolink.local", nil)
 
 		setCookieSecure(c, "auth_token", "value", 600)
 

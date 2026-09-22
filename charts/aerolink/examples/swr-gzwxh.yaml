@@ -1,7 +1,7 @@
-# 使用「个人仓库」中的自建镜像部署 Kite：
+# 使用「个人仓库」中的自建镜像部署鸢联 AeroLink：
 #
-#   helm upgrade --install kite charts/kite -n kite-system --create-namespace \
-#     -f charts/kite/examples/swr-gzwxh.yaml \
+#   helm upgrade --install aerolink charts/aerolink -n aerolink-system --create-namespace \
+#     -f charts/aerolink/examples/swr-gzwxh.yaml \
 #     --set image.tag=$(bash scripts/get-version.sh)
 #
 # 镜像构建与推送见 docs/guide/build-and-push-image.md。
@@ -12,7 +12,7 @@ image:
   pullPolicy: IfNotPresent
 
 # SWR 私有仓库需要拉取凭据时，先创建 Secret 再取消下面的注释：
-#   kubectl create secret docker-registry swr-gzwxh -n kite-system \
+#   kubectl create secret docker-registry swr-gzwxh -n aerolink-system \
 #     --docker-server=swr.cn-south-1.myhuaweicloud.com \
 #     --docker-username='cn-south-1@<AK>' \
 #     --docker-password='<SK>'
@@ -27,7 +27,7 @@ image:
 #   enabled: true
 #   className: nginx
 #   hosts:
-#     - host: kite.example.com
+#     - host: aerolink.gogdev.cn
 #       paths:
 #         - path: /
 #           pathType: Prefix

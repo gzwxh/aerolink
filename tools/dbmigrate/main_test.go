@@ -20,9 +20,9 @@ const testEncryptKey = "dbmigrate-test-key-0123456789abcdef"
 // useTestEncryptKey 把加解密密钥固定成可预期的值，并负责还原。
 func useTestEncryptKey(t *testing.T) {
 	t.Helper()
-	previous := common.KiteEncryptKey
-	common.KiteEncryptKey = testEncryptKey
-	t.Cleanup(func() { common.KiteEncryptKey = previous })
+	previous := common.EncryptKey
+	common.EncryptKey = testEncryptKey
+	t.Cleanup(func() { common.EncryptKey = previous })
 }
 
 // newTestDB 建一个空的 sqlite 库、迁出全部模型。
@@ -252,7 +252,7 @@ func TestReadSourceFailsWithTheWrongEncryptKey(t *testing.T) {
 	source := newTestDB(t, "source.db")
 	seedSource(t, source)
 
-	common.KiteEncryptKey = "another-key-that-never-encrypted-this-data"
+	common.EncryptKey = "another-key-that-never-encrypted-this-data"
 	_, err := readSource(source)
 	if err == nil {
 		t.Fatal("expected readSource to fail with a mismatched encryption key")

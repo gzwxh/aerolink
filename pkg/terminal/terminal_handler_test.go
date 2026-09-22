@@ -86,7 +86,7 @@ func TestTerminalWebSocketsRejectUnauthorizedUsersBeforeUpgrade(t *testing.T) {
 
 func TestTerminalAgentsUseExpectedSecurityConfigurationAndCleanupScope(t *testing.T) { //nolint:gocyclo // 该用例同时覆盖两种终端 Agent 的安全配置
 	originalNamespace := common.AgentPodNamespace
-	common.AgentPodNamespace = "kite-system"
+	common.AgentPodNamespace = "aerolink-system"
 	t.Cleanup(func() {
 		common.AgentPodNamespace = originalNamespace
 	})

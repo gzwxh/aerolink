@@ -13,24 +13,25 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 )
 
-// 本文件是 Kite 管理接口的薄封装。迁移只用这几个接口：
+// 本文件是鸢联 AeroLink 管理接口的薄封装。迁移只用这几个接口：
 // 角色（/api/v1/admin/roles）、权限绑定组（/api/v1/admin/binding-groups）与用户列表。
-// 鉴权用 Kite 的 API key：请求头 Authorization 直接放控制台里那串 kite<id>-<secret>。
-type kiteClient struct {
+// 鉴权用 AeroLink 的 API key：请求头 Authorization 直接放控制台里那串 aerolink<id>-<secret>
+// （改名前的 kite<id>-<secret> 同样接受）。
+type aerolinkClient struct {
 	*httpClient
 }
 
-func newKiteClient(base, token string, insecure bool, timeout time.Duration, verbose bool) *kiteClient {
+func newAeroLinkClient(base, token string, insecure bool, timeout time.Duration, verbose bool) *aerolinkClient {
 	headers := map[string]string{"Authorization": token}
-	return &kiteClient{newHTTPClient(base, headers, insecure, timeout, verbose, "")}
+	return &aerolinkClient{newHTTPClient(base, headers, insecure, timeout, verbose, "")}
 }
 
-type kiteCluster struct {
+type aerolinkCluster struct {
 	ID   uint   `json:"id"`
 	Name string `json:"name"`
 }
 
-type kiteRole struct {
+type aerolinkRole struct {
 	ID          uint                   `json:"id"`
 	Name        string                 `json:"name"`
 	DisplayName string                 `json:"displayName"`
@@ -41,39 +42,39 @@ type kiteRole struct {
 	Verbs       []string               `json:"verbs"`
 }
 
-type kiteNamespaceRef struct {
+type aerolinkNamespaceRef struct {
 	Namespace string `json:"namespace"`
 }
 
-type kiteBindingGroup struct {
-	ID          uint               `json:"id"`
-	Cluster     string             `json:"cluster"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Global      bool               `json:"global"`
-	Detached    bool               `json:"detached"`
-	Protected   bool               `json:"protected"`
-	Namespaces  []kiteNamespaceRef `json:"namespaces"`
+type aerolinkBindingGroup struct {
+	ID          uint                   `json:"id"`
+	Cluster     string                 `json:"cluster"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Global      bool                   `json:"global"`
+	Detached    bool                   `json:"detached"`
+	Protected   bool                   `json:"protected"`
+	Namespaces  []aerolinkNamespaceRef `json:"namespaces"`
 }
 
-type kiteMember struct {
-	SubjectType string   `json:"subjectType"`
-	Subject     string   `json:"subject"`
-	Namespace   string   `json:"namespace"`
-	RoleID      uint     `json:"roleId"`
-	Protected   bool     `json:"protected"`
-	Role        kiteRole `json:"role"`
+type aerolinkMember struct {
+	SubjectType string       `json:"subjectType"`
+	Subject     string       `json:"subject"`
+	Namespace   string       `json:"namespace"`
+	RoleID      uint         `json:"roleId"`
+	Protected   bool         `json:"protected"`
+	Role        aerolinkRole `json:"role"`
 }
 
-type kiteMemberInput struct {
+type aerolinkMemberInput struct {
 	SubjectType string `json:"subjectType"`
 	Subject     string `json:"subject"`
 	Namespace   string `json:"namespace"`
 	RoleIDs     []uint `json:"roleIds"`
 }
 
-func (c *kiteClient) clusters() ([]kiteCluster, error) {
-	var clusters []kiteCluster
+func (c *aerolinkClient) clusters() ([]aerolinkCluster, error) {
+	var clusters []aerolinkCluster
 	if err := c.getJSON("/api/v1/admin/clusters/", &clusters); err != nil {
 		return nil, err
 	}
@@ -81,9 +82,9 @@ func (c *kiteClient) clusters() ([]kiteCluster, error) {
 	return clusters, nil
 }
 
-func (c *kiteClient) roles() ([]kiteRole, error) {
+func (c *aerolinkClient) roles() ([]aerolinkRole, error) {
 	var doc struct {
-		Roles []kiteRole `json:"roles"`
+		Roles []aerolinkRole `json:"roles"`
 	}
 	if err := c.getJSON("/api/v1/admin/roles/", &doc); err != nil {
 		return nil, err
@@ -91,7 +92,7 @@ func (c *kiteClient) roles() ([]kiteRole, error) {
 	return doc.Roles, nil
 }
 
-func (c *kiteClient) createRole(mapping roleMapping) (kiteRole, error) {
+func (c *aerolinkClient) createRole(mapping roleMapping) (aerolinkRole, error) {
 	body := map[string]any{
 		"name":        mapping.Name,
 		"displayName": mapping.DisplayName,
@@ -100,18 +101,18 @@ func (c *kiteClient) createRole(mapping roleMapping) (kiteRole, error) {
 	}
 	payload, err := c.do(http.MethodPost, "/api/v1/admin/roles/", body)
 	if err != nil {
-		return kiteRole{}, err
+		return aerolinkRole{}, err
 	}
 	var doc struct {
-		Role kiteRole `json:"role"`
+		Role aerolinkRole `json:"role"`
 	}
 	if err := json.Unmarshal(payload, &doc); err != nil {
-		return kiteRole{}, fmt.Errorf("decode created role: %w", err)
+		return aerolinkRole{}, fmt.Errorf("decode created role: %w", err)
 	}
 	return doc.Role, nil
 }
 
-func (c *kiteClient) updateRole(id uint, mapping roleMapping) error {
+func (c *aerolinkClient) updateRole(id uint, mapping roleMapping) error {
 	body := map[string]any{
 		"name":        mapping.Name,
 		"displayName": mapping.DisplayName,
@@ -122,9 +123,9 @@ func (c *kiteClient) updateRole(id uint, mapping roleMapping) error {
 	return err
 }
 
-func (c *kiteClient) bindingGroups() ([]kiteBindingGroup, error) {
+func (c *aerolinkClient) bindingGroups() ([]aerolinkBindingGroup, error) {
 	var doc struct {
-		BindingGroups []kiteBindingGroup `json:"bindingGroups"`
+		BindingGroups []aerolinkBindingGroup `json:"bindingGroups"`
 	}
 	if err := c.getJSON("/api/v1/admin/binding-groups/", &doc); err != nil {
 		return nil, err
@@ -132,22 +133,22 @@ func (c *kiteClient) bindingGroups() ([]kiteBindingGroup, error) {
 	return doc.BindingGroups, nil
 }
 
-func (c *kiteClient) createBindingGroup(cluster, name, description string) (kiteBindingGroup, error) {
+func (c *aerolinkClient) createBindingGroup(cluster, name, description string) (aerolinkBindingGroup, error) {
 	body := map[string]any{"cluster": cluster, "name": name, "description": description}
 	payload, err := c.do(http.MethodPost, "/api/v1/admin/binding-groups/", body)
 	if err != nil {
-		return kiteBindingGroup{}, err
+		return aerolinkBindingGroup{}, err
 	}
 	var doc struct {
-		BindingGroup kiteBindingGroup `json:"bindingGroup"`
+		BindingGroup aerolinkBindingGroup `json:"bindingGroup"`
 	}
 	if err := json.Unmarshal(payload, &doc); err != nil {
-		return kiteBindingGroup{}, fmt.Errorf("decode created binding group: %w", err)
+		return aerolinkBindingGroup{}, fmt.Errorf("decode created binding group: %w", err)
 	}
 	return doc.BindingGroup, nil
 }
 
-func (c *kiteClient) setBindingGroupNamespaces(id uint, namespaces []string) error {
+func (c *aerolinkClient) setBindingGroupNamespaces(id uint, namespaces []string) error {
 	sorted := append([]string(nil), namespaces...)
 	sort.Strings(sorted)
 	body := map[string]any{"namespaces": sorted}
@@ -155,9 +156,9 @@ func (c *kiteClient) setBindingGroupNamespaces(id uint, namespaces []string) err
 	return err
 }
 
-func (c *kiteClient) bindingGroupMembers(id uint) ([]kiteMember, error) {
+func (c *aerolinkClient) bindingGroupMembers(id uint) ([]aerolinkMember, error) {
 	var doc struct {
-		Members []kiteMember `json:"members"`
+		Members []aerolinkMember `json:"members"`
 	}
 	if err := c.getJSON(fmt.Sprintf("/api/v1/admin/binding-groups/%d/members", id), &doc); err != nil {
 		return nil, err
@@ -165,7 +166,7 @@ func (c *kiteClient) bindingGroupMembers(id uint) ([]kiteMember, error) {
 	return doc.Members, nil
 }
 
-func (c *kiteClient) setBindingGroupMembers(id uint, members []kiteMemberInput) error {
+func (c *aerolinkClient) setBindingGroupMembers(id uint, members []aerolinkMemberInput) error {
 	sort.Slice(members, func(i, j int) bool {
 		if members[i].SubjectType != members[j].SubjectType {
 			return members[i].SubjectType < members[j].SubjectType
@@ -180,8 +181,8 @@ func (c *kiteClient) setBindingGroupMembers(id uint, members []kiteMemberInput) 
 	return err
 }
 
-// usernames 返回 Kite 已知的全部用户名，用于提示「绑定已写入、但账号还没被 Kite 见过」。
-func (c *kiteClient) usernames() (map[string]struct{}, error) {
+// usernames 返回鸢联 AeroLink 已知的全部用户名，用于提示「绑定已写入、但账号还没被鸢联 AeroLink 见过」。
+func (c *aerolinkClient) usernames() (map[string]struct{}, error) {
 	known := map[string]struct{}{}
 	for page := 1; page <= 200; page++ {
 		var doc struct {
@@ -206,17 +207,17 @@ func (c *kiteClient) usernames() (map[string]struct{}, error) {
 	return known, nil
 }
 
-func (c *kiteClient) deleteRole(id uint) error {
+func (c *aerolinkClient) deleteRole(id uint) error {
 	_, err := c.do(http.MethodDelete, fmt.Sprintf("/api/v1/admin/roles/%d", id), nil)
 	return err
 }
 
-func (c *kiteClient) deleteBindingGroup(id uint) error {
+func (c *aerolinkClient) deleteBindingGroup(id uint) error {
 	_, err := c.do(http.MethodDelete, fmt.Sprintf("/api/v1/admin/binding-groups/%d", id), nil)
 	return err
 }
 
-// explainAuthError 把 Kite 侧的鉴权失败翻成可操作的提示：
+// explainAuthError 把鸢联 AeroLink 侧的鉴权失败翻成可操作的提示：
 // 401 是 token 不对，403 是没有 settings.rbac 的写权限（或该章节由配置文件托管），
 // 或者账号开了 MFA 二次校验（删除类操作会被拦）。
 func explainAuthError(err error) error {
@@ -227,7 +228,7 @@ func explainAuthError(err error) error {
 	hint := ""
 	switch {
 	case statusError.Status == http.StatusUnauthorized:
-		hint = "：AeroLink API key 无效或已停用。请求头里的值应当是控制台创建时给出的那份完整 API key（形如 kite1-xxxxxxxx）"
+		hint = "：AeroLink API key 无效或已停用。请求头里的值应当是控制台创建时给出的那份完整 API key（形如 aerolink1-xxxxxxxx；改名前的 kite1-xxxxxxxx 仍可用）"
 	case strings.Contains(statusError.Body, "mfa_verification_required"):
 		hint = "：该账号开启了 MFA 二次校验，API key 无法完成校验。请换一个未强制 MFA 的管理员账号生成 API key"
 	case statusError.Status == http.StatusForbidden:
@@ -239,8 +240,8 @@ func explainAuthError(err error) error {
 	return fmt.Errorf("%w%s", err, hint)
 }
 
-// kiteURLJoin 便于在报告里输出可点击的地址。
-func kiteURLJoin(base, path string) string {
+// aerolinkURLJoin 便于在报告里输出可点击的地址。
+func aerolinkURLJoin(base, path string) string {
 	joined, err := url.JoinPath(base, path)
 	if err != nil {
 		return base + path

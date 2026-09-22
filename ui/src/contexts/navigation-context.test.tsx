@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest'
 
 import { NavigationProvider, useNavigationHistory } from './navigation-context'
 
-const STORAGE_KEY = 'kite-navigation-history'
+const STORAGE_KEY = 'aerolink-navigation-history'
+const LEGACY_STORAGE_KEY = 'kite-navigation-history'
 
 function Probe() {
   const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory()
@@ -134,6 +135,27 @@ describe('NavigationProvider', () => {
       expect(screen.getByTestId('state')).toHaveTextContent('back/-')
     )
     expect(paths(readStack())).toEqual(['/one', '/two'])
+  })
+
+  it('migrates the stack stored under the legacy key', async () => {
+    sessionStorage.setItem(
+      LEGACY_STORAGE_KEY,
+      JSON.stringify({
+        entries: [
+          { path: '/one', search: '' },
+          { path: '/two', search: '' },
+        ],
+        index: 1,
+      })
+    )
+
+    renderNavigation('/two')
+
+    await waitFor(() =>
+      expect(screen.getByTestId('state')).toHaveTextContent('back/-')
+    )
+    expect(paths(readStack())).toEqual(['/one', '/two'])
+    expect(sessionStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
   })
 
   it('handles the shortcuts on window but not while typing in an input', async () => {

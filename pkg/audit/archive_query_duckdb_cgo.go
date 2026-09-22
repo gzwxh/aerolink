@@ -47,7 +47,7 @@ const (
 	// duckdbSDKMemoryLimit 是单个实例的内存上限。
 	//
 	// 作用对象是「一次大范围扫描」：DuckDB 默认会用可用的绝大部分内存做 hash/排序，单机部署
-	// 里这个默认值不合适（它与 Kite 主进程抢内存）。
+	// 里这个默认值不合适（它与鸢联 AeroLink 主进程抢内存）。
 	duckdbSDKMemoryLimit = "1GB"
 
 	// duckdbSDKIdleTimeout 是空闲连接的保留时长。

@@ -15,7 +15,7 @@ This guide provides detailed instructions for installing AeroLink in a Kubernete
 Using Helm provides flexibility for configuration and upgrades. The in-repo chart already points its default image at the company SWR, so a plain install is enough:
 
 ```bash
-helm install kite charts/kite -n kite-system --create-namespace
+helm install aerolink charts/aerolink -n aerolink-system --create-namespace
 ```
 
 #### Custom Installation
@@ -27,7 +27,7 @@ For complete configuration, refer to [Chart Values](../config/chart-values).
 Install with custom values:
 
 ```bash
-helm install kite charts/kite -n kite-system -f values.yaml
+helm install aerolink charts/aerolink -n aerolink-system -f values.yaml
 ```
 
 ### Method 2: YAML Manifest
@@ -53,7 +53,7 @@ This method will install AeroLink with default configuration. For advanced custo
 During testing, you can quickly access AeroLink through port forwarding:
 
 ```bash
-kubectl port-forward -n kite-system svc/kite 8080:8080
+kubectl port-forward -n aerolink-system svc/aerolink 8080:8080
 ```
 
 ### LoadBalancer Service
@@ -61,13 +61,13 @@ kubectl port-forward -n kite-system svc/kite 8080:8080
 If the cluster supports LoadBalancer, you can directly expose the AeroLink service:
 
 ```bash
-kubectl patch svc kite -n kite-system -p '{"spec": {"type": "LoadBalancer"}}'
+kubectl patch svc aerolink -n aerolink-system -p '{"spec": {"type": "LoadBalancer"}}'
 ```
 
 Get the assigned IP:
 
 ```bash
-kubectl get svc kite -n kite-system
+kubectl get svc aerolink -n aerolink-system
 ```
 
 ### Ingress (Recommended for Production)
@@ -83,8 +83,8 @@ Some Ingress controllers may require additional configuration to handle websocke
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: kite
-  namespace: kite-system
+  name: aerolink
+  namespace: aerolink-system
 spec:
   ingressClassName: nginx
   rules:
@@ -95,7 +95,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: kite
+                name: aerolink
                 port:
                   number: 8080
   tls:
@@ -106,20 +106,20 @@ spec:
 
 ## Serving under a subpath (basePath)
 
-If you want to serve AeroLink under a subpath (for example `https://example.com/kite`), use the Helm chart `basePath` value.
+If you want to serve AeroLink under a subpath (for example `https://example.com/aerolink`), use the Helm chart `basePath` value.
 
 How to set it:
 
 - In `values.yaml`:
 
 ```yaml
-basePath: "/kite"
+basePath: "/aerolink"
 ```
 
 - Or with Helm CLI:
 
 ```bash
-helm install kite charts/kite -n kite-system --create-namespace --set basePath="/kite"
+helm install aerolink charts/aerolink -n aerolink-system --create-namespace --set basePath="/aerolink"
 ```
 
 Important notes:
@@ -132,11 +132,11 @@ ingress:
   hosts:
     - host: aerolink.example.com
       paths:
-        - path: /kite
+        - path: /aerolink
           pathType: Prefix
 ```
 
-- OAuth / redirects: if you enable OAuth (or any external redirect flows), update the redirect URLs in your OAuth provider to include the base path, e.g. `https://aerolink.example.com/kite/oauth/callback`.
+- OAuth / redirects: if you enable OAuth (or any external redirect flows), update the redirect URLs in your OAuth provider to include the base path, e.g. `https://aerolink.example.com/aerolink/oauth/callback`.
 - Environment overrides: if you provide environment variables via `extraEnvs` or an existing secret, ensure `AEROLINK_BASE` is set consistently with the `basePath` value (otherwise behavior may differ).
 
 ## Verifying Installation
@@ -168,7 +168,7 @@ This is the recommended option for getting started quickly, especially in develo
 ### Helm Uninstall
 
 ```bash
-helm uninstall kite -n kite-system
+helm uninstall aerolink -n aerolink-system
 ```
 
 ### YAML Uninstall

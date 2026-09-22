@@ -91,7 +91,7 @@ func TestVerifyAcceptsCurrentCodeAndFormatting(t *testing.T) {
 }
 
 func TestQRCodeDataURL(t *testing.T) {
-	value, err := QRCodeDataURL("otpauth://totp/Kite:test?secret=SECRET")
+	value, err := QRCodeDataURL("otpauth://totp/AeroLink:test?secret=SECRET")
 	if err != nil {
 		t.Fatalf("QRCodeDataURL() error = %v", err)
 	}
