@@ -162,6 +162,10 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // 该用例用多个子�
 		if response.Code != http.StatusOK {
 			t.Fatalf("unassign returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
 		}
+		// 取消分配的路径里只有角色 ID 与查询参数：审计详情要能读出「谁对哪个角色的分配被收回」。
+		if auditDetail.ResourceName != "developer-updated ← user:alice" {
+			t.Fatalf("audit resourceName = %q, want role <- subject", auditDetail.ResourceName)
+		}
 		if err := db.Model(&model.RoleAssignment{}).Where("role_id = ?", created.Role.ID).Count(&assignmentCount).Error; err != nil {
 			t.Fatalf("count assignments after unassign: %v", err)
 		}

@@ -2,12 +2,14 @@ package notification
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 )
 
@@ -48,5 +50,46 @@ func TestCreateSubscriptionAcceptsAllUsersReceiver(t *testing.T) {
 	router.ServeHTTP(badRecorder, badRequest)
 	if badRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("unknown receiverType status = %d, want %d", badRecorder.Code, http.StatusBadRequest)
+	}
+}
+
+// 删除订阅的审计详情必须带「事件 → 接收者」与快照：只留自增 ID 认不出删的是哪条订阅。
+func TestDeleteNotificationSubscriptionRecordsAuditDetail(t *testing.T) {
+	newNotificationTestDB(t)
+	gin.SetMode(gin.TestMode)
+
+	var detail common.AdminAuditDetail
+	router := gin.New()
+	router.POST("/admin/notification-subscriptions/", HandleCreateNotificationSubscription)
+	router.DELETE("/admin/notification-subscriptions/:id", func(c *gin.Context) {
+		HandleDeleteNotificationSubscription(c)
+		if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+			detail, _ = value.(common.AdminAuditDetail)
+		}
+	})
+
+	body := `{"event":"remote_login","channel":"email","receiverType":"email","receiver":"ops@example.com"}`
+	createRequest := httptest.NewRequest(http.MethodPost, "/admin/notification-subscriptions/", strings.NewReader(body))
+	createRequest.Header.Set("Content-Type", "application/json")
+	createRecorder := httptest.NewRecorder()
+	router.ServeHTTP(createRecorder, createRequest)
+	if createRecorder.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d: %s", createRecorder.Code, http.StatusCreated, createRecorder.Body.String())
+	}
+	var created model.NotificationSubscription
+	if err := json.Unmarshal(createRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decoding create response: %v", err)
+	}
+
+	deleteRecorder := httptest.NewRecorder()
+	router.ServeHTTP(deleteRecorder, httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/admin/notification-subscriptions/%d", created.ID), nil))
+	if deleteRecorder.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d: %s", deleteRecorder.Code, http.StatusNoContent, deleteRecorder.Body.String())
+	}
+	if detail.ResourceName != "remote_login → ops@example.com" {
+		t.Fatalf("audit resourceName = %q, want event -> receiver", detail.ResourceName)
+	}
+	if !strings.Contains(detail.PreviousYAML, "ops@example.com") {
+		t.Fatalf("audit snapshot must describe the subscription, got %q", detail.PreviousYAML)
 	}
 }

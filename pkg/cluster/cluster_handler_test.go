@@ -428,3 +428,36 @@ func performClusterRequest(router *gin.Engine, method string, path string, body 
 	router.ServeHTTP(recorder, request)
 	return recorder
 }
+
+// 删除集群的审计详情必须带集群名与快照，且 kubeconfig 是凭据、绝不能进快照。
+func TestDeleteClusterRecordsAuditDetail(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}
+	cluster := model.Cluster{Name: "doomed", Description: "dev", Config: "top-secret-kubeconfig", Enable: true}
+	if err := model.DB.Create(&cluster).Error; err != nil {
+		t.Fatalf("seeding cluster: %v", err)
+	}
+
+	var detail common.AdminAuditDetail
+	router := gin.New()
+	router.DELETE("/clusters/:id", func(c *gin.Context) {
+		manager.DeleteCluster(c)
+		if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+			detail, _ = value.(common.AdminAuditDetail)
+		}
+	})
+
+	response := performClusterRequest(router, http.MethodDelete, fmt.Sprintf("/clusters/%d", cluster.ID), "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if detail.ResourceName != "doomed" {
+		t.Fatalf("audit resourceName = %q, want the cluster name", detail.ResourceName)
+	}
+	if !strings.Contains(detail.PreviousYAML, "name: doomed") {
+		t.Fatalf("audit snapshot must describe the cluster, got %q", detail.PreviousYAML)
+	}
+	if strings.Contains(detail.PreviousYAML, "top-secret-kubeconfig") {
+		t.Fatalf("audit snapshot must not leak the kubeconfig: %s", detail.PreviousYAML)
+	}
+}

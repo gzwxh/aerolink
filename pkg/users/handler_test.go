@@ -571,3 +571,46 @@ func currentTOTPCode(t *testing.T, secret string) string {
 	value := binary.BigEndian.Uint32(sum[offset:offset+4]) & 0x7fffffff
 	return fmt.Sprintf("%06d", value%1000000)
 }
+
+// 删除账号不可逆：审计详情必须带用户名与脱敏快照（password / mfa_secret 由
+// `json:"-"` 排除，apiKey 由 AuditSnapshot 清空）。
+func TestDeleteUserRecordsAuditDetail(t *testing.T) {
+	operator := setupUserHandlerTestDB(t)
+	// 删除账号会一并清理角色分配、权限绑定成员与组成员，并把审计记录的操作者置空：
+	// 这些表必须在测试库里存在，否则删除路径直接 SQL 报错（走不到审计断言）。
+	if err := model.DB.AutoMigrate(
+		&model.Role{},
+		&model.RoleAssignment{},
+		&model.BindingGroup{},
+		&model.BindingGroupMember{},
+		&model.GroupMember{},
+		&model.ResourceHistory{},
+	); err != nil {
+		t.Fatalf("migrating tables used by the delete path: %v", err)
+	}
+	victim := model.User{Username: "victim", Provider: model.AuthProviderPassword, Enabled: true}
+	if err := model.DB.Create(&victim).Error; err != nil {
+		t.Fatalf("seeding user: %v", err)
+	}
+
+	var detail common.AdminAuditDetail
+	router := gin.New()
+	router.DELETE("/users/:id", func(c *gin.Context) {
+		c.Set("user", *operator)
+		DeleteUser(c)
+		if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+			detail, _ = value.(common.AdminAuditDetail)
+		}
+	})
+
+	response := performUserRequest(router, http.MethodDelete, fmt.Sprintf("/users/%d", victim.ID), "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if detail.ResourceName != "victim" {
+		t.Fatalf("audit resourceName = %q, want the username", detail.ResourceName)
+	}
+	if !strings.Contains(detail.PreviousYAML, "username: victim") {
+		t.Fatalf("audit snapshot must describe the account, got %q", detail.PreviousYAML)
+	}
+}

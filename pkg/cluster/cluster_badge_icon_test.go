@@ -488,3 +488,28 @@ func TestUploadClusterBadgeIconRequiresAFile(t *testing.T) {
 		t.Error("an empty upload was stored anyway")
 	}
 }
+
+// 删除徽章图标是一次子资源删除：审计里至少要能看出动的是哪个集群。
+func TestDeleteClusterBadgeIconRecordsAuditDetail(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	cluster := createIconTestCluster(t, "primary")
+
+	var detail common.AdminAuditDetail
+	router := gin.New()
+	router.DELETE("/api/v1/admin/clusters/:id/badge-icon", func(c *gin.Context) {
+		DeleteClusterBadgeIcon(c)
+		if value, ok := c.Get(common.AdminAuditDetailKey); ok {
+			detail, _ = value.(common.AdminAuditDetail)
+		}
+	})
+
+	request := httptest.NewRequest(http.MethodDelete, adminIconPath(cluster.ID), nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if detail.ResourceName != "primary" {
+		t.Fatalf("audit resourceName = %q, want the cluster name", detail.ResourceName)
+	}
+}

@@ -339,15 +339,71 @@ export function RBACManagement() {
         accessorFn: (role) => (role.assignments ?? []).length,
         enableSorting: false,
         cell: ({ row }) => {
-          const count = (row.original.assignments ?? []).length
-          if (count === 0) {
+          const direct = (row.original.assignments ?? []).length
+          // 角色的使用者有两个来源：直接分配，以及权限绑定里以该角色授权的成员。
+          // 只看前者会把「只被权限绑定使用」的角色显示成 '-'，误判成没人用。
+          const groups = groupsByRole.get(row.original.id) ?? []
+          if (direct === 0 && groups.length === 0) {
             return <span className="text-sm text-muted-foreground">-</span>
           }
           return (
-            <div className="flex justify-center">
-              <Badge variant="secondary" className="text-xs">
-                {count}
-              </Badge>
+            <div className="flex flex-col items-center gap-1">
+              {direct > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="secondary" className="text-xs">
+                      {t('rbac.subjectsDirect', {
+                        count: direct,
+                        defaultValue: '{{count}} 用户/组',
+                      })}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="max-w-80 whitespace-normal border bg-popover text-xs text-popover-foreground shadow-md"
+                  >
+                    {t(
+                      'rbac.subjectsDirectHint',
+                      '直接分配给该角色的用户 / 用户组（在角色详情里维护）。'
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {groups.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="text-xs">
+                      {t('rbac.subjectsBindingGroups', {
+                        count: groups.length,
+                        defaultValue: '{{count}} 权限绑定',
+                      })}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="max-w-80 whitespace-normal border bg-popover text-xs text-popover-foreground shadow-md"
+                  >
+                    <div className="space-y-1">
+                      <p>
+                        {t(
+                          'rbac.subjectsBindingGroupsHint',
+                          '以下权限绑定以该角色授权，删除角色前需要先在「权限绑定」里解绑：'
+                        )}
+                      </p>
+                      <ul className="list-disc pl-4">
+                        {groups.map((group) => (
+                          <li key={group.id}>
+                            {group.name}
+                            <span className="text-muted-foreground">
+                              （{group.cluster}）
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
           )
         },
@@ -392,7 +448,7 @@ export function RBACManagement() {
         },
       },
     ],
-    [readOnly, setDetailRoleName, t]
+    [groupsByRole, readOnly, setDetailRoleName, t]
   )
 
   const table = useReactTable<Role>({
