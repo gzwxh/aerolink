@@ -79,7 +79,7 @@ func main() {
 			klog.Fatalf("Failed to start server: %v", err)
 		}
 	}()
-	klog.Infof("Kite server started on port %s", common.Port)
+	klog.Infof("AeroLink server started on port %s", common.Port)
 	klog.Infof("Version: %s, Build Date: %s, Commit: %s",
 		version.Version, version.BuildDate, version.CommitID)
 

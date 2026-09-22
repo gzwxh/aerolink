@@ -12,7 +12,7 @@ export interface Branding {
   isCustomLogo: boolean
   /** 控制台名称（侧边栏、登录页、浏览器标签共用）。 */
   siteName: string
-  /** 管理员配置过名称或 logo：此时收起版本号等 Kite 自身信息（见侧边栏）。 */
+  /** 管理员配置过名称或 logo：此时收起版本号等 AeroLink 自身信息（见侧边栏）。 */
   isCustomBranding: boolean
 }
 

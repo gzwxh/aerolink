@@ -259,7 +259,7 @@ var defaultNotificationTemplates = map[string]struct {
 	Body    string
 }{
 	NotificationEventRemoteLogin: {
-		Subject: "[Kite] 异地登录提醒",
+		Subject: "[鸢联] 异地登录提醒",
 		Body: `您好 {{username}}：
 
 您的账号刚刚在以下位置登录，如果不是您本人操作，请立即修改密码。
@@ -271,29 +271,29 @@ var defaultNotificationTemplates = map[string]struct {
 `,
 	},
 	NotificationEventPasswordExpiring: {
-		Subject: "[Kite] 密码即将过期提醒",
+		Subject: "[鸢联] 密码即将过期提醒",
 		Body: `您好 {{username}}：
 
 您的登录密码将在 {{days}} 天后过期（{{expireDate}}），请及时修改密码，以免影响登录。
 `,
 	},
 	NotificationEventPasswordExpired: {
-		Subject: "[Kite] 密码已过期",
+		Subject: "[鸢联] 密码已过期",
 		Body: `您好 {{username}}：
 
 您的登录密码已于 {{expireDate}} 过期，请尽快修改密码。
 `,
 	},
 	NotificationEventInactiveUserDisabled: {
-		Subject: "[Kite] 账号因长期未登录被禁用",
+		Subject: "[鸢联] 账号因长期未登录被禁用",
 		Body: `您好 {{username}}：
 
 您的账号已连续 {{days}} 天未登录，已被自动禁用。如需继续使用，请联系管理员。
 `,
 	},
 	NotificationEventTest: {
-		Subject: "[Kite] 通知测试邮件",
-		Body: `这是一封来自 Kite 的测试邮件。
+		Subject: "[鸢联] 通知测试邮件",
+		Body: `这是一封来自鸢联的测试邮件。
 
 如果您收到此邮件，说明 SMTP 配置正确。
 
@@ -301,7 +301,7 @@ var defaultNotificationTemplates = map[string]struct {
 `,
 	},
 	NotificationEventPasswordResetByAdmin: {
-		Subject: "[Kite] 密码已被管理员重置",
+		Subject: "[鸢联] 密码已被管理员重置",
 		Body: `您好 {{username}}：
 
 您的账号密码已被管理员 {{operator}} 于 {{time}} 重置。
@@ -310,7 +310,7 @@ var defaultNotificationTemplates = map[string]struct {
 `,
 	},
 	NotificationEventMFAResetByAdmin: {
-		Subject: "[Kite] 动态码绑定已被管理员重置",
+		Subject: "[鸢联] 动态码绑定已被管理员重置",
 		Body: `您好 {{username}}：
 
 您账号的多因素认证（MFA）绑定已被管理员 {{operator}} 于 {{time}} 解除，请在下次登录时重新绑定。
@@ -319,23 +319,23 @@ var defaultNotificationTemplates = map[string]struct {
 `,
 	},
 	NotificationEventAccountDisabled: {
-		Subject: "[Kite] 账号已被禁用",
+		Subject: "[鸢联] 账号已被禁用",
 		Body: `您好 {{username}}：
 
-您的账号已被管理员 {{operator}} 于 {{time}} 禁用，将无法登录 Kite。
+您的账号已被管理员 {{operator}} 于 {{time}} 禁用，将无法登录鸢联。
 
 如有疑问，请联系管理员。
 `,
 	},
 	NotificationEventAccountEnabled: {
-		Subject: "[Kite] 账号已启用",
+		Subject: "[鸢联] 账号已启用",
 		Body: `您好 {{username}}：
 
 您的账号已被管理员 {{operator}} 于 {{time}} 启用，现在可以正常登录使用。
 `,
 	},
 	NotificationEventAccountExpiring: {
-		Subject: "[Kite] 账号即将过期",
+		Subject: "[鸢联] 账号即将过期",
 		Body: `您好 {{username}}：
 
 您的账号将于 {{expireDate}}（{{days}} 天后）过期，过期后将无法登录。
@@ -344,21 +344,21 @@ var defaultNotificationTemplates = map[string]struct {
 `,
 	},
 	NotificationEventRoleAssigned: {
-		Subject: "[Kite] 已为您分配角色",
+		Subject: "[鸢联] 已为您分配角色",
 		Body: `您好 {{username}}：
 
 管理员于 {{time}} 为您的账号分配了角色「{{role}}」，相关权限已生效。
 `,
 	},
 	NotificationEventRoleUnassigned: {
-		Subject: "[Kite] 角色已被移除",
+		Subject: "[鸢联] 角色已被移除",
 		Body: `您好 {{username}}：
 
 管理员于 {{time}} 移除了您账号的角色「{{role}}」，相关权限已收回。
 `,
 	},
 	NotificationEventSessionTakeover: {
-		Subject: "[Kite] 账号在其他设备登录",
+		Subject: "[鸢联] 账号在其他设备登录",
 		Body: `账号 {{username}} 于 {{time}} 在其他设备登录（IP：{{ip}}），出于安全考虑，该账号此前的会话已自动退出。
 
 - 如果是您本人的操作：在登录页重新登录即可继续使用；
@@ -366,7 +366,7 @@ var defaultNotificationTemplates = map[string]struct {
 `,
 	},
 	NotificationEventScheduledTaskFailed: {
-		Subject: "[Kite] 定时任务执行失败",
+		Subject: "[鸢联] 定时任务执行失败",
 		Body: `您好：
 
 您创建的定时任务「{{taskName}}」于 {{time}} 执行失败。
@@ -376,11 +376,11 @@ var defaultNotificationTemplates = map[string]struct {
   对象：{{key}}
   失败原因：{{reason}}
 
-任务会在下一个计划时间重试。如需查看或调整，请到 Kite 控制台该任务的设置中查看「最近错误」。
+任务会在下一个计划时间重试。如需查看或调整，请到鸢联控制台该任务的设置中查看「最近错误」。
 `,
 	},
 	NotificationEventMailDeliveryFailed: {
-		Subject: "[Kite] 通知邮件发送失败",
+		Subject: "[鸢联] 通知邮件发送失败",
 		Body: `管理员您好：
 
 {{time}} 向 {{address}} 发送事件「{{event}}」的通知邮件失败：

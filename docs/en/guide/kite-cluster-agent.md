@@ -61,13 +61,13 @@ After creation, Kite shows the connection info only once, and you can choose the
 Command-line option:
 
 ```bash
-kite cluster-agent --server='https://kite.example.com' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
+aerolink cluster-agent --server='https://kite.example.com' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
 ```
 
 `--server` may include Kite's Base Path. For example:
 
 ```bash
-kite cluster-agent --server='https://kite.example.com/kite' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
+aerolink cluster-agent --server='https://kite.example.com/kite' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
 ```
 
 The Cluster Agent automatically appends the `/api/v1/cluster-agent/register` and `/api/v1/cluster-agent/connect` paths as needed; pass only the Kite Server base address to `--server`.
@@ -112,7 +112,7 @@ Once the Cluster Agent connects successfully, the cluster management page shows 
 For local development and testing, you can specify a kubeconfig explicitly:
 
 ```bash
-kite cluster-agent \
+aerolink cluster-agent \
   --server='http://localhost:8080' \
   --token='<cluster-agent-token>' \
   --public-key='<registration-public-key>' \

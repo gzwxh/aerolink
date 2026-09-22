@@ -252,7 +252,7 @@ func notifyAdminsOfMailFailure(event string, addresses map[string]bool) {
 		klog.Errorf("failed to list admins for mail failure alert: %v", err)
 		return
 	}
-	title := "[Kite] 通知邮件发送失败"
+	title := "[鸢联] 通知邮件发送失败"
 	content := fmt.Sprintf(
 		"%s 事件「%s」的通知邮件发送失败（收件地址：%s）。请检查系统设置中的 SMTP 配置。",
 		time.Now().Format("2006-01-02 15:04:05"), event,

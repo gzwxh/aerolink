@@ -132,9 +132,9 @@ func (h *HelmReleaseHandler) runInstall(c *gin.Context, dryRun bool) (rel *relea
 	}
 	description := req.Description
 	if description == "" {
-		description = "Install requested from Kite"
+		description = "Install requested from AeroLink"
 		if dryRun {
-			description = "Dry run install requested from Kite"
+			description = "Dry run install requested from AeroLink"
 		}
 	}
 
@@ -266,7 +266,7 @@ func (h *HelmReleaseHandler) Delete(c *gin.Context) {
 
 	if err := helmutil.UninstallRelease(cfg, c.Param("name"), helmutil.UninstallReleaseOptions{
 		Timeout:     helmActionTimeout,
-		Description: "Deleted from Kite",
+		Description: "Deleted from AeroLink",
 	}); err != nil {
 		runErr = err
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -358,9 +358,9 @@ func (h *HelmReleaseHandler) runUpgrade(c *gin.Context, dryRun bool) (result hel
 	}
 	description := req.Description
 	if description == "" {
-		description = "Dry run upgrade requested from Kite"
+		description = "Dry run upgrade requested from AeroLink"
 		if !dryRun {
-			description = "Upgrade requested from Kite"
+			description = "Upgrade requested from AeroLink"
 		}
 	}
 

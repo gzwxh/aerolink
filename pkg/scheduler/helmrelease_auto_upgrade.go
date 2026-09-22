@@ -100,7 +100,7 @@ func (e *helmReleaseAutoUpgradeExecutor) Run(ctx context.Context, task model.Sch
 		Namespace:            payload.Namespace,
 		Timeout:              time.Duration(payload.TimeoutMinutes) * time.Minute,
 		ResetThenReuseValues: true,
-		Description:          "Auto upgrade requested from Kite",
+		Description:          "Auto upgrade requested from AeroLink",
 		RollbackOnFailure:    payload.RollbackOnFailure,
 	})
 	if err != nil {
