@@ -31,7 +31,7 @@ func loadClassicRepositoryIndex(repository model.HelmRepository) (*repo.IndexFil
 	if err != nil {
 		return nil, err
 	}
-	cacheDir, err := os.MkdirTemp("", "kite-helm-repo-*")
+	cacheDir, err := os.MkdirTemp("", "aerolink-helm-repo-*")
 	if err != nil {
 		return nil, err
 	}

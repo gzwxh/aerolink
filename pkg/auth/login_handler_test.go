@@ -54,7 +54,7 @@ func TestSetCookieSecure(t *testing.T) {
 	})
 
 	t.Run("secure when host is https", func(t *testing.T) {
-		common.Host = "https://kite.example.com"
+		common.Host = "https://aerolink.example.com"
 		rec := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(rec)
 		c.Request = httptest.NewRequest(http.MethodGet, "http://kite.local", nil)

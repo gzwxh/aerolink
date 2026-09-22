@@ -99,7 +99,7 @@ func (r *runner) writeChecks() {
 	}
 	r.expectStatus("滚动重启（patch 注解）", "PATCH", fmt.Sprintf("%s/deployments/%s/%s", base, ns, dep), map[string]any{
 		"spec": map[string]any{"template": map[string]any{"metadata": map[string]any{
-			"annotations": map[string]any{"kite.kubernetes.io/restartedAt": time.Now().UTC().Format(time.RFC3339)}}}},
+			"annotations": map[string]any{"aerolink.kubernetes.io/restartedAt": time.Now().UTC().Format(time.RFC3339)}}}},
 	}, 200)
 	r.expectStatus("Deployment 历史", "GET", fmt.Sprintf("%s/deployments/%s/%s/history", base, ns, dep), nil, 200)
 	r.expectStatus("改镜像（PUT）", "PUT", fmt.Sprintf("%s/deployments/%s/%s", base, ns, dep), deploymentBody(dep, ns, img, 2), 200)

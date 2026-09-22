@@ -103,12 +103,20 @@ func TestValidateMFATicketRejectsBadInput(t *testing.T) {
 		t.Fatalf("a ticket inside the window was rejected: %v", err)
 	}
 
+	// 变异的最后一位必须与原来**不同**：base64url 字母表里换一个即可。否则原串末位
+	// 恰好就是 "A" 时"变异"其实没变，会把合法票据也当成应当拒绝的输入（假失败）。
+	lastChar := ticket[len(ticket)-1]
+	replacement := byte('A')
+	if lastChar == replacement {
+		replacement = 'B'
+	}
+
 	for _, bad := range []string{
 		"",
 		"not-a-ticket",
 		"a.b",
 		ticket + "x",
-		ticket[:len(ticket)-1] + "A",
+		ticket[:len(ticket)-1] + string(replacement),
 	} {
 		if _, err := validateMFATicket(bad, time.Now()); !errors.Is(err, errMFATicketInvalid) {
 			t.Errorf("validateMFATicket(%q) error = %v, want errMFATicketInvalid", bad, err)

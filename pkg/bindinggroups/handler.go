@@ -357,7 +357,7 @@ func (h *Handler) CreateBindingGroupNamespace(c *gin.Context) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: req.Namespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/managed-by": "kite",
+				"app.kubernetes.io/managed-by": "aerolink",
 			},
 		},
 	}

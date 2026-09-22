@@ -123,7 +123,7 @@ func (r *runner) smtpChecks() {
 	setting["smtpPort"] = sink.port()
 	setting["smtpTls"] = "none"
 	setting["smtpUsername"] = ""
-	setting["smtpFrom"] = "kite-smoke@local"
+	setting["smtpFrom"] = "aerolink-smoke@local"
 	setting["smtpSenderName"] = "AeroLink Smoke"
 	status, raw := r.putNotificationSetting(setting)
 	r.check("通知设置指向本地假 SMTP", status == 200, fmt.Sprintf("status=%d body=%s", status, truncate(string(raw), 120)))

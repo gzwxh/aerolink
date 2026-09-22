@@ -89,7 +89,7 @@ func latestArtifactHubChartPackage(ctx context.Context, repositoryName, chartNam
 	if err != nil {
 		return ChartPackage{}, err
 	}
-	req.Header.Set("User-Agent", "kite")
+	req.Header.Set("User-Agent", "aerolink")
 
 	client := http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)

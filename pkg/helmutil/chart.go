@@ -142,7 +142,7 @@ func newAnonymousAuthorizer() auth.Client {
 		Client: registryHTTPClient,
 		Cache:  auth.NewCache(),
 	}
-	authorizer.SetUserAgent("kite")
+	authorizer.SetUserAgent("aerolink")
 	return authorizer
 }
 

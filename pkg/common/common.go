@@ -15,8 +15,8 @@ const (
 	JWTExpirationSeconds = 24 * 60 * 60 // 24 hours
 	DefaultJWTSecret     = "kite-default-jwt-secret-key-change-in-production"
 
-	NodeTerminalPodName    = "kite-node-terminal-agent"
-	KubectlTerminalPodName = "kite-kubectl-agent"
+	NodeTerminalPodName    = "aerolink-node-terminal-agent"
+	KubectlTerminalPodName = "aerolink-kubectl-agent"
 
 	KubectlAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
 )

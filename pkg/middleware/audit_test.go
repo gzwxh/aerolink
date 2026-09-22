@@ -47,7 +47,7 @@ func runAdminAudit(t *testing.T, operator model.User, method, path string, statu
 	router.Any(path, func(c *gin.Context) { c.Status(status) })
 
 	request := httptest.NewRequest(method, path, nil)
-	request.Header.Set("User-Agent", "kite-test-agent/1.0")
+	request.Header.Set("User-Agent", "aerolink-test-agent/1.0")
 	request.RemoteAddr = "203.0.113.7:51234"
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -80,7 +80,7 @@ func TestAdminAuditRecordsSourceOfChange(t *testing.T) {
 	if row.ClientIP != "203.0.113.7" {
 		t.Fatalf("clientIp = %q, want the request address", row.ClientIP)
 	}
-	if row.UserAgent != "kite-test-agent/1.0" {
+	if row.UserAgent != "aerolink-test-agent/1.0" {
 		t.Fatalf("userAgent = %q, want the request User-Agent", row.UserAgent)
 	}
 	if row.OperatorName != "alice" {

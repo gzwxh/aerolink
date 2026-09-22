@@ -6,7 +6,7 @@ import (
 )
 
 func TestGenerateManifest(t *testing.T) {
-	manifest := GenerateManifest("https://kite.example.com", "my-token", "public-key", "ghcr.io/kite-org/kite:v1.0")
+	manifest := GenerateManifest("https://aerolink.example.com", "my-token", "public-key", "ghcr.io/kite-org/kite:v1.0")
 
 	checks := []string{
 		"apiVersion: v1\nkind: Secret",
@@ -21,7 +21,7 @@ func TestGenerateManifest(t *testing.T) {
 		`image: "ghcr.io/kite-org/kite:v1.0"`,
 		"--server=$(AEROLINK_SERVER)",
 		"--token=$(CLUSTER_AGENT_TOKEN)",
-		"value: \"https://kite.example.com\"",
+		"value: \"https://aerolink.example.com\"",
 	}
 	for _, want := range checks {
 		if !strings.Contains(manifest, want) {
@@ -36,8 +36,8 @@ func TestGenerateManifest(t *testing.T) {
 }
 
 func TestGenerateManifestWhitespaceTrimmed(t *testing.T) {
-	manifest := GenerateManifest("  https://kite.example.com  ", "  tok  ", "  public-key  ", "  img:tag  ")
-	if !strings.Contains(manifest, `"https://kite.example.com"`) {
+	manifest := GenerateManifest("  https://aerolink.example.com  ", "  tok  ", "  public-key  ", "  img:tag  ")
+	if !strings.Contains(manifest, `"https://aerolink.example.com"`) {
 		t.Errorf("serverURL not trimmed:\n%s", manifest)
 	}
 	if !strings.Contains(manifest, `"tok"`) {
@@ -50,7 +50,7 @@ func TestGenerateManifestWhitespaceTrimmed(t *testing.T) {
 
 func TestGenerateManifestSpecialCharacters(t *testing.T) {
 	// 含特殊字符的 Token，不加引号会破坏 YAML。
-	manifest := GenerateManifest("https://kite.example.com", "tok:en\"'", "public-key", "img")
+	manifest := GenerateManifest("https://aerolink.example.com", "tok:en\"'", "public-key", "img")
 	if !strings.Contains(manifest, `"tok:en\"'"`) {
 		t.Errorf("special characters in token not properly escaped:\n%s", manifest)
 	}

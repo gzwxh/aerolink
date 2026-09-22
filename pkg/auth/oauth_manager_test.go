@@ -18,7 +18,7 @@ func TestGetRequestHost(t *testing.T) {
 	})
 
 	t.Run("configured host overrides request", func(t *testing.T) {
-		common.Host = "https://kite.example.com"
+		common.Host = "https://aerolink.example.com"
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		c.Request = httptest.NewRequest(http.MethodGet, "http://ignored.local", nil)
 
@@ -32,11 +32,11 @@ func TestGetRequestHost(t *testing.T) {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		req := httptest.NewRequest(http.MethodGet, "http://internal.local", nil)
 		req.Header.Set("X-Forwarded-Proto", "https")
-		req.Header.Set("X-Forwarded-Host", "kite.example.com")
+		req.Header.Set("X-Forwarded-Host", "aerolink.example.com")
 		c.Request = req
 
-		if got := getRequestHost(c); got != "https://kite.example.com" {
-			t.Fatalf("getRequestHost() = %q, want %q", got, "https://kite.example.com")
+		if got := getRequestHost(c); got != "https://aerolink.example.com" {
+			t.Fatalf("getRequestHost() = %q, want %q", got, "https://aerolink.example.com")
 		}
 	})
 
