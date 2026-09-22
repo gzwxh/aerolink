@@ -7,10 +7,10 @@
 ## 1. 本地发布清单（A3）
 
 - [ ] **1. 跑完整检查**：`make pre-commit` + `make test`（含 `go test` 与 `pnpm test`），全部通过。
-- [ ] **2. 确定版本号规则**：统一用 tag 形式 `vX.Y.Z`。`Makefile` 的 `VERSION` 与 `charts/kite/Chart.yaml` 的 `appVersion` 都写这个形式（默认 `v1.0.0`），CI 发布再用 tag 覆盖 `VERSION`；`scripts/get-version.sh` 推导出的也是同一形式。不要给版本号加任何额外前缀（尤其别把镜像仓库名当日志/版本前缀），也不要与 tag 形式并存两种写法。
+- [ ] **2. 确定版本号规则**：统一用 tag 形式 `vX.Y.Z`。`Makefile` 的 `VERSION` 与 `charts/aerolink/Chart.yaml` 的 `appVersion` 都写这个形式（默认 `v1.0.0`），CI 发布再用 tag 覆盖 `VERSION`；`scripts/get-version.sh` 推导出的也是同一形式。不要给版本号加任何额外前缀（尤其别把镜像仓库名当日志/版本前缀），也不要与 tag 形式并存两种写法。
 - [ ] **3. 交叉编译并打包**：`make cross-compile` → `make package-binaries`，确认产物落在 `bin/`。
 - [ ] **4. 构建并推送镜像**：使用 `Dockerfile.binary`，目标 registry 用公司仓库（参考 `Makefile` 的 `IMAGE`，如 `swr.cn-south-1.myhuaweicloud.com/gzwxh/...`）。`make image` / `make push`。
-- [ ] **5. 打包并推送 chart**：`helm package charts/kite`，推送 chart（OCI 或内网/oss 仓库）。注意打包产物不得入库（见 §3）。
+- [ ] **5. 打包并推送 chart**：`helm package charts/aerolink`，推送 chart（OCI 或内网/oss 仓库）。注意打包产物不得入库（见 §3）。
 - [ ] **6. 打 tag 并写发布说明**：`scripts/release.sh <version>` 完成 bump + commit + tag；发布说明用 `make changelog` 的产物，并附上二进制与 chart。
 - [ ] **7. 发布后核对**：确认 `/api/v1/version` 返回值与 tag 一致（验证 ldflags 是否真的注入了版本号）。
 
@@ -21,7 +21,7 @@
 | 类型 | 名称 | 说明 |
 | --- | --- | --- |
 | 变量 | `RELEASE_ENABLED` | 设为 `true` 才会跑（默认不跑，避免误触发发布） |
-| 变量 | `IMAGE_REPOSITORY` | 目标镜像，默认 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`（与 `charts/kite/values.yaml` 的 `image.repository` 一致）；例如 `ghcr.io/<owner>/kite` |
+| 变量 | `IMAGE_REPOSITORY` | 目标镜像，默认 `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`（与 `charts/aerolink/values.yaml` 的 `image.repository` 一致）；例如 `ghcr.io/<owner>/aerolink` |
 | 变量 | `CHART_OCI_REPOSITORY` | chart 的 OCI 目标，留空则不推 chart；例如 `oci://swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/charts` |
 | 变量 | `HELM_INDEX_ENABLED` | 是否更新 gh-pages 上的 Helm index（上游的分发方式），本仓库默认关 |
 | Secret | `IMAGE_REGISTRY_USERNAME` / `IMAGE_REGISTRY_PASSWORD` | 非 ghcr.io 目标仓库的推送凭据（ghcr.io 用内置 `GITHUB_TOKEN`） |
@@ -35,11 +35,11 @@
 
 ## 3. 产物卫生（A4）
 
-- [ ] `charts/*.tgz` 不入库：`.gitignore` 已忽略 `kite-*.tgz` 与 `charts/*.tgz`；打包产物改由 Release 附件 / OCI 承载。
+- [ ] `charts/*.tgz` 不入库：`.gitignore` 已忽略 `aerolink-*.tgz` 与 `charts/*.tgz`；打包产物改由 Release 附件 / OCI 承载。
 - [ ] `dev.db`、`bin/`、`tupian/` 不入库的政策不变；`static/` 是 `make frontend` 的生成物，不得手工提交。
 - [ ] `scripts/release.sh` 的约束保持有效：
   - 不使用 `set -x`（避免把凭据类参数打进日志）；
-  - `CHART_DIR` 已参数化（默认 `charts/kite`，可用第二个参数或环境变量覆盖）；
+  - `CHART_DIR` 已参数化（默认 `charts/aerolink`，可用第二个参数或环境变量覆盖）；
   - 打 tag 前要求工作区干净，存在未提交改动时直接失败。
 
 ## 4. 相关命令速查

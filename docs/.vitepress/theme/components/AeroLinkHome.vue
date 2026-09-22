@@ -262,7 +262,7 @@ const copy = computed(() =>
 </script>
 
 <template>
-  <div id="top" class="kite-home">
+  <div id="top" class="aerolink-home">
     <a class="skip-link" href="#main-content">{{ copy.skipLabel }}</a>
 
     <header class="site-header">
@@ -448,4 +448,4 @@ const copy = computed(() =>
   </div>
 </template>
 
-<style scoped src="./kite-home.css"></style>
+<style scoped src="./aerolink-home.css"></style>

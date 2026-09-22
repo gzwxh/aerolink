@@ -19,7 +19,7 @@ import (
 //
 // 这三家的差异只在「端点路径 + 认证 + 流/索引命名」，而文档内容与失败处理完全一致：
 //   - 文档都来自 esDocumentFromMessage（字段集见方案 §5 schema，中立、不绑定任何后端）；
-//   - 写入都在 uploadPool 里跑，失败计入 kite_audit_archive_failures_total{stage="write"}；
+//   - 写入都在 uploadPool 里跑，失败计入 aerolink_audit_archive_failures_total{stage="write"}；
 //   - 都只做 HTTP，不引入任何第三方客户端库（许可证与依赖面都更干净）。
 
 // documentSink 是「把一批中立文档写进外部日志存储」的统一接口。

@@ -247,7 +247,7 @@ func TestNormalizeArchiveTrimsS3AndES(t *testing.T) {
 	data.Archive.S3.Enabled = true
 	data.Archive.S3.Endpoint = "  http://minio:9000  "
 	data.Archive.S3.Bucket = "  aerolink-audit "
-	data.Archive.S3.Prefix = " /kite/audit/ "
+	data.Archive.S3.Prefix = " /aerolink/audit/ "
 	data.Archive.Elasticsearch.Enabled = true
 	data.Archive.Elasticsearch.URLs = []string{" http://es:9200 ", "", "   "}
 
@@ -257,8 +257,8 @@ func TestNormalizeArchiveTrimsS3AndES(t *testing.T) {
 	if data.Archive.S3.Endpoint != "http://minio:9000" || data.Archive.S3.Bucket != "aerolink-audit" {
 		t.Errorf("S3 endpoint/bucket not trimmed: %+v", data.Archive.S3)
 	}
-	if data.Archive.S3.Prefix != "kite/audit" {
-		t.Errorf("S3 prefix = %q, want kite/audit", data.Archive.S3.Prefix)
+	if data.Archive.S3.Prefix != "aerolink/audit" {
+		t.Errorf("S3 prefix = %q, want aerolink/audit", data.Archive.S3.Prefix)
 	}
 	if len(data.Archive.Elasticsearch.URLs) != 1 || data.Archive.Elasticsearch.URLs[0] != "http://es:9200" {
 		t.Errorf("ES urls not cleaned: %v", data.Archive.Elasticsearch.URLs)
@@ -420,7 +420,7 @@ func TestGetAuditSettingReadsLegacySyslogRow(t *testing.T) {
 	db := setupAuditSettingTestDB(t)
 
 	legacy := `{"retentionDays":90,"syslog":{"enabled":true,"network":"tcp",` +
-		`"address":"log.example.com:514","tag":"kite","facility":13,` +
+		`"address":"log.example.com:514","tag":"aerolink","facility":13,` +
 		`"format":"json","insecureSkipVerify":false},"stdout":{"enabled":false,"format":"text"}}`
 	if err := db.Create(&AuditSetting{Model: Model{ID: 1}, Data: JSONField(legacy)}).Error; err != nil {
 		t.Fatalf("seeding legacy row: %v", err)

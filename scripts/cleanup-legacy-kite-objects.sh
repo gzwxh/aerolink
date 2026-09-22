@@ -8,6 +8,11 @@
 #
 # 默认**只列不改**（dry-run）：先看清要删什么，确认后再加 -y 真删。
 #
+# 除了 ns/kite 里的对象（-n 可改），还会检查 kube-system 里由旧脚本/旧清单装的那批：
+# 旧 kubeconfig 生成脚本建的 kite-admin（SA + ClusterRoleBinding + Token Secret），
+# 以及旧 Cluster Agent 清单建的 kite-cluster-agent（SA + ClusterRoleBinding + Token Secret
+# + Deployment）。它们与 aerolink 这套新对象无关，删掉不影响正在使用的接入方式。
+#
 # 用法：
 #   scripts/cleanup-legacy-kite-objects.sh                 # 看一眼 ns/kite 里的遗留对象
 #   scripts/cleanup-legacy-kite-objects.sh -y               # 确认后真删
@@ -24,6 +29,8 @@
 set -euo pipefail
 
 NAMESPACE="kite"
+# 旧 kubeconfig 生成脚本与旧 Cluster Agent 清单装的对象都在 kube-system，跟 -n 无关。
+SYSTEM_NAMESPACE="kube-system"
 ASSUME_YES=0
 WITH_PVC=0
 
@@ -82,6 +89,21 @@ LEGACY_PVCS=(
   "pvc/kite-audit"
 )
 
+# kube-system 里的旧对象：旧 kubeconfig 生成脚本（当时 SA_NAME=kite-admin）与旧
+# Cluster Agent 清单（当时叫 kite-cluster-agent）建的，都不随 -n 变。
+LEGACY_SYSTEM_OBJECTS=(
+  "serviceaccount/kite-admin"
+  "secret/kite-admin-token"
+  "serviceaccount/kite-cluster-agent"
+  "secret/kite-cluster-agent-token"
+  "deployment/kite-cluster-agent"
+)
+# ClusterRoleBinding 是集群级资源，没有命名空间。
+LEGACY_CLUSTER_OBJECTS=(
+  "clusterrolebinding/kite-admin"
+  "clusterrolebinding/kite-cluster-agent"
+)
+
 found=()
 echo "🔍 检查命名空间 ${NAMESPACE} 中的遗留对象（dry-run=$([ "${ASSUME_YES}" -eq 1 ] && echo no || echo yes)）"
 for obj in "${LEGACY_OBJECTS[@]}"; do
@@ -100,7 +122,23 @@ for obj in "${LEGACY_PVCS[@]}"; do
   fi
 done
 
-if [ "${#found[@]}" -eq 0 ]; then
+system_found=()
+for obj in "${LEGACY_SYSTEM_OBJECTS[@]}"; do
+  if kubectl get -n "${SYSTEM_NAMESPACE}" "${obj}" -o name >/dev/null 2>&1; then
+    system_found+=("${obj}")
+    echo "  • 存在：${obj}（命名空间 ${SYSTEM_NAMESPACE}）"
+  fi
+done
+
+cluster_found=()
+for obj in "${LEGACY_CLUSTER_OBJECTS[@]}"; do
+  if kubectl get "${obj}" -o name >/dev/null 2>&1; then
+    cluster_found+=("${obj}")
+    echo "  • 存在：${obj}（集群级）"
+  fi
+done
+
+if [ "${#found[@]}" -eq 0 ] && [ "${#system_found[@]}" -eq 0 ] && [ "${#cluster_found[@]}" -eq 0 ]; then
   echo "✅ 没有需要清理的遗留对象。"
   exit 0
 fi
@@ -108,6 +146,7 @@ fi
 echo
 echo "ℹ️  删掉 service/kite 会一并释放它占用的 NodePort 27862，之后新清单才能 apply 成功。"
 echo "ℹ️  删掉 deployment/kite 会停掉仍在跑的改名前的实例。"
+echo "ℹ️  删掉 kube-system 里的 kite-admin / kite-cluster-agent 是在清旧的 kubeconfig 与 Cluster Agent，与新对象互不影响。"
 
 if [ "${ASSUME_YES}" -ne 1 ]; then
   echo
@@ -120,9 +159,23 @@ fi
 
 echo
 echo "🧹 开始删除…"
-for obj in "${found[@]}"; do
-  kubectl delete -n "${NAMESPACE}" "${obj}" --ignore-not-found
-done
+# 三组各自可能为空（旧主机上 bash 4.3 及更早对 `"${arr[@]}"` + set -u 会直接退出），
+# 这里按组判断非空，避免删到一半中断。
+if [ "${#found[@]}" -gt 0 ]; then
+  for obj in "${found[@]}"; do
+    kubectl delete -n "${NAMESPACE}" "${obj}" --ignore-not-found
+  done
+fi
+if [ "${#system_found[@]}" -gt 0 ]; then
+  for obj in "${system_found[@]}"; do
+    kubectl delete -n "${SYSTEM_NAMESPACE}" "${obj}" --ignore-not-found
+  done
+fi
+if [ "${#cluster_found[@]}" -gt 0 ]; then
+  for obj in "${cluster_found[@]}"; do
+    kubectl delete "${obj}" --ignore-not-found
+  done
+fi
 
 if [ "${WITH_PVC}" -eq 1 ] && [ "${#pvc_found[@]}" -gt 0 ]; then
   for obj in "${pvc_found[@]}"; do

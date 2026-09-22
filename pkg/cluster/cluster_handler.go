@@ -22,7 +22,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// clusterAgentServerURL 从请求上下文推导 Kite 服务端 URL，
+// clusterAgentServerURL 从请求上下文推导鸢联 AeroLink 服务端 URL，
 // 使用 common.Host / X-Forwarded-Host / 请求 host 以及 common.Base。
 func clusterAgentServerURL(c *gin.Context) string {
 	scheme := "http"
@@ -452,7 +452,7 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		updates["config"] = model.SecretString(*req.Config)
 	}
 
-	// in-cluster 类型不可通过编辑改变：它依赖 Kite 自身 Pod 的服务账号
+	// in-cluster 类型不可通过编辑改变：它依赖鸢联 AeroLink 自身 Pod 的服务账号
 	// 连接，没有 kubeconfig，类型一旦丢失集群将永久无法连接。
 	if cluster.InCluster {
 		updates["in_cluster"] = true
@@ -640,7 +640,7 @@ func (cm *ClusterManager) GetClusterAgentManifest(c *gin.Context) {
 	}
 	manifest := clusteragent.GenerateManifest(serverURL, token, publicKey, image)
 	c.Header("Cache-Control", "no-store")
-	c.Header("Content-Disposition", `attachment; filename="kite-cluster-agent.yaml"`)
+	c.Header("Content-Disposition", `attachment; filename="aerolink-cluster-agent.yaml"`)
 	c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(manifest))
 }
 

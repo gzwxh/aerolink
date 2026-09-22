@@ -15,6 +15,8 @@ import {
   K8S_DATA_KEY_PATTERN,
   K8S_META_KEY_PATTERN,
   K8S_RESOURCE_NAME_PATTERN,
+  LEGACY_DESCRIPTION_ANNOTATION,
+  readDescription,
   RESERVED_CREATE_NAMES,
   resolveCreateNamespace,
 } from '@/lib/k8s'
@@ -142,10 +144,13 @@ export function ConfigMapCreatePage() {
   useEffect(() => {
     if (!existing) return
     const annotations = existing.metadata?.annotations || {}
-    const { [DESCRIPTION_ANNOTATION]: description, ...rest } = annotations
+    // 描述注解：读新键并兼容改名前的旧键；两者都不作为「额外注解」展示。
+    const rest = { ...annotations }
+    delete rest[DESCRIPTION_ANNOTATION]
+    delete rest[LEGACY_DESCRIPTION_ANNOTATION]
     setName(existing.metadata?.name || '')
     setNamespace(existing.metadata?.namespace || namespace)
-    setDescription(description || '')
+    setDescription(readDescription(annotations))
     setDataRows(rowsFromRecord(existing.data))
     setBinaryRows(rowsFromRecord(existing.binaryData))
     setLabels(rowsFromRecord(existing.metadata?.labels))

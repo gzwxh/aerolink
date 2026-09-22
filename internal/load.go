@@ -14,18 +14,18 @@ import (
 )
 
 var (
-	kiteUsername = common.Getenv("USERNAME")
-	kitePassword = common.Getenv("PASSWORD")
+	aerolinkUsername = common.Getenv("USERNAME")
+	aerolinkPassword = common.Getenv("PASSWORD")
 )
 
 func loadUser() error {
-	if kiteUsername != "" && kitePassword != "" {
+	if aerolinkUsername != "" && aerolinkPassword != "" {
 		uc, err := model.CountUsers()
 		if err == nil && uc == 0 {
-			klog.Infof("Creating super user %s from environment variables", kiteUsername)
+			klog.Infof("Creating super user %s from environment variables", aerolinkUsername)
 			u := &model.User{
-				Username: kiteUsername,
-				Password: kitePassword,
+				Username: aerolinkUsername,
+				Password: aerolinkPassword,
 			}
 			err := model.AddSuperUser(u)
 			if err == nil {

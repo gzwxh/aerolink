@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-CHART_DIR="charts/kite"
+CHART_DIR="charts/aerolink"
 TEMP_DIR=$(mktemp -d)
 
 echo "🔍 正在校验 Helm Chart..."
@@ -110,8 +110,8 @@ if ! grep -E -q "kind:\s*PersistentVolumeClaim" "$RENDERED_SQLITE"; then
     fail "sqlite 渲染结果中未找到 PersistentVolumeClaim"
 fi
 
-# 确认 PVC 名称或 claim 引用中包含 'kite-storage'。
-if ! grep -E -q "kite-storage" "$RENDERED_SQLITE"; then
+# 确认 PVC 名称或 claim 引用中包含 'aerolink-storage'。
+if ! grep -E -q "aerolink-storage" "$RENDERED_SQLITE"; then
     fail "渲染结果中未找到 sqlite PVC 名称或引用"
 fi
 

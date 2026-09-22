@@ -10,8 +10,8 @@ on:
 # 现在改成"仓库变量开关 + 目标仓库可配置"：
 #
 #   vars.RELEASE_ENABLED        必须显式设为 true 才会跑（默认不跑，避免误触发发布）
-#   vars.IMAGE_REPOSITORY       目标镜像，默认与 charts/kite/values.yaml 的 image.repository 一致
-#                               例：swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink / ghcr.io/<owner>/kite
+#   vars.IMAGE_REPOSITORY       目标镜像，默认与 charts/aerolink/values.yaml 的 image.repository 一致
+#                               例：swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink / ghcr.io/<owner>/aerolink
 #   vars.CHART_OCI_REPOSITORY   Helm chart 的 OCI 目标，留空则不推送 chart
 #                               例：oci://swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/charts
 #   vars.HELM_INDEX_ENABLED     是否更新 gh-pages 上的 Helm index（上游分发用，本仓库默认关）
@@ -62,7 +62,7 @@ jobs:
           case "$FIRST" in
             # registry host 一定带点（域名）或端口；localhost 是本地调试的特例。
             *.*|*:*|localhost) REGISTRY="$FIRST" ;;
-            # 形如 zzde/kite：没有 host，按 Docker Hub 处理。
+            # 形如 zzde/aerolink：没有 host，按 Docker Hub 处理。
             *) REGISTRY="docker.io" ;;
           esac
           echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
@@ -159,7 +159,7 @@ jobs:
 
       - name: Package Helm chart
         run: |
-          helm package charts/kite/
+          helm package charts/aerolink/
 
       - name: Login Helm to the chart registry
         if: env.CHART_OCI_REPOSITORY != ''
@@ -176,7 +176,7 @@ jobs:
       - name: Push Helm chart to OCI registry
         if: env.CHART_OCI_REPOSITORY != ''
         run: |
-          CHART_PACKAGE=$(ls kite-*.tgz)
+          CHART_PACKAGE=$(ls aerolink-*.tgz)
           helm push "$CHART_PACKAGE" "${{ env.CHART_OCI_REPOSITORY }}"
 
       - name: Create Release
@@ -190,7 +190,7 @@ jobs:
           body_path: release-notes.md
           files: |
             bin/aerolink-*-${{ steps.check_version.outputs.tag_name }}.tar.gz
-            kite-*.tgz
+            aerolink-*.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -215,7 +215,7 @@ jobs:
           VERSION=$(echo $TAG_NAME | sed 's/^v//')
 
           # 从 release 里取回 helm chart
-          gh release download $TAG_NAME --pattern "kite-$VERSION.tgz"
+          gh release download $TAG_NAME --pattern "aerolink-$VERSION.tgz"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -179,7 +179,7 @@ function ResourceTableContent<T>({
     labelSelector: effectiveLabelSelector,
   })
   // 创建按钮与批量删除不绑定单个命名空间，因此
-  // 遵循"某处已授权"规则。Kite 没有其元数据的资源
+  // 遵循"某处已授权"规则。AeroLink 没有其元数据的资源
   // （页面传入了展示名，例如 "Helm Releases"）不做处理。
   const canAnyNamespace = useCanAnyNamespace()
   const permissionTarget =

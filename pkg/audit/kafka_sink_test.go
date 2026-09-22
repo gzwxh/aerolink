@@ -185,7 +185,7 @@ func TestKafkaSASLMechanismMapping(t *testing.T) {
 		t.Run(tc.mechanism, func(t *testing.T) {
 			config := testKafkaSetting()
 			config.SASLMechanism = tc.mechanism
-			config.Username = "kite"
+			config.Username = "aerolink"
 			config.Password = model.SecretString("secret")
 
 			_, err := kafkaSASLMechanism(config)

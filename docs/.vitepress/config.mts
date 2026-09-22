@@ -73,7 +73,7 @@ export default defineConfig({
                 { text: "Helm Management", link: "/en/guide/helm-management" },
                 { text: "AI Assistant", link: "/en/guide/ai-assistant" },
                 { text: "Web Terminal", link: "/en/guide/web-terminal" },
-                { text: "AeroLink Cluster Agent", link: "/en/guide/kite-cluster-agent" },
+                { text: "AeroLink Cluster Agent", link: "/en/guide/aerolink-cluster-agent" },
                 { text: "Resource History", link: "/en/guide/resource-history" },
                 { text: "Custom Sidebar", link: "/en/guide/custom-sidebar" },
                 { text: "Kube Proxy", link: "/en/guide/kube-proxy" },
@@ -108,8 +108,9 @@ export default defineConfig({
           ],
         },
         editLink: {
-          pattern: "https://github.com/kite-org/kite/tree/main/docs/:path",
-          text: "Edit this page on GitHub",
+          pattern:
+            "http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/_edit/main/docs/:path",
+          text: "Edit this page in the internal repository",
         },
       },
     },
@@ -135,8 +136,9 @@ export default defineConfig({
     },
     langMenuLabel: "Language",
     editLink: {
-      pattern: "https://github.com/kite-org/kite/tree/main/docs/:path",
-      text: "在 GitHub 上编辑此页面",
+      pattern:
+        "http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/_edit/main/docs/:path",
+      text: "在内部仓库中编辑此页面",
     },
 
     nav: [
@@ -179,7 +181,7 @@ export default defineConfig({
             { text: "Helm 管理", link: "/guide/helm-management" },
             { text: "AI 助手", link: "/guide/ai-assistant" },
             { text: "Web 终端", link: "/guide/web-terminal" },
-            { text: "鸢联 AeroLink Cluster Agent", link: "/guide/kite-cluster-agent" },
+            { text: "鸢联 AeroLink Cluster Agent", link: "/guide/aerolink-cluster-agent" },
             { text: "资源历史", link: "/guide/resource-history" },
             { text: "自定义侧边栏", link: "/guide/custom-sidebar" },
             { text: "Kube Proxy", link: "/guide/kube-proxy" },

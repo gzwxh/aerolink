@@ -212,7 +212,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
           },
           annotations: {
             ...(cronjob.spec.jobTemplate.metadata?.annotations || {}),
-            'kite.kubernetes.io/run-now': new Date().toISOString(),
+            'aerolink.kubernetes.io/run-now': new Date().toISOString(),
           },
           ownerReferences: cronjob.metadata?.uid
             ? [

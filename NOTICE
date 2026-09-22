@@ -27,16 +27,18 @@
 
 | 资产路径 | 来源 | 许可证 | 备注 |
 | --- | --- | --- | --- |
-| `ui/src/assets/icon.svg` | 来源与许可证待确认 | 待确认 | 项目 LOGO；与 `docs/assets/logo.svg`、`docs/public/logo.svg` 字节完全一致 |
+| `ui/src/assets/logo.svg` | **自研**（文件头注明「自研矢量素材」） | Apache-2.0（同本仓库） | 主 LOGO（蓝翼）；`docs/assets/logo.svg` 是它的同步副本，供 README 展示 |
+| `docs/public/logo.svg` | **自研**（带动画的主 LOGO 去掉 SMIL 后导出） | Apache-2.0（同本仓库） | 文档站图标 / favicon：站点图标按静态帧渲染，只能用静态版 |
+| `ui/src/assets/icon.svg` | **自研** | Apache-2.0（同本仓库） | 单色菱形鸢面图标（深色模式由前端反色），与 `logo.svg` 不是同一份图形 |
 | `ui/src/assets/github.svg` | GitHub 官方标志图形 | 待确认 | 文件含 `<title>GitHub</title>`；使用受 GitHub 品牌规范约束 |
 | `ui/src/assets/login-banner.svg` | **自研**（本仓库原创，非第三方） | Apache-2.0（同本仓库） | 登录页背景；2026-09-18 重画，不再使用 AGPL 项目素材，图形与文案均为自绘 |
 | `ui/src/assets/fonts/maple-mono-latin-400-normal.woff` | 字体：Maple Mono（文件名遵循 `@fontsource` 命名约定） | 待确认 | 字体文件内未包含许可证声明 |
 | `ui/src/assets/fonts/maple-mono-latin-400-normal.woff2` | 字体：Maple Mono（同上） | 待确认 | 同上 |
 | `ui/src/assets/fonts/jetbrains-mono-latin-wght-normal.woff2` | 字体：JetBrains Mono（同上） | 待确认 | 同上 |
-| `ui/src/assets/fonts/kite-song-sc-400-normal.woff2` | **派生**自思源宋体 CN Regular（[adobe-fonts/source-han-serif](https://github.com/adobe-fonts/source-han-serif)，2.003） | SIL OFL 1.1 | 界面用子集（GB2312 全集 + `zh.json` 文案）并改名为 `Kite Song SC`；源字体的版权声明含保留字体名 `Source`，派生版未使用该名 |
-| `ui/src/assets/fonts/kite-kai-400-normal.woff2` | **派生**自寒蝉正楷体 ChillKai（[Warren2060/Chillkai](https://github.com/Warren2060/Chillkai)，v2.000；版权 © 2018-2022 ChillType，正文含数位发展部「全字库正楷体」的正楷字形与 Gentium 的西文部分） | 源字体为「政府资料开放授权条款 1.0」与 SIL OFL 1.1 双许可，本仓库采用 OFL 分支 | 同样的界面子集，改名为 `Kite Kai` |
+| `ui/src/assets/fonts/aerolink-song-sc-400-normal.woff2` | **派生**自思源宋体 CN Regular（[adobe-fonts/source-han-serif](https://github.com/adobe-fonts/source-han-serif)，2.003） | SIL OFL 1.1 | 界面用子集（GB2312 全集 + `zh.json` 文案）并改名为 `AeroLink Song SC`；源字体的版权声明含保留字体名 `Source`，派生版未使用该名 |
+| `ui/src/assets/fonts/aerolink-kai-400-normal.woff2` | **派生**自寒蝉正楷体 ChillKai（[Warren2060/Chillkai](https://github.com/Warren2060/Chillkai)，v2.000；版权 © 2018-2022 ChillType，正文含数位发展部「全字库正楷体」的正楷字形与 Gentium 的西文部分） | 源字体为「政府资料开放授权条款 1.0」与 SIL OFL 1.1 双许可，本仓库采用 OFL 分支 | 同样的界面子集，改名为 `AeroLink Kai` |
 
-`ui/src/assets/fonts/kite-*.woff2` 均由 `scripts/build-font-subsets.sh` 从上述源字体重新生成；OFL 1.1 全文见 `licenses/OFL-1.1.txt`。
+`ui/src/assets/fonts/aerolink-*.woff2` 均由 `scripts/build-font-subsets.sh` 从上述源字体重新生成；OFL 1.1 全文见 `licenses/OFL-1.1.txt`。
 | `docs/public/assets/fonts/dm-mono-latin-400-normal.woff2` | 字体：DM Mono（同上） | 待确认 | 同上 |
 | `docs/public/assets/fonts/dm-mono-latin-500-normal.woff2` | 字体：DM Mono（同上） | 待确认 | 同上 |
 | `docs/public/assets/fonts/cormorant-garamond-latin-400-normal.woff2` | 字体：Cormorant Garamond（同上） | 待确认 | 同上 |

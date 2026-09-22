@@ -1,4 +1,4 @@
-// Command dbmigrate 把 kite 的整库数据从一个数据库搬到另一个数据库（sqlite / mysql /
+// Command dbmigrate 把鸢联 AeroLink 的整库数据从一个数据库搬到另一个数据库（sqlite / mysql /
 // postgres 之间任意方向，典型用途是换成 PostgreSQL 以便多副本部署）。
 //
 // 为什么不用 mysqldump / pg_dump / sqlite3：
@@ -189,7 +189,7 @@ func applyEncryptKey() {
 			"default key. This is correct only when the source also used that key.")
 		return
 	}
-	common.KiteEncryptKey = key
+	common.EncryptKey = key
 }
 
 func openDatabase(dbType, dsn string) (*gorm.DB, error) {

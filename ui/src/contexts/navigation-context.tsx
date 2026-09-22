@@ -11,6 +11,8 @@ import {
 } from 'react'
 import { useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 
+import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
+
 interface NavigationEntry {
   path: string
   search: string
@@ -27,7 +29,7 @@ const NavigationContext = createContext<NavigationContextValue | undefined>(
   undefined
 )
 
-const STORAGE_KEY = 'kite-navigation-history'
+const STORAGE_KEY = 'aerolink-navigation-history'
 // 只防长时间使用后无限增长：超了丢最旧的一条。
 const MAX_DEPTH = 50
 
@@ -68,6 +70,8 @@ function readStoredStack(): { entries: NavigationEntry[]; index: number } {
   // error boundary。
   let stored: string | null
   try {
+    // 旧产品名时期的键：首次读取时把历史记录搬到新键（幂等）。
+    migrateLegacyKiteStorageKey(sessionStorage, STORAGE_KEY)
     stored = sessionStorage.getItem(STORAGE_KEY)
   } catch {
     return empty

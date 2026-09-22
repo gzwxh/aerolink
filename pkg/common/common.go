@@ -35,7 +35,7 @@ var (
 	Host                 = ""
 	Base                 = ""
 
-	// Kite 在创建 pod/终端/agent 工作负载时拉取的镜像。它们
+	// 鸢联 AeroLink 在创建 pod/终端/agent 工作负载时拉取的镜像。它们
 	// 已镜像到公司仓库（SWR，组织 "gzwxh"），以便隔离网络
 	// 的集群也能拉取；每个都仍可通过环境变量或
 	// 设置界面覆盖。
@@ -45,12 +45,13 @@ var (
 	DBType               = "sqlite"
 	DBDSN                = "dev.db"
 
-	// DefaultKiteEncryptKey 只是开发用的引导值。用它加密的
+	// DefaultEncryptKey 只是开发用的引导值。用它加密的
 	// 密钥，任何拿到数据库的人都能解密，因此
 	// 生产部署必须设置 AEROLINK_ENCRYPT_KEY（或
 	// 设置 AEROLINK_REQUIRE_ENCRYPT_KEY=true 使其成为强制要求）。
-	DefaultKiteEncryptKey = "kite-default-encryption-key-change-in-production"
-	KiteEncryptKey        = DefaultKiteEncryptKey
+	// 字符串值保持 "kite-..."：库里已加密数据就是用它加密的，改了会解不开。
+	DefaultEncryptKey = "kite-default-encryption-key-change-in-production"
+	EncryptKey        = DefaultEncryptKey
 
 	AllNamespaces = "_all"
 
@@ -147,7 +148,7 @@ func loadSecretEnvs() {
 	}
 
 	if key := Getenv("ENCRYPT_KEY"); key != "" {
-		KiteEncryptKey = key
+		EncryptKey = key
 		if len(key) < 32 {
 			klog.Warningf("AEROLINK_ENCRYPT_KEY is shorter than 32 bytes; use a longer random value (openssl rand -base64 32)")
 		}

@@ -308,7 +308,7 @@ test.describe('deployment lifecycle', () => {
           async () =>
             (await getJSON<DeploymentObject>(request, deploymentPath)).spec
               .template.metadata?.annotations?.[
-              'kite.kubernetes.io/restartedAt'
+              'aerolink.kubernetes.io/restartedAt'
             ] ?? '',
           { timeout: 60_000, message: 'restart annotation should be written' }
         )

@@ -51,7 +51,7 @@ const authUser = (provider: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 })
 
-// 目录账号（LDAP）在 Kite 里没有可提交的口令：向导不索要密码，
+// 目录账号（LDAP）在 AeroLink 里没有可提交的口令：向导不索要密码，
 // 后端按「最近重新登录过」判定，不满足时给出重新登录的入口。
 describe('被强制绑定 MFA 时的向导', () => {
   beforeEach(() => {

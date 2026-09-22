@@ -367,8 +367,8 @@ func TestRBACMiddleware(t *testing.T) {
 		{
 			name:       "base path all namespace list allowed",
 			method:     http.MethodGet,
-			url:        "/kite/api/v1/pods/_all",
-			base:       "/kite",
+			url:        "/aerolink/api/v1/pods/_all",
+			base:       "/aerolink",
 			cluster:    "prod",
 			username:   "alice",
 			roles:      []string{"pod-reader"},
@@ -378,8 +378,8 @@ func TestRBACMiddleware(t *testing.T) {
 		{
 			name:       "base path cluster pod watch allowed",
 			method:     http.MethodGet,
-			url:        "/kite/api/v1/_clusters/prod/pods/_all/watch",
-			base:       "/kite",
+			url:        "/aerolink/api/v1/_clusters/prod/pods/_all/watch",
+			base:       "/aerolink",
 			cluster:    "prod",
 			username:   "alice",
 			roles:      []string{"pod-reader"},

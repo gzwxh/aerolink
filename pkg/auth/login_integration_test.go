@@ -116,12 +116,12 @@ func TestPasswordLoginHonorsMFAAndGlobalDisable(t *testing.T) {
 func setupAuthIntegrationDB(t *testing.T) *model.User {
 	t.Helper()
 	originalDB := model.DB
-	originalEncryptKey := common.KiteEncryptKey
+	originalEncryptKey := common.EncryptKey
 	originalJWTSecret := common.JwtSecret
 	originalRBACConfig := rbac.RBACConfig
 	originalLimiter := credentialLoginAttempts
 
-	common.KiteEncryptKey = "auth-integration-test-key"
+	common.EncryptKey = "auth-integration-test-key"
 	common.JwtSecret = "auth-integration-test-jwt-secret"
 	// 限流状态现在在数据库里，每个用例换新库即等于清空（见 login_attempt_limiter.go）。
 	credentialLoginAttempts = &credentialLoginAttemptLimiter{}
@@ -184,7 +184,7 @@ func setupAuthIntegrationDB(t *testing.T) *model.User {
 			_ = sqlDB.Close()
 		}
 		model.DB = originalDB
-		common.KiteEncryptKey = originalEncryptKey
+		common.EncryptKey = originalEncryptKey
 		common.JwtSecret = originalJWTSecret
 		rbac.RBACConfig = originalRBACConfig
 		credentialLoginAttempts = originalLimiter

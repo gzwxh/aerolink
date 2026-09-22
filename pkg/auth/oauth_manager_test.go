@@ -43,18 +43,18 @@ func TestGetRequestHost(t *testing.T) {
 	t.Run("request host and scheme", func(t *testing.T) {
 		common.Host = ""
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
-		req := httptest.NewRequest(http.MethodGet, "http://kite.local", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://aerolink.local", nil)
 		c.Request = req
 
-		if got := getRequestHost(c); got != "http://kite.local" {
-			t.Fatalf("getRequestHost() = %q, want %q", got, "http://kite.local")
+		if got := getRequestHost(c); got != "http://aerolink.local" {
+			t.Fatalf("getRequestHost() = %q, want %q", got, "http://aerolink.local")
 		}
 	})
 
 	t.Run("fallback", func(t *testing.T) {
 		common.Host = ""
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
-		c.Request = httptest.NewRequest(http.MethodGet, "http://kite.local", nil)
+		c.Request = httptest.NewRequest(http.MethodGet, "http://aerolink.local", nil)
 		c.Request.Host = ""
 
 		if got := getRequestHost(c); got != "http://localhost" {
@@ -92,8 +92,8 @@ func TestGenerateAndValidateJWT(t *testing.T) {
 	if claims.RefreshToken != "refresh-token" {
 		t.Fatalf("ValidateJWT() refresh token = %q, want %q", claims.RefreshToken, "refresh-token")
 	}
-	if claims.Issuer != "Kite" {
-		t.Fatalf("ValidateJWT() issuer = %q, want %q", claims.Issuer, "Kite")
+	if claims.Issuer != "AeroLink" {
+		t.Fatalf("ValidateJWT() issuer = %q, want %q", claims.Issuer, "AeroLink")
 	}
 }
 

@@ -69,7 +69,7 @@ export function ResponsiveTabs({
   const [draggedTabValue, setDraggedTabValue] = useState<string | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const storageKey = customizationKey
-    ? `kite:responsive-tabs:${customizationKey}`
+    ? `aerolink:responsive-tabs:${customizationKey}`
     : ''
 
   useEffect(() => {

@@ -11,7 +11,7 @@ import (
 
 // 强制绑定只对能自助绑定的账号生效。
 //
-// OIDC 账号在 Kite 里既没有可校验的口令，也没有绑定入口，一旦被 mfa_setup_required
+// OIDC 账号在鸢联 AeroLink 里既没有可校验的口令，也没有绑定入口，一旦被 mfa_setup_required
 // 拦下就只能卡在绑定向导里（改前策略设「所有用户」会锁死全部 OIDC 账号）。
 func TestBlockForMFAEnrollmentSkipsAccountsThatCannotSelfEnroll(t *testing.T) {
 	user := setupAuthDBWithSecuritySetting(t)

@@ -21,7 +21,7 @@ import (
 //   - 角色模板（roleTemplate）才是真正的 RBAC 规则（apiGroups × resources × verbs）。
 //
 // 因此「某人在某命名空间有什么权限」= 该命名空间所属项目的 PRTB + 所属集群的 CRTB。
-// 归一化后的数据供 main.go 拼装成 Kite 的权限绑定组。
+// 归一化后的数据供 main.go 拼装成鸢联 AeroLink 的权限绑定组。
 //
 // 字段名在 Norman（/v3）与 Steve（/v1）之间并不一致，且随版本漂移，所以这里的读取
 // 一律走「多个候选键 + 缺失时记录说明」，而不是绑定结构体：读不全时宁可少迁一块、
@@ -54,7 +54,7 @@ type rancherBinding struct {
 	ProjectID      string
 	RoleTemplateID string
 	SubjectType    string // "user" | "group"
-	Subject        string // Kite 侧主体名
+	Subject        string // 鸢联 AeroLink 侧主体名
 	Principal      string
 	RancherSubject string
 	Notes          []string
@@ -716,9 +716,9 @@ func bindingsFromItems(prtbs, crtbs []jsonObject, projects map[string]rancherPro
 	return out, notes, nil
 }
 
-// subjectResolver 把 Rancher 的主体标识翻成 Kite 的主体名。
+// subjectResolver 把 Rancher 的主体标识翻成鸢联 AeroLink 的主体名。
 //
-// 用户：以 Rancher 用户名为准（Kite 与 Rancher 接同一个目录时用户名一致），
+// 用户：以 Rancher 用户名为准（鸢联 AeroLink 与 Rancher 接同一个目录时用户名一致），
 // principalId 只用于回查用户名；--user-map 可覆盖。
 // 用户组：本地组走 /v3/groups 的组名；AD / LDAP / OIDC 组从 principalId 里取
 // （DN 取第一段的值，例如 cn=devs,ou=groups,... → devs），--group-map 可覆盖。

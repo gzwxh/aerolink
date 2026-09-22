@@ -601,11 +601,29 @@ export function createSearchFilter<T>(
 }
 
 /**
- * Kite 在创建表单里记录自由文本描述时写入的注解。
+ * AeroLink 在创建表单里记录自由文本描述时写入的注解。
  * 它保存在 annotations（而绝不是 labels）中，这样描述不会进入
  * 标签选择器，同时又能从对象本身读到。
  */
-export const DESCRIPTION_ANNOTATION = 'kite.io/description'
+export const DESCRIPTION_ANNOTATION = 'aerolink.io/description'
+
+/**
+ * 改名前的描述注解。改名后只写新键，但读的时候要兼容旧对象：
+ * 界面上「升级前建过的」资源仍带着旧键，不读就要丢描述。
+ */
+export const LEGACY_DESCRIPTION_ANNOTATION = 'kite.io/description'
+
+/** 读取描述：新键优先，其次回退到改名前的旧键。 */
+export function readDescription(
+  annotations: Record<string, string> | undefined | null
+): string {
+  if (!annotations) return ''
+  return (
+    annotations[DESCRIPTION_ANNOTATION] ??
+    annotations[LEGACY_DESCRIPTION_ANNOTATION] ??
+    ''
+  )
+}
 
 /**
  * 创建表单（ConfigMap / Secret …）共用的校验模式。

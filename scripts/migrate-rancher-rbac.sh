@@ -13,7 +13,7 @@
 #   export RANCHER_URL=https://rancher.example.com
 #   export RANCHER_TOKEN='token-xxxxx:yyyyy'
 #   export AEROLINK_URL=https://aerolink.example.com   # 旧名 KITE_URL 仍可用
-#   export AEROLINK_TOKEN='kite1-xxxxxxxx'            # 旧名 KITE_TOKEN 仍可用
+#   export AEROLINK_TOKEN='aerolink1-xxxxxxxx'        # 旧名 KITE_TOKEN 仍可用
 #
 #   scripts/migrate-rancher-rbac.sh -cluster-map c-m-abc123=prod        # 看计划
 #   scripts/migrate-rancher-rbac.sh -cluster-map c-m-abc123=prod -apply # 落库

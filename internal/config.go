@@ -16,8 +16,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// KiteConfig 表示外部配置文件的结构。
-type KiteConfig struct {
+// AeroLinkConfig 表示外部配置文件的结构。
+type AeroLinkConfig struct {
 	SuperUser *SuperUserConfig `yaml:"superUser"`
 	Clusters  []ClusterConfig  `yaml:"clusters"`
 	OAuth     []OAuthConfig    `yaml:"oauth"`
@@ -122,7 +122,7 @@ func LoadConfigFromFile(path string) {
 	common.SetManagedSections(sections)
 }
 
-func readConfigFile(path string) (*KiteConfig, [sha256.Size]byte, error) {
+func readConfigFile(path string) (*AeroLinkConfig, [sha256.Size]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, [sha256.Size]byte{}, fmt.Errorf("failed to read config file %s: %w", path, err)
@@ -132,7 +132,7 @@ func readConfigFile(path string) (*KiteConfig, [sha256.Size]byte, error) {
 	// 从环境变量展开 ${ENV_VAR} 占位符
 	expanded := os.ExpandEnv(string(data))
 
-	var cfg KiteConfig
+	var cfg AeroLinkConfig
 	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
 		return nil, hash, fmt.Errorf("failed to parse config file %s: %w", path, err)
 	}
@@ -140,7 +140,7 @@ func readConfigFile(path string) (*KiteConfig, [sha256.Size]byte, error) {
 	return &cfg, hash, nil
 }
 
-func applyConfig(path string, cfg *KiteConfig) AppliedSections {
+func applyConfig(path string, cfg *AeroLinkConfig) AppliedSections {
 	sections := AppliedSections{}
 	klog.Infof("Loading configuration from file: %s", path)
 

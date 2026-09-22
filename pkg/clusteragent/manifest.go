@@ -24,7 +24,7 @@ func GenerateManifest(serverURL, token, publicKey, image string) string {
 	return fmt.Sprintf(`apiVersion: v1
 kind: Secret
 metadata:
-  name: kite-cluster-agent-token
+  name: aerolink-cluster-agent-token
   namespace: kube-system
 type: Opaque
 stringData:
@@ -33,40 +33,40 @@ stringData:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kite-cluster-agent
+  name: aerolink-cluster-agent
   namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: kite-cluster-agent
+  name: aerolink-cluster-agent
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin
 subjects:
   - kind: ServiceAccount
-    name: kite-cluster-agent
+    name: aerolink-cluster-agent
     namespace: kube-system
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kite-cluster-agent
+  name: aerolink-cluster-agent
   namespace: kube-system
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: kite-cluster-agent
+      app.kubernetes.io/name: aerolink-cluster-agent
   template:
     metadata:
       annotations:
-        kite.kubernetes.io/cluster-agent-token-hash: %s
+        aerolink.kubernetes.io/cluster-agent-token-hash: %s
       labels:
-        app.kubernetes.io/name: kite-cluster-agent
+        app.kubernetes.io/name: aerolink-cluster-agent
     spec:
-      serviceAccountName: kite-cluster-agent
+      serviceAccountName: aerolink-cluster-agent
       containers:
         - name: cluster-agent
           image: %s
@@ -83,7 +83,7 @@ spec:
             - name: CLUSTER_AGENT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: kite-cluster-agent-token
+                  name: aerolink-cluster-agent-token
                   key: token
             - name: CLUSTER_AGENT_PUBLIC_KEY
               value: %s

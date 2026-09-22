@@ -1,4 +1,4 @@
-# kite 的默认配置值。
+# 鸢联 AeroLink 的默认配置值。
 # 这是一个 YAML 格式的文件。
 # 声明需要传入模板的变量。
 
@@ -36,13 +36,13 @@ debug: false
 # 应用对外访问的 Host
 # 用于生成 OAuth 重定向 URL
 # 留空表示从请求头中获取
-# 示例：https://kite.zzde.me
+# 示例：https://aerolink.gogdev.cn
 host: ""
 
 # 应用的基础路径
-# 如果要把 kite 部署在子路径下，请相应地设置该值。
+# 如果要把鸢联 AeroLink 部署在子路径下，请相应地设置该值。
 # 记得同时把 ingress 的路径设置为一致。
-# 示例："/kite"
+# 示例："/aerolink"
 basePath: ""
 
 # 审计/访问日志的本地归档目录（注入 AEROLINK_AUDIT_ARCHIVE_DIR）。
@@ -173,7 +173,7 @@ db:
       # 在容器内的挂载位置
       mountPath: /data
       # mountPath 下的 sqlite 文件名
-      filename: kite.db
+      filename: aerolink.db
     # 额外的 sqlite 数据库连接选项，会以 "/<filename>?<options>" 形式追加到 DSN。
     # 仅支持 pure-Go 驱动的 "_pragma=..." 形式；mattn 风格的
     # "_journal_mode=WAL&_busy_timeout=5000" 会被静默忽略。
@@ -192,7 +192,7 @@ config:
   # 包含 `config.yaml` 键的已有 Secret 名称。
   # 设置后，下面的内联配置会被忽略。
   # 该 Secret 由用户自行创建和管理。
-  # 示例：kubectl create secret generic kite-config --from-file=config.yaml=./my-config.yaml
+  # 示例：kubectl create secret generic aerolink-config --from-file=config.yaml=./my-config.yaml
   existingSecret: ""
   # --- 内联配置（existingSecret 为空时使用） ---
   # 超级用户配置（用户不存在时创建，重启时更新密码）
@@ -249,7 +249,7 @@ config:
   #   enabled: true
   #   serverUrl: "ldaps://ldap.example.com:636"
   #   useStartTLS: false
-  #   bindDn: "cn=svc-kite,ou=services,dc=example,dc=com"
+  #   bindDn: "cn=svc-aerolink,ou=services,dc=example,dc=com"
   #   bindPassword: "bind-password"
   #   userBaseDn: "ou=users,dc=example,dc=com"
   #   userFilter: "(uid=%s)"
@@ -330,15 +330,15 @@ ingress:
   className: "nginx"
   annotations: {}
   hosts:
-    - host: kite.zzde.me
+    - host: aerolink.gogdev.cn
       paths:
         - path: /
           pathType: ImplementationSpecific
   # tls:
   #  - hosts:
-  #      - kite.zzde.me
+  #      - aerolink.gogdev.cn
 
-# 用于对外暴露 Kite 的 Gateway API 资源
+# 用于对外暴露鸢联 AeroLink 的 Gateway API 资源
 # 需要集群中已安装 Gateway API CRD
 # 更多信息见：https://gateway-api.sigs.k8s.io/
 gateway:
@@ -370,22 +370,22 @@ gateway:
     # - name: https
     #   port: 443
     #   protocol: HTTPS
-    #   hostname: "kite.example.com"
+    #   hostname: "aerolink.gogdev.cn"
     #   allowedRoutes:
     #     namespaces:
     #       from: Same
     #   tls:
     #     mode: Terminate
     #     certificateRefs:
-    #       - name: kite-tls-secret
+    #       - name: aerolink-tls-secret
   # HTTPRoute 配置（支持配置多条路由）
   httpRoutes:
-    - name: kite
+    - name: aerolink
       # HTTPRoute 的 Annotations
       annotations: {}
       # 要匹配的 Hostname（可选，留空则匹配所有）
       hostnames: []
-        # - kite.example.com
+        # - aerolink.gogdev.cn
       # 路由规则
       rules:
         - matches:
@@ -395,7 +395,7 @@ gateway:
           timeouts:
             request: "120s"
     # 示例：为不同的 hostname/路径添加路由
-    # - name: kite-api
+    # - name: aerolink-api
     #   annotations: {}
     #   hostnames:
     #     - api.example.com

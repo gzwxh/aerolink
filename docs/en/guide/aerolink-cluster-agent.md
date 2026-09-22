@@ -67,17 +67,17 @@ aerolink cluster-agent --server='https://aerolink.example.com' --token='<cluster
 `--server` may include AeroLink's Base Path. For example:
 
 ```bash
-aerolink cluster-agent --server='https://aerolink.example.com/kite' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
+aerolink cluster-agent --server='https://aerolink.example.com/aerolink' --token='<cluster-agent-token>' --public-key='<registration-public-key>'
 ```
 
 The Cluster Agent automatically appends the `/api/v1/cluster-agent/register` and `/api/v1/cluster-agent/connect` paths as needed; pass only the AeroLink Server base address to `--server`.
 
 The Kubernetes YAML option creates the following resources:
 
-- A `kite-cluster-agent-token` Secret in the `kube-system` namespace to hold the Cluster Agent Token.
-- A `kite-cluster-agent` ServiceAccount in the `kube-system` namespace.
+- A `aerolink-cluster-agent-token` Secret in the `kube-system` namespace to hold the Cluster Agent Token.
+- A `aerolink-cluster-agent` ServiceAccount in the `kube-system` namespace.
 - A ClusterRoleBinding that binds this ServiceAccount to `cluster-admin`.
-- A single-replica `kite-cluster-agent` Deployment in the `kube-system` namespace.
+- A single-replica `aerolink-cluster-agent` Deployment in the `kube-system` namespace.
 
 You can deploy in either of the following ways:
 
@@ -96,7 +96,7 @@ The URL contains an encrypted manifest grant that is separate from the Cluster A
 Copy the YAML from the connection info dialog, save it to a file, and then deploy:
 
 ```bash
-kubectl apply -f kite-cluster-agent.yaml
+kubectl apply -f aerolink-cluster-agent.yaml
 ```
 
 The image used by the Deployment is configured via **Cluster Agent Image** in the platform settings, defaulting to `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest`. The token is injected into the Cluster Agent process via a Secret.

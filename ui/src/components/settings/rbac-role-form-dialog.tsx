@@ -135,7 +135,7 @@ export function RBACRoleFormDialog({
   // ----- 权限清单与搬运操作 -----
 
   // 条目与「权限一览」页同源（权限 ID / 名称 / 来源 / 范围徽标一致）。设置族
-  // （settings / settings.<章节>，即 kite:settings*）不进「可用」：这些权限由内置角色
+  // （settings / settings.<章节>，即 aerolink:settings*）不进「可用」：这些权限由内置角色
   // 承担（三员完整管理，只读管理员只有 get），弹窗里只把角色已有的设置授权列在
   // 「已赋予」里，可以查看与移除。
   const privileges = useMemo<Privilege[]>(() => {

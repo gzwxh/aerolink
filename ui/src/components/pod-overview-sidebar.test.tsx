@@ -20,8 +20,8 @@ vi.mock('react-i18next', async (importOriginal) => {
 
 const service: RelatedResources = {
   type: 'services',
-  name: 'kite',
-  namespace: 'kite',
+  name: 'aerolink',
+  namespace: 'aerolink',
 }
 
 function renderCard(initialEntry = '/') {
@@ -36,8 +36,8 @@ describe('CompactRelatedResourcesCard', () => {
   it('点击相关资源直接跳转到该资源的详情页，而不是内嵌弹窗', () => {
     renderCard()
 
-    const link = screen.getByText('kite').closest('a')
-    expect(link).toHaveAttribute('href', '/services/kite/kite')
+    const link = screen.getByText('aerolink').closest('a')
+    expect(link).toHaveAttribute('href', '/services/aerolink/aerolink')
     // 旧的弹窗触发按钮不应再出现
     expect(screen.queryByRole('button')).toBeNull()
   })
@@ -45,9 +45,9 @@ describe('CompactRelatedResourcesCard', () => {
   it('iframe 视图下保留 iframe 参数', () => {
     renderCard('/?iframe=true')
 
-    expect(screen.getByText('kite').closest('a')).toHaveAttribute(
+    expect(screen.getByText('aerolink').closest('a')).toHaveAttribute(
       'href',
-      '/services/kite/kite?iframe=true'
+      '/services/aerolink/aerolink?iframe=true'
     )
   })
 })

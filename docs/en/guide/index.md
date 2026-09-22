@@ -23,7 +23,7 @@ Install AeroLink with Helm, use port forwarding for the first visit, then connec
 - **Install and manage releases:** [Helm Management](./helm-management)
 - **Review resource changes:** [Resource History](./resource-history)
 - **Troubleshoot with an AI agent:** [AI Assistant](./ai-assistant)
-- **Connect private or remote clusters:** [AeroLink Cluster Agent](./kite-cluster-agent)
+- **Connect private or remote clusters:** [AeroLink Cluster Agent](./aerolink-cluster-agent)
 
 ## Platform at a glance
 

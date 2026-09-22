@@ -15,10 +15,10 @@ AeroLink does not query upstream releases either: there is no update check and n
 If you encounter an error message like the following when accessing resources:
 
 ```txt
-User admin does not have permission to get configmaps in namespace kite in cluster in-cluster
+User admin does not have permission to get configmaps in namespace aerolink in cluster in-cluster
 ```
 
-This means that user `admin` does not have permission to access `configmaps` resources in the `kite` namespace.
+This means that user `admin` does not have permission to access `configmaps` resources in the `aerolink` namespace.
 
 You need to refer to the [RBAC Configuration Guide](./config/rbac-config) to configure user permissions.
 

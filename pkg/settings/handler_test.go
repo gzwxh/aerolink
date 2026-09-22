@@ -98,10 +98,10 @@ func TestHandleUpdateGeneralSettingRejectsUnsafeAIConfiguration(t *testing.T) {
 func setupGeneralSettingTestDB(t *testing.T, apiKey string) {
 	t.Helper()
 	originalDB := model.DB
-	originalEncryptKey := common.KiteEncryptKey
+	originalEncryptKey := common.EncryptKey
 	originalJWTSecret := common.JwtSecret
 
-	common.KiteEncryptKey = "settings-handler-test-key"
+	common.EncryptKey = "settings-handler-test-key"
 	common.JwtSecret = "settings-handler-test-jwt-secret"
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -134,7 +134,7 @@ func setupGeneralSettingTestDB(t *testing.T, apiKey string) {
 			_ = sqlDB.Close()
 		}
 		model.DB = originalDB
-		common.KiteEncryptKey = originalEncryptKey
+		common.EncryptKey = originalEncryptKey
 		common.JwtSecret = originalJWTSecret
 	})
 }

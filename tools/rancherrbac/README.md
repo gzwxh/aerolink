@@ -114,7 +114,7 @@ AEROLINK_URL=https://aerolink-test.example.com ./rancherrbac -config prod.yaml
 
    - 迁移做完后建议撤销这次授权（见 5.6），别让一把长期有效的 key 一直挂着管理员角色。
 4. **备份 AeroLink 数据库。** 工具只写这五张表，按你们的备份手段（mysqldump / pg_dump /
-   `sqlite3 kite.db ".backup backup.db"`）留一份，作为 5.6 之外的兜底：`roles`、
+   `sqlite3 aerolink.db ".backup backup.db"`）留一份，作为 5.6 之外的兜底：`roles`、
    `role_assignments`、`binding_groups`、`binding_group_namespaces`、`binding_group_members`。
 5. **影响面先对齐预期：** 工具不动 Rancher（只有 GET）、不动下游集群里的 RBAC，只写 AeroLink 的
    角色与权限绑定组；写入即时生效，AeroLink 的 RBAC 缓存约 1 分钟。
@@ -164,7 +164,7 @@ chmod 600 rancherrbac.yaml                   # 里面有明文密钥
    roles = {r['name'] for r in json.load(open('aerolink-roles.json'))['roles']}
    groups = {g['name'] for g in json.load(open('aerolink-groups.json'))['bindingGroups']}
    print('角色同名：', [r['name'] for r in plan['roles'] if r['name'] in roles])
-   print('绑定组同名：', [(g['kiteCluster'], g['name']) for g in plan['groups'] if g['name'] in groups])
+   print('绑定组同名：', [(g['aerolinkCluster'], g['name']) for g in plan['groups'] if g['name'] in groups])
    PY
    ```
 
@@ -330,7 +330,7 @@ RANCHERRBAC_BIN=/path/to/rancherrbac scripts/migrate-rancher-rbac.sh -help
 | `-init-config` | 生成带注释的配置模板，然后退出；不覆盖已存在的文件 |
 | `-version` | 打印版本号 |
 | `-aerolink-url` | AeroLink 控制台地址（默认取 `$AEROLINK_URL`） |
-| `-aerolink-token` | AeroLink API key，即控制台里的 `kite<id>-<secret>`（默认取 `$AEROLINK_TOKEN`） |
+| `-aerolink-token` | AeroLink API key，即控制台里的 `aerolink<id>-<secret>`（改名前的 `kite<id>-<secret>` 同样可用；默认取 `$AEROLINK_TOKEN`） |
 | `-aerolink-insecure` | 跳过 AeroLink 的 TLS 证书校验 |
 | `-apply` | 真正写入 AeroLink；不加则只打印计划 |
 | `-plan-out` | 把计划写成 JSON，便于评审与留档 |

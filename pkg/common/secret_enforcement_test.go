@@ -27,7 +27,7 @@ func TestLoadEnvsAllowsShortJWTSecretOnlyWithEscapeHatch(t *testing.T) {
 	if !AllowInsecureSecrets {
 		t.Fatal("AllowInsecureSecrets should follow AEROLINK_ALLOW_INSECURE_SECRETS")
 	}
-	if KiteEncryptKey != "short-key" {
-		t.Fatalf("KiteEncryptKey = %q, want %q", KiteEncryptKey, "short-key")
+	if EncryptKey != "short-key" {
+		t.Fatalf("EncryptKey = %q, want %q", EncryptKey, "short-key")
 	}
 }

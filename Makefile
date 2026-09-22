@@ -1,4 +1,4 @@
-# Makefile for Kite project
+# Makefile for AeroLink project
 .PHONY: help dev build build-cli rancherrbac clean test docker-build docker-run frontend backend backend-cli install deps changelog e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-existing e2e-run-headed e2e-test e2e-test-headed
 
 # Variables
@@ -7,18 +7,18 @@ UI_DIR=ui
 E2E_DIR=e2e
 DOCKER_IMAGE=aerolink
 DOCKER_TAG=latest
-E2E_KIND_NAME ?= kite-e2e
+E2E_KIND_NAME ?= aerolink-e2e
 E2E_PORT ?= 38080
-E2E_KUBECONFIG ?= $(shell printf '%s' "$${TMPDIR:-/tmp/}kite-e2e.kubeconfig")
-E2E_AUTH_NETWORK ?= kite-e2e-auth
-E2E_LDAP_CONTAINER ?= kite-e2e-ldap
+E2E_KUBECONFIG ?= $(shell printf '%s' "$${TMPDIR:-/tmp/}aerolink-e2e.kubeconfig")
+E2E_AUTH_NETWORK ?= aerolink-e2e-auth
+E2E_LDAP_CONTAINER ?= aerolink-e2e-ldap
 E2E_LDAP_PORT ?= 3389
-E2E_DEX_CONTAINER ?= kite-e2e-dex
+E2E_DEX_CONTAINER ?= aerolink-e2e-dex
 E2E_OAUTH_PORT ?= 5556
 # Existing-cluster mode (e2e-run-existing): KUBECONFIG must point at the cluster,
-# E2E_CLUSTER_NAME is the kubeconfig context Kite imports it as, and
+# E2E_CLUSTER_NAME is the kubeconfig context AeroLink imports it as, and
 # E2E_NODE_NAME is the node the node-based specs look for.
-E2E_CLUSTER_NAME ?= kite-e2e
+E2E_CLUSTER_NAME ?= aerolink-e2e
 E2E_CONTEXT_NAME ?= $(E2E_CLUSTER_NAME)
 E2E_NODE_NAME ?=
 SPEC ?=
@@ -256,20 +256,20 @@ e2e-setup-ldap: ## Start the OpenLDAP service used by external-auth e2e
 		--network "$(E2E_AUTH_NETWORK)" \
 		--network-alias ldap \
 		-p "$(E2E_LDAP_PORT):389" \
-		-e LDAP_ORGANISATION="Kite E2E" \
-		-e LDAP_DOMAIN="kite.test" \
+		-e LDAP_ORGANISATION="AeroLink E2E" \
+		-e LDAP_DOMAIN="aerolink.test" \
 		-e LDAP_ADMIN_PASSWORD="admin" \
 		-e LDAP_CONFIG_PASSWORD="admin" \
 		-e LDAP_TLS="false" \
 		-v "$(CURDIR)/e2e/fixtures/openldap:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro" \
 		osixia/openldap:1.5.0 --copy-service
 	@for i in $$(seq 1 60); do \
-		if docker exec "$(E2E_LDAP_CONTAINER)" ldapsearch -x -H ldap://localhost:389 -b dc=kite,dc=test -D "cn=admin,dc=kite,dc=test" -w admin >/dev/null 2>&1; then \
+		if docker exec "$(E2E_LDAP_CONTAINER)" ldapsearch -x -H ldap://localhost:389 -b dc=aerolink,dc=test -D "cn=admin,dc=aerolink,dc=test" -w admin >/dev/null 2>&1; then \
 			break; \
 		fi; \
 		sleep 1; \
 	done
-	docker exec "$(E2E_LDAP_CONTAINER)" ldapsearch -x -H ldap://localhost:389 -b dc=kite,dc=test -D "cn=admin,dc=kite,dc=test" -w admin >/dev/null
+	docker exec "$(E2E_LDAP_CONTAINER)" ldapsearch -x -H ldap://localhost:389 -b dc=aerolink,dc=test -D "cn=admin,dc=aerolink,dc=test" -w admin >/dev/null
 
 e2e-setup-dex: ## Start the Dex service used by external-auth e2e
 	@docker network inspect "$(E2E_AUTH_NETWORK)" >/dev/null 2>&1 || docker network create "$(E2E_AUTH_NETWORK)" >/dev/null

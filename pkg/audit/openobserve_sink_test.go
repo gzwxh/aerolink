@@ -57,7 +57,7 @@ func TestOpenObserveSinkWritePostsRecordsArray(t *testing.T) {
 	})
 
 	sink := newOpenObserveSink(t, model.OpenObserveArchive{
-		Org:      "kite-org",
+		Org:      "aerolink-org",
 		Stream:   "audit-stream",
 		Username: "ops@example.com",
 		Password: model.SecretString("s3cr3t"),
@@ -74,8 +74,8 @@ func TestOpenObserveSinkWritePostsRecordsArray(t *testing.T) {
 		t.Fatalf("Write() error = %v", err)
 	}
 
-	if path != "/api/kite-org/audit-stream/_json" {
-		t.Errorf("ingest path = %q, want /api/kite-org/audit-stream/_json", path)
+	if path != "/api/aerolink-org/audit-stream/_json" {
+		t.Errorf("ingest path = %q, want /api/aerolink-org/audit-stream/_json", path)
 	}
 	if contentType != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", contentType)

@@ -135,8 +135,8 @@ func TestDeleteAPIKeyRejectsNonAPIKeyUser(t *testing.T) {
 func setupAPIKeyTestDB(t *testing.T) {
 	t.Helper()
 	originalDB := model.DB
-	originalEncryptKey := common.KiteEncryptKey
-	common.KiteEncryptKey = "apikey-handler-test-key"
+	originalEncryptKey := common.EncryptKey
+	common.EncryptKey = "apikey-handler-test-key"
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
@@ -152,7 +152,7 @@ func setupAPIKeyTestDB(t *testing.T) {
 			_ = sqlDB.Close()
 		}
 		model.DB = originalDB
-		common.KiteEncryptKey = originalEncryptKey
+		common.EncryptKey = originalEncryptKey
 	})
 }
 

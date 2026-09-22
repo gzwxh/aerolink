@@ -39,7 +39,7 @@ AeroLink supports several environment variables by default to change the default
 
 ## Runtime & Operations
 
-- **AEROLINK_BASE**: Base path when AeroLink is served behind a sub-path (e.g. `/kite`).
+- **AEROLINK_BASE**: Base path when AeroLink is served behind a sub-path (e.g. `/aerolink`).
 - **CORS_ALLOWED_ORIGINS**: Comma-separated list of origins allowed for CORS. Development only.
 - **DISABLE_GZIP**: Set to `true` to disable gzip response compression (default: disabled).
 - **NAMESPACE**: Kubernetes namespace where terminal/kubectl agent pods are created (default `kube-system`).

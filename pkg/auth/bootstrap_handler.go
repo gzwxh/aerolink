@@ -45,7 +45,7 @@ type bootstrapSession struct {
 type bootstrapBranding struct {
 	// LogoURL 是管理员配置的自定义 logo；空串表示由前端使用内置图标。
 	LogoURL string `json:"logoUrl"`
-	// SiteName 是控制台展示名称；空串表示由前端使用默认名 “Kite”。
+	// SiteName 是控制台展示名称；空串表示由前端使用默认名 “鸢联 AeroLink”。
 	SiteName string `json:"siteName"`
 }
 

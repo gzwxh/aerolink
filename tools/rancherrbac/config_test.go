@@ -188,8 +188,8 @@ namespacesSource: v1
 		t.Fatalf("环境变量应当优先于配置文件：%q", opts.rancherURL)
 	}
 	// 环境变量没给的字段继续用配置文件里的值。
-	if opts.rancherToken != "token-config:secret" || opts.kiteURL != "https://kite.from-config" ||
-		opts.kiteToken != "kite1-from-config" {
+	if opts.rancherToken != "token-config:secret" || opts.aerolinkURL != "https://kite.from-config" ||
+		opts.aerolinkToken != "kite1-from-config" {
 		t.Fatalf("配置文件的值被丢了：%#v", opts)
 	}
 	if opts.timeout != 30*time.Second || opts.namespacesSource != sourceV1 {
@@ -220,8 +220,8 @@ namespacesSource: v1
 		t.Fatalf("映射表应合并而不是整体替换：%#v", maps)
 	}
 	// 命令行没碰的字段仍然来自配置文件。
-	if opts.kiteToken != "kite1-from-config" {
-		t.Fatalf("kiteToken = %q", opts.kiteToken)
+	if opts.aerolinkToken != "kite1-from-config" {
+		t.Fatalf("aerolinkToken = %q", opts.aerolinkToken)
 	}
 }
 
@@ -237,8 +237,8 @@ func TestLoadOptionsPrefersAeroLinkEnvNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("组装参数失败：%v", err)
 	}
-	if opts.kiteURL != "https://aerolink.from-env" || opts.kiteToken != "kite1-from-env" {
-		t.Fatalf("新名应当优先于旧名：%q / %q", opts.kiteURL, opts.kiteToken)
+	if opts.aerolinkURL != "https://aerolink.from-env" || opts.aerolinkToken != "kite1-from-env" {
+		t.Fatalf("新名应当优先于旧名：%q / %q", opts.aerolinkURL, opts.aerolinkToken)
 	}
 }
 
@@ -252,8 +252,8 @@ func TestLoadOptionsAcceptsLegacyEnvNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("组装参数失败：%v", err)
 	}
-	if opts.kiteURL != "https://kite.from-legacy-env" || opts.kiteToken != "kite1-from-legacy-env" {
-		t.Fatalf("旧名应当仍然生效：%q / %q", opts.kiteURL, opts.kiteToken)
+	if opts.aerolinkURL != "https://kite.from-legacy-env" || opts.aerolinkToken != "kite1-from-legacy-env" {
+		t.Fatalf("旧名应当仍然生效：%q / %q", opts.aerolinkURL, opts.aerolinkToken)
 	}
 }
 
@@ -273,8 +273,8 @@ aerolink:
 	if err != nil {
 		t.Fatalf("组装参数失败：%v", err)
 	}
-	if opts.kiteURL != "https://aerolink.from-new-key" || opts.kiteToken != "kite1-from-new-key" {
-		t.Fatalf("aerolink: 应当优先于 kite:：%q / %q", opts.kiteURL, opts.kiteToken)
+	if opts.aerolinkURL != "https://aerolink.from-new-key" || opts.aerolinkToken != "kite1-from-new-key" {
+		t.Fatalf("aerolink: 应当优先于 kite:：%q / %q", opts.aerolinkURL, opts.aerolinkToken)
 	}
 }
 
@@ -288,7 +288,7 @@ func TestParseFlagsAcceptsLegacyNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("解析参数失败：%v", err)
 	}
-	if cli.kiteURL != "https://kite.from-cli" || cli.kiteToken != "kite1-from-cli" || !cli.kiteInsecure {
+	if cli.aerolinkURL != "https://kite.from-cli" || cli.aerolinkToken != "kite1-from-cli" || !cli.aerolinkInsecure {
 		t.Fatalf("旧参数名应当照旧生效：%#v", cli)
 	}
 	if !set["aerolink-url"] || !set["aerolink-token"] || !set["aerolink-insecure"] {
@@ -299,11 +299,31 @@ func TestParseFlagsAcceptsLegacyNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("解析参数失败：%v", err)
 	}
-	if cli.kiteURL != "https://aerolink.example.com" || cli.kiteToken != "kite1-secret" {
+	if cli.aerolinkURL != "https://aerolink.example.com" || cli.aerolinkToken != "kite1-secret" {
 		t.Fatalf("新参数名应当生效：%#v", cli)
 	}
 	if !set["aerolink-url"] || !set["aerolink-token"] {
 		t.Fatalf("新参数名应当记入 set：%#v", set)
+	}
+}
+
+// API key 前缀改名后，新签发的 key 以 aerolink 开头；存量 key 仍是 kite，两者都要认。
+// 其它串（例如 Rancher 的 token-xxxxx:yyyyy）必须拒，不能拿去请求。
+func TestLooksLikeAPIKey(t *testing.T) {
+	cases := []struct {
+		token string
+		want  bool
+	}{
+		{"aerolink1-abcdef", true},
+		{"kite12-secret", true},
+		{"", false},
+		{"token-xxxxx:yyyyy", false},
+		{"-secret", false},
+	}
+	for _, tc := range cases {
+		if got := looksLikeAPIKey(tc.token); got != tc.want {
+			t.Errorf("looksLikeAPIKey(%q) = %v, want %v", tc.token, got, tc.want)
+		}
 	}
 }
 
@@ -321,7 +341,7 @@ func TestLoadOptionsFindsConfigInWorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("组装参数失败：%v", err)
 	}
-	if opts.kiteURL != "https://kite.from-cwd" || opts.configPath != "rancherrbac.yaml" {
+	if opts.aerolinkURL != "https://kite.from-cwd" || opts.configPath != "rancherrbac.yaml" {
 		t.Fatalf("应当自动用当前目录的配置：%#v", opts)
 	}
 
@@ -330,7 +350,7 @@ func TestLoadOptionsFindsConfigInWorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("组装参数失败：%v", err)
 	}
-	if opts.kiteURL != "" || opts.configPath != "" {
+	if opts.aerolinkURL != "" || opts.configPath != "" {
 		t.Fatalf("-config \"\" 应当跳过配置文件：%#v", opts)
 	}
 }

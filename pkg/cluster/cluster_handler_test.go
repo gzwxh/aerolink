@@ -379,12 +379,12 @@ func TestGetClustersIncludesBadgeOnlyWhenEnabled(t *testing.T) {
 func setupClusterHandlerTestDB(t *testing.T) {
 	t.Helper()
 	originalDB := model.DB
-	originalEncryptKey := common.KiteEncryptKey
+	originalEncryptKey := common.EncryptKey
 	originalManagedSections := make(map[string]bool, len(common.ManagedSections))
 	for section, managed := range common.ManagedSections {
 		originalManagedSections[section] = managed
 	}
-	common.KiteEncryptKey = "cluster-handler-test-key"
+	common.EncryptKey = "cluster-handler-test-key"
 	common.SetManagedSections(nil)
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -414,7 +414,7 @@ func setupClusterHandlerTestDB(t *testing.T) {
 			_ = sqlDB.Close()
 		}
 		model.DB = originalDB
-		common.KiteEncryptKey = originalEncryptKey
+		common.EncryptKey = originalEncryptKey
 		common.SetManagedSections(originalManagedSections)
 	})
 }

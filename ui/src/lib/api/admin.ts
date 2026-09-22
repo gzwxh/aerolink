@@ -1086,7 +1086,7 @@ export const exportArchiveRecords = (
   appendArchiveParams(params, { ...query, page: 1, size: 20 })
   return downloadFile(
     `/admin/${ARCHIVE_ENDPOINTS[kind]}/export?${params.toString()}`,
-    `kite-${kind}-logs-archive.csv`
+    `aerolink-${kind}-logs-archive.csv`
   )
 }
 

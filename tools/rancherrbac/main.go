@@ -1,4 +1,4 @@
-// Command rancherrbac 把 Rancher 上「谁在哪些命名空间里有什么权限」搬成 Kite 的
+// Command rancherrbac 把 Rancher 上「谁在哪些命名空间里有什么权限」搬成鸢联 AeroLink 的
 // 权限绑定组，相当于替管理员把授权配置好。
 //
 // 入口脚本：scripts/migrate-rancher-rbac.sh
@@ -28,12 +28,12 @@ const (
 )
 
 type options struct {
-	rancherURL      string
-	rancherToken    string
-	rancherInsecure bool
-	kiteURL         string
-	kiteToken       string
-	kiteInsecure    bool
+	rancherURL       string
+	rancherToken     string
+	rancherInsecure  bool
+	aerolinkURL      string
+	aerolinkToken    string
+	aerolinkInsecure bool
 
 	apply              bool
 	planOut            string
@@ -142,14 +142,14 @@ type migrationPlan struct {
 }
 
 type clusterMapping struct {
-	RancherID   string `json:"rancherClusterId"`
-	RancherName string `json:"rancherClusterName"`
-	KiteCluster string `json:"kiteCluster,omitempty"`
+	RancherID       string `json:"rancherClusterId"`
+	RancherName     string `json:"rancherClusterName"`
+	AeroLinkCluster string `json:"aerolinkCluster,omitempty"`
 }
 
 type groupPlan struct {
 	RancherClusterID string       `json:"rancherClusterId"`
-	KiteCluster      string       `json:"kiteCluster"`
+	AeroLinkCluster  string       `json:"aerolinkCluster"`
 	ProjectID        string       `json:"rancherProjectId"`
 	Name             string       `json:"name"`
 	Description      string       `json:"description"`
@@ -228,24 +228,37 @@ func (index *namespaceIndex) projectsOfCluster(clusterID string) []string {
 	return index.projectsByCluster[clusterID]
 }
 
+// apiKeyPrefixes 是控制台签发的 API key 前缀：新名 aerolink，旧名 kite（改名前的存量
+// key 仍有脚本 / CI 在用，不能拒；判定口径与 pkg/model.APIKeyToken 一致）。
+var apiKeyPrefixes = []string{"aerolink", "kite"}
+
+func looksLikeAPIKey(token string) bool {
+	for _, prefix := range apiKeyPrefixes {
+		if strings.HasPrefix(token, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func run(opts options) error {
 	switch {
-	case opts.kiteURL == "":
+	case opts.aerolinkURL == "":
 		return errors.New("缺少 AeroLink 地址：用 -aerolink-url、环境变量 AEROLINK_URL 或配置文件 aerolink.url 指定（旧名 -kite-url / KITE_URL / kite.url 仍可用）")
-	case opts.kiteToken == "":
+	case opts.aerolinkToken == "":
 		return errors.New("缺少 AeroLink API key：用 -aerolink-token、环境变量 AEROLINK_TOKEN 或配置文件 aerolink.token 指定（旧名 -kite-token / KITE_TOKEN / kite.token 仍可用）")
-	case !strings.HasPrefix(opts.kiteToken, "kite"):
-		return errors.New("API key 应当以 kite 开头：请填控制台创建时给出的完整值（形如 kite1-xxxxxxxx）")
+	case !looksLikeAPIKey(opts.aerolinkToken):
+		return errors.New("API key 应当以 aerolink 开头：请填控制台创建时给出的完整值（形如 aerolink1-xxxxxxxx；改名前的 kite1-xxxxxxxx 仍可用）")
 	}
 	// -cleanup 只动 AeroLink：给了 -prefix 就按前缀删，否则要先用计划算出到底该删哪些（见下）。
 	if opts.cleanup && opts.prefix != "" {
-		if opts.kiteURL == "" {
+		if opts.aerolinkURL == "" {
 			return errors.New("缺少 AeroLink 地址：用 -aerolink-url、环境变量 AEROLINK_URL 或配置文件 aerolink.url 指定（旧名 -kite-url / KITE_URL / kite.url 仍可用）")
 		}
-		if opts.kiteToken == "" {
+		if opts.aerolinkToken == "" {
 			return errors.New("缺少 AeroLink API key：用 -aerolink-token、环境变量 AEROLINK_TOKEN 或配置文件 aerolink.token 指定（旧名 -kite-token / KITE_TOKEN / kite.token 仍可用）")
 		}
-		return cleanupByPrefix(newKiteClient(opts.kiteURL, opts.kiteToken, opts.kiteInsecure, opts.timeout, opts.verbose), opts)
+		return cleanupByPrefix(newAeroLinkClient(opts.aerolinkURL, opts.aerolinkToken, opts.aerolinkInsecure, opts.timeout, opts.verbose), opts)
 	}
 	if opts.fromDir == "" {
 		switch {
@@ -262,13 +275,13 @@ func run(opts options) error {
 	if opts.fromDir != "" {
 		rancher = newRancherFileClient(opts.fromDir, opts.dumpDir)
 	}
-	kite := newKiteClient(opts.kiteURL, opts.kiteToken, opts.kiteInsecure, opts.timeout, opts.verbose)
+	aerolink := newAeroLinkClient(opts.aerolinkURL, opts.aerolinkToken, opts.aerolinkInsecure, opts.timeout, opts.verbose)
 
 	// AeroLink 侧先探一次：连通性与鉴权问题在这里就暴露，不要等到写了一半才发现。
-	kiteClusters, err := kite.clusters()
+	aerolinkClusters, err := aerolink.clusters()
 	if err != nil {
 		return fmt.Errorf("读取 AeroLink 集群列表失败（%s）：%w",
-			kiteURLJoin(opts.kiteURL, "/api/v1/admin/clusters/"), explainAuthError(err))
+			aerolinkURLJoin(opts.aerolinkURL, "/api/v1/admin/clusters/"), explainAuthError(err))
 	}
 
 	if opts.configPath != "" {
@@ -284,12 +297,12 @@ func run(opts options) error {
 		return err
 	}
 
-	plan := buildPlan(data, kiteClusters, opts)
+	plan := buildPlan(data, aerolinkClusters, opts)
 
 	// -cleanup（无前缀）靠计划定位要删的对象：名称默认就是项目名 / 模板名，
 	// 无法靠名字区分是不是本工具建的，必须用描述里的迁移标记排除手工对象。
 	if opts.cleanup {
-		return cleanupPlan(kite, plan, opts)
+		return cleanupPlan(aerolink, plan, opts)
 	}
 
 	printPlan(plan)
@@ -311,7 +324,7 @@ func run(opts options) error {
 	}
 
 	fmt.Println("\n→ 写入 AeroLink⋯")
-	return applyPlan(kite, plan, opts)
+	return applyPlan(aerolink, plan, opts)
 }
 
 func loadRancherData(client *rancherClient, opts options) (*rancherData, error) {
@@ -379,11 +392,11 @@ func loadRancherData(client *rancherClient, opts options) (*rancherData, error) 
 	return data, nil
 }
 
-func buildPlan(data *rancherData, kiteClusters []kiteCluster, opts options) *migrationPlan {
+func buildPlan(data *rancherData, aerolinkClusters []aerolinkCluster, opts options) *migrationPlan {
 	plan := &migrationPlan{Notes: append([]string{}, data.notes...)}
 	namespaces := newNamespaceIndex(data.namespaces)
 
-	clusterMap, mappings, mappingNotes := resolveClusterMappings(data.clusters, kiteClusters, opts)
+	clusterMap, mappings, mappingNotes := resolveClusterMappings(data.clusters, aerolinkClusters, opts)
 	plan.ClusterMappings = mappings
 	plan.Notes = append(plan.Notes, mappingNotes...)
 
@@ -402,24 +415,24 @@ func buildPlan(data *rancherData, kiteClusters []kiteCluster, opts options) *mig
 	return plan
 }
 
-// resolveClusterMappings 决定每个 Rancher 集群落到哪个 Kite 集群；映射不上的集群整体跳过。
-func resolveClusterMappings(clusters []rancherCluster, kiteClusters []kiteCluster, opts options) (map[string]string, []clusterMapping, []string) {
+// resolveClusterMappings 决定每个 Rancher 集群落到哪个鸢联 AeroLink 集群；映射不上的集群整体跳过。
+func resolveClusterMappings(clusters []rancherCluster, aerolinkClusters []aerolinkCluster, opts options) (map[string]string, []clusterMapping, []string) {
 	clusterMap := make(map[string]string, len(clusters))
 	mappings := make([]clusterMapping, 0, len(clusters))
 	notes := make([]string, 0)
 	for _, cluster := range clusters {
-		kiteName, ok, reason := resolveKiteCluster(cluster, kiteClusters, opts.clusterMaps.values)
+		aerolinkName, ok, reason := resolveAeroLinkCluster(cluster, aerolinkClusters, opts.clusterMaps.values)
 		mappings = append(mappings, clusterMapping{
-			RancherID:   cluster.ID,
-			RancherName: cluster.DisplayName,
-			KiteCluster: kiteName,
+			RancherID:       cluster.ID,
+			RancherName:     cluster.DisplayName,
+			AeroLinkCluster: aerolinkName,
 		})
 		if !ok {
 			notes = append(notes, fmt.Sprintf(
 				"Rancher 集群 %s（%s）未映射到 AeroLink 集群，该集群下的授权未迁移：%s", cluster.ID, cluster.DisplayName, reason))
 			continue
 		}
-		clusterMap[cluster.ID] = kiteName
+		clusterMap[cluster.ID] = aerolinkName
 	}
 	return clusterMap, mappings, notes
 }
@@ -458,7 +471,7 @@ func collectBindings(data *rancherData, clusterMap map[string]string, namespaces
 	return projectBindings, clusterBindings, usedTemplates, notes
 }
 
-// mapRoles 把用到的角色模板翻成 Kite 角色定义。
+// mapRoles 把用到的角色模板翻成鸢联 AeroLink 角色定义。
 func mapRoles(data *rancherData, usedTemplates map[string]map[string]struct{}, index *resourceIndex, opts options) (map[string]roleMapping, []string) {
 	roleByName := map[string]roleMapping{}
 	notes := make([]string, 0)
@@ -508,9 +521,9 @@ func sortedRoles(roleByName map[string]roleMapping) []roleMapping {
 	return roles
 }
 
-// assembleGroups 组装权限绑定组：一个 Rancher 项目 = 一个 Kite 权限绑定组。
+// assembleGroups 组装权限绑定组：一个 Rancher 项目 = 一个鸢联 AeroLink 权限绑定组。
 //
-// 集群级绑定（CRTB）在 Kite 里没有对应的授权容器可用（绑定组按命名空间组织），
+// 集群级绑定（CRTB）在鸢联 AeroLink 里没有对应的授权容器可用（绑定组按命名空间组织），
 // 因此把它分摊到该集群的每个权限绑定组：成员命名空间范围为「整组」，正好覆盖该
 // 集群的全部命名空间；资源通配 * 的角色还能覆盖集群级资源。
 func assembleGroups(data *rancherData, clusterMap map[string]string, namespaces *namespaceIndex,
@@ -551,7 +564,7 @@ func assembleGroups(data *rancherData, clusterMap map[string]string, namespaces 
 	}
 
 	for clusterID, bindings := range clusterBindings {
-		kiteCluster := clusterMap[clusterID]
+		aerolinkCluster := clusterMap[clusterID]
 		targets := clusterGroups[clusterID]
 		if len(targets) == 0 {
 			if len(namespaces.cluster(clusterID)) == 0 {
@@ -564,7 +577,7 @@ func assembleGroups(data *rancherData, clusterMap map[string]string, namespaces 
 			name := sanitizeName(fmt.Sprintf("%s%s-集群级", prefix, clusterID))
 			group := &groupPlan{
 				RancherClusterID: clusterID,
-				KiteCluster:      kiteCluster,
+				AeroLinkCluster:  aerolinkCluster,
 				Name:             name,
 				Description:      fmt.Sprintf("%s：集群 %s 的集群级授权", migrationMarker, clusterID),
 				Namespaces:       append([]string(nil), namespaces.cluster(clusterID)...),
@@ -599,15 +612,15 @@ func assembleGroups(data *rancherData, clusterMap map[string]string, namespaces 
 		}
 	}
 	sort.Slice(plans, func(i, j int) bool {
-		if plans[i].KiteCluster != plans[j].KiteCluster {
-			return plans[i].KiteCluster < plans[j].KiteCluster
+		if plans[i].AeroLinkCluster != plans[j].AeroLinkCluster {
+			return plans[i].AeroLinkCluster < plans[j].AeroLinkCluster
 		}
 		return plans[i].Name < plans[j].Name
 	})
 	return plans, notes
 }
 
-// newGroupPlan 为某个 Rancher 项目生成一个 Kite 权限绑定组（名称 / 描述 / 命名空间）。
+// newGroupPlan 为某个 Rancher 项目生成一个鸢联 AeroLink 权限绑定组（名称 / 描述 / 命名空间）。
 func newGroupPlan(data *rancherData, namespaces *namespaceIndex, clusterMap map[string]string,
 	usedNames map[string]map[string]struct{}, projectID, clusterID, prefix string) *groupPlan {
 	if usedNames[clusterID] == nil {
@@ -616,7 +629,7 @@ func newGroupPlan(data *rancherData, namespaces *namespaceIndex, clusterMap map[
 	name, description := groupName(data.projects[projectID], projectID, clusterID, usedNames[clusterID], prefix)
 	return &groupPlan{
 		RancherClusterID: clusterID,
-		KiteCluster:      clusterMap[clusterID],
+		AeroLinkCluster:  clusterMap[clusterID],
 		ProjectID:        projectID,
 		Name:             name,
 		Description:      description,
@@ -626,7 +639,7 @@ func newGroupPlan(data *rancherData, namespaces *namespaceIndex, clusterMap map[
 
 // addMember 把一条 Rancher 绑定落到权限绑定组的成员上。
 func addMember(group *groupPlan, binding rancherBinding, roles map[string]roleMapping, prefix string) {
-	role := kiteRoleName(prefix, binding.RoleTemplateID)
+	role := aerolinkRoleName(prefix, binding.RoleTemplateID)
 	if _, ok := roles[role]; !ok {
 		return
 	}
@@ -679,19 +692,19 @@ func templateContext(template rancherRoleTemplate, scopes map[string]struct{}) (
 	return "project", true
 }
 
-// resolveKiteCluster 决定一个 Rancher 集群该落到哪个 Kite 集群。
-// 显式 -cluster-map 优先；其次按名字（或 Rancher 集群 ID）与 Kite 集群名匹配。
-func resolveKiteCluster(cluster rancherCluster, kiteClusters []kiteCluster, explicit map[string]string) (string, bool, string) {
+// resolveAeroLinkCluster 决定一个 Rancher 集群该落到哪个鸢联 AeroLink 集群。
+// 显式 -cluster-map 优先；其次按名字（或 Rancher 集群 ID）与鸢联 AeroLink 集群名匹配。
+func resolveAeroLinkCluster(cluster rancherCluster, aerolinkClusters []aerolinkCluster, explicit map[string]string) (string, bool, string) {
 	if mapped, ok := explicit[cluster.ID]; ok {
-		if _, exists := findKiteCluster(kiteClusters, mapped); !exists {
+		if _, exists := findAeroLinkCluster(aerolinkClusters, mapped); !exists {
 			return "", false, fmt.Sprintf("-cluster-map 指定的 AeroLink 集群 %q 不存在", mapped)
 		}
 		return mapped, true, ""
 	}
 	matches := make([]string, 0, 2)
-	for _, kiteCluster := range kiteClusters {
-		if strings.EqualFold(kiteCluster.Name, cluster.DisplayName) || strings.EqualFold(kiteCluster.Name, cluster.ID) {
-			matches = append(matches, kiteCluster.Name)
+	for _, aerolinkCluster := range aerolinkClusters {
+		if strings.EqualFold(aerolinkCluster.Name, cluster.DisplayName) || strings.EqualFold(aerolinkCluster.Name, cluster.ID) {
+			matches = append(matches, aerolinkCluster.Name)
 		}
 	}
 	switch len(matches) {
@@ -705,13 +718,13 @@ func resolveKiteCluster(cluster rancherCluster, kiteClusters []kiteCluster, expl
 	}
 }
 
-func findKiteCluster(clusters []kiteCluster, name string) (kiteCluster, bool) {
+func findAeroLinkCluster(clusters []aerolinkCluster, name string) (aerolinkCluster, bool) {
 	for _, cluster := range clusters {
 		if cluster.Name == name {
 			return cluster, true
 		}
 	}
-	return kiteCluster{}, false
+	return aerolinkCluster{}, false
 }
 
 // groupName 生成权限绑定组的名字与描述：默认直接用 Rancher 上的项目名，
@@ -743,11 +756,11 @@ func printPlan(plan *migrationPlan) {
 		fmt.Println("  （Rancher 上没有集群）")
 	}
 	for _, mapping := range plan.ClusterMappings {
-		if mapping.KiteCluster == "" {
+		if mapping.AeroLinkCluster == "" {
 			fmt.Printf("  %s（%s）→ 未映射\n", mapping.RancherID, mapping.RancherName)
 			continue
 		}
-		fmt.Printf("  %s（%s）→ %s\n", mapping.RancherID, mapping.RancherName, mapping.KiteCluster)
+		fmt.Printf("  %s（%s）→ %s\n", mapping.RancherID, mapping.RancherName, mapping.AeroLinkCluster)
 	}
 
 	fmt.Printf("\n=== 角色（%d 个）===\n", len(plan.Roles))
@@ -770,7 +783,7 @@ func printPlan(plan *migrationPlan) {
 	fmt.Printf("\n=== 权限绑定组（%d 个 / 命名空间 %d 个 / 成员 %d 位）===\n",
 		len(plan.Groups), namespaceCount, memberCount)
 	for _, group := range plan.Groups {
-		fmt.Printf("  [AeroLink 集群 %s] %s（%s）\n", group.KiteCluster, group.Name, group.ProjectID)
+		fmt.Printf("  [AeroLink 集群 %s] %s（%s）\n", group.AeroLinkCluster, group.Name, group.ProjectID)
 		fmt.Printf("      命名空间：%s\n", strings.Join(group.Namespaces, ", "))
 		for _, member := range group.Members {
 			fmt.Printf("      %s %s → %s\n", subjectLabel(member.SubjectType), member.Subject, strings.Join(member.Roles, ", "))
@@ -794,32 +807,32 @@ func subjectLabel(subjectType string) string {
 
 // ---------- 落库 ----------
 
-func applyPlan(kite *kiteClient, plan *migrationPlan, opts options) error {
+func applyPlan(aerolink *aerolinkClient, plan *migrationPlan, opts options) error {
 	if len(plan.Roles) == 0 && len(plan.Groups) == 0 {
 		fmt.Println("  计划里没有任何要写入的内容。")
 		return nil
 	}
 
 	// 1. 角色：名称与手工角色可能同名，靠描述里的迁移标记判断归属，非本工具建的不覆盖。
-	existingRoles, err := kite.roles()
+	existingRoles, err := aerolink.roles()
 	if err != nil {
 		return fmt.Errorf("读取 AeroLink 角色失败：%w", explainAuthError(err))
 	}
-	existingByName := map[string]kiteRole{}
+	existingByName := map[string]aerolinkRole{}
 	for _, role := range existingRoles {
 		existingByName[role.Name] = role
 	}
-	roleIDs, err := ensureRoles(kite, plan.Roles, existingByName)
+	roleIDs, err := ensureRoles(aerolink, plan.Roles, existingByName)
 	if err != nil {
 		return err
 	}
 
 	// 2. 权限绑定组：按 (集群, 名称) 复用，命名空间与成员默认与既有配置取并集。
-	existingGroups, err := kite.bindingGroups()
+	existingGroups, err := aerolink.bindingGroups()
 	if err != nil {
 		return fmt.Errorf("读取 AeroLink 权限绑定组失败：%w", explainAuthError(err))
 	}
-	groupsByKey := map[string]kiteBindingGroup{}
+	groupsByKey := map[string]aerolinkBindingGroup{}
 	for _, group := range existingGroups {
 		groupsByKey[group.Cluster+"\x00"+group.Name] = group
 	}
@@ -827,7 +840,7 @@ func applyPlan(kite *kiteClient, plan *migrationPlan, opts options) error {
 	knownUsers := map[string]struct{}{}
 	checkUsers := false
 	if hasUserSubjects(plan) {
-		users, err := kite.usernames()
+		users, err := aerolink.usernames()
 		switch err {
 		case nil:
 			knownUsers, checkUsers = users, true
@@ -841,28 +854,28 @@ func applyPlan(kite *kiteClient, plan *migrationPlan, opts options) error {
 	unknownUsers := map[string]struct{}{}
 	failed := make([]string, 0)
 	for _, group := range plan.Groups {
-		current, exists := groupsByKey[group.KiteCluster+"\x00"+group.Name]
+		current, exists := groupsByKey[group.AeroLinkCluster+"\x00"+group.Name]
 		if !exists {
-			created, err := kite.createBindingGroup(group.KiteCluster, group.Name, group.Description)
+			created, err := aerolink.createBindingGroup(group.AeroLinkCluster, group.Name, group.Description)
 			if err != nil {
 				failed = append(failed, fmt.Sprintf("创建权限绑定组 %s 失败：%v", group.Name, err))
 				continue
 			}
 			current = created
-			fmt.Printf("  + 权限绑定组 [%s] %s\n", group.KiteCluster, group.Name)
+			fmt.Printf("  + 权限绑定组 [%s] %s\n", group.AeroLinkCluster, group.Name)
 		} else {
-			fmt.Printf("  = 权限绑定组 [%s] %s 已存在，按并集补齐\n", group.KiteCluster, group.Name)
+			fmt.Printf("  = 权限绑定组 [%s] %s 已存在，按并集补齐\n", group.AeroLinkCluster, group.Name)
 			if !isMigrated(current.Description, group.Description) {
 				// 名称就是 Rancher 的项目名，与手工建的组可能撞名：合并是期望行为，但要提醒。
 				fmt.Printf("      ! 该组不是本工具建的（描述：%s），本步会与它合并成员与命名空间\n", truncate(current.Description, 60))
 			}
 		}
 
-		if message := syncNamespaces(kite, current, group, opts); message != "" {
+		if message := syncNamespaces(aerolink, current, group, opts); message != "" {
 			failed = append(failed, message)
 			continue
 		}
-		message, missing := syncMembers(kite, current, group, roleIDs, opts, knownUsers, checkUsers)
+		message, missing := syncMembers(aerolink, current, group, roleIDs, opts, knownUsers, checkUsers)
 		if message != "" {
 			failed = append(failed, message)
 			continue
@@ -893,12 +906,12 @@ func applyPlan(kite *kiteClient, plan *migrationPlan, opts options) error {
 }
 
 // ensureRoles 创建 / 对齐计划里的角色，返回角色名 → 角色 ID。
-func ensureRoles(kite *kiteClient, roles []roleMapping, existing map[string]kiteRole) (map[string]uint, error) {
+func ensureRoles(aerolink *aerolinkClient, roles []roleMapping, existing map[string]aerolinkRole) (map[string]uint, error) {
 	roleIDs := map[string]uint{}
 	for _, mapping := range roles {
 		current, exists := existing[mapping.Name]
 		if !exists {
-			created, err := kite.createRole(mapping)
+			created, err := aerolink.createRole(mapping)
 			if err != nil {
 				return nil, fmt.Errorf("创建角色 %s 失败：%w", mapping.Name, explainAuthError(err))
 			}
@@ -917,7 +930,7 @@ func ensureRoles(kite *kiteClient, roles []roleMapping, existing map[string]kite
 		case grantsEqual(current.Grants, mapping.Grants):
 			fmt.Printf("  = 角色 %s 已是最新\n", mapping.Name)
 		default:
-			if err := kite.updateRole(current.ID, mapping); err != nil {
+			if err := aerolink.updateRole(current.ID, mapping); err != nil {
 				return nil, fmt.Errorf("更新角色 %s 失败：%w", mapping.Name, explainAuthError(err))
 			}
 			fmt.Printf("  ~ 角色 %s 已更新（%d 条授权）\n", mapping.Name, len(mapping.Grants))
@@ -928,7 +941,7 @@ func ensureRoles(kite *kiteClient, roles []roleMapping, existing map[string]kite
 
 // syncNamespaces 把计划的命名空间写进绑定组；默认与既有命名空间取并集。
 // 返回非空字符串表示这一步失败（调用方收集后统一报告）。
-func syncNamespaces(kite *kiteClient, current kiteBindingGroup, group groupPlan, opts options) string {
+func syncNamespaces(aerolink *aerolinkClient, current aerolinkBindingGroup, group groupPlan, opts options) string {
 	existing := namespaceNames(current.Namespaces)
 	namespaces := group.Namespaces
 	if !opts.replaceNamespaces {
@@ -937,17 +950,17 @@ func syncNamespaces(kite *kiteClient, current kiteBindingGroup, group groupPlan,
 	if sameStringSet(existing, namespaces) {
 		return ""
 	}
-	if err := kite.setBindingGroupNamespaces(current.ID, namespaces); err != nil {
+	if err := aerolink.setBindingGroupNamespaces(current.ID, namespaces); err != nil {
 		return fmt.Sprintf("设置权限绑定组 %s 的命名空间失败：%v", group.Name, err)
 	}
 	fmt.Printf("      ~ 命名空间 %d 个\n", len(namespaces))
 	return ""
 }
 
-// syncMembers 把计划的成员写进绑定组；返回错误说明（空表示成功）与 Kite 里还不存在的账号。
-func syncMembers(kite *kiteClient, current kiteBindingGroup, group groupPlan, roleIDs map[string]uint,
+// syncMembers 把计划的成员写进绑定组；返回错误说明（空表示成功）与鸢联 AeroLink 里还不存在的账号。
+func syncMembers(aerolink *aerolinkClient, current aerolinkBindingGroup, group groupPlan, roleIDs map[string]uint,
 	opts options, knownUsers map[string]struct{}, checkUsers bool) (string, []string) {
-	members, err := kite.bindingGroupMembers(current.ID)
+	members, err := aerolink.bindingGroupMembers(current.ID)
 	if err != nil {
 		return fmt.Sprintf("读取权限绑定组 %s 的成员失败：%v", group.Name, err), nil
 	}
@@ -956,7 +969,7 @@ func syncMembers(kite *kiteClient, current kiteBindingGroup, group groupPlan, ro
 		fmt.Printf("      = 成员无变化\n")
 		return "", missing
 	}
-	if err := kite.setBindingGroupMembers(current.ID, inputs); err != nil {
+	if err := aerolink.setBindingGroupMembers(current.ID, inputs); err != nil {
 		return fmt.Sprintf("设置权限绑定组 %s 的成员失败：%v", group.Name, err), nil
 	}
 	fmt.Printf("      ~ 成员 %d 位\n", len(inputs))
@@ -975,11 +988,11 @@ func hasUserSubjects(plan *migrationPlan) bool {
 }
 
 // mergeMembers 把计划里的成员合并进既有成员（默认并集，-replace-members 则全量覆盖），
-// 返回写入入参、是否需要写入，以及 Kite 里还不存在的用户名（checkUsers 为 false 时不检查）。
-func mergeMembers(existing []kiteMember, group groupPlan, roleIDs map[string]uint, opts options,
-	knownUsers map[string]struct{}, checkUsers bool) ([]kiteMemberInput, bool, []string) {
+// 返回写入入参、是否需要写入，以及鸢联 AeroLink 里还不存在的用户名（checkUsers 为 false 时不检查）。
+func mergeMembers(existing []aerolinkMember, group groupPlan, roleIDs map[string]uint, opts options,
+	knownUsers map[string]struct{}, checkUsers bool) ([]aerolinkMemberInput, bool, []string) {
 	current := memberInputsFromExisting(existing)
-	planned := make([]kiteMemberInput, 0, len(group.Members))
+	planned := make([]aerolinkMemberInput, 0, len(group.Members))
 	missingUsers := make([]string, 0)
 	for _, member := range group.Members {
 		if checkUsers && member.SubjectType == "user" {
@@ -996,7 +1009,7 @@ func mergeMembers(existing []kiteMember, group groupPlan, roleIDs map[string]uin
 		if len(ids) == 0 {
 			continue
 		}
-		planned = append(planned, kiteMemberInput{
+		planned = append(planned, aerolinkMemberInput{
 			SubjectType: member.SubjectType,
 			Subject:     member.Subject,
 			Namespace:   "",
@@ -1011,15 +1024,15 @@ func mergeMembers(existing []kiteMember, group groupPlan, roleIDs map[string]uin
 	return desired, !sameMembers(current, desired), missingUsers
 }
 
-// memberInputsFromExisting 把 Kite 里既有的成员行按「主体 × 命名空间范围」归并。
-func memberInputsFromExisting(existing []kiteMember) []kiteMemberInput {
+// memberInputsFromExisting 把鸢联 AeroLink 里既有的成员行按「主体 × 命名空间范围」归并。
+func memberInputsFromExisting(existing []aerolinkMember) []aerolinkMemberInput {
 	index := map[string]int{}
-	inputs := make([]kiteMemberInput, 0, len(existing))
+	inputs := make([]aerolinkMemberInput, 0, len(existing))
 	for _, member := range existing {
 		key := member.SubjectType + "\x00" + member.Subject + "\x00" + member.Namespace
 		position, ok := index[key]
 		if !ok {
-			inputs = append(inputs, kiteMemberInput{
+			inputs = append(inputs, aerolinkMemberInput{
 				SubjectType: member.SubjectType,
 				Subject:     member.Subject,
 				Namespace:   member.Namespace,
@@ -1032,15 +1045,15 @@ func memberInputsFromExisting(existing []kiteMember) []kiteMemberInput {
 	return normalizeMembers(inputs)
 }
 
-func unionMembers(base, extra []kiteMemberInput) []kiteMemberInput {
+func unionMembers(base, extra []aerolinkMemberInput) []aerolinkMemberInput {
 	index := map[string]int{}
-	merged := make([]kiteMemberInput, 0, len(base)+len(extra))
-	for _, group := range [][]kiteMemberInput{base, extra} {
+	merged := make([]aerolinkMemberInput, 0, len(base)+len(extra))
+	for _, group := range [][]aerolinkMemberInput{base, extra} {
 		for _, member := range group {
 			key := member.SubjectType + "\x00" + member.Subject + "\x00" + member.Namespace
 			position, ok := index[key]
 			if !ok {
-				merged = append(merged, kiteMemberInput{
+				merged = append(merged, aerolinkMemberInput{
 					SubjectType: member.SubjectType,
 					Subject:     member.Subject,
 					Namespace:   member.Namespace,
@@ -1054,7 +1067,7 @@ func unionMembers(base, extra []kiteMemberInput) []kiteMemberInput {
 	return normalizeMembers(merged)
 }
 
-func normalizeMembers(members []kiteMemberInput) []kiteMemberInput {
+func normalizeMembers(members []aerolinkMemberInput) []aerolinkMemberInput {
 	for i := range members {
 		seen := map[uint]struct{}{}
 		ids := make([]uint, 0, len(members[i].RoleIDs))
@@ -1076,7 +1089,7 @@ func normalizeMembers(members []kiteMemberInput) []kiteMemberInput {
 	return members
 }
 
-func sameMembers(a, b []kiteMemberInput) bool {
+func sameMembers(a, b []aerolinkMemberInput) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -1098,9 +1111,9 @@ func sameMembers(a, b []kiteMemberInput) bool {
 
 // cleanupByPrefix 删除本工具创建的角色与绑定组（-prefix 非空时按名字前缀圈定）。
 // 不加 -yes 时只打印会删哪些，不动手。
-func cleanupByPrefix(kite *kiteClient, opts options) error {
+func cleanupByPrefix(aerolink *aerolinkClient, opts options) error {
 	preview := !opts.yes
-	roles, err := kite.roles()
+	roles, err := aerolink.roles()
 	if err != nil {
 		return fmt.Errorf("读取 AeroLink 角色失败：%w", explainAuthError(err))
 	}
@@ -1114,13 +1127,13 @@ func cleanupByPrefix(kite *kiteClient, opts options) error {
 		if preview {
 			continue
 		}
-		if err := kite.deleteRole(role.ID); err != nil {
+		if err := aerolink.deleteRole(role.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "  ❌ 删除角色 %s 失败：%v\n", role.Name, err)
 			removedRoles--
 		}
 	}
 
-	groups, err := kite.bindingGroups()
+	groups, err := aerolink.bindingGroups()
 	if err != nil {
 		return fmt.Errorf("读取 AeroLink 权限绑定组失败：%w", explainAuthError(err))
 	}
@@ -1134,7 +1147,7 @@ func cleanupByPrefix(kite *kiteClient, opts options) error {
 		if preview {
 			continue
 		}
-		if err := kite.deleteBindingGroup(group.ID); err != nil {
+		if err := aerolink.deleteBindingGroup(group.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "  ❌ 删除权限绑定组 [%s] %s 失败：%v\n", group.Cluster, group.Name, err)
 			removedGroups--
 		}
@@ -1160,9 +1173,9 @@ func previewCleanupError(prefix string, roles, groups int) error {
 // 名称默认就是项目名 / 角色模板名，与手工对象可能同名，所以这里只删描述里带迁移标记的那些：
 // 同名但描述不对的对象视为管理员的，跳过并报告。
 // 不加 -yes 时只把会删的对象列出来，不动手。
-func cleanupPlan(kite *kiteClient, plan *migrationPlan, opts options) error {
+func cleanupPlan(aerolink *aerolinkClient, plan *migrationPlan, opts options) error {
 	preview := !opts.yes
-	roles, err := kite.roles()
+	roles, err := aerolink.roles()
 	if err != nil {
 		return fmt.Errorf("读取 AeroLink 角色失败：%w", explainAuthError(err))
 	}
@@ -1186,19 +1199,19 @@ func cleanupPlan(kite *kiteClient, plan *migrationPlan, opts options) error {
 		if preview {
 			continue
 		}
-		if err := kite.deleteRole(role.ID); err != nil {
+		if err := aerolink.deleteRole(role.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "  ❌ 删除角色 %s 失败：%v\n", role.Name, err)
 			removedRoles--
 		}
 	}
 
-	groups, err := kite.bindingGroups()
+	groups, err := aerolink.bindingGroups()
 	if err != nil {
 		return fmt.Errorf("读取 AeroLink 权限绑定组失败：%w", explainAuthError(err))
 	}
 	plannedGroups := make(map[string]string, len(plan.Groups))
 	for _, group := range plan.Groups {
-		plannedGroups[group.KiteCluster+"\x00"+group.Name] = group.Description
+		plannedGroups[group.AeroLinkCluster+"\x00"+group.Name] = group.Description
 	}
 	removedGroups, skippedGroups := 0, 0
 	for _, group := range groups {
@@ -1216,7 +1229,7 @@ func cleanupPlan(kite *kiteClient, plan *migrationPlan, opts options) error {
 		if preview {
 			continue
 		}
-		if err := kite.deleteBindingGroup(group.ID); err != nil {
+		if err := aerolink.deleteBindingGroup(group.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "  ❌ 删除权限绑定组 [%s] %s 失败：%v\n", group.Cluster, group.Name, err)
 			removedGroups--
 		}
@@ -1268,7 +1281,7 @@ func grantsEqual(a, b []common.ResourceGrant) bool {
 	return true
 }
 
-func namespaceNames(refs []kiteNamespaceRef) []string {
+func namespaceNames(refs []aerolinkNamespaceRef) []string {
 	names := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		names = append(names, ref.Namespace)

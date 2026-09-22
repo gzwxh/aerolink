@@ -448,7 +448,7 @@ func toLogsQLCondition(condition archiveCondition) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			// 两侧都要 `*`：只有一侧是「前缀/后缀」匹配，`api` 就匹配不到 `kite-api-server`。
+			// 两侧都要 `*`：只有一侧是「前缀/后缀」匹配，`api` 就匹配不到 `aerolink-api-server`。
 			matches = append(matches, column+":*"+value+"*")
 		}
 		if len(matches) == 0 {

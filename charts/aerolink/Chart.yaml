@@ -1,7 +1,7 @@
 apiVersion: v2
-name: kite
+name: aerolink
 description: A Helm chart for Kubernetes
-icon: https://kite.zzde.me/logo.svg
+icon: https://aerolink.gogdev.cn/logo.svg
 
 # chart 的 type 可以是 'application' 或 'library'。
 #

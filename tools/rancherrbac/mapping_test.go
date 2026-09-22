@@ -30,7 +30,7 @@ func verbsOf(t *testing.T, grants []common.ResourceGrant, resource string) []str
 	return nil
 }
 
-// 项目上下文的资源通配必须展开：Kite 权限绑定组里 `*` 的语义是「整个集群的一切资源」，
+// 项目上下文的资源通配必须展开：鸢联 AeroLink 权限绑定组里 `*` 的语义是「整个集群的一切资源」，
 // 照搬会项目级只读放大成集群级只读（越权）。
 func TestMapRoleTemplateExpandsProjectWildcard(t *testing.T) {
 	index := newResourceIndex()
@@ -113,7 +113,7 @@ func TestMapRoleTemplateMapsVerbs(t *testing.T) {
 	}
 }
 
-// 只读授权补容器日志：Kite 的内置只读管理员也是 get + log。
+// 只读授权补容器日志：鸢联 AeroLink 的内置只读管理员也是 get + log。
 func TestMapRoleTemplateReadOnlyAddsPodLogs(t *testing.T) {
 	index := newResourceIndex()
 	mapping := index.mapRoleTemplate(rancherRoleTemplate{
@@ -157,7 +157,7 @@ func TestMapRoleTemplatePodExecMapsToExecVerb(t *testing.T) {
 	}
 }
 
-// 限定对象名的规则默认跳过：Kite 无法表达，放宽等于提权。
+// 限定对象名的规则默认跳过：鸢联 AeroLink 无法表达，放宽等于提权。
 func TestMapRoleTemplateSkipsResourceNamesUnlessAllowed(t *testing.T) {
 	index := newResourceIndex()
 	template := rancherRoleTemplate{
@@ -185,7 +185,7 @@ func TestMapRoleTemplateSkipsResourceNamesUnlessAllowed(t *testing.T) {
 	}
 }
 
-// Kite 未收录的资源与 Rancher 专有 API 组只记录、不授权。
+// 鸢联 AeroLink 未收录的资源与 Rancher 专有 API 组只记录、不授权。
 func TestMapRoleTemplateDropsUnknownResources(t *testing.T) {
 	index := newResourceIndex()
 	mapping := index.mapRoleTemplate(rancherRoleTemplate{
@@ -253,7 +253,7 @@ func TestMapRoleTemplateRecordsClusterScopedResources(t *testing.T) {
 }
 
 // 真实数据里的坑：集群上下文的规则里 `resources: ["*"]` 只覆盖它声明的那个 API 组
-// （rke-machine-config.cattle.io 之类）。照搬成 Kite 的 `*` 会变成一个 Rancher 专有的
+// （rke-machine-config.cattle.io 之类）。照搬成鸢联 AeroLink 的 `*` 会变成一个 Rancher 专有的
 // 只读规则把整个集群的读权限授出去。
 func TestMapRoleTemplateScopedWildcardStaysScoped(t *testing.T) {
 	index := newResourceIndex()
@@ -277,7 +277,7 @@ func TestMapRoleTemplateScopedWildcardStaysScoped(t *testing.T) {
 	}
 }
 
-// 只声明具体 API 组的资源通配，且该组 Kite 没有对应资源 → 什么也不授。
+// 只声明具体 API 组的资源通配，且该组鸢联 AeroLink 没有对应资源 → 什么也不授。
 func TestMapRoleTemplateScopedWildcardUnknownGroupGrantsNothing(t *testing.T) {
 	index := newResourceIndex()
 	mapping := index.mapRoleTemplate(rancherRoleTemplate{
@@ -296,7 +296,7 @@ func TestMapRoleTemplateScopedWildcardUnknownGroupGrantsNothing(t *testing.T) {
 	}
 }
 
-// metrics.k8s.io 的 pods 在 Kite 里叫 podmetrics：要按「API 组 + 资源名」映射。
+// metrics.k8s.io 的 pods 在鸢联 AeroLink 里叫 podmetrics：要按「API 组 + 资源名」映射。
 func TestMapRoleTemplateMapsMetricsAlias(t *testing.T) {
 	index := newResourceIndex()
 	mapping := index.mapRoleTemplate(rancherRoleTemplate{
@@ -372,7 +372,7 @@ func TestMapRoleTemplateAddsKubernetesBuiltinForProjectRoles(t *testing.T) {
 }
 
 // cluster-member 在下游集群里绑的是内置 view（ClusterRoleBinding 名 <user>-view）：
-// 集群级只读、不含 secrets。Kite 里只能靠资源通配 * + 否定模式表达。
+// 集群级只读、不含 secrets。鸢联 AeroLink 里只能靠资源通配 * + 否定模式表达。
 func TestMapRoleTemplateClusterMemberGetsClusterWideView(t *testing.T) {
 	index := newResourceIndex()
 	mapping := index.mapRoleTemplate(rancherRoleTemplate{
@@ -396,16 +396,16 @@ func TestMapRoleTemplateClusterMemberGetsClusterWideView(t *testing.T) {
 	}
 }
 
-func TestKiteRoleNameUsesProjectNaming(t *testing.T) {
+func TestAeroLinkRoleNameUsesProjectNaming(t *testing.T) {
 	// 默认不加前缀：角色名就是 Rancher 上的角色模板名（界面里一眼能对上）。
-	if got := kiteRoleName("", "project-owner"); got != "project-owner" {
+	if got := aerolinkRoleName("", "project-owner"); got != "project-owner" {
 		t.Fatalf("角色名 = %q", got)
 	}
 	// 需要避让时可以加前缀。
-	if got := kiteRoleName("rk-", "project-owner"); got != "rk-project-owner" {
+	if got := aerolinkRoleName("rk-", "project-owner"); got != "rk-project-owner" {
 		t.Fatalf("带前缀的角色名 = %q", got)
 	}
-	long := kiteRoleName("", strings.Repeat("x", 200))
+	long := aerolinkRoleName("", strings.Repeat("x", 200))
 	if len([]rune(long)) > 100 {
 		t.Fatalf("角色名过长：%d", len([]rune(long)))
 	}

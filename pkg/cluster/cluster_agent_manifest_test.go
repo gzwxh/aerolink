@@ -55,7 +55,7 @@ func TestGetClusterAgentManifest(t *testing.T) {
 		"kind: ServiceAccount",
 		"kind: ClusterRoleBinding",
 		"kind: Deployment",
-		"kite-cluster-agent",
+		"aerolink-cluster-agent",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("manifest missing %q:\n%s", want, body)

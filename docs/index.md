@@ -24,7 +24,7 @@ head:
 ---
 
 <script setup>
-import KiteHome from './.vitepress/theme/components/KiteHome.vue'
+import AeroLinkHome from './.vitepress/theme/components/AeroLinkHome.vue'
 </script>
 
-<KiteHome />
+<AeroLinkHome />

@@ -85,7 +85,7 @@ export function UserManagement() {
   // 列显示偏好：与资源列表（/deployments 等）一致，用齿轮菜单勾选，并持久化。
   // 用户列表是全局数据、与当前集群无关，所以这里用不带集群前缀的键。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
-    'kite-users-columnVisibility'
+    'aerolink-users-columnVisibility'
   )
   const { data: roles = [] } = useRoleList()
   // 认证方式除了内置的密码 / LDAP，还可能是任意已配置的 OAuth 提供方名称。

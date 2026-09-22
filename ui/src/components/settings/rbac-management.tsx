@@ -161,7 +161,7 @@ export function RBACManagement() {
   const [sorting, setSorting] = useState<SortingState>([])
   // 列显示偏好：与资源列表 / 用户组列表一致，用齿轮菜单勾选，并持久化。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
-    'kite-rbac-roles-columnVisibility'
+    'aerolink-rbac-roles-columnVisibility'
   )
 
   const editRole = useMemo(

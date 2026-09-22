@@ -207,10 +207,10 @@ func sha256Hex(content []byte) string {
 
 // exportHMAC 用从部署密钥派生的密钥给导出内容签名。
 //
-// 不直接用 KiteEncryptKey 当 HMAC 密钥：它是给存储凭据加密用的，混用会让同一份
+// 不直接用 EncryptKey 当 HMAC 密钥：它是给存储凭据加密用的，混用会让同一份
 // 密钥承担两种用途。这里先做一次 SHA-256 派生（用途分隔），密钥本身仍然不进日志。
 func exportHMAC(content []byte) string {
-	seed := sha256.Sum256([]byte("aerolink-audit-export:" + common.KiteEncryptKey))
+	seed := sha256.Sum256([]byte("aerolink-audit-export:" + common.EncryptKey))
 	mac := hmac.New(sha256.New, seed[:])
 	mac.Write(content)
 	return hex.EncodeToString(mac.Sum(nil))

@@ -51,11 +51,11 @@ docs/.vitepress/cache
 # 直接 `go build ./tools/rancherrbac/...` 会把它落在仓库根目录（Makefile 的
 # rancherrbac 目标走 scripts/build-rancherrbac.sh，产物在 bin/）
 /rancherrbac
-!charts/kite
+!charts/aerolink
 
-# 打包好的 Helm chart（`helm package charts/kite/` 会在仓库根目录生成
-# kite-<chart version>.tgz，CI 自己打包并上传，不进版本库）
-kite-*.tgz
+# 打包好的 Helm chart（`helm package charts/aerolink/` 会在仓库根目录生成
+# aerolink-<chart version>.tgz，CI 自己打包并上传，不进版本库）
+aerolink-*.tgz
 charts/*.tgz
 
 .gocache/

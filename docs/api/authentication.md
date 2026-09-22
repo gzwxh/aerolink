@@ -117,7 +117,7 @@ aerolink<ID>-<SECRET>
 使用时直接把完整值放进 `Authorization` 请求头，不要加 `Bearer`。
 
 ```http
-Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ## 在哪里配置
@@ -141,7 +141,7 @@ API 密钥与普通用户共用同一套 RBAC 权限模型。
 
 ```bash
 curl \
-  -H "Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: aerolink12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "x-cluster-name: demo-cluster" \
   https://aerolink.example.com/api/v1/pods/default
 ```

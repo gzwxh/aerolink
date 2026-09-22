@@ -96,7 +96,9 @@ describe('FontProvider', () => {
     })
     expect(
       document.documentElement.style.getPropertyValue('--app-font-sans')
-    ).toBe("'Kite Song SC', 'Songti SC', SimSun, 'Noto Serif CJK SC', serif")
+    ).toBe(
+      "'AeroLink Song SC', 'Songti SC', SimSun, 'Noto Serif CJK SC', serif"
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'set kai' }))
 
@@ -105,7 +107,7 @@ describe('FontProvider', () => {
     })
     expect(
       document.documentElement.style.getPropertyValue('--app-font-sans')
-    ).toBe("'Kite Kai', 'Kaiti SC', KaiTi, STKaiti, serif")
+    ).toBe("'AeroLink Kai', 'Kaiti SC', KaiTi, STKaiti, serif")
     expect(localStorage.getItem('font-theme-key')).toBe('kai')
   })
 })

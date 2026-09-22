@@ -13,19 +13,19 @@ const oauthIssuer = process.env.AEROLINK_E2E_OAUTH_ISSUER
 
 const ldapUser = {
   username: 'ldap-e2e',
-  password: 'KiteLDAP!2345',
+  password: 'AeroLinkLDAP!2345',
   provider: 'ldap',
 }
 
 const oauthUser = {
   username: 'oauth-e2e',
-  password: 'KiteOAuth!2345',
+  password: 'AeroLinkOAuth!2345',
   provider: 'dex',
 }
 
 const oauthUserWithoutGroup = {
   username: 'oauth-no-group',
-  password: 'KiteOAuthNoGroup!2345',
+  password: 'AeroLinkOAuthNoGroup!2345',
 }
 
 const restrictedOAuthProvider = {
@@ -46,7 +46,7 @@ const customGroupClaimOAuthProvider = {
 
 // 外部身份（LDAP / OIDC 用户组）通过**权限绑定**拿到 viewer：
 // 绑定组 = 集群 + 命名空间（default）+ 成员（用户组 × 角色）。
-// 绑定对象是用户组，所以成员的增删完全由目录维护，Kite 侧不需要跟着改。
+// 绑定对象是用户组，所以成员的增删完全由目录维护，鸢联 AeroLink 侧不需要跟着改。
 const externalBinding = {
   name: 'e2e-external-scope',
   namespace: 'default',
@@ -131,13 +131,13 @@ async function configureLDAPViaUI(page: Page) {
   }
 
   await page.getByLabel('Server URL').fill(ldapURL!)
-  await page.getByLabel('Bind DN').fill('cn=admin,dc=kite,dc=test')
+  await page.getByLabel('Bind DN').fill('cn=admin,dc=aerolink,dc=test')
   await page.getByLabel('Bind Password').fill('admin')
-  await page.getByLabel('User Base DN').fill('ou=users,dc=kite,dc=test')
+  await page.getByLabel('User Base DN').fill('ou=users,dc=aerolink,dc=test')
   await page.getByLabel('User Filter').fill('(uid=%s)')
   await page.getByLabel('Username Attribute').fill('uid')
   await page.getByLabel('Display Name Attribute').fill('cn')
-  await page.getByLabel('Group Base DN').fill('ou=groups,dc=kite,dc=test')
+  await page.getByLabel('Group Base DN').fill('ou=groups,dc=aerolink,dc=test')
   await page.getByLabel('Group Filter').fill('(member=%s)')
   await page.getByLabel('Group Name Attribute').fill('cn')
   await ldapCard.getByRole('button', { name: 'Save' }).click()
@@ -157,8 +157,8 @@ async function configureOAuthViaUI(page: Page) {
   await expect(dialog).toBeVisible()
 
   await dialog.getByLabel('Name *').fill('dex')
-  await dialog.getByLabel('Client ID *').fill('kite-e2e')
-  await dialog.getByLabel('Client Secret *').fill('kite-e2e-secret')
+  await dialog.getByLabel('Client ID *').fill('aerolink-e2e')
+  await dialog.getByLabel('Client Secret *').fill('aerolink-e2e-secret')
   await dialog.getByLabel('Issuer').fill(oauthIssuer!)
   await dialog.getByLabel('Scopes').fill('openid,profile,email,groups')
   await dialog.getByRole('button', { name: 'Create' }).click()
@@ -202,8 +202,8 @@ async function configureUsernameClaimOAuthViaUI(page: Page) {
   await expect(dialog).toBeVisible()
 
   await dialog.getByLabel('Name *').fill(usernameClaimOAuthProvider.name)
-  await dialog.getByLabel('Client ID *').fill('kite-e2e')
-  await dialog.getByLabel('Client Secret *').fill('kite-e2e-secret')
+  await dialog.getByLabel('Client ID *').fill('aerolink-e2e')
+  await dialog.getByLabel('Client Secret *').fill('aerolink-e2e-secret')
   await dialog.getByLabel('Issuer').fill(oauthIssuer!)
   await dialog.getByLabel('Scopes').fill('openid,profile,email,groups')
   await dialog
@@ -251,8 +251,8 @@ async function configureRestrictedOAuthViaUI(page: Page) {
   await expect(dialog).toBeVisible()
 
   await dialog.getByLabel('Name *').fill(restrictedOAuthProvider.name)
-  await dialog.getByLabel('Client ID *').fill('kite-e2e')
-  await dialog.getByLabel('Client Secret *').fill('kite-e2e-secret')
+  await dialog.getByLabel('Client ID *').fill('aerolink-e2e')
+  await dialog.getByLabel('Client Secret *').fill('aerolink-e2e-secret')
   await dialog.getByLabel('Issuer').fill(oauthIssuer!)
   await dialog.getByLabel('Scopes').fill('openid,profile,email,groups')
   await dialog
@@ -301,8 +301,8 @@ async function configureCustomGroupClaimOAuthViaUI(page: Page) {
   await expect(dialog).toBeVisible()
 
   await dialog.getByLabel('Name *').fill(customGroupClaimOAuthProvider.name)
-  await dialog.getByLabel('Client ID *').fill('kite-e2e')
-  await dialog.getByLabel('Client Secret *').fill('kite-e2e-secret')
+  await dialog.getByLabel('Client ID *').fill('aerolink-e2e')
+  await dialog.getByLabel('Client Secret *').fill('aerolink-e2e-secret')
   await dialog.getByLabel('Issuer').fill(oauthIssuer!)
   await dialog.getByLabel('Scopes').fill('openid,profile,email,groups')
   await dialog

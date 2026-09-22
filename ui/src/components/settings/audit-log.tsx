@@ -87,7 +87,7 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
   // 列显示偏好：与资源列表（/deployments 等）一致，齿轮菜单勾选 + 持久化。
   // 日志是全局数据，键不带集群前缀。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
-    'kite-audit-logs-columnVisibility'
+    'aerolink-audit-logs-columnVisibility'
   )
   const [operatorId, setOperatorId] = useState<number | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState('')

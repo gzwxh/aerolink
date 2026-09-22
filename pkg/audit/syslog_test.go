@@ -101,7 +101,7 @@ func TestFormatSyslogLineUnknownKindIsEmpty(t *testing.T) {
 }
 
 func TestFormatSyslogMessageSeverity(t *testing.T) {
-	config := model.LogForwardSetting{Facility: model.DefaultSyslogFacility, Tag: "kite"}
+	config := model.LogForwardSetting{Facility: model.DefaultSyslogFacility, Tag: "aerolink"}
 
 	// facility 13*8 + informational 6 = 110
 	informational := formatSyslogMessage(config, "event=login result=success user=a")

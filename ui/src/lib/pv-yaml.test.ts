@@ -214,7 +214,7 @@ const livePV = (): PersistentVolume =>
       name: 'pv-1',
       uid: 'uid-1',
       labels: { keep: 'me' },
-      annotations: { 'kite.internal/note': 'keep me' },
+      annotations: { 'aerolink.internal/note': 'keep me' },
     },
     spec: {
       capacity: { storage: '10Gi', iops: '3000' },
@@ -283,7 +283,7 @@ describe('PV 编辑（只放行可变字段）', () => {
     })
     expect(updated.metadata?.labels).toEqual({ keep: 'me' })
     expect(updated.metadata?.annotations).toEqual({
-      'kite.internal/note': 'keep me',
+      'aerolink.internal/note': 'keep me',
     })
     expect(updated.status?.phase).toBe('Bound')
   })

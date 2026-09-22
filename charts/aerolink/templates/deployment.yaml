@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "kite.fullname" . }}
+  name: {{ include "aerolink.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "kite.labels" . | nindent 4 }}
+    {{- include "aerolink.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "kite.selectorLabels" . | nindent 6 }}
+      {{- include "aerolink.selectorLabels" . | nindent 6 }}
   {{- with .Values.deploymentStrategy }}
   strategy:
     {{- toYaml . | nindent 4 }}
@@ -21,7 +21,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "kite.labels" . | nindent 8 }}
+        {{- include "aerolink.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -30,7 +30,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "kite.serviceAccountName" . }}
+      serviceAccountName: {{ include "aerolink.serviceAccountName" . }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -53,7 +53,7 @@ spec:
               protocol: TCP
           envFrom:
             - secretRef:
-                name: {{ include "kite.secret" . }}
+                name: {{ include "aerolink.secret" . }}
           env:
             {{- if .Values.host }}
             - name: HOST
@@ -75,7 +75,7 @@ spec:
             {{- end }}
             {{- if .Values.config.enabled }}
             - name: AEROLINK_CONFIG_FILE
-              value: /etc/kite/config.yaml
+              value: /etc/aerolink/config.yaml
             {{- end }}
             {{- if .Values.auditArchiveDir }}
             - name: AEROLINK_AUDIT_ARCHIVE_DIR
@@ -107,33 +107,33 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- if .Values.config.enabled }}
-            - name: kite-config
-              mountPath: /etc/kite
+            - name: aerolink-config
+              mountPath: /etc/aerolink
               readOnly: true
           {{- end }}
           {{- if and (eq .Values.db.type "sqlite")}}
-            - name: {{ include "kite.fullname" . }}-storage
+            - name: {{ include "aerolink.fullname" . }}-storage
               mountPath: {{ .Values.db.sqlite.persistence.mountPath }}
           {{- end }}
           {{- if .Values.auditPersistence.enabled }}
             # 归档 parquet 与 klog 日志共用这一个卷（归档目录是其子目录）。
-            - name: {{ include "kite.fullname" . }}-audit
+            - name: {{ include "aerolink.fullname" . }}-audit
               mountPath: {{ .Values.auditPersistence.mountPath }}
           {{- end }}
       volumes:
       {{- if .Values.config.enabled }}
-        - name: kite-config
+        - name: aerolink-config
           secret:
-            secretName: {{ .Values.config.existingSecret | default (printf "%s-config" (include "kite.fullname" .)) }}
+            secretName: {{ .Values.config.existingSecret | default (printf "%s-config" (include "aerolink.fullname" .)) }}
             items:
               - key: config.yaml
                 path: config.yaml
       {{- end }}
       {{- if eq .Values.db.type "sqlite"}}
-        - name: {{ include "kite.fullname" . }}-storage
+        - name: {{ include "aerolink.fullname" . }}-storage
       {{- if .Values.db.sqlite.persistence.pvc.enabled }}
           persistentVolumeClaim:
-            claimName: {{ .Values.db.sqlite.persistence.pvc.existingClaim | default (printf "%s-storage" (include "kite.fullname" .)) }}
+            claimName: {{ .Values.db.sqlite.persistence.pvc.existingClaim | default (printf "%s-storage" (include "aerolink.fullname" .)) }}
       {{- else if .Values.db.sqlite.persistence.hostPath.enabled }}
           hostPath:
             path: {{ .Values.db.sqlite.persistence.hostPath.path }}
@@ -143,10 +143,10 @@ spec:
       {{- end }}
       {{- end }}
       {{- if .Values.auditPersistence.enabled }}
-        - name: {{ include "kite.fullname" . }}-audit
+        - name: {{ include "aerolink.fullname" . }}-audit
       {{- if .Values.auditPersistence.pvc.enabled }}
           persistentVolumeClaim:
-            claimName: {{ .Values.auditPersistence.pvc.existingClaim | default (printf "%s-audit" (include "kite.fullname" .)) }}
+            claimName: {{ .Values.auditPersistence.pvc.existingClaim | default (printf "%s-audit" (include "aerolink.fullname" .)) }}
       {{- else if .Values.auditPersistence.hostPath.enabled }}
           hostPath:
             path: {{ .Values.auditPersistence.hostPath.path }}

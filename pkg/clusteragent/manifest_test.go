@@ -10,11 +10,11 @@ func TestGenerateManifest(t *testing.T) {
 
 	checks := []string{
 		"apiVersion: v1\nkind: Secret",
-		"name: kite-cluster-agent-token",
+		"name: aerolink-cluster-agent-token",
 		"namespace: kube-system",
 		"token: \"my-token\"",
 		"apiVersion: v1\nkind: ServiceAccount",
-		"name: kite-cluster-agent",
+		"name: aerolink-cluster-agent",
 		"apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding",
 		"name: cluster-admin",
 		"apiVersion: apps/v1\nkind: Deployment",

@@ -182,11 +182,11 @@ func TestSyntheticAuditIDLayout(t *testing.T) {
 
 // 实例标识：同一身份恒定、落在 [1, 1023]（0 留给旧布局的序号区间），且不同身份要能散开。
 func TestAuditInstanceTag(t *testing.T) {
-	tag := auditInstanceTagFor("kite-7d9f8b6c4-x2k4p", 1)
+	tag := auditInstanceTagFor("aerolink-7d9f8b6c4-x2k4p", 1)
 	if tag < 1 || tag > auditIDTagMask {
 		t.Fatalf("auditInstanceTagFor() = %d, want within [1, %d]", tag, auditIDTagMask)
 	}
-	if again := auditInstanceTagFor("kite-7d9f8b6c4-x2k4p", 1); again != tag {
+	if again := auditInstanceTagFor("aerolink-7d9f8b6c4-x2k4p", 1); again != tag {
 		t.Errorf("同一身份的实例标识必须恒定: %d != %d", again, tag)
 	}
 
@@ -194,7 +194,7 @@ func TestAuditInstanceTag(t *testing.T) {
 	// 每一对；这里验证的是分布没有退化（散列恒定的实现会在这里失败）。
 	seen := make(map[uint]bool, 1000)
 	for i := 0; i < 5000; i++ {
-		seen[auditInstanceTagFor(fmt.Sprintf("kite-7d9f8b6c4-pod%d", i), 1)] = true
+		seen[auditInstanceTagFor(fmt.Sprintf("aerolink-7d9f8b6c4-pod%d", i), 1)] = true
 	}
 	if len(seen) < 900 {
 		t.Errorf("5000 个不同身份只散出 %d 个实例标识，散列退化了", len(seen))

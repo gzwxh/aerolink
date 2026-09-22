@@ -29,16 +29,16 @@ func openEncryptionTestDB(t *testing.T) *gorm.DB {
 
 func TestEnsureEncryptionKeyMigratesFromDefaultKey(t *testing.T) {
 	db := openEncryptionTestDB(t)
-	previousKey := common.KiteEncryptKey
-	t.Cleanup(func() { common.KiteEncryptKey = previousKey })
+	previousKey := common.EncryptKey
+	t.Cleanup(func() { common.EncryptKey = previousKey })
 
 	// 在内置密钥生效期间写入的数据。
-	common.KiteEncryptKey = common.DefaultKiteEncryptKey
+	common.EncryptKey = common.DefaultEncryptKey
 	if err := db.Create(&GeneralSetting{Model: Model{ID: 1}}).Error; err != nil {
 		t.Fatalf("failed to create general setting: %v", err)
 	}
 	if err := db.Exec("UPDATE general_settings SET encrypt_key_fingerprint = ? WHERE id = 1",
-		encryptionKeyFingerprint(common.DefaultKiteEncryptKey)).Error; err != nil {
+		encryptionKeyFingerprint(common.DefaultEncryptKey)).Error; err != nil {
 		t.Fatalf("failed to seed fingerprint: %v", err)
 	}
 	cluster := Cluster{Name: "c1", Config: SecretString("kubeconfig-payload")}
@@ -47,7 +47,7 @@ func TestEnsureEncryptionKeyMigratesFromDefaultKey(t *testing.T) {
 	}
 
 	// 运维配置了真正的密钥：已存的密钥必须被重写。
-	common.KiteEncryptKey = "production-key-0123456789"
+	common.EncryptKey = "production-key-0123456789"
 	EnsureEncryptionKey()
 
 	var raw string
@@ -82,12 +82,12 @@ func TestEnsureEncryptionKeyMigratesFromDefaultKey(t *testing.T) {
 
 func TestEnsureEncryptionKeyKeepsUnknownRotationIntact(t *testing.T) {
 	db := openEncryptionTestDB(t)
-	previousKey := common.KiteEncryptKey
-	t.Cleanup(func() { common.KiteEncryptKey = previousKey })
+	previousKey := common.EncryptKey
+	t.Cleanup(func() { common.EncryptKey = previousKey })
 
 	// 密钥是用某个既不是当前密钥、也不是内置默认密钥的密钥加密的。
 	//
-	common.KiteEncryptKey = "some-other-key"
+	common.EncryptKey = "some-other-key"
 	if err := db.Create(&GeneralSetting{Model: Model{ID: 1}}).Error; err != nil {
 		t.Fatalf("failed to create general setting: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestEnsureEncryptionKeyKeepsUnknownRotationIntact(t *testing.T) {
 		t.Fatalf("failed to seed ciphertext: %v", err)
 	}
 
-	common.KiteEncryptKey = "yet-another-key"
+	common.EncryptKey = "yet-another-key"
 	EnsureEncryptionKey()
 
 	// 不允许重写任何内容：数据保持原样，以便运维恢复正确的密钥。

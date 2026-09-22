@@ -4,7 +4,7 @@
 # 源字体需自行下载，两者均为 SIL OFL 1.1：
 #   思源宋体 CN Regular  https://github.com/adobe-fonts/source-han-serif（release 分支 SubsetOTF/CN/）
 #   寒蝉正楷体            https://github.com/Warren2060/Chillkai（releases → ChillKai.zip）
-# 两者都声明了 Reserved Font Name（思源宋体为 'Source'），派生的子集因此改用 Kite 自有名称，
+# 两者都声明了 Reserved Font Name（思源宋体为 'Source'），派生的子集因此改用 AeroLink 自有名称，
 # 版权、OFL 声明与商标记录原样保留。
 #
 # 子集范围 = GB2312 全集 + ui/src/i18n/locales/zh.json 中出现的字符 + ASCII。
@@ -86,7 +86,7 @@ name = font['name']
 
 # 版权（0）、许可描述与链接（13/14）、商标（7）保持来源原始文本，只在版权里注明本仓库的修改。
 copyright_notice = name.getDebugName(0) or ''
-suffix = ' Subset and renamed by the Kite project in 2026; no Reserved Font Name is used.'
+suffix = ' Subset and renamed by the AeroLink project in 2026; no Reserved Font Name is used.'
 name.removeNames(nameID=0)
 name.setName(copyright_notice + suffix, 0, 3, 1, 0x409)
 
@@ -113,5 +113,5 @@ PY
 }
 
 mkdir -p "$OUT_DIR"
-[[ "$SONG_SRC" == '-' ]] || build_subset "$SONG_SRC" 'kite-song-sc-400-normal.woff2' 'Kite Song SC' 'KiteSongSC-Regular'
-[[ "$KAI_SRC" == '-' ]] || build_subset "$KAI_SRC" 'kite-kai-400-normal.woff2' 'Kite Kai' 'KiteKai-Regular'
+[[ "$SONG_SRC" == '-' ]] || build_subset "$SONG_SRC" 'aerolink-song-sc-400-normal.woff2' 'AeroLink Song SC' 'AeroLinkSongSC-Regular'
+[[ "$KAI_SRC" == '-' ]] || build_subset "$KAI_SRC" 'aerolink-kai-400-normal.woff2' 'AeroLink Kai' 'AeroLinkKai-Regular'

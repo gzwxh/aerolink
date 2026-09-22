@@ -356,7 +356,7 @@ func (r *archiveRuntime) append(message model.AuditMessage) {
 		default:
 			// 队列满：丢弃，不阻塞请求（与 parquet/syslog 同一策略）。但**必须计数**：丢记录是
 			// 「日志链路自己坏了」的头号信号，只打一行 Warning 会淹没在海量日志里，而 /metrics 上的
-			// kite_audit_forward_dropped_total{sink=...} 一眼可见。
+			// aerolink_audit_forward_dropped_total{sink=...} 一眼可见。
 			dropped := archiveDocDropped.Add(1)
 			if dropped%100 == 1 {
 				klog.Warningf("%s archive queue is full, dropped %d record(s)", model.AuditSink, dropped)
