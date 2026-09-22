@@ -22,13 +22,14 @@ This authentication method works well in local client environments, but fails in
 
 Create a dedicated Service Account for AeroLink and use its token for authentication.
 
-AeroLink provides a helper script for creation:
+AeroLink ships a helper script, `scripts/generate-aerolink-kubeconfig.sh` (self-contained, it only needs `kubectl`, so you can copy it to the target machine):
 
 ```sh
-wget https://raw.githubusercontent.com/kite-org/kite/refs/heads/main/scripts/generate-kite-kubeconfig.sh -O generate-kite-kubeconfig.sh
-chmod +x generate-kite-kubeconfig.sh
-./generate-kite-kubeconfig.sh
+chmod +x scripts/generate-aerolink-kubeconfig.sh
+./scripts/generate-aerolink-kubeconfig.sh
 ```
+
+It creates `kube-system/aerolink-admin` (the ServiceAccount and the ClusterRoleBinding share the name), the `aerolink-admin-token` Secret, and writes `aerolink-kubeconfig.yaml`. The namespace and names can be overridden with `NAMESPACE` / `SA_NAME` / `SECRET_NAME` / `OUTPUT_FILE`; the `cleanup` subcommand removes everything it created.
 
 #### Steps:
 
@@ -38,20 +39,20 @@ chmod +x generate-kite-kubeconfig.sh
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kite-admin
+  name: aerolink-admin
   namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: kite-admin
+  name: aerolink-admin
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin
 subjects:
   - kind: ServiceAccount
-    name: kite-admin
+    name: aerolink-admin
     namespace: kube-system
 ```
 
@@ -61,10 +62,10 @@ subjects:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: kite-admin-token
+  name: aerolink-admin-token
   namespace: kube-system
   annotations:
-    kubernetes.io/service-account.name: kite-admin
+    kubernetes.io/service-account.name: aerolink-admin
 type: kubernetes.io/service-account-token
 ```
 
@@ -72,10 +73,10 @@ type: kubernetes.io/service-account-token
 
 ```bash
 # Get token
-TOKEN=$(kubectl get secret kite-admin-token -n kube-system -o jsonpath='{.data.token}' | base64 -d)
+TOKEN=$(kubectl get secret aerolink-admin-token -n kube-system -o jsonpath='{.data.token}' | base64 -d)
 
 # Get CA certificate
-CA_CERT=$(kubectl get secret kite-admin-token -n kube-system -o jsonpath='{.data.ca\.crt}')
+CA_CERT=$(kubectl get secret aerolink-admin-token -n kube-system -o jsonpath='{.data.ca\.crt}')
 
 # Get API Server address
 API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
@@ -84,22 +85,22 @@ API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.ser
 4. Generate kubeconfig:
 
 ```bash
-cat > kite-kubeconfig.yaml <<EOF
+cat > aerolink-kubeconfig.yaml <<EOF
 apiVersion: v1
 kind: Config
 clusters:
 - cluster:
     certificate-authority-data: ${CA_CERT}
     server: ${API_SERVER}
-  name: kite-cluster
+  name: aerolink-cluster
 contexts:
 - context:
-    cluster: kite-cluster
-    user: kite-admin
-  name: kite-context
-current-context: kite-context
+    cluster: aerolink-cluster
+    user: aerolink-admin
+  name: aerolink-context
+current-context: aerolink-context
 users:
-- name: kite-admin
+- name: aerolink-admin
   user:
     token: ${TOKEN}
 EOF

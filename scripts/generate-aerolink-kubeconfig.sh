@@ -3,13 +3,13 @@
 set -e
 
 NAMESPACE="${NAMESPACE:-kube-system}"
-SA_NAME="${SA_NAME:-kite-admin}"
+SA_NAME="${SA_NAME:-aerolink-admin}"
 SECRET_NAME="${SECRET_NAME:-${SA_NAME}-token}"
-OUTPUT_FILE="${OUTPUT_FILE:-kite-kubeconfig.yaml}"
+OUTPUT_FILE="${OUTPUT_FILE:-aerolink-kubeconfig.yaml}"
 
 cleanup() {
     echo "======================================"
-    echo "Kite 资源清理"
+    echo "鸢联 AeroLink 资源清理"
     echo "======================================"
     echo ""
     echo "将删除以下资源："
@@ -42,10 +42,10 @@ cleanup() {
 
 create() {
     echo "======================================"
-    echo "Kite Kubeconfig 生成器"
+    echo "鸢联 AeroLink Kubeconfig 生成器"
     echo "======================================"
     echo ""
-    echo "本脚本会创建一个 Service Account，并生成一份可供 Kite 使用的"
+    echo "本脚本会创建一个 Service Account，并生成一份可供鸢联 AeroLink 使用的"
     echo "kubeconfig（无需 exec 插件）。"
     echo ""
     echo "配置："
@@ -143,9 +143,9 @@ echo "======================================"
 echo ""
 echo "kubeconfig 已保存到：$OUTPUT_FILE"
 echo ""
-echo "现在可以用该文件把集群添加到 Kite："
+echo "现在可以用该文件把集群添加到鸢联 AeroLink："
 echo "  1. 复制 $OUTPUT_FILE 的内容"
-echo "  2. 在 Kite 界面中进入「系统设置 → 集群管理 → 添加集群」"
+echo "  2. 在鸢联 AeroLink 界面中进入「系统设置 → 集群管理 → 添加集群」"
 echo "  3. 粘贴 kubeconfig 内容"
 echo ""
 echo "验证 kubeconfig："
@@ -164,9 +164,9 @@ show_usage() {
 
 环境变量：
   NAMESPACE     Kubernetes 命名空间（默认：kube-system）
-  SA_NAME       Service Account 名称（默认：kite-admin）
-  SECRET_NAME   Secret 名称（默认：kite-admin-token）
-  OUTPUT_FILE   输出的 kubeconfig 文件（默认：kite-kubeconfig.yaml）
+  SA_NAME       Service Account 名称（默认：aerolink-admin）
+  SECRET_NAME   Secret 名称（默认：aerolink-admin-token）
+  OUTPUT_FILE   输出的 kubeconfig 文件（默认：aerolink-kubeconfig.yaml）
 
 示例：
   # 使用默认值创建资源
