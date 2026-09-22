@@ -49,7 +49,7 @@ spec:
     spec:
       serviceAccountName: kite
       containers:
-        - image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/kite:v1.0.0
+        - image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
           imagePullPolicy: IfNotPresent
           name: kite
           envFrom:

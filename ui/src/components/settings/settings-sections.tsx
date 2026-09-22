@@ -93,7 +93,7 @@ export const settingsSectionRegistry: SettingsSectionDefinition[] = [
     defaultLabel: 'API Keys',
     descriptionKey: 'settings.descriptions.apikeys',
     defaultDescription:
-      'Create and revoke the API keys used to call the Kite API.',
+      'Create and revoke the API keys used to call the AeroLink API.',
     icon: IconApi,
     render: () => <APIKeyManagement />,
     section: 'apikeys',

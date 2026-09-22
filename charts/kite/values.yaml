@@ -7,7 +7,7 @@ replicaCount: 1
 
 # 设置容器镜像，更多信息见：https://kubernetes.io/docs/concepts/containers/images/
 image:
-  repository: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite
+  repository: swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink
   # 设置镜像的拉取策略。
   pullPolicy: IfNotPresent
   # 覆盖镜像 tag，其默认值为 chart 的 appVersion。

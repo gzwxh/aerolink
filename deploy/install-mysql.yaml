@@ -86,7 +86,7 @@ spec:
     spec:
       serviceAccountName: kite
       containers:
-        - image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+        - image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
           imagePullPolicy: Always
           name: kite
           envFrom:

@@ -28,7 +28,7 @@
 name: kite
 services:
   kite:
-    image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+    image: swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
     container_name: kite
     # 对应 install-mysql.yaml 的 restartPolicy: Always
     restart: unless-stopped

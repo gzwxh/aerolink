@@ -120,7 +120,7 @@ func DefaultSecuritySettingData() SecuritySettingData {
 		MFAThirdPartyEnabled:     true,
 		MFAStepUpEnabled:         true,
 		MFAVerifyTTLSeconds:      60,
-		OTPIssuerName:            "Kite",
+		OTPIssuerName:            "鸢联 AeroLink",
 		// 新建用户默认「激活」，默认不过期。
 		DefaultUserEnabled:    true,
 		DefaultUserExpireDays: 0,

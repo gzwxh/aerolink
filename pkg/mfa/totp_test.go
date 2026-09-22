@@ -34,8 +34,10 @@ func TestURL(t *testing.T) {
 	if parsed.Scheme != "otpauth" || parsed.Host != "totp" {
 		t.Fatalf("URL() = %q, want otpauth TOTP URL", value)
 	}
-	if parsed.Path != "/Kite:alice@example.com" {
-		t.Fatalf("URL path = %q, want %q", parsed.Path, "/Kite:alice@example.com")
+	// otpauth 的标签是「发行方:账号」，跟随默认发行方名称（可在安全设置里改）。
+	wantPath := "/" + defaultIssuer + ":alice@example.com"
+	if parsed.Path != wantPath {
+		t.Fatalf("URL path = %q, want %q", parsed.Path, wantPath)
 	}
 	if got := parsed.Query().Get("secret"); got != "SECRET" {
 		t.Fatalf("secret query = %q, want %q", got, "SECRET")

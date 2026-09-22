@@ -17,7 +17,7 @@ export interface Branding {
 }
 
 /** 默认站点名；管理员留空时使用。 */
-export const DEFAULT_SITE_NAME = 'Kite'
+export const DEFAULT_SITE_NAME = '鸢联 AeroLink'
 
 const BrandingContext = createContext<Branding>({
   logoUrl: DefaultLogo,
@@ -41,7 +41,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
         logoUrl: customLogo || DefaultLogo,
         isCustomLogo: customLogo !== '',
         siteName: customName || DEFAULT_SITE_NAME,
-        // 看的是“配没配”而不是“和默认值一不一样”：管理员就是把名字填成 Kite
+        // 看的是“配没配”而不是“和默认值一不一样”：管理员就是把名字填成默认名
         // 也算自定义，留空才是用默认值。
         isCustomBranding: customLogo !== '' || customName !== '',
       }}

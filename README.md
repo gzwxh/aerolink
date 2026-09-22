@@ -98,8 +98,8 @@ set -a; . ./dev.env; set +a; ./kite
 make image     # 构建镜像（默认 tag 见 Makefile 的 IMAGE 变量）
 make push      # 构建并推送到公司 SWR
 # 等价于：
-# docker build -t swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1 .
-# docker push  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+# docker build -t swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1 .
+# docker push  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
 
 受限网络下 `make image/push` 已内置国内镜像源参数（daocloud 基础镜像 + npmmirror + goproxy.cn），直连环境可用 `make image DOCKER_BUILD_ARGS=` 置空。
@@ -123,7 +123,7 @@ docker run -d --name kite -p 8080:8080 \
   -e DB_DSN=/app/data/kite.db \
   -e KITE_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
 
 生产推荐启动方式（含全部安全参数，密钥用 `openssl rand -base64 32` 生成并妥善保存）：
@@ -137,7 +137,7 @@ docker run -d --name kite --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://kite.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:v1.0.1
+  swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:v1.0.1
 ```
 
 首次访问会引导创建管理员账号，之后在「系统设置」中完成其余策略配置。
@@ -173,7 +173,7 @@ docker run -d --name kite --restart unless-stopped \
 | `KITE_CONFIG_FILE` | 空 | 外部配置文件路径 |
 | `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/busybox:latest` | 节点终端 Pod 镜像（公司 SWR） |
 | `KUBECTL_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/kubectl:latest` | Kubectl 终端 Pod 镜像（公司 SWR） |
-| `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/kite:latest` | 集群 Agent 镜像，与应用镜像同一仓库（公司 SWR） |
+| `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/dsy/devops/aerolink:latest` | 集群 Agent 镜像，与应用镜像同一仓库（公司 SWR） |
 | `KITE_KUBE_API_QPS` / `KITE_KUBE_API_BURST` | 内置值 | 访问 K8s API 的限速参数，集群规模大时可上调 |
 | `KITE_CACHE_SYNC_TIMEOUT` | 内置值 | 集群缓存同步超时 |
 | `DISABLE_CACHE` | 否 | `true` 关闭资源缓存（调试用） |

@@ -884,7 +884,7 @@ export function UserManagement() {
           deletingUser?.provider === 'ldap'
             ? t(
                 'userManagement.messages.ldapDeleteNote',
-                'This only removes the account from Kite. The user remains in the LDAP directory and can be imported again later.'
+                'This only removes the account from AeroLink. The user remains in the LDAP directory and can be imported again later.'
               )
             : undefined
         }

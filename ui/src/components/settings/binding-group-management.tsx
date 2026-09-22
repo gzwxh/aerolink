@@ -1713,41 +1713,78 @@ export function BindingGroupFormPage({
                 />
               )}
             </div>
-            {/* 限高滚动：命名空间可能上百个，平铺会把这一页撑得极长（真机反馈）。 */}
-            <div className="mt-1.5 max-h-48 space-y-1 overflow-y-auto pr-1">
-              {visibleConflicts.map(([namespace, owner]) => (
-                <div
-                  key={namespace}
-                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
-                >
-                  <span className="w-40 shrink-0 truncate font-mono font-medium">
-                    {namespace}
-                  </span>
-                  <span className="text-muted-foreground">
-                    ← {owner.groupName}
-                  </span>
-                  {owner.subjects.length > 0 && (
-                    <span className="text-muted-foreground">
-                      · {t('bindingGroup.nsTakenSubjects', '已授权')}{' '}
-                      {owner.subjects.join('、')}
-                    </span>
+            {/* 限高滚动：命名空间可能上百个，平铺会把这一页撑得极长（真机反馈）。
+                按「命名空间 / 权限绑定 / 已授权 / 角色」分列，长名单才不会糊成一片。 */}
+            <div className="border-warning/25 bg-background mt-1.5 max-h-48 overflow-y-auto rounded-md border">
+              <Table className="text-xs">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="h-8 w-[1%] px-2 text-xs">
+                      {t('bindingGroup.nsTakenColumnNamespace', '命名空间')}
+                    </TableHead>
+                    <TableHead className="h-8 w-[1%] px-2 text-xs">
+                      {t('bindingGroup.nsTakenColumnBinding', '权限绑定')}
+                    </TableHead>
+                    <TableHead className="h-8 px-2 text-xs whitespace-normal">
+                      {t(
+                        'bindingGroup.nsTakenColumnSubjects',
+                        '已授权的用户 / 用户组'
+                      )}
+                    </TableHead>
+                    <TableHead className="h-8 px-2 text-xs whitespace-normal">
+                      {t('bindingGroup.nsTakenColumnRoles', '角色')}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleConflicts.map(([namespace, owner]) => (
+                    <TableRow key={namespace}>
+                      <TableCell className="w-[1%] px-2 py-1.5 align-top font-mono font-medium">
+                        {namespace}
+                      </TableCell>
+                      <TableCell className="w-[1%] px-2 py-1.5 align-top">
+                        <span className="bg-primary/10 rounded px-1.5 py-0.5">
+                          {owner.groupName}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground px-2 py-1.5 align-top whitespace-normal">
+                        {owner.subjects.length > 0
+                          ? owner.subjects.join('、')
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="px-2 py-1.5 align-top whitespace-normal">
+                        {owner.roles.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {owner.roles.map((role) => (
+                              <span
+                                key={role}
+                                className="bg-muted text-muted-foreground rounded px-1.5 py-0.5"
+                              >
+                                {role}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {visibleConflicts.length === 0 && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={4}
+                        className="text-muted-foreground px-2 py-3 text-center whitespace-normal"
+                      >
+                        {t(
+                          'bindingGroup.nsTakenNoMatch',
+                          '没有匹配的命名空间或绑定名'
+                        )}
+                      </TableCell>
+                    </TableRow>
                   )}
-                  {owner.roles.length > 0 && (
-                    <span className="text-muted-foreground">
-                      · {t('bindingGroup.nsTakenRoles', '角色')}{' '}
-                      {owner.roles.join('、')}
-                    </span>
-                  )}
-                </div>
-              ))}
-              {visibleConflicts.length === 0 && (
-                <p className="text-muted-foreground text-xs">
-                  {t(
-                    'bindingGroup.nsTakenNoMatch',
-                    '没有匹配的命名空间或绑定名'
-                  )}
-                </p>
-              )}
+                </TableBody>
+              </Table>
             </div>
             <p className="text-muted-foreground mt-1.5 text-xs">
               {t(

@@ -200,7 +200,7 @@ export function MFASection() {
           <p className="text-xs text-muted-foreground">
             {t(
               'accountSettings.security.mfa.directoryHint',
-              '目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认；若最近没有重新登录过，请先退出并重新登录，再回来绑定。'
+              '目录账号（LDAP）没有本地密码，鸢联 AeroLink 以你最近一次登录作为本人确认；若最近没有重新登录过，请先退出并重新登录，再回来绑定。'
             )}
           </p>
         )}

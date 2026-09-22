@@ -740,7 +740,7 @@
     },
     "tabs": {
       "rolloutRevisions": "发布版本历史",
-      "kiteAudit": "Kite 审计记录"
+      "kiteAudit": "鸢联 审计记录"
     }
   },
   "daemonsets": {
@@ -962,7 +962,7 @@
     "tryAgainHint": "请尝试使用有权限的其他账号登录。",
     "noLoginMethods": "未配置登录方式",
     "configureAuth": "请先配置认证方式",
-    "footer": "© {{year}} Kite · {{company}} 版权所有",
+    "footer": "© {{year}} 鸢联 AeroLink · {{company}} 版权所有",
     "errors": {
       "accessDenied": "访问被拒绝",
       "authenticationFailed": "认证失败",
@@ -1905,7 +1905,7 @@
       "general": "管理控制台全局开关：AI 助手、kubectl / 节点终端、集群代理与运行时配置。",
       "navigation": "配置左侧导航显示哪些分组与条目：可以调整顺序、隐藏条目或新建分组；发布为全局导航后对没有自定义导航的用户生效。",
       "clusters": "导入 Kubernetes 集群、启用或禁用集群，以及删除不再使用的集群。",
-      "apikeys": "创建与吊销用于调用 Kite API 的密钥。",
+      "apikeys": "创建与吊销用于调用 鸢联 AeroLink API 的密钥。",
       "templates": "维护创建资源时可选的模板。",
       "user": "管理控制台用户与用户组：新增/编辑账号、启用或禁用登录、重置密码、分配角色以及维护用户组成员。",
       "rbac": "定义角色（集群、资源、动作）以及把用户或用户组与角色关联的权限绑定。",
@@ -1985,10 +1985,10 @@
     },
     "branding": {
       "title": "品牌",
-      "description": "自定义控制台外观：名称与 logo 会用在侧边栏、登录页、初始化页与浏览器标签上；留空则用默认值（Kite + 内置图标）。仅管理员可改。",
+      "description": "自定义控制台外观：名称与 logo 会用在侧边栏、登录页、初始化页与浏览器标签上；留空则用默认值（鸢联 AeroLink + 内置图标）。仅管理员可改。",
       "nameLabel": "名称",
-      "namePlaceholder": "Kite",
-      "nameHint": "展示在侧边栏、登录页与浏览器标签上；最长 16 个字符（中文按 1 个算），过长时侧边栏会折成两行完整展示。留空则使用默认名称 Kite。",
+      "namePlaceholder": "鸢联 AeroLink",
+      "nameHint": "展示在侧边栏、登录页与浏览器标签上；最长 16 个字符（中文按 1 个算），过长时侧边栏会折成两行完整展示。留空则使用默认名称 鸢联 AeroLink。",
       "nameCounter": "{{used}}/{{max}}",
       "preview": "Logo 预览",
       "upload": "选择图片",
@@ -2087,7 +2087,7 @@
       "groups": "用户组"
     },
     "messages": {
-      "ldapDeleteNote": "此操作仅从 Kite 中移除该账号，用户仍存在于 LDAP 目录中，之后可再次导入。",
+      "ldapDeleteNote": "此操作仅从 鸢联 AeroLink 中移除该账号，用户仍存在于 LDAP 目录中，之后可再次导入。",
       "ldapDeleted": "用户已删除",
       "mfaNotBound": "未绑定 MFA",
       "superAdminDisableHint": "超级管理员可以停用，但系统里必须还有另一个启用、且持有系统管理员角色的账号。更推荐的做法是给它绑定 MFA。",
@@ -2313,7 +2313,7 @@
     "errors": {
       "loadFailed": "加载集群失败"
     },
-    "deleteConfirmation": "此操作仅移除 Kite 中的集群配置，不会删除集群内的任何资源。",
+    "deleteConfirmation": "此操作仅移除 鸢联 AeroLink 中的集群配置，不会删除集群内的任何资源。",
     "dialog": {
       "createTitle": "添加集群",
       "editTitle": "编辑集群",
@@ -2379,7 +2379,7 @@
   },
   "initialization": {
     "title": "初始化设置",
-    "welcome": "欢迎使用 Kite！",
+    "welcome": "欢迎使用 鸢联 AeroLink！",
     "subtitle": "完成以下步骤开始使用",
     "description": "创建管理员账号并连接集群",
     "step1": {
@@ -2654,7 +2654,7 @@
       "addRepositoryDescription": "添加 Helm Repository 后，它的 Charts 会显示在列表中。支持传统仓库（https://）和 OCI 仓库（oci://，URL 需指向单个 Chart）。",
       "repositoryAdded": "Repository 已添加",
       "repositoryDeleted": "Repository 已删除",
-      "deleteRepositoryDescription": "这里只会从 Kite 移除这个受管理的 Chart 来源，不会删除远端 Chart，也不会卸载已安装的 Helm Release。",
+      "deleteRepositoryDescription": "这里只会从 鸢联 AeroLink 移除这个受管理的 Chart 来源，不会删除远端 Chart，也不会卸载已安装的 Helm Release。",
       "noCharts": "未找到 Chart",
       "noReadme": "未找到 README",
       "noValues": "未找到 Values",
@@ -2662,7 +2662,7 @@
       "noVersions": "未找到版本",
       "noChartUrl": "缺少 Chart 包 URL。",
       "invalidValues": "Values 必须是 YAML 对象。",
-      "artifactHubTrafficNotice": "从该来源搜索或查看 Chart 信息时，Kite 会访问 <artifactHub>Artifact Hub</artifactHub>。Kite 仅展示第三方数据，不对其中内容负责。",
+      "artifactHubTrafficNotice": "从该来源搜索或查看 Chart 信息时，鸢联 AeroLink 会访问 <artifactHub>Artifact Hub</artifactHub>。鸢联 AeroLink 仅展示第三方数据，不对其中内容负责。",
       "installed": "Helm Release 已安装"
     },
     "placeholders": {
@@ -3031,7 +3031,7 @@
     "description": "管理员已要求你的账号启用 MFA，请先绑定身份验证器后继续使用。",
     "passwordStepHint": "为防止会话被盗用，请先验证当前密码；验证通过后将显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
     "passwordLabel": "当前密码",
-    "directoryStepHint": "目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认。点击继续后显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
+    "directoryStepHint": "目录账号（LDAP）没有本地密码，鸢联 AeroLink 以你最近一次登录作为本人确认。点击继续后显示绑定二维码，用身份验证器 App 扫码即可完成绑定。",
     "reauthRequired": "为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。",
     "reauthAction": "退出并重新登录",
     "continue": "继续",
@@ -3231,7 +3231,7 @@
         "otpauthUrl": "otpauth 链接",
         "description": "绑定动态码后，登录与敏感操作会要求输入一次动态码。",
         "featureDisabled": "当前部署已在「设置 → 通用」里关闭动态码功能，无法绑定；需要管理员启用后才能使用。",
-        "directoryHint": "目录账号（LDAP）没有本地密码，Kite 以你最近一次登录作为本人确认；若最近没有重新登录过，请先退出并重新登录，再回来绑定。",
+        "directoryHint": "目录账号（LDAP）没有本地密码，鸢联 AeroLink 以你最近一次登录作为本人确认；若最近没有重新登录过，请先退出并重新登录，再回来绑定。",
         "reauthRequired": "为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。",
         "reauthAction": "退出并重新登录"
       }
@@ -3684,8 +3684,10 @@
     "nsAfterCreate": "命名空间可在创建权限绑定后再绑定或直接创建。",
     "nsExclusiveHint": "每个命名空间同一时间只能归属一个权限绑定；已被占用的要先到那个绑定里解绑，才会重新出现在这里。",
     "nsTakenTitle": "以下命名空间已被其它权限绑定占用，已从可选列表中移除",
-    "nsTakenSubjects": "已授权",
-    "nsTakenRoles": "角色",
+    "nsTakenColumnNamespace": "命名空间",
+    "nsTakenColumnBinding": "权限绑定",
+    "nsTakenColumnSubjects": "已授权的用户 / 用户组",
+    "nsTakenColumnRoles": "角色",
     "nsTakenHint": "需要改用这些命名空间时，请先在上面对应的权限绑定里保存（去掉该命名空间）解绑，再回到这里选择。",
     "nsTakenFilter": "筛选命名空间或绑定名",
     "nsTakenNoMatch": "没有匹配的命名空间或绑定名",
