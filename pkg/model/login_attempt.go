@@ -24,12 +24,22 @@ type LoginAttempt struct {
 	// WindowStart 是当前计数窗口的起点。窗口过期后下一次失败会把计数重置为 1，
 	// 所以这是一个固定窗口计数，而不是逐条记录失败时刻的滑动窗口。
 	WindowStart time.Time `gorm:"column:window_started_at" json:"window_started_at"`
-	// BlockedUntil 为零表示未封锁。
+	// BlockedUntil 为 noBlock（1970-01-01）表示未封锁，见 noBlock 的说明。
 	BlockedUntil time.Time `gorm:"index" json:"blocked_until"`
 	// ManualBlock 标记管理员手动拉黑：它优先于 IP 白名单豁免。
 	ManualBlock bool      `gorm:"not null;default:false" json:"manual_block"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
+
+// noBlock 是「未被封锁 / 计数窗口早已过期」在库里的表示，用来代替 time.Time 的零值。
+//
+// 为什么不能用零值：go-sql-driver 会把零值时间渲染成 '0000-00-00 00:00:00'，MySQL 严格模式
+// （默认带 NO_ZERO_DATE + STRICT_TRANS_TABLES，5.7 / 8.0 都是）直接报 Error 1292，而 SQLite /
+// PostgreSQL 照收——于是登录失败计数与自动锁定在 MySQL 上会静默失效（错误只留一条 Warning）。
+// 纪元时间在三家库上都是合法日期，且与零值在所有比较里的结果完全一致：
+//   - now.Before(BlockedUntil) → false（attemptBlocked 视为未封锁）
+//   - blocked_until > now → 不匹配、window_started_at < cutoff → 匹配（与零值相同）
+var noBlock = time.Unix(0, 0).UTC()
 
 // keyEquals 是把 key 列名交给 GORM 做方言引号的等值条件（见类型注释）。
 func keyEquals(key string) map[string]interface{} {
@@ -68,6 +78,8 @@ func RecordCredentialLoginFailure(key string, now time.Time, window time.Duratio
 			Key:          key,
 			FailureCount: 1,
 			WindowStart:  now,
+			// 零值时间在 MySQL 严格模式下写不进去（见 noBlock）。
+			BlockedUntil: noBlock,
 		}).Error
 		if err == nil {
 			return 1, nil
@@ -103,7 +115,13 @@ func BlockLoginAttempt(key string, until time.Time, manual bool) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		attempt := &LoginAttempt{Key: key, BlockedUntil: until, ManualBlock: manual}
+		attempt := &LoginAttempt{
+			Key:          key,
+			BlockedUntil: until,
+			ManualBlock:  manual,
+			// 同上：window_started_at 也不能留零值。
+			WindowStart: noBlock,
+		}
 		if err := DB.Create(attempt).Error; err != nil {
 			if !isUniqueConstraintError(err) {
 				return err

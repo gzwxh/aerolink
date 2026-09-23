@@ -563,13 +563,28 @@ func rewriteGroupOnUsers(tx *gorm.DB, oldName, newName string) error {
 	}
 
 	type row struct {
-		ID     uint
-		Groups string
+		ID     uint   `gorm:"column:id"`
+		Groups string `gorm:"column:group_list"`
 	}
 	var rows []row
+	// 列名与别名都不能直接拼进 SQL：users 的组列在历史库上就叫 groups，而 GROUPS 是 MySQL 8 的
+	// 保留字（5.7 不是，SQLite / PostgreSQL 也不是），裸写会报 1064。这里交给 clause 让 GORM 按
+	// 方言加引号，别名也换成非保留字的 group_list。
+	// 注意用 Clauses 而不是 Select(clause.Expr{...})：GORM v1.31 的 Select 只接受 string /
+	// []string，传 clause.Expression 会直接报 "unsupported select args"。
+	selectClause := clause.Select{
+		Expression: clause.Expr{
+			SQL: "id, ? AS ?",
+			Vars: []interface{}{
+				clause.Column{Name: column},
+				clause.Column{Name: "group_list"},
+			},
+			WithoutParentheses: true,
+		},
+	}
 	if err := tx.Model(&User{}).
-		Select("id AS id, "+column+" AS groups").
-		Where(column+" LIKE ?", "%"+oldName+"%").
+		Clauses(selectClause).
+		Where(PatternLike(clause.Column{Name: column}, "%"+oldName+"%")).
 		Find(&rows).Error; err != nil {
 		return err
 	}

@@ -3,7 +3,10 @@ package model
 import (
 	"testing"
 
+	"github.com/glebarez/sqlite"
 	"github.com/zxh326/kite/pkg/common"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func mfaTestUser(provider string, admin bool) *User {
@@ -83,5 +86,50 @@ func TestMFAThirdPartyForcesEnrollmentForLDAPAdmins(t *testing.T) {
 				t.Fatalf("MFARequiredFor(%s) = %v, want %v", tc.name, got, tc.want)
 			}
 		})
+	}
+}
+
+// 保存单行设置（`SecuritySetting{Model: Model{ID: 1}}` + Save，见 UpdateSecuritySetting）
+// 不能把零值 created_at 写回去：MySQL 严格模式（NO_ZERO_DATE）会报
+// Error 1292: Incorrect datetime value: '0000-00-00' for column 'created_at'，
+// 而 SQLite / PostgreSQL 不报错。所以这里断言「更新后 created_at 没变」，它同时是
+// Model.BeforeSave 的回归（见 model.go 里那段说明）。
+func TestUpdateSecuritySettingKeepsCreatedAt(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("opening test database: %v", err)
+	}
+	if err := db.AutoMigrate(&SecuritySetting{}); err != nil {
+		t.Fatalf("migrating test database: %v", err)
+	}
+	previous := DB
+	DB = db
+	t.Cleanup(func() {
+		DB = previous
+		InvalidateSecuritySettingCache()
+	})
+
+	row := SecuritySetting{Model: Model{ID: 1}}
+	if err := row.Data.Marshal(DefaultSecuritySettingData()); err != nil {
+		t.Fatalf("marshalling the default setting: %v", err)
+	}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatalf("seeding security setting: %v", err)
+	}
+	created := row.CreatedAt
+
+	if _, err := UpdateSecuritySetting(DefaultSecuritySettingData()); err != nil {
+		t.Fatalf("UpdateSecuritySetting() error = %v", err)
+	}
+
+	var reread SecuritySetting
+	if err := db.First(&reread, 1).Error; err != nil {
+		t.Fatalf("reloading security setting: %v", err)
+	}
+	if !reread.CreatedAt.Equal(created) {
+		t.Fatalf("created_at = %v, want %v（零值时间会被渲染成 0000-00-00，MySQL 严格模式会拒绝）",
+			reread.CreatedAt, created)
 	}
 }

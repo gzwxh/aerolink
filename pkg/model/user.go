@@ -11,6 +11,7 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/utils"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"k8s.io/klog/v2"
 )
 
@@ -363,7 +364,7 @@ func ListUsers(q UserListQuery) (users []User, total int64, err error) {
 	if q.Search != "" {
 		likeQuery := "%" + q.Search + "%"
 		query = query.Where(
-			"users.username LIKE ? OR users.name LIKE ?",
+			PatternLikeSQL("users.username")+" OR "+PatternLikeSQL("users.name"),
 			likeQuery,
 			likeQuery,
 		)
@@ -382,13 +383,14 @@ func ListUsers(q UserListQuery) (users []User, total int64, err error) {
 		if columnErr != nil {
 			return nil, 0, columnErr
 		}
-		query = query.Where(
-			fmt.Sprintf(
-				"users.%s = ? OR users.%s LIKE ? OR users.%s LIKE ? OR users.%s LIKE ?",
-				column, column, column, column,
-			),
-			q.Group, q.Group+",%", "%,"+q.Group, "%,"+q.Group+",%",
-		)
+		// 列名与匹配都交给 clause：历史库上这个列可能就叫保留字（见 dialect.go）。
+		groupColumn := clause.Column{Table: "users", Name: column}
+		query = query.Where(clause.Or(
+			clause.Eq{Column: groupColumn, Value: q.Group},
+			PatternLike(groupColumn, q.Group+",%"),
+			PatternLike(groupColumn, "%,"+q.Group),
+			PatternLike(groupColumn, "%,"+q.Group+",%"),
+		))
 	}
 	countQuery := query.Select("users.id").Distinct("users.id")
 	err = DB.Table("(?) as sub", countQuery).Count(&total).Error

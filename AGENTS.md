@@ -45,6 +45,23 @@
   `chore`…）：`scripts/changelog.sh` 按前缀分类，写成中文前缀会全部落到「未分类」。
   例：`feat(ui): 给 ValueRows 加显示/隐藏切换`。
 
+## 数据库兼容（Database compatibility）
+
+同一份代码要跑在 SQLite（默认）、MySQL 5.7/8.x、PostgreSQL 12+ 上，**行为必须一致**。
+写任何带 SQL 的代码前先看 `docs/dev/cross-database-compatibility.md`，三条硬规则：
+
+- 列名/表名不拼进 SQL 字符串：走 map 条件或 `clause.Eq/IN/Like/Column`，由 GORM 按方言加引号。
+  MySQL 的 `key`/`read`（5.7+）与 `groups`（仅 8.0+）是保留字，裸写只在 MySQL 上报 1064，
+  PG/SQLite 照常通过——本地（SQLite）跑通不代表没问题。
+- 不写 `time.Time` 零值：MySQL 严格模式报 `Error 1292`（PG/SQLite 照收）。可空时间用
+  `*time.Time`；新建行的哨兵值见 `pkg/model/login_attempt.go` 的 `noBlock`；整行 `Save` 的
+  `created_at` 由 `Model.BeforeSave` 兜底（不要覆盖掉那个 hook）。
+- 「都能跑」不等于「结果一样」：包含匹配统一走 `pkg/model/dialect.go` 的 `PatternLike*`
+  （PostgreSQL 用 `ILIKE`）；可空列的排序显式写 `col IS NULL, col DESC`。
+
+改完 SQL 除了 SQLite 单测，还要直连 MySQL（挑严格模式实例，先看 `@@sql_mode`）与 PostgreSQL
+各跑一遍真实函数；跨功能面的改动再用 `tools/apismoke` 对每套库跑一遍冒烟。
+
 ## 许可与归属（Licensing and attribution）
 
 - 绝不把 AGPL / SSPL 等强传染性许可证的代码或组件文件复制进本仓库（与 Apache-2.0

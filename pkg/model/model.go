@@ -28,6 +28,27 @@ type Model struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// BeforeSave 在「按主键更新」且 CreatedAt 仍为零值时，把 created_at 从更新列里排除。
+//
+// 为什么需要它：Save 会更新全部字段（GORM 会把 Statement.Selects 置为 "*"），零值时间被
+// go-sql-driver 渲染成 '0000-00-00 00:00:00'；MySQL 严格模式（5.7/8.0 默认带 NO_ZERO_DATE +
+// STRICT_TRANS_TABLES）直接报 Error 1292，而 SQLite / PostgreSQL 照单全收——所以这类写法
+// 只在 MySQL 上炸。单行设置类模型（security_settings / audit_settings）用
+// `SecuritySetting{Model: Model{ID: 1}}` + Save 写回整行，正好踩在这里。
+//
+// 首次插入（ID 为零）不受影响：GORM 照常把 CreatedAt 填成当前时间。
+func (m *Model) BeforeSave(tx *gorm.DB) error {
+	if m.ID != 0 && m.CreatedAt.IsZero() {
+		tx.Statement.Omit("created_at")
+	}
+	return nil
+}
+
+// InitDB 建表并迁移到最新结构。
+//
+// sqlite / mysql / postgres 共用这一份模型，写 SQL 前先看
+// docs/dev/cross-database-compatibility.md：列名不拼字符串、不写零值时间、
+// 「都能跑」也不等于「结果一样」（LIKE 大小写、NULL 排序）。
 func InitDB() {
 	dsn := common.DBDSN
 	level := logger.Silent

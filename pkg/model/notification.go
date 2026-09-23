@@ -918,8 +918,10 @@ func MarkUserAutoDisabled(id uint, reason string) error {
 // 按时间倒序。
 func ListAutoDisabledUsers() ([]User, error) {
 	var users []User
+	// disabled_at 可为空，而 ORDER BY ... DESC 对 NULL 的位置三家不一致（PostgreSQL 把 NULL
+	// 当最大值排在最前，MySQL / SQLite 排在最后）；显式排名让列表顺序在三种库上一致。
 	err := DB.Where("enabled = ? AND disabled_reason <> ''", false).
-		Order("disabled_at DESC").Find(&users).Error
+		Order("disabled_at IS NULL, disabled_at DESC").Find(&users).Error
 	return users, err
 }
 

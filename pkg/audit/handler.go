@@ -169,7 +169,7 @@ func auditLogQuery(c *gin.Context, from, to time.Time, toIsDateOnly bool) (*gorm
 	}
 	if search != "" {
 		like := "%" + search + "%"
-		query = query.Where("resource_name LIKE ?", like)
+		query = query.Where(model.PatternLikeSQL("resource_name"), like)
 	}
 	if operation != "" {
 		query = query.Where("operation_type = ?", operation)
@@ -207,7 +207,7 @@ func loginLogQuery(c *gin.Context, from, to time.Time, toIsDateOnly bool) (*gorm
 	}
 	if search != "" {
 		like := "%" + search + "%"
-		query = query.Where("username LIKE ? OR ip LIKE ?", like, like)
+		query = query.Where(model.PatternLikeSQL("username")+" OR "+model.PatternLikeSQL("ip"), like, like)
 	}
 	return applyTimeRange(query, from, to, toIsDateOnly), true
 }
@@ -227,7 +227,7 @@ func passwordChangeLogQuery(c *gin.Context, from, to time.Time, toIsDateOnly boo
 	}
 	if search != "" {
 		like := "%" + search + "%"
-		query = query.Where("username LIKE ? OR operator LIKE ?", like, like)
+		query = query.Where(model.PatternLikeSQL("username")+" OR "+model.PatternLikeSQL("operator"), like, like)
 	}
 	return applyTimeRange(query, from, to, toIsDateOnly), true
 }
