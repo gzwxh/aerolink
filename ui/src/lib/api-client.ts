@@ -9,9 +9,19 @@ import {
 } from './service-status'
 import { notifySessionSuperseded } from './session-events'
 import { withSubPath } from './subpath'
+import {
+  requestWriteConfirm,
+  writeConfirmFor,
+  type WriteOperationKind,
+} from './write-confirm'
 
 export interface ApiRequestOptions extends RequestInit {
   retryOnUnauthorized?: boolean
+  /**
+   * 显式声明这次请求属于哪类写操作（见 lib/write-confirm.ts）。
+   * 省略时按 method 与路径推断；只有「重启」这种与普通修改同 URL 同 method 的动作才需要标注。
+   */
+  operation?: WriteOperationKind
 }
 
 /**
@@ -118,6 +128,23 @@ class ApiClient {
       credentials: 'include',
       headers,
       ...options,
+    }
+
+    // k8s 写操作的二次确认（按集群逐类开关，见 lib/write-confirm.ts）。
+    // 必须在真正 fetch 之前：用户取消时请求根本不该发出去。
+    const writeConfirm = writeConfirmFor(
+      options.method ?? 'GET',
+      url,
+      options.operation
+    )
+    if (writeConfirm && !(await requestWriteConfirm(writeConfirm))) {
+      // 用 499（客户端主动放弃）+ 机器可读 code：调用方按既有错误路径收尾，
+      // 界面据此给出「已取消，未提交」而不是含糊的失败。
+      throw new ApiError(
+        'Operation cancelled before it was sent',
+        499,
+        'operation_cancelled'
+      )
     }
 
     try {

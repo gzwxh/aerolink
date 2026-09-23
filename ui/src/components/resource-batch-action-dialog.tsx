@@ -137,6 +137,28 @@ export function ResourceBatchActionDialog<T extends BatchResource>({
           </DialogDescription>
         </DialogHeader>
 
+        {/* 列出将要操作的资源名：只写「1 个 Deployments」看不出动的是哪一个，
+            名字是最关键的信息，操作前后都便于核对。 */}
+        {resources.length > 0 ? (
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-xs font-medium">
+              {t('resourceTable.batchActions.resourcesLabel', '将要操作的资源')}
+            </p>
+            <ul className="bg-muted/40 max-h-40 space-y-1 overflow-y-auto rounded-md border px-3 py-2 font-mono text-xs">
+              {resources.map((resource) => {
+                const name = resource.metadata?.name ?? ''
+                const namespace = resource.metadata?.namespace
+                const label = namespace ? `${namespace}/${name}` : name
+                return (
+                  <li key={label} className="truncate" title={label}>
+                    {label}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : null}
+
         {options?.(isRunning)}
 
         {failures.length > 0 && (

@@ -17,6 +17,7 @@ import {
   isClusterScopedResource,
 } from '@/lib/resource-catalog'
 import { discardUnsavedEdits, hasUnsavedEdits } from '@/lib/unsaved-edits'
+import { setClusterConfirmPolicies } from '@/lib/write-confirm'
 import { ClusterSwitchConfirmDialog } from '@/components/cluster-switch-confirm-dialog'
 
 interface ClusterContextType {
@@ -140,6 +141,12 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({
       clearCurrentCluster()
     }
   }, [clusters, currentCluster])
+
+  // 把集群的写操作确认开关同步给模块级缓存：拦截发生在 api-client（非 React 模块）里，
+  // 读不到这里的 state（见 lib/write-confirm.ts）。
+  useEffect(() => {
+    setClusterConfirmPolicies(clusters)
+  }, [clusters])
 
   const setCurrentCluster = async (clusterName: string) => {
     if (clusterName === currentCluster || isSwitching) {

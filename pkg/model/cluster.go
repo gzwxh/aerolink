@@ -31,6 +31,25 @@ type Cluster struct {
 	// 它只能由上传/删除图标的接口维护，不接受业务请求体直接写——否则那条路径会
 	// 与「有字节行 ⇔ URL 指向它」的不变式脱钩（见 cluster_badge_icon.go）。
 	BadgeIconURL string `json:"badge_icon_url" gorm:"type:varchar(255)"`
+
+	// 写操作二次确认：按操作**类别**分别开关，默认全关——升级后行为完全不变，
+	// 由管理员在「系统设置 → 集群 → 操作确认」里逐项开启。
+	//
+	// 判定发生在请求提交给 k8s **之前**，由前端做（见 ui/src/lib/operation-confirm.ts）：
+	// 它防的是误触，不是绕过；真要绕过时 RBAC 与 AdminAudit 仍然照常拦与记。
+	// 因此这里只是配置位，服务端不参与拦截。
+	//
+	// 归类口径（与前端 lib/write-operation.ts 的映射表一一对应，改一处要改两处）：
+	//   create 新增：创建资源、YAML apply、Helm 安装
+	//   update 修改：编辑、标签/注解/镜像、扩缩容、暂停恢复、Pod 改规格、Helm 升级与回滚
+	//   delete 删除：单个/批量/强制删除、删除命名空间与节点、Helm 卸载
+	//   restart 重启：工作负载 rollout restart（与普通修改同 URL，靠请求体区分，前端显式标注）
+	//   nodeMaintenance 节点维护：cordon / uncordon / drain / taint / untaint
+	ConfirmCreate          bool `json:"confirm_create" gorm:"type:boolean;default:false"`
+	ConfirmUpdate          bool `json:"confirm_update" gorm:"type:boolean;default:false"`
+	ConfirmDelete          bool `json:"confirm_delete" gorm:"type:boolean;default:false"`
+	ConfirmRestart         bool `json:"confirm_restart" gorm:"type:boolean;default:false"`
+	ConfirmNodeMaintenance bool `json:"confirm_node_maintenance" gorm:"type:boolean;default:false"`
 }
 
 func AddCluster(cluster *Cluster) error {

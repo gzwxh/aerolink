@@ -7,6 +7,7 @@ import {
   IconPalette,
   IconPlus,
   IconServer,
+  IconShieldCheck,
   IconSwitchHorizontal,
   IconTrash,
   IconUpload,
@@ -61,6 +62,7 @@ import { Action, ActionTable } from '../action-table'
 import { ClusterBadgeDialog } from './cluster-badge-dialog'
 import { ClusterDialog } from './cluster-dialog'
 import { ClusterImportDialog } from './cluster-import-dialog'
+import { ClusterWriteConfirmDialog } from './cluster-write-confirm-dialog'
 
 export function ClusterManagement() {
   const { t } = useTranslation()
@@ -84,6 +86,8 @@ export function ClusterManagement() {
   const [editingCluster, setEditingCluster] = useState<Cluster | null>(null)
   const [badgeCluster, setBadgeCluster] = useState<Cluster | null>(null)
   const [deletingCluster, setDeletingCluster] = useState<Cluster | null>(null)
+  // 「操作确认」设置弹窗的目标集群（null = 关闭）。
+  const [confirmCluster, setConfirmCluster] = useState<Cluster | null>(null)
   const [deleteBindingGroups, setDeleteBindingGroups] = useState(false)
   const [clusterAgentCommand, setClusterAgentCommand] = useState('')
   const [clusterAgentYaml, setClusterAgentYaml] = useState('')
@@ -328,6 +332,15 @@ export function ClusterManagement() {
             {
               label: (
                 <>
+                  <IconShieldCheck className="h-4 w-4" />
+                  {t('clusterManagement.actions.writeConfirm', '操作确认')}
+                </>
+              ),
+              onClick: (cluster: Cluster) => setConfirmCluster(cluster),
+            },
+            {
+              label: (
+                <>
                   <IconPalette className="h-4 w-4" />
                   {t('clusterManagement.actions.badge', '自定义徽章')}
                 </>
@@ -463,6 +476,29 @@ export function ClusterManagement() {
       setBadgeCluster(null)
     },
     onError: () => {},
+  })
+
+  // 写操作二次确认开关：与编辑集群同一个接口，只提交这 5 个字段。
+  // 必须同时失效 ['clusters']——前端的拦截策略缓存在集群列表更新时同步
+  // （见 contexts/cluster-context.tsx），不失效的话开关要等下一次列表刷新才生效。
+  const confirmMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: ClusterUpdateRequest }) =>
+      updateCluster(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['clusters'] })
+      toast.success(
+        t('clusterManagement.writeConfirm.updated', '操作确认设置已更新')
+      )
+      setConfirmCluster(null)
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t('clusterManagement.writeConfirm.updateFailed', '更新失败')
+      )
+    },
   })
 
   // 集群下的权限绑定数量，用于删除集群时提示是否一并删除。
@@ -637,6 +673,19 @@ export function ClusterManagement() {
           }
         }}
         isPending={badgeMutation.isPending}
+      />
+
+      {/* k8s 写操作的二次确认设置（按集群逐类开关，见 lib/write-confirm.ts）。 */}
+      <ClusterWriteConfirmDialog
+        open={confirmCluster !== null}
+        cluster={confirmCluster}
+        isPending={confirmMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmCluster(null)
+          }
+        }}
+        onSubmit={(id, data) => confirmMutation.mutate({ id, data })}
       />
 
       <ClusterImportDialog

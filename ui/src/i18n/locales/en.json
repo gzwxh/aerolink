@@ -1026,6 +1026,23 @@
     "retry": "Retry",
     "serverUnavailable": "Service temporarily unavailable; auto-refresh is paused"
   },
+  "writeConfirm": {
+    "kinds": {
+      "create": "Create",
+      "delete": "Delete",
+      "nodeMaintenance": "Node maintenance",
+      "restart": "Restart",
+      "update": "Update"
+    },
+    "fields": {
+      "cluster": "Cluster",
+      "operation": "Operation",
+      "target": "Target"
+    },
+    "confirm": "Confirm and run",
+    "description": "This cluster requires confirmation, so the change is sent to Kubernetes only after you confirm.",
+    "title": "Confirm this operation?"
+  },
   "session": {
     "supersededTitle": "Signed in on another device",
     "supersededMessage": "Your account was just used to sign in on another device, so this session has been signed out for safety.\n\nIf this was you, sign in again to continue. If it was not you, your password may be compromised: change it right away and tell an administrator.",
@@ -1076,7 +1093,8 @@
       "drainNodesTitle": "Drain {{count}} selected nodes?",
       "drainNodesDescription": "Selected nodes will be cordoned and drained one at a time. Pod eviction can be disruptive and cannot be automatically rolled back.",
       "restartResourcesTitle": "Restart {{count}} selected {{resource}}?",
-      "restartResourcesDescription": "This updates each {{resource}} Pod template and triggers a rollout. Paused or OnDelete strategies may not restart immediately, and rollout health is not monitored."
+      "restartResourcesDescription": "This updates each {{resource}} Pod template and triggers a rollout. Paused or OnDelete strategies may not restart immediately, and rollout health is not monitored.",
+      "resourcesLabel": "Resources to act on"
     },
     "watch": "Watch",
     "refreshWatch": "Reconnect and fetch",
@@ -2282,7 +2300,8 @@
       "add": "Add Cluster",
       "import": "Import Clusters",
       "importing": "Importing...",
-      "badge": "Custom badge"
+      "badge": "Custom badge",
+      "writeConfirm": "Operation confirmation"
     },
     "table": {
       "prometheus": "Prometheus"
@@ -2351,6 +2370,19 @@
       "configLoadFailed": "Failed to load the current configuration",
       "configLoaded": "Current configuration loaded",
       "viewCurrentConfig": "View current configuration"
+    },
+    "writeConfirm": {
+      "hints": {
+        "create": "Creating resources, applying YAML, installing Helm releases",
+        "update": "Editing resources, labels/annotations/images, scaling, pause/resume, Helm upgrade and rollback",
+        "delete": "Deleting resources (including batch and force), namespaces and nodes, uninstalling Helm releases",
+        "restart": "Rollout restart of a workload",
+        "nodeMaintenance": "Cordon / uncordon / drain / taint a node"
+      },
+      "description": "When enabled, this kind of operation asks for confirmation before it is sent to Kubernetes. The setting applies to this cluster only.",
+      "title": "Confirm write operations",
+      "updateFailed": "Failed to update the setting",
+      "updated": "Operation confirmation settings updated"
     }
   },
   "oauthManagement": {
@@ -2664,7 +2696,9 @@
     "nameRequired": "metadata.name is required.",
     "namespaceRequired": "metadata.namespace is required.",
     "targetExists": "A resource with this name already exists in the target namespace.",
-    "targetMustChange": "Change metadata.name or metadata.namespace before creating the clone."
+    "targetMustChange": "Change metadata.name or metadata.namespace before creating the clone.",
+    "loadingRelatedServices": "Checking for related Services…",
+    "attachedServices": "Included {{count}} related Service(s) ({{names}}): their names and selectors are already updated for the clone, and you can keep editing them in the YAML below."
   },
   "helm": {
     "actions": {
@@ -3818,6 +3852,13 @@
       "avatar_invalid_type": "The avatar must be a PNG or JPG image",
       "avatar_invalid_image": "This image is corrupted or cannot be read",
       "avatar_dimensions_too_large": "The avatar must not exceed {{dimension}} pixels on a side"
+    }
+  },
+  "terminal": {
+    "writeConfirm": {
+      "action": "I understand, open the terminal",
+      "hint": "Commands in the terminal go straight to Kubernetes and are not covered by the confirmation step used in the UI, so nothing here can stop what you type. Make sure you know what you are about to run.",
+      "title": "This cluster requires confirmation for operations"
     }
   }
 }

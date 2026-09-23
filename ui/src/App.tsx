@@ -18,6 +18,7 @@ import { MFAPromptDialog } from './components/mfa-prompt-dialog'
 import { ServiceStatusOverlay } from './components/service-status-overlay'
 import { SessionSupersededDialog } from './components/session-superseded-dialog'
 import { SiteHeader } from './components/site-header'
+import { WriteConfirmDialog } from './components/write-confirm-dialog'
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar'
 import { Toaster } from './components/ui/sonner'
 import { AIChatProvider } from './contexts/ai-chat-context'
@@ -119,6 +120,8 @@ function AppProviders({ children }: { children: ReactNode }) {
               <SessionSupersededDialog />
               {/* 服务异常横幅、以及登录跳转成环时的阻断页：主界面与独立 AI 页共用。 */}
               <ServiceStatusOverlay />
+              {/* k8s 写操作的二次确认弹窗（按集群逐类开关，见 lib/write-confirm.ts）。 */}
+              <WriteConfirmDialog />
             </AIChatProvider>
           </GlobalSearchProvider>
         </NavigationProvider>

@@ -116,6 +116,12 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 			"badgeIconEnabled": cluster.BadgeIconEnabled,
 			"badgeIconText":    cluster.BadgeIconText,
 			"badgeIconUrl":     cluster.BadgeIconURL,
+			// 写操作二次确认（见 model.Cluster 的 Confirm* 注释）：管理界面用它回填弹窗。
+			"confirmCreate":          cluster.ConfirmCreate,
+			"confirmUpdate":          cluster.ConfirmUpdate,
+			"confirmDelete":          cluster.ConfirmDelete,
+			"confirmRestart":         cluster.ConfirmRestart,
+			"confirmNodeMaintenance": cluster.ConfirmNodeMaintenance,
 		}
 		if cluster.ClusterAgent {
 			clusterInfo["clusterAgentVersion"] = cm.clusterAgentManager.Version(cluster.ID)
@@ -288,6 +294,13 @@ func applyStoredDisplayInfo(info *common.ClusterInfo, stored *model.Cluster) {
 		info.BadgeIconText = stored.BadgeIconText
 		info.BadgeIconURL = stored.BadgeIconURL
 	}
+	// 写操作二次确认开关：前端提交 k8s 写请求前要据此决定是否弹确认框，
+	// 而它拿到的就是这份集群列表（见 ui/src/lib/current-cluster.ts）。
+	info.ConfirmCreate = stored.ConfirmCreate
+	info.ConfirmUpdate = stored.ConfirmUpdate
+	info.ConfirmDelete = stored.ConfirmDelete
+	info.ConfirmRestart = stored.ConfirmRestart
+	info.ConfirmNodeMaintenance = stored.ConfirmNodeMaintenance
 }
 
 // badgeColorPattern 只放行严格的 #RRGGBB。徽章颜色会进前端的内联样式，
@@ -360,6 +373,12 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		BadgeColor       *string `json:"badgeColor"`
 		BadgeIconEnabled *bool   `json:"badgeIconEnabled"`
 		BadgeIconText    *string `json:"badgeIconText"`
+		// 写操作二次确认开关，见 model.Cluster 的 Confirm* 注释。
+		ConfirmCreate          *bool `json:"confirmCreate"`
+		ConfirmUpdate          *bool `json:"confirmUpdate"`
+		ConfirmDelete          *bool `json:"confirmDelete"`
+		ConfirmRestart         *bool `json:"confirmRestart"`
+		ConfirmNodeMaintenance *bool `json:"confirmNodeMaintenance"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -442,6 +461,21 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	}
 	if req.Enabled != nil {
 		updates["enable"] = *req.Enabled
+	}
+	if req.ConfirmCreate != nil {
+		updates["confirm_create"] = *req.ConfirmCreate
+	}
+	if req.ConfirmUpdate != nil {
+		updates["confirm_update"] = *req.ConfirmUpdate
+	}
+	if req.ConfirmDelete != nil {
+		updates["confirm_delete"] = *req.ConfirmDelete
+	}
+	if req.ConfirmRestart != nil {
+		updates["confirm_restart"] = *req.ConfirmRestart
+	}
+	if req.ConfirmNodeMaintenance != nil {
+		updates["confirm_node_maintenance"] = *req.ConfirmNodeMaintenance
 	}
 
 	if req.Name != nil && *req.Name != "" && *req.Name != cluster.Name {

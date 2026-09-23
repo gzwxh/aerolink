@@ -652,6 +652,13 @@ export interface Cluster {
   badgeIconText?: string
   /** 上传的图标地址（`/api/v1/clusters/<id>/badge-icon?v=<哈希>`），未上传时为空。 */
   badgeIconUrl?: string
+  // 写操作二次确认开关（见 model.Cluster 的 Confirm* 字段与 lib/write-confirm.ts）：
+  // 开启后在提交对应的 k8s 写请求前会先弹确认框。默认全关。
+  confirmCreate?: boolean
+  confirmUpdate?: boolean
+  confirmDelete?: boolean
+  confirmRestart?: boolean
+  confirmNodeMaintenance?: boolean
 }
 
 export interface OAuthProvider {

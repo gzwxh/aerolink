@@ -465,7 +465,7 @@ export const drainNode = async (
     node: string
     pods: number
     warnings?: string | string[]
-  }>(endpoint, options)
+  }>(endpoint, options, { operation: 'nodeMaintenance' })
 
   return response
 }
@@ -478,7 +478,7 @@ export const cordonNode = async (
     message: string
     node: string
     unschedulable: boolean
-  }>(endpoint)
+  }>(endpoint, undefined, { operation: 'nodeMaintenance' })
 
   return response
 }
@@ -491,7 +491,7 @@ export const uncordonNode = async (
     message: string
     node: string
     unschedulable: boolean
-  }>(endpoint)
+  }>(endpoint, undefined, { operation: 'nodeMaintenance' })
 
   return response
 }
@@ -509,7 +509,7 @@ export const taintNode = async (
     message: string
     node: string
     taint: unknown
-  }>(endpoint, taint)
+  }>(endpoint, taint, { operation: 'nodeMaintenance' })
 
   return response
 }
@@ -523,7 +523,7 @@ export const untaintNode = async (
     message: string
     node: string
     removedTaintKey: string
-  }>(endpoint, { key })
+  }>(endpoint, { key }, { operation: 'nodeMaintenance' })
 
   return response
 }
@@ -592,17 +592,23 @@ export const restartWorkload = async (
   namespace: string
 ): Promise<void> => {
   const endpoint = `/${resource}/${namespace}/${name}`
-  await apiClient.patch(endpoint, {
-    spec: {
-      template: {
-        metadata: {
-          annotations: {
-            'aerolink.kubernetes.io/restartedAt': new Date().toISOString(),
+  // 显式标注为「重启」：它与普通修改用同一个 URL、同一个 PATCH，只是请求体里多了
+  // restartedAt 注解，仅凭 method 与路径无法区分（见 lib/write-confirm.ts 的分类口径）。
+  await apiClient.patch(
+    endpoint,
+    {
+      spec: {
+        template: {
+          metadata: {
+            annotations: {
+              'aerolink.kubernetes.io/restartedAt': new Date().toISOString(),
+            },
           },
         },
       },
     },
-  })
+    { operation: 'restart' }
+  )
 }
 
 export const createResource = async <T extends ResourceType>(

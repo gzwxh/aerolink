@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  IconAlertTriangle,
   IconClearAll,
   IconMaximize,
   IconMinimize,
@@ -22,6 +23,11 @@ import { appendCurrentClusterParam } from '@/lib/current-cluster'
 import { toSimpleContainer } from '@/lib/k8s'
 import { getWebSocketUrl } from '@/lib/subpath'
 import { translateError } from '@/lib/utils'
+import {
+  acknowledgeTerminal,
+  hasAnyWriteConfirm,
+  isTerminalAcknowledged,
+} from '@/lib/write-confirm'
 import { useCluster } from '@/hooks/use-cluster'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -114,6 +120,14 @@ export function Terminal({
   const speedUpdateTimerRef = useRef<NodeJS.Timeout | null>(null)
   const { t } = useTranslation()
   const { currentCluster } = useCluster()
+  // 终端命令走裸 WebSocket、绕过 api-client，拦不住具体命令；集群开了写操作确认时，
+  // 至少要在进入前把「这里不受保护」讲清楚（见 lib/write-confirm.ts）。
+  // 用 state 记住本次挂载里已经点过确认的集群，切集群回来时不重复弹。
+  const [acknowledgedClusters, setAcknowledgedClusters] = useState<string[]>([])
+  const needsTerminalAck =
+    hasAnyWriteConfirm(currentCluster) &&
+    !isTerminalAcknowledged(currentCluster) &&
+    !acknowledgedClusters.includes(currentCluster ?? '')
 
   // 保持用户的选择，除非当前 pod 已不可用。
   useEffect(() => {
@@ -262,6 +276,8 @@ export function Terminal({
 
   // 统一的终端与 WebSocket 生命周期
   useEffect(() => {
+    // 未确认终端风险提示前不建立连接；点确认后 needsTerminalAck 变化会重跑本效果。
+    if (needsTerminalAck) return
     if (type === 'pod') {
       if (!pods || pods.length === 0) if (!selectedPod) return
       if (!selectedContainer) return
@@ -513,6 +529,7 @@ export function Terminal({
     currentCluster,
     updateNetworkStats,
     reconnectFlag,
+    needsTerminalAck,
   ])
 
   // 清空终端
@@ -537,6 +554,20 @@ export function Terminal({
       }}
     />
   )
+
+  // 集群开了操作确认时，终端要先确认一次：这里的命令不受界面拦截层保护
+  // （裸 WebSocket，拦不住具体命令），至少得让人知道风险。
+  if (needsTerminalAck) {
+    return (
+      <TerminalWriteConfirm
+        embedded={embedded}
+        onConfirm={() => {
+          acknowledgeTerminal(currentCluster)
+          setAcknowledgedClusters((prev) => [...prev, currentCluster ?? ''])
+        }}
+      />
+    )
+  }
 
   // 内嵌模式：没有头部，完全填满父容器
   if (embedded) {
@@ -755,6 +786,57 @@ export function Terminal({
       <CardContent className="p-0 flex h-full min-h-0">
         {terminalDiv}
       </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * 终端入口的风险提示。
+ *
+ * 为什么只做"告知"而不是"二次确认"：终端是交互式的，一道确认框只能证明「你打开了终端」，
+ * 证明不了「你清楚接下来敲的每条命令」。所以这里只做一次进入前的告知，把
+ * 「终端里的操作不受界面拦截层保护」讲清楚（见 lib/write-confirm.ts）。
+ */
+function TerminalWriteConfirm({
+  embedded,
+  onConfirm,
+}: {
+  embedded: boolean
+  onConfirm: () => void
+}) {
+  const { t } = useTranslation()
+
+  const panel = (
+    <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
+      <IconAlertTriangle className="text-warning h-8 w-8" />
+      <div className="space-y-1">
+        <p className="text-sm font-semibold">
+          {t('terminal.writeConfirm.title', '该集群已开启操作确认')}
+        </p>
+        <p className="text-muted-foreground max-w-md text-xs text-pretty">
+          {t(
+            'terminal.writeConfirm.hint',
+            '终端里的命令会直接发给 Kubernetes，不经过界面上的二次确认——这里拦不住你敲的命令。请确认你清楚即将执行的操作。'
+          )}
+        </p>
+      </div>
+      <Button size="sm" onClick={onConfirm}>
+        {t('terminal.writeConfirm.action', '我已知晓，进入终端')}
+      </Button>
+    </div>
+  )
+
+  if (embedded) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        {panel}
+      </div>
+    )
+  }
+
+  return (
+    <Card className="flex h-full min-h-0 flex-col items-center justify-center gap-0 py-2">
+      <CardContent>{panel}</CardContent>
     </Card>
   )
 }

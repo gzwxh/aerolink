@@ -62,6 +62,15 @@ type ClusterInfo struct {
 	// BadgeIconURL 只有上传过图标的集群才有；有它时前端优先显示图片，
 	// 其次才是 BadgeIconText。
 	BadgeIconURL string `json:"badgeIconUrl,omitempty"`
+	// 写操作二次确认开关（见 model.Cluster 的 Confirm* 字段）。
+	//
+	// 必须随集群列表下发：前端在提交 k8s 写请求前要据此决定是否弹确认框，
+	// 而它拿到的就是这份列表（见 ui/src/lib/current-cluster.ts 的缓存）。
+	ConfirmCreate          bool `json:"confirmCreate,omitempty"`
+	ConfirmUpdate          bool `json:"confirmUpdate,omitempty"`
+	ConfirmDelete          bool `json:"confirmDelete,omitempty"`
+	ConfirmRestart         bool `json:"confirmRestart,omitempty"`
+	ConfirmNodeMaintenance bool `json:"confirmNodeMaintenance,omitempty"`
 }
 
 type MetricsCell struct {

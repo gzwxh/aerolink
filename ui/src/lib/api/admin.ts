@@ -32,8 +32,19 @@ export interface ClusterCreateRequest {
   isDefault?: boolean
 }
 
-export interface ClusterUpdateRequest extends ClusterCreateRequest {
+export interface ClusterUpdateRequest extends Omit<ClusterCreateRequest, 'name'> {
+  // 刻意不要求 name：更新是**部分更新**，后端按「字段是否出现」决定改不改
+  // （见 UpdateCluster 的指针 DTO）。原来的 `extends ClusterCreateRequest` 让 name
+  // 变成了必填，只想改一两个字段的调用（如本文件的确认开关）就没法通过类型检查。
+  name?: string
   enabled?: boolean
+  // 写操作二次确认开关（见 lib/write-confirm.ts）：只提交要改的项，
+  // 后端按字段是否出现决定改不改（与徽章字段同一约定）。
+  confirmCreate?: boolean
+  confirmUpdate?: boolean
+  confirmDelete?: boolean
+  confirmRestart?: boolean
+  confirmNodeMaintenance?: boolean
 }
 
 /** 集群徽章：只发徽章字段，后端按字段是否出现决定改不改。 */
