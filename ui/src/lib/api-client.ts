@@ -1,6 +1,12 @@
 // 带认证支持的 API 客户端
 import { appendCurrentClusterHeader } from './current-cluster'
 import { requestMFAVerification } from './mfa-prompt'
+import {
+  consumeLoginRedirectBudget,
+  markLoginRedirectLoop,
+  reportApiFailure,
+  reportApiSuccess,
+} from './service-status'
 import { notifySessionSuperseded } from './session-events'
 import { withSubPath } from './subpath'
 
@@ -20,8 +26,19 @@ let redirectingToLogin = false
 export function redirectToLogin() {
   if (redirectingToLogin) return
   if (window.location.pathname.endsWith('/login')) return
+  // 跳转前先申请额度：整页跳转会重置本模块的所有模块级状态，只有 sessionStorage 记得
+  // 「刚刚跳过」。超预算说明前端的「已登录」与后端的判定在打架，继续跳只会无限刷新
+  // （历史事故见下方注释），此时停在原地显示阻断页。
+  if (!consumeLoginRedirectBudget()) {
+    markLoginRedirectLoop()
+    return
+  }
   redirectingToLogin = true
-  window.location.href = withSubPath('/login')
+  // 必须带 forced=1（登录页据此忽略「已登录就跳首页」，见 pages/login.tsx 的 forcedLogin）。
+  // 不带它就会形成整页跳转循环：会话已失效（被顶下线、改密前签发、来源不在允许列表…）时
+  // 受保护接口 401，但如果 bootstrap 仍认为已登录，登录页会把用户弹回首页 → 首页再 401
+  // → 又跳登录页……每轮一次整页加载，实测能堆出上千个 401。
+  window.location.href = withSubPath('/login?forced=1')
 }
 
 /**
@@ -104,7 +121,7 @@ class ApiClient {
     }
 
     try {
-      let response = await fetch(fullUrl, defaultOptions)
+      let response = await this.fetchReportingStatus(fullUrl, defaultOptions)
 
       if (response.status === 403) {
         const payload = await response
@@ -116,7 +133,7 @@ class ApiClient {
           // 后端会为这个浏览器记住这次验证。
           const verified = await requestMFAVerification()
           if (verified) {
-            response = await fetch(fullUrl, defaultOptions)
+            response = await this.fetchReportingStatus(fullUrl, defaultOptions)
           }
         }
       }
@@ -141,7 +158,7 @@ class ApiClient {
       if (response.status === 401 && options.retryOnUnauthorized !== false) {
         try {
           await this.refreshToken()
-          response = await fetch(fullUrl, defaultOptions)
+          response = await this.fetchReportingStatus(fullUrl, defaultOptions)
         } catch (refreshError) {
           console.error('Token refresh failed:', refreshError)
           redirectToLogin()
@@ -154,6 +171,33 @@ class ApiClient {
       console.error('API request failed:', error)
       throw error
     }
+  }
+
+  /**
+   * 发请求并把结果上报给全局服务状态（见 lib/service-status.ts）。
+   *
+   * 网络层失败与 5xx 会计数，连续多次后界面暂停所有轮询并提示「服务不可用」；
+   * 其余状态码（含 401/403）说明服务本身是活的，只清零计数——会话失效不该被
+   * 报成服务故障，否则用户会看到「服务挂了」而实际只需重新登录。
+   */
+  private async fetchReportingStatus(
+    url: string,
+    options: RequestInit
+  ): Promise<Response> {
+    let response: Response
+    try {
+      response = await fetch(url, options)
+    } catch (error) {
+      reportApiFailure('network')
+      throw error
+    }
+
+    if (response.status >= 500) {
+      reportApiFailure('server')
+    } else {
+      reportApiSuccess()
+    }
+    return response
   }
 
   private async makeRequest<T>(

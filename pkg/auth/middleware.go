@@ -28,6 +28,38 @@ func tokenIssuedBeforePasswordChange(user *model.User, claims *Claims) bool {
 	return claims.IssuedAt.Before(user.PasswordUpdatedAt.Add(-time.Second))
 }
 
+// sessionDeniedReason 报告会话不可用的原因码；空串表示会话有效。
+//
+// bootstrap（前端判断「是否已登录」的唯一来源）与 RequireAuth 必须给出同一个答案：
+// 任何一侧更宽松，前端就会在「已登录」与「未登录」之间来回整页跳转——bootstrap 认
+// 而业务接口 401 时，首页与登录页会互相弹，每轮一次整页加载（见 ui/src/lib/api-client.ts
+// 的 redirectToLogin）。所以两边共用本函数：**改会话判定只改这里**。
+//
+// 返回值与 RequireAuth 下发给前端的 code 保持一致（loginSourceDeniedCode 等）。
+func sessionDeniedReason(c *gin.Context, user *model.User, claims *Claims) string {
+	if user == nil || !user.Enabled {
+		return "user_not_found"
+	}
+	if user.IsExpired(time.Now()) {
+		return "user_expired"
+	}
+	if !loginSourceAllowed(c.ClientIP()) {
+		return loginSourceDeniedCode
+	}
+	if tokenIssuedBeforePasswordChange(user, claims) {
+		return "password_changed"
+	}
+	if activeSessions.superseded(uint64(user.ID), claims.SessionSeq) {
+		return "session_superseded"
+	}
+	if activeSessions.expired(uint64(user.ID)) {
+		activeSessions.forget(uint64(user.ID))
+		return "session_expired"
+	}
+	activeSessions.touch(uint64(user.ID))
+	return ""
+}
+
 func (h *AuthHandler) RequireAPIKeyAuth(c *gin.Context, token string) {
 	keyPart := strings.SplitN(token, "-", 2)
 	if len(keyPart) < 2 {

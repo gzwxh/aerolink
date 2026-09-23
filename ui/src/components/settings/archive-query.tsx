@@ -18,7 +18,7 @@ import {
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { decodeClusterName } from '@/lib/current-cluster'
-import { statusBadge, statusText } from '@/lib/status-badge'
+import { isLoginSuccess, statusBadge, statusText } from '@/lib/status-badge'
 import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
@@ -221,20 +221,20 @@ export function ArchiveQuery() {
           id: 'result',
           header: t('common.fields.result', 'Result'),
           cell: ({ row }) => {
+            // 成功（`success` 或历史空值）→ 绿；其余是失败码 → 红（判定见 isLoginSuccess）。
             const result = row.original.result
-            const tone = statusText(
-              result === 'success' ? 'success' : 'failure'
-            )
-            if (result === 'success') {
+            if (isLoginSuccess(result)) {
               return (
-                <span className={`text-sm font-medium ${tone}`}>
+                <span
+                  className={`text-sm font-medium ${statusText('success')}`}
+                >
                   {t('status.success', 'Success')}
                 </span>
               )
             }
             return (
               <span
-                className={`text-sm font-medium ${tone}`}
+                className={`text-sm font-medium ${statusText('failure')}`}
                 title={display(result)}
               >
                 {t(`audit.loginResult.${String(result)}`, display(result))}

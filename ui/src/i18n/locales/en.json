@@ -1016,6 +1016,16 @@
       "restart": "Sign in again"
     }
   },
+  "serviceStatus": {
+    "attempts": "{{count}} consecutive failures",
+    "networkUnavailable": "Cannot reach the service; auto-refresh is paused",
+    "offline": "Network is offline; auto-refresh is paused",
+    "redirectLoopHint": "The session keeps failing, so the page stopped bouncing between the home page and the login page. Please sign in again; if it still fails, ask an administrator to check the login source allowlist and session policy.",
+    "redirectLoopTitle": "Session problem: automatic redirects stopped",
+    "relogin": "Sign in again",
+    "retry": "Retry",
+    "serverUnavailable": "Service temporarily unavailable; auto-refresh is paused"
+  },
   "session": {
     "supersededTitle": "Signed in on another device",
     "supersededMessage": "Your account was just used to sign in on another device, so this session has been signed out for safety.\n\nIf this was you, sign in again to continue. If it was not you, your password may be compromised: change it right away and tell an administrator.",

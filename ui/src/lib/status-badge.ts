@@ -58,6 +58,24 @@ export function outcomeText(success: boolean): string {
   return statusText(success ? 'success' : 'failure')
 }
 
+/** 登录结果里的成功值（与后端 `model.AuditResultSuccess` 一致）。 */
+export const LOGIN_RESULT_SUCCESS = 'success'
+
+/**
+ * 登录记录的 `result` 是否表示成功。
+ *
+ * 空/缺失也算成功：`result` 是后加的列，历史记录为空。
+ * 判定必须**先排除成功值**再去查失败原因文案——后端只把失败码写进表
+ * （`invalid_credentials` 之类），而 i18n 里并没有 `success` 这个键，
+ * 用「取不到文案就算失败」的写法会让成功登录落到失败分支、整列染红。
+ */
+export function isLoginSuccess(result: unknown): boolean {
+  if (result === null || result === undefined || result === '') {
+    return true
+  }
+  return String(result).toLowerCase() === LOGIN_RESULT_SUCCESS
+}
+
 /** 中性徽标：只描边、不带状态色（来源、类型、数量这类非状态信息）。 */
 export function neutralBadge(): StatusBadgeStyle {
   return { variant: 'outline', className: '' }

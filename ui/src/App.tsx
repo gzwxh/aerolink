@@ -15,6 +15,7 @@ import {
 } from './components/global-search-provider'
 import { MFAEnrollmentGate } from './components/mfa-enrollment-gate'
 import { MFAPromptDialog } from './components/mfa-prompt-dialog'
+import { ServiceStatusOverlay } from './components/service-status-overlay'
 import { SessionSupersededDialog } from './components/session-superseded-dialog'
 import { SiteHeader } from './components/site-header'
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar'
@@ -116,6 +117,8 @@ function AppProviders({ children }: { children: ReactNode }) {
               {children}
               {/* 账号被顶下线的提示（单点登录）：主界面与独立 AI 页共用一个实例。 */}
               <SessionSupersededDialog />
+              {/* 服务异常横幅、以及登录跳转成环时的阻断页：主界面与独立 AI 页共用。 */}
+              <ServiceStatusOverlay />
             </AIChatProvider>
           </GlobalSearchProvider>
         </NavigationProvider>

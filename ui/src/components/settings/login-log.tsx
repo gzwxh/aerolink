@@ -17,7 +17,7 @@ import {
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { copyToClipboard } from '@/lib/clipboard'
-import { statusText } from '@/lib/status-badge'
+import { isLoginSuccess, statusText } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
@@ -125,12 +125,14 @@ export function LoginLog() {
   )
 
   const columns = useMemo<ColumnDef<LoginRecord>[]>(() => {
-    // 失败原因码 → 文案。空/缺失 = 成功登录（result 列是后加的，历史行为空）。
+    // 失败原因码 → 文案；成功登录（`success` 或历史空值）返回 null，由调用处染成绿色。
+    // 这里必须先判成功：i18n 里没有 `audit.loginResult.success` 键，`t()` 会回退成键名
+    // 本身，用「取不到文案即失败」的写法会把成功的登录染成红色。
     const failureReason = (result: string | null | undefined) => {
-      if (!result) {
+      if (isLoginSuccess(result)) {
         return null
       }
-      return t(`audit.loginResult.${result}`, result)
+      return t(`audit.loginResult.${String(result)}`, String(result))
     }
 
     return [

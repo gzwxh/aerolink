@@ -216,6 +216,14 @@ func (h *AuthHandler) bootstrapUser(c *gin.Context, setting *model.GeneralSettin
 		return nil
 	}
 
+	// 会话有效性必须与 RequireAuth 用同一套判定（见 sessionDeniedReason）：
+	// bootstrap 是前端判断「是否已登录」的唯一来源，比业务接口宽松就会出现分裂——
+	// 前端认为已登录并渲染首页，首页的受保护接口却全部 401，于是与登录页互相整页
+	// 跳转、无限刷新（实测一轮能堆出上千个 401）。这里宁可当作未登录，让用户重新登录。
+	if sessionDeniedReason(c, user, claims) != "" {
+		return nil
+	}
+
 	currentUser := *user
 	// 与 /api/auth/user 一致：全局权限绑定组带来的角色也要展示，否则仅由绑定组授权的
 	// 账号能登录、却看不到系统设置入口（前端的管理入口就是由这份角色列表推导的）。
