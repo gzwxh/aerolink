@@ -36,6 +36,28 @@ const TONE_CLASS: Record<BadgeTone, string> = {
   attention: 'bg-attention/10 text-attention border-attention/25',
 }
 
+const TONE_TEXT: Record<BadgeTone, string> = {
+  success: 'text-success',
+  failure: 'text-destructive',
+  info: 'text-info',
+  warning: 'text-warning',
+  attention: 'text-attention',
+}
+
+/**
+ * 纯文字状态色：只上色，不带徽标的底色与描边。
+ *
+ * 用于「结果」这类以文字为主的状态列——一列徽标框在密集的日志表里显得很重。
+ */
+export function statusText(tone: BadgeTone): string {
+  return TONE_TEXT[tone]
+}
+
+/** 布尔型结果的纯文字色：成功 / 失败。 */
+export function outcomeText(success: boolean): string {
+  return statusText(success ? 'success' : 'failure')
+}
+
 /** 中性徽标：只描边、不带状态色（来源、类型、数量这类非状态信息）。 */
 export function neutralBadge(): StatusBadgeStyle {
   return { variant: 'outline', className: '' }

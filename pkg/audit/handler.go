@@ -2,6 +2,7 @@ package audit
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +11,18 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 	"gorm.io/gorm"
 )
+
+// clusterNameVariants 返回集群名的匹配变体：原值 + 修复前落库时用的 URL 编码值。
+//
+// 历史记录里的集群名是 `%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83` 这样的编码串（写审计时漏了
+// 解码，见 middleware.DecodeClusterName）；查询时把两种写法都算上，否则按集群筛选查不到
+// 修复前写入的记录。集群名不含需转义字符时两个值相同，只查一次。
+func clusterNameVariants(name string) []string {
+	if escaped := url.PathEscape(name); escaped != name {
+		return []string{name, escaped}
+	}
+	return []string{name}
+}
 
 // parsePagination 读取审计接口共用的 `page`/`size` 查询参数，
 // 输入非法时写出 400 响应并返回 ok=false。
@@ -156,7 +169,7 @@ func auditLogQuery(c *gin.Context, from, to time.Time, toIsDateOnly bool) (*gorm
 		query = query.Where("operator_id = ?", operatorID)
 	}
 	if clusterName != "" {
-		query = query.Where("cluster_name = ?", clusterName)
+		query = query.Where("cluster_name IN ?", clusterNameVariants(clusterName))
 	}
 	if resourceType != "" {
 		query = query.Where("resource_type = ?", resourceType)

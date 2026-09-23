@@ -17,7 +17,7 @@ import {
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { copyToClipboard } from '@/lib/clipboard'
-import { statusBadge } from '@/lib/status-badge'
+import { statusText } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
@@ -148,22 +148,22 @@ export function LoginLog() {
         header: t('common.fields.result', 'Result'),
         cell: ({ row }) => {
           const reason = failureReason(row.original.result)
-          const badge = statusBadge(reason ? 'failure' : 'success')
+          // 结果列只要文字色，不要徽标框：密集日志表里一列框太重。
+          const tone = statusText(reason ? 'failure' : 'success')
           if (!reason) {
             return (
-              <Badge variant={badge.variant} className={badge.className}>
+              <span className={`text-sm font-medium ${tone}`}>
                 {t('status.success', 'Success')}
-              </Badge>
+              </span>
             )
           }
           return (
-            <Badge
-              variant={badge.variant}
-              className={badge.className}
+            <span
+              className={`text-sm font-medium ${tone}`}
               title={row.original.result ?? ''}
             >
               {reason}
-            </Badge>
+            </span>
           )
         },
       },

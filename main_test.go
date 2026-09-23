@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -335,5 +337,29 @@ func TestLoadGeneralSettingReadsStoredJWTSecretAfterKeyMigration(t *testing.T) {
 
 	if common.JwtSecret != stored {
 		t.Fatalf("JwtSecret = %q, want the stored secret %q", common.JwtSecret, stored)
+	}
+}
+
+// klog 打不开 -log_file 时会直接 fatal 退出，所以落盘前必须确认「目录能建、文件能开」：
+// 路径配错时应当降级到 stderr，而不是让控制台拒绝启动。
+func TestEnsureLogFileWritable(t *testing.T) {
+	dir := t.TempDir()
+
+	// 父目录不存在：应自动建出来并成功试开。
+	path := filepath.Join(dir, "nested", "aerolink.log")
+	if err := ensureLogFileWritable(path); err != nil {
+		t.Fatalf("ensureLogFileWritable(%q) error = %v", path, err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("日志文件没有被创建: %v", err)
+	}
+
+	// 父路径是文件：MkdirAll 必然失败，应返回错误（调用方据此回落 stderr）。
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatalf("creating blocker file: %v", err)
+	}
+	if err := ensureLogFileWritable(filepath.Join(blocker, "aerolink.log")); err == nil {
+		t.Error("父路径是文件时应返回错误，而不是静默通过")
 	}
 }

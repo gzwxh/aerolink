@@ -46,8 +46,10 @@ host: ""
 basePath: ""
 
 # 审计/访问日志的本地归档目录（注入 AEROLINK_AUDIT_ARCHIVE_DIR）。
-# 只作启动兜底：生效值在「日志审计 → 审计设置 → 归档」里配置。
-# 留空表示只依赖数据库里的配置。
+# 只作启动兜底：生效值在「日志审计 → 审计设置 → 归档」里配置——**数据库里的本地目录优先于本项**，
+# 改了这里不会覆盖已有部署里保存过的值。
+# 默认取运行用户家目录下的 data/archive，与镜像内建目录及 auditPersistence.mountPath 一致；
+# 镜像本身也带同样的默认值，这里写出来只是为了显式可见、便于覆盖。置空则只依赖数据库配置。
 # 注意：`auditSink: parquet` 时归档目录是**唯一落点**，既没配 localDir 又没配本项时
 # 会拒绝启动（详见 docs/dev/plans/2026-09-20-audit-log-parquet-archive.md §12.13）。
 # 另外：`replicaCount > 1` 且 sink=parquet 时，归档目录必须是**共享卷**（RWX PVC / NFS 等）——
@@ -82,7 +84,7 @@ basePath: ""
 #
 # 或者不用环境变量，直接走 config.enabled=true + 含 config.yaml 的 Secret
 # （内容里写 `auditSink: parquet`，示例见仓库根目录 config.dev.yaml）。
-auditArchiveDir: ""
+auditArchiveDir: /home/aerolink/data/archive
 
 # DuckDB（parquet 检索）安装扩展的目录，注入 AEROLINK_DUCKDB_EXTENSION_DIR。
 # 留空表示用进程可写的临时目录（系统临时目录下的 aerolink-duckdb-extensions）。
@@ -93,8 +95,10 @@ duckdbExtensionDir: ""
 
 # klog（系统日志）的落盘路径，注入 AEROLINK_LOG_FILE 环境变量：程序据此设置 -log_file
 # 并关闭 stderr 输出（-logtostderr=false），即「系统日志只落文件、由采集工具收集」。
-# 留空表示维持默认（输出到 stderr）。
-logFile: ""
+# 默认取运行用户家目录下的 data/aerolink.log（与归档共用一个卷，镜像自带同一默认值）；
+# 置空表示输出到 stderr（`kubectl logs` 能直接看到系统日志）。
+# 目录不存在时程序会尝试创建；实在写不进去只告警并回落到 stderr，不会让控制台起不来。
+logFile: /home/aerolink/data/aerolink.log
 
 # Pod 列表页周期推送用量（CPU/内存数字）的间隔，单位秒，注入 AEROLINK_POD_METRICS_INTERVAL。
 # 留空即默认 15，与历史行为一致；调大能进一步降低推送频率，代价是数字刷新变慢。

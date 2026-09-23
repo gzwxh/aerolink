@@ -17,7 +17,8 @@ import {
   useClusterList,
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
-import { outcomeBadge, statusBadge } from '@/lib/status-badge'
+import { decodeClusterName } from '@/lib/current-cluster'
+import { statusBadge, statusText } from '@/lib/status-badge'
 import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
@@ -77,14 +78,22 @@ function displayTime(value: unknown): string {
 function textColumn(
   id: string,
   header: string,
-  key: string
+  key: string,
+  // 需要把原始值转成可读文本时用它（例如集群名要先解码）。
+  format?: (value: unknown) => string
 ): ColumnDef<ArchiveRow> {
   return {
     id,
     header,
-    cell: ({ row }) => (
-      <span className="text-sm">{display(row.original[key])}</span>
-    ),
+    cell: ({ row }) => {
+      const text = format ? format(row.original[key]) : display(row.original[key])
+      // truncate：归档里的路径、UA 可能很长，不截断会把相邻列挤变形。
+      return (
+        <span className="block truncate text-sm" title={text}>
+          {text}
+        </span>
+      )
+    },
   }
 }
 
@@ -213,24 +222,23 @@ export function ArchiveQuery() {
           header: t('common.fields.result', 'Result'),
           cell: ({ row }) => {
             const result = row.original.result
-            const badge = statusBadge(
+            const tone = statusText(
               result === 'success' ? 'success' : 'failure'
             )
             if (result === 'success') {
               return (
-                <Badge variant={badge.variant} className={badge.className}>
+                <span className={`text-sm font-medium ${tone}`}>
                   {t('status.success', 'Success')}
-                </Badge>
+                </span>
               )
             }
             return (
-              <Badge
-                variant={badge.variant}
-                className={badge.className}
+              <span
+                className={`text-sm font-medium ${tone}`}
                 title={display(result)}
               >
                 {t(`audit.loginResult.${String(result)}`, display(result))}
-              </Badge>
+              </span>
             )
           },
         },
@@ -294,7 +302,13 @@ export function ArchiveQuery() {
             </span>
           ),
         },
-        textColumn('cluster', t('common.fields.cluster', 'Cluster'), 'cluster'),
+        textColumn(
+          'cluster',
+          t('common.fields.cluster', 'Cluster'),
+          'cluster',
+          // 归档里的集群名同样是 URL 编码串（历史写入所致）。
+          (value) => decodeClusterName(value as string) || '-'
+        ),
         textColumn('user', t('common.fields.user', 'User'), 'user'),
         textColumn(
           'clientIp',
@@ -318,19 +332,20 @@ export function ArchiveQuery() {
         id: 'result',
         header: t('common.fields.result', 'Result'),
         cell: ({ row }) => {
-          const badge = outcomeBadge(row.original.success === true)
+          const tone = statusText(
+            row.original.success === true ? 'success' : 'failure'
+          )
           return row.original.success === true ? (
-            <Badge variant={badge.variant} className={badge.className}>
+            <span className={`text-sm font-medium ${tone}`}>
               {t('status.success', 'Success')}
-            </Badge>
+            </span>
           ) : (
-            <Badge
-              variant={badge.variant}
-              className={badge.className}
+            <span
+              className={`text-sm font-medium ${tone}`}
               title={display(row.original.error_message)}
             >
               {t('status.failed', 'Failed')}
-            </Badge>
+            </span>
           )
         },
       },

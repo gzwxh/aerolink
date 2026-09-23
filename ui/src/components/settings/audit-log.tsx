@@ -18,7 +18,8 @@ import {
   useUserList,
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
-import { operationTypeBadge, outcomeBadge } from '@/lib/status-badge'
+import { decodeClusterName } from '@/lib/current-cluster'
+import { operationTypeBadge, outcomeText } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
@@ -307,11 +308,19 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
               id: 'cluster',
               header: t('common.fields.cluster', 'Cluster'),
               size: 130,
-              cell: ({ row }: { row: { original: ResourceHistory } }) => (
-                <span className="text-sm text-muted-foreground">
-                  {row.original.clusterName || '-'}
-                </span>
-              ),
+              cell: ({ row }: { row: { original: ResourceHistory } }) => {
+                // 历史记录里的集群名是 URL 编码串（写审计时漏解码，已修）：展示端解码。
+                // truncate 兜住超长名称，避免把相邻列挤变形。
+                const cluster = decodeClusterName(row.original.clusterName)
+                return (
+                  <span
+                    className="block truncate text-sm text-muted-foreground"
+                    title={cluster || undefined}
+                  >
+                    {cluster || '-'}
+                  </span>
+                )
+              },
             },
           ]
         : []),
@@ -319,16 +328,15 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
         id: 'status',
         header: t('common.fields.status', 'Status'),
         size: 100,
-        cell: ({ row }) => {
-          const badge = outcomeBadge(row.original.success)
-          return (
-            <Badge variant={badge.variant} className={badge.className}>
-              {row.original.success
-                ? t('status.success', 'Success')
-                : t('status.failed', 'Failed')}
-            </Badge>
-          )
-        },
+        cell: ({ row }) => (
+          <span
+            className={`text-sm font-medium ${outcomeText(row.original.success)}`}
+          >
+            {row.original.success
+              ? t('status.success', 'Success')
+              : t('status.failed', 'Failed')}
+          </span>
+        ),
       },
       {
         id: 'actions',

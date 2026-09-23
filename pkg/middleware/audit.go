@@ -180,7 +180,8 @@ func recordAdminAudit(c *gin.Context, path, operation string, body []byte) {
 	}
 
 	history := model.ResourceHistory{
-		ClusterName:     strings.TrimSpace(c.GetHeader(ClusterNameHeader)),
+		// 请求头里是 URL 编码过的集群名，落库前必须还原（否则界面显示 %E7%94%9F... 且无法按集群筛选）。
+		ClusterName:     DecodeClusterName(strings.TrimSpace(c.GetHeader(ClusterNameHeader))),
 		ResourceType:    adminAuditTypePrefix + resourceType,
 		ResourceName:    resourceName,
 		PreviousYAML:    model.LongText(previousYAML),

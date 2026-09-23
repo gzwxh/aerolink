@@ -133,3 +133,17 @@ func setupAuditTestDB(t *testing.T) *gorm.DB {
 	})
 	return db
 }
+
+// 修复前写入的审计记录里集群名是 URL 编码串（见 middleware.DecodeClusterName）：
+// 按集群筛选时必须把原值与编码值都匹配上，否则筛「生产环境」看不到历史记录。
+func TestClusterNameVariants(t *testing.T) {
+	got := clusterNameVariants("生产环境")
+	want := []string{"生产环境", "%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("clusterNameVariants(生产环境) = %v, want %v", got, want)
+	}
+
+	if got := clusterNameVariants("prod"); len(got) != 1 || got[0] != "prod" {
+		t.Errorf("clusterNameVariants(prod) = %v, want [prod]（无需转义时只查一次）", got)
+	}
+}

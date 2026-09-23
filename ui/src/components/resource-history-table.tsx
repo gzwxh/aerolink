@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 import { ResourceHistory, ResourceType, ResourceTypeMap } from '@/types/api'
 import { applyResource, useResourceHistory } from '@/lib/api'
-import { operationTypeBadge, outcomeBadge } from '@/lib/status-badge'
+import { operationTypeBadge, outcomeText } from '@/lib/status-badge'
 import { formatDate, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 
@@ -179,11 +179,10 @@ export function ResourceHistoryTable<T extends ResourceType>({
         accessor: (item: ResourceHistory) => item.success,
         cell: (value: unknown) => {
           const success = value as boolean
-          const badge = outcomeBadge(success)
           return (
-            <Badge variant={badge.variant} className={badge.className}>
+            <span className={`text-sm font-medium ${outcomeText(success)}`}>
               {success ? t('status.success') : t('status.failed')}
-            </Badge>
+            </span>
           )
         },
       },

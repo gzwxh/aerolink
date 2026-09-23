@@ -78,6 +78,13 @@ RUN printf 'aerolink:x:65532:65532::/home/aerolink:/sbin/nologin\n' >> /etc/pass
     mkdir -p /home/aerolink/data/archive && \
     chown -R 65532:65532 /home/aerolink
 
+# 数据位置的镜像默认值（上面 RUN 已建好这些目录）：
+#   AEROLINK_AUDIT_ARCHIVE_DIR 只是**启动兜底**，生效值仍以「审计设置 → 归档」里的本地目录为准；
+#   AEROLINK_LOG_FILE 一旦生效，klog 就不再写 stderr（见 main.go 的 applyLogFileEnv）。
+# 写进镜像后部署清单不必再重复这两项；`docker run -e` / extraEnvs 显式覆盖仍然优先。
+ENV AEROLINK_AUDIT_ARCHIVE_DIR=/home/aerolink/data/archive \
+    AEROLINK_LOG_FILE=/home/aerolink/data/aerolink.log
+
 WORKDIR /home/aerolink
 
 # CA 证书：openEuler / ubuntu 这类**精简基础镜像都不带** ca-certificates，缺了它所有 HTTPS

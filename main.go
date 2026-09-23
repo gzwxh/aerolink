@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -23,9 +24,18 @@ import (
 //
 // 必须在 flag.Parse() 之前调用：环境变量只提供默认值，命令行里显式给出的 flag 仍然优先。
 // 落文件后同时关掉 stderr 输出，避免同一份日志被写两遍（采集以文件为准）。
+//
+// 落盘前先确认「父目录能建、文件能开」：klog 打不开 -log_file 时会直接 fatal 退出
+// （`log: exiting because of error: ... unable to create log`）。系统日志是观测手段、
+// 不是审计数据，不该因为一个没挂上的卷就拒绝启动——审计那条链路才是 fail-closed 的。
+// 预检失败时保持 stderr 输出并给出警告。
 func applyLogFileEnv() {
 	path := strings.TrimSpace(common.Getenv("LOG_FILE"))
 	if path == "" {
+		return
+	}
+	if err := ensureLogFileWritable(path); err != nil {
+		log.Printf("AEROLINK_LOG_FILE %q is not writable, keeping system logs on stderr: %v", path, err)
 		return
 	}
 	if err := flag.Set("log_file", path); err != nil {
@@ -35,6 +45,21 @@ func applyLogFileEnv() {
 	if err := flag.Set("logtostderr", "false"); err != nil {
 		log.Printf("Failed to disable klog stderr output for AEROLINK_LOG_FILE: %v", err)
 	}
+}
+
+// ensureLogFileWritable 建好日志文件的父目录并试开一次，确认 klog 真的写得进去。
+// 试开成功会留下一个空文件（klog 随后追加写进去），失败则返回原因由调用方降级。
+func ensureLogFileWritable(path string) error {
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	return file.Close()
 }
 
 func main() {

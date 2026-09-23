@@ -34,6 +34,26 @@ export function appendCurrentClusterHeader(headers: Record<string, string>) {
   }
 }
 
+/**
+ * 展示用：把集群名还原成可读文本。
+ *
+ * 历史审计记录（以及归档里的副本）存的是 URL 编码后的集群名——写审计时漏了解码（已修），
+ * 这些记录不会重写，所以在展示端做容错解码；没编码过或解不开时原样返回。
+ */
+export function decodeClusterName(name: string | null | undefined): string {
+  if (!name) {
+    return ''
+  }
+  if (!name.includes('%')) {
+    return name
+  }
+  try {
+    return decodeURIComponent(name)
+  } catch {
+    return name
+  }
+}
+
 export function withCurrentClusterPath(
   path: string,
   currentCluster: string | null = getCurrentCluster()

@@ -59,7 +59,7 @@
 
   # 本地 parquet 文件（需同时给归档目录）
   AEROLINK_AUDIT_SINK=parquet
-  AEROLINK_AUDIT_ARCHIVE_DIR=/home/aerolink/data/archive
+  AEROLINK_AUDIT_ARCHIVE_DIR=/home/aerolink/data/archive   # 官方镜像默认值
 
   # Elasticsearch（需先在页面或配置文件里填好地址）
   AEROLINK_AUDIT_SINK=elasticsearch
@@ -88,7 +88,9 @@
   检索不受影响。官方镜像以 `aerolink` 用户在其家目录（`/home/aerolink`，即工作目录）下运行，
   `HOME` 可写；离线部署可在镜像里预置 `httpfs` 扩展，并把本项指向该目录。
 - **AEROLINK_LOG_FILE**：klog（系统日志）落盘路径。设置后系统日志只写文件、不再写 stderr，便于日志
-  采集工具收集；等价于命令行 `-log_file <path> -logtostderr=false`（命令行优先）。
+  采集工具收集；等价于命令行 `-log_file <path> -logtostderr=false`（命令行优先）。官方镜像的默认值是
+  `/home/aerolink/data/aerolink.log`（运行用户家目录下）；置空则输出到 stderr，`kubectl logs` 可直接
+  看到系统日志。目录不存在时程序会尝试创建，实在写不进去只告警并回落到 stderr，不会拒绝启动。
 
 ## 运行与运维
 

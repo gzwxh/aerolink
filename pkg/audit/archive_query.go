@@ -78,7 +78,14 @@ func QueryAccessLogArchive(c *gin.Context) {
 // 报错更难发现（用户以为筛出来了，实际是全量）。
 func auditHistoryArchiveFilters(c *gin.Context) ([]archiveCondition, bool) {
 	conditions := make([]archiveCondition, 0, 8)
-	addEqCondition(&conditions, esFieldClusterName, c.Query("cluster"))
+	// 归档里同样存在修复前写入的编码集群名（见 clusterNameVariants），两种写法都匹配。
+	if cluster := strings.TrimSpace(c.Query("cluster")); cluster != "" {
+		values := make([]any, 0, 2)
+		for _, name := range clusterNameVariants(cluster) {
+			values = append(values, name)
+		}
+		conditions = append(conditions, archiveCondition{field: esFieldClusterName, op: opIn, value: values})
+	}
 	addEqCondition(&conditions, esFieldOperationType, c.Query("operation"))
 	addEqCondition(&conditions, esFieldResourceType, c.Query("resourceType"))
 	addEqCondition(&conditions, esFieldResourceName, c.Query("resourceName"))
@@ -168,6 +175,7 @@ func appendInCondition(conditions []archiveCondition, c *gin.Context, field, par
 // accessLogArchiveFilters 解析访问日志的过滤条件。
 func accessLogArchiveFilters(c *gin.Context) ([]archiveCondition, bool) {
 	conditions := make([]archiveCondition, 0, 5)
+	// 访问日志的集群名取自 ClusterMiddleware 注入的上下文值（已解码），不存在历史编码串问题。
 	addEqCondition(&conditions, esFieldClusterName, c.Query("cluster"))
 	addEqCondition(&conditions, esFieldMethod, c.Query("method"))
 	addEqCondition(&conditions, esFieldClientIP, c.Query("clientIp"))
