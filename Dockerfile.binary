@@ -1,18 +1,40 @@
-# Runtime base from the company registry (SWR, org "gzwxh").
-FROM swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20
+# 用**本机编译好的二进制**打镜像（`make image-binary`，见 Makefile）。
+#
+# 相比 Dockerfile 的容器内构建，省掉 vendor(872MB)/ui 的上下文传输与两段编译
+# （实测 12 分钟以上 → 1~2 分钟）。构建上下文由 Makefile 准备，是一个只含两个文件的
+# 目录（dist/）：
+#   aerolink-<arch>      CGO 单二进制，已 embed 前端产物与 DuckDB 引擎
+#   ca-certificates.crt  从构建机拷来的公共根证书
+#
+# 基座必须与**编译机同 glibc 版本线**（编译机不得高于它），否则报 GLIBC_2.xx not found；
+# 本仓库的约定是 openEuler 24.03（编译机 SP3、基座 SP4，均为 glibc 2.38）。
+# 也必须是 glibc 基座：CGO 产物依赖 glibc/libstdc++，换成 alpine(musl) 直接跑不起来。
+FROM swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4
+
 ARG TARGETARCH
 
-# 运行用户 aerolink：uid/gid 与 Dockerfile 保持一致（65532），家目录即工作目录
-# （HOME 可写，程序不必为 DuckDB 扩展目录等缓存反复调权限）。
-# alpine 自带 busybox 的 adduser/addgroup，不需要额外装 shadow-utils。
-RUN addgroup -g 65532 aerolink && \
-    adduser -u 65532 -G aerolink -h /home/aerolink -s /sbin/nologin -D aerolink
+# 运行用户 aerolink：uid/gid 沿用 distroless/static(nonroot) 的 65532，与 Dockerfile 一致。
+# 家目录就是工作目录，所有可写数据（归档、klog、DuckDB 扩展、sqlite 库）都放在它下面，
+# 不必为 /var/log、/data 这类系统目录来回改属主。
+# openEuler 基础镜像没装 shadow-utils（没有 useradd/groupadd），所以直接写 passwd/group。
+RUN printf 'aerolink:x:65532:65532::/home/aerolink:/sbin/nologin\n' >> /etc/passwd && \
+    printf 'aerolink:x:65532:\n' >> /etc/group && \
+    mkdir -p /home/aerolink/data/archive && \
+    chown -R 65532:65532 /home/aerolink
+
+# CA 证书：openEuler 精简基座**不带**可信根证书（实测没有 /etc/ssl/certs/ca-certificates.crt），
+# 缺了它 S3/COS、OIDC、LDAP、SMTP 等所有出站 HTTPS 都会以
+# "x509: certificate signed by unknown authority" 失败——这与「后端自己是否对外提供 HTTPS」
+# 无关（入站由前置代理卸载）。
+# 上下文里这份由 Makefile 从构建机拷贝（RHEL/openEuler 上是 ca-bundle.crt，Debian 上是
+# ca-certificates.crt，见 Makefile 的 CA_BUNDLE），统一落到 Go 系统证书查找顺序的第一个候选。
+COPY ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /home/aerolink
 
-COPY --chown=65532:65532 bin/aerolink-$TARGETARCH ./aerolink
-
 USER aerolink
+
+COPY --chown=65532:65532 aerolink-${TARGETARCH} ./aerolink
 
 EXPOSE 8080
 

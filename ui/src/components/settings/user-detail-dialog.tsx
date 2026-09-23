@@ -19,6 +19,7 @@ import {
   useOAuthProviderList,
 } from '@/lib/api'
 import { normalizeAvatarUrl } from '@/lib/avatar-url'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { isDeletableUser, isNativeUser } from '@/lib/user-kind'
 import { formatDate, translateError } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard'
@@ -270,16 +271,16 @@ export function UserDetailDialog({
             <DialogTitle className="flex flex-wrap items-center gap-2">
               <span>{user.username}</span>
               {user.enabled ? (
-                <Badge variant="default">
+                <Badge {...statusBadge('success')}>
                   {t('status.enabled', 'Enabled')}
                 </Badge>
               ) : (
-                <Badge variant="secondary">
+                <Badge {...neutralBadge()}>
                   {t('status.disabled', 'Disabled')}
                 </Badge>
               )}
               {user.pendingDeletion && (
-                <Badge variant="destructive">
+                <Badge {...statusBadge('failure')}>
                   {t('userManagement.status.pendingDeletion', '待删除')}
                 </Badge>
               )}

@@ -30,6 +30,7 @@ import {
   useClusterList,
 } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { useCluster } from '@/hooks/use-cluster'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -101,10 +102,7 @@ export function ClusterManagement() {
     (cluster: Cluster) => {
       if (cluster.clusterAgent) {
         const badge = (
-          <Badge
-            variant="outline"
-            className="bg-success/10 text-success border-success/25"
-          >
+          <Badge {...statusBadge('success')}>
             {t('clusterManagement.type.clusterAgent', 'Cluster Agent')}
           </Badge>
         )
@@ -123,10 +121,7 @@ export function ClusterManagement() {
       }
       if (cluster.inCluster) {
         return (
-          <Badge
-            variant="outline"
-            className="bg-info/10 text-info border-info/25"
-          >
+          <Badge {...statusBadge('info')}>
             {t('clusterManagement.type.inCluster', 'In-Cluster')}
           </Badge>
         )
@@ -147,7 +142,7 @@ export function ClusterManagement() {
     (cluster: Cluster) => {
       if (!cluster.enabled) {
         return (
-          <Badge variant="secondary">{t('status.disabled', 'Disabled')}</Badge>
+          <Badge {...neutralBadge()}>{t('status.disabled', 'Disabled')}</Badge>
         )
       }
       if (cluster.clusterAgent && !cluster.connected) {
@@ -159,12 +154,16 @@ export function ClusterManagement() {
       }
       if (cluster.clusterAgent) {
         return (
-          <Badge variant="default">
+          <Badge {...statusBadge('success')}>
             {t('clusterManagement.status.connected', 'Connected')}
           </Badge>
         )
       }
-      return <Badge variant="default">{t('status.enabled', 'Enabled')}</Badge>
+      return (
+        <Badge {...statusBadge('success')}>
+          {t('status.enabled', 'Enabled')}
+        </Badge>
+      )
     },
     [t]
   )
@@ -244,7 +243,7 @@ export function ClusterManagement() {
             return (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="destructive">Error</Badge>
+                  <Badge {...statusBadge('failure')}>Error</Badge>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="max-w-xs break-all">{cluster.error}</p>

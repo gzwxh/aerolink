@@ -17,6 +17,7 @@ import {
   useClusterList,
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
+import { outcomeBadge, statusBadge } from '@/lib/status-badge'
 import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
@@ -212,15 +213,22 @@ export function ArchiveQuery() {
           header: t('common.fields.result', 'Result'),
           cell: ({ row }) => {
             const result = row.original.result
+            const badge = statusBadge(
+              result === 'success' ? 'success' : 'failure'
+            )
             if (result === 'success') {
               return (
-                <Badge variant="default">
+                <Badge variant={badge.variant} className={badge.className}>
                   {t('status.success', 'Success')}
                 </Badge>
               )
             }
             return (
-              <Badge variant="destructive" title={display(result)}>
+              <Badge
+                variant={badge.variant}
+                className={badge.className}
+                title={display(result)}
+              >
                 {t(`audit.loginResult.${String(result)}`, display(result))}
               </Badge>
             )
@@ -266,11 +274,15 @@ export function ArchiveQuery() {
             if (!code) {
               return <span className="text-muted-foreground">-</span>
             }
-            return (
-              <Badge variant={code >= 400 ? 'destructive' : 'secondary'}>
-                {code}
-              </Badge>
-            )
+            if (code >= 400) {
+              const badge = statusBadge('failure')
+              return (
+                <Badge variant={badge.variant} className={badge.className}>
+                  {code}
+                </Badge>
+              )
+            }
+            return <Badge variant="secondary">{code}</Badge>
           },
         },
         {
@@ -305,17 +317,22 @@ export function ArchiveQuery() {
       {
         id: 'result',
         header: t('common.fields.result', 'Result'),
-        cell: ({ row }) =>
-          row.original.success === true ? (
-            <Badge variant="default">{t('status.success', 'Success')}</Badge>
+        cell: ({ row }) => {
+          const badge = outcomeBadge(row.original.success === true)
+          return row.original.success === true ? (
+            <Badge variant={badge.variant} className={badge.className}>
+              {t('status.success', 'Success')}
+            </Badge>
           ) : (
             <Badge
-              variant="destructive"
+              variant={badge.variant}
+              className={badge.className}
               title={display(row.original.error_message)}
             >
               {t('status.failed', 'Failed')}
             </Badge>
-          ),
+          )
+        },
       },
       textColumn(
         'operator',

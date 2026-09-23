@@ -17,6 +17,7 @@ import {
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { copyToClipboard } from '@/lib/clipboard'
+import { statusBadge } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
@@ -147,13 +148,20 @@ export function LoginLog() {
         header: t('common.fields.result', 'Result'),
         cell: ({ row }) => {
           const reason = failureReason(row.original.result)
+          const badge = statusBadge(reason ? 'failure' : 'success')
           if (!reason) {
             return (
-              <Badge variant="default">{t('status.success', 'Success')}</Badge>
+              <Badge variant={badge.variant} className={badge.className}>
+                {t('status.success', 'Success')}
+              </Badge>
             )
           }
           return (
-            <Badge variant="destructive" title={row.original.result ?? ''}>
+            <Badge
+              variant={badge.variant}
+              className={badge.className}
+              title={row.original.result ?? ''}
+            >
               {reason}
             </Badge>
           )

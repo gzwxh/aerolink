@@ -222,8 +222,15 @@ func respondArchiveQuery(c *gin.Context, query archiveQuery) {
 		return
 	}
 
+	// 响应里的 data 必须是数组：nil 会被序列化成 `null`，而界面把它当数组用
+	// （`data.length`），null 会让整个归档页崩掉。检索后端各自都应给非 nil 切片，
+	// 这里再兜一道——OpenObserve 这类外部后端的响应里 hits 缺失时就是 nil。
+	hits := result.Hits
+	if hits == nil {
+		hits = []json.RawMessage{}
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"data":    result.Hits,
+		"data":    hits,
 		"total":   result.Total,
 		"page":    page,
 		"size":    size,

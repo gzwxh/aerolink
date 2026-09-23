@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { createSearchFilter } from '@/lib/k8s'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResourceTable } from '@/components/resource-table'
@@ -62,8 +63,14 @@ export function EventListPage() {
         enableColumnFilter: true,
         cell: ({ getValue }) => {
           const type = getValue() || ''
-          const variant = type === 'Normal' ? 'default' : 'destructive'
-          return <Badge variant={variant}>{type}</Badge>
+          // Normal 是普通信息（中性），其余按 Warning 处理——事件里只有这两类。
+          const badge =
+            type === 'Normal' ? neutralBadge() : statusBadge('warning')
+          return (
+            <Badge variant={badge.variant} className={badge.className}>
+              {type}
+            </Badge>
+          )
         },
       }),
       columnHelper.accessor((row) => row.reason, {

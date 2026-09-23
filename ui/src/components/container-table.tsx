@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Container } from 'kubernetes-types/core/v1'
 import { ChevronDown, ChevronRight, Edit3 } from 'lucide-react'
 
+import { neutralBadge } from '@/lib/status-badge'
+
 import { ContainerEditDialog } from './container-edit-dialog'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -36,7 +38,7 @@ export function ContainerTable(props: {
                 ) : (
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 )}
-                <Badge variant="default" className="font-medium">
+                <Badge {...neutralBadge()} className="font-medium">
                   {container.name}
                 </Badge>
               </div>

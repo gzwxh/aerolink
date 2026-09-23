@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import { NodeWithMetrics } from '@/types/api'
 import { cordonNode, uncordonNode } from '@/lib/api'
 import { createSearchFilter } from '@/lib/k8s'
+import { statusBadge } from '@/lib/status-badge'
 import { formatDate, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
@@ -373,7 +374,7 @@ export function NodeListPage() {
         cell: ({ row }) => {
           if (row.original.spec?.unschedulable) {
             return (
-              <Badge variant="destructive" className="text-xs">
+              <Badge {...statusBadge('warning')} className="text-xs">
                 {t('nodes.cordoned', 'Cordoned')}
               </Badge>
             )

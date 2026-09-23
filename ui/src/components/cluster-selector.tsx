@@ -1,6 +1,7 @@
 import { IconCheck, IconChevronDown } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
+import { statusBadge } from '@/lib/status-badge'
 import { cn } from '@/lib/utils'
 import { useCluster } from '@/hooks/use-cluster'
 import { Badge } from '@/components/ui/badge'
@@ -106,7 +107,10 @@ export function ClusterSelector() {
                   </Badge>
                 )}
                 {cluster.error && (
-                  <Badge variant="destructive" className="shrink-0 text-xs">
+                  <Badge
+                    {...statusBadge('failure')}
+                    className="shrink-0 text-xs"
+                  >
                     {t('cluster.syncError', '同步异常')}
                   </Badge>
                 )}

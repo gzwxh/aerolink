@@ -36,6 +36,9 @@ kubeconfig
 static
 bin
 
+# `make image-binary` 的临时构建上下文（本机二进制 + CA 证书，每次生成）
+/dist
+
 deploy-dev
 
 values-*.yaml

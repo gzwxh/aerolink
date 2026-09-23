@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResourceRowActions } from '@/components/resource-row-actions'
@@ -15,7 +16,8 @@ function getSuspendBadge(cronjob: CronJob) {
   const isSuspended = cronjob.spec?.suspend ?? false
   return {
     label: isSuspended ? 'Suspended' : 'Active',
-    variant: isSuspended ? ('secondary' as const) : ('default' as const),
+    // Active = 正在按计划运行（进行中），Suspended 是中性状态。
+    ...(isSuspended ? neutralBadge() : statusBadge('info')),
   }
 }
 
@@ -61,7 +63,11 @@ export function CronJobListPage() {
         header: t('cronJobList.state', 'State'),
         cell: ({ row }) => {
           const badge = getSuspendBadge(row.original)
-          return <Badge variant={badge.variant}>{badge.label}</Badge>
+          return (
+            <Badge variant={badge.variant} className={badge.className}>
+              {badge.label}
+            </Badge>
+          )
         },
       }),
       columnHelper.display({

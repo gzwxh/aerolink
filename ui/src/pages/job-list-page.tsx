@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResourceRowActions } from '@/components/resource-row-actions'
@@ -66,14 +67,18 @@ export function JobListPage() {
           header: t('common.fields.status'),
           cell: ({ getValue }) => {
             const status = getValue()
-            const variant =
+            const badge =
               status === 'Complete'
-                ? 'default'
+                ? statusBadge('success')
                 : status === 'Failed'
-                  ? 'destructive'
-                  : 'secondary'
+                  ? statusBadge('failure')
+                  : neutralBadge()
 
-            return <Badge variant={variant}>{status}</Badge>
+            return (
+              <Badge variant={badge.variant} className={badge.className}>
+                {status}
+              </Badge>
+            )
           },
         }
       ),

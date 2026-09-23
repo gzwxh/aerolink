@@ -128,7 +128,9 @@ func (b *DuckDBBackend) Search(ctx context.Context, query archiveQuery, from, to
 	globs, useS3 := b.parquetGlobs(ctx, parquetKind, from, to)
 	if len(globs) == 0 {
 		// 该时间段没有任何归档文件：返回空结果，而不是走进引擎报错。
-		return &archiveSearchResult{}, nil
+		// Hits 必须是**非 nil 空切片**：它会直接进响应 JSON，nil 会序列化成 `null`，
+		// 而界面把 data 当数组用（`data.length`），null 会让整个归档页崩掉。
+		return &archiveSearchResult{Hits: []json.RawMessage{}}, nil
 	}
 
 	statement, err := buildDuckDBSQL(query, columns, globs, from, to, page, size)

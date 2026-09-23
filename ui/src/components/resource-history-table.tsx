@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 
 import { ResourceHistory, ResourceType, ResourceTypeMap } from '@/types/api'
 import { applyResource, useResourceHistory } from '@/lib/api'
+import { operationTypeBadge, outcomeBadge } from '@/lib/status-badge'
 import { formatDate, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 
@@ -101,21 +102,6 @@ export function ResourceHistoryTable<T extends ResourceType>({
     }
   }
 
-  const getOperationTypeColor = (operationType: string) => {
-    switch (operationType.toLowerCase()) {
-      case 'create':
-        return 'default'
-      case 'update':
-        return 'secondary'
-      case 'delete':
-        return 'destructive'
-      case 'apply':
-        return 'outline'
-      default:
-        return 'secondary'
-    }
-  }
-
   const getOperationTypeLabel = useCallback(
     (operationType: string) => {
       switch (operationType.toLowerCase()) {
@@ -180,8 +166,9 @@ export function ResourceHistoryTable<T extends ResourceType>({
         accessor: (item: ResourceHistory) => item.operationType,
         cell: (value: unknown) => {
           const operationType = value as string
+          const badge = operationTypeBadge(operationType)
           return (
-            <Badge variant={getOperationTypeColor(operationType)}>
+            <Badge variant={badge.variant} className={badge.className}>
               {getOperationTypeLabel(operationType)}
             </Badge>
           )
@@ -192,8 +179,9 @@ export function ResourceHistoryTable<T extends ResourceType>({
         accessor: (item: ResourceHistory) => item.success,
         cell: (value: unknown) => {
           const success = value as boolean
+          const badge = outcomeBadge(success)
           return (
-            <Badge variant={success ? 'default' : 'destructive'}>
+            <Badge variant={badge.variant} className={badge.className}>
               {success ? t('status.success') : t('status.failed')}
             </Badge>
           )

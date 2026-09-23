@@ -10,6 +10,10 @@ dev.db
 *.db
 kite
 aerolink
+# Cross-compiled / locally built binaries (bin/aerolink-<arch>…, ~120MB): the source-based
+# build compiles inside the builder stage, so these are never inputs.
+# （`make image-binary` 不用这个上下文，它用的是 dist/。）
+/bin
 
 # Local development credentials and overrides
 # `config.dev.yaml` auto-creates admin/AdminPass!234, `dev.env*` holds development
@@ -35,3 +39,15 @@ charts
 AGENTS.md
 CLAUDE.md
 *.log
+
+# `make image-binary` stages the locally compiled binary (+ CA bundle) here and uses
+# dist/ itself as the build context (Dockerfile.binary)；源码构建的上下文不该带上它。
+/dist
+
+# DuckDB static libraries ship per platform (~90MB each) and cgo links only the one
+# matching the build platform (see lib/<platform>/prebuilt.go build tags). Dropping
+# darwin/windows keeps ~265MB out of the build context. Add lib/linux-arm64 as well if
+# the image is never built on arm64.
+vendor/github.com/duckdb/duckdb-go-bindings/lib/darwin-amd64
+vendor/github.com/duckdb/duckdb-go-bindings/lib/darwin-arm64
+vendor/github.com/duckdb/duckdb-go-bindings/lib/windows-amd64

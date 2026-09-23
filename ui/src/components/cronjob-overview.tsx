@@ -7,6 +7,11 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useRelatedResources } from '@/lib/api'
 import { formatJobStatusBadge, getJobStatusBadge } from '@/lib/job-status'
 import { getEventTime, getOwnerInfo } from '@/lib/k8s'
+import {
+  neutralBadge,
+  statusBadge,
+  type StatusBadgeStyle,
+} from '@/lib/status-badge'
 import { cn, formatDate, getAge } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,7 +41,7 @@ type TranslationFn = ReturnType<typeof useTranslation>['t']
 interface CronJobStatusBadge {
   key: 'suspended' | 'active' | 'idle' | 'pending'
   label: string
-  variant: 'default' | 'secondary' | 'destructive' | 'outline'
+  style: StatusBadgeStyle
 }
 
 export function CronJobOverview({
@@ -118,7 +123,7 @@ function CronJobSummaryGrid({ cronjob }: { cronjob: CronJob }) {
       <WorkloadSummaryCard
         label={t('common.fields.status')}
         value={
-          <Badge variant={cronJobStatus.variant}>
+          <Badge {...cronJobStatus.style}>
             {formatCronJobStatus(cronJobStatus, t)}
           </Badge>
         }
@@ -250,7 +255,7 @@ function CronJobJobsCard({
 
 function CronJobJobRow({ job }: { job: Job }) {
   const { t } = useTranslation()
-  const statusBadge = getJobStatusBadge(job)
+  const jobBadge = getJobStatusBadge(job)
   const age = job.metadata?.creationTimestamp
     ? getAge(job.metadata.creationTimestamp)
     : '-'
@@ -261,8 +266,8 @@ function CronJobJobRow({ job }: { job: Job }) {
         <CronJobJobLink job={job} />
       </TableCell>
       <TableCell className="px-1 py-1.5 text-center">
-        <Badge variant={statusBadge.variant}>
-          {formatJobStatusBadge(statusBadge, t, 'status')}
+        <Badge {...jobBadge.style}>
+          {formatJobStatusBadge(jobBadge, t, 'status')}
         </Badge>
       </TableCell>
       <TableCell className="px-1 py-1.5 text-center tabular-nums">
@@ -476,15 +481,15 @@ export function CronJobJobLink({
 
 function getCronJobStatusBadge(cronjob: CronJob): CronJobStatusBadge {
   if (cronjob.spec?.suspend) {
-    return { key: 'suspended', label: 'Suspended', variant: 'secondary' }
+    return { key: 'suspended', label: 'Suspended', style: neutralBadge() }
   }
   if ((cronjob.status?.active?.length || 0) > 0) {
-    return { key: 'active', label: 'Active', variant: 'default' }
+    return { key: 'active', label: 'Active', style: statusBadge('info') }
   }
   if (cronjob.status?.lastSuccessfulTime) {
-    return { key: 'idle', label: 'Idle', variant: 'outline' }
+    return { key: 'idle', label: 'Idle', style: neutralBadge() }
   }
-  return { key: 'pending', label: 'Pending', variant: 'outline' }
+  return { key: 'pending', label: 'Pending', style: neutralBadge() }
 }
 
 function formatCronJobStatus(badge: CronJobStatusBadge, t: TranslationFn) {

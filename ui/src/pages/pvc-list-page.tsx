@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { createSearchFilter } from '@/lib/k8s'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate, parseBytes } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ResourceTable } from '@/components/resource-table'
@@ -43,21 +44,25 @@ export function PVCListPage() {
         header: t('common.fields.status'),
         cell: ({ getValue }) => {
           const phase = getValue() || 'Unknown'
-          let variant: 'default' | 'destructive' | 'secondary' = 'secondary'
+          let badge = neutralBadge()
 
           switch (phase) {
             case 'Bound':
-              variant = 'default'
+              badge = statusBadge('success')
               break
             case 'Lost':
-              variant = 'destructive'
+              badge = statusBadge('failure')
               break
             case 'Pending':
-              variant = 'secondary'
+              badge = neutralBadge()
               break
           }
 
-          return <Badge variant={variant}>{phase}</Badge>
+          return (
+            <Badge variant={badge.variant} className={badge.className}>
+              {phase}
+            </Badge>
+          )
         },
       }),
       columnHelper.accessor('spec.volumeName', {

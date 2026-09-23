@@ -16,6 +16,7 @@ import {
   setUserEnabled,
 } from '@/lib/api'
 import { fetchAPI } from '@/lib/api/shared'
+import { statusBadge } from '@/lib/status-badge'
 import { translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -330,7 +331,7 @@ export function UserStatusPanel() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   {account.username}
-                  <Badge variant="destructive">
+                  <Badge {...statusBadge('warning')}>
                     {t('common.fields.disabled', '已禁用')}
                   </Badge>
                 </div>

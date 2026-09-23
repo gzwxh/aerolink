@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 
 import { useResources } from '@/lib/api'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -41,14 +42,14 @@ export function RecentEvents() {
     }
   }
 
-  const getEventBadgeVariant = (type: string) => {
+  const getEventBadgeStyle = (type: string) => {
     switch (type.toLowerCase()) {
       case 'warning':
-        return 'secondary' as const
+        return statusBadge('warning')
       case 'error':
-        return 'destructive' as const
+        return statusBadge('failure')
       default:
-        return 'default' as const
+        return neutralBadge()
     }
   }
 
@@ -112,7 +113,7 @@ export function RecentEvents() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <Badge
-                          variant={getEventBadgeVariant(event.type ?? '')}
+                          {...getEventBadgeStyle(event.type ?? '')}
                           className="text-xs"
                         >
                           {event.type ?? ''}

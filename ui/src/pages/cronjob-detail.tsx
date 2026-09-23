@@ -103,7 +103,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
         cell: (value) => {
           const badge = value as JobStatusBadge
           return (
-            <Badge variant={badge.variant}>
+            <Badge {...badge.style}>
               {formatJobStatusBadge(badge, t, 'status')}
             </Badge>
           )

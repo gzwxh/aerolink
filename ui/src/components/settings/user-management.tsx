@@ -32,6 +32,7 @@ import {
 import { ApiError } from '@/lib/api-client'
 import { resolveAvatarSrc } from '@/lib/avatar-url'
 import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate, translateError } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Button } from '@/components/ui/button'
@@ -191,9 +192,11 @@ export function UserManagement() {
   const getStatusBadge = useCallback(
     (user: UserItem) => {
       const badge = user.enabled ? (
-        <Badge variant="default">{t('status.enabled', 'Enabled')}</Badge>
+        <Badge {...statusBadge('success')}>
+          {t('status.enabled', 'Enabled')}
+        </Badge>
       ) : (
-        <Badge variant="secondary">{t('status.disabled', 'Disabled')}</Badge>
+        <Badge {...neutralBadge()}>{t('status.disabled', 'Disabled')}</Badge>
       )
       // 超级管理员可以停用，但后端要求系统里还有别的启用账号能进控制台管理面；
       // 它的保护手段是绑定 MFA，所以未绑定时额外给出引导。

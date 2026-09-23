@@ -21,6 +21,48 @@ func archiveTestContext(t *testing.T, rawQuery string) *gin.Context {
 	return ctx
 }
 
+// 该时间段没有归档文件时，响应里的 data 必须是空数组而不是 null：界面把它当数组用
+// （`data.length`），null 会让整个归档页崩掉（真实故障：Cannot read properties of
+// null (reading 'length')）。DuckDB 路径的早退与响应层兜底各修一处，这里从接口层钉住。
+func TestArchiveQueryReturnsEmptyArrayNotNull(t *testing.T) {
+	setupRetentionTestDB(t)
+
+	// CLI 驱动构建下没有 duckdb 可执行文件时后端不可用，与本用例无关。
+	if !DuckDBAvailable() {
+		t.Skip("duckdb is not available in this build")
+	}
+
+	originalSink := model.AuditSink
+	model.AuditSink = model.AuditSinkParquet
+	t.Cleanup(func() { model.AuditSink = originalSink })
+
+	setting := model.DefaultAuditSettingData()
+	// 空目录：时间范围内一个 parquet 文件都没有，走的是「没有归档」的早退路径。
+	setting.Archive.LocalDir = t.TempDir()
+	if _, err := model.UpdateAuditSetting(setting); err != nil {
+		t.Fatalf("seeding audit setting: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/archive?page=1&size=20", nil)
+
+	QueryAuditHistoryArchive(ctx)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var body struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	if body.Data == nil {
+		t.Errorf("data 是 null（应为 []），界面会在 data.length 上崩掉: %s", recorder.Body.String())
+	}
+}
+
 // 索引 mapping 由 ES 动态生成（字符串 = text + .keyword 子字段）。对 text 字段做
 // term 查询会先分词，`PUT` 这类大写值匹配不上——所以精确匹配必须落到 .keyword。
 // 这是真实联调中踩到的坑，用回归测试钉住。

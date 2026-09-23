@@ -13,6 +13,11 @@ import {
   type AnnouncementPayload,
 } from '@/lib/api'
 import { formatDateTimeShort, fromRFC3339, toRFC3339 } from '@/lib/date-time'
+import {
+  neutralBadge,
+  statusBadge,
+  type StatusBadgeStyle,
+} from '@/lib/status-badge'
 import { translateError } from '@/lib/utils'
 import {
   useDraftDirty,
@@ -69,14 +74,12 @@ function statusOf(item: Announcement, now = Date.now()): AnnouncementStatus {
   return 'active'
 }
 
-const STATUS_VARIANTS: Record<
-  AnnouncementStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  active: 'default',
-  pending: 'secondary',
-  expired: 'outline',
-  disabled: 'outline',
+// 公告状态同样是状态色：生效=成功、待生效=进行中（info）、过期的停用的用中性。
+const STATUS_BADGES: Record<AnnouncementStatus, StatusBadgeStyle> = {
+  active: statusBadge('success'),
+  pending: statusBadge('info'),
+  expired: neutralBadge(),
+  disabled: neutralBadge(),
 }
 
 function formatWindow(item: Announcement, never: string): string {
@@ -248,7 +251,7 @@ export function AnnouncementManagement() {
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate font-medium">{item.title}</span>
-                    <Badge variant={STATUS_VARIANTS[status]}>
+                    <Badge {...STATUS_BADGES[status]}>
                       {t(`notifications.announcements.status.${status}`)}
                     </Badge>
                   </div>

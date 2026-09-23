@@ -116,7 +116,7 @@ function JobSummaryGrid({ job }: { job: Job }) {
       <WorkloadSummaryCard
         label={t('common.fields.status')}
         value={
-          <Badge variant={jobStatus.variant}>
+          <Badge {...jobStatus.style}>
             {formatJobStatusBadge(jobStatus, t)}
           </Badge>
         }

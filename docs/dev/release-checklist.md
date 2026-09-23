@@ -9,7 +9,15 @@
 - [ ] **1. 跑完整检查**：`make pre-commit` + `make test`（含 `go test` 与 `pnpm test`），全部通过。
 - [ ] **2. 确定版本号规则**：统一用 tag 形式 `vX.Y.Z`。`Makefile` 的 `VERSION` 与 `charts/aerolink/Chart.yaml` 的 `appVersion` 都写这个形式（默认 `v1.0.0`），CI 发布再用 tag 覆盖 `VERSION`；`scripts/get-version.sh` 推导出的也是同一形式。不要给版本号加任何额外前缀（尤其别把镜像仓库名当日志/版本前缀），也不要与 tag 形式并存两种写法。
 - [ ] **3. 交叉编译并打包**：`make cross-compile` → `make package-binaries`，确认产物落在 `bin/`。
-- [ ] **4. 构建并推送镜像**：使用 `Dockerfile.binary`，目标 registry 用公司仓库（参考 `Makefile` 的 `IMAGE`，如 `swr.cn-south-1.myhuaweicloud.com/gzwxh/...`）。`make image` / `make push`。
+      注意：这里产出的是**纯 Go** 的 `bin/aerolink-<arch>`（`-tags duckdb_cli`，不含 DuckDB 引擎，
+      需要目标机自带 duckdb CLI），**不要**拿它打容器镜像——`parquet` 审计 sink 会失效。
+- [ ] **4. 构建并推送镜像**：二选一，产物功能等价，差别只在「在哪编译」（见 `Makefile` 的说明）：
+      - `make image-binary` + `make push-binary`（推荐，快）：本机 `make build`（含前端）后只把二进制
+        打进镜像，要求本机 glibc **不高于**运行基座（openEuler 24.03 LTS-SP4 = glibc 2.38）。
+      - `make image` + `make push`：容器内编译（golang:1.26.8 / Debian glibc 2.41），可复现、不挑本机
+        工具链，但每次要把 vendor(872MB) 传进上下文并编译两遍（实测 12 分钟以上）。
+      两条路径都推公司 registry（`Makefile` 的 `IMAGE`，如 `swr.cn-south-1.myhuaweicloud.com/gzwxh/...`）。
+      构建后先 `docker run --rm <image> /home/aerolink/aerolink -h` 确认镜像能起来。
 - [ ] **5. 打包并推送 chart**：`helm package charts/aerolink`，推送 chart（OCI 或内网/oss 仓库）。注意打包产物不得入库（见 §3）。
 - [ ] **6. 打 tag 并写发布说明**：`scripts/release.sh <version>` 完成 bump + commit + tag；发布说明用 `make changelog` 的产物，并附上二进制与 chart。
 - [ ] **7. 发布后核对**：确认 `/api/v1/version` 返回值与 tag 一致（验证 ldflags 是否真的注入了版本号）。

@@ -11,6 +11,7 @@ import {
 } from '@/lib/api'
 import { AVATAR_MAX_BYTES, prepareAvatarFile } from '@/lib/avatar-upload'
 import { normalizeAvatarUrl, resolveAvatarSrc } from '@/lib/avatar-url'
+import { statusBadge } from '@/lib/status-badge'
 import { formatBytes, formatDate, translateError } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -360,11 +361,13 @@ export function ProfileSection() {
         </InfoRow>
         <InfoRow label={t('common.fields.status', '状态')}>
           {user.enabled === false ? (
-            <Badge variant="destructive">
+            <Badge {...statusBadge('warning')}>
               {t('common.fields.disabled', '已禁用')}
             </Badge>
           ) : (
-            <Badge variant="default">{t('common.fields.active', '正常')}</Badge>
+            <Badge {...statusBadge('success')}>
+              {t('common.fields.active', '正常')}
+            </Badge>
           )}
         </InfoRow>
         <InfoRow label={t('common.fields.createdAt', '创建时间')}>

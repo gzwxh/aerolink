@@ -175,6 +175,10 @@ func TestDuckDBSDKBackendEmptyRange(t *testing.T) {
 	if result.Total != 0 || len(result.Hits) != 0 {
 		t.Errorf("无归档文件时应返回空结果: total=%d hits=%d", result.Total, len(result.Hits))
 	}
+	// 必须是空切片而不是 nil：nil 会序列化成 `data: null`，界面 data.length 会崩。
+	if result.Hits == nil {
+		t.Error("无归档文件时 Hits 不能是 nil（应为空切片）")
+	}
 }
 
 // 跨驱动一致性：同一份 parquet，SDK 与 CLI 必须给出**完全相同**的结果。

@@ -43,16 +43,19 @@ BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 # Build flags
-# 这两行只做两件事：-s -w 去掉符号表与调试信息（体积小），-X 在链接期把值写进
-# pkg/version 的字符串变量。`github.com/zxh326/kite/...` 是 **Go 符号名**（= go.mod 的
-# module 路径 + 包 + 变量），不是网址：这里不发任何网络请求，$(VERSION) / $(BUILD_DATE)
-# / $(COMMIT_ID) 也都是本机求值（make 变量、date、git rev-parse），耗时微秒级。
+# -s -w 去掉符号表与调试信息（体积小），-X 在链接期把值写进 pkg/version 的字符串变量。
+# `github.com/zxh326/kite/...` 是 **Go 符号名**（= go.mod 的 module 路径 + 包 + 变量），
+# 不是网址：这里不发任何网络请求，$(VERSION) / $(BUILD_DATE) / $(COMMIT_ID) 都是本机
+# 求值（make 变量、date、git rev-parse），耗时微秒级。
+#
+# 必须用递归赋值（`?=` / `=`，不能用 `:=`）：变量在使用时才展开，下面
+# `-include Makefile.local` 里覆盖的 VERSION / BUILD_DATE / COMMIT_ID 才能进到 ldflags。
 # 注意：整个 -ldflags "..." 必须留在 LDFLAGS 里，不能只留版本号——go build 需要的是
 # 「-ldflags + 参数」这一对，写成 LDFLAGS="v1.0.0" 会被当成包路径而报错。
-# LDFLAGS=-ldflags "-s -w \
-# 	-X 'github.com/zxh326/kite/pkg/version.Version=$(VERSION)' \
-# 	-X 'github.com/zxh326/kite/pkg/version.BuildDate=$(BUILD_DATE)' \
-# 	-X 'github.com/zxh326/kite/pkg/version.CommitID=$(COMMIT_ID)'"
+LDFLAGS ?= -ldflags "-s -w \
+	-X 'github.com/zxh326/kite/pkg/version.Version=$(VERSION)' \
+	-X 'github.com/zxh326/kite/pkg/version.BuildDate=$(BUILD_DATE)' \
+	-X 'github.com/zxh326/kite/pkg/version.CommitID=$(COMMIT_ID)'"
 
 # 本机临时覆盖（不进版本库，见 .gitignore）：把 VERSION / LDFLAGS 这类本机专用值写进
 # Makefile.local，例如让本机构建的后端/前端显示另一个版本号而不改仓库里的 VERSION。
@@ -329,9 +332,20 @@ IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
 # --provenance=false --sbom=false：禁止 BuildKit 附加 provenance/SBOM 证明清单。
 # 带证明的镜像会以 OCI manifest list 推送，部分仓库（如华为云 SWR）无法解析，
 # 推送时报 "Invalid image, fail to parse 'manifest.json'"。
+# 两条镜像路径（image / image-binary）都必须带上，image-binary 曾漏掉这两个参数。
+DOCKER_PROVENANCE_ARGS ?= --provenance=false --sbom=false
 DOCKER_BUILD_ARGS ?= --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
-	--provenance=false --sbom=false
+	$(DOCKER_PROVENANCE_ARGS)
 
+# 两条镜像构建路径，产物功能等价，差别在「在哪编译」：
+#   make image        —— 容器内编译（golang:1.26.8 / Debian glibc 2.41），可复现、不挑本机工具链；
+#                        代价是把 vendor(872MB) + ui 传进上下文并编译两遍，实测 12 分钟以上。
+#   make image-binary —— 本机 `make build`（含前端）后只把二进制打进镜像，1~2 分钟；
+#                        前提是本机 glibc **不高于**运行基座（openEuler 24.03 LTS-SP4 = glibc 2.38），
+#                        并且必须用 CGO 默认构建：`make cross-compile` 出的 bin/aerolink-<arch>
+#                        是 `-tags duckdb_cli` 纯 Go 产物，不含 DuckDB 引擎，用它建镜像会让
+#                        parquet 审计检索失效。
+#
 # 版本信息单独传，不放进 DOCKER_BUILD_ARGS：后者可能被置空以走直连环境，
 # 而镜像里的版本号（前端展示）不该跟着丢掉。
 .PHONY: image push
@@ -343,4 +357,38 @@ image: ## Build the Docker image (IMAGE=registry/repo:tag)
 		-t $(IMAGE) .
 
 push: image ## Build and push the Docker image
+	docker push $(IMAGE)
+
+# image-binary 的输入目录：只放一个二进制 + CA 证书，构建上下文因此只有 ~100MB。
+BINARY_DIST_DIR ?= dist
+# 可信根证书 bundle 的路径各发行版命名不同：RHEL/openEuler 系是 ca-bundle.crt（指向
+# /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem 的符号链接），Debian/Ubuntu 系才是
+# ca-certificates.crt。按顺序取第一个存在的，都找不到时明确报错让使用者自己指定。
+CA_BUNDLE ?= $(firstword $(wildcard \
+	/etc/ssl/certs/ca-bundle.crt \
+	/etc/pki/tls/certs/ca-bundle.crt \
+	/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+	/etc/ssl/certs/ca-certificates.crt))
+GOARCH ?= $(shell go env GOARCH)
+
+# 注意：这里先跑 `build`（= 前端 pnpm build 到 ../static + CGO 编译），保证二进制里
+# embed 的是最新前端产物；版本号走 Makefile 的 LDFLAGS，不传 --build-arg。
+.PHONY: image-binary push-binary
+image-binary: build ## Build the image from the locally compiled binary (fast, needs a matching glibc)
+	@command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
+	@test -n "$(CA_BUNDLE)" && test -f "$(CA_BUNDLE)" || { \
+		echo "cannot find a CA bundle (tried ca-bundle.crt / ca-certificates.crt);" >&2; \
+		echo "install ca-certificates or set CA_BUNDLE=/path/to/bundle" >&2; exit 1; }
+	@rm -rf $(BINARY_DIST_DIR) && mkdir -p $(BINARY_DIST_DIR)
+	cp $(BINARY_NAME) $(BINARY_DIST_DIR)/$(BINARY_NAME)-$(GOARCH)
+	@# 运行基座（openEuler 精简镜像）不带可信根证书，必须从构建机拷一份；
+	@# 统一放到 Debian 命名 ca-certificates.crt —— Go 的系统证书查找顺序里它是第一个候选。
+	cp $(CA_BUNDLE) $(BINARY_DIST_DIR)/ca-certificates.crt
+	docker build -f Dockerfile.binary \
+		$(DOCKER_PROVENANCE_ARGS) \
+		--build-arg TARGETARCH=$(GOARCH) \
+		-t $(IMAGE) $(BINARY_DIST_DIR)
+	@echo "✅ $(IMAGE) built from the locally compiled binary (CA bundle: $(CA_BUNDLE))"
+
+push-binary: image-binary ## Build from the local binary and push it (IMAGE=registry/repo:tag)
 	docker push $(IMAGE)

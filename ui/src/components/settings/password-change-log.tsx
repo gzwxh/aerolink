@@ -119,8 +119,10 @@ export function PasswordChangeLog() {
         id: 'source',
         header: t('common.fields.source', 'Source'),
         cell: ({ row }) => (
+          // 来源不是状态：用中性样式（管理员重置更实、本人修改用描边），
+          // 不占用 default（品牌色）——那是状态色之外的另一套语义。
           <Badge
-            variant={row.original.source === 'admin' ? 'secondary' : 'default'}
+            variant={row.original.source === 'admin' ? 'secondary' : 'outline'}
           >
             {getSourceLabel(row.original.source)}
           </Badge>

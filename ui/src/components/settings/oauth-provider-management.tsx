@@ -15,6 +15,7 @@ import {
   updateOAuthProvider,
   useOAuthProviderList,
 } from '@/lib/api'
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -42,10 +43,14 @@ export function OAuthProviderManagement() {
     (provider: OAuthProvider) => {
       if (!provider.enabled) {
         return (
-          <Badge variant="secondary">{t('status.disabled', 'Disabled')}</Badge>
+          <Badge {...neutralBadge()}>{t('status.disabled', 'Disabled')}</Badge>
         )
       }
-      return <Badge variant="default">{t('status.enabled', 'Enabled')}</Badge>
+      return (
+        <Badge {...statusBadge('success')}>
+          {t('status.enabled', 'Enabled')}
+        </Badge>
+      )
     },
     [t]
   )

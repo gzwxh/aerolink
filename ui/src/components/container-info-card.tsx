@@ -7,6 +7,7 @@ import {
 import { ChevronDown, ChevronRight, Edit3 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { cn, formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,9 +23,7 @@ function renderState(state: ContainerState) {
   if (state.running) {
     return (
       <div className="flex items-center gap-2">
-        <Badge variant="default" className="bg-success text-success-foreground">
-          Running
-        </Badge>
+        <Badge {...statusBadge('success')}>Running</Badge>
         {state.running.startedAt && (
           <span className="text-xs text-muted-foreground">
             since {formatDate(state.running.startedAt)}
@@ -108,7 +107,7 @@ export function ContainerInfoCard({
       {/* Header */}
       <div className="bg-muted/30 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Badge variant="default" className="font-medium">
+          <Badge {...neutralBadge()} className="font-medium">
             {container.name}
           </Badge>
           {init && container.restartPolicy !== 'Always' && (
@@ -129,12 +128,12 @@ export function ContainerInfoCard({
         </div>
         <div className="flex items-center gap-2">
           {status && !ephemeral && (
-            <Badge variant={status.ready ? 'default' : 'secondary'}>
+            <Badge {...(status.ready ? statusBadge('success') : neutralBadge())}>
               {status.ready ? 'Ready' : 'Not Ready'}
             </Badge>
           )}
           {status && !ephemeral && status.restartCount > 0 && (
-            <Badge variant="destructive" className="tabular-nums">
+            <Badge {...statusBadge('warning')} className="tabular-nums">
               {status.restartCount} restarts
             </Badge>
           )}

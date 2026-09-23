@@ -18,6 +18,7 @@ import {
   useUserList,
 } from '@/lib/api'
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
+import { operationTypeBadge, outcomeBadge } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
@@ -183,23 +184,7 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
     ]
   )
 
-  const getOperationTypeColor = (operationType: string) => {
-    switch (operationType.toLowerCase()) {
-      case 'create':
-        return 'default'
-      case 'update':
-        return 'secondary'
-      case 'delete':
-        return 'destructive'
-      case 'apply':
-        return 'outline'
-      case 'read':
-        // 读取审计日志本身（A4）：用轮廓样式与写操作区分开。
-        return 'outline'
-      default:
-        return 'secondary'
-    }
-  }
+  // 操作类型的配色统一走 @/lib/status-badge：只有新增（info）与删除（failure）带语义色。
 
   const getOperationTypeLabel = useCallback(
     (operationType: string) => {
@@ -279,11 +264,14 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
         id: 'operationType',
         header: t('common.fields.operation', 'Operation'),
         size: 130,
-        cell: ({ row }) => (
-          <Badge variant={getOperationTypeColor(row.original.operationType)}>
-            {getOperationTypeLabel(row.original.operationType)}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const badge = operationTypeBadge(row.original.operationType)
+          return (
+            <Badge variant={badge.variant} className={badge.className}>
+              {getOperationTypeLabel(row.original.operationType)}
+            </Badge>
+          )
+        },
       },
       {
         id: 'resource',
@@ -331,13 +319,16 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
         id: 'status',
         header: t('common.fields.status', 'Status'),
         size: 100,
-        cell: ({ row }) => (
-          <Badge variant={row.original.success ? 'default' : 'destructive'}>
-            {row.original.success
-              ? t('status.success', 'Success')
-              : t('status.failed', 'Failed')}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const badge = outcomeBadge(row.original.success)
+          return (
+            <Badge variant={badge.variant} className={badge.className}>
+              {row.original.success
+                ? t('status.success', 'Success')
+                : t('status.failed', 'Failed')}
+            </Badge>
+          )
+        },
       },
       {
         id: 'actions',
