@@ -1,0 +1,82 @@
+# 鸢联 AeroLink 外部配置文件示例（docker compose 部署用）
+#
+# 用法：
+#   cp deploy/config.example.yaml deploy/config.yaml
+#   vi deploy/config.yaml          # 至少改 s3.endpoint / bucket / pathStyle
+#   vi deploy/.env                 # 写 S3 凭据（见下），再启动 compose
+#
+# 这个文件由 docker-compose.yaml 里的 `AEROLINK_CONFIG_FILE=/app/config.yaml` 指定，
+# 容器内只读挂载。敏感值支持 ${ENV_VAR} 占位符（启动时从环境变量展开），
+# 所以 S3 的 accessKey / secretKey 不必写进本文件。
+#
+# ⚠️ 三条语义先看清楚，否则会出现「配了但没生效」：
+#   1. auditSink 是**启动期**决定（审计写入路径按它选择，运行期不变），管理页面只读。
+#      取值 database / parquet / elasticsearch / victorialogs / openobserve，五选一互斥；
+#      parquet 表示**不写数据库**，审计记录只落本地 parquet 文件（可叠加 S3 远端副本）。
+#   2. auditArchive 只是**首次启动的播种值**：仅当数据库里还是默认归档配置时才写入，
+#      之后以「日志审计 → 审计设置 → 归档」页面上的值为准（页面配置优先，本文件不再覆盖）。
+#      也就是：改完本文件要生效，得在库内仍是默认值时启动；否则请直接在页面上改。
+#   3. 一旦设了 AEROLINK_CONFIG_FILE，程序就**不再走环境变量路径**（app.go：有配置文件时
+#      不执行 LoadConfigFromEnv）：USERNAME/PASSWORD 创建超管、KUBECONFIG 自动导入集群
+#      都不会再发生。需要这两个行为时，把它们写进本文件的 superUser / clusters（见文末）。
+
+# 审计记录的落地方式：parquet = 只落本地 parquet 文件（+ 可选的 S3 远端副本）。
+# 与 docker-compose.yaml 里的 AEROLINK_AUDIT_SINK 保持一致（配置文件优先）。
+auditSink: parquet
+
+auditArchive:
+  # 本地归档目录：parquet sink 必填（缺失会**拒绝启动**，不静默回落数据库）。
+  # 与 compose 里的 AEROLINK_AUDIT_ARCHIVE_DIR 指向同一路径（这里优先）。
+  localDir: /var/log/aerolink/archive
+  retentionDays: 7                 # 本地保留天数（S3 上的副本不受它影响），0 = 不清理
+  maxBytes: 10737418240            # 本地容量上限 10 GiB，0 = 不清理
+  flush:                           # parquet 攒批触发条件：时间 / 条数 / 字节满足其一即落文件
+    intervalSeconds: 120           # parquet 作为唯一存储时不得超过 300 秒（否则拒绝启动）
+    maxBatchRows: 100000
+    maxBatchBytes: 67108864
+  accessLog:                       # 访问日志量级远大于审计日志，单独滚留
+    enabled: true
+    retentionDays: 3
+    maxBytes: 5368709120           # 5 GiB
+    flush:
+      intervalSeconds: 120
+      maxBatchRows: 200000
+      maxBatchBytes: 67108864
+    format: text                   # 访问日志控制台输出：text（现状）或 json
+
+  # S3 兼容对象存储（MinIO / RustFS / Ceph RGW / 腾讯 COS / 华为 OBS / 阿里 OSS / SeaweedFS…）
+  # 默认语义：本地按 retentionDays 留几天 + 全量同步 S3，两边都能查（本地优先、缺失回落 S3）。
+  s3:
+    enabled: true
+    # endpoint 写 http:// 或 https:// 时以它为准，不必再单独开 useTLS
+    # （minio-go 要求两者一致，填错会直接报 "Endpoint url scheme ... conflicts"）。
+    endpoint: http://minio.example.com:9000
+    region: ""                    # 腾讯 COS 必填（如 ap-guangzhou），其余厂商通常可空
+    bucket: aerolink-audit
+    accessKey: ${AEROLINK_S3_ACCESS_KEY}   # 值来自 deploy/.env（见文件头）；留空会以匿名身份上传并失败
+    secretKey: ${AEROLINK_S3_SECRET_KEY}
+    pathStyle: true               # MinIO / RustFS / Ceph 用 true；COS / OBS 用 false（强制 virtual-hosted）
+    useTLS: false
+    prefix: aerolink-audit/       # 对象键前缀，便于和同桶里的其它数据区分
+    deleteLocalAfterUpload: false # false = 本地留几天 + 全量同步 S3；true = 上传成功即删本地（本地只作中转）
+
+# 可选：首次启动创建管理员（对应环境变量路径的 USERNAME / PASSWORD，见文件头第 3 条）。
+# 仅当库里还没有任何用户时生效。
+# superUser:
+#   username: admin
+#   password: ${AEROLINK_ADMIN_PASSWORD}
+
+# 可选：预置集群（写了就由本文件接管，页面只读；不写则只有环境变量路径会从 KUBECONFIG 导入）。
+# clusters:
+#   - name: local
+#     description: 本机 kind / minikube
+#     default: true
+#     config: |
+#       apiVersion: v1
+#       kind: Config
+#       clusters: []
+#       contexts: []
+#       users: []
+#       current-context: ""
+#
+# 可选：LDAP / OAuth / RBAC 预置，写法见仓库根目录的 config.dev.yaml。

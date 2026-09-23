@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // LoginAttempt 记录某个登录来源的失败计数与封锁状态。
@@ -11,6 +12,11 @@ import (
 // Key 形如 `ip:1.2.3.4` 或 `user:alice`——两个维度各自独立计数。状态放在数据库里而不是
 // 进程内存里：控制台跑多个副本时，各算各的等于把「错 N 次锁定」的上限放大 N 倍，
 // 管理员手动拉黑的 IP 也只对其中一个副本生效。
+//
+// ⚠ 列名 key 是 **MySQL 的保留字**：在原始 SQL 条件里引用它必须走 map 条件或 clause
+// （两者都会按方言加引号）。裸写 "key = ?" 在 MySQL 8 上是 1064 语法错误，而 SQLite /
+// PostgreSQL 把它当普通标识符、照常通过——所以这种问题只在 MySQL 上暴露，本地用
+// PG/SQLite 联调发现不了。
 type LoginAttempt struct {
 	Key string `gorm:"primaryKey;size:255" json:"key"`
 	// FailureCount 是当前窗口内的失败次数；触发封锁时会清零（与封锁前的老实现一致）。
@@ -25,10 +31,15 @@ type LoginAttempt struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// keyEquals 是把 key 列名交给 GORM 做方言引号的等值条件（见类型注释）。
+func keyEquals(key string) map[string]interface{} {
+	return map[string]interface{}{"key": key}
+}
+
 // GetLoginAttempt 读取某个来源的计数行；没有记录时返回 gorm.ErrRecordNotFound。
 func GetLoginAttempt(key string) (*LoginAttempt, error) {
 	var attempt LoginAttempt
-	if err := DB.Where("key = ?", key).First(&attempt).Error; err != nil {
+	if err := DB.Where(keyEquals(key)).First(&attempt).Error; err != nil {
 		return nil, err
 	}
 	return &attempt, nil
@@ -47,7 +58,7 @@ func RecordCredentialLoginFailure(key string, now time.Time, window time.Duratio
 		"window_started_at": gorm.Expr(
 			"CASE WHEN window_started_at < ? THEN ? ELSE window_started_at END", cutoff, now),
 	}
-	result := DB.Model(&LoginAttempt{}).Where("key = ?", key).Updates(assignments)
+	result := DB.Model(&LoginAttempt{}).Where(keyEquals(key)).Updates(assignments)
 	if result.Error != nil {
 		return 0, result.Error
 	}
@@ -64,7 +75,7 @@ func RecordCredentialLoginFailure(key string, now time.Time, window time.Duratio
 		if !isUniqueConstraintError(err) {
 			return 0, err
 		}
-		result = DB.Model(&LoginAttempt{}).Where("key = ?", key).Updates(assignments)
+		result = DB.Model(&LoginAttempt{}).Where(keyEquals(key)).Updates(assignments)
 		if result.Error != nil {
 			return 0, result.Error
 		}
@@ -87,7 +98,7 @@ func BlockLoginAttempt(key string, until time.Time, manual bool) error {
 	if manual {
 		assignments["manual_block"] = true
 	}
-	result := DB.Model(&LoginAttempt{}).Where("key = ?", key).Updates(assignments)
+	result := DB.Model(&LoginAttempt{}).Where(keyEquals(key)).Updates(assignments)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -97,7 +108,7 @@ func BlockLoginAttempt(key string, until time.Time, manual bool) error {
 			if !isUniqueConstraintError(err) {
 				return err
 			}
-			return DB.Model(&LoginAttempt{}).Where("key = ?", key).Updates(assignments).Error
+			return DB.Model(&LoginAttempt{}).Where(keyEquals(key)).Updates(assignments).Error
 		}
 	}
 	return nil
@@ -108,14 +119,20 @@ func DeleteLoginAttempts(keys ...string) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	return DB.Where("key IN ?", keys).Delete(&LoginAttempt{}).Error
+	values := make([]interface{}, 0, len(keys))
+	for _, key := range keys {
+		values = append(values, key)
+	}
+	return DB.Where(clause.IN{Column: clause.Column{Name: "key"}, Values: values}).
+		Delete(&LoginAttempt{}).Error
 }
 
 // ListLoginAttempts 返回某个前缀（例如 "ip:"）下、当前仍处于封锁状态的记录，
 // 按封锁到期时间倒序。
 func ListLoginAttempts(prefix string, now time.Time) ([]LoginAttempt, error) {
 	var attempts []LoginAttempt
-	err := DB.Where("key LIKE ? AND blocked_until > ?", prefix+"%", now).
+	err := DB.Where(clause.Like{Column: clause.Column{Name: "key"}, Value: prefix + "%"}).
+		Where("blocked_until > ?", now).
 		Order("blocked_until DESC").
 		Find(&attempts).Error
 	return attempts, err

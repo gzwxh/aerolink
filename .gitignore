@@ -63,3 +63,8 @@ charts/*.tgz
 dev.env.local
 dev.env.*.local
 Makefile.local
+
+# docker compose 部署时按需生成的本地配置（含 S3 / 数据库等凭据，不进版本库；
+# 模板见 deploy/config.example.yaml 与 deploy/aerolink.env.example）
+deploy/.env
+deploy/config.yaml

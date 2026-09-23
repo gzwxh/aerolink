@@ -1,0 +1,183 @@
+# 鸢联 AeroLink 本地全栈联调清单（PostgreSQL + 本机 RustFS + 鸢联 AeroLink）
+#
+# 用途：在一台开发机上把「PostgreSQL + S3 兼容对象存储 + 应用」拉起来，验证 PG 方言、
+# 审计 parquet 落地与 S3 归档上传三条链路。**仅供本地联调**：密码写在文件里、
+# 端口直接暴露、无 TLS，不要照搬到生产。
+#
+# 与生产版 deploy/docker-compose.yaml 的区别：
+#   - 数据库：外部 MySQL → 本文件自带的 PostgreSQL 容器（PG 12+，这里用 16）
+#   - S3：外部 MinIO/云厂商 → **本机已在跑的 RustFS 容器**（容器名 aerolink-rustfs，
+#     端口 9000/9001，凭据 kiteadmin/kiteadmin123，桶 kite-audit 已存在），
+#     不另起存储容器，因此不会和现有容器抢 9000/9001 端口。
+#
+# ---------------------------------------------------------------------------
+# 使用步骤
+# ---------------------------------------------------------------------------
+#   1. 准备归档目录（容器以 uid 65532 运行，必须是它能写的属主）：
+#        mkdir -p deploy/logs/archive && sudo chown -R 65532:65532 deploy/logs
+#      ⚠ 漏做的典型报错：镜像内 /var/log/aerolink 属主是 65532，但一旦挂载宿主
+#        目录就被盖成 root，容器写不进去，启动直接退出：
+#          log: unable to create log: open /var/log/aerolink/aerolink.log: permission denied
+#        SELinux 发行版（CentOS/RHEL/openEuler）还要挂载加 `:Z`，或执行
+#          sudo chcon -Rt container_file_t deploy/logs
+#   2. 配置文件 deploy/config.yaml 已随本清单提供：endpoint 指向本机 RustFS 的
+#      host.docker.internal:9000、bucket=kite-audit、pathStyle=true，
+#      文末 superUser=admin/Aerolink@123。它已被 .gitignore 忽略（含 S3 凭据与
+#      超管口令，不进库）；想重新生成就 cp deploy/config.example.yaml deploy/config.yaml。
+#      ⚠ 生产版 compose 挂的是同一路径 ./config.yaml：切回生产部署前，把 endpoint
+#        改回真实对象存储、并删掉 superUser 段。
+#   3. 启动：
+#        docker compose -f deploy/docker-compose.local.yaml up -d
+#        访问 http://<宿主机IP>:27862（config.yaml 里有 superUser，直接 admin/Aerolink@123 登录）
+#        RustFS 控制台 http://<宿主机IP>:9001（kiteadmin / kiteadmin123）
+#   4. 排错：
+#        docker compose -f deploy/docker-compose.local.yaml logs -f aerolink
+#        docker compose -f deploy/docker-compose.local.yaml exec postgres psql -U aerolink -d aerolink
+#   5. 全部清掉（含 PG 数据卷）：
+#        docker compose -f deploy/docker-compose.local.yaml down -v
+#
+# ---------------------------------------------------------------------------
+# 关于桶：应用**不会**自动建桶
+# ---------------------------------------------------------------------------
+#   pkg/audit/s3_archive.go 里有 EnsureBucket()，但当前没有任何调用点（死代码），
+#   minio-go 的 PutObject 遇到不存在的桶直接返回 NoSuchBucket。所以 bucket 必须已经存在，
+#   否则表现为「本地 parquet 正常、S3 上传一直失败」（日志里是 upload 报错，本地归档不受影响）。
+#   本机 RustFS 里现成的是 kite-audit（旧名遗留），因此配置默认复用它、用 prefix
+#   (aerolink-audit/) 与别的数据区分——开箱即用、零手工步骤。
+#   想用独立桶（例如 aerolink-audit）：先到控制台 Buckets → Create Bucket 建好，
+#   再同步改 deploy/config.yaml 的 bucket 字段。
+#
+# ---------------------------------------------------------------------------
+# 想完全自包含 / 换成别的 PG、RustFS
+# ---------------------------------------------------------------------------
+#   - 完全自包含的存储：给下面的 rustfs 服务加上 profile 启动即可（前提是先停掉
+#     本机已占 9000/9001 的 RustFS，或改端口）：
+#       docker compose -f deploy/docker-compose.local.yaml --profile bundled-rustfs up -d
+#     注意此时容器间的 endpoint 应改成 http://rustfs:9000（同一 compose 网络内可用服务名）。
+#   - 已有外部 PG：删掉 postgres 服务与 volumes.postgres-data，把 DB_DSN 的
+#     host/port/user/password/dbname 换成外部实例（本机另有一个 PG 在 5433，可复用，
+#     但库要自己建）。PG 的 TimeZone 必须显式写，否则界面与审计日志时间整体偏 8 小时。
+#   - 已有外部 RustFS/MinIO：把 config.yaml 的 endpoint 改成 http://<主机>:9000 即可；
+#     容器访问宿主机上的服务不要写 127.0.0.1（那是容器自己），用
+#     host.docker.internal（下面已配 extra_hosts）或宿主机 IP。
+name: aerolink-local
+
+services:
+  # -------------------------------------------------------------------------
+  # PostgreSQL：应用数据（AutoMigrate 自动建表，无需手工建库建表）
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: aerolink-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aerolink
+      POSTGRES_USER: aerolink
+      # 本地联调用，勿复用；含特殊字符时 DB_DSN 的 key=value 写法要加引号转义。
+      POSTGRES_PASSWORD: aerolink-local-pwd
+      # 容器时区与 DSN 里的 TimeZone 保持一致，避免 timestamptz 换算偏移。
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    # 需要从宿主机连库（psql / DBeaver / GoLand）时打开；注意本机 5432/5433 已被占用。
+    #ports:
+    #  - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # aerolink 用 service_healthy 等它就绪，避免首启连不上库直接失败。
+      test: ["CMD-SHELL", "pg_isready -U aerolink -d aerolink"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # -------------------------------------------------------------------------
+  # RustFS：**默认不启动**，复用本机已在跑的 aerolink-rustfs（见文件头）。
+  # 只有想自带一套隔离的存储时才用 --profile bundled-rustfs 起它，
+  # 起之前必须确认 9000/9001 没有被占用（否则端口冲突直接启动失败）。
+  # -------------------------------------------------------------------------
+  rustfs:
+    profiles: ["bundled-rustfs"]
+    image: rustfs/rustfs:latest
+    container_name: aerolink-rustfs-local
+    restart: unless-stopped
+    environment:
+      # 与本机那套保持同一组凭据，切来切去不用改 config.yaml。
+      RUSTFS_ACCESS_KEY: kiteadmin
+      RUSTFS_SECRET_KEY: kiteadmin123
+      # 打开 9001 上的控制台（建桶要用）。
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_VOLUMES: /data
+    ports:
+      # 9000 = S3 API（应用用），9001 = 控制台（人用）。
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs-data:/data
+    # 镜像内是否带 curl/wget 不保证，因此不配 healthcheck；
+    # 应用侧构造 S3 客户端是懒连接，RustFS 起得慢不会拖累 aerolink 启动。
+
+  # -------------------------------------------------------------------------
+  # 鸢联 AeroLink 本体
+  # -------------------------------------------------------------------------
+  aerolink:
+    image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
+    container_name: aerolink-local
+    restart: unless-stopped
+    pull_policy: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 让容器能用 host.docker.internal 访问宿主机上已发布的端口（即本机 RustFS 的 9000）。
+    # Docker 20.10+ 支持 host-gateway；不支持时改成宿主机实际 IP。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      # 与生产 compose / K8s nodePort 一致，两种方式互换时访问 URL 不变。
+      - "27862:8080"
+    environment:
+      # ---- 数据库：PostgreSQL ----
+      DB_TYPE: postgres
+      # key=value 写法，host 用 compose 服务名；TimeZone 必须显式写（漏写不报错，
+      # 只会让时间按服务端 UTC 解释，界面与审计日志整体差 8 小时；启动时有 warning）。
+      DB_DSN: "host=postgres port=5432 user=aerolink password=aerolink-local-pwd dbname=aerolink sslmode=disable TimeZone=Asia/Shanghai"
+      # PostgreSQL 默认 max_connections=100，单副本用默认 100 会顶到上限，
+      # 而且 pg_dump/psql 也要占坑位；本地单副本给 20 足够。
+      AEROLINK_DB_MAX_OPEN_CONNS: "20"
+      AEROLINK_DB_MAX_IDLE_CONNS: "5"
+      # ---- 安全参数（本地固定值；生产必须 openssl rand -base64 32 重新生成并备份）----
+      # AEROLINK_ENCRYPT_KEY 一旦用过就不可更换，否则库里已加密的凭据全部解不开。
+      AEROLINK_ENCRYPT_KEY: "local-dev-encrypt-key-0123456789abcdef"
+      JWT_SECRET: "local-dev-jwt-secret-0123456789abcdefghij"
+      # 端口直连宿主机、前面没有代理，必须 none：否则可伪造 X-Forwarded-For
+      # 绕过 IP 黑名单 / 登录失败锁定，审计日志里的来源 IP 也不可信。
+      TRUSTED_PROXIES: "none"
+      # ---- 审计：parquet 落地 + 本地归档 + 系统日志 ----
+      AEROLINK_AUDIT_SINK: parquet
+      AEROLINK_AUDIT_ARCHIVE_DIR: /var/log/aerolink/archive
+      AEROLINK_LOG_FILE: /var/log/aerolink/aerolink.log
+      # ---- 配置文件：播种 auditSink / auditArchive（含 S3）/ superUser ----
+      # ⚠ 设了它就不再走环境变量路径：KUBECONFIG 自动导入、USERNAME/PASSWORD 建超管
+      #   都失效，需要时写进 config.yaml 的 clusters / superUser 段。
+      AEROLINK_CONFIG_FILE: /app/config.yaml
+      # config.yaml 里 auditArchive.s3.accessKey 用的就是这两个名字（${} 展开）。
+      # 与本机 RustFS 容器 aerolink-rustfs 的凭据一致。
+      AEROLINK_S3_ACCESS_KEY: kiteadmin
+      AEROLINK_S3_SECRET_KEY: kiteadmin123
+    volumes:
+      # 本地配置（gitignore 忽略）。
+      - ./config.yaml:/app/config.yaml:ro
+      # 本地 parquet 归档 + klog 系统日志，不挂出来容器重建即丢。
+      # 宿主目录属主需为 65532（见文件头的准备命令）；SELinux 发行版加 :Z。
+      - ./logs:/var/log/aerolink
+      # 想让容器内直接连宿主机 k8s（kind/minikube）时：打开挂载，并在 config.yaml 里
+      # 用 clusters 段写集群（因为 AEROLINK_CONFIG_FILE 让 KUBECONFIG 环境变量失效）。
+      # 注意 kubeconfig 里的 127.0.0.1 指的是容器自己，要换成宿主机/节点可达的地址。
+      #- /root/.kube/config:/kube/config:ro
+
+volumes:
+  # 本地联调数据；`down -v` 会一起删掉（PG 数据；rustfs-data 只在启用
+  # bundled-rustfs profile 时才会被创建）。
+  postgres-data:
+  rustfs-data:

@@ -660,7 +660,7 @@ export function SecurityManagement() {
                           {t(
                             'securitySettings.actions.viewLockedIPs',
                             'View locked IPs ({{count}})',
-                            { count: lockedIPs?.items.length ?? 0 }
+                            { count: (lockedIPs?.items ?? []).length }
                           )}
                         </Button>
                       </SettingRow>
@@ -1188,7 +1188,7 @@ export function SecurityManagement() {
             </div>
           )}
 
-          {(lockedIPs?.items.length ?? 0) === 0 ? (
+          {(lockedIPs?.items ?? []).length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               {t(
                 'securitySettings.lockedIPs.empty',

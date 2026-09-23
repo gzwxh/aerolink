@@ -720,14 +720,17 @@ func (h *HelmReleaseHandler) ensureHelmReleaseAutoUpgradeTarget(cs *cluster.Clie
 func getHelmReleaseAutoUpgradeTask(clusterName, namespace, releaseName string) (model.ScheduledTask, error) {
 	var task model.ScheduledTask
 	err := model.DB.
-		Where("cluster_name = ? AND type = ? AND key = ?", clusterName, scheduler.HelmReleaseAutoUpgradeTaskType, scheduler.HelmReleaseAutoUpgradeTaskKey(namespace, releaseName)).
+		Where("cluster_name = ? AND type = ?", clusterName, scheduler.HelmReleaseAutoUpgradeTaskType).
+		// key 是 MySQL 保留字：等值条件走 map 由 GORM 按方言加引号（裸写会 1064）。
+		Where(map[string]interface{}{"key": scheduler.HelmReleaseAutoUpgradeTaskKey(namespace, releaseName)}).
 		First(&task).Error
 	return task, err
 }
 
 func deleteHelmReleaseAutoUpgradeTask(clusterName, namespace, releaseName string) error {
 	return model.DB.
-		Where("cluster_name = ? AND type = ? AND key = ?", clusterName, scheduler.HelmReleaseAutoUpgradeTaskType, scheduler.HelmReleaseAutoUpgradeTaskKey(namespace, releaseName)).
+		Where("cluster_name = ? AND type = ?", clusterName, scheduler.HelmReleaseAutoUpgradeTaskType).
+		Where(map[string]interface{}{"key": scheduler.HelmReleaseAutoUpgradeTaskKey(namespace, releaseName)}).
 		Delete(&model.ScheduledTask{}).Error
 }
 

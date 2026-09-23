@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
+	"k8s.io/klog/v2"
 )
 
 // templateVariables 记录每个事件可用的占位符，
@@ -449,8 +450,13 @@ func HandleListNotifications(c *gin.Context) {
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
 	items, total, err := model.ListNotifications(user.ID, page, size)
 	if err != nil {
+		klog.Errorf("failed to list notifications for user %d: %v", user.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load notifications"})
 		return
+	}
+	// 空结果也要回数组：nil 切片会序列化成 null，前端按数组读长度时直接抛错。
+	if items == nil {
+		items = []model.Notification{}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"items": items,
@@ -467,6 +473,8 @@ func HandleNotificationUnreadCount(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	count, err := model.CountUnreadNotifications(user.ID)
 	if err != nil {
+		// 这里原来把错误丢掉了，500 成了「无线索的 500」，排查只能靠猜。
+		klog.Errorf("failed to count notifications for user %d: %v", user.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count notifications"})
 		return
 	}

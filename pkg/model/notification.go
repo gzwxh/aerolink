@@ -169,6 +169,10 @@ func (NotificationSubscription) TableName() string {
 //
 // user_id 上的两个复合索引分别服务前端轮询的未读计数（user_id + read）与列表
 // （user_id + created_at 倒序）；只按 user_id 的查询（删除全部站内信）走前者的左前缀。
+//
+// ⚠ 列名 read 是 **MySQL 的保留字**：在原始 SQL 条件里引用它必须走 map 条件或 clause，
+// 由 GORM 按方言加引号；裸写 "read = ?" 在 MySQL 8 上是 1064 语法错误，而 SQLite /
+// PostgreSQL 照常通过。
 type Notification struct {
 	ID        uint      `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time `json:"createdAt" gorm:"index:idx_notifications_user_created,priority:2,sort:desc"`
@@ -793,7 +797,9 @@ func ListNotifications(userID uint, page, size int) ([]Notification, int64, erro
 func CountUnreadNotifications(userID uint) (int64, error) {
 	var count int64
 	err := DB.Model(&Notification{}).
-		Where("user_id = ? AND read = ?", userID, false).
+		Where("user_id = ?", userID).
+		// read 是 MySQL 保留字：等值条件走 map，由 GORM 按方言加引号（裸写会 1064）。
+		Where(map[string]interface{}{"read": false}).
 		Count(&count).Error
 	return count, err
 }
@@ -808,7 +814,8 @@ func MarkNotificationRead(userID, id uint) error {
 // MarkAllNotificationsRead 把用户的所有消息标记为已读。
 func MarkAllNotificationsRead(userID uint) error {
 	return DB.Model(&Notification{}).
-		Where("user_id = ? AND read = ?", userID, false).
+		Where("user_id = ?", userID).
+		Where(map[string]interface{}{"read": false}).
 		Update("read", true).Error
 }
 

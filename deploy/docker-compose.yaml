@@ -1,19 +1,40 @@
-# 鸢联 AeroLink Docker Compose 部署清单（外部 MySQL 数据库版）
+# 鸢联 AeroLink Docker Compose 部署清单
+# 场景：外部 MySQL 数据库 + 审计走本地 parquet 归档 + S3 远端副本
 #
 # 与 deploy/install-mysql.yaml 等价的单机部署方式：不需要 Kubernetes，只要一台
-# 能跑 docker compose 的机器。数据全部在外部 MySQL 里，容器本身无状态，
-# 重建容器不会丢数据。
+# 能跑 docker compose 的机器。业务数据全部在外部 MySQL 里，容器本身无状态，
+# 重建容器不会丢数据（审计与系统日志在宿主机的 /var/log/aerolink，见下）。
 #
-# 使用前必改项（搜索 REPLACE-ME）：
+# ---------------------------------------------------------------------------
+# 使用前必改项（搜索 REPLACE-ME）
+# ---------------------------------------------------------------------------
 #   1. JWT_SECRET / AEROLINK_ENCRYPT_KEY —— 用 `openssl rand -base64 32` 生成随机值。
 #      ⚠ AEROLINK_ENCRYPT_KEY 用于加密存库的敏感数据（集群 kubeconfig、LDAP/SMTP/OAuth
-#      密码、AI Key 等），一旦投入使用不可更换，否则已保存的凭据将无法解密；
+#      密码、S3 密钥、AI Key 等），一旦投入使用不可更换，否则已保存的凭据将无法解密；
 #      请务必妥善备份。
 #   2. DB_DSN —— 替换为实际的 MySQL 连接信息。
 #      ⚠ 如果这套鸢联 AeroLink 要和已有实例（例如 K8s 里那套）共用同一个数据库，这两个
 #      密钥必须与 aerolink-secret 里的完全一致，否则会话失效、已保存的凭据解不开。
+#   3. deploy/config.yaml —— 由 deploy/config.example.yaml 复制而来，改 s3.endpoint /
+#      bucket / pathStyle（各厂商差异就这三项）。
+#   4. deploy/.env —— S3 凭据（compose 会自动读取本文件所在目录的 .env）：
+#        AEROLINK_S3_ACCESS_KEY=...
+#        AEROLINK_S3_SECRET_KEY=...
+#      config.yaml 里用 ${AEROLINK_S3_ACCESS_KEY} 占位，凭据不落进配置文件。
+#      （不想用 config.yaml 播种 S3 的话，也可以只在「日志审计 → 审计设置 → 归档」页面上填，
+#        那样就不必挂 config.yaml，但下面的 AEROLINK_CONFIG_FILE 与对应卷要一起删掉。）
 #
-# 数据库要求（二选一，提前手动建好）：
+# ---------------------------------------------------------------------------
+# 目录准备（容器以 uid 65532 运行，宿主目录必须让它可写，否则归档与系统日志写不进去）
+# ---------------------------------------------------------------------------
+#   sudo mkdir -p /var/log/aerolink /var/log/aerolink/archive
+#   sudo chown -R 65532:65532 /var/log/aerolink
+#   # 用 SELinux 的发行版（CentOS/RHEL/openEuler）再加 :Z，例如
+#   #   -v /var/log/aerolink:/var/log/aerolink:Z
+#
+# ---------------------------------------------------------------------------
+# 数据库要求（提前手动建好）
+# ---------------------------------------------------------------------------
 #   库名与账号名跟产品名无关，可自定；下面与 DB_DSN 里沿用现网库名 aerolink。
 #   CREATE DATABASE aerolink CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 #   CREATE USER 'aerolink'@'%' IDENTIFIED BY '你的密码';
@@ -22,9 +43,14 @@
 #
 # 数据库版本：MySQL 5.7 / 8.0 / 8.4 LTS 均可，推荐 8.0。
 #
-# 启动：docker compose -f deploy/docker-compose.yaml up -d
-# 访问：http://<宿主机IP>:27862
-# 日志：docker logs -f aerolink
+# ---------------------------------------------------------------------------
+# 启动 / 访问
+# ---------------------------------------------------------------------------
+#   cp deploy/config.example.yaml deploy/config.yaml && vi deploy/config.yaml
+#   docker compose -f deploy/docker-compose.yaml up -d
+#   访问：http://<宿主机IP>:27862
+#   日志：docker logs -f aerolink（审计与访问日志走 stdout；系统日志 klog 已落
+#         /var/log/aerolink/aerolink.log，见 AEROLINK_LOG_FILE）
 # 项目名固定为 aerolink，避免默认取目录名 deploy。
 name: aerolink
 services:
@@ -35,6 +61,7 @@ services:
     restart: unless-stopped
     # 对应 install-mysql.yaml 的 terminationGracePeriodSeconds
     stop_grace_period: 30s
+    pull_policy: always
     ports:
       # 宿主机端口与 install-mysql.yaml 的 nodePort 保持一致，两种部署方式互换时
       # 访问 URL 不变；端口冲突时改冒号左边的数字即可。
@@ -47,44 +74,59 @@ services:
       DB_DSN: "REPLACE-ME"
       JWT_SECRET: "REPLACE-ME"
       AEROLINK_ENCRYPT_KEY: "REPLACE-ME"
-      # 反向代理场景下必须收紧为真实代理网段，防止伪造来源 IP；
-      # 默认值已覆盖 docker 网桥（172.16.0.0/12）。
-      TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      # 本 compose 把 8080 直接映射到宿主机、客户端直连（前面没有 nginx/SLB），
+      # 因此必须设为 none：否则客户端可自带 X-Forwarded-For 伪造来源 IP，
+      # 绕过 IP 黑名单 / 登录失败锁定 / 异地登录提醒，审计日志里的来源 IP 也不可信。
+      # 前面确实挂了反向代理时，改成代理的真实网段，例如：
+      #   TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      TRUSTED_PROXIES: "none"
       # 通过 HTTPS 反向代理暴露时打开，且要与实际访问协议一致：否则登录 Cookie
       # 会带 Secure 标记，在 HTTP 下被浏览器丢弃。
-      #HOST: "https://aerolink.gogdev.cn"
-      # 需首次启动自动导入 kubeconfig 时取消注释，并把下面 volumes 的挂载一起打开。
-      #KUBECONFIG: /kube/config
-      # 审计日志的落地方式（五选一、互斥，**启动时**生效、页面只读）：
+      #HOST: "https://aerolink.example.com"
+
+      # ---- 审计：落地方式 + 本地归档 + 系统日志 ----
+      # auditSink 是**启动期**决定、页面只读，五选一互斥：
       #   database（默认，不设即可） / parquet / elasticsearch / victorialogs / openobserve
-      #   ① parquet：必须同时给归档目录（下面的 AEROLINK_AUDIT_ARCHIVE_DIR，或挂 config.yaml 配
-      #      auditArchive.localDir），否则会拒绝启动。S3 远端副本可在页面上另配。
-      #AEROLINK_AUDIT_SINK: parquet
-      #   ② elasticsearch：ES 地址必须先存在（页面先填好「审计设置 → ES」并保存，或用
-      #      config.yaml 的 auditArchive.elasticsearch.urls 播种），否则会拒绝启动。
-      #AEROLINK_AUDIT_SINK: elasticsearch
-      #   ③ victorialogs：VictoriaLogs（**不是** VictoriaMetrics）地址必须先存在，同上。
-      #AEROLINK_AUDIT_SINK: victorialogs
-      #   ④ openobserve：OpenObserve 地址必须先存在，同上。
-      #AEROLINK_AUDIT_SINK: openobserve
-      # 归档目录与系统日志落盘（可选，需要与下面的卷挂载配套）：
-      # 归档目录只作启动兜底，实际值在「日志审计 → 审计设置 → 归档」里配置；
-      # 系统日志（klog）设置后会落文件、不再写 stderr。
-      #AEROLINK_AUDIT_ARCHIVE_DIR: /var/log/aerolink/archive
-      #AEROLINK_LOG_FILE: /var/log/aerolink/aerolink.log
-    # 首次启动且数据库里还没有任何集群时，鸢联 AeroLink 会导入挂载进来的 kubeconfig
-    # （internal/load.go：优先 $KUBECONFIG，其次 ~/.kube/config）；之后新增或
-    # 修改集群请在页面上操作。
-    # ⚠ 宿主机路径不存在时 docker 会创建一个同名空目录，请改成实际路径；
-    #   另外 kubeconfig 里若写的是 127.0.0.1 / localhost，容器内指向的是容器自身，
-    #   需要换成宿主机或节点可达的地址。
-    #volumes:
-    #  - /root/.kube/config:/kube/config:ro
-    #  # 归档 parquet 与 klog 系统日志：挂出来容器重建才不丢（路径与上面的
-    #  # AEROLINK_AUDIT_ARCHIVE_DIR / AEROLINK_LOG_FILE 对应）。
-    #  - /var/log/aerolink:/var/log/aerolink
-    # 镜像默认运行时是 distroless，容器内没有 curl/wget，因此不配置 healthcheck。
-    # 需要健康检查时，用 Dockerfile 的 RUNTIME_IMAGE 参数换成带工具的镜像后再加：
+      # 这里用 parquet：审计记录**不写数据库**，改由「日志审计」页面从 parquet 归档里检索
+      # （本地优先、缺失回落 S3）。远端副本见下面的 S3 段，语义是「本地留几天 + 全量同步 S3」。
+      # 需要审计记录同时落库（页面走数据库查询）时，删掉这一行即回落 database。
+      AEROLINK_AUDIT_SINK: parquet
+      # 归档目录：parquet sink 必须能拿到它（这里是启动兜底，config.yaml 的
+      # auditArchive.localDir 优先），缺失会拒绝启动——不会静默回落数据库。
+      AEROLINK_AUDIT_ARCHIVE_DIR: /var/log/aerolink/archive
+      # 系统日志（klog）落盘，设置后不再写 stderr（即不再出现在 docker logs 里）。
+      AEROLINK_LOG_FILE: /var/log/aerolink/aerolink.log
+
+      # ---- 审计的 S3 远端副本（MinIO / RustFS / Ceph RGW / COS / OBS / OSS…）----
+      # 具体 endpoint / bucket / pathStyle 在挂载进来的 config.yaml 里（auditArchive.s3），
+      # 这里只注入凭据；config.yaml 用 ${AEROLINK_S3_ACCESS_KEY} 占位符展开。
+      # ⚠ 经 config 文件配置归档是「首次启动播种」：库里已有自定义归档设置时不会覆盖，
+      #   后续调整请在「日志审计 → 审计设置 → 归档」页面上改（页面优先）。
+      AEROLINK_CONFIG_FILE: /app/config.yaml
+      # 凭据留空时 S3 会以匿名身份上传并失败（日志里能看到 upload 报错），本地归档不受影响。
+      AEROLINK_S3_ACCESS_KEY: "${AEROLINK_S3_ACCESS_KEY:-}"
+      AEROLINK_S3_SECRET_KEY: "${AEROLINK_S3_SECRET_KEY:-}"
+
+      # 需首次启动自动导入 kubeconfig 时取消注释，并把下面 volumes 的挂载一起打开。
+      # ⚠ 注意：一旦设置了 AEROLINK_CONFIG_FILE（本文件已设置），程序就不再走环境变量路径，
+      #   KUBECONFIG 自动导入与 USERNAME/PASSWORD 建超管都会失效；需要它们时把集群与超管
+      #   写进 config.yaml 的 clusters / superUser 段（模板见 config.example.yaml 文末）。
+      #KUBECONFIG: /kube/config
+    volumes:
+      # 外部配置文件：审计 sink 的播种值 + S3 归档设置（模板 deploy/config.example.yaml）。
+      # 只读挂载；改完后 `docker compose -f deploy/docker-compose.yaml restart aerolink` 生效。
+      - ./config.yaml:/app/config.yaml:ro
+      # 本地 parquet 归档 + klog 系统日志，必须挂出来，否则容器重建即丢。
+      # 宿主目录属主必须是 65532（见文件头的目录准备），SELinux 发行版加 :Z。
+      - /var/log/aerolink:/var/log/aerolink
+      # ⚠ 宿主机路径不存在时 docker 会创建一个同名空目录，请改成实际路径；
+      #   另外 kubeconfig 里若写的是 127.0.0.1 / localhost，容器内指向的是容器自身，
+      #   需要换成宿主机或节点可达的地址。挂了 config.yaml 后此挂载只在
+      #   config.yaml 里写了 clusters 或去掉 AEROLINK_CONFIG_FILE 时才有意义。
+      #- /root/.kube/config:/kube/config:ro
+    # 镜像默认运行时是 distroless/静态基座（uid 65532），容器内没有 curl/wget，
+    # 因此不配置 healthcheck。需要健康检查时，用 Dockerfile 的 RUNTIME_IMAGE 参数
+    # 换成带工具的镜像后再加：
     #healthcheck:
     #  test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
     #  interval: 10s

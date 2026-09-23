@@ -149,7 +149,8 @@ docker run -d --name aerolink -p 8080:8080 \
 docker run -d --name aerolink --restart unless-stopped \
   -p 8080:8080 \
   -v /data/aerolink:/app/data \
-  -e DB_DSN=/app/data/aerolink.db \
+  -e DB_TYPE=mysql \
+  -e DB_DSN="aerolink:UwBVOvOB2q0FnCoO2qn5@tcp(10.32.2.244:3306)/aerolink?charset=utf8mb4&parseTime=true&loc=Local"
   -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://aerolink.example.com \
