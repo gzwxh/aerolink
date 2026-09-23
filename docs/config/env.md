@@ -59,7 +59,7 @@
 
   # 本地 parquet 文件（需同时给归档目录）
   AEROLINK_AUDIT_SINK=parquet
-  AEROLINK_AUDIT_ARCHIVE_DIR=/var/log/aerolink/archive
+  AEROLINK_AUDIT_ARCHIVE_DIR=/home/aerolink/data/archive
 
   # Elasticsearch（需先在页面或配置文件里填好地址）
   AEROLINK_AUDIT_SINK=elasticsearch
@@ -82,6 +82,11 @@
 - **AEROLINK_AUDIT_ARCHIVE_DIR**：审计/访问日志的本地归档目录（`AEROLINK_AUDIT_SINK=parquet` 且没在页面上
   配 `localDir` 时的启动兜底）。多副本部署（`replicaCount > 1`）时必须把它指向**共享卷**
   （RWX PVC / NFS 等）：每个副本只写自己产生的记录、检索读的又是本地目录，目录不共享就查不全。
+- **AEROLINK_DUCKDB_EXTENSION_DIR**：DuckDB（parquet 检索）安装扩展的目录。留空时用进程可写的临时
+  目录（系统临时目录下的 `aerolink-duckdb-extensions`）：DuckDB 默认装到 `~/.duckdb`，`HOME` 不可写
+  时 `INSTALL httpfs` 会直接失败，导致查 S3 上的归档（早于本地保留期的记录）不可用——本地 parquet
+  检索不受影响。官方镜像以 `aerolink` 用户在其家目录（`/home/aerolink`，即工作目录）下运行，
+  `HOME` 可写；离线部署可在镜像里预置 `httpfs` 扩展，并把本项指向该目录。
 - **AEROLINK_LOG_FILE**：klog（系统日志）落盘路径。设置后系统日志只写文件、不再写 stderr，便于日志
   采集工具收集；等价于命令行 `-log_file <path> -logtostderr=false`（命令行优先）。
 

@@ -15,9 +15,9 @@
 # ---------------------------------------------------------------------------
 #   1. 准备归档目录（容器以 uid 65532 运行，必须是它能写的属主）：
 #        mkdir -p deploy/logs/archive && sudo chown -R 65532:65532 deploy/logs
-#      ⚠ 漏做的典型报错：镜像内 /var/log/aerolink 属主是 65532，但一旦挂载宿主
+#      ⚠ 漏做的典型报错：镜像内 /home/aerolink/data 属主是 65532，但一旦挂载宿主
 #        目录就被盖成 root，容器写不进去，启动直接退出：
-#          log: unable to create log: open /var/log/aerolink/aerolink.log: permission denied
+#          log: unable to create log: open /home/aerolink/data/aerolink.log: permission denied
 #        SELinux 发行版（CentOS/RHEL/openEuler）还要挂载加 `:Z`，或执行
 #          sudo chcon -Rt container_file_t deploy/logs
 #   2. 配置文件 deploy/config.yaml 已随本清单提供：endpoint 指向本机 RustFS 的
@@ -155,22 +155,22 @@ services:
       TRUSTED_PROXIES: "none"
       # ---- 审计：parquet 落地 + 本地归档 + 系统日志 ----
       AEROLINK_AUDIT_SINK: parquet
-      AEROLINK_AUDIT_ARCHIVE_DIR: /var/log/aerolink/archive
-      AEROLINK_LOG_FILE: /var/log/aerolink/aerolink.log
+      AEROLINK_AUDIT_ARCHIVE_DIR: /home/aerolink/data/archive
+      AEROLINK_LOG_FILE: /home/aerolink/data/aerolink.log
       # ---- 配置文件：播种 auditSink / auditArchive（含 S3）/ superUser ----
       # ⚠ 设了它就不再走环境变量路径：KUBECONFIG 自动导入、USERNAME/PASSWORD 建超管
       #   都失效，需要时写进 config.yaml 的 clusters / superUser 段。
-      AEROLINK_CONFIG_FILE: /app/config.yaml
+      AEROLINK_CONFIG_FILE: /home/aerolink/config.yaml
       # config.yaml 里 auditArchive.s3.accessKey 用的就是这两个名字（${} 展开）。
       # 与本机 RustFS 容器 aerolink-rustfs 的凭据一致。
       AEROLINK_S3_ACCESS_KEY: kiteadmin
       AEROLINK_S3_SECRET_KEY: kiteadmin123
     volumes:
       # 本地配置（gitignore 忽略）。
-      - ./config.yaml:/app/config.yaml:ro
+      - ./config.yaml:/home/aerolink/config.yaml:ro
       # 本地 parquet 归档 + klog 系统日志，不挂出来容器重建即丢。
       # 宿主目录属主需为 65532（见文件头的准备命令）；SELinux 发行版加 :Z。
-      - ./logs:/var/log/aerolink
+      - ./logs:/home/aerolink/data
       # 想让容器内直接连宿主机 k8s（kind/minikube）时：打开挂载，并在 config.yaml 里
       # 用 clusters 段写集群（因为 AEROLINK_CONFIG_FILE 让 KUBECONFIG 环境变量失效）。
       # 注意 kubeconfig 里的 127.0.0.1 指的是容器自己，要换成宿主机/节点可达的地址。

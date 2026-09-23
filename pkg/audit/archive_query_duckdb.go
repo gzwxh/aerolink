@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"k8s.io/klog/v2"
 )
@@ -357,6 +359,19 @@ func buildDuckDBSQL(
 	), nil
 }
 
+// duckdbExtensionDir 返回 DuckDB 安装扩展的目录。
+//
+// 为什么要显式落定：DuckDB 默认把扩展装在 `~/.duckdb`，而 INSTALL / LOAD 需要能往那里写文件——
+// HOME 不可写（容器里最常见的一类）时 httpfs 永远装不上，查 S3 归档随之不可用。默认落到进程
+// 自己的可写临时目录，不依赖 HOME；离线部署要预装扩展时，用 AEROLINK_DUCKDB_EXTENSION_DIR
+// 指向镜像里预置的扩展目录（见 charts/aerolink 的 duckdbExtensionDir）。
+func duckdbExtensionDir() string {
+	if custom := strings.TrimSpace(common.DuckDBExtensionDir); custom != "" {
+		return custom
+	}
+	return filepath.Join(os.TempDir(), "aerolink-duckdb-extensions")
+}
+
 // duckdbS3Statements 返回访问 S3 需要的 DuckDB 语句（CLI 驱动前置执行；SDK 驱动在连接初始化执行）。
 //
 // endpoint 要去掉协议头（DuckDB 的 s3_endpoint 只接受 host）；寻址方式与 minio-go 的
@@ -382,6 +397,8 @@ func duckdbS3Statements(s3 model.S3Archive) []string {
 	}
 
 	return []string{
+		// 扩展目录必须先落定：默认的 ~/.duckdb 在容器里通常不可写（见 duckdbExtensionDir）。
+		set("extension_directory", duckdbExtensionDir()),
 		"INSTALL httpfs",
 		"LOAD httpfs",
 		set("s3_endpoint", endpoint),

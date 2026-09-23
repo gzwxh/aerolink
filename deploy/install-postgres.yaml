@@ -138,9 +138,9 @@ spec:
             - name: AEROLINK_AUDIT_SINK
               value: parquet
             - name: AEROLINK_AUDIT_ARCHIVE_DIR
-              value: /var/log/aerolink/archive
+              value: /home/aerolink/data/archive
             - name: AEROLINK_LOG_FILE
-              value: /var/log/aerolink/aerolink.log
+              value: /home/aerolink/data/aerolink.log
             # 连接池：每个副本最多占这么多条连接，而 PostgreSQL 的 max_connections 是
             # **全部客户端**的总坑位。硬约束：
             #   副本数 × AEROLINK_DB_MAX_OPEN_CONNS + 20（管理/备份/监控余量） ≤ max_connections
@@ -172,14 +172,14 @@ spec:
             # - name: AEROLINK_AUDIT_SINK
             #   value: parquet
             # - name: AEROLINK_AUDIT_ARCHIVE_DIR
-            #   value: /var/log/aerolink/archive
+            #   value: /home/aerolink/data/archive
             # - name: AEROLINK_LOG_FILE
-            #   value: /var/log/aerolink/aerolink.log
+            #   value: /home/aerolink/data/aerolink.log
           # 与上面的 AEROLINK_* 配套（emptyDir 仅 Pod 生命周期内保留，生产换 PVC；
           # 多副本时归档目录必须是共享卷，否则检索查不全）：
           # volumeMounts:
           #   - name: aerolink-logs
-          #     mountPath: /var/log/aerolink
+          #     mountPath: /home/aerolink/data
           # volumes:
           #   - name: aerolink-logs
           #     emptyDir: {}

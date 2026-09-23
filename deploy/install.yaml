@@ -69,12 +69,12 @@ spec:
           #   - name: AEROLINK_AUDIT_SINK
           #     value: parquet
           #   - name: AEROLINK_AUDIT_ARCHIVE_DIR
-          #     value: /var/log/aerolink/archive
+          #     value: /home/aerolink/data/archive
           #   - name: AEROLINK_LOG_FILE
-          #     value: /var/log/aerolink/aerolink.log
+          #     value: /home/aerolink/data/aerolink.log
           # volumeMounts:
           #   - name: aerolink-logs
-          #     mountPath: /var/log/aerolink
+          #     mountPath: /home/aerolink/data
           resources:
             limits:
               cpu: 1000m

@@ -71,7 +71,7 @@ spec:
         - name: cluster-agent
           image: %s
           command:
-            - /app/aerolink
+            - /home/aerolink/aerolink
           args:
             - cluster-agent
             - --server=$(AEROLINK_SERVER)

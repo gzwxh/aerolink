@@ -2,9 +2,17 @@
 FROM swr.cn-south-1.myhuaweicloud.com/gzwxh/alpine:3.20
 ARG TARGETARCH
 
-WORKDIR /app
+# 运行用户 aerolink：uid/gid 与 Dockerfile 保持一致（65532），家目录即工作目录
+# （HOME 可写，程序不必为 DuckDB 扩展目录等缓存反复调权限）。
+# alpine 自带 busybox 的 adduser/addgroup，不需要额外装 shadow-utils。
+RUN addgroup -g 65532 aerolink && \
+    adduser -u 65532 -G aerolink -h /home/aerolink -s /sbin/nologin -D aerolink
 
-COPY bin/aerolink-$TARGETARCH ./aerolink
+WORKDIR /home/aerolink
+
+COPY --chown=65532:65532 bin/aerolink-$TARGETARCH ./aerolink
+
+USER aerolink
 
 EXPOSE 8080
 

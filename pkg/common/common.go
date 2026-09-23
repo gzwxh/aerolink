@@ -94,6 +94,12 @@ var (
 	// 只作启动兜底：审计设置里的 Archive.LocalDir 优先（见 pkg/model/audit_setting.go）。
 	AuditArchiveDir = ""
 
+	// DuckDBExtensionDir 是 DuckDB 存放扩展的目录（AEROLINK_DUCKDB_EXTENSION_DIR）。
+	// 留空时由 pkg/audit 用进程可写的临时目录（见 duckdbExtensionDir）：DuckDB 默认装在
+	// ~/.duckdb，HOME 不可写时 INSTALL httpfs 会直接失败、S3 归档检索不可用。
+	// 离线部署可把它指向镜像里预置扩展的目录。
+	DuckDBExtensionDir = ""
+
 	// ManagedSections 记录哪些配置分区由配置文件管理。
 	// Key 取值："clusters"、"oauth"、"ldap"、"rbac"、"superUser"
 	ManagedSections = map[string]bool{}
@@ -327,5 +333,8 @@ func loadRuntimeEnvs() {
 	}
 	if v := Getenv("AUDIT_ARCHIVE_DIR"); v != "" {
 		AuditArchiveDir = strings.TrimSpace(v)
+	}
+	if v := Getenv("DUCKDB_EXTENSION_DIR"); v != "" {
+		DuckDBExtensionDir = strings.TrimSpace(v)
 	}
 }

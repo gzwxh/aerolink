@@ -43,7 +43,7 @@ spec:
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/app/aerolink"]
+          command: ["/home/aerolink/aerolink"]
           {{- if .Values.debug }}
           args: ["-v", "1"]
           {{- end }}
@@ -80,6 +80,11 @@ spec:
             {{- if .Values.auditArchiveDir }}
             - name: AEROLINK_AUDIT_ARCHIVE_DIR
               value: {{ .Values.auditArchiveDir }}
+            {{- end }}
+            {{- if .Values.duckdbExtensionDir }}
+            # DuckDB 扩展目录：留空时程序用进程可写的临时目录（默认的 ~/.duckdb 在容器里不可写）
+            - name: AEROLINK_DUCKDB_EXTENSION_DIR
+              value: {{ .Values.duckdbExtensionDir }}
             {{- end }}
             {{- if .Values.logFile }}
             # klog 落盘：程序读取该环境变量后设置 -log_file 并关闭 stderr 输出

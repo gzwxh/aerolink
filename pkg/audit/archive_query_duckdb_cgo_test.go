@@ -4,13 +4,17 @@ package audit
 
 import (
 	"context"
+	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/parquet-go/parquet-go"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 )
 
@@ -248,4 +252,80 @@ func decodeArchiveHit(t *testing.T, hit json.RawMessage) map[string]any {
 		t.Fatalf("hit is not valid JSON: %v", err)
 	}
 	return row
+}
+
+// fakeExecer 是 driver.ExecerContext 的替身：记录执行过的语句，按子串决定哪些失败。
+type fakeExecer struct {
+	failOn   string
+	executed []string
+}
+
+func (f *fakeExecer) ExecContext(_ context.Context, statement string, _ []driver.NamedValue) (driver.Result, error) {
+	f.executed = append(f.executed, statement)
+	if f.failOn != "" && strings.Contains(statement, f.failOn) {
+		return nil, errors.New("statement failed")
+	}
+	return driver.RowsAffected(0), nil
+}
+
+// S3 初始化失败（装不上 httpfs、扩展目录不可写）不能把整个引擎拖下水：
+// 本地 parquet 检索不依赖 httpfs，最近几天的审计日志必须照常可查。
+func TestDuckDBSDKInitializeKeepsLocalSearchWhenS3Fails(t *testing.T) {
+	runner := newDuckDBSDKRunner(model.S3Archive{Enabled: true, Endpoint: "cos.example.com", Bucket: "bucket"})
+	execer := &fakeExecer{failOn: "INSTALL httpfs"}
+
+	if err := runner.initialize(execer); err != nil {
+		t.Fatalf("initialize() error = %v, want nil（S3 只是可选能力）", err)
+	}
+	if err := runner.s3Unavailable("SELECT * FROM read_parquet(['s3://bucket/x.parquet'])"); err == nil {
+		t.Error("S3 初始化失败后，读 s3:// 的语句必须给出明确原因")
+	}
+	if err := runner.s3Unavailable("SELECT * FROM read_parquet(['/tmp/x.parquet'])"); err != nil {
+		t.Errorf("本地语句不该被 S3 的失败牵连: %v", err)
+	}
+
+	// 第一条 S3 语句失败后就该停：SET s3_* 每条都会再触发一次扩展 autoload，继续没有意义。
+	for _, statement := range execer.executed {
+		if strings.HasPrefix(statement, "SET s3_") {
+			t.Errorf("S3 初始化失败后不应继续执行 %q", statement)
+		}
+	}
+}
+
+// 引擎自身的会话设置失败仍是硬错误——那不是可选能力。
+func TestDuckDBSDKInitializeFailsOnCoreStatementError(t *testing.T) {
+	runner := newDuckDBSDKRunner(model.S3Archive{})
+	execer := &fakeExecer{failOn: "SET memory_limit"}
+
+	if err := runner.initialize(execer); err == nil {
+		t.Fatal("核心 SET 失败必须让初始化失败")
+	}
+}
+
+// S3 全部就绪时不该留下「不可用」标记。
+func TestDuckDBSDKInitializeS3Success(t *testing.T) {
+	runner := newDuckDBSDKRunner(model.S3Archive{Enabled: true, Endpoint: "https://cos.example.com", Bucket: "bucket"})
+	if err := runner.initialize(&fakeExecer{}); err != nil {
+		t.Fatalf("initialize() error = %v", err)
+	}
+	if err := runner.s3Unavailable("SELECT * FROM read_parquet(['s3://bucket/x.parquet'])"); err != nil {
+		t.Errorf("S3 初始化成功后不该报不可用: %v", err)
+	}
+}
+
+// 扩展目录必须显式落定：DuckDB 默认的 ~/.duckdb 在容器里不可写（HOME 属主是 root）。
+func TestDuckdbS3StatementsPinExtensionDirectory(t *testing.T) {
+	original := common.DuckDBExtensionDir
+	common.DuckDBExtensionDir = t.TempDir()
+	t.Cleanup(func() { common.DuckDBExtensionDir = original })
+
+	statements := duckdbS3Statements(model.S3Archive{Enabled: true, Endpoint: "cos.example.com", Bucket: "bucket"})
+	joined := strings.Join(statements, "; ")
+	want := "SET extension_directory='" + common.DuckDBExtensionDir + "'"
+	if !strings.Contains(joined, want) {
+		t.Errorf("S3 语句应把扩展目录固定为 %q:\n%s", common.DuckDBExtensionDir, joined)
+	}
+	if index, install := strings.Index(joined, want), strings.Index(joined, "INSTALL httpfs"); index < 0 || install < 0 || index > install {
+		t.Error("扩展目录必须在 INSTALL 之前设置，否则扩展会被装到默认目录")
+	}
 }

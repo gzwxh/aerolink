@@ -92,7 +92,7 @@ PostgreSQL（会存成 `0001-01-01`）与 SQLite 照收。两种典型踩法：
 
    ```bash
    /tmp/apismoke -base-url http://127.0.0.1:8080 -username admin -password '...' \
-     -log-file /var/log/aerolink/aerolink.log -smtp -ai
+     -log-file /home/aerolink/data/aerolink.log -smtp -ai
    ```
 
 ## 已修复的问题清单（供回溯）

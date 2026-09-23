@@ -14,6 +14,7 @@ import (
 	"time"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"k8s.io/klog/v2"
 )
@@ -60,6 +61,13 @@ const (
 // duckdbSDKRunner 用 cgo 绑定在进程内执行 SQL。
 type duckdbSDKRunner struct {
 	s3 model.S3Archive
+
+	// s3ErrMu 保护 s3Err：连接初始化跑在 database/sql 的连接 goroutine 上，而查询跑在
+	// 请求 goroutine 上，两者会并发访问。
+	s3ErrMu sync.Mutex
+	// s3Err 是 S3 初始化（装 httpfs + SET s3_*）失败的原因；nil 表示 S3 可用。
+	// 一旦落下就保留到引擎重建（见 initializeS3）：同一引擎内不同连接状态不一致更难排查。
+	s3Err error
 
 	// once 保证连接池只建一次，且失败结果被记住——初始化（起引擎、装扩展）不便宜，
 	// 不能在每次查询上重试。
@@ -126,28 +134,67 @@ func (r *duckdbSDKRunner) open() (*sql.DB, error) {
 func (r *duckdbSDKRunner) initialize(execer driver.ExecerContext) error {
 	ctx := context.Background()
 
-	statements := []string{
+	// 会话级资源限制失败就等于引擎不可用，必须报错。
+	for _, statement := range []string{
 		fmt.Sprintf("SET threads=%d", duckdbSDKThreads),
 		"SET memory_limit='" + duckdbSDKMemoryLimit + "'",
-	}
-	// 只有真的要用 S3 才装 httpfs：INSTALL 需要联网下载扩展，本地 parquet 检索（parquet 扩展
-	// 是编译进 libduckdb 的）完全用不到它，不该为一个用不上的能力引入网络依赖。
-	if r.s3.Enabled {
-		statements = append(statements, duckdbS3Statements(r.s3)...)
-	}
-
-	for _, statement := range statements {
+	} {
 		if _, err := execer.ExecContext(ctx, statement, []driver.NamedValue{}); err != nil {
-			// 扩展语句的失败只影响「查 S3」，本地热层照常可用，所以降级为告警，
-			// 不让它把整个后端拖成不可用（受限网络下 INSTALL 拉不到扩展是常见情况）。
-			if isExtensionStatement(statement) {
-				klog.Warningf("duckdb: %q failed, S3 archive search may be unavailable: %v", statement, err)
-				continue
-			}
 			return fmt.Errorf("failed to run %q: %w", statement, err)
 		}
 	}
+
+	// S3 是**可选能力**：装 httpfs 既需要联网又要可写的扩展目录，受限环境里两条都不保证。
+	// 它失败只该让「查 S3」不可用——本地 parquet 查询不依赖 httpfs（parquet 扩展编进了
+	// libduckdb），若让它把整个引擎拖成不可用，最近几天（本地热层）的审计日志会一起查不到。
+	if r.s3.Enabled {
+		r.initializeS3(ctx, execer)
+	}
 	return nil
+}
+
+// initializeS3 建立 S3 访问能力（装 httpfs + 设置 s3_*），失败只告警并记录原因。
+//
+// 为什么不在失败处 continue 而是直接停：`SET s3_endpoint` 这类语句本身会触发 DuckDB 的扩展
+// autoload，httpfs 装不上时每一条都会再失败一次；第一条失败后剩下的已无意义。真正需要 S3 的
+// 查询会在 Query 里拿到这个原因（见 s3Unavailable）。
+func (r *duckdbSDKRunner) initializeS3(ctx context.Context, execer driver.ExecerContext) {
+	for _, statement := range duckdbS3Statements(r.s3) {
+		if _, err := execer.ExecContext(ctx, statement, []driver.NamedValue{}); err != nil {
+			r.setS3Err(fmt.Errorf("failed to run %q: %w", statement, err))
+			klog.Warningf("duckdb: S3 archive search is unavailable (%v); local parquet search keeps working", err)
+			return
+		}
+	}
+}
+
+// setS3Err 记下 S3 初始化失败的原因（只记第一次）。
+func (r *duckdbSDKRunner) setS3Err(err error) {
+	r.s3ErrMu.Lock()
+	defer r.s3ErrMu.Unlock()
+	if r.s3Err == nil {
+		r.s3Err = err
+	}
+}
+
+// s3Unavailable 在语句要读 S3、但 S3 初始化未成功时返回失败原因。
+//
+// 不放手让引擎去报一个含糊的 "httpfs extension not loaded"：初始化失败的常见原因是环境问题
+// （扩展装不上、扩展目录不可写），把原始原因带出来才知道该改什么。文案里给出两条出路——
+// 缩小时间范围（本地热层照常可查）与预装扩展——否则使用者只会看到一个装不上的扩展名。
+func (r *duckdbSDKRunner) s3Unavailable(statement string) error {
+	if !strings.Contains(statement, "s3://") {
+		return nil
+	}
+	r.s3ErrMu.Lock()
+	defer r.s3ErrMu.Unlock()
+	if r.s3Err == nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"s3 archive search is unavailable, so records older than the local archive cannot be queried: %w "+
+			"(narrow the time range to the locally retained days, or pre-install the duckdb httpfs extension and point %sDUCKDB_EXTENSION_DIR at it)",
+		r.s3Err, common.EnvPrefix)
 }
 
 // Query 执行一条 SELECT。
@@ -155,6 +202,10 @@ func (r *duckdbSDKRunner) initialize(execer driver.ExecerContext) error {
 // setup 被忽略：CLI 驱动必须把前置语句与 SELECT 拼进同一次子进程调用，而 SDK 驱动在每个连接
 // 建立时就做完了（见 initialize），这里再执行一遍只是白费时间。
 func (r *duckdbSDKRunner) Query(ctx context.Context, _ []string, statement string) ([]map[string]any, error) {
+	if err := r.s3Unavailable(statement); err != nil {
+		return nil, err
+	}
+
 	db, err := r.open()
 	if err != nil {
 		return r.queryWithFallback(ctx, statement, err)
@@ -237,12 +288,6 @@ func (r *duckdbSDKRunner) cliFallback() (duckdbRunner, error) {
 	}
 	r.fallback = cli
 	return cli, nil
-}
-
-// isExtensionStatement 报告一条语句是否是 INSTALL / LOAD（扩展的加载，允许失败）。
-func isExtensionStatement(statement string) bool {
-	upper := strings.ToUpper(strings.TrimSpace(statement))
-	return strings.HasPrefix(upper, "INSTALL ") || strings.HasPrefix(upper, "LOAD ")
 }
 
 // DuckDBAvailable 报告是否具备 DuckDB 检索能力。

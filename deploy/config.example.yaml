@@ -5,7 +5,7 @@
 #   vi deploy/config.yaml          # 至少改 s3.endpoint / bucket / pathStyle
 #   vi deploy/.env                 # 写 S3 凭据（见下），再启动 compose
 #
-# 这个文件由 docker-compose.yaml 里的 `AEROLINK_CONFIG_FILE=/app/config.yaml` 指定，
+# 这个文件由 docker-compose.yaml 里的 `AEROLINK_CONFIG_FILE=/home/aerolink/config.yaml` 指定，
 # 容器内只读挂载。敏感值支持 ${ENV_VAR} 占位符（启动时从环境变量展开），
 # 所以 S3 的 accessKey / secretKey 不必写进本文件。
 #
@@ -27,7 +27,7 @@ auditSink: parquet
 auditArchive:
   # 本地归档目录：parquet sink 必填（缺失会**拒绝启动**，不静默回落数据库）。
   # 与 compose 里的 AEROLINK_AUDIT_ARCHIVE_DIR 指向同一路径（这里优先）。
-  localDir: /var/log/aerolink/archive
+  localDir: /home/aerolink/data/archive
   retentionDays: 7                 # 本地保留天数（S3 上的副本不受它影响），0 = 不清理
   maxBytes: 10737418240            # 本地容量上限 10 GiB，0 = 不清理
   flush:                           # parquet 攒批触发条件：时间 / 条数 / 字节满足其一即落文件

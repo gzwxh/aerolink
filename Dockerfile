@@ -66,7 +66,19 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # Runtime image.
 FROM ${RUNTIME_IMAGE}
 
-WORKDIR /app
+# 运行用户 aerolink：uid/gid 沿用 distroless/static(nonroot) 的 65532，换成 openEuler 后权限
+# 语义完全不变——已有的数据卷属主与 K8s securityContext 都不用调整。
+# openEuler 基础镜像没装 shadow-utils（没有 useradd/groupadd），所以直接写 passwd/group。
+#
+# 家目录就是工作目录（/home/aerolink），**所有可写数据都放在它下面**：二进制与配置文件、
+# parquet 归档（data/archive）、klog（data/aerolink.log）、DuckDB 扩展（~/.duckdb）、
+# sqlite 库文件。这样不必为 /var/log、/data 这些系统目录来回改属主。
+RUN printf 'aerolink:x:65532:65532::/home/aerolink:/sbin/nologin\n' >> /etc/passwd && \
+    printf 'aerolink:x:65532:\n' >> /etc/group && \
+    mkdir -p /home/aerolink/data/archive && \
+    chown -R 65532:65532 /home/aerolink
+
+WORKDIR /home/aerolink
 
 # CA 证书：openEuler / ubuntu 这类**精简基础镜像都不带** ca-certificates，缺了它所有 HTTPS
 # 调用都会以 "x509: certificate signed by unknown authority" 失败（K8s API、OIDC、S3/COS、
@@ -77,17 +89,9 @@ COPY --from=backend-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca
 # 但 ubuntu 等精简基座可能没有，缺了会静默退化成 UTC。从构建镜像拷一份，基座可随意替换。
 COPY --from=backend-builder /usr/share/zoneinfo /usr/share/zoneinfo
 
-# 运行用户：沿用 distroless/static(nonroot) 的 uid/gid 65532，这样换成 openEuler 后权限语义
-# 完全不变——已有的数据卷属主、K8s securityContext 都不用调整。
-# openEuler 基础镜像没装 shadow-utils（没有 useradd/groupadd），所以直接写 passwd/group。
-RUN printf 'aerolink:x:65532:65532::/app:/sbin/nologin\n' >> /etc/passwd && \
-    printf 'aerolink:x:65532:\n' >> /etc/group && \
-    mkdir -p /var/log/aerolink/archive && \
-    chown -R 65532:65532 /var/log/aerolink
+USER aerolink
 
-USER 65532
-
-COPY --from=backend-builder /app/aerolink .
+COPY --from=backend-builder --chown=65532:65532 /app/aerolink /home/aerolink/aerolink
 
 EXPOSE 8080
 
