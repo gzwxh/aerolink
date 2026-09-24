@@ -61,7 +61,7 @@ export function RecentEvents() {
           <div className="h-4  bg-muted rounded w-1/2"></div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2 scrollbar-hide overflow-auto">
+          <div className="space-y-2 scrollbar-thin overflow-auto">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-start gap-3 animate-pulse">
                 <div className="w-4 h-4  bg-muted rounded-full mt-1"></div>
@@ -104,7 +104,7 @@ export function RecentEvents() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="max-h-72 overflow-y-auto scrollbar-hide">
+        <div className="max-h-72 overflow-y-auto scrollbar-thin">
           <div className="space-y-4">
             {events.map((event, index) => (
               <div

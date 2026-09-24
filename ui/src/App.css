@@ -6,4 +6,30 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none; /* Chrome, Safari and Opera */
   }
+
+  /*
+   * 可见的细滚动条。
+   *
+   * Windows 的操作习惯是「能滚的地方要看得见滚动条」：像 .scrollbar-hide 那样整个藏掉，
+   * 用户会以为内容就这些、压根不会去滚（概览页「最近事件」卡片就是这个毛病）。
+   * 这里保留滚动条，只做细一点、跟随主题色，不抢视觉。
+   */
+  .scrollbar-thin {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: var(--border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
 }

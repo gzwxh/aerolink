@@ -264,7 +264,12 @@ function ResourceTableContent<T>({
             return metadata?.namespace || '-'
           },
           cell: ({ getValue }: { getValue: () => string }) => (
-            <Badge variant="outline" className="ml-2 ">
+            // 命名空间名可能比列宽长：截断 + 悬浮看全名，避免压到相邻列。
+            <Badge
+              variant="outline"
+              className="ml-2 max-w-full truncate"
+              title={getValue()}
+            >
               {getValue()}
             </Badge>
           ),

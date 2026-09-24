@@ -75,7 +75,10 @@ export function ServiceListPage() {
         cell: ({ getValue }) => {
           const val = getValue() || '-'
           return (
-            <span className="font-mono text-sm text-muted-foreground">
+            <span
+              className="block truncate font-mono text-sm text-muted-foreground"
+              title={val}
+            >
               {val}
             </span>
           )
@@ -87,7 +90,10 @@ export function ServiceListPage() {
         cell: ({ getValue }) => {
           const val = getValue()
           return (
-            <span className="font-mono text-sm text-muted-foreground">
+            <span
+              className="block truncate font-mono text-sm text-muted-foreground"
+              title={String(val ?? '')}
+            >
               {val}
             </span>
           )
@@ -111,7 +117,10 @@ export function ServiceListPage() {
               })
               .join(', ')
             return (
-              <span className="font-mono text-sm text-muted-foreground">
+              <span
+                className="block truncate font-mono text-sm text-muted-foreground"
+                title={text}
+              >
                 {text}
               </span>
             )

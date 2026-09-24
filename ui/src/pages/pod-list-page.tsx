@@ -44,10 +44,14 @@ export function PodListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
+            {/* Pod 名很长（aero-link-6b5c5fb7f7-hug 这种），列宽固定时截断显示，
+                悬浮看全名，否则会压到右侧的 Namespace / 就绪列上。 */}
             <Link
               to={`/pods/${row.original.metadata!.namespace}/${
                 row.original.metadata!.name
               }`}
+              className="block truncate"
+              title={row.original.metadata!.name}
             >
               {row.original.metadata!.name}
             </Link>
@@ -95,6 +99,8 @@ export function PodListPage() {
       columnHelper.accessor((row) => row.metrics?.cpuUsage || 0, {
         id: 'cpu',
         header: 'CPU',
+        // 指标列要放下「用量 / 上限 + 百分比」两行，比默认列宽宽一些。
+        size: 180,
         cell: ({ row }) => (
           <MetricCell metrics={row.original.metrics} type="cpu" />
         ),
@@ -102,6 +108,8 @@ export function PodListPage() {
       columnHelper.accessor((row) => row.metrics?.memoryUsage || 0, {
         id: 'memory',
         header: 'Memory',
+        // 内存文本最长（4.69 GiB / 8 GiB），再宽一点，免得和百分比挤在一起。
+        size: 200,
         cell: ({ row }) => (
           <MetricCell metrics={row.original.metrics} type="memory" />
         ),
@@ -112,7 +120,10 @@ export function PodListPage() {
         cell: ({ getValue }) => {
           const ip = getValue() || '-'
           return (
-            <span className="text-muted-foreground text-sm font-mono">
+            <span
+              className="block truncate font-mono text-sm text-muted-foreground"
+              title={ip}
+            >
               {ip}
             </span>
           )

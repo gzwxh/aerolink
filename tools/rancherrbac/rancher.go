@@ -333,7 +333,14 @@ func (c *rancherClient) addNamespacesOfUncoveredClusters(namespaces []rancherNam
 	clusters []rancherCluster) ([]rancherNamespace, []string, error) {
 	covered := make(map[string]struct{}, len(clusters))
 	for _, namespace := range namespaces {
-		if namespace.ClusterID != "" {
+		// 只把**带项目归属**的命名空间算作「该集群已覆盖」。
+		//
+		// Steve 的聚合 /v1/namespaces 会为每个集群额外返回一条「集群命名空间」对象
+		// （id 就是集群 ID，如 c-m-abc123）。它没有 field.cattle.io/projectId，
+		// 也不代表这个集群的命名空间已经被读到；若仅凭 ClusterID 非空就判定覆盖，
+		// 所有集群都会被误判成已覆盖、跳过这里的补读，最终每个项目都显示成
+		// 「没有命名空间」——一条授权都迁不过去（真机踩过）。
+		if namespace.ClusterID != "" && namespace.ProjectID != "" {
 			covered[namespace.ClusterID] = struct{}{}
 		}
 	}

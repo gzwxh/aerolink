@@ -35,7 +35,12 @@ export function CRDListPage() {
         header: 'Group',
         enableColumnFilter: true,
         cell: ({ getValue }) => (
-          <span className="text-sm font-mono">{getValue()}</span>
+          <span
+            className="block truncate text-sm font-mono"
+            title={String(getValue() ?? '')}
+          >
+            {getValue()}
+          </span>
         ),
       }),
       columnHelper.accessor(

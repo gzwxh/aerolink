@@ -388,7 +388,13 @@ export function NodeListPage() {
         size: 120,
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link to={`/nodes/${row.original.metadata!.name}`}>
+            {/* 主机名经常比列宽长（k8s-prod-middleware-progress-1 这种）：
+                截断显示，悬浮看全名，否则会压到右侧的状态列上。 */}
+            <Link
+              to={`/nodes/${row.original.metadata!.name}`}
+              className="block truncate"
+              title={row.original.metadata!.name}
+            >
               {row.original.metadata!.name}
             </Link>
           </div>
@@ -465,6 +471,8 @@ export function NodeListPage() {
       columnHelper.accessor((row) => row.metrics?.cpuUsage || 0, {
         id: 'cpu',
         header: t('common.fields.cpu', 'CPU'),
+        // 指标列要放下「用量 / 上限 + 百分比」两行，比默认列宽宽一些。
+        size: 180,
         cell: ({ row }) => (
           <MetricCell
             metrics={row.original.metrics}
@@ -477,6 +485,8 @@ export function NodeListPage() {
       columnHelper.accessor((row) => row.metrics?.memoryUsage || 0, {
         id: 'memory',
         header: t('common.fields.memory', 'Memory'),
+        // 内存文本最长（4.69 GiB / 8 GiB），再宽一点。
+        size: 200,
         cell: ({ row }) => (
           <MetricCell
             metrics={row.original.metrics}

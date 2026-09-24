@@ -171,40 +171,51 @@ func migrateDisabled() bool {
 	return strings.EqualFold(strings.TrimSpace(common.Getenv("DB_MIGRATE")), "off")
 }
 
-// schemaExpectations 列出「应用直接依赖、又可能落在库结构变更之后」的列。
+// checkSchema 用**只读**方式把「模型定义」与库里的实际结构比一遍，缺表/缺列逐条打印。
 //
-// 只列这几处，不做全量 schema 比对：全量比对要读 information_schema 再和 GORM 模型
-// 对齐，成本与误报都超过收益；而漏列的后果通常是某个功能直接报错，
-// 提前用一条明确日志点出来就够了。
-var schemaExpectations = []struct {
-	model  interface{}
-	column string
-	hint   string
-}{
-	{
-		model:  &Announcement{},
-		column: "Scroll",
-		hint:   "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS scroll boolean NOT NULL DEFAULT true;",
-	},
-	{
-		model:  &Announcement{},
-		column: "ScrollMode",
-		hint: "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS scroll_mode " +
-			"varchar(16) NOT NULL DEFAULT 'continuous';",
-	},
-}
-
-// checkSchema 用只读方式确认关键列都在（不需要 DDL 权限），缺了就给出可执行的 SQL。
+// 为什么需要它：结构由 DBA 托管（DB_MIGRATE=off，或应用账号没有 DDL 权限）时，
+// 漏执行一次结构变更的后果是「某个功能报 500」，日志里只剩一个数据库错误码，
+// 得从接口反推表结构才知道缺什么（实际踩过：clusters.confirm_create 缺失）。
+// 启动时一次性列清楚，运维照着补 SQL 就行。
 //
-// DB_MIGRATE=off 时这是唯一的自查手段，所以**不受该开关影响**，每次都跑。
+// 全部走只读查询（information_schema 一类），不需要 DDL 权限，所以 DB_MIGRATE=off 时照跑。
 func checkSchema() {
-	for _, expect := range schemaExpectations {
-		if DB.Migrator().HasColumn(expect.model, expect.column) {
+	missing := 0
+	for _, model := range Models() {
+		stmt := &gorm.Statement{DB: DB}
+		if err := stmt.Parse(model); err != nil || stmt.Schema == nil {
 			continue
 		}
-		klog.Errorf("库结构缺少 %s 列：依赖它的接口会报错，请让 DBA 执行：%s",
-			expect.column, expect.hint)
+		if !DB.Migrator().HasTable(model) {
+			klog.Errorf("库结构缺少表 %s：相关功能会报错，请让 DBA 建表", stmt.Schema.Table)
+			missing++
+			continue
+		}
+		columns, err := DB.Migrator().ColumnTypes(model)
+		if err != nil {
+			continue
+		}
+		existing := make(map[string]struct{}, len(columns))
+		for _, column := range columns {
+			existing[column.Name()] = struct{}{}
+		}
+		for _, field := range stmt.Schema.Fields {
+			if field.DBName == "" {
+				continue
+			}
+			if _, ok := existing[field.DBName]; ok {
+				continue
+			}
+			klog.Errorf("库表 %s 缺少列 %s：依赖它的接口会报错，请让 DBA 补上",
+				stmt.Schema.Table, field.DBName)
+			missing++
+		}
 	}
+	if missing == 0 {
+		klog.Info("库结构与模型一致")
+		return
+	}
+	klog.Errorf("共发现 %d 处库结构差异（见上方清单）——补齐后重启即可；服务当前仍可启动", missing)
 }
 
 // Models 是全部需要建表与迁移的模型。顺序满足外键依赖：被引用的表在前

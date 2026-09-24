@@ -70,7 +70,11 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        // truncate = overflow:hidden + text-overflow:ellipsis + nowrap。
+        // 表格是固定列宽，超长内容必须就地截断，否则会溢出压到相邻列上（看起来像
+        // 两列文字叠在一起）。用多行徽标的列靠 flex-wrap 换行，不受 white-space 影响，
+        // 因此不会被裁掉。
+        "text-foreground h-10 truncate px-2 text-left align-middle font-medium [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -83,7 +87,9 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        // 同 TableHead：所有单元格默认截断，杜绝内容溢出压到相邻列。
+        // 需要多行的内容（徽标组等）用 flex-wrap 自己换行，不受影响。
+        "truncate p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

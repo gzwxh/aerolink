@@ -15,6 +15,16 @@ function formatCores(milli: number): string {
   return `${Number.isInteger(cores) ? cores : cores.toFixed(1)} 核`
 }
 
+/** 去掉数值尾部的单位（英文单位或中文「核」），用于「同单位时只写一次」的紧凑显示。 */
+function stripUnit(text: string): string {
+  return text.replace(/\s*[A-Za-z\u4e00-\u9fa5]+$/, '')
+}
+
+/** 取数值尾部的单位（含前导空格），没有单位时返回空串。 */
+function unitOf(text: string): string {
+  return text.slice(stripUnit(text).length)
+}
+
 export function MetricCell({
   metrics,
   type,
@@ -69,6 +79,16 @@ export function MetricCell({
       ? Math.min((metricValue / metricLimit) * 100, 100)
       : 0
 
+    // 上限与用量同一单位时只写一次（4.69 GiB / 8 GiB → 4.69 / 8 GiB、0 核 / 4 核 → 0 / 4 核）：
+    // 内存这列文本本来就长，列宽有限时能省下几个字符给百分比留位置。
+    const rawUsage = formatValue(metricValue)
+    const rawLimit = formatValue(metricLimit)
+    const usageText = rawUsage
+    const limitText =
+      unitOf(rawLimit) !== '' && unitOf(rawUsage) === unitOf(rawLimit)
+        ? stripUnit(rawLimit)
+        : rawLimit
+
     const getProgressColor = () => {
       if (percentage > 90) return 'bg-destructive'
       if (percentage > 60) return 'bg-warning'
@@ -111,11 +131,11 @@ export function MetricCell({
       <Tooltip>
         <TooltipTrigger asChild>
           <div className="flex w-full min-w-0 flex-col gap-1">
-            <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center justify-between gap-3">
               <span className="min-w-0 truncate text-xs tabular-nums">
-                {formatValue(metricValue)}
+                {usageText}
                 <span className="text-muted-foreground"> / </span>
-                {formatValue(metricLimit)}
+                {limitText}
               </span>
               {showPercentage && (
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
