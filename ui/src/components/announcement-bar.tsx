@@ -16,6 +16,11 @@ import {
 } from '@/lib/announcement-markup'
 import { useAnnouncements } from '@/lib/api'
 import {
+  ANNOUNCEMENT_SCROLL_PAUSE_SECONDS,
+  combinedScrollMode,
+  pacedAnimationName,
+} from '@/lib/announcement-scroll'
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -31,8 +36,9 @@ import { AnnouncementContent } from './announcement-content'
  * - 默认横向滚动（不论内容长短）：内容比这块窄时先重复铺满，否则循环会露出空隙；
  * - 三种「读全」的手段（滚动只是其中一种，消息很长时用户可能来不及看完）：
  *   鼠标悬停暂停、按住拖动（横向拖看前后文）、右侧展开全文；
- * - 浏览器报 `prefers-reduced-motion: reduce` 时**不自动滚**，只留后两个手段
- *   （见 §12.10：不再只是一段被截断的死文字，因此可以尊重该偏好）；
+ * - **不受** `prefers-reduced-motion` 影响：滚不滚只看公告自己的配置（理由见
+ *   styles/base.css 里那段说明）——管理员已按条决定过，被客户端偏好静默否决会得到
+ *   「勾了横向滚动却没滚、也没人解释为什么」，比不尊重偏好更糟；
  * - 同时有多条时按优先级顺序串成一条，图标颜色取其中最高的级别。
  *
  * 见 plans/2026-09-21-announcement-bar.md。
@@ -61,16 +67,19 @@ export function AnnouncementBar() {
   // 每条公告逐个决定过，优先级高于客户端偏好；被客户端静默推翻是最糟的结果（既没滚，
   // 也不知道为什么）。速度本身也很慢（60px/s），静态时仍有拖动与「展开全文」兜底。
   //
-  // 多条公告串成**一条**轨道输出，没法一半滚一半不滚，所以取「任一条要求滚动就滚动」
-  // ——与「级别取最高」同一套取舍。
-  // 用 `!== false` 而不是直接读值：老数据/老接口没有该字段时按滚动处理，与后端默认值一致。
-  const scrolling = items.some((item) => item.scroll !== false)
+  // 多条公告串成**一条**轨道输出，没法一半滚一半不滚，所以取「最强」的那一种方式
+  // ——与「级别取最高」同一套取舍（判定见 lib/announcement-scroll.ts）。
+  const scrollMode = combinedScrollMode(items)
+  const scrolling = scrollMode !== 'none'
   const viewportRef = useRef<HTMLDivElement>(null)
   const runRef = useRef<HTMLSpanElement>(null)
   // repeat 是「一份内容要重复几次才能铺满可视区」：内容比可视区窄时必须重复，
   // 否则 translateX(-50%) 的循环里会出现一段空白。
   const [repeat, setRepeat] = useState(1)
   const [duration, setDuration] = useState(MIN_SCROLL_DURATION_SECONDS)
+  // 「每轮停留」用的关键帧名，按这轮实际要滚多久生成（见 lib/announcement-scroll.ts）。
+  // 空串 = 用 CSS 里的连续滚动关键帧。
+  const [animationName, setAnimationName] = useState('')
   // 拖动查看：悬停时动画已经暂停，因此拖动的就是一份静止的内容，
   // 不会被动画推回去（状态里只记起点，不触发重渲染）。
   const dragRef = useRef<{ startX: number; startScroll: number } | null>(null)
@@ -95,11 +104,20 @@ export function AnnouncementBar() {
       }
       const copies = Math.max(1, Math.ceil(viewportWidth / runWidth))
       setRepeat(copies)
+      const scrollSeconds = Math.max(
+        MIN_SCROLL_DURATION_SECONDS,
+        Math.round((runWidth * copies) / SCROLL_PIXELS_PER_SECOND)
+      )
+      // 「每轮停留」= 滚动段（按内容宽度算，所以每轮时长随公告长短变化）+ 固定 2 秒停留：
+      // 总时长直接相加，关键帧的停留点按同一比例生成，于是滚动速度与连续模式一致，
+      // 而每轮结束都稳定停 2 秒。
       setDuration(
-        Math.max(
-          MIN_SCROLL_DURATION_SECONDS,
-          Math.round((runWidth * copies) / SCROLL_PIXELS_PER_SECOND)
-        )
+        scrollMode === 'paced'
+          ? scrollSeconds + ANNOUNCEMENT_SCROLL_PAUSE_SECONDS
+          : scrollSeconds
+      )
+      setAnimationName(
+        scrollMode === 'paced' ? pacedAnimationName(scrollSeconds) : ''
       )
     }
     measure()
@@ -107,7 +125,7 @@ export function AnnouncementBar() {
     observer.observe(viewport)
     observer.observe(run)
     return () => observer.disconnect()
-  }, [contentKey])
+  }, [contentKey, scrollMode])
 
   const plainText = useMemo(
     () =>
@@ -203,10 +221,16 @@ export function AnnouncementBar() {
         className="announcement-viewport min-w-0 flex-1 cursor-grab overflow-hidden select-none active:cursor-grabbing"
       >
         <div
-          className={`announcement-track${scrolling ? ' is-scrolling' : ''}`}
+          className={`announcement-track${scrolling ? ' is-scrolling' : ''}${
+            scrollMode === 'paced' ? ' is-paced' : ''
+          }`}
           style={
             {
               '--announcement-duration': `${duration}s`,
+              // 只在「每轮停留」时覆盖动画名，连续滚动沿用 CSS 默认的那份。
+              ...(animationName
+                ? { '--announcement-animation': animationName }
+                : {}),
             } as CSSProperties
           }
         >

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Pod } from 'kubernetes-types/core/v1'
+import { useTranslation } from 'react-i18next'
 import { Check, ChevronsUpDown } from 'lucide-react'
 
 import { cn, getAge } from '@/lib/utils'
@@ -32,11 +33,12 @@ export function PodSelector({
   onPodChange,
   showAllOption = false,
 }: PodSelectorProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
 
   const allOption: Pod = {
     metadata: {
-      name: 'All Pods',
+      name: t('common.allPods', 'All Pods'),
       uid: 'all',
       creationTimestamp: undefined,
     },
@@ -57,16 +59,22 @@ export function PodSelector({
           className="w-full min-w-0 justify-between md:w-auto md:min-w-[12rem] md:max-w-[300px]"
         >
           <span className="truncate">
-            {selectedOption ? selectedOption.metadata?.name : 'All'}
+            {selectedOption
+              ? selectedOption.metadata?.name
+              : t('common.all', 'All')}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[max(var(--radix-popover-trigger-width),18rem)] max-w-[min(300px,calc(100vw-1rem))] p-0">
         <Command>
-          <CommandInput placeholder="Search pods..." />
+          <CommandInput
+            placeholder={t('common.messages.searchPods', 'Search pods...')}
+          />
           <CommandList>
-            <CommandEmpty>No pods found.</CommandEmpty>
+            <CommandEmpty>
+              {t('common.messages.noPodsFound', 'No pods found.')}
+            </CommandEmpty>
             <CommandGroup>
               {options.map((pod) => (
                 <CommandItem

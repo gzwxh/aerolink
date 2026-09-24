@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // 公告级别：只决定横幅整体的强调方式（左侧色条 + 图标 + 淡底），
 // 正文里的文字颜色由内容自己的具名标记决定（见 plans/2026-09-21-announcement-bar.md §5）。
@@ -37,6 +40,29 @@ func IsAnnouncementLevel(level string) bool {
 //
 // 与 Notification（站内信）的差别：站内信绑定收件人、进铃铛、可标记已读；公告不绑定
 // 任何用户，只按「启用 + 生效窗口」决定是否出现在所有人的横幅里，也没有已读状态。
+// 公告横向滚动的三种方式。ScrollMode 取这里的值；Scroll（bool）是它的早期口径。
+const (
+	// AnnouncementScrollNone 不滚动：静态展示，超出部分靠拖动与「展开全文」读。
+	AnnouncementScrollNone = "none"
+	// AnnouncementScrollContinuous 连续滚动：一轮走完立刻接下一轮（历史行为）。
+	AnnouncementScrollContinuous = "continuous"
+	// AnnouncementScrollPaced 每轮走完先停一会儿再开始下一轮。
+	//
+	// 真机反馈：连续滚动时消息刚滑出可视区就立刻接上，长公告根本来不及读完，
+	// 于是有了这个"走一轮、停一下"的口径。
+	AnnouncementScrollPaced = "paced"
+)
+
+// IsAnnouncementScrollMode 报告取值是否为已知的滚动方式。
+func IsAnnouncementScrollMode(mode string) bool {
+	switch mode {
+	case AnnouncementScrollNone, AnnouncementScrollContinuous, AnnouncementScrollPaced:
+		return true
+	default:
+		return false
+	}
+}
+
 // 因此两张表不共用，见 plans/2026-09-21-announcement-bar.md §3。
 type Announcement struct {
 	Model
@@ -57,10 +83,17 @@ type Announcement struct {
 	// Create 时被跳过、永远存不进去（users.enabled 踩过同一个坑，见上面 Enabled 的注释）。
 	//
 	// 存量行加列后是 false，由 MigrateAnnouncementScrollBackfill 回填成 true。
-	Scroll    bool       `json:"scroll" gorm:"type:boolean;not null;default:false"`
-	StartAt   *time.Time `json:"startAt,omitempty" gorm:"index"`
-	EndAt     *time.Time `json:"endAt,omitempty" gorm:"index"`
-	CreatorID uint       `json:"creatorId" gorm:"index"`
+	Scroll bool `json:"scroll" gorm:"type:boolean;not null;default:false"`
+	// ScrollMode 是滚动的**方式**（none / continuous / paced，见上面的常量）。
+	//
+	// 与 Scroll 的关系：Scroll 是早期的布尔口径（true = 连续滚动）。保留它是为了让老客户端
+	// 与已有数据仍读得懂；写入时以 ScrollMode 为准，并同步维护 `Scroll = (mode != none)`。
+	// 默认 continuous 与历史行为一致：加列不会改变现有公告的观感，只有显式设过
+	// scroll = false 的那些由 MigrateAnnouncementScrollModeBackfill 改成 none。
+	ScrollMode string     `json:"scrollMode" gorm:"type:varchar(16);not null;default:continuous"`
+	StartAt    *time.Time `json:"startAt,omitempty" gorm:"index"`
+	EndAt      *time.Time `json:"endAt,omitempty" gorm:"index"`
+	CreatorID  uint       `json:"creatorId" gorm:"index"`
 }
 
 func (Announcement) TableName() string {
@@ -110,6 +143,26 @@ func GetAnnouncement(id uint) (*Announcement, error) {
 	return &item, nil
 }
 
+// MigrateAnnouncementScrollModeBackfill 给 ScrollMode 这列补上与 Scroll 一致的取值。
+//
+// 加列时数据库默认是 continuous（= 滚动），与历史行为一致；只有显式设过 scroll = false
+// （不滚动）的老公告需要改成 none，否则升级后它们会突然开始滚动。
+// 与 Scroll 那次回填同理，必须在主 AutoMigrate 循环之前调用。
+func MigrateAnnouncementScrollModeBackfill() error {
+	if DB.Migrator().HasColumn(&Announcement{}, "ScrollMode") {
+		return nil
+	}
+	if err := DB.AutoMigrate(&Announcement{}); err != nil {
+		return fmt.Errorf("给 announcements 加 scroll_mode 列失败（应用账号若不是该表 owner，"+
+			"请让 DBA 用 owner 账号执行：ALTER TABLE announcements "+
+			"ADD COLUMN IF NOT EXISTS scroll_mode varchar(16) NOT NULL DEFAULT 'continuous'）：%w", err)
+	}
+	return DB.
+		Model(&Announcement{}).
+		Where("scroll = ?", false).
+		Update("scroll_mode", AnnouncementScrollNone).Error
+}
+
 // MigrateAnnouncementScrollBackfill 给「升级前就存在的公告」补上 scroll = true。
 //
 // Scroll 是后加的列，AutoMigrate 给存量行填的是零值 false（= 不滚动），而历史行为一直是
@@ -123,7 +176,9 @@ func MigrateAnnouncementScrollBackfill() error {
 		return nil
 	}
 	if err := DB.AutoMigrate(&Announcement{}); err != nil {
-		return err
+		return fmt.Errorf("给 announcements 加 scroll 列失败（应用账号若不是该表 owner，"+
+			"请让 DBA 用 owner 账号执行：ALTER TABLE announcements "+
+			"ADD COLUMN IF NOT EXISTS scroll boolean NOT NULL DEFAULT true）：%w", err)
 	}
 	return DB.Model(&Announcement{}).Where("scroll = ?", false).Update("scroll", true).Error
 }

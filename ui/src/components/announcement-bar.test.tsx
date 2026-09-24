@@ -127,6 +127,53 @@ describe('AnnouncementBar', () => {
     expect(container.querySelectorAll('.announcement-run')).toHaveLength(2)
   })
 
+  // 真机反馈：连续滚动一轮接一轮，长公告来不及读。paced 走完一轮停固定 2 秒——
+  // 滚动段仍按内容宽度算（所以每轮滚多久随公告长短变化），停留固定 2 秒。
+  it('每轮停留模式：滚完停 2 秒，关键帧按实际滚动时长生成', () => {
+    stubWidths(1200, 400)
+    const { container } = renderBar([
+      announcement({ scroll: true, scrollMode: 'paced' }),
+    ])
+
+    const track = container.querySelector('.announcement-track') as HTMLElement
+    expect(track).toHaveClass('is-scrolling')
+    expect(track).toHaveClass('is-paced')
+    // 1200 / 60 = 20s 滚动 + 2s 停留 → 22s。
+    expect(track.style.getPropertyValue('--announcement-duration')).toBe('22s')
+    // 停留点 = 20 / 22 ≈ 90.9091%，编进动画名，关键帧同时注入到 <head>。
+    const name = 'announcement-scroll-paced-909091'
+    expect(track.style.getPropertyValue('--announcement-animation')).toBe(name)
+    const injected = document.head.querySelector(
+      `style[data-announcement-keyframes="${name}"]`
+    )
+    expect(injected?.textContent).toContain(`@keyframes ${name}`)
+    expect(injected?.textContent).toContain('90.9091%')
+  })
+
+  it('连续滚动不带停留关键帧', () => {
+    stubWidths(1200, 400)
+    const { container } = renderBar([
+      announcement({ scroll: true, scrollMode: 'continuous' }),
+    ])
+
+    const track = container.querySelector('.announcement-track') as HTMLElement
+    expect(track).toHaveClass('is-scrolling')
+    expect(track).not.toHaveClass('is-paced')
+    expect(track.style.getPropertyValue('--announcement-duration')).toBe('20s')
+  })
+
+  // 多条公告串成一条轨道，没法一半一种方式：取「最强」的那种。
+  it('多条里有一条要求停留时整条都按停留走', () => {
+    stubWidths(1200, 400)
+    const { container } = renderBar([
+      announcement({ id: 1, scrollMode: 'continuous' }),
+      announcement({ id: 2, scrollMode: 'paced' }),
+    ])
+
+    const track = container.querySelector('.announcement-track') as HTMLElement
+    expect(track).toHaveClass('is-paced')
+  })
+
   // 滚动只是「读全」的手段之一：消息太长时用户来不及看完，
   // 所以要能按住拖动看前后文（悬停时动画已暂停，拖的就是静止的内容）。
   it('按住横向拖动可以看前后文', () => {

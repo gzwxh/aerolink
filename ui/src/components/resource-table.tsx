@@ -228,6 +228,8 @@ function ResourceTableContent<T>({
       ),
       enableSorting: false,
       enableHiding: false,
+      // 只有一个复选框，固定布局下不该占用默认列宽。
+      size: 44,
     }
 
     const baseColumns = [selectColumn, ...columns]
@@ -304,6 +306,9 @@ function ResourceTableContent<T>({
   const table = useReactTable<T>({
     data: memoizedData,
     columns: enhancedColumns,
+    // 固定列宽（配合表格的 table-fixed）：内容长短、排序都不该让列宽跳动。
+    // 160px 是普通文本列的基本宽度，宽列（名称、污点/标签等）在列定义里单独给 size。
+    defaultColumn: { size: 160, minSize: 80, maxSize: 600 },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

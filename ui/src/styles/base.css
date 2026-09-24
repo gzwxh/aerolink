@@ -211,7 +211,11 @@ body {
 
 /* 顶栏通知栏的滚动（见 components/announcement-bar.tsx）：
    轨道里放的是「内容重复到铺满可视区」的两轮（每轮 repeat 份），位移 50% 正好一轮，
-   因此内容比可视区窄时也不会露空白；时长由组件按轮宽度算出来。 */
+   因此内容比可视区窄时也不会露空白；时长由组件按轮宽度算出来。
+
+   下面是**连续滚动**用的关键帧。「每轮停留」那份不是静态的：停留点取决于这轮要滚多久
+   （公告长短不一），所以由 lib/announcement-scroll.ts 的 pacedAnimationName 在运行时
+   按「滚动秒数 /（滚动秒数 + 2 秒）」算出来并注入，动画名通过 --announcement-animation 传入。 */
 @keyframes announcement-scroll {
   from {
     transform: translateX(0);
@@ -235,8 +239,10 @@ body {
 }
 
 .announcement-track.is-scrolling {
-  animation: announcement-scroll var(--announcement-duration, 30s) linear
-    infinite;
+  /* 动画名默认是连续滚动的关键帧；「每轮停留」由组件通过 --announcement-animation
+     换成自己那一份（停留点按实际滚动时长算好），时长、linear、infinite 都沿用这里。 */
+  animation: var(--announcement-animation, announcement-scroll)
+    var(--announcement-duration, 30s) linear infinite;
   /* 单独提一层，避免这行持续动画带动整个顶栏重绘。 */
   will-change: transform;
 }

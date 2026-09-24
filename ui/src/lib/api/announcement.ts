@@ -20,14 +20,27 @@ export interface Announcement {
   /**
    * 是否在顶栏横向滚动。后端默认 true（与历史行为一致）；
    * 旧数据或老接口没有这个字段时按 true 处理。
+   *
+   * 新代码请用 `scrollMode`：它是三态口径，这个布尔只是给老客户端读的兼容字段
+   * （后端写入时两者会被同步维护）。判定统一走 lib/announcement-scroll.ts。
    */
   scroll: boolean
+  /** 滚动方式：不滚动 / 连续 / 每轮之间停留（见 pkg/model/announcement.go 的常量）。 */
+  scrollMode?: AnnouncementScrollMode
   startAt?: string
   endAt?: string
   creatorId: number
   createdAt: string
   updatedAt: string
 }
+
+/**
+ * 顶栏通知栏的滚动方式（与 pkg/model/announcement.go 的常量一一对应）：
+ *   none       不滚动，静态展示；
+ *   continuous 连续滚动，一轮接一轮（历史行为）；
+ *   paced      每轮走完先停一会儿，再开始下一轮。
+ */
+export type AnnouncementScrollMode = 'none' | 'continuous' | 'paced'
 
 export interface AnnouncementPayload {
   title: string
@@ -37,6 +50,8 @@ export interface AnnouncementPayload {
   enabled: boolean
   /** 是否在顶栏横向滚动（后端在该字段缺省时按 true 处理）。 */
   scroll: boolean
+  /** 滚动方式；后端以它为准，并据此同步维护上面的 scroll。 */
+  scrollMode: AnnouncementScrollMode
   /** 空串表示「立即生效 / 永不过期」（后端按可空时间解析）。 */
   startAt: string
   endAt: string

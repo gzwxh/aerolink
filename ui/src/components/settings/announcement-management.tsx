@@ -12,6 +12,8 @@ import {
   type Announcement,
   type AnnouncementPayload,
 } from '@/lib/api'
+import type { AnnouncementScrollMode } from '@/lib/api'
+import { announcementScrollMode } from '@/lib/announcement-scroll'
 import { formatDateTimeShort, fromRFC3339, toRFC3339 } from '@/lib/date-time'
 import {
   neutralBadge,
@@ -58,6 +60,19 @@ import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confir
 
 const LEVELS: AnnouncementLevel[] = ['info', 'warning', 'danger']
 
+/** 表单下拉里的滚动方式（顺序即展示顺序：默认的连续滚动排第一）。 */
+const ANNOUNCEMENT_SCROLL_MODES: AnnouncementScrollMode[] = [
+  'continuous',
+  'paced',
+  'none',
+]
+
+const SCROLL_MODE_LABELS: Record<AnnouncementScrollMode, string> = {
+  continuous: 'notifications.announcements.scrollModes.continuous',
+  paced: 'notifications.announcements.scrollModes.paced',
+  none: 'notifications.announcements.scrollModes.none',
+}
+
 type AnnouncementStatus = 'active' | 'pending' | 'expired' | 'disabled'
 
 /** 与后端 model.ListActiveAnnouncements 的过滤条件同口径。 */
@@ -95,8 +110,8 @@ interface AnnouncementForm {
   level: AnnouncementLevel
   priority: number
   enabled: boolean
-  /** 在顶栏是否横向滚动；关闭后单行显示，靠拖动或「展开全文」读剩下的内容。 */
-  scroll: boolean
+  /** 顶栏横向滚动的方式；none 时单行显示，靠拖动或「展开全文」读剩下的内容。 */
+  scrollMode: AnnouncementScrollMode
   startAt: string
   endAt: string
 }
@@ -107,8 +122,8 @@ const emptyDraft: AnnouncementForm = {
   level: 'info',
   priority: 0,
   enabled: true,
-  // 默认滚动，与历史行为一致（后端缺省值也是 true）。
-  scroll: true,
+  // 默认连续滚动，与历史行为一致（后端缺省值也是 continuous）。
+  scrollMode: 'continuous',
   startAt: '',
   endAt: '',
 }
@@ -123,8 +138,8 @@ function toForm(announcement: Announcement | null): AnnouncementForm {
     level: announcement.level,
     priority: announcement.priority,
     enabled: announcement.enabled,
-    // `!== false`：老数据没有这个字段时按「滚动」处理，与后端默认值一致。
-    scroll: announcement.scroll !== false,
+    // 老数据没有 scrollMode 时按 scroll 推导（见 lib/announcement-scroll.ts）。
+    scrollMode: announcementScrollMode(announcement),
     startAt: fromRFC3339(announcement.startAt),
     endAt: fromRFC3339(announcement.endAt),
   }
@@ -137,7 +152,9 @@ function toPayload(form: AnnouncementForm): AnnouncementPayload {
     level: form.level,
     priority: form.priority,
     enabled: form.enabled,
-    scroll: form.scroll,
+    // 两个字段一起发且保持一致：scrollMode 是新口径，scroll 给老客户端/老后端读。
+    scroll: form.scrollMode !== 'none',
+    scrollMode: form.scrollMode,
     // 空串由后端当作「立即生效 / 永不过期」。
     startAt: toRFC3339(form.startAt) ?? '',
     endAt: toRFC3339(form.endAt) ?? '',
@@ -155,9 +172,10 @@ function announcementToPayload(item: Announcement): AnnouncementPayload {
     level: item.level,
     priority: item.priority,
     enabled: item.enabled,
-    // 行内改级别/启用时会把整条公告回传（接口是覆盖式 PUT），这里必须带上 scroll，
-    // 否则一次行内改动就会把滚动设置重置掉。老数据缺字段时按「滚动」处理。
+    // 行内改级别/启用时会把整条公告回传（接口是覆盖式 PUT），这里必须带上滚动方式，
+    // 否则一次行内改动就会把设置重置掉。老数据缺字段时按 scroll 推导。
     scroll: item.scroll !== false,
+    scrollMode: announcementScrollMode(item),
     startAt: item.startAt ?? '',
     endAt: item.endAt ?? '',
   }
@@ -284,9 +302,17 @@ export function AnnouncementManagement() {
                         : t('notifications.announcements.enabledOff', '已停用')}
                     </span>
                     <span>
-                      {item.scroll === false
+                      {announcementScrollMode(item) === 'none'
                         ? t('notifications.announcements.scrollOff', '不滚动')
-                        : t('notifications.announcements.scrollOn', '横向滚动')}
+                        : announcementScrollMode(item) === 'paced'
+                          ? t(
+                              'notifications.announcements.scrollPaced',
+                              '横向滚动（每轮停留）'
+                            )
+                          : t(
+                              'notifications.announcements.scrollOn',
+                              '横向滚动'
+                            )}
                     </span>
                   </div>
                 </div>
@@ -554,22 +580,37 @@ function AnnouncementDialog({
 
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <Label htmlFor="announcement-scroll">
-                  {t('notifications.announcements.fields.scroll', '横向滚动')}
+                <Label htmlFor="announcement-scroll-mode">
+                  {t('notifications.announcements.fields.scrollMode', '滚动方式')}
                 </Label>
                 <p className="text-muted-foreground text-xs">
                   {t(
-                    'notifications.announcements.fields.scrollHint',
-                    '开启后内容从右向左循环滚动；关闭则单行显示，靠拖动或右侧箭头展开读全文。'
+                    'notifications.announcements.fields.scrollModeHint',
+                    '「连续滚动」一轮接一轮；「每轮停留」走完一圈会停一下再开始，长内容更容易读完；「不滚动」则单行显示，靠拖动或右侧箭头展开读全文。'
                   )}
                 </p>
               </div>
-              <Switch
-                id="announcement-scroll"
-                checked={draft.scroll}
-                onCheckedChange={(value) => patch('scroll', value)}
+              <Select
+                value={draft.scrollMode}
+                onValueChange={(value) =>
+                  patch('scrollMode', value as AnnouncementScrollMode)
+                }
                 disabled={readOnly}
-              />
+              >
+                <SelectTrigger
+                  id="announcement-scroll-mode"
+                  className="w-[180px] shrink-0"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ANNOUNCEMENT_SCROLL_MODES.map((mode) => (
+                    <SelectItem key={mode} value={mode}>
+                      {t(SCROLL_MODE_LABELS[mode])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex items-center justify-between gap-4">

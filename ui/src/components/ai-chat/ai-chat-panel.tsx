@@ -32,7 +32,7 @@ export function AIChatPanel({
   sessionId?: string
   onClose: () => void
 }) {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { closeChat, pageContext } = useAIChatContext()
   const {
     messages,
@@ -173,7 +173,7 @@ export function AIChatPanel({
                 <Clock className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top">Chat history</TooltipContent>
+            <TooltipContent side="top">{t('common.fields.chatHistory', '对话历史')}</TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -187,7 +187,7 @@ export function AIChatPanel({
                 <MessageSquarePlus className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top">New chat</TooltipContent>
+            <TooltipContent side="top">{t('common.actions.newChat', '新对话')}</TooltipContent>
           </Tooltip>
 
           {!standalone && (
@@ -202,7 +202,7 @@ export function AIChatPanel({
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">Open in new tab</TooltipContent>
+              <TooltipContent side="top">{t('common.actions.openInNewTab', '在新标签页打开')}</TooltipContent>
             </Tooltip>
           )}
 

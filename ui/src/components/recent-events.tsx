@@ -82,11 +82,13 @@ export function RecentEvents() {
       <Card>
         <CardHeader>
           <CardTitle>{t('overview.recentEvents')}</CardTitle>
-          <CardDescription>Latest cluster events</CardDescription>
+          <CardDescription>
+            {t('overview.recentEventsDescription', '集群最近发生的事件')}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-32 text-muted-foreground">
-            No recent events
+            {t('events.noRecentEvents', '暂无最近事件')}
           </div>
         </CardContent>
       </Card>
@@ -97,7 +99,9 @@ export function RecentEvents() {
     <Card>
       <CardHeader>
         <CardTitle>{t('overview.recentEvents')}</CardTitle>
-        <CardDescription>Latest cluster events</CardDescription>
+        <CardDescription>
+          {t('overview.recentEventsDescription', '集群最近发生的事件')}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="max-h-72 overflow-y-auto scrollbar-hide">

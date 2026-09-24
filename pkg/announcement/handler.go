@@ -27,9 +27,12 @@ type announcementRequest struct {
 	Enabled  bool   `json:"enabled"`
 	// Scroll 用指针区分「没传」与「显式传 false」：不带该字段的老客户端应当保持滚动这个
 	// 默认行为，而不是把公告改成停住。
-	Scroll  *bool  `json:"scroll"`
-	StartAt string `json:"startAt"`
-	EndAt   string `json:"endAt"`
+	Scroll *bool `json:"scroll"`
+	// ScrollMode 是新的三态口径（none / continuous / paced，见 model 的常量）。
+	// 两者同时出现时以它为准，写入时会据此同步维护 Scroll。
+	ScrollMode *string `json:"scrollMode"`
+	StartAt    string  `json:"startAt"`
+	EndAt      string  `json:"endAt"`
 }
 
 // HandleListActiveAnnouncements 返回当前生效的公告，供所有登录用户读取。
@@ -117,6 +120,7 @@ func HandleUpdateAnnouncement(c *gin.Context) {
 	existing.Priority = updated.Priority
 	existing.Enabled = updated.Enabled
 	existing.Scroll = updated.Scroll
+	existing.ScrollMode = updated.ScrollMode
 	existing.StartAt = updated.StartAt
 	existing.EndAt = updated.EndAt
 	// CreatorID 不覆盖：它记的是「谁发的」，改内容的人由操作日志留痕。
@@ -208,10 +212,17 @@ func buildAnnouncement(req announcementRequest) (*model.Announcement, error) {
 		return nil, errors.New("结束时间必须晚于生效时间")
 	}
 
-	// 没传 scroll 时默认滚动：与历史行为一致，不带该字段的老客户端不会改变观感。
-	scroll := true
-	if req.Scroll != nil {
-		scroll = *req.Scroll
+	// 滚动方式：默认连续滚动，与历史行为一致，不带该字段的老客户端不会改变观感。
+	// 老客户端只发 scroll(bool)，这里按它的取值翻译成对应方式。
+	scrollMode := model.AnnouncementScrollContinuous
+	switch {
+	case req.ScrollMode != nil:
+		scrollMode = strings.TrimSpace(*req.ScrollMode)
+	case req.Scroll != nil && !*req.Scroll:
+		scrollMode = model.AnnouncementScrollNone
+	}
+	if !model.IsAnnouncementScrollMode(scrollMode) {
+		return nil, errors.New("滚动方式不合法")
 	}
 
 	return &model.Announcement{
@@ -220,9 +231,11 @@ func buildAnnouncement(req announcementRequest) (*model.Announcement, error) {
 		Level:    level,
 		Priority: req.Priority,
 		Enabled:  req.Enabled,
-		Scroll:   scroll,
-		StartAt:  startAt,
-		EndAt:    endAt,
+		// Scroll 与 ScrollMode 必须一致：前者是给老客户端读的兼容口径。
+		Scroll:     scrollMode != model.AnnouncementScrollNone,
+		ScrollMode: scrollMode,
+		StartAt:    startAt,
+		EndAt:      endAt,
 	}, nil
 }
 

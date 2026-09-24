@@ -74,16 +74,17 @@
       "actions": "操作",
       "continue": "继续",
       "creating": "创建中...",
-      "deleting": "删除中..."
+      "deleting": "删除中...",
+      "openInNewTab": "在新标签页打开"
     },
     "fields": {
-      "accessModes": "Access Modes",
+      "accessModes": "访问模式",
       "actions": "操作",
       "active": "活跃",
       "advancedSettings": "高级设置",
       "age": "运行时间",
       "allContainers": "所有容器",
-      "allocatable": "Allocatable",
+      "allocatable": "可分配",
       "annotations": "注解",
       "apiKey": "API 密钥",
       "apiKeys": "API 密钥",
@@ -101,10 +102,10 @@
       "capacity": "容量",
       "chatHistory": "对话历史",
       "claim": "声明",
-      "clientId": "Client ID",
+      "clientId": "客户端 ID",
       "cluster": "集群",
       "clusters": "集群",
-      "clusterIP": "Cluster IP",
+      "clusterIP": "集群 IP",
       "completed": "完成时间",
       "config": "配置",
       "container": "容器",
@@ -124,7 +125,7 @@
       "desired": "期望",
       "desiredScheduled": "期望调度",
       "details": "详情",
-      "effect": "Effect",
+      "effect": "效果",
       "env": "环境变量",
       "envFrom": "环境变量来源",
       "errorDetails": "错误详情",
@@ -139,9 +140,9 @@
       "images": "镜像",
       "information": "信息",
       "internalIP": "内部 IP",
-      "issuer": "Issuer",
-      "job": "Job",
-      "jobs": "Jobs",
+      "issuer": "签发者",
+      "job": "任务",
+      "jobs": "任务",
       "kernelVersion": "内核版本",
       "key": "键",
       "keys": "键",
@@ -161,14 +162,14 @@
       "minReadySeconds": "最短就绪时间",
       "mounts": "挂载",
       "name": "名称",
-      "namespace": "Namespace",
-      "namespaces": "Namespaces",
+      "namespace": "命名空间",
+      "namespaces": "命名空间",
       "node": "节点",
       "object": "对象",
       "observedGeneration": "已观测版本号",
       "oauthEndpoints": "OAuth 端点",
-      "oauthProvider": "OAuth Provider",
-      "oauthProviders": "OAuth Provider",
+      "oauthProvider": "OAuth 提供商",
+      "oauthProviders": "OAuth 提供商",
       "oidcGroup": "LDAP / OIDC 用户组",
       "oidcGroups": "LDAP / OIDC 用户组",
       "operator": "操作人",
@@ -181,13 +182,13 @@
       "passwordLogin": "密码登录",
       "passwordUser": "密码用户",
       "paused": "暂停",
-      "persistentVolumeClaims": "PVCs",
+      "persistentVolumeClaims": "PVC",
       "permissions": "权限",
       "phase": "阶段",
       "podCIDR": "Pod CIDR",
       "podIP": "Pod IP",
       "podManagementPolicy": "Pod 管理策略",
-      "pods": "Pods",
+      "pods": "Pod 数",
       "ports": "端口",
       "progressDeadline": "进度截止时间",
       "prometheus": "Prometheus",
@@ -209,7 +210,7 @@
       "revision": "版本",
       "role": "角色",
       "roles": "角色",
-      "selector": "Selector",
+      "selector": "选择器",
       "serviceAccount": "服务账号",
       "serviceName": "服务名",
       "size": "大小",
@@ -250,7 +251,7 @@
       "passwordChangeLogs": "改密日志",
       "yamlConfiguration": "YAML 配置",
       "yamlContent": "YAML 内容",
-      "yamlDiff": "YAML Diff",
+      "yamlDiff": "YAML 差异",
       "system": "系统",
       "disabled": "已禁用",
       "email": "邮箱",
@@ -354,7 +355,9 @@
       "containerUpdated": "容器更新成功",
       "disabled": "已禁用",
       "enabled": "已启用",
-      "noResults": "没有匹配的结果"
+      "noResults": "没有匹配的结果",
+      "searchPods": "搜索 Pod…",
+      "noPodsFound": "未找到 Pod"
     },
     "tabs": {
       "containers": "容器",
@@ -442,7 +445,14 @@
       "noResults": "没有匹配结果",
       "toggle": "切换 Namespace {{name}}"
     },
-    "currentCluster": "当前集群"
+    "currentCluster": "当前集群",
+    "all": "全部",
+    "allPods": "全部 Pod",
+    "resourceTypeNotFound": "未知的资源类型：{{type}}",
+    "metrics": {
+      "usage": "使用量",
+      "request": "请求"
+    }
   },
   "globalSearch": {
     "title": "全局搜索",
@@ -515,7 +525,9 @@
     "crdEmpty": "未找到 CRD",
     "crdLoading": "CRD 加载中...",
     "crdLoadFailed": "CRD 加载失败",
-    "saveFailed": "保存侧边栏配置失败，请稍后重试"
+    "saveFailed": "保存侧边栏配置失败，请稍后重试",
+    "sheetTitle": "侧边栏",
+    "sheetDescription": "移动端侧边栏"
   },
   "nav": {
     "rbac": "权限管理",
@@ -603,7 +615,8 @@
     "resourceCharts": "资源图表",
     "scopedHint": "当前账号只能看到已授权命名空间的数据，不包含集群容量。",
     "failedToLoad": "加载概览数据失败",
-    "unknownError": "未知错误"
+    "unknownError": "未知错误",
+    "recentEventsDescription": "集群最近发生的事件"
   },
   "loginLog": {
     "copyClient": "复制客户端信息",
@@ -1112,7 +1125,13 @@
     "emptyNamespace": "{{namespace}}中没有{{resource}}",
     "clearSearch": "清除搜索",
     "selectAllRows": "全选",
-    "selectRow": "选择该行"
+    "selectRow": "选择该行",
+    "rowsTotal": "共 {{count}} 行",
+    "rowsFiltered": "显示 {{shown}} / {{total}} 行",
+    "filteredBy": "（筛选：“{{query}}”）",
+    "rowsPerPage": "每页行数",
+    "allOption": "全部",
+    "noResults": "暂无数据"
   },
   "errors": {
     "crdNotInstalledTitle": "资源类型不可用",
@@ -1754,7 +1773,9 @@
         "startAt": "生效时间",
         "startAtHint": "留空立即生效",
         "endAt": "结束时间",
-        "endAtHint": "留空永不结束"
+        "endAtHint": "留空永不结束",
+        "scrollMode": "滚动方式",
+        "scrollModeHint": "「连续滚动」一轮接一轮；「每轮停留」走完一圈会停一下再开始，长内容更容易读完；「不滚动」则单行显示，靠拖动或右侧箭头展开读全文。"
       },
       "toolbar": {
         "label": "格式",
@@ -1789,7 +1810,13 @@
       "scrollOff": "不滚动",
       "enabledOn": "已启用",
       "enabledOff": "已停用",
-      "scrollOn": "横向滚动"
+      "scrollOn": "横向滚动",
+      "scrollModes": {
+        "continuous": "连续滚动",
+        "paced": "每轮停留后再滚动",
+        "none": "不滚动"
+      },
+      "scrollPaced": "横向滚动（每轮停留）"
     },
     "channels": {
       "inapp": "站内信",

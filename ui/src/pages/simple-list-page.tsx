@@ -72,7 +72,13 @@ export function SimpleListPage<T extends keyof ResourceTypeMap>({
   }, [])
 
   if (!resourceType) {
-    return <div>Resource type "{resourceType}" not found</div>
+    return (
+      <div>
+        {t('common.resourceTypeNotFound', '未知的资源类型：{{type}}', {
+          type: resourceType,
+        })}
+      </div>
+    )
   }
 
   return (

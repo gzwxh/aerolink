@@ -78,9 +78,11 @@ describe('AnnouncementManagement 行内操作', () => {
       level: 'warning',
       priority: 3,
       enabled: false,
-      // 覆盖式 PUT 不会带上没传的字段：行内改动必须把 scroll 一起回传，
+      // 覆盖式 PUT 不会带上没传的字段：行内改动必须把滚动设置一起回传，
       // 否则一次点「启用」就会把管理员的「不滚动」设置悄悄清掉。
       scroll: false,
+      // scrollMode 是新口径，与 scroll 成对回传；老数据没有该字段时按 scroll 推导。
+      scrollMode: 'none',
       startAt: '2026-09-21T14:00:00+08:00',
       endAt: '2026-09-21T16:00:00+08:00',
     })

@@ -74,7 +74,8 @@
       "actions": "Actions",
       "continue": "Continue",
       "creating": "Creating...",
-      "deleting": "Deleting..."
+      "deleting": "Deleting...",
+      "openInNewTab": "Open in new tab"
     },
     "fields": {
       "accessModes": "Access Modes",
@@ -354,7 +355,9 @@
       "containerUpdated": "Container updated successfully",
       "disabled": "Disabled",
       "enabled": "Enabled",
-      "noResults": "No matching results"
+      "noResults": "No matching results",
+      "searchPods": "Search pods...",
+      "noPodsFound": "No pods found."
     },
     "tabs": {
       "containers": "Containers",
@@ -442,7 +445,14 @@
       "noResults": "No results",
       "toggle": "Toggle namespace {{name}}"
     },
-    "currentCluster": "Current cluster"
+    "currentCluster": "Current cluster",
+    "all": "All",
+    "allPods": "All Pods",
+    "resourceTypeNotFound": "Resource type \"{{type}}\" not found",
+    "metrics": {
+      "usage": "Usage",
+      "request": "Request"
+    }
   },
   "globalSearch": {
     "title": "Global Search",
@@ -515,7 +525,9 @@
     "crdEmpty": "No CRDs found.",
     "crdLoading": "Loading CRDs...",
     "crdLoadFailed": "Failed to load CRDs",
-    "saveFailed": "Failed to save the sidebar configuration; please try again later"
+    "saveFailed": "Failed to save the sidebar configuration; please try again later",
+    "sheetTitle": "Sidebar",
+    "sheetDescription": "Displays the mobile sidebar."
   },
   "nav": {
     "rbac": "RBAC",
@@ -603,7 +615,8 @@
     "resourceCharts": "Resource Charts",
     "scopedHint": "Showing the namespaces you have access to; cluster capacity is not included.",
     "failedToLoad": "Failed to load overview data",
-    "unknownError": "Unknown error occurred"
+    "unknownError": "Unknown error occurred",
+    "recentEventsDescription": "Latest cluster events"
   },
   "loginLog": {
     "copyClient": "Copy client info",
@@ -1112,7 +1125,13 @@
     "emptyNamespace": "There are no {{resource}} in {{namespace}}",
     "clearSearch": "Clear Search",
     "selectAllRows": "Select all",
-    "selectRow": "Select row"
+    "selectRow": "Select row",
+    "rowsTotal": "{{count}} row(s) total.",
+    "rowsFiltered": "Showing {{shown}} of {{total}} row(s)",
+    "filteredBy": "(filtered by \"{{query}}\")",
+    "rowsPerPage": "Rows per page",
+    "allOption": "All",
+    "noResults": "No results."
   },
   "errors": {
     "crdNotInstalledTitle": "Resource Type Not Available",
@@ -1754,7 +1773,9 @@
         "startAt": "Starts at",
         "startAtHint": "Leave empty to start immediately",
         "endAt": "Ends at",
-        "endAtHint": "Leave empty to never end"
+        "endAtHint": "Leave empty to never end",
+        "scrollMode": "Scroll mode",
+        "scrollModeHint": "\"Continuous\" loops back to back; \"Pause between rounds\" waits a moment after each pass so long text can be read; \"None\" keeps everything on one line and relies on dragging or the expand arrow."
       },
       "toolbar": {
         "label": "Formatting",
@@ -1789,7 +1810,13 @@
       "scrollOff": "Static",
       "enabledOn": "Enabled",
       "enabledOff": "Disabled",
-      "scrollOn": "Scrolling"
+      "scrollOn": "Scrolling",
+      "scrollModes": {
+        "continuous": "Continuous",
+        "paced": "Pause between rounds",
+        "none": "Do not scroll"
+      },
+      "scrollPaced": "Scrolling (pauses between rounds)"
     },
     "channels": {
       "inapp": "In-app",

@@ -105,26 +105,105 @@ func InitDB() {
 	}
 	// 公告的 Scroll 列要在主循环之前补：加列与「判断这列是不是刚加的」必须紧邻，
 	// 主循环跑完就分不清了（见 MigrateAnnouncementScrollBackfill 的注释）。
-	if err := MigrateAnnouncementScrollBackfill(); err != nil {
-		panic("failed to backfill announcement scroll: " + err.Error())
+	// 下面几步都可能碰到需要 DDL 权限的变更（AutoMigrate 加列/改列、DropColumn）。
+	// 失败只告警、不中断启动：生产库的表多由 DBA 创建，应用账号往往只有 DML 权限，
+	// 不该因为一次「加列被拒」让整个控制台起不来（见 runMigration 的说明）。
+	// 结构完全交给 DBA 托管时可设 DB_MIGRATE=off：应用不再尝试任何 DDL，
+	// 也不会每次启动都刷一条「加列失败」，代价是失去这层自查（见 migrateDisabled）。
+	if migrateDisabled() {
+		klog.Info("DB_MIGRATE=off：跳过自动迁移与回填，库结构按外部流程维护")
 	}
+	runMigration("公告 scroll 列回填", MigrateAnnouncementScrollBackfill)
+	// ScrollMode 同理，且**必须排在 Scroll 之后**：它的回填要读已经补好的 scroll 列。
+	runMigration("公告 scrollMode 列回填", MigrateAnnouncementScrollModeBackfill)
 	for _, model := range Models() {
-		err = DB.AutoMigrate(model)
-		if err != nil {
-			panic("failed to migrate database: " + err.Error())
-		}
+		current := model
+		runMigration("表结构自动迁移", func() error { return DB.AutoMigrate(current) })
 	}
-	if err := MigrateBindingGroupMemberNamespace(); err != nil {
-		panic("failed to migrate binding group member index: " + err.Error())
-	}
-	if err := MigrateDropUserWechatColumn(); err != nil {
-		panic("failed to drop the legacy user wechat column: " + err.Error())
-	}
+	runMigration("绑定组成员命名空间索引", MigrateBindingGroupMemberNamespace)
+	runMigration("清理 users.wechat 旧列", MigrateDropUserWechatColumn)
+
+	// 不论是否跳过迁移，都用只读方式确认关键列在不在（不需要 DDL 权限）。
+	// 这样设了 DB_MIGRATE=off 也不会漏掉「忘了执行 DBA 的 SQL」。
+	checkSchema()
 	sqldb, err := DB.DB()
 	if err == nil {
 		sqldb.SetMaxOpenConns(common.DBMaxOpenConns)
 		sqldb.SetMaxIdleConns(common.DBMaxIdleConns)
 		sqldb.SetConnMaxLifetime(common.DBConnMaxLifetime)
+	}
+}
+
+// runMigration 执行一步数据库变更，失败只告警、不阻断启动。
+//
+// 为什么不 fail-fast：生产环境的库通常由 DBA 建表，应用的数据库账号只有 DML 权限，
+// 而 AutoMigrate 加列/改列需要 DDL 权限（PostgreSQL 还要求是**表 owner**，否则报
+// 42501 must be owner of table）。一次「加列被拒」就把整个控制台拖垮，比
+// 「结构未就绪、少数接口报错」严重得多。错误文案里会带上该步需要执行的 SQL，
+// 运维据此交给 DBA 补齐即可。
+//
+// 需要「迁移失败即启动失败」时（本地开发、CI）设 DB_MIGRATE_STRICT=true。
+func runMigration(name string, fn func() error) {
+	if migrateDisabled() {
+		return
+	}
+	if err := fn(); err != nil {
+		if dbMigrateStrict() {
+			panic("failed to migrate database (" + name + "): " + err.Error())
+		}
+		klog.Errorf("数据库变更未完成（%s）：%v", name, err)
+		klog.Errorf("  该步骤需要 DDL 权限（表 owner）。请让 DBA 用 owner 账号执行上面的变更后重启；" +
+			"补齐之前，依赖该结构的接口可能报错，其余功能不受影响。")
+	}
+}
+
+// dbMigrateStrict 报告是否要求「迁移失败即启动失败」，默认否。
+func dbMigrateStrict() bool {
+	return strings.EqualFold(strings.TrimSpace(common.Getenv("DB_MIGRATE_STRICT")), "true")
+}
+
+// migrateDisabled 报告是否完全跳过自动迁移（DB_MIGRATE=off）。
+//
+// 库结构由 DBA 统一维护时用它：应用账号只有 DML 权限，AutoMigrate 每次启动都会因为
+// 「不是表 owner」失败并留下一条错误日志，跳过更干净。代价是失去这层自查——漏执行
+// 结构变更时不再有日志提醒，需要靠 checkSchema 兜住（所以默认不跳过）。
+func migrateDisabled() bool {
+	return strings.EqualFold(strings.TrimSpace(common.Getenv("DB_MIGRATE")), "off")
+}
+
+// schemaExpectations 列出「应用直接依赖、又可能落在库结构变更之后」的列。
+//
+// 只列这几处，不做全量 schema 比对：全量比对要读 information_schema 再和 GORM 模型
+// 对齐，成本与误报都超过收益；而漏列的后果通常是某个功能直接报错，
+// 提前用一条明确日志点出来就够了。
+var schemaExpectations = []struct {
+	model  interface{}
+	column string
+	hint   string
+}{
+	{
+		model:  &Announcement{},
+		column: "Scroll",
+		hint:   "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS scroll boolean NOT NULL DEFAULT true;",
+	},
+	{
+		model:  &Announcement{},
+		column: "ScrollMode",
+		hint: "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS scroll_mode " +
+			"varchar(16) NOT NULL DEFAULT 'continuous';",
+	},
+}
+
+// checkSchema 用只读方式确认关键列都在（不需要 DDL 权限），缺了就给出可执行的 SQL。
+//
+// DB_MIGRATE=off 时这是唯一的自查手段，所以**不受该开关影响**，每次都跑。
+func checkSchema() {
+	for _, expect := range schemaExpectations {
+		if DB.Migrator().HasColumn(expect.model, expect.column) {
+			continue
+		}
+		klog.Errorf("库结构缺少 %s 列：依赖它的接口会报错，请让 DBA 执行：%s",
+			expect.column, expect.hint)
 	}
 }
 

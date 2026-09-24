@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   flexRender,
   PaginationState,
@@ -44,6 +45,10 @@ interface ResourceTableViewProps<T> {
    * 按列定义里的 `size` 固定列宽（`table-fixed`）：列宽稳定、长内容靠截断显示，
    * 而不是由最长的那个单元格把整张表撑宽。配合单元格里的 `truncate` 使用。
    */
+  /**
+   * 固定列宽（`table-fixed` + 按列的 size 分配，见 resource-table.tsx 的 defaultColumn）。
+   * 默认开：内容长短与排序都不该让列宽跳动；个别页面想恢复自动布局可显式传 false。
+   */
   columnSizing?: boolean
   showAllPageSize?: boolean
   pageSizeOptions?: number[]
@@ -68,11 +73,16 @@ export function ResourceTableView<T>({
   pagination,
   setPagination,
   shrinkFirstColumn = true,
-  columnSizing = false,
+  columnSizing = true,
   showAllPageSize = true,
   pageSizeOptions = [10, 20, 50, 100],
   renderRowDetails,
 }: ResourceTableViewProps<T>) {
+  const { t } = useTranslation()
+  // 可见列 size 之和：下面把每列宽度换算成它的占比（总宽恒为 100%）。
+  // 这样列数再多、内容再长，表格都待在容器里，不会出现横向滚动。
+  const totalColumnSize = table.getTotalSize() || 1
+
   const renderRows = () => {
     const rows = table.getRowModel().rows
 
@@ -80,7 +90,7 @@ export function ResourceTableView<T>({
       return (
         <TableRow>
           <TableCell colSpan={columnCount} className="h-24 text-center">
-            No results.
+            {t('resourceTable.noResults', 'No results.')}
           </TableCell>
         </TableRow>
       )
@@ -209,7 +219,11 @@ export function ResourceTableView<T>({
                           className={index <= 1 ? 'text-left' : 'text-center'}
                           style={
                             columnSizing
-                              ? { width: header.getSize() }
+                              ? // 按 size 的**比例**分配，而不是写死像素：写死会让总宽超过
+                                // 容器，列一多就逼出横向滚动条（用户反馈的就是这个）。
+                                {
+                                  width: `${((header.getSize() || 1) / totalColumnSize) * 100}%`,
+                                }
                               : undefined
                           }
                         >
@@ -267,19 +281,29 @@ export function ResourceTableView<T>({
           <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
             {hasActiveFilters ? (
               <>
-                Showing {filteredRowCount} of {totalRowCount} row(s)
+                {t(
+                  'resourceTable.rowsFiltered',
+                  '显示 {{shown}} / {{total}} 行',
+                  { shown: filteredRowCount, total: totalRowCount }
+                )}
                 {searchQuery && (
-                  <span className="ml-1">(filtered by "{searchQuery}")</span>
+                  <span className="ml-1">
+                    {t('resourceTable.filteredBy', '（筛选：“{{query}}”）', {
+                      query: searchQuery,
+                    })}
+                  </span>
                 )}
               </>
             ) : (
-              `${totalRowCount} row(s) total.`
+              t('resourceTable.rowsTotal', '共 {{count}} 行', {
+                count: totalRowCount,
+              })
             )}
           </div>
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 lg:w-fit">
             <div className="flex items-center justify-between gap-2 sm:justify-start">
               <span className="text-sm text-muted-foreground">
-                Rows per page:
+                {t('resourceTable.rowsPerPage', '每页行数')}:
               </span>
               <Select
                 value={pagination.pageSize.toString()}
@@ -302,14 +326,17 @@ export function ResourceTableView<T>({
                   ))}
                   {showAllPageSize && resolvedAllPageSize > 0 && (
                     <SelectItem value={`${resolvedAllPageSize}`}>
-                      All
+                      {t('resourceTable.allOption', 'All')}
                     </SelectItem>
                   )}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex items-center justify-center text-sm font-medium">
-              Page {pagination.pageIndex + 1} of {table.getPageCount() || 1}
+              {t('common.pagination.page', 'Page {{current}} of {{total}}', {
+                current: pagination.pageIndex + 1,
+                total: table.getPageCount() || 1,
+              })}
             </div>
             <div className="flex items-center justify-end gap-2 sm:justify-start lg:ml-0">
               <Button
@@ -319,7 +346,10 @@ export function ResourceTableView<T>({
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to previous page</span>←
+                <span className="sr-only">
+                  {t('common.pagination.previous', 'Previous page')}
+                </span>
+                ←
               </Button>
               <Button
                 variant="outline"
@@ -328,7 +358,10 @@ export function ResourceTableView<T>({
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to next page</span>→
+                <span className="sr-only">
+                  {t('common.pagination.next', 'Next page')}
+                </span>
+                →
               </Button>
             </div>
           </div>

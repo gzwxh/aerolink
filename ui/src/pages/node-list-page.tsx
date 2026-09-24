@@ -20,6 +20,11 @@ import { statusBadge } from '@/lib/status-badge'
 import { formatDate, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { MetricCell } from '@/components/metrics-cell'
 import { NodeDeleteDialog } from '@/components/node-delete-dialog'
 import { NodeDrainDialog } from '@/components/node-drain-dialog'
@@ -132,7 +137,8 @@ function getNodeIP(node: NodeWithMetrics): string {
   return 'N/A'
 }
 
-const NODE_LABEL_DISPLAY_LIMIT = 6
+// 系统管理的键（kubernetes.io/...）是自动创建的，对运维来说是噪音，因此一律隐藏。
+const isSystemKey = (key: string) => key.includes('kubernetes.io')
 
 function formatNodeTaint(taint: {
   key: string
@@ -143,74 +149,91 @@ function formatNodeTaint(taint: {
   return `${taint.key}${value}:${taint.effect ?? ''}`
 }
 
-// NodeLabelsAndTaints 在全宽详情行中渲染节点的污点与标签。
-// 超出展示上限的标签会折叠到"显示更多"之后。
-function NodeLabelsAndTaints({ node }: { node: NodeWithMetrics }) {
-  const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(false)
+/** 节点的非系统污点。 */
+function nodeTaints(node: NodeWithMetrics) {
+  return (node.spec?.taints ?? []).filter((taint) => !isSystemKey(taint.key))
+}
 
-  // 系统管理的键（kubernetes.io/...）是自动创建的，对运维来说是
-  // 噪音，因此在这个摘要中隐藏。
-  const isSystemKey = (key: string) => key.includes('kubernetes.io')
-
-  const taints = (node.spec?.taints ?? []).filter(
-    (taint) => !isSystemKey(taint.key)
-  )
-  const labels = Object.entries(node.metadata?.labels ?? {})
+/** 节点的非系统标签，按 key 排序。 */
+function nodeLabels(node: NodeWithMetrics) {
+  return Object.entries(node.metadata?.labels ?? {})
     .filter(([key]) => !isSystemKey(key))
     .sort(([a], [b]) => a.localeCompare(b))
+}
 
-  if (taints.length === 0 && labels.length === 0) {
-    return null
+/** 表格里的污点列：固定宽度、单行显示（第一个 + 剩余数量），悬浮看全部。 */
+function NodeTaintsCell({ node }: { node: NodeWithMetrics }) {
+  const taints = nodeTaints(node)
+  if (taints.length === 0) {
+    return <span className="text-muted-foreground">—</span>
   }
 
-  const visibleLabels = expanded
-    ? labels
-    : labels.slice(0, NODE_LABEL_DISPLAY_LIMIT)
-  const hasHiddenLabels = labels.length > NODE_LABEL_DISPLAY_LIMIT
-
+  // 只显示第一个 + 剩余数量：列宽固定、行高不涨，全部内容靠悬浮看。
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-      {taints.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="shrink-0">
-            {t('common.fields.taints', 'Taints')}:
-          </span>
-          {taints.map((taint) => (
-            <Badge
-              key={`${taint.key}-${taint.effect}`}
-              variant="outline"
-              className="font-normal"
-            >
-              {formatNodeTaint(taint)}
-            </Badge>
-          ))}
-        </div>
-      )}
-      {labels.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="shrink-0">
-            {t('common.fields.labels', 'Labels')}:
-          </span>
-          {visibleLabels.map(([key, value]) => (
-            <Badge key={key} variant="outline" className="font-normal">
-              {key}={value}
-            </Badge>
-          ))}
-          {hasHiddenLabels && (
-            <button
-              type="button"
-              className="text-primary hover:underline"
-              onClick={() => setExpanded((prev) => !prev)}
-            >
-              {expanded
-                ? t('common.actions.showLess', 'Show less')
-                : t('common.actions.showMore', 'Show more')}
-            </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex w-full min-w-0 items-center gap-1 overflow-hidden">
+          <Badge
+            {...statusBadge('warning')}
+            className="min-w-0 truncate text-xs font-normal"
+          >
+            {formatNodeTaint(taints[0])}
+          </Badge>
+          {taints.length > 1 && (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              +{taints.length - 1}
+            </span>
           )}
         </div>
-      )}
-    </div>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-sm">
+        <div className="flex flex-col gap-1 text-sm">
+          {taints.map((taint) => (
+            <span key={`${taint.key}-${taint.effect}`} className="break-all">
+              {formatNodeTaint(taint)}
+            </span>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** 表格里的标签列：固定宽度、单行显示（第一个 + 剩余数量），悬浮看全部。 */
+function NodeLabelsCell({ node }: { node: NodeWithMetrics }) {
+  const labels = nodeLabels(node)
+  if (labels.length === 0) {
+    return <span className="text-muted-foreground">—</span>
+  }
+
+  // 同污点列：定宽单行，第一个标签 + 剩余数量，全部靠悬浮看。
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex w-full min-w-0 items-center gap-1 overflow-hidden">
+          <Badge
+            variant="outline"
+            className="min-w-0 truncate font-normal"
+          >
+            {labels[0][0]}={labels[0][1]}
+          </Badge>
+          {labels.length > 1 && (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              +{labels.length - 1}
+            </span>
+          )}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-sm">
+        <div className="flex flex-col gap-1 text-sm">
+          {labels.map(([key, value]) => (
+            <span key={key} className="break-all">
+              {key}={value}
+            </span>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -360,6 +383,9 @@ export function NodeListPage() {
     () => [
       columnHelper.accessor('metadata.name', {
         header: t('common.fields.name'),
+        // 节点名很短（gpu-101 / host-107 这类），列宽按比例分配时给它 220 太占地方。
+        // 120 足够放下名字并留出省略号，省下的宽度分给 CPU / 内存 / 污点这些内容列。
+        size: 120,
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <Link to={`/nodes/${row.original.metadata!.name}`}>
@@ -390,7 +416,7 @@ export function NodeListPage() {
       }),
       columnHelper.accessor((row) => getNodeRoles(row).join(', '), {
         id: 'roles',
-        header: 'Roles',
+        header: t('common.fields.roles', 'Roles'),
         cell: ({ row }) => {
           const roles = getNodeRoles(row.original)
           return (
@@ -408,85 +434,110 @@ export function NodeListPage() {
           )
         },
       }),
+      // 污点与标签也放进表格（原先只在展开行里）：节点多的时候不必逐行展开就能扫一遍。
+      // 每列只显示前几个，完整列表仍在展开行。
+      columnHelper.display({
+        id: 'taints',
+        header: t('common.fields.taints', 'Taints'),
+        // 固定宽度：内容多少都不撑开表格，看全部靠悬浮。
+        size: 180,
+        cell: ({ row }) => <NodeTaintsCell node={row.original} />,
+      }),
+      columnHelper.display({
+        id: 'labels',
+        header: t('common.fields.labels', 'Labels'),
+        // 标签一般更长，给宽一点，但同样是固定宽度。
+        size: 220,
+        cell: ({ row }) => <NodeLabelsCell node={row.original} />,
+      }),
       columnHelper.accessor((row) => row.metrics?.pods || 0, {
         id: 'pods',
-        header: 'Pods',
+        header: t('common.fields.pods', 'Pod 数'),
         cell: ({ row }) => (
           <Link
             to={`/nodes/${row.original.metadata!.name}?tab=pods`}
-            className="text-muted-foreground hover:text-primary/80 hover:underline transition-colors cursor-pointer"
+            className="block transition-colors hover:text-primary/80"
           >
-            {row.original.metrics?.pods || 0} /{' '}
-            {row.original.metrics?.podsLimit || 0}
+            <MetricCell metrics={row.original.metrics} type="pods" />
           </Link>
         ),
       }),
       columnHelper.accessor((row) => row.metrics?.cpuUsage || 0, {
         id: 'cpu',
-        header: 'CPU',
+        header: t('common.fields.cpu', 'CPU'),
         cell: ({ row }) => (
           <MetricCell
             metrics={row.original.metrics}
             type="cpu"
-            limitLabel="Allocatable"
+            limitLabel={t('common.fields.allocatable', '可分配')}
             showPercentage={true}
-            showRequest={false}
           />
         ),
       }),
       columnHelper.accessor((row) => row.metrics?.memoryUsage || 0, {
         id: 'memory',
-        header: 'Memory',
+        header: t('common.fields.memory', 'Memory'),
         cell: ({ row }) => (
           <MetricCell
             metrics={row.original.metrics}
             type="memory"
-            limitLabel="Allocatable"
+            limitLabel={t('common.fields.allocatable', '可分配')}
             showPercentage={true}
-            showRequest={false}
           />
         ),
       }),
       columnHelper.accessor((row) => getNodeIP(row), {
         id: 'ip',
-        header: 'IP Address',
+        header: t('common.fields.ip', 'IP 地址'),
         cell: ({ getValue }) => {
           const ip = getValue()
           return (
-            <span className="text-sm font-mono text-muted-foreground">
+            <span
+              className="block truncate font-mono text-sm text-muted-foreground"
+              title={ip}
+            >
               {ip}
             </span>
           )
         },
       }),
       columnHelper.accessor('status.nodeInfo.kubeletVersion', {
-        header: 'Version',
+        header: t('common.fields.version', 'Version'),
         cell: ({ getValue }) => {
           const version = getValue()
           return version ? (
-            <span className="text-sm font-mono">{version}</span>
+            <span className="block truncate font-mono text-sm" title={version}>
+              {version}
+            </span>
           ) : (
             <span className="text-muted-foreground">N/A</span>
           )
         },
       }),
       columnHelper.accessor('status.nodeInfo.kernelVersion', {
-        header: 'Kernel Version',
+        header: t('common.fields.kernelVersion', 'Kernel Version'),
         cell: ({ getValue }) => {
           const kernelVersion = getValue()
           return kernelVersion ? (
-            <span className="text-sm">{kernelVersion}</span>
+            <span
+              className="block truncate text-sm"
+              title={kernelVersion}
+            >
+              {kernelVersion}
+            </span>
           ) : (
             <span className="text-muted-foreground">N/A</span>
           )
         },
       }),
       columnHelper.accessor('status.nodeInfo.osImage', {
-        header: 'OS Image',
+        header: t('common.fields.osImage', 'OS Image'),
         cell: ({ getValue }) => {
           const osImage = getValue()
           return osImage ? (
-            <span className="text-sm">{osImage}</span>
+            <span className="block truncate text-sm" title={osImage}>
+              {osImage}
+            </span>
           ) : (
             <span className="text-muted-foreground">N/A</span>
           )
@@ -497,7 +548,12 @@ export function NodeListPage() {
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
           return (
-            <span className="text-muted-foreground text-sm">{dateStr}</span>
+            <span
+              className="block truncate text-sm text-muted-foreground"
+              title={dateStr}
+            >
+              {dateStr}
+            </span>
           )
         },
       }),
@@ -529,7 +585,6 @@ export function NodeListPage() {
           'status_nodeInfo_kernelVersion',
           'status_nodeInfo_osImage',
         ]}
-        renderRowDetails={(node) => <NodeLabelsAndTaints node={node} />}
       />
 
       <NodeDrainDialog

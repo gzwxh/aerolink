@@ -1,37 +1,65 @@
 import { useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { MetricsData } from '@/types/api'
 import { formatMemory } from '@/lib/utils'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
+/** 支持的指标：CPU、内存、Pod 数。三者统一为「用量 / 上限 + 百分比 + 进度条」。 */
+type MetricType = 'cpu' | 'memory' | 'pods'
+
+/** 毫核 → 「0.2 核」这种习惯写法（整数不留小数）。 */
+function formatCores(milli: number): string {
+  const cores = milli / 1000
+  return `${Number.isInteger(cores) ? cores : cores.toFixed(1)} 核`
+}
+
 export function MetricCell({
   metrics,
   type,
   limitLabel = 'Limit',
-  showPercentage = false,
+  showPercentage = true,
   showBar = true,
   showRequest = true,
 }: {
   metrics?: MetricsData
-  type: 'cpu' | 'memory'
+  type: MetricType
   limitLabel?: string // e.g., "Limit" or "Capacity"
   showPercentage?: boolean // Whether to show percentage in the display
   showBar?: boolean // Set false to render only the numeric value (no progress bar)
-  showRequest?: boolean // Set false when there is no meaningful request (e.g. nodes)
+  showRequest?: boolean // Set false when there is no meaningful request
 }) {
+  const { t } = useTranslation()
+
   const metricValue =
-    type === 'cpu' ? metrics?.cpuUsage || 0 : metrics?.memoryUsage || 0
+    type === 'cpu'
+      ? metrics?.cpuUsage || 0
+      : type === 'memory'
+        ? metrics?.memoryUsage || 0
+        : metrics?.pods || 0
 
-  const metricLimit = type === 'cpu' ? metrics?.cpuLimit : metrics?.memoryLimit
+  const metricLimit =
+    type === 'cpu'
+      ? metrics?.cpuLimit
+      : type === 'memory'
+        ? metrics?.memoryLimit
+        : metrics?.podsLimit
 
+  // Pod 数没有「请求」这个概念，只有 CPU / 内存有。
   const metricRequest =
-    type === 'cpu' ? metrics?.cpuRequest : metrics?.memoryRequest
+    type === 'cpu'
+      ? metrics?.cpuRequest
+      : type === 'memory'
+        ? metrics?.memoryRequest
+        : undefined
 
   const formatValue = useCallback(
     (val?: number) => {
       if (val === undefined || val === null) return '-'
-      return type === 'cpu' ? `${val}m` : formatMemory(val)
+      if (type === 'cpu') return formatCores(val)
+      if (type === 'memory') return formatMemory(val)
+      return String(val)
     },
     [type]
   )
@@ -47,64 +75,76 @@ export function MetricCell({
       return 'bg-info'
     }
 
-    return (
-      <div className="flex w-full min-w-0 items-center justify-center gap-1 overflow-hidden">
-        {showBar && (
-          <div className="shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="w-14 h-2 relative">
-                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-300 ${getProgressColor()}`}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-                  {showRequest && metricRequest && metricLimit && (
-                    <div
-                      className="absolute -top-0.5 h-3 flex items-center justify-center"
-                      style={{
-                        left: `${Math.min((metricRequest / metricLimit) * 100, 100)}%`,
-                        transform: 'translateX(-50%)',
-                      }}
-                    >
-                      <div className="w-0.5 h-3 bg-muted-foreground rounded-sm shadow-sm"></div>
-                    </div>
-                  )}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className="text-sm grid grid-cols-2 gap-x-3 gap-y-0.5 min-w-0">
-                  <span>Usage:</span>
-                  <span className="text-right">{formatValue(metricValue)}</span>
-                  {showRequest &&
-                    metricRequest !== undefined &&
-                    metricRequest > 0 && (
-                      <>
-                        <span>Request:</span>
-                        <span className="text-right">
-                          {formatValue(metricRequest)}
-                        </span>
-                      </>
-                    )}
-                  <span>{limitLabel}:</span>
-                  <span className="text-right">{formatValue(metricLimit)}</span>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </div>
+    // 悬浮明细：使用量 / 请求 / 可分配，数值右对齐。
+    const detail = (
+      <div className="text-sm grid grid-cols-2 gap-x-3 gap-y-0.5 min-w-0">
+        <span>{t('common.metrics.usage', 'Usage')}:</span>
+        <span className="text-right">{formatValue(metricValue)}</span>
+        {showRequest && metricRequest !== undefined && metricRequest > 0 && (
+          <>
+            <span>{t('common.metrics.request', 'Request')}:</span>
+            <span className="text-right">{formatValue(metricRequest)}</span>
+          </>
         )}
-        <span
-          className={`truncate min-w-0 text-right inline-block text-xs text-muted-foreground whitespace-nowrap tabular-nums`}
-        >
-          {formatValue(metricValue)}
-          {showPercentage && metricLimit && metricValue > 0 && (
-            <span className="hidden 2xl:inline text-[10px] opacity-70">
-              ({percentage.toFixed(0)}%)
-            </span>
-          )}
-        </span>
+        <span>{limitLabel}:</span>
+        <span className="text-right">{formatValue(metricLimit)}</span>
       </div>
+    )
+
+    // 没有上限可比时退回单行：不画一条永远是 0 的进度条。
+    if (!showBar || !metricLimit) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-block w-full truncate text-right text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+              {formatValue(metricValue)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{detail}</TooltipContent>
+        </Tooltip>
+      )
+    }
+
+    return (
+      // 两行布局：上行「用量 / 上限 + 百分比」，下行进度条——一眼横向比较各节点水位。
+      // 整格都可悬浮（不只是进度条）：数值同样需要解释请求与可分配是多少。
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex w-full min-w-0 flex-col gap-1">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-xs tabular-nums">
+                {formatValue(metricValue)}
+                <span className="text-muted-foreground"> / </span>
+                {formatValue(metricLimit)}
+              </span>
+              {showPercentage && (
+                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                  {percentage.toFixed(0)}%
+                </span>
+              )}
+            </div>
+            <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${getProgressColor()}`}
+                style={{
+                  width: `${percentage}%`,
+                  // 非零时给个最小宽度，否则 1% 这种水位完全看不见。
+                  minWidth: percentage > 0 ? '0.25rem' : undefined,
+                }}
+              />
+              {showRequest && metricRequest && metricLimit && (
+                <div
+                  className="absolute top-0 h-full w-0.5 bg-foreground/40"
+                  style={{
+                    left: `${Math.min((metricRequest / metricLimit) * 100, 100)}%`,
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>{detail}</TooltipContent>
+      </Tooltip>
     )
   }, [
     metricLimit,
@@ -115,5 +155,6 @@ export function MetricCell({
     showPercentage,
     showBar,
     showRequest,
+    t,
   ])
 }
