@@ -3201,6 +3201,8 @@
       "ipListHint": "Accepts a single IP, a CIDR block or a range such as 192.168.10.1-192.168.10.20 / 2001:db8:a1-2001:db8:1:a10; blacklisted IPs are refused while whitelisted IPs are exempt from the failed-attempt lockout.",
       "lockedIPs": "Locked IPs",
       "lockedIPsHint": "List of IPs that are currently blocked.",
+      "lockedUsers": "Locked users",
+      "lockedUsersHint": "List of users that are currently blocked.",
       "singleDeviceLogin": "Single device login",
       "singleDeviceLoginHint": "Signed-in devices are logged out automatically when the user signs in from a new device.",
       "passwordExpireDays": "Password expiry (days)",
@@ -3243,8 +3245,21 @@
       "unblocked": "IP unblocked",
       "manualHint": "Addresses on the allow list are never locked by failed attempts; add an IP to the deny list for a permanent block. A manual block is cleared when the server restarts."
     },
+    "lockedUsers": {
+      "title": "Locked users",
+      "description": "Users that are temporarily blocked after too many failed sign-in attempts. You can unblock or block a user here. Usernames are matched case-insensitively.",
+      "empty": "No user is currently locked.",
+      "until": "Until {{time}}",
+      "addPlaceholder": "Username to block",
+      "block": "Block",
+      "unblock": "Unblock",
+      "blocked": "User blocked",
+      "unblocked": "User unblocked",
+      "manualHint": "A manual block is cleared when the server restarts. Disable the account itself for a permanent block."
+    },
     "actions": {
-      "viewLockedIPs": "View locked IPs ({{count}})"
+      "viewLockedIPs": "View locked IPs ({{count}})",
+      "viewLockedUsers": "View locked users ({{count}})"
     },
     "messages": {
       "updated": "Security Management updated",

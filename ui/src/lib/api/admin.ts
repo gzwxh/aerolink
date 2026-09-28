@@ -1293,6 +1293,36 @@ export const unblockLoginIP = async (ip: string): Promise<void> => {
   )
 }
 
+export interface BlockedLoginUser {
+  username: string
+  blockedUntil: string
+  failures: number
+}
+
+export const fetchLockedLoginUsers = async (): Promise<{
+  items: BlockedLoginUser[]
+}> => {
+  return fetchAPI<{ items: BlockedLoginUser[] }>(
+    '/admin/security-setting/locked-users'
+  )
+}
+
+// 管理员手动拉黑一个用户（按策略中的用户锁定窗口），匹配大小写不敏感。
+export const blockLoginUser = async (
+  username: string
+): Promise<{ success: boolean; username: string; blockedUntil: string }> => {
+  return await apiClient.post('/admin/security-setting/locked-users', {
+    username,
+  })
+}
+
+// 解除某个用户的锁定（自动锁定与手动拉黑都会清除）。
+export const unblockLoginUser = async (username: string): Promise<void> => {
+  await apiClient.delete(
+    `/admin/security-setting/locked-users/${encodeURIComponent(username)}`
+  )
+}
+
 export const setGlobalSidebarPreference = async (sidebarPreference: string) => {
   return await apiClient.post<{ success: boolean }>(
     '/admin/sidebar_preference/global',

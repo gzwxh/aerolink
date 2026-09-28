@@ -276,6 +276,10 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	// 锁定 IP 支持管理员手动解除与手动拉黑
 	securitySettingAPI.POST("/locked-ips", settings.HandleBlockLoginIP)
 	securitySettingAPI.DELETE("/locked-ips/:ip", settings.HandleUnlockLoginIP)
+	// 锁定用户在用户维度上提供同样的手动解除与手动拉黑
+	securitySettingAPI.GET("/locked-users", settings.HandleGetLockedLoginUsers)
+	securitySettingAPI.POST("/locked-users", settings.HandleBlockLoginUser)
+	securitySettingAPI.DELETE("/locked-users/:username", settings.HandleUnlockLoginUser)
 
 	notificationSettingAPI := adminAPI.Group("/notification-setting", requireNotification)
 	notificationSettingAPI.GET("/", notification.HandleGetNotificationSetting)

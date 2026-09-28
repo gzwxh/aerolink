@@ -12,8 +12,11 @@ import { toast } from 'sonner'
 
 import {
   blockLoginIP,
+  blockLoginUser,
   fetchLockedLoginIPs,
+  fetchLockedLoginUsers,
   unblockLoginIP,
+  unblockLoginUser,
   updateSecuritySetting,
   useSecuritySetting,
   type MFAPolicy,
@@ -183,6 +186,14 @@ export function SecurityManagement() {
     refetchInterval: 15000,
   })
 
+  const [isLockedUsersOpen, setIsLockedUsersOpen] = useState(false)
+  const [newLockedUser, setNewLockedUser] = useState('')
+  const { data: lockedUsers } = useQuery({
+    queryKey: ['locked-login-users'],
+    queryFn: fetchLockedLoginUsers,
+    refetchInterval: 15000,
+  })
+
   const blockIPMutation = useMutation({
     mutationFn: (ip: string) => blockLoginIP(ip),
     onSuccess: () => {
@@ -198,6 +209,25 @@ export function SecurityManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locked-login-ips'] })
       toast.success(t('securitySettings.lockedIPs.unblocked', 'IP unblocked'))
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
+  const blockUserMutation = useMutation({
+    mutationFn: (username: string) => blockLoginUser(username),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['locked-login-users'] })
+      setNewLockedUser('')
+      toast.success(t('securitySettings.lockedUsers.blocked', 'User blocked'))
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
+  const unblockUserMutation = useMutation({
+    mutationFn: (username: string) => unblockLoginUser(username),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['locked-login-users'] })
+      toast.success(t('securitySettings.lockedUsers.unblocked', 'User unblocked'))
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -545,6 +575,29 @@ export function SecurityManagement() {
                           }
                           className="max-w-40"
                         />
+                      </SettingRow>
+
+                      <SettingRow
+                        label={t(
+                          'securitySettings.fields.lockedUsers',
+                          'Locked users'
+                        )}
+                        hint={t(
+                          'securitySettings.fields.lockedUsersHint',
+                          'List of users that are currently blocked.'
+                        )}
+                      >
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsLockedUsersOpen(true)}
+                        >
+                          {t(
+                            'securitySettings.actions.viewLockedUsers',
+                            'View locked users ({{count}})',
+                            { count: (lockedUsers?.items ?? []).length }
+                          )}
+                        </Button>
                       </SettingRow>
                     </SettingGroup>
 
@@ -1238,6 +1291,102 @@ export function SecurityManagement() {
             {t(
               'securitySettings.lockedIPs.manualHint',
               'Addresses on the allow list are never locked by failed attempts; add an IP to the deny list for a permanent block. A manual block is cleared when the server restarts.'
+            )}
+          </p>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isLockedUsersOpen} onOpenChange={setIsLockedUsersOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {t('securitySettings.lockedUsers.title', 'Locked users')}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'securitySettings.lockedUsers.description',
+                'Users that are temporarily blocked after too many failed sign-in attempts. You can unblock or block a user here.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!readOnly && (
+            <div className="flex gap-2">
+              <Input
+                value={newLockedUser}
+                onChange={(event) => setNewLockedUser(event.target.value)}
+                placeholder={t(
+                  'securitySettings.lockedUsers.addPlaceholder',
+                  'Username to block'
+                )}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && newLockedUser.trim()) {
+                    event.preventDefault()
+                    blockUserMutation.mutate(newLockedUser.trim())
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                disabled={!newLockedUser.trim() || blockUserMutation.isPending}
+                onClick={() => blockUserMutation.mutate(newLockedUser.trim())}
+              >
+                <IconPlus className="h-4 w-4" />
+                {t('securitySettings.lockedUsers.block', 'Block')}
+              </Button>
+            </div>
+          )}
+
+          {(lockedUsers?.items ?? []).length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {t(
+                'securitySettings.lockedUsers.empty',
+                'No user is currently locked.'
+              )}
+            </p>
+          ) : (
+            <div className="divide-y rounded-md border">
+              {lockedUsers?.items.map((item) => (
+                <div
+                  key={item.username}
+                  className="flex items-center justify-between gap-4 px-3 py-2 text-sm"
+                >
+                  <span className="font-medium">{item.username}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">
+                      {t('securitySettings.lockedUsers.until', 'Until {{time}}', {
+                        time: formatDate(item.blockedUntil),
+                      })}
+                    </span>
+                    {!readOnly && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        disabled={unblockUserMutation.isPending}
+                        aria-label={t(
+                          'securitySettings.lockedUsers.unblock',
+                          'Unblock'
+                        )}
+                        title={t(
+                          'securitySettings.lockedUsers.unblock',
+                          'Unblock'
+                        )}
+                        onClick={() => unblockUserMutation.mutate(item.username)}
+                      >
+                        <IconX className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'securitySettings.lockedUsers.manualHint',
+              'A manual block is cleared when the server restarts. Disable the account itself for a permanent block.'
             )}
           </p>
         </DialogContent>

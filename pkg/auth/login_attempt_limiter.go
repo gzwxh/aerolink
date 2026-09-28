@@ -269,3 +269,59 @@ func BlockedLoginIPs() []BlockedLoginIP {
 	}
 	return result
 }
+
+// UnblockLoginUser 清除某个用户名已记录的锁定，并报告
+// 该用户是否确实处于锁定状态。
+func UnblockLoginUser(username string) bool {
+	key := userAttemptKey(username)
+	_, blocked := attemptBlocked(key, time.Now())
+	if err := model.DeleteLoginAttempts(key); err != nil {
+		klog.Warningf("failed to clear the lock for %s: %v", key, err)
+	}
+	return blocked
+}
+
+// BlockLoginUser 代表管理员把某个用户名锁定到给定时间。
+//
+// 该封锁与自动锁定写在同一张表里，所以对所有副本生效；需要永久封锁请配合
+// 账号本身的停用（这个封锁会随到期时间自然消失）。
+func BlockLoginUser(username string, until time.Time) {
+	if model.DB == nil {
+		return
+	}
+	credentialLoginAttempts.cleanupExpired(time.Now())
+	if err := model.BlockLoginAttempt(userAttemptKey(username), until, true); err != nil {
+		klog.Warningf("failed to lock user %s: %v", username, err)
+	}
+}
+
+// BlockedLoginUser 是一个当前被锁定的用户。
+//
+// 用户名的匹配大小写不敏感（见 userAttemptKey），这里回传的是规范化后的写法。
+type BlockedLoginUser struct {
+	Username     string    `json:"username"`
+	BlockedUntil time.Time `json:"blockedUntil"`
+	Failures     int       `json:"failures"`
+}
+
+// BlockedLoginUsers 快照当前被锁定的用户，按过期时间倒序。
+func BlockedLoginUsers() []BlockedLoginUser {
+	if model.DB == nil {
+		return nil
+	}
+	now := time.Now()
+	attempts, err := model.ListLoginAttempts("user:", now)
+	if err != nil {
+		klog.Warningf("failed to list the locked users: %v", err)
+		return nil
+	}
+	result := make([]BlockedLoginUser, 0, len(attempts))
+	for _, attempt := range attempts {
+		result = append(result, BlockedLoginUser{
+			Username:     strings.TrimPrefix(attempt.Key, "user:"),
+			BlockedUntil: attempt.BlockedUntil,
+			Failures:     attempt.FailureCount,
+		})
+	}
+	return result
+}

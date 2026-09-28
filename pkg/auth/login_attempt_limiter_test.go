@@ -69,6 +69,41 @@ func TestBlockLoginIPIsSharedAndOutranksWhitelist(t *testing.T) {
 	}
 }
 
+// 管理员手动拉黑用户与 IP 走同一张表：同样对所有副本生效，且能被列出与解除。
+// 用户名匹配大小写不敏感，列表里回传的是规范化后的写法。
+func TestBlockLoginUserIsSharedAndListed(t *testing.T) {
+	setupAuthIntegrationDB(t)
+
+	const username = "Frank"
+	limits := loginLimits{}
+
+	if credentialLoginAttempts.blocked("203.0.113.60", username, limits) {
+		t.Fatal("an unblocked user must not be reported as blocked")
+	}
+
+	BlockLoginUser(username, time.Now().Add(time.Minute))
+
+	// 大小写不敏感：用小写写法登录同样被挡。
+	if !credentialLoginAttempts.blocked("203.0.113.60", "frank", limits) {
+		t.Fatal("a manual user block must apply regardless of username casing")
+	}
+
+	locked := BlockedLoginUsers()
+	if len(locked) != 1 || locked[0].Username != "frank" {
+		t.Fatalf("BlockedLoginUsers() = %#v, want the manually locked user", locked)
+	}
+
+	if !UnblockLoginUser(username) {
+		t.Fatal("UnblockLoginUser() reported that the user was not locked")
+	}
+	if credentialLoginAttempts.blocked("203.0.113.60", username, limits) {
+		t.Fatal("the user is still blocked after unlocking")
+	}
+	if len(BlockedLoginUsers()) != 0 {
+		t.Fatal("the unlocked user is still listed")
+	}
+}
+
 // 成功登录要清掉计数，否则正常用户会被自己之前的几次输错累积锁住。
 func TestCredentialLoginLimiterClearResetsCounters(t *testing.T) {
 	setupAuthIntegrationDB(t)

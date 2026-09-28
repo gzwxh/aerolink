@@ -13,6 +13,7 @@ import {
   IconRefresh,
   IconTrash,
 } from '@tabler/icons-react'
+import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -117,6 +118,7 @@ export function ResourceDetailShell<T>({
   permissionResource,
 }: ResourceDetailShellProps<T>) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [yamlContent, setYamlContent] = useState('')
   const [yamlDirty, setYamlDirty] = useState(false)
   // 最近一次从服务端数据同步出来的 YAML：编辑器可能把程序化更新也回抛给
@@ -182,11 +184,26 @@ export function ResourceDetailShell<T>({
     setRefreshKey((prev) => prev + 1)
     setIsRefreshing(true)
     try {
-      await onRefresh()
+      // 这一页上的数据不止主资源一份：事件、相关资源、监控曲线等都是各自独立的查询
+      // （见 components/resource-overview.tsx 的 useResourcesEvents / useRelatedResources），
+      // 而页面传进来的 onRefresh 只覆盖主资源。以前这里只调 onRefresh，于是点「刷新」时
+      // 那些区块仍是旧数据、看起来"没反应"，只能整页重载才更新——这正是用户反馈的
+      // "有时点刷新不生效，要按浏览器刷新才行"。
+      // 这里是用户显式发起的刷新，把当前挂载着的查询（type: 'active'，范围恰好是这一页）
+      // 一并重取；refetchQueries 不看 staleTime，所以刚点就一定能拿到新数据。
+      // 传 cancelRefetch: false：主资源此时正由 onRefresh 在取（fetch 是同步进入 fetching 的），
+      // 复用它那条请求，不会为同一个资源多发一次。
+      await Promise.all([
+        onRefresh(),
+        queryClient.refetchQueries(
+          { type: 'active' },
+          { cancelRefetch: false }
+        ),
+      ])
     } finally {
       setIsRefreshing(false)
     }
-  }, [onRefresh])
+  }, [onRefresh, queryClient])
 
   const handleSaveYaml = useCallback(
     async (content: T) => {

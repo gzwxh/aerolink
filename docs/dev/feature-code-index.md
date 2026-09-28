@@ -75,7 +75,7 @@
 | 头像（外链 / 上传存库） | `ui/src/components/account/profile-section.tsx`（上传与移除）、`ui/src/lib/avatar-upload.ts`（浏览器端裁方+缩放+重编码）、`ui/src/lib/avatar-url.ts`（`resolveAvatarSrc` 区分内链/外链，4 处头像渲染点共用） | `ui/src/lib/api/auth.ts` | `pkg/users/avatar.go`（校验与三个接口）、`pkg/model/user_avatar.go` | `user_avatars`（字节按用户一行；`users.avatar_url` 存 `/api/users/<id>/avatar?v=<内容哈希>`，口径见 `plans/2026-09-20-avatar-upload.md`） |
 | 会话策略（空闲/总时长/单点登录） | `ui/src/components/settings/security-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/auth/session_policy.go`、`pkg/auth/login_attempt_limiter.go` | `security_settings` |
 | 会话心跳 / 被顶下线 | `ui/src/hooks/use-session-heartbeat.ts`、`ui/src/hooks/use-session-takeover-notice.tsx`、`ui/src/components/session-superseded-dialog.tsx` | — | `pkg/auth`、`pkg/notification/session_takeover.go` | 进程内状态 + `notifications` |
-| 登录失败限流 / IP 黑白名单 | `ui/src/components/settings/security-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/auth/login_attempt_limiter.go` | `security_settings` |
+| 登录失败限流 / IP 黑白名单 / 锁定 IP 与用户 | `ui/src/components/settings/security-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/auth/login_attempt_limiter.go`、`pkg/settings/security.go` | `security_settings`、`login_attempts` |
 | API Key | `ui/src/components/settings/apikey-management.tsx`、`apikey-dialog.tsx` | `ui/src/lib/api/admin.ts` | `pkg/apikeys` | `users.api_key` |
 | 站内信 | `ui/src/components/notification-bell.tsx` | `ui/src/lib/api/notification.ts` | `pkg/notification`、`pkg/model/notification.go` | `notifications` |
 | 邮件模板/订阅 | `ui/src/components/settings/notification-management.tsx`、`template-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/notification` | `notification_settings`、`notification_templates`、`notification_subscriptions` |

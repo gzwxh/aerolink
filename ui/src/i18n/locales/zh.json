@@ -3201,6 +3201,8 @@
       "ipListHint": "支持单个 IP、CIDR 与区间范围（如 192.168.10.1-192.168.10.20、2001:db8:a1-2001:db8:1:a10）；黑名单内 IP 直接拒绝登录，白名单内 IP 不受失败锁定限制",
       "lockedIPs": "已锁定 IP",
       "lockedIPsHint": "查看已被锁定的 IP 列表",
+      "lockedUsers": "已锁定用户",
+      "lockedUsersHint": "查看已被锁定的用户列表",
       "singleDeviceLogin": "仅一处设备登录",
       "singleDeviceLoginHint": "用户在新设备登录时，其他已登录的设备自动退出",
       "passwordExpireDays": "用户密码过期时间（天）",
@@ -3243,8 +3245,21 @@
       "unblocked": "已解除锁定",
       "manualHint": "白名单中的地址不会被失败次数自动锁定；需要长期拒绝请写入「IP 登录黑名单」。手动拉黑在服务重启后失效。"
     },
+    "lockedUsers": {
+      "title": "已锁定用户",
+      "description": "因登录失败次数过多而被临时禁止登录的用户，可在此手动解除或手动拉黑。用户名匹配大小写不敏感。",
+      "empty": "当前没有被锁定的用户。",
+      "until": "解除时间 {{time}}",
+      "addPlaceholder": "输入要拉黑的用户名",
+      "block": "拉黑",
+      "unblock": "解除锁定",
+      "blocked": "已拉黑该用户",
+      "unblocked": "已解除锁定",
+      "manualHint": "手动拉黑在服务重启后失效；需要长期禁止该账号登录请直接停用账号。"
+    },
     "actions": {
-      "viewLockedIPs": "查看 已锁定 IP（{{count}}）"
+      "viewLockedIPs": "查看 已锁定 IP（{{count}}）",
+      "viewLockedUsers": "查看已锁定用户（{{count}}）"
     },
     "messages": {
       "updated": "安全管理已更新",
