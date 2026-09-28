@@ -1,9 +1,13 @@
+import yaml from 'js-yaml'
 import { describe, expect, it } from 'vitest'
 
 import {
   generateWorkloadYaml,
   initialFormData,
   mergeEditedManifest,
+  parseYamlToFormData,
+  type DeploymentFormData,
+  type VolumeForm,
 } from './deployment-form'
 
 /**
@@ -205,5 +209,152 @@ describe('工作负载 YAML 生成', () => {
       expect(text, resourceType).not.toContain('kind: Service')
       expect(text.match(/^---$/m), resourceType).toBeNull()
     }
+  })
+})
+
+/**
+ * 存储卷：表单支持的卷来源要能完整写进 podSpec.volumes，并能原样读回表单。
+ *
+ * 这里盯的是两类容易写错的地方：hostPath 的空 type 是 API 的默认值（不检查路径），
+ * 不能写成 `type: ''`；Pod 级 CSI 卷没有 volumeHandle 字段，参数只能走
+ * volumeAttributes（写错会被 API 直接拒掉）。
+ */
+describe('存储卷的生成与反向解析', () => {
+  const withVolumes = (volumes: VolumeForm[]): DeploymentFormData => ({
+    ...initialFormData,
+    name: 'web',
+    namespace: 'default',
+    labels: [{ key: 'app', value: 'web' }],
+    containers: [
+      { ...initialFormData.containers[0], name: 'app', image: 'nginx:1.25' },
+    ],
+    podSpec: { ...initialFormData.podSpec, volumes },
+  })
+
+  const volumesOf = (volumes: VolumeForm[]) => {
+    const doc = yaml.load(
+      generateWorkloadYaml(withVolumes(volumes), 'deployments')
+    ) as {
+      spec: { template: { spec: { volumes: unknown } } }
+    }
+    return doc.spec.template.spec.volumes
+  }
+
+  it('hostPath 写出路径类型；未指定类型时不写 type 字段', () => {
+    expect(
+      volumesOf([
+        {
+          name: 'data',
+          sourceType: 'hostPath',
+          options: { path: '/data', hostPathType: 'DirectoryOrCreate' },
+        },
+        { name: 'scratch', sourceType: 'hostPath', options: { path: '/tmp' } },
+      ])
+    ).toEqual([
+      {
+        name: 'data',
+        hostPath: { path: '/data', type: 'DirectoryOrCreate' },
+      },
+      { name: 'scratch', hostPath: { path: '/tmp' } },
+    ])
+  })
+
+  it('NFS 与 CSI 卷按 API 字段生成，CSI 参数落在 volumeAttributes', () => {
+    expect(
+      volumesOf([
+        {
+          name: 'shared',
+          sourceType: 'nfs',
+          options: {
+            nfsServer: '10.0.0.1',
+            nfsPath: '/exports/data',
+            nfsReadOnly: true,
+          },
+        },
+        {
+          name: 'disk',
+          sourceType: 'csi',
+          options: {
+            csiDriver: 'disk.csi.everest.io',
+            csiFsType: 'ext4',
+            csiVolumeAttributes: [
+              { key: 'volumeHandle', value: 'd-1' },
+              { key: '', value: '被丢弃的空键' },
+            ],
+          },
+        },
+      ])
+    ).toEqual([
+      {
+        name: 'shared',
+        nfs: { server: '10.0.0.1', path: '/exports/data', readOnly: true },
+      },
+      {
+        name: 'disk',
+        csi: {
+          driver: 'disk.csi.everest.io',
+          fsType: 'ext4',
+          volumeAttributes: { volumeHandle: 'd-1' },
+        },
+      },
+    ])
+  })
+
+  it('生成的 YAML 能原样读回表单', () => {
+    const volumes: VolumeForm[] = [
+      { name: 'cache', sourceType: 'emptyDir' },
+      {
+        name: 'data',
+        sourceType: 'hostPath',
+        options: { path: '/data', hostPathType: 'Directory' },
+      },
+      {
+        name: 'shared',
+        sourceType: 'nfs',
+        options: { nfsServer: '10.0.0.1', nfsPath: '/exports/data' },
+      },
+      {
+        name: 'disk',
+        sourceType: 'csi',
+        options: {
+          csiDriver: 'disk.csi.everest.io',
+          csiReadOnly: true,
+          csiVolumeAttributes: [{ key: 'volumeHandle', value: 'd-1' }],
+        },
+      },
+    ]
+    const parsed = parseYamlToFormData(
+      generateWorkloadYaml(withVolumes(volumes), 'deployments'),
+      'deployments',
+      initialFormData
+    )
+
+    expect(parsed.podSpec.volumes).toEqual([
+      { name: 'cache', sourceType: 'emptyDir', options: {} },
+      {
+        name: 'data',
+        sourceType: 'hostPath',
+        options: { path: '/data', hostPathType: 'Directory' },
+      },
+      {
+        name: 'shared',
+        sourceType: 'nfs',
+        options: {
+          nfsServer: '10.0.0.1',
+          nfsPath: '/exports/data',
+          nfsReadOnly: false,
+        },
+      },
+      {
+        name: 'disk',
+        sourceType: 'csi',
+        options: {
+          csiDriver: 'disk.csi.everest.io',
+          csiFsType: '',
+          csiReadOnly: true,
+          csiVolumeAttributes: [{ key: 'volumeHandle', value: 'd-1' }],
+        },
+      },
+    ])
   })
 })

@@ -2,14 +2,41 @@ import yaml from 'js-yaml'
 import { Deployment } from 'kubernetes-types/apps/v1'
 import { Container, Volume } from 'kubernetes-types/core/v1'
 
+export type VolumeSourceType =
+  'emptyDir' | 'hostPath' | 'configMap' | 'secret' | 'pvc' | 'nfs' | 'csi'
+
+/** hostPath 的路径类型；空串表示「任意路径，不做检查」（API 的默认值）。 */
+export const hostPathTypeOptions = [
+  '',
+  'DirectoryOrCreate',
+  'Directory',
+  'FileOrCreate',
+  'File',
+  'Socket',
+  'CharDevice',
+  'BlockDevice',
+] as const
+
 export interface VolumeForm {
   name: string
-  sourceType: 'emptyDir' | 'hostPath' | 'configMap' | 'secret' | 'pvc'
+  sourceType: VolumeSourceType
   options?: {
     path?: string
+    hostPathType?: string
     configMapName?: string
     secretName?: string
     claimName?: string
+    nfsServer?: string
+    nfsPath?: string
+    nfsReadOnly?: boolean
+    csiDriver?: string
+    csiFsType?: string
+    csiReadOnly?: boolean
+    /**
+     * Pod 级 CSI 卷没有 volumeHandle 字段（那是 PV/PVC 的），驱动相关参数
+     * 一律走 volumeAttributes，例如华为云 CSI 的 volumeHandle/everest.io/disk-volume-type。
+     */
+    csiVolumeAttributes?: Array<{ key: string; value: string }>
   }
 }
 
@@ -270,6 +297,13 @@ export function validateStep(
           return false
         if (volume.sourceType === 'pvc' && !volume.options?.claimName)
           return false
+        if (
+          volume.sourceType === 'nfs' &&
+          (!volume.options?.nfsServer || !volume.options?.nfsPath)
+        )
+          return false
+        if (volume.sourceType === 'csi' && !volume.options?.csiDriver)
+          return false
       }
       return true
     case 3:
@@ -289,7 +323,13 @@ function buildVolumes(volumeForms: VolumeForm[]): Volume[] {
       case 'hostPath':
         volumes.push({
           name: volume.name,
-          hostPath: { path: volume.options?.path || '/data' },
+          // 空 type 是 API 的默认值（不检查目标路径），此时不写这个字段。
+          hostPath: {
+            path: volume.options?.path || '/data',
+            ...(volume.options?.hostPathType
+              ? { type: volume.options.hostPathType }
+              : {}),
+          },
         })
         break
       case 'configMap':
@@ -312,6 +352,37 @@ function buildVolumes(volumeForms: VolumeForm[]): Volume[] {
           },
         })
         break
+      case 'nfs':
+        volumes.push({
+          name: volume.name,
+          nfs: {
+            server: volume.options?.nfsServer || '',
+            path: volume.options?.nfsPath || '',
+            ...(volume.options?.nfsReadOnly ? { readOnly: true } : {}),
+          },
+        })
+        break
+      case 'csi': {
+        const attributes = (volume.options?.csiVolumeAttributes || []).filter(
+          (pair) => pair.key
+        )
+        volumes.push({
+          name: volume.name,
+          csi: {
+            driver: volume.options?.csiDriver || '',
+            ...(volume.options?.csiFsType
+              ? { fsType: volume.options.csiFsType }
+              : {}),
+            ...(volume.options?.csiReadOnly ? { readOnly: true } : {}),
+            ...(attributes.length > 0 && {
+              volumeAttributes: Object.fromEntries(
+                attributes.map((pair) => [pair.key, pair.value])
+              ),
+            }),
+          },
+        })
+        break
+      }
       default:
         // 表单表达不了的卷类型：整条跳过，绝不发一个空 source —— 空的
         // VolumeSource 会把线上对象的真实卷覆盖成空（server-side apply 不区分
@@ -972,7 +1043,7 @@ export function parseYamlToFormData(
       podLabels: toPairs(podMeta.labels || {}),
       podAnnotations: toPairs(podMeta.annotations || {}),
       podSpec: {
-        // 只把表单能表达的卷类型读进来：projected / nfs / csi / downwardAPI 这类
+        // 只把表单能表达的卷类型读进来：projected / downwardAPI 这类
         // 没有对应输入项，硬塞进表单只会被当成空卷写回去（把线上对象改坏），
         // 所以留给 mergeEditedManifest 从线上对象恢复。
         volumes: ((podSpecDoc.volumes as Array<any>) || []).flatMap(
@@ -985,7 +1056,10 @@ export function parseYamlToFormData(
                 {
                   name,
                   sourceType: 'hostPath' as const,
-                  options: { path: v.hostPath.path },
+                  options: {
+                    path: v.hostPath.path,
+                    hostPathType: v.hostPath.type || '',
+                  },
                 },
               ]
             if (v.configMap)
@@ -1010,6 +1084,33 @@ export function parseYamlToFormData(
                   name,
                   sourceType: 'pvc' as const,
                   options: { claimName: v.persistentVolumeClaim.claimName },
+                },
+              ]
+            if (v.nfs)
+              return [
+                {
+                  name,
+                  sourceType: 'nfs' as const,
+                  options: {
+                    nfsServer: v.nfs.server,
+                    nfsPath: v.nfs.path,
+                    nfsReadOnly: v.nfs.readOnly === true,
+                  },
+                },
+              ]
+            if (v.csi)
+              return [
+                {
+                  name,
+                  sourceType: 'csi' as const,
+                  options: {
+                    csiDriver: v.csi.driver,
+                    csiFsType: v.csi.fsType || '',
+                    csiReadOnly: v.csi.readOnly === true,
+                    csiVolumeAttributes: Object.entries(
+                      (v.csi.volumeAttributes || {}) as Record<string, string>
+                    ).map(([key, value]) => ({ key, value: String(value) })),
+                  },
                 },
               ]
             return []

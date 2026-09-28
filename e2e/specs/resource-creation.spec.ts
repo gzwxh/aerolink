@@ -71,6 +71,36 @@ async function deleteJobPods(
   }
 }
 
+/**
+ * StatefulSet 创建页的「服务名称」是必填下拉框，只能从命名空间里已有的 Service
+ * 里选，因此先种一个 headless Service 再进界面。
+ */
+async function seedHeadlessService(
+  request: APIRequestContext,
+  name: string,
+  appLabel: string
+) {
+  await expectStatus(
+    await request.post(`${clusterPath}/resources/apply`, {
+      data: {
+        yaml: `apiVersion: v1
+kind: Service
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+spec:
+  clusterIP: None
+  selector:
+    app: ${appLabel}
+  ports:
+    - port: 80
+`,
+      },
+    }),
+    200
+  )
+}
+
 /** 创建页通用的工作负载表单：名称 + 容器（名称/镜像）。 */
 async function fillWorkloadForm(page: Page, name: string) {
   await page.getByPlaceholder('unique-name').fill(name)
@@ -265,6 +295,92 @@ test.describe('resource creation', () => {
       await deleteJobPods(request, name)
     }
   })
+
+  /**
+   * 存储卷区块的需求：卷类型要能选（此前只有 emptyDir），选出来的来源要真的
+   * 落到 `spec.template.spec.volumes`。这里用 hostPath 走一遍
+   * 「Pod 页签 → 存储 → 添加卷 → 主机路径 → 路径类型」。
+   *
+   * 路径故意指向节点上不存在的目录、类型选「一个现有的目录」：hostPath 的
+   * 类型校验会让 Pod 停在创建中，所以这条用例只校验对象本身，既不等 Pod
+   * Ready，也不会在节点上留下目录。用例结束后删除 StatefulSet（前台级联，
+   * 连它的 Pod 一起清掉）与种下的 Service。
+   */
+  test('creates a StatefulSet whose hostPath volume lands in the pod template', async ({
+    page,
+    request,
+  }) => {
+    const name = uniqueName('sts')
+    const serviceName = `${name}-svc`
+    const volumeName = 'zz-e2e-hostpath'
+    const hostPath = '/zz-e2e-does-not-exist'
+    try {
+      await seedHeadlessService(request, serviceName, name)
+
+      await page.goto(`/statefulsets/${namespace}/create`)
+      await fillWorkloadForm(page, name)
+      // 服务名称：StatefulSet 必填，选刚种下的那个 headless Service。
+      await page
+        .locator(
+          'xpath=//label[contains(normalize-space(.), "Service Name")]/following-sibling::button[1]'
+        )
+        .click()
+      await page.getByRole('option', { name: serviceName }).click()
+
+      await page.getByRole('tab', { name: 'Pod', exact: true }).click()
+      await page
+        .locator('nav.w-40')
+        .getByRole('button', { name: 'Storage', exact: true })
+        .click()
+      await page.getByRole('button', { name: 'Add Volume' }).click()
+      await page
+        .getByRole('menuitem', { name: 'Host Path (Bind-Mount)' })
+        .click()
+
+      await page.getByPlaceholder('e.g. data').fill(volumeName)
+      await page.getByPlaceholder('/data').fill(hostPath)
+      await page
+        .locator(
+          'xpath=//label[contains(normalize-space(.), "Path Type")]/following-sibling::button[1]'
+        )
+        .click()
+      await page
+        .getByRole('option', { name: 'An existing directory' })
+        .click()
+
+      await page.getByRole('button', { name: 'Create StatefulSet' }).click()
+      await page.waitForURL(`**/statefulsets/${namespace}/${name}`, {
+        timeout: 30000,
+      })
+
+      const created = await expectJSON<{
+        spec: {
+          template: {
+            spec: {
+              volumes: Array<{
+                name: string
+                hostPath?: { path: string; type?: string }
+              }>
+            }
+          }
+        }
+      }>(
+        await request.get(`${clusterPath}/statefulsets/${namespace}/${name}`),
+        200
+      )
+
+      expect(created.spec.template.spec.volumes).toEqual([
+        { name: volumeName, hostPath: { path: hostPath, type: 'Directory' } },
+      ])
+    } finally {
+      await request
+        .delete(`${clusterPath}/statefulsets/${namespace}/${name}`)
+        .catch(() => undefined)
+      await request
+        .delete(`${clusterPath}/services/${namespace}/${serviceName}`)
+        .catch(() => undefined)
+    }
+  })
 })
 
 /** 用例自清理后补充一次兜底清理，避免失败时在集群里留下 zz-e2e-* 对象。 */
@@ -273,6 +389,7 @@ test.afterAll(async ({ request }) => {
     'configmaps',
     'services',
     'deployments',
+    'statefulsets',
     'cronjobs',
     'jobs',
   ]) {

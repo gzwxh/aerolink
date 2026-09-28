@@ -22,8 +22,8 @@ func HandleGetLockedLoginIPs(c *gin.Context) {
 }
 
 // HandleBlockLoginIP 代表管理员锁定某个客户端 IP，使用
-// 已配置的 IP 锁定窗口。该封锁优先于允许列表，
-// 最迟持续到进程重启；需要永久封锁请使用拒绝列表。
+// 已配置的 IP 锁定窗口。该封锁优先于允许列表，并写在数据库里：
+// 重启后仍然有效，直到到期或被解除；需要永久封锁请使用拒绝列表。
 func HandleBlockLoginIP(c *gin.Context) {
 	var req struct {
 		IP string `json:"ip" binding:"required"`
@@ -74,7 +74,8 @@ func HandleGetLockedLoginUsers(c *gin.Context) {
 }
 
 // HandleBlockLoginUser 代表管理员锁定某个用户，使用已配置的
-// 用户锁定窗口。匹配大小写不敏感，最迟持续到进程重启。
+// 用户锁定窗口。匹配大小写不敏感，封锁写在数据库里：
+// 重启后仍然有效，直到到期或被解除。
 func HandleBlockLoginUser(c *gin.Context) {
 	var req struct {
 		Username string `json:"username" binding:"required"`

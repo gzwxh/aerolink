@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as YAML from 'js-yaml'
-import { ArrowLeft, Loader2, Plus, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Loader2, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -13,6 +13,13 @@ import { cn, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -29,11 +36,14 @@ import {
   createDefaultContainer,
   defaultNetwork,
   generateWorkloadYaml,
+  hostPathTypeOptions,
   initialFormData,
   parseYamlToFormData,
   StrategyForm,
+  validateStep,
   VolumeForm,
   type DeploymentFormData,
+  type VolumeSourceType,
   type WorkloadResourceType,
 } from '@/components/editors/deployment-form'
 import { EnvironmentEditor } from '@/components/editors/environment-editor'
@@ -339,6 +349,9 @@ function DeploymentFormPage({
     if (!isEdit && formData.replicas <= 0) return false
     if (!formData.labels.every((l) => l.key && l.value)) return false
     if (!formData.containers.every((c) => c.image && c.name)) return false
+    // 卷的来源字段（主机路径、NFS 服务器/路径、CSI 驱动…）缺一不可：留空会生成
+    // 一个 API 直接拒绝的空来源，不如在这里拦住并指出是哪一项。
+    if (!validateStep(formData, 2)) return false
     if (resourceType === 'statefulsets' && !formData.serviceName?.trim())
       return false
     if (resourceType === 'cronjobs' && !formData.schedule?.trim()) return false
@@ -386,6 +399,9 @@ function DeploymentFormPage({
       }
       if (!formData.labels.every((l) => l.key && l.value)) {
         missing.push(t('workloadWizard.labelSection', '标签'))
+      }
+      if (!validateStep(formData, 2)) {
+        missing.push(t('workloadWizard.volumeSection', '存储卷'))
       }
       const message = missing.length
         ? t('workloadWizard.requiredFields', {
@@ -2059,6 +2075,81 @@ function NetworkFormView({
   )
 }
 
+/** 「添加卷」菜单里的卷类型，顺序即菜单顺序。 */
+const VOLUME_TYPE_ITEMS: Array<{
+  value: VolumeSourceType
+  labelKey: string
+  fallback: string
+}> = [
+  {
+    value: 'emptyDir',
+    labelKey: 'workloadWizard.volumeTypeEmptyDir',
+    fallback: '空目录',
+  },
+  {
+    value: 'hostPath',
+    labelKey: 'workloadWizard.volumeTypeHostPath',
+    fallback: '主机路径（Bind-Mount）',
+  },
+  {
+    value: 'configMap',
+    labelKey: 'workloadWizard.volumeTypeConfigMap',
+    fallback: 'ConfigMap',
+  },
+  {
+    value: 'secret',
+    labelKey: 'workloadWizard.volumeTypeSecret',
+    fallback: '密文',
+  },
+  {
+    value: 'pvc',
+    labelKey: 'workloadWizard.volumeTypePvc',
+    fallback: '持久卷声明',
+  },
+  {
+    value: 'nfs',
+    labelKey: 'workloadWizard.volumeTypeNfs',
+    fallback: 'NFS',
+  },
+  {
+    value: 'csi',
+    labelKey: 'workloadWizard.volumeTypeCsi',
+    fallback: 'CSI',
+  },
+]
+
+/** hostPath 路径类型的文案：取值集合来自 `hostPathTypeOptions`。 */
+const HOST_PATH_TYPE_LABEL_KEYS: Record<string, string> = {
+  '': 'workloadWizard.hostPathTypeAny',
+  DirectoryOrCreate: 'workloadWizard.hostPathTypeDirectoryOrCreate',
+  Directory: 'workloadWizard.hostPathTypeDirectory',
+  FileOrCreate: 'workloadWizard.hostPathTypeFileOrCreate',
+  File: 'workloadWizard.hostPathTypeFile',
+  Socket: 'workloadWizard.hostPathTypeSocket',
+  CharDevice: 'workloadWizard.hostPathTypeCharDevice',
+  BlockDevice: 'workloadWizard.hostPathTypeBlockDevice',
+}
+
+/** Radix Select 不接受空字符串 value，用这个哨兵表示「不指定路径类型」。 */
+const HOST_PATH_TYPE_NONE = '__none__'
+
+function VolumeField({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-normal text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
+  )
+}
+
 function StorageFormView({
   formData,
   setFormData,
@@ -2068,162 +2159,346 @@ function StorageFormView({
 }) {
   const { t } = useTranslation()
   const volumes = formData.podSpec.volumes || []
+
+  const patchVolumes = (updater: (list: VolumeForm[]) => VolumeForm[]) =>
+    setFormData((prev) => ({
+      ...prev,
+      podSpec: {
+        ...prev.podSpec,
+        volumes: updater(prev.podSpec.volumes || []),
+      },
+    }))
+
+  const patchOptions = (
+    index: number,
+    options: Partial<NonNullable<VolumeForm['options']>>
+  ) =>
+    patchVolumes((list) =>
+      list.map((v, i) =>
+        i === index ? { ...v, options: { ...v.options, ...options } } : v
+      )
+    )
+
+  const patchAttributes = (
+    index: number,
+    updater: (
+      list: Array<{ key: string; value: string }>
+    ) => Array<{ key: string; value: string }>
+  ) =>
+    patchVolumes((list) =>
+      list.map((v, i) =>
+        i === index
+          ? {
+              ...v,
+              options: {
+                ...v.options,
+                csiVolumeAttributes: updater(
+                  v.options?.csiVolumeAttributes || []
+                ),
+              },
+            }
+          : v
+      )
+    )
+
+  const typeLabel = (type: VolumeSourceType) => {
+    const item = VOLUME_TYPE_ITEMS.find((i) => i.value === type)
+    return item ? t(item.labelKey, item.fallback) : type
+  }
+
   return (
     <div className="space-y-3">
       <h4 className="text-base font-medium">
         {t('workloadWizard.storageTitle', '存储')}
       </h4>
       {volumes.map((volume, index) => (
-        <div
-          key={index}
-          className="grid grid-cols-[minmax(0,1fr)_150px_minmax(0,1fr)_auto] items-end gap-3"
-        >
-          <div className="space-y-1.5">
-            <Label className="text-xs font-normal text-muted-foreground">
-              {t('workloadWizard.volumeName', '卷名称')}
-            </Label>
-            <Input
-              value={volume.name}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  podSpec: {
-                    ...prev.podSpec,
-                    volumes: (prev.podSpec.volumes || []).map((v, i) =>
-                      i === index ? { ...v, name: e.target.value } : v
-                    ),
-                  },
-                }))
-              }
-              placeholder={t('workloadWizard.exampleVolume', '例如: data')}
-              className="h-9"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-normal text-muted-foreground">
-              {t('workloadWizard.volumeType', '类型')}
-            </Label>
-            <Select
-              value={volume.sourceType}
-              onValueChange={(sourceType) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  podSpec: {
-                    ...prev.podSpec,
-                    volumes: (prev.podSpec.volumes || []).map((vol, i) =>
-                      i === index
-                        ? {
-                            ...vol,
-                            sourceType: sourceType as VolumeForm['sourceType'],
-                          }
-                        : vol
-                    ),
-                  },
-                }))
+        <div key={index} className="rounded-md border p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="text-sm font-medium">
+              {typeLabel(volume.sourceType)}
+            </span>
+            <button
+              type="button"
+              className="shrink-0 text-sm text-primary transition-colors hover:underline"
+              onClick={() =>
+                patchVolumes((list) => list.filter((_, i) => i !== index))
               }
             >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="emptyDir">emptyDir</SelectItem>
-                <SelectItem value="hostPath">hostPath</SelectItem>
-                <SelectItem value="configMap">ConfigMap</SelectItem>
-                <SelectItem value="secret">Secret</SelectItem>
-                <SelectItem value="pvc">PVC</SelectItem>
-              </SelectContent>
-            </Select>
+              {t('workloadWizard.remove', '移除')}
+            </button>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-normal text-muted-foreground">
-              {volume.sourceType === 'hostPath'
-                ? t('workloadWizard.hostPath', '主机路径')
-                : volume.sourceType === 'configMap'
-                  ? t('workloadWizard.configMapName', 'ConfigMap 名称')
-                  : volume.sourceType === 'secret'
-                    ? t('workloadWizard.secretName', 'Secret 名称')
-                    : t('workloadWizard.pvcName', 'PVC 名称')}
-            </Label>
-            <Input
-              value={
-                volume.options?.path ||
-                volume.options?.configMapName ||
-                volume.options?.secretName ||
-                volume.options?.claimName ||
-                ''
-              }
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  podSpec: {
-                    ...prev.podSpec,
-                    volumes: (prev.podSpec.volumes || []).map((v, i) => {
-                      if (i !== index) return v
-                      const key =
-                        v.sourceType === 'hostPath'
-                          ? 'path'
-                          : v.sourceType === 'configMap'
-                            ? 'configMapName'
-                            : v.sourceType === 'secret'
-                              ? 'secretName'
-                              : 'claimName'
-                      return {
-                        ...v,
-                        options: { ...v.options, [key]: e.target.value },
-                      }
-                    }),
-                  },
-                }))
-              }
-              placeholder={
-                volume.sourceType === 'hostPath'
-                  ? '/data'
-                  : volume.sourceType === 'pvc'
-                    ? t('workloadWizard.examplePvc', '例如: my-pvc')
-                    : ''
-              }
-              className="h-9"
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <VolumeField label={t('workloadWizard.volumeName', '卷名称')}>
+              <Input
+                value={volume.name}
+                onChange={(e) =>
+                  patchVolumes((list) =>
+                    list.map((v, i) =>
+                      i === index ? { ...v, name: e.target.value } : v
+                    )
+                  )
+                }
+                placeholder={t('workloadWizard.exampleVolume', '例如: data')}
+                className="h-9"
+              />
+            </VolumeField>
+            {volume.sourceType === 'hostPath' && (
+              <>
+                <VolumeField label={t('workloadWizard.hostPath', '主机路径')}>
+                  <Input
+                    value={volume.options?.path || ''}
+                    onChange={(e) =>
+                      patchOptions(index, { path: e.target.value })
+                    }
+                    placeholder="/data"
+                    className="h-9"
+                  />
+                </VolumeField>
+                <VolumeField
+                  label={t('workloadWizard.hostPathType', '路径类型')}
+                >
+                  <Select
+                    value={volume.options?.hostPathType || HOST_PATH_TYPE_NONE}
+                    onValueChange={(value) =>
+                      patchOptions(index, {
+                        hostPathType:
+                          value === HOST_PATH_TYPE_NONE ? '' : value,
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-9 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hostPathTypeOptions.map((type) => (
+                        <SelectItem
+                          key={type || HOST_PATH_TYPE_NONE}
+                          value={type || HOST_PATH_TYPE_NONE}
+                        >
+                          {type
+                            ? t(HOST_PATH_TYPE_LABEL_KEYS[type], type)
+                            : t(
+                                'workloadWizard.hostPathTypeAny',
+                                '任意路径：不需要检查目标路径'
+                              )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </VolumeField>
+              </>
+            )}
+            {volume.sourceType === 'configMap' && (
+              <VolumeField
+                label={t('workloadWizard.configMapName', 'ConfigMap 名称')}
+              >
+                <Input
+                  value={volume.options?.configMapName || ''}
+                  onChange={(e) =>
+                    patchOptions(index, { configMapName: e.target.value })
+                  }
+                  className="h-9"
+                />
+              </VolumeField>
+            )}
+            {volume.sourceType === 'secret' && (
+              <VolumeField
+                label={t('workloadWizard.secretName', 'Secret 名称')}
+              >
+                <Input
+                  value={volume.options?.secretName || ''}
+                  onChange={(e) =>
+                    patchOptions(index, { secretName: e.target.value })
+                  }
+                  className="h-9"
+                />
+              </VolumeField>
+            )}
+            {volume.sourceType === 'pvc' && (
+              <VolumeField label={t('workloadWizard.pvcName', 'PVC 名称')}>
+                <Input
+                  value={volume.options?.claimName || ''}
+                  onChange={(e) =>
+                    patchOptions(index, { claimName: e.target.value })
+                  }
+                  placeholder={t('workloadWizard.examplePvc', '例如: my-pvc')}
+                  className="h-9"
+                />
+              </VolumeField>
+            )}
+            {volume.sourceType === 'nfs' && (
+              <>
+                <VolumeField
+                  label={t('workloadWizard.nfsServer', 'NFS 服务器')}
+                >
+                  <Input
+                    value={volume.options?.nfsServer || ''}
+                    onChange={(e) =>
+                      patchOptions(index, { nfsServer: e.target.value })
+                    }
+                    placeholder={t(
+                      'workloadWizard.nfsServerPlaceholder',
+                      '例如: 10.0.0.1'
+                    )}
+                    className="h-9"
+                  />
+                </VolumeField>
+                <VolumeField label={t('workloadWizard.nfsPath', '共享路径')}>
+                  <Input
+                    value={volume.options?.nfsPath || ''}
+                    onChange={(e) =>
+                      patchOptions(index, { nfsPath: e.target.value })
+                    }
+                    placeholder={t(
+                      'workloadWizard.nfsPathPlaceholder',
+                      '例如: /exports/data'
+                    )}
+                    className="h-9"
+                  />
+                </VolumeField>
+                <label className="flex h-9 items-center gap-2 self-end text-sm">
+                  <Checkbox
+                    checked={volume.options?.nfsReadOnly === true}
+                    onCheckedChange={(checked) =>
+                      patchOptions(index, { nfsReadOnly: checked === true })
+                    }
+                  />
+                  {t('workloadWizard.readOnlyMount', '以只读方式挂载')}
+                </label>
+              </>
+            )}
+            {volume.sourceType === 'csi' && (
+              <>
+                <VolumeField label={t('workloadWizard.csiDriver', 'CSI 驱动')}>
+                  <Input
+                    value={volume.options?.csiDriver || ''}
+                    onChange={(e) =>
+                      patchOptions(index, { csiDriver: e.target.value })
+                    }
+                    placeholder={t(
+                      'workloadWizard.csiDriverPlaceholder',
+                      '例如: disk.csi.everest.io'
+                    )}
+                    className="h-9"
+                  />
+                </VolumeField>
+                <VolumeField
+                  label={t('workloadWizard.csiFsType', '文件系统类型')}
+                >
+                  <Input
+                    value={volume.options?.csiFsType || ''}
+                    onChange={(e) =>
+                      patchOptions(index, { csiFsType: e.target.value })
+                    }
+                    placeholder={t(
+                      'workloadWizard.csiFsTypePlaceholder',
+                      '例如: ext4'
+                    )}
+                    className="h-9"
+                  />
+                </VolumeField>
+                <label className="flex h-9 items-center gap-2 self-end text-sm">
+                  <Checkbox
+                    checked={volume.options?.csiReadOnly === true}
+                    onCheckedChange={(checked) =>
+                      patchOptions(index, { csiReadOnly: checked === true })
+                    }
+                  />
+                  {t('workloadWizard.readOnlyMount', '以只读方式挂载')}
+                </label>
+              </>
+            )}
           </div>
-          <button
-            type="button"
-            className="flex h-9 shrink-0 items-center text-sm text-primary transition-colors hover:underline"
-            onClick={() =>
-              setFormData((prev) => ({
-                ...prev,
-                podSpec: {
-                  ...prev.podSpec,
-                  volumes: (prev.podSpec.volumes || []).filter(
-                    (_, i) => i !== index
-                  ),
-                },
-              }))
-            }
-          >
-            {t('workloadWizard.remove', '移除')}
-          </button>
+          {volume.sourceType === 'csi' && (
+            <div className="mt-3 space-y-2">
+              <Label className="text-xs font-normal text-muted-foreground">
+                {t('workloadWizard.csiVolumeAttributes', '卷属性')}
+              </Label>
+              {(volume.options?.csiVolumeAttributes || []).map((pair, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    value={pair.key}
+                    onChange={(e) =>
+                      patchAttributes(index, (attrs) =>
+                        attrs.map((p, j) =>
+                          j === i ? { ...p, key: e.target.value } : p
+                        )
+                      )
+                    }
+                    placeholder={t('workloadWizard.labelKey', '键')}
+                    className="h-9 min-w-0 flex-1"
+                  />
+                  <Input
+                    value={pair.value}
+                    onChange={(e) =>
+                      patchAttributes(index, (attrs) =>
+                        attrs.map((p, j) =>
+                          j === i ? { ...p, value: e.target.value } : p
+                        )
+                      )
+                    }
+                    placeholder={t('workloadWizard.labelValue', '值')}
+                    className="h-9 min-w-0 flex-1"
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 text-sm text-primary transition-colors hover:underline"
+                    onClick={() =>
+                      patchAttributes(index, (attrs) =>
+                        attrs.filter((_, j) => j !== i)
+                      )
+                    }
+                  >
+                    {t('workloadWizard.remove', '移除')}
+                  </button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 border-primary/40 bg-primary/5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
+                onClick={() =>
+                  patchAttributes(index, (attrs) => [
+                    ...attrs,
+                    { key: '', value: '' },
+                  ])
+                }
+              >
+                {t('workloadWizard.addVolumeAttribute', '添加卷属性')}
+              </Button>
+            </div>
+          )}
         </div>
       ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 border-primary/40 bg-primary/5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
-        onClick={() =>
-          setFormData((prev) => ({
-            ...prev,
-            podSpec: {
-              ...prev.podSpec,
-              volumes: [
-                ...(prev.podSpec.volumes || []),
-                { name: '', sourceType: 'emptyDir' as const },
-              ],
-            },
-          }))
-        }
-      >
-        {t('workloadWizard.addVolume', '添加存储卷')}
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 border-primary/40 bg-primary/5 text-xs text-primary hover:bg-primary/10 hover:text-primary"
+          >
+            {t('workloadWizard.addVolume', '添加卷')}
+            <ChevronDown className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {VOLUME_TYPE_ITEMS.map((item) => (
+            <DropdownMenuItem
+              key={item.value}
+              onSelect={() =>
+                patchVolumes((list) => [
+                  ...list,
+                  { name: '', sourceType: item.value },
+                ])
+              }
+            >
+              {t(item.labelKey, item.fallback)}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

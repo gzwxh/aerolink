@@ -1290,7 +1290,7 @@ export function SecurityManagement() {
           <p className="text-xs text-muted-foreground">
             {t(
               'securitySettings.lockedIPs.manualHint',
-              'Addresses on the allow list are never locked by failed attempts; add an IP to the deny list for a permanent block. A manual block is cleared when the server restarts.'
+              'Addresses on the allow list are never locked by failed attempts; add an IP to the deny list for a permanent block. A manual block is stored in the database and survives a server restart until it expires or is removed.'
             )}
           </p>
         </DialogContent>
@@ -1386,7 +1386,7 @@ export function SecurityManagement() {
           <p className="text-xs text-muted-foreground">
             {t(
               'securitySettings.lockedUsers.manualHint',
-              'A manual block is cleared when the server restarts. Disable the account itself for a permanent block.'
+              'A manual block is stored in the database and survives a server restart until it expires or is removed. Disable the account itself for a permanent block.'
             )}
           </p>
         </DialogContent>
