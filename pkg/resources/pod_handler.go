@@ -947,6 +947,7 @@ func (h *PodHandler) sendPodWatchSnapshot(
 		fieldMatcher = parsed
 	}
 
+	sent := 0
 	for i := range podList.Items {
 		pod := &podList.Items[i]
 		if fieldMatcher != nil && !fieldMatcher.Matches(podFieldSet(pod)) {
@@ -960,8 +961,12 @@ func (h *PodHandler) sendPodWatchSnapshot(
 		if err := writeSSE(c, cs.Name, "added", obj); err != nil {
 			return err
 		}
+		sent++
 	}
-	return nil
+	// 快照发完给一个显式的结束标记：客户端据此把「本次快照里已经没有的行」丢掉。
+	// 少了它，断线期间被删掉的对象不会再收到任何事件，只能永久留在列表里
+	// （重连只是又合并了一次快照，用户点刷新也去不掉）。
+	return writeSSE(c, cs.Name, "synced", gin.H{"count": sent})
 }
 
 // Watch 实现基于 SSE 的 pod 列表监听：先给初始快照，再给增量更新

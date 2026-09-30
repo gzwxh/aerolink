@@ -46,6 +46,13 @@ class FakeEventSource {
 const podEvent = (name: string) =>
   JSON.stringify({ metadata: { name, namespace: 'default' } })
 
+/** 列表里各行的名字，按当前顺序。 */
+const names = (items: Array<{ metadata?: { name?: string } }> | undefined) =>
+  (items || []).map((item) => item.metadata?.name)
+
+// 重同步窗口的长度是 hook 内部常量：这里取一个必然大于它的值，避免测试与实现耦合。
+const AFTER_RESYNC_WINDOW_MS = 1000
+
 // 服务端明确拒绝连接（429 限流 / 403 无权限）时浏览器给的状态：
 // readyState 变 CLOSED 且不再自动重连。
 const rejectConnection = (source: FakeEventSource) => {
@@ -242,6 +249,72 @@ describe('useResourcesWatch', () => {
     expect(FakeEventSource.instances).toHaveLength(2)
     expect(FakeEventSource.instances[0].closed).toBe(true)
     expect(FakeEventSource.instances[1].closed).toBe(false)
+  })
+
+  // 断线期间被删掉的对象不会再有任何事件：重连拿到的新快照里已经没有它，
+  // 必须按快照把本地遗留的行丢掉，否则会出现「Pod 已删除、界面还在」（点刷新也去不掉，
+  // 因为重连只是又合并了一次快照）。
+  it('重连后按新快照丢掉已消失的行', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('EventSource', FakeEventSource)
+
+    const { result } = renderHook(() => useResourcesWatch('pods', 'default'))
+
+    act(() => {
+      FakeEventSource.instances[0].emit('added', podEvent('p1'))
+      FakeEventSource.instances[0].emit('added', podEvent('p2'))
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_RESYNC_WINDOW_MS)
+    })
+    expect(names(result.current.data)).toEqual(['p2', 'p1'])
+
+    act(() => {
+      result.current.refetch({ immediate: true })
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(FakeEventSource.instances).toHaveLength(2)
+
+    // 新快照里只剩 p1（p2 在断线期间被删掉了）。
+    act(() => {
+      FakeEventSource.instances[1].emit('added', podEvent('p1'))
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_RESYNC_WINDOW_MS)
+    })
+
+    expect(names(result.current.data)).toEqual(['p1'])
+  })
+
+  // 服务端显式给出「快照发完」的标记时，不必再等窗口到期。
+  it('收到 synced 立刻结束重同步窗口', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('EventSource', FakeEventSource)
+
+    const { result } = renderHook(() => useResourcesWatch('pods', 'default'))
+    act(() => {
+      FakeEventSource.instances[0].emit('added', podEvent('p1'))
+      FakeEventSource.instances[0].emit('added', podEvent('p2'))
+    })
+    act(() => {
+      FakeEventSource.instances[0].emit('synced', '')
+    })
+    expect(names(result.current.data)).toEqual(['p2', 'p1'])
+
+    act(() => {
+      result.current.refetch({ immediate: true })
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    act(() => {
+      FakeEventSource.instances[1].emit('added', podEvent('p1'))
+      FakeEventSource.instances[1].emit('synced', '')
+    })
+
+    expect(names(result.current.data)).toEqual(['p1'])
   })
 
   // 显式刷新不吃指数退避：默认 refetch 要等 1s（连续重连更久），immediate 立刻重连。

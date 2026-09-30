@@ -1707,3 +1707,61 @@ func TestPodWatchReduceStripsHeavyFields(t *testing.T) {
 		})
 	}
 }
+
+// TestPodWatchSnapshotEndsWithSyncedMarker 覆盖「初始快照发出显式结束标记」。
+//
+// 客户端据此把本轮快照里已经不存在、只剩在本地列表里的行丢掉：少了这个标记，
+// 断线期间被删掉的 Pod 不会再收到任何事件，只能一直留在界面上（重连只是又合并了一次
+// 快照，用户点刷新也去不掉）。
+func TestPodWatchSnapshotEndsWithSyncedMarker(t *testing.T) {
+	originalConfig := rbac.RBACConfig
+	t.Cleanup(func() { rbac.RBACConfig = originalConfig })
+
+	roles := []common.Role{{
+		Name:       "pod-default-reader",
+		Clusters:   []string{"cluster-a"},
+		Namespaces: []string{"default"},
+		Resources:  []string{string(common.Pods)},
+		Verbs:      []string{string(common.VerbGet)},
+	}}
+	rbac.RBACConfig = &common.RolesConfig{
+		Roles: roles,
+		RoleMapping: []common.RoleMapping{
+			{Name: "pod-default-reader", Users: []string{"alice"}},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "default"}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p2", Namespace: "other"}},
+	).Build()
+
+	clientSet := &cluster.ClientSet{
+		Name:      "cluster-a",
+		K8sClient: &kube.K8sClient{Client: k8sClient},
+	}
+	user := model.User{Username: "alice", Roles: roles}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/pods/default/watch", nil)
+
+	if err := NewPodHandler().sendPodWatchSnapshot(c, clientSet, user, "default", "", "", true, nil); err != nil {
+		t.Fatalf("sendPodWatchSnapshot returned error: %v", err)
+	}
+
+	body := recorder.Body.String()
+	if got := strings.Count(body, "event: added"); got != 1 {
+		t.Fatalf("应只下发 default 命名空间里的 Pod（默认恰好 1 个），实际 %d 个; body=%s", got, body)
+	}
+	if !strings.Contains(body, "event: synced") {
+		t.Fatalf("快照结束后应给出 synced 标记; body=%s", body)
+	}
+	if !strings.HasSuffix(body, "data: {\"count\":1}\n\n") {
+		t.Fatalf("synced 应是最后一个事件，并带上本轮条数; body=%s", body)
+	}
+}

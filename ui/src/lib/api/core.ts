@@ -740,6 +740,18 @@ const EVENT_SOURCE_CLOSED = 2
 const WATCH_FALLBACK_POLL_INTERVAL = 5000
 const WATCH_STREAM_PROBE_INTERVAL = 30000
 
+// 每次连接建立后的「重同步窗口」：服务端的初始快照是一串 added 事件、没有结束标记，
+// 客户端只能把这段时间里收到的对象记下来，窗口一关就把没再出现过的行丢掉。
+// 断线期间被删掉的对象不会再有任何事件，不丢就等于把已删除的行永久留在列表里
+// （用户报过的「Pod 已经删了、点刷新还在」）。取值远大于快照在正常网络下的到达时间，
+// 窗口内还没到的行会被各自的事件补回来。
+const WATCH_RESYNC_WINDOW_MS = 800
+
+/** watch 列表里一条对象的身份：命名空间 + 名字。 */
+const watchItemKey = (obj: {
+  metadata?: { namespace?: string; name?: string }
+}) => `${obj.metadata?.namespace || ''}/${obj.metadata?.name || ''}`
+
 // Hook：资源列表的 SSE watch（初始快照 + ADDED/MODIFIED/DELETED）
 //
 // 列表数据在本地 state 里，不写进 react-query 缓存：外壳点「刷新」时
@@ -781,6 +793,9 @@ export function useResourcesWatch<T extends ResourceType>(
   const lastUrlRef = useRef<string | null>(null)
   // 连续重连次数：连接成功后清零，用于指数退避。
   const reconnectAttemptRef = useRef(0)
+  // 重同步窗口：本轮快照里见过的对象，以及窗口的关闭定时器（见 WATCH_RESYNC_WINDOW_MS）。
+  const resyncKeysRef = useRef<Set<string> | null>(null)
+  const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const buildUrl = useCallback(() => {
     const ns = namespace || '_all'
@@ -811,7 +826,46 @@ export function useResourcesWatch<T extends ResourceType>(
       eventSourceRef.current.close()
       eventSourceRef.current = null
     }
+    // 断开时不留半截重同步窗口：下一次连接会重新开一个，按旧集合裁剪会误删
+    // 「新快照还没轮到」的行。
+    if (resyncTimerRef.current) {
+      clearTimeout(resyncTimerRef.current)
+      resyncTimerRef.current = null
+    }
+    resyncKeysRef.current = null
   }, [])
+
+  /**
+   * 关掉当前的重同步窗口：把这轮快照里没再出现过的行丢掉。
+   *
+   * 服务端的初始快照是一串 `added`、没有结束标记，客户端只能靠这个窗口判断
+   * 「快照大概发完了」。若不这样做，断线期间被删掉的对象（不会再有任何事件）会永久
+   * 留在列表里——重连只是又合并了一次快照，点刷新也去不掉。
+   */
+  const endResync = useCallback(() => {
+    if (resyncTimerRef.current) {
+      clearTimeout(resyncTimerRef.current)
+      resyncTimerRef.current = null
+    }
+    const keys = resyncKeysRef.current
+    resyncKeysRef.current = null
+    if (!keys) return
+    setData((prev) => {
+      if (!prev) return prev
+      const next = prev.filter((item) =>
+        keys.has(watchItemKey(item as ResourceTypeMap[T] & object))
+      )
+      return next.length === prev.length
+        ? prev
+        : (next as unknown as ResourcesItems<T>)
+    })
+  }, [])
+
+  const beginResync = useCallback(() => {
+    if (resyncTimerRef.current) clearTimeout(resyncTimerRef.current)
+    resyncKeysRef.current = new Set()
+    resyncTimerRef.current = setTimeout(endResync, WATCH_RESYNC_WINDOW_MS)
+  }, [endResync])
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -900,6 +954,8 @@ export function useResourcesWatch<T extends ResourceType>(
     try {
       const es = new EventSource(url, { withCredentials: true })
       eventSourceRef.current = es
+      // 开一个重同步窗口：这轮快照（一串 added）发完后，把没再出现过的行丢掉。
+      beginResync()
 
       es.onopen = () => {
         setIsConnected(true)
@@ -909,16 +965,15 @@ export function useResourcesWatch<T extends ResourceType>(
         reconnectAttemptRef.current = 0
       }
 
-      const getKey = (obj: ResourceTypeMap[T]) => {
-        return (
-          (obj.metadata?.namespace || '') + '/' + (obj.metadata?.name || '')
-        )
-      }
+      const getKey = (obj: ResourceTypeMap[T]) =>
+        watchItemKey(obj as ResourceTypeMap[T] & object)
 
       const upsert = (obj: string) => {
         const object = JSON.parse(obj) as ResourceTypeMap[T]
         hasDataRef.current = true
         setIsLoading(false)
+        // 重同步窗口内收到的对象都要记下来：窗口关闭时按这份集合裁剪（见 endResync）。
+        resyncKeysRef.current?.add(getKey(object))
         setData((prev) => {
           const arr = prev ? [...prev] : []
           const key = getKey(object)
@@ -999,6 +1054,11 @@ export function useResourcesWatch<T extends ResourceType>(
         })
       })
 
+      // 服务端若显式给出「快照发完」的标记，就不用等窗口到期了。
+      es.addEventListener('synced', () => {
+        endResync()
+      })
+
       es.addEventListener('error', (e: MessageEvent) => {
         try {
           const payload = JSON.parse(e.data)
@@ -1031,7 +1091,15 @@ export function useResourcesWatch<T extends ResourceType>(
       setIsLoading(false)
       setIsConnected(false)
     }
-  }, [buildUrl, disconnect, options?.enabled, startPolling, stopPolling])
+  }, [
+    buildUrl,
+    disconnect,
+    options?.enabled,
+    startPolling,
+    stopPolling,
+    beginResync,
+    endResync,
+  ])
 
   // 定时器与可见性监听通过 ref 调用，避免与 connect 形成循环依赖。
   connectRef.current = connect
