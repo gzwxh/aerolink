@@ -7,13 +7,13 @@ import {
   IconTerminal2,
 } from '@tabler/icons-react'
 import { Deployment } from 'kubernetes-types/apps/v1'
-import type { Container, Service } from 'kubernetes-types/core/v1'
+import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
-  createResource,
+  applyResource,
   patchResource,
   updateResource,
   useRelatedResources,
@@ -27,8 +27,21 @@ import {
   servicesForWorkload,
   toSimpleContainer,
 } from '@/lib/k8s'
+import {
+  generateServiceYaml,
+  initialData,
+  servicePortErrorCodes,
+  type ServiceFormData,
+  type ServiceType,
+} from '@/lib/service-yaml'
 import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
+import { useNodePortRange } from '@/hooks/use-node-port-range'
+import { useServicePortErrorText } from '@/hooks/use-service-port-error-text'
+import {
+  useDraftDirty,
+  useUnsavedChangesGuard,
+} from '@/hooks/use-unsaved-changes-guard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -61,7 +74,9 @@ import { LogViewer } from '@/components/log-viewer'
 import { PodMonitoring } from '@/components/pod-monitoring'
 import { PodTable } from '@/components/pod-table'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
+import { ServicePortsEditor } from '@/components/service-ports-editor'
 import { Terminal } from '@/components/terminal'
+import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 import { VolumeTable } from '@/components/volume-table'
 import { WorkloadHistoryTabs } from '@/components/workload-history-tabs'
 
@@ -70,17 +85,16 @@ import {
   type ResourceDetailShellTab,
 } from './resource-detail-shell'
 
-type ExposeServiceType = 'ClusterIP' | 'NodePort' | 'LoadBalancer'
-
 export function DeploymentDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const [scaleReplicas, setScaleReplicas] = useState(1)
   const [isExposing, setIsExposing] = useState(false)
   const [isExposeDialogOpen, setIsExposeDialogOpen] = useState(false)
-  const [exposePort, setExposePort] = useState(80)
-  const [exposeTargetPort, setExposeTargetPort] = useState(80)
-  const [exposeServiceType, setExposeServiceType] =
-    useState<ExposeServiceType>('ClusterIP')
+  // 「暴露」弹窗就是建一个 Service，表单与「服务」创建页同源（见 lib/service-yaml.ts）。
+  // 初值在打开那一刻按当前 Deployment 填（exposeInitialForm），baseline 供草稿判定用。
+  const [exposeForm, setExposeForm] = useState<ServiceFormData>(initialData)
+  const [exposeBaseline, setExposeBaseline] =
+    useState<ServiceFormData>(initialData)
   const [isScalePopoverOpen, setIsScalePopoverOpen] = useState(false)
   const [isRestartPopoverOpen, setIsRestartPopoverOpen] = useState(false)
   const [isTerminalDialogOpen, setIsTerminalDialogOpen] = useState(false)
@@ -141,14 +155,6 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     () => relatedResources?.some((resource) => resource.type === 'services'),
     [relatedResources]
   )
-  const defaultExposePort = useMemo(() => {
-    const containerPort = deployment?.spec?.template.spec?.containers
-      ?.flatMap((container) => container.ports || [])
-      .find((port) => port.containerPort)?.containerPort
-
-    return containerPort || 80
-  }, [deployment])
-
   // 终端弹窗与 containers 标签页共用同一份容器列表。
   const containers = useMemo(
     () => deployment?.spec?.template.spec?.containers || [],
@@ -165,10 +171,64 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     }
   }, [deployment])
 
-  useEffect(() => {
-    setExposePort(defaultExposePort)
-    setExposeTargetPort(defaultExposePort)
-  }, [defaultExposePort])
+  /**
+   * 「暴露」弹窗的初值：名称取工作负载名，选择器取它的 Pod 标签（即
+   * `spec.selector.matchLabels`，界面上只读），端口默认用容器声明的第一个端口。
+   */
+  const exposeInitialForm = useCallback((): ServiceFormData => {
+    const containerPort =
+      deployment?.spec?.template.spec?.containers
+        ?.flatMap((container) => container.ports || [])
+        .find((port) => port.containerPort)?.containerPort || 80
+
+    return {
+      ...initialData,
+      name,
+      namespace,
+      selector: Object.entries(
+        deployment?.spec?.selector?.matchLabels || {}
+      ).map(([key, value]) => ({ key, value })),
+      ports: [
+        {
+          name: '',
+          port: String(containerPort),
+          targetPort: String(containerPort),
+          nodePort: '',
+          protocol: 'TCP',
+        },
+      ],
+    }
+  }, [deployment, name, namespace])
+
+  const openExposeDialog = useCallback(() => {
+    const next = exposeInitialForm()
+    setExposeForm(next)
+    setExposeBaseline(next)
+    setIsExposeDialogOpen(true)
+  }, [exposeInitialForm])
+
+  const closeExposeDialog = useCallback(() => setIsExposeDialogOpen(false), [])
+  // 承载可编辑草稿的弹窗：遮罩 / Esc / 关闭按钮都要先确认（见 AGENTS.md）。
+  const exposeGuard = useUnsavedChangesGuard({
+    dirty: useDraftDirty(exposeForm, exposeBaseline),
+    onClose: closeExposeDialog,
+  })
+
+  const updateExpose = useCallback((updates: Partial<ServiceFormData>) => {
+    setExposeForm((prev) => ({ ...prev, ...updates }))
+  }, [])
+
+  const exposeNodePortRange = useNodePortRange()
+  const exposePortErrors = useMemo(
+    () =>
+      servicePortErrorCodes(
+        exposeForm.ports,
+        exposeForm.serviceType,
+        exposeNodePortRange
+      ),
+    [exposeForm.ports, exposeForm.serviceType, exposeNodePortRange]
+  )
+  const exposeErrorText = useServicePortErrorText()
 
   useEffect(() => {
     if (deployment) {
@@ -235,47 +295,38 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   const handleExpose = useCallback(async () => {
     if (!deployment) return
 
-    const selector = deployment.spec?.selector?.matchLabels || {}
-    if (Object.keys(selector).length === 0) {
+    // 选择器在弹窗里是只读的（取工作负载的 Pod 标签），但仍是提交的必填项：
+    // Deployment 没有 matchLabels 时建的 Service 不会选中任何 Pod。
+    const selector = exposeForm.selector.filter(
+      (pair) => pair.key.trim() && pair.value.trim()
+    )
+    if (selector.length === 0) {
       toast.error(t('deployments.exposeNoSelector'))
       return
     }
-
-    if (
-      exposePort < 1 ||
-      exposePort > 65535 ||
-      exposeTargetPort < 1 ||
-      exposeTargetPort > 65535
-    ) {
+    if (!exposeForm.name.trim()) {
+      toast.error(t('deployments.exposeNameRequired', '请填写 Service 名称'))
+      return
+    }
+    if (exposeForm.ports.length === 0) {
       toast.error(t('deployments.exposeInvalidPort'))
       return
     }
-
-    const service: Service = {
-      apiVersion: 'v1',
-      kind: 'Service',
-      metadata: {
-        name,
-        namespace,
-        labels: deployment.metadata?.labels,
-      },
-      spec: {
-        type: exposeServiceType,
-        selector,
-        ports: [
-          {
-            port: exposePort,
-            protocol: 'TCP',
-            targetPort: exposeTargetPort,
-          },
-        ],
-      },
+    const firstPortError = [...exposePortErrors.values()][0]
+    if (firstPortError) {
+      toast.error(exposeErrorText(firstPortError))
+      return
     }
 
     setIsExposing(true)
     try {
-      await createResource('services', namespace, service)
-      toast.success(t('deployments.exposed', { service: name }))
+      // 与「服务」创建页走同一条生成路径，两个入口产出的 Service 一致。提交用 apply：
+      // 同名 Service 已存在时是原地更新，而不是报「已存在」。
+      await applyResource(
+        generateServiceYaml({ ...exposeForm, selector }),
+        exposeForm.namespace
+      )
+      toast.success(t('deployments.exposed', { service: exposeForm.name }))
       setIsExposeDialogOpen(false)
       await refetchRelatedResources()
     } catch (error) {
@@ -285,11 +336,9 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     }
   }, [
     deployment,
-    exposePort,
-    exposeServiceType,
-    exposeTargetPort,
-    name,
-    namespace,
+    exposeErrorText,
+    exposeForm,
+    exposePortErrors,
     refetchRelatedResources,
     t,
   ])
@@ -597,7 +646,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsExposeDialogOpen(true)}
+              onClick={openExposeDialog}
               disabled={isExposing}
             >
               <IconNetwork className="w-4 h-4" />
@@ -715,9 +764,9 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
           ) : null}
           <Dialog
             open={isExposeDialogOpen}
-            onOpenChange={setIsExposeDialogOpen}
+            onOpenChange={exposeGuard.handleOpenChange}
           >
-            <DialogContent>
+            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{t('deployments.exposeTitle')}</DialogTitle>
                 <DialogDescription>
@@ -731,67 +780,104 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
                   handleExpose()
                 }}
               >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="expose-name">
+                      {t('common.fields.name', '名称')} *
+                    </Label>
+                    <Input
+                      id="expose-name"
+                      value={exposeForm.name}
+                      onChange={(event) =>
+                        updateExpose({ name: event.target.value })
+                      }
+                      placeholder={name}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="expose-service-type">
+                      {t('deployments.serviceType')}
+                    </Label>
+                    <Select
+                      value={exposeForm.serviceType}
+                      onValueChange={(value) =>
+                        updateExpose({ serviceType: value as ServiceType })
+                      }
+                    >
+                      <SelectTrigger id="expose-service-type" className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ClusterIP">ClusterIP</SelectItem>
+                        <SelectItem value="NodePort">NodePort</SelectItem>
+                        <SelectItem value="LoadBalancer">
+                          LoadBalancer
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="service-type">
-                    {t('deployments.serviceType')}
+                  <Label>{t('serviceCreate.selectorTitle', '选择器')}</Label>
+                  <div className="flex flex-wrap gap-1.5 rounded-md border p-2">
+                    {exposeForm.selector.map((pair) => (
+                      <Badge
+                        key={pair.key}
+                        variant="secondary"
+                        className="font-mono text-xs font-normal"
+                      >
+                        {pair.key}={pair.value}
+                      </Badge>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'deployments.exposeSelectorHint',
+                      '选择器取本工作负载的 Pod 标签，固定不可改；需要自定义选择器时请到「服务」页面创建。'
+                    )}
+                  </p>
+                </div>
+
+                <ServicePortsEditor
+                  ports={exposeForm.ports}
+                  serviceType={exposeForm.serviceType}
+                  errors={exposePortErrors}
+                  onChange={(ports) => updateExpose({ ports })}
+                />
+
+                <div className="space-y-2">
+                  <Label htmlFor="expose-session-affinity">
+                    {t('serviceCreate.sessionAffinity', '会话保持')}
                   </Label>
                   <Select
-                    value={exposeServiceType}
+                    value={exposeForm.sessionAffinity}
                     onValueChange={(value) =>
-                      setExposeServiceType(value as ExposeServiceType)
+                      updateExpose({
+                        sessionAffinity:
+                          value as ServiceFormData['sessionAffinity'],
+                      })
                     }
                   >
-                    <SelectTrigger id="service-type" className="w-full">
+                    <SelectTrigger
+                      id="expose-session-affinity"
+                      className="h-9 w-48"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ClusterIP">ClusterIP</SelectItem>
-                      <SelectItem value="NodePort">NodePort</SelectItem>
-                      <SelectItem value="LoadBalancer">LoadBalancer</SelectItem>
+                      <SelectItem value="None">None</SelectItem>
+                      <SelectItem value="ClientIP">ClientIP</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="service-port">
-                      {t('deployments.servicePort')}
-                    </Label>
-                    <Input
-                      id="service-port"
-                      type="number"
-                      min="1"
-                      max="65535"
-                      value={exposePort}
-                      onChange={(event) =>
-                        setExposePort(
-                          Number.parseInt(event.target.value, 10) || 0
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="target-port">
-                      {t('deployments.targetPort')}
-                    </Label>
-                    <Input
-                      id="target-port"
-                      type="number"
-                      min="1"
-                      max="65535"
-                      value={exposeTargetPort}
-                      onChange={(event) =>
-                        setExposeTargetPort(
-                          Number.parseInt(event.target.value, 10) || 0
-                        )
-                      }
-                    />
-                  </div>
-                </div>
+
                 <DialogFooter>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setIsExposeDialogOpen(false)}
+                    onClick={() => exposeGuard.handleOpenChange(false)}
                   >
                     {t('common.actions.cancel')}
                   </Button>
@@ -803,6 +889,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
               </form>
             </DialogContent>
           </Dialog>
+          <UnsavedChangesConfirmDialog {...exposeGuard.confirmDialogProps} />
         </>
       }
       preYamlTabs={extraTabs.filter((tab) =>

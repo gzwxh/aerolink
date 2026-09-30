@@ -1,9 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
 import type { Container, Probe } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 
-import { fetchNodePortRange } from '@/lib/api'
-import { useCluster } from '@/hooks/use-cluster'
+import { useNodePortRange } from '@/hooks/use-node-port-range'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,7 +16,6 @@ import { CommandListInput } from '@/components/command-list-input'
 import {
   isValidClusterIP,
   isValidContainerPort,
-  knownNodePortRange,
   type PortForm,
   type PortServiceType,
 } from '@/components/editors/deployment-form'
@@ -48,17 +45,8 @@ export function PortsEditor({
   workloadName?: string
 }) {
   const { t } = useTranslation()
-  const { currentCluster } = useCluster()
-  const { data: nodePortRange } = useQuery({
-    queryKey: ['nodeport-range', currentCluster],
-    queryFn: () => fetchNodePortRange(currentCluster || ''),
-    enabled: !!currentCluster,
-    staleTime: 10 * 60 * 1000,
-    retry: false,
-  })
-  // 只有拿到集群真实配置时才按它提示与校验：接口读不到 flag、或当前用户不是管理员
-  // （接口在 admin 组）时都是 null，此时不拿 K8s 默认值当集群事实。
-  const range = knownNodePortRange(nodePortRange)
+  // 只有拿到集群真实配置时才按它提示与校验；拿不到时为 null（见 lib/node-port-range.ts）。
+  const range = useNodePortRange()
 
   const updatePort = (index: number, patch: Partial<PortForm>) => {
     onUpdate(ports.map((p, i) => (i === index ? { ...p, ...patch } : p)))

@@ -9,6 +9,8 @@ import {
   initialData,
   mergeServiceUpdate,
   resolveTargetPort,
+  servicePortErrorCodes,
+  type PortRow,
   type ServiceFormData,
 } from './service-yaml'
 
@@ -207,5 +209,70 @@ describe('service 表单数据层', () => {
       'NodePort',
       'LoadBalancer',
     ])
+  })
+})
+
+/**
+ * 端口行的行内校验：Service 创建页与工作负载详情页的「暴露」弹窗共用这一份。
+ *
+ * NodePort 的范围只有拿到集群真实值时才判（传 null 表示「不知道」）：集群自定义过
+ * `--service-node-port-range` 时，拿 K8s 默认值去校验会把合法端口标红。
+ */
+describe('servicePortErrorCodes', () => {
+  const rows = (overrides: Partial<PortRow>[] = [{}]): PortRow[] =>
+    overrides.map((override) => ({ ...initialData.ports[0], ...override }))
+
+  it('端口不是 1-65535 时报 port', () => {
+    expect(
+      servicePortErrorCodes(rows([{ port: '0' }]), 'ClusterIP', null).get(0)
+    ).toBe('port')
+    expect(
+      servicePortErrorCodes(rows([{ port: '70000' }]), 'ClusterIP', null).get(0)
+    ).toBe('port')
+  })
+
+  it('targetPort 允许端口名，非法名字与越界数字分别报错', () => {
+    expect(
+      servicePortErrorCodes(rows([{ targetPort: 'http' }]), 'ClusterIP', null)
+        .size
+    ).toBe(0)
+    expect(
+      servicePortErrorCodes(
+        rows([{ targetPort: 'Bad_Name' }]),
+        'ClusterIP',
+        null
+      ).get(0)
+    ).toBe('targetPortName')
+    expect(
+      servicePortErrorCodes(
+        rows([{ targetPort: '70000' }]),
+        'ClusterIP',
+        null
+      ).get(0)
+    ).toBe('targetPortRange')
+  })
+
+  it('NodePort 只在拿到集群真实范围时校验', () => {
+    const ports = rows([{ nodePort: '31000' }])
+
+    expect(servicePortErrorCodes(ports, 'NodePort', null).size).toBe(0)
+    expect(
+      servicePortErrorCodes(ports, 'NodePort', { min: 20000, max: 30000 }).get(
+        0
+      )
+    ).toBe('nodePortRange')
+    expect(
+      servicePortErrorCodes(ports, 'NodePort', { min: 30000, max: 32767 }).size
+    ).toBe(0)
+    // 非 NodePort 类型不校验 nodePort（那列本来也不显示）。
+    expect(
+      servicePortErrorCodes(ports, 'ClusterIP', { min: 30000, max: 32767 }).size
+    ).toBe(0)
+  })
+
+  it('ExternalName 不校验端口', () => {
+    expect(
+      servicePortErrorCodes(rows([{ port: '0' }]), 'ExternalName', null).size
+    ).toBe(0)
   })
 })

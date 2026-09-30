@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
-import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -14,14 +14,16 @@ import {
   initialData,
   intOrNull,
   mergeServiceUpdate,
-  PORT_NAME_PATTERN,
+  servicePortErrorCodes,
   type ServiceFormData,
   type ServiceType,
 } from '@/lib/service-yaml'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
+import { useNodePortRange } from '@/hooks/use-node-port-range'
 import { usePageTitle } from '@/hooks/use-page-title'
+import { useServicePortErrorText } from '@/hooks/use-service-port-error-text'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,6 +36,7 @@ import {
 } from '@/components/ui/select'
 import { LabelSelectorEditor } from '@/components/label-selector-editor'
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
+import { ServicePortsEditor } from '@/components/service-ports-editor'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 
 export function ServiceCreatePage() {
@@ -94,54 +97,20 @@ export function ServiceCreatePage() {
   const currentYaml = useMemo(() => generateServiceYaml(formData), [formData])
   const finalYaml = editedYaml || currentYaml
 
-  const portErrors = useMemo(() => {
-    const errors = new Map<number, string>()
-    formData.ports.forEach((p, i) => {
-      const port = intOrNull(p.port)
-      if (port === undefined || port < 1 || port > 65535) {
-        errors.set(
-          i,
-          t('serviceCreate.portRangeError', '端口必须为 1-65535 的数字')
-        )
-        return
-      }
-      // targetPort 可以是数字，也可以是容器端口名。
-      const rawTarget = p.targetPort.trim()
-      if (rawTarget) {
-        const target = intOrNull(rawTarget)
-        if (target === undefined) {
-          if (rawTarget.length > 15 || !PORT_NAME_PATTERN.test(rawTarget)) {
-            errors.set(
-              i,
-              t(
-                'serviceCreate.targetPortNameError',
-                '目标端口要么是 1-65535 的数字，要么是合法的端口名（小写字母/数字/-，最长 15 个字符）'
-              )
-            )
-            return
-          }
-        } else if (target < 1 || target > 65535) {
-          errors.set(
-            i,
-            t('serviceCreate.targetPortRangeError', '目标端口必须为 1-65535')
-          )
-          return
-        }
-      }
-      if (formData.serviceType === 'NodePort' && p.nodePort.trim()) {
-        const np = intOrNull(p.nodePort)
-        if (np === undefined || np < 30000 || np > 32767) {
-          errors.set(
-            i,
-            t('serviceCreate.nodePortRangeError', 'NodePort 必须为 30000-32767')
-          )
-        }
-      }
-    })
-    return errors
-  }, [formData.ports, formData.serviceType, t])
+  const nodePortRange = useNodePortRange()
+  const portErrorText = useServicePortErrorText()
+  // 端口行的校验与文案都在共享实现里（见 components/service-ports-editor.tsx）。
+  const portErrors = useMemo(
+    () =>
+      servicePortErrorCodes(
+        formData.ports,
+        formData.serviceType,
+        nodePortRange
+      ),
+    [formData.ports, formData.serviceType, nodePortRange]
+  )
 
-  const hasPortErrors = [...portErrors.values()].length > 0
+  const hasPortErrors = portErrors.size > 0
   const isValid = useMemo(() => {
     if (editedYaml.trim()) {
       try {
@@ -165,10 +134,13 @@ export function ServiceCreatePage() {
     if (!isValid) {
       // 明确指出缺失的字段，让提示条可操作，
       // 而不是笼统地"请补全表单"。
-      const firstPortError =
+      const firstPortCode =
         formData.serviceType === 'ExternalName'
           ? undefined
           : [...portErrors.values()][0]
+      const firstPortError = firstPortCode
+        ? portErrorText(firstPortCode)
+        : undefined
       const missing: string[] = []
       if (!formData.name.trim()) {
         missing.push(t('serviceCreate.serviceName', '服务名称'))
@@ -377,148 +349,12 @@ export function ServiceCreatePage() {
         </div>
 
         {formData.serviceType !== 'ExternalName' && (
-          <div className="space-y-2 rounded-md border p-3">
-            <h4 className="text-sm font-semibold">
-              {t('serviceCreate.portsTitle', '端口')}
-            </h4>
-            {formData.ports.map((port, index) => (
-              <div key={index} className="space-y-1">
-                {/* A flex row keeps the port fields equally wide, and makes
-                    room for the NodePort field without wrapping the remove
-                    button onto a second line. */}
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={port.name}
-                    onChange={(e) =>
-                      update({
-                        ports: formData.ports.map((p, i) =>
-                          i === index ? { ...p, name: e.target.value } : p
-                        ),
-                      })
-                    }
-                    placeholder={t('serviceCreate.portName', '端口名称')}
-                    className="h-8 min-w-0 flex-1"
-                  />
-                  <Input
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={port.port}
-                    onChange={(e) =>
-                      update({
-                        ports: formData.ports.map((p, i) =>
-                          i === index ? { ...p, port: e.target.value } : p
-                        ),
-                      })
-                    }
-                    placeholder={t('serviceCreate.port', '端口 *')}
-                    className={
-                      'h-8 min-w-0 flex-1 ' +
-                      (portErrors.has(index) &&
-                      (intOrNull(port.port) === undefined ||
-                        intOrNull(port.port)! < 1 ||
-                        intOrNull(port.port)! > 65535)
-                        ? 'border-destructive'
-                        : '')
-                    }
-                  />
-                  <Input
-                    value={port.targetPort}
-                    onChange={(e) =>
-                      update({
-                        ports: formData.ports.map((p, i) =>
-                          i === index ? { ...p, targetPort: e.target.value } : p
-                        ),
-                      })
-                    }
-                    placeholder={t('serviceCreate.targetPort', '目标端口')}
-                    className="h-8 min-w-0 flex-1"
-                  />
-                  {formData.serviceType === 'NodePort' && (
-                    <Input
-                      type="number"
-                      min={30000}
-                      max={32767}
-                      value={port.nodePort}
-                      onChange={(e) =>
-                        update({
-                          ports: formData.ports.map((p, i) =>
-                            i === index ? { ...p, nodePort: e.target.value } : p
-                          ),
-                        })
-                      }
-                      placeholder={t(
-                        'serviceCreate.nodePortPlaceholder',
-                        'NodePort 30000-32767'
-                      )}
-                      className="h-8 min-w-0 flex-1"
-                    />
-                  )}
-                  <Select
-                    value={port.protocol}
-                    onValueChange={(v) =>
-                      update({
-                        ports: formData.ports.map((p, i) =>
-                          i === index
-                            ? { ...p, protocol: v as 'TCP' | 'UDP' }
-                            : p
-                        ),
-                      })
-                    }
-                  >
-                    <SelectTrigger className="h-8 w-24 shrink-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="TCP">TCP</SelectItem>
-                      <SelectItem value="UDP">UDP</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() =>
-                      update({
-                        ports: formData.ports.filter((_, i) => i !== index),
-                      })
-                    }
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                {portErrors.has(index) && (
-                  <p className="text-xs text-destructive">
-                    {portErrors.get(index)}
-                  </p>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() =>
-                update({
-                  ports: [
-                    ...formData.ports,
-                    {
-                      name: '',
-                      port: '80',
-                      targetPort: '',
-                      nodePort: '',
-                      protocol: 'TCP',
-                    },
-                  ],
-                })
-              }
-            >
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              {t('serviceCreate.addPort', '添加端口')}
-            </Button>
-          </div>
+          <ServicePortsEditor
+            ports={formData.ports}
+            serviceType={formData.serviceType}
+            errors={portErrors}
+            onChange={(ports) => update({ ports })}
+          />
         )}
 
         <div className="space-y-2">

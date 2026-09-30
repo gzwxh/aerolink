@@ -28,6 +28,15 @@ export interface ServiceFormData {
   ports: PortRow[]
 }
 
+/** 一行新的端口：创建页的初值与「添加端口」都用它。 */
+export const emptyPortRow = (): PortRow => ({
+  name: '',
+  port: '80',
+  targetPort: '',
+  nodePort: '',
+  protocol: 'TCP',
+})
+
 export const initialData: ServiceFormData = {
   name: '',
   namespace: 'default',
@@ -35,9 +44,7 @@ export const initialData: ServiceFormData = {
   externalName: '',
   sessionAffinity: 'None',
   selector: [{ key: 'app', value: '' }],
-  ports: [
-    { name: '', port: '80', targetPort: '', nodePort: '', protocol: 'TCP' },
-  ],
+  ports: [emptyPortRow()],
 }
 
 export const intOrNull = (v: string) => {
@@ -58,6 +65,59 @@ export function resolveTargetPort(raw: string): number | string | undefined {
   if (!trimmed) return undefined
   // 是数字就发数字，否则当容器端口名（k8s 的 IntOrString）。
   return intOrNull(trimmed) ?? trimmed
+}
+
+/** 端口行的错误码；文案由调用方（hooks/use-service-port-errors）按语言映射。 */
+export type ServicePortErrorCode =
+  'port' | 'targetPortName' | 'targetPortRange' | 'nodePortRange'
+
+/**
+ * 端口行的行内校验。
+ *
+ * NodePort 的范围只有拿到集群真实值时才判（见 `lib/node-port-range.ts`）：传 `null` 表示
+ * 「不知道集群范围」，此时不做范围校验、把合法性交给 API —— 否则集群自定义过范围时会把
+ * 合法端口标红。
+ */
+export function servicePortErrorCodes(
+  ports: PortRow[],
+  serviceType: ServiceType,
+  nodePortRange: { min: number; max: number } | null
+): Map<number, ServicePortErrorCode> {
+  const errors = new Map<number, ServicePortErrorCode>()
+  if (serviceType === 'ExternalName') return errors
+
+  ports.forEach((p, i) => {
+    const port = intOrNull(p.port)
+    if (port === undefined || port < 1 || port > 65535) {
+      errors.set(i, 'port')
+      return
+    }
+    // targetPort 可以是数字，也可以是容器端口名。
+    const rawTarget = p.targetPort.trim()
+    if (rawTarget) {
+      const target = intOrNull(rawTarget)
+      if (target === undefined) {
+        if (rawTarget.length > 15 || !PORT_NAME_PATTERN.test(rawTarget)) {
+          errors.set(i, 'targetPortName')
+          return
+        }
+      } else if (target < 1 || target > 65535) {
+        errors.set(i, 'targetPortRange')
+        return
+      }
+    }
+    if (serviceType === 'NodePort' && nodePortRange && p.nodePort.trim()) {
+      const np = intOrNull(p.nodePort)
+      if (
+        np === undefined ||
+        np < nodePortRange.min ||
+        np > nodePortRange.max
+      ) {
+        errors.set(i, 'nodePortRange')
+      }
+    }
+  })
+  return errors
 }
 
 /** 线上 Service → 表单（编辑模式预填）。 */
