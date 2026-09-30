@@ -1078,10 +1078,18 @@ func (h *PodHandler) Watch(c *gin.Context) {
 	// 每轮只保留当前仍可见的 Pod，Pod 消失后条目随之释放。
 	lastUsage := make(map[string][2]int64)
 
+	// 退出信号在本连接开始时取一次（见 shutdown.go）。
+	shutdown := shuttingDown()
+
 	for {
 		select {
 		case <-c.Request.Context().Done():
 			_ = writeSSE(c, cs.Name, "close", gin.H{"message": "connection closed"})
+			return
+		case <-shutdown:
+			// 进程要退出了：正常收尾再返回响应。硬切断会让浏览器报
+			// net::ERR_INCOMPLETE_CHUNKED_ENCODING（客户端仍会按 retry 重连到新实例）。
+			_ = writeSSE(c, cs.Name, "close", gin.H{"message": "server shutting down"})
 			return
 		case <-pingTicker.C:
 			_, _ = fmt.Fprintf(c.Writer, ": ping\n\n") // comment line per SSE

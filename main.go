@@ -16,6 +16,7 @@ import (
 
 	"github.com/zxh326/kite/pkg/clusteragent"
 	"github.com/zxh326/kite/pkg/common"
+	"github.com/zxh326/kite/pkg/resources"
 	"github.com/zxh326/kite/pkg/version"
 	"k8s.io/klog/v2"
 )
@@ -113,6 +114,9 @@ func main() {
 	<-quit
 
 	klog.Info("Shutting down server...")
+	// 先让在途的 SSE watch 流写完收尾事件再返回：否则 Shutdown 等到超时后进程退出，
+	// 响应被硬切断，浏览器控制台冒出 net::ERR_INCOMPLETE_CHUNKED_ENCODING。
+	resources.MarkShuttingDown()
 	cancelApp()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

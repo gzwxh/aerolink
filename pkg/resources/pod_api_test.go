@@ -1765,3 +1765,86 @@ func TestPodWatchSnapshotEndsWithSyncedMarker(t *testing.T) {
 		t.Fatalf("synced 应是最后一个事件，并带上本轮条数; body=%s", body)
 	}
 }
+
+// TestPodWatchEndsWithCloseOnShutdown 覆盖退出时的干净收尾：进程收到退出信号后，
+// 在途的 watch 流要写一个 `close` 事件再正常结束响应。硬切断（进程直接退出）会让浏览器
+// 报 net::ERR_INCOMPLETE_CHUNKED_ENCODING —— 客户端照样会重连，但那条报错会让人误以为
+// 「事件丢了、页面数据不准」。
+func TestPodWatchEndsWithCloseOnShutdown(t *testing.T) {
+	originalConfig := rbac.RBACConfig
+	t.Cleanup(func() { rbac.RBACConfig = originalConfig })
+
+	roles := []common.Role{{
+		Name:       "pod-default-reader",
+		Clusters:   []string{"cluster-a"},
+		Namespaces: []string{"default"},
+		Resources:  []string{string(common.Pods)},
+		Verbs:      []string{string(common.VerbGet)},
+	}}
+	rbac.RBACConfig = &common.RolesConfig{
+		Roles: roles,
+		RoleMapping: []common.RoleMapping{
+			{Name: "pod-default-reader", Users: []string{"alice"}},
+		},
+	}
+
+	// 上游 watch 保持打开：本用例只关心退出路径，不关心事件。
+	watchServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/pods") || r.URL.Query().Get("watch") != "true" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	t.Cleanup(watchServer.Close)
+
+	clientSet, err := kubernetes.NewForConfig(&rest.Config{Host: watchServer.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := newPodAPITestFixture(t, podAPITestConfig{
+		user:              model.User{Username: "alice", Roles: roles},
+		clusterAClientSet: clientSet,
+	})
+
+	// 换一条本用例独有的退出通道：关掉包级通道会影响同包其它用例。
+	shutdownMu.Lock()
+	originalShutdown := shutdownCh
+	shutdownCh = make(chan struct{})
+	shutdownMu.Unlock()
+	t.Cleanup(func() {
+		shutdownMu.Lock()
+		shutdownCh = originalShutdown
+		shutdownMu.Unlock()
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/pods/default/watch?reduce=true", nil)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fixture.router.ServeHTTP(recorder, request)
+	}()
+
+	// 不等待任何事件：通道已关闭时，watch 循环一进 select 就会走收尾分支。
+	MarkShuttingDown()
+	MarkShuttingDown() // 幂等：重复标记不应 panic
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("进程退出时 watch 流没有收尾返回")
+	}
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, "event: close") {
+		t.Fatalf("退出时应写一个 close 事件收尾; body=%q", body)
+	}
+	if !strings.Contains(body, "server shutting down") {
+		t.Fatalf("close 事件应说明是进程退出; body=%q", body)
+	}
+}
