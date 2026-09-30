@@ -189,6 +189,10 @@ export function ResourceDetailShell<T>({
       // 而页面传进来的 onRefresh 只覆盖主资源。以前这里只调 onRefresh，于是点「刷新」时
       // 那些区块仍是旧数据、看起来"没反应"，只能整页重载才更新——这正是用户反馈的
       // "有时点刷新不生效，要按浏览器刷新才行"。
+      // 注意：走 SSE 的列表不在 react-query 里（详情页的 Pods，见 useResourcesWatch 的
+      // 注释），refetchQueries 碰不到它，必须由页面的 onRefresh 一并调用那条 watch 的
+      // refetch —— 否则 Pod 删掉后点刷新列表还是旧的（六个详情页都是这么接的：
+      // Deployment / StatefulSet / DaemonSet / Job / Service / HelmRelease）。
       // 这里是用户显式发起的刷新，把当前挂载着的查询（type: 'active'，范围恰好是这一页）
       // 一并重取；refetchQueries 不看 staleTime，所以刚点就一定能拿到新数据。
       // 传 cancelRefetch: false：主资源此时正由 onRefresh 在取（fetch 是同步进入 fetching 的），

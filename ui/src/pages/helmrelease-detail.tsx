@@ -1498,14 +1498,14 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
   const labelSelector = releaseName
     ? `app.kubernetes.io/instance=${releaseName}`
     : undefined
-  const { data: releasePods, isLoading: isPodsLoading } = useResourcesWatch(
-    'pods',
-    namespace,
-    {
-      labelSelector,
-      enabled: !!labelSelector,
-    }
-  )
+  const {
+    data: releasePods,
+    isLoading: isPodsLoading,
+    refetch: refetchPods,
+  } = useResourcesWatch('pods', namespace, {
+    labelSelector,
+    enabled: !!labelSelector,
+  })
   const containers = useMemo<Container[]>(() => {
     const seen = new Set<string>()
     const items: Container[] = []
@@ -1619,6 +1619,13 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
     ]
   )
 
+  // Pods 是 SSE 推进来的（本地 state，不归 react-query 管），外壳只重取查询是刷不到它的：
+  // 漏掉 refetchPods() 就会出现「Pod 已删除、点刷新列表还是旧的、整页重载才对」。
+  const handleRefresh = async () => {
+    refetchPods()
+    await refetch()
+  }
+
   return (
     <ResourceDetailShell
       resourceType="helmrelease"
@@ -1628,7 +1635,7 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
       data={data}
       isLoading={isLoading}
       error={error}
-      onRefresh={refetch}
+      onRefresh={handleRefresh}
       showClone={false}
       titleIcon={
         data ? (
