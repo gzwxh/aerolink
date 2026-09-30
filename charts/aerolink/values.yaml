@@ -51,7 +51,7 @@ basePath: ""
 # 默认取运行用户家目录下的 data/archive，与镜像内建目录及 auditPersistence.mountPath 一致；
 # 镜像本身也带同样的默认值，这里写出来只是为了显式可见、便于覆盖。置空则只依赖数据库配置。
 # 注意：`auditSink: parquet` 时归档目录是**唯一落点**，既没配 localDir 又没配本项时
-# 会拒绝启动（详见 docs/dev/plans/2026-09-20-audit-log-parquet-archive.md §12.13）。
+# 会拒绝启动（详见 docs/dev/plans/2026-09-20-审计日志parquet归档.md §12.13）。
 # 另外：`replicaCount > 1` 且 sink=parquet 时，归档目录必须是**共享卷**（RWX PVC / NFS 等）——
 # 每个副本只写自己产生的记录，检索要看到全部记录就得读同一个目录（见方案 §12.15d）。
 #

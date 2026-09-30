@@ -39,7 +39,7 @@
 #   记下实际使用的 datcollate（现网是 en_US.utf8）：它由 glibc 提供，将来升级
 #   glibc 后可能需要 ALTER DATABASE aerolink REFRESH COLLATION VERSION; 并 REINDEX。
 #
-# 详细步骤、校验清单与已知坑见 docs/dev/plans/2026-09-21-postgres-deployment.md。
+# 详细步骤、校验清单与已知坑见 docs/dev/plans/2026-09-21-PostgreSQL部署.md。
 apiVersion: v1
 kind: Namespace
 metadata:

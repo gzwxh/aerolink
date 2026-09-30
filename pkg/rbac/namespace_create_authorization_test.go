@@ -10,7 +10,7 @@ import (
 // 「创建命名空间」是管理员专属动作，不通过授权配置下发：命名空间统一由管理员创建，
 // 再通过权限绑定组授权给用户使用。它同时覆盖资源创建接口，以及 YAML apply
 // （`POST /resources/apply` 用的也是同一个 CanAccess）。
-// 口径见 docs/dev/plans/2026-09-20-namespace-create-admin-only.md。
+// 口径见 docs/dev/plans/2026-09-20-创建命名空间只归管理员.md。
 
 func namespaceCreateTestRole(name string, namespaces, resources, verbs []string) common.Role {
 	return common.Role{

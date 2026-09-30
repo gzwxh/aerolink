@@ -1044,7 +1044,7 @@ test('backend APIs work end to end against the real test environment', async ({
       200
     )
     // 全局布局只是「没自己配过的人的默认样子」：管理员发布之后普通用户仍能保存
-    // 自己的布局，并且以个人布局为准（见 plans/2026-09-20-sidebar-preference-precedence.md）。
+    // 自己的布局，并且以个人布局为准（见 plans/2026-09-20-侧边栏偏好优先级.md）。
     await expectStatus(
       await readerRequest.post('/api/users/sidebar_preference', {
         data: { sidebar_preference: '{"blocked":true}' },

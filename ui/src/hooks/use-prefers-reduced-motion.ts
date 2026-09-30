@@ -5,7 +5,7 @@ import * as React from 'react'
  *
  * 通知栏的滚动是持续性的水平位移动画，对前庭敏感的用户不友好：开启该项时通知栏
  * 不自动滚动，改为静态截断显示，并由「按住拖动」与「展开全文」保证内容仍然读得到
- * （见 components/announcement-bar.tsx 与 plans/2026-09-21-announcement-bar.md §12.10）。
+ * （见 components/announcement-bar.tsx 与 plans/2026-09-21-顶部通知栏.md §12.10）。
  */
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
   配色主题的对比度契约。
 
   `src/styles/themes/*.css` 只有 CSS 变量，没有可断言的数据结构，之前调色全靠在
-  浏览器里量计算样式（见 plans/2026-09-20-default-theme-contrast-retune.md）。这里把
+  浏览器里量计算样式（见 plans/2026-09-20-默认主题对比度调整.md）。这里把
   那套口径落成静态断言：读 CSS 变量 → 用 culori 转 sRGB → 算 WCAG 对比度。
 
   口算模型：颜色先落到 sRGB、越界截断（oklch 的 chroma 可以超出 sRGB 色域，
@@ -23,7 +23,7 @@ const THEMES_DIR = join(STYLES_DIR, 'styles/themes')
 const MIN_TEXT_CONTRAST = 4.5
 
 /**
- * 描边分两层（口径见 plans/2026-09-20-default-theme-contrast-retune.md）：
+ * 描边分两层（口径见 plans/2026-09-20-默认主题对比度调整.md）：
  * `--border` 是分隔线，`--input` 是表单控件边界、需比分隔线更实。
  * 区间同时挡住两种退化：与卡片同色（看不见）和过重（比表单边界还抢眼）。
  */

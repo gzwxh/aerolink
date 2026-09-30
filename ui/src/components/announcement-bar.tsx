@@ -41,7 +41,7 @@ import { AnnouncementContent } from './announcement-content'
  *   「勾了横向滚动却没滚、也没人解释为什么」，比不尊重偏好更糟；
  * - 同时有多条时按优先级顺序串成一条，图标颜色取其中最高的级别。
  *
- * 见 plans/2026-09-21-announcement-bar.md。
+ * 见 plans/2026-09-21-顶部通知栏.md。
  */
 
 // 多条公告同时生效时，整条通知栏取其中最高的级别。

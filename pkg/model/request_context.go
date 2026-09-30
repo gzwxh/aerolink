@@ -12,7 +12,7 @@ type requestIDContextKey struct{}
 //
 // 请求关联 ID 把「访问日志 / 审计事件 / 报错日志」串成同一条链，是日志闭环的前提：
 // 只靠时间戳无法可靠地把一次用户操作与它触发的日志对应起来。
-// 见 docs/dev/plans/2026-09-20-log-closed-loop-design.md。
+// 见 docs/dev/plans/2026-09-20-日志闭环设计.md。
 func WithRequestID(ctx context.Context, requestID string) context.Context {
 	if ctx == nil || requestID == "" {
 		return ctx

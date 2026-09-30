@@ -55,7 +55,7 @@ import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confir
  *
  * 正文是 Markdown 子集 + 具名颜色标记，编辑时旁边给实时预览——
  * 横幅用的是同一个渲染组件，所以预览里什么样、线上就什么样。
- * 见 plans/2026-09-21-announcement-bar.md。
+ * 见 plans/2026-09-21-顶部通知栏.md。
  */
 
 const LEVELS: AnnouncementLevel[] = ['info', 'warning', 'danger']

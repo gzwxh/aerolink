@@ -89,7 +89,7 @@ func pruneBefore(target interface{}, cutoff time.Time) (int64, error) {
 // 导出的（可测）形式：worker 只是按固定间隔调用它。删除行为本身也会写一条审计记录，
 // 使得「谁在什么策略下删了多少审计记录」永远可追溯。
 //
-// 删除分工（五种 sink 各自不同，见 plans/2026-09-21-additional-audit-log-sinks.md §3.4）：
+// 删除分工（五种 sink 各自不同，见 plans/2026-09-21-新增审计落地方式.md §3.4）：
 //   - database      ：下面的库表删除就是全部（sink=其他时这些表本来就是空的，是空转）；
 //   - elasticsearch ：除库表外还删过期的按天索引（pruneExpiredESIndices）；
 //   - parquet       ：文件滚留自己管（archive.RetentionDays / MaxBytes），不在这里删；

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { ResourceDeleteConfirmationDialog } from './resource-delete-confirmation-dialog'
 
-// 失败反馈口径（见 docs/dev/plans/2026-09-21-notification-recipient-and-failure-feedback.md）：
+// 失败反馈口径（见 docs/dev/plans/2026-09-21-站内信收件人与失败反馈.md）：
 // 请求失败不再写站内信，必须当场弹给操作者。这个组件是代表性的一处——它的 catch 里
 // 还有「资源已不存在 → 回列表」的专门分支，两种路径的反馈不能互相覆盖。
 const deleteResource = vi.hoisted(() => vi.fn())

@@ -250,7 +250,7 @@ export function formFromPV(pv: PersistentVolume): PVFormData {
 /**
  * 编辑模式要提交的对象：只取表单里**真正可变**的那几项，其余全部从线上对象带过去。
  *
- * 可改范围是实测出来的（k8s 1.32，见 docs/dev/plans/2026-09-20-pv-sc-form-edit.md）：
+ * 可改范围是实测出来的（k8s 1.32，见 docs/dev/plans/2026-09-20-PV与SC表单编辑.md）：
  *   ✓ capacity（可增）/ accessModes / persistentVolumeReclaimPolicy / mountOptions / 元数据
  *   ✗ 卷来源（hostPath、nfs、csi…）：Forbidden: spec.persistentvolumesource ...
  *   ✗ volumeMode：field is immutable

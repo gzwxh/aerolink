@@ -12,7 +12,7 @@
 //   - 任何失败都会让退出码非 0，方便接进脚本或 CI（但它需要一个真实实例，所以
 //     不进 make test）。
 //
-// 用法见 docs/dev/plans/2026-09-20-pg12-now-and-upgrade-path.md 的「回归脚本」一节。
+// 用法见 docs/dev/plans/2026-09-20-PostgreSQL12现状与升级路径.md 的「回归脚本」一节。
 package main
 
 import (

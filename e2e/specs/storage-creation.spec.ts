@@ -8,13 +8,13 @@ import { expectJSON, expectStatus } from '../support/admin-api'
  * 用 API 复核落库结果，最后无论成功失败都删掉创建出来的对象。
  *
  * 这两个资源页以前完全没有自动化覆盖，而它们有两个「不报错但会坑人」的点，本文件
- * 专门锁住（口径见 docs/dev/plans/2026-09-20-storage-create-hardening.md）：
+ * 专门锁住（口径见 docs/dev/plans/2026-09-20-存储创建页加固.md）：
  *   1. no-provisioner（纯静态卷）必须用 WaitForFirstConsumer，否则 PVC 可能绑到
  *      Pod 调度不上去的节点上（Bound 却一直 Pending）；
  *   2. 同名参数在生成的 YAML 里只会保留最后一行，界面必须拦下而不是静默丢弃。
  *
  * 后半部分覆盖编辑：这两个资源的不可变字段比 Service 还多（实测见
- * docs/dev/plans/2026-09-20-pv-sc-form-edit.md），编辑时必须一个字都不动它们，
+ * docs/dev/plans/2026-09-20-PV与SC表单编辑.md），编辑时必须一个字都不动它们，
  * 而被清空的可变字段要真的删掉。
  *
  * 运行（对已有集群、真实 K8s，两个用例都自清理）：

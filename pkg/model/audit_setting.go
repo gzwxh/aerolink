@@ -118,7 +118,7 @@ type LogForwardSetting struct {
 // 与 syslog 的区别：syslog 是应用主动外发到远端日志服务器；stdout 是本地输出、被动采集，
 // 适用于「日志统一由采集工具收走」的部署。默认开启且用 json——审计事件量很小（相对访问日志
 // 不到 1%），而「日志平台里查得到谁在什么时间从哪个 IP 做了什么」是运维刚需
-// （见 docs/dev/plans/2026-09-20-log-closed-loop-design.md）。
+// （见 docs/dev/plans/2026-09-20-日志闭环设计.md）。
 //
 // 只输出操作 / 登录 / 改密三类：访问日志已由 gin 访问日志中间件输出，再投一份就是重复。
 type StdoutSetting struct {
@@ -185,7 +185,7 @@ type ESArchive struct {
 // 注意：**不是** VictoriaMetrics。VictoriaMetrics 是时序库（metric + labels + 采样值），
 // 存不下审计记录的字段明细（资源名 / 操作者 / 错误信息…），审计落地必须用 VictoriaLogs
 // （同一套部署习惯的日志组件，默认 9428）。详见
-// docs/dev/plans/2026-09-21-additional-audit-log-sinks.md §2。
+// docs/dev/plans/2026-09-21-新增审计落地方式.md §2。
 //
 // 写入走 ES bulk 兼容接口 `/insert/elasticsearch/_bulk`，检索走 LogsQL；
 // 过期数据由服务端 `-retentionPeriod` 负责，客户端不做删除。
@@ -203,7 +203,7 @@ type VictoriaLogsArchive struct {
 // OpenObserveArchive 是 OpenObserve 的设置。
 //
 // 写入走它的 HTTP 接口 `/api/{org}/{stream}/_json`（JSON 数组 + Basic 认证），检索走它自己的
-// 搜索接口（**不**假定与 ES 的 DSL 等价，见 plans/2026-09-21-additional-audit-log-sinks.md §3.3）；
+// 搜索接口（**不**假定与 ES 的 DSL 等价，见 plans/2026-09-21-新增审计落地方式.md §3.3）；
 // 过期数据由服务端按 stream 的 `data_retention` 负责，客户端不做删除。
 type OpenObserveArchive struct {
 	Enabled bool     `json:"enabled" yaml:"enabled"`
@@ -259,7 +259,7 @@ func (AuditSetting) TableName() string {
 	return "audit_settings"
 }
 
-// 归档默认值（见 docs/dev/plans/2026-09-20-audit-log-parquet-archive.md §7）。
+// 归档默认值（见 docs/dev/plans/2026-09-20-审计日志parquet归档.md §7）。
 // 审计日志与访问日志分开：访问日志量大，默认保留期更短、攒批更大。
 const (
 	DefaultArchiveRetentionDays   = 7
@@ -271,7 +271,7 @@ const (
 	DefaultAccessLogFlushRows     = 200000
 	DefaultESIndexPrefix          = "aerolink-audit"
 	// DefaultLogStream 是 VictoriaLogs / OpenObserve 的默认流名（这两家由服务端按时间分区，
-	// 不再自己拼日期，见 plans/2026-09-21-additional-audit-log-sinks.md §3.2）。
+	// 不再自己拼日期，见 plans/2026-09-21-新增审计落地方式.md §3.2）。
 	DefaultLogStream = "aerolink-audit"
 	// DefaultOpenObserveOrg 是 OpenObserve 的默认组织名。
 	DefaultOpenObserveOrg = "default"

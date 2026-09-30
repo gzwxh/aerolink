@@ -16,7 +16,7 @@ import (
 )
 
 // 头像的三个硬限制与服务端其它图片上传共用一套规则，实现在 pkg/imageupload
-// （见 docs/dev/plans/2026-09-20-avatar-upload.md）。
+// （见 docs/dev/plans/2026-09-20-头像上传.md）。
 const (
 	maxAvatarBytes      = imageupload.MaxBytes
 	maxAvatarUploadBody = imageupload.MaxBodyBytes

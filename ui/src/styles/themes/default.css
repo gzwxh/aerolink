@@ -35,7 +35,7 @@
   --destructive-foreground: oklch(1 0 0);
   /* 状态色：success 正常/就绪、info 进行中、warning 需留意未失败、attention 过渡/销毁中
      （如 Terminating、Paused）。软底与描边用透明度修饰表达（bg-success/10、border-success/25）。
-     取值口径见 docs/dev/plans/2026-09-21-semantic-status-color-tokens.md。 */
+     取值口径见 docs/dev/plans/2026-09-21-语义状态色token.md。 */
   --success: oklch(0.506 0.13 150);
   --success-foreground: oklch(1 0 0);
   --info: oklch(0.507 0.15 240);

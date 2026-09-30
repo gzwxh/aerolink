@@ -5,9 +5,9 @@
   `deploy/install-mysql.yaml` 对等的部署说明：库怎么建、DSN 怎么写、K8s 怎么部、
   怎么校验、出问题怎么退。
 - 相关：
-  - `docs/dev/plans/2026-09-20-sqlite-to-postgres-migration.md`（首次从 SQLite 切库 + `tools/dbmigrate`）
-  - `docs/dev/plans/2026-09-20-pg12-now-and-upgrade-path.md`（PG 12 的参数、排序规则、升级路径；本文 §2 的取值都来自它）
-  - `docs/dev/plans/2026-09-20-multi-replica-deployment.md`（多副本部署产物）
+  - `docs/dev/plans/2026-09-20-从SQLite迁移到PostgreSQL.md`（首次从 SQLite 切库 + `tools/dbmigrate`）
+  - `docs/dev/plans/2026-09-20-PostgreSQL12现状与升级路径.md`（PG 12 的参数、排序规则、升级路径；本文 §2 的取值都来自它）
+  - `docs/dev/plans/2026-09-20-多副本部署.md`（多副本部署产物）
   - `deploy/install-postgres.yaml`（K8s 清单）、`deploy/aerolink.env.example`（裸进程/多副本的环境文件）
 
 ## 1. 三条路，先选一条
@@ -46,7 +46,7 @@
 | 2 副本 | 200 | 220 | 300 |
 | 3 副本 | 300 | 320 | **400** |
 
-现网取 `max_connections=400`（起库命令见 `2026-09-20-pg12-now-and-upgrade-path.md` §6.1，
+现网取 `max_connections=400`（起库命令见 `2026-09-20-PostgreSQL12现状与升级路径.md` §6.1，
 `docker run -c` 传参，重建容器不会自动继承，**要有一份外部记录**）。
 
 **备份从切库那天就要有**：`pg_dump` 逻辑备份（体积小、跨版本可恢复，天然是升级的退路）。

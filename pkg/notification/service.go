@@ -27,7 +27,7 @@ func SendEvent(event string, variables map[string]string) {
 // 只有 model.NotificationEventTargetsUser(event) 为真时才采纳 recipients：非清单事件
 // 传入的收件人会被忽略并记一条 V(1) 日志。这是刻意的——历史上 SendEvent 有一个通用的
 // extras 参数，任何调用方都能顺手把一个事件变成「不看订阅也发」，结果全网用户在订阅表
-// 为空的情况下也收到了上千条消息（见 plans/2026-09-20-console-ux-and-notification-fixes.md §5）。
+// 为空的情况下也收到了上千条消息（见 plans/2026-09-20-控制台体验与通知口径修复.md §5）。
 // 现在要开这个口子，得先在 model.targetUserEvents 里显式登记该事件。
 func SendEventTo(event string, variables map[string]string, recipients ...uint) {
 	sendEvent(event, variables, recipients)

@@ -28,7 +28,7 @@ function namespaceBody(name: string) {
 
 /**
  * 「创建命名空间只归管理员」的端到端覆盖。口径见
- * docs/dev/plans/2026-09-20-namespace-create-admin-only.md：
+ * docs/dev/plans/2026-09-20-创建命名空间只归管理员.md：
  * 命名空间统一由管理员创建，再通过权限绑定组分配给用户使用。因此角色里即便显式写了
  * namespaces + create 也不授予创建（界面入口也不出现），而组内其它授权照旧生效。
  */

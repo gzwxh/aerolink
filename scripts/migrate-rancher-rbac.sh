@@ -21,7 +21,7 @@
 #
 # 取值优先级：命令行 > 环境变量 > 配置文件 > 默认值。
 # 编译独立可执行文件：scripts/build-rancherrbac.sh（见 tools/rancherrbac/README.md）。
-# 迁移口径与取舍见 docs/dev/plans/2026-09-21-rancher-rbac-migration.md。
+# 迁移口径与取舍见 docs/dev/plans/2026-09-21-Rancher授权迁移脚本.md。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

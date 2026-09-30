@@ -8,7 +8,7 @@
 //   - SecretString 列是 AES-GCM 密文，必须用与源库相同的 AEROLINK_ENCRYPT_KEY 解密，
 //     再按目标库配置的密钥重新加密，这只有走模型才能做到。
 //
-// 步骤与切流注意事项见 docs/dev/plans/2026-09-20-sqlite-to-postgres-migration.md。
+// 步骤与切流注意事项见 docs/dev/plans/2026-09-20-从SQLite迁移到PostgreSQL.md。
 package main
 
 import (

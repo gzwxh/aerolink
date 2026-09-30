@@ -22,7 +22,7 @@ var ErrOpenObserveDisabled = errors.New("openobserve archiving is disabled")
 
 // OpenObserveSink 把审计/访问日志写进 OpenObserve，并从它检索。
 //
-// 与 ES sink 的区别（见 docs/dev/plans/2026-09-21-additional-audit-log-sinks.md）：
+// 与 ES sink 的区别（见 docs/dev/plans/2026-09-21-新增审计落地方式.md）：
 //   - 写入走 `/api/{org}/{stream}/_json`（JSON 数组 + Basic 认证），不是 ES 的 bulk NDJSON；
 //   - 检索走 OpenObserve **自己的**搜索接口（SQL 模式），不假定与 ES 的查询 DSL 等价；
 //   - **单流**，不自己按天分区；过期数据由服务端按 stream 的 `data_retention` 负责（客户端不删）。

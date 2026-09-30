@@ -12,7 +12,7 @@ import (
 //
 // 这一组指标的作用是**把闭环合上**：日志系统自己坏了（丢记录、传不上去、写不进磁盘）必须能
 // 从 /metrics 看出来，而不是等到真的需要查日志时才发现缺了一段。
-// 见 docs/dev/plans/2026-09-20-log-closed-loop-design.md 第 ⑦ 环。
+// 见 docs/dev/plans/2026-09-20-日志闭环设计.md 第 ⑦ 环。
 var (
 	archiveWrittenDesc = prometheus.NewDesc(
 		"aerolink_audit_archive_written_total",

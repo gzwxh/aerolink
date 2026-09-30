@@ -11,7 +11,7 @@ import {
  * 渲染一段公告正文（Markdown 子集 + 具名颜色标记）。横幅与管理页的预览共用它，
  * 保证「预览里什么样、线上就什么样」。
  *
- * 安全边界（见 plans/2026-09-21-announcement-bar.md §5）：
+ * 安全边界（见 plans/2026-09-21-顶部通知栏.md §5）：
  * - 不装 rehype-raw：正文里的 HTML 标签不会被当元素渲染；
  * - 不覆盖 urlTransform：react-markdown 默认只放行 https/mailto 等协议，
  *   `[x](javascript:...)` 会被清空成空链接；

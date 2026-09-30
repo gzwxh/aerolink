@@ -117,7 +117,7 @@ export default defineConfig(({ command }) => ({
       Vite 默认声明的 firefox114 是低估，会让人误以为 114 也能用。
 
       低于这条基线的浏览器不做兼容（规则见 AGENTS.md「界面（UI）」），
-      改动原因见 docs/dev/plans/2026-09-21-theme-contrast-and-browser-baseline.md。
+      改动原因见 docs/dev/plans/2026-09-21-主题对比度与浏览器基线.md。
     */
     target: ['chrome111', 'edge111', 'firefox128', 'safari16.4', 'ios16.4'],
     rolldownOptions: {

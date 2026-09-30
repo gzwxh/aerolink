@@ -13,7 +13,7 @@ import (
 )
 
 // 资源级变更历史只在审计记录落库时可用：sink≠database 时必须**明确拒绝**并给出可本地化的
-// code，而不是返回空列表让人以为"这个资源从没被改过"（见 docs/dev/plans/2026-09-20-audit-log-parquet-archive.md §12.13）。
+// code，而不是返回空列表让人以为"这个资源从没被改过"（见 docs/dev/plans/2026-09-20-审计日志parquet归档.md §12.13）。
 //
 // 这里不需要集群与数据库：判定发生在 handler 的最前面，早于任何取用。
 func TestListHistoryRequiresDatabaseSink(t *testing.T) {

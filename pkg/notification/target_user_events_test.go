@@ -9,7 +9,7 @@ import (
 
 // 「当事人必收」：事件描述的是这个账号自己的状态/凭据变化，没有任何订阅时本人也必须收到。
 //
-// 这一档是上一轮删掉通用 extras 参数（见 plans/2026-09-20-console-ux-and-notification-fixes.md §5）
+// 这一档是上一轮删掉通用 extras 参数（见 plans/2026-09-20-控制台体验与通知口径修复.md §5）
 // 之后补回来的**受清单约束**的路径：只有 model.targetUserEvents 里的事件才认显式收件人。
 func TestTargetUserEventsReachTheAffectedUserWithoutAnySubscription(t *testing.T) {
 	newNotificationTestDB(t)

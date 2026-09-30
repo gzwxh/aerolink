@@ -137,7 +137,7 @@ export const updateCurrentUser = async (data: {
 }
 
 // 上传当前用户头像（multipart，字段名 file）。服务端会写回 users.avatar_url，
-// 返回更新后的用户对象；限制与说明见 docs/dev/plans/2026-09-20-avatar-upload.md。
+// 返回更新后的用户对象；限制与说明见 docs/dev/plans/2026-09-20-头像上传.md。
 export const uploadCurrentUserAvatar = async (
   file: File
 ): Promise<AuthUser> => {

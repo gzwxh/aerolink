@@ -195,7 +195,7 @@ export function AuditSetting() {
 
   // 审计记录的落地方式由**配置文件**在启动时决定，后端在响应顶层返回；界面只读展示。
   const sink = data?.sink ?? 'database'
-  // 五条通道互斥（见 docs/dev/plans/2026-09-20-audit-log-parquet-archive.md §12.13）：
+  // 五条通道互斥（见 docs/dev/plans/2026-09-20-审计日志parquet归档.md §12.13）：
   // 通道开关由存储方式决定（配置文件指定、界面只读），不是管理员可改的意向。
   const parquetSink = sink === 'parquet'
   const elasticsearchSink = sink === 'elasticsearch'

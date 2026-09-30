@@ -5,8 +5,8 @@
 > **本文是 2026-09-20 当天的过程记录，现状已变**：文中作为目标库的 `kite-postgres`（PG 18，
 > 5432）与 `/data/postgresql` 已于同日退役删除；**切流已完成**，现网库是 `aerolink-postgres12`
 > （PG 12.12，宿主端口 **5433**）。新建/重建目标库请看
-> `2026-09-20-pg12-now-and-upgrade-path.md` §6，别再按本文去连 5432。
-- 相关：`docs/dev/plans/2026-09-20-multi-replica-shared-state.md`（§0 前置条件就是这件事）
+> `2026-09-20-PostgreSQL12现状与升级路径.md` §6，别再按本文去连 5432。
+- 相关：`docs/dev/plans/2026-09-20-多副本共享状态.md`（§0 前置条件就是这件事）
 - 触发：单节点卡顿，要扩到多副本；SQLite 是单文件单写入者，两个进程同时写会互相锁死。
 
 ## 1. 现状（2026-09-20 实测，不是推测）
@@ -108,10 +108,10 @@ sqlite3 dev.db ".backup /data/backup/dev.db.$(date +%F-%H%M)"
 
 > **2026-09-20 更新**：`kite-postgres`（PG 18）已退役、容器与 `/data/postgresql` 均已删除，
 > 现网库是 `aerolink-postgres12`（12.12，宿主端口 5433）。下面这段「复用现成的库」只作为当时的
-> 记录保留，**要新建目标库请看 `2026-09-20-pg12-now-and-upgrade-path.md` §6**，别再去连 5432。
+> 记录保留，**要新建目标库请看 `2026-09-20-PostgreSQL12现状与升级路径.md` §6**，别再去连 5432。
 
 （下面按「复用现成的 `kite-postgres`」写。若目标库要另建在 **PG 12.12** 容器里——新建容器、
-`max_connections` 取多少、端口怎么并存——见 `2026-09-20-pg12-now-and-upgrade-path.md` §6。）
+`max_connections` 取多少、端口怎么并存——见 `2026-09-20-PostgreSQL12现状与升级路径.md` §6。）
 
 本机复用 `kite-postgres` 里那张只有试跑数据的 `kite` 库，三件事：
 
@@ -200,7 +200,7 @@ docker exec kite-postgres psql -U kite -d kite -c "select count(*) from users;"
 
 ## 6. 之后才谈扩副本
 
-切到 pg 之后，多副本的三个共享状态（会话序号、登录失败计数、安全设置缓存）在 `2026-09-20-multi-replica-shared-state.md` 里已经处理完并入库。实际部署产物（systemd 副本 + nginx 入口）与实测记录见 `2026-09-20-multi-replica-deployment.md`。扩副本时还要注意：
+切到 pg 之后，多副本的三个共享状态（会话序号、登录失败计数、安全设置缓存）在 `2026-09-20-多副本共享状态.md` 里已经处理完并入库。实际部署产物（systemd 副本 + nginx 入口）与实测记录见 `2026-09-20-多副本部署.md`。扩副本时还要注意：
 
 - **连接池总量** = 副本数 × `AEROLINK_DB_MAX_OPEN_CONNS`，别超过 pg 的 `max_connections`。
 - **每个副本各持一份 K8s informer 缓存**，监听 apiserver 的流量按副本数放大——这本来就是「卡顿」的怀疑来源之一，扩容前后建议对比一次。

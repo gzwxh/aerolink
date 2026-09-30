@@ -131,7 +131,7 @@ func (m *Manager) runTask(ctx context.Context, task model.ScheduledTask) {
 //
 // 定时任务在人不在场的时候跑，失败原本只写进 scheduled_tasks.last_error，创建者不会主动
 // 去看——这正是「不在场时发生的、与自己相关的事」，按失败反馈口径应该走站内信
-// （见 plans/2026-09-21-notification-recipient-and-failure-feedback.md §2.3）。
+// （见 plans/2026-09-21-站内信收件人与失败反馈.md §2.3）。
 // 收件人是创建者本人，通过 SendEventTo 的「当事人必收」档送达，不依赖订阅配置。
 //
 // 只处理执行失败：调度配置本身有问题（scheduleErr）时 next_run_at 不会推进，任务会被

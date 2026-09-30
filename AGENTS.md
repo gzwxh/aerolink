@@ -95,7 +95,7 @@
   及其 `-foreground`）与中性 token，不要再写 Tailwind 色阶用具（`text-green-600`、
   `bg-blue-50 dark:bg-blue-950/50` 这类）——它们不跟随配色主题，也躲过对比度断言。
   软底/软描边用透明度修饰表达（`bg-success/10`、`border-success/25`），
-  语义与取值口径见 `docs/dev/plans/2026-09-21-semantic-status-color-tokens.md`。
+  语义与取值口径见 `docs/dev/plans/2026-09-21-语义状态色token.md`。
   例外：日志/终端主题（`ui/src/types/themes.ts`、`log-viewer-content.tsx` 的浮层 chrome）
   跟随的是用户选的终端主题，不改。
 
@@ -113,6 +113,6 @@
   **导航**（核心入口、前后端共用约定、分功能索引、how-to 清单）。新增或迁移功能面时
   同步更新它。
 - 非平凡改动（新功能面、跨前后端改动、涉及授权或数据模型的取舍）先写方案到
-  `docs/dev/plans/YYYY-MM-DD-<topic>.md`；小修和缺陷修复不必写方案文档。
+  `docs/dev/plans/YYYY-MM-DD-<中文主题>.md`；小修和缺陷修复不必写方案文档。
 - `docs/dev/**` 仅供工程使用，不进入发布的文档站（`docs/.vitepress/config.mts` →
   `srcExclude`）。

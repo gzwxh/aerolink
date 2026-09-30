@@ -39,7 +39,7 @@ const (
 	// AuditSinkElasticsearch 只写 Elasticsearch。
 	AuditSinkElasticsearch = "elasticsearch"
 	// AuditSinkVictoriaLogs 只写 VictoriaLogs（VictoriaMetrics 体系里的日志存储，**不是**
-	// VictoriaMetrics 本身：后者是时序库，存不下审计记录的字段明细，见 plans/2026-09-21-additional-audit-log-sinks.md §2）。
+	// VictoriaMetrics 本身：后者是时序库，存不下审计记录的字段明细，见 plans/2026-09-21-新增审计落地方式.md §2）。
 	AuditSinkVictoriaLogs = "victorialogs"
 	// AuditSinkOpenObserve 只写 OpenObserve。
 	AuditSinkOpenObserve = "openobserve"
@@ -117,7 +117,7 @@ func AuditSinkUsesExternalLogs() bool {
 // VictoriaLogs 与 OpenObserve 都没有「删除过期数据」的客户端接口：保留由服务端配置决定
 // （VL 的 -retentionPeriod、OO 的 stream data_retention）。也就是说
 // audit_settings.retentionDays 对这两个 sink **不生效**——这个事实必须能传到界面，
-// 否则又是一个「配了没生效」的静默失效（见 plans/2026-09-21-additional-audit-log-sinks.md §3.4）。
+// 否则又是一个「配了没生效」的静默失效（见 plans/2026-09-21-新增审计落地方式.md §3.4）。
 func AuditSinkRetentionIsServerSide() bool {
 	return AuditSinkUsesVictoriaLogs() || AuditSinkUsesOpenObserve()
 }

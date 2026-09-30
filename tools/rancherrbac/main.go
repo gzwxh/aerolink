@@ -2,7 +2,7 @@
 // 权限绑定组，相当于替管理员把授权配置好。
 //
 // 入口脚本：scripts/migrate-rancher-rbac.sh
-// 迁移口径与取舍：docs/dev/plans/2026-09-21-rancher-rbac-migration.md
+// 迁移口径与取舍：docs/dev/plans/2026-09-21-Rancher授权迁移脚本.md
 //
 // 默认是只读的 dry-run：打印计划，不写任何东西；确认无误后加 -apply 落库。
 package main

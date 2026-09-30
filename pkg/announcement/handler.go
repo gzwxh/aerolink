@@ -1,5 +1,5 @@
 // Package announcement 实现顶栏通知栏：管理员发布的公告在这里读写，
-// 前端在页面顶端以滚动横幅展示（见 plans/2026-09-21-announcement-bar.md）。
+// 前端在页面顶端以滚动横幅展示（见 plans/2026-09-21-顶部通知栏.md）。
 package announcement
 
 import (

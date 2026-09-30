@@ -6,7 +6,7 @@ import (
 )
 
 // 公告级别：只决定横幅整体的强调方式（左侧色条 + 图标 + 淡底），
-// 正文里的文字颜色由内容自己的具名标记决定（见 plans/2026-09-21-announcement-bar.md §5）。
+// 正文里的文字颜色由内容自己的具名标记决定（见 plans/2026-09-21-顶部通知栏.md §5）。
 const (
 	AnnouncementLevelInfo    = "info"
 	AnnouncementLevelWarning = "warning"
@@ -63,7 +63,7 @@ func IsAnnouncementScrollMode(mode string) bool {
 	}
 }
 
-// 因此两张表不共用，见 plans/2026-09-21-announcement-bar.md §3。
+// 因此两张表不共用，见 plans/2026-09-21-顶部通知栏.md §3。
 type Announcement struct {
 	Model
 	Title    string `json:"title" gorm:"type:varchar(255);not null"`

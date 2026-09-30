@@ -256,7 +256,7 @@ func Models() []interface{} {
 		NotificationSubscription{},
 		Notification{},
 		LoginRecord{},
-		// 顶栏通知栏公告（管理员发布，见 plans/2026-09-21-announcement-bar.md）。
+		// 顶栏通知栏公告（管理员发布，见 plans/2026-09-21-顶部通知栏.md）。
 		Announcement{},
 		// 周期性全局任务的执行权租约（多副本选主，见 leader.go）。
 		LeaderLease{},

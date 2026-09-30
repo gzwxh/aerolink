@@ -25,7 +25,7 @@ import (
 // documentSink 是「把一批中立文档写进外部日志存储」的统一接口。
 //
 // ES 复用按天索引（自己管过期索引删除）；VictoriaLogs / OpenObserve 用单流名，由服务端按时间
-// 分区并自带保留（见 plans/2026-09-21-additional-audit-log-sinks.md §3.2/§3.4）。
+// 分区并自带保留（见 plans/2026-09-21-新增审计落地方式.md §3.2/§3.4）。
 type documentSink interface {
 	Write(ctx context.Context, docs []ESDocument) error
 }

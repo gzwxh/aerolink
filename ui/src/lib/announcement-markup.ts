@@ -72,7 +72,7 @@ export type AnnouncementLevel = 'info' | 'warning' | 'danger'
  * 级别 → 图标色的语义 token。
  *
  * 刻意不加底色/描边：通知栏是顶栏里的一行文字，外面套个色框会很抢眼（见
- * plans/2026-09-21-announcement-bar.md §12.7）；强度靠图标颜色区分就够。
+ * plans/2026-09-21-顶部通知栏.md §12.7）；强度靠图标颜色区分就够。
  */
 export const ANNOUNCEMENT_LEVEL_ICONS: Record<AnnouncementLevel, string> = {
   info: 'text-info',

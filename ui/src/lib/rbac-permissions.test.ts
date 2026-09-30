@@ -135,7 +135,7 @@ describe('roleCanAccessAnyNamespace', () => {
 })
 
 // 「创建命名空间」是管理员专属动作，不通过角色 / 权限绑定组下发（见
-// docs/dev/plans/2026-09-20-namespace-create-admin-only.md）；其余操作仍按哨兵值
+// docs/dev/plans/2026-09-20-创建命名空间只归管理员.md）；其余操作仍按哨兵值
 // （集群级请求为 _all）匹配角色的命名空间列表。
 describe('namespaces resource', () => {
   it('needs the cluster-wide sentinel for list and delete', () => {

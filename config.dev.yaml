@@ -133,8 +133,8 @@ superUser:
 # auditSink: database
 
 # 可选：日志归档（本地 parquet + 外部存储 S3/ES/VictoriaLogs/OpenObserve）。详细方案见
-# docs/dev/plans/2026-09-20-audit-log-parquet-archive.md 与
-# docs/dev/plans/2026-09-21-additional-audit-log-sinks.md。
+# docs/dev/plans/2026-09-20-审计日志parquet归档.md 与
+# docs/dev/plans/2026-09-21-新增审计落地方式.md。
 # 这是**配置全集**（五条通道的开关 + 各自参数），但实际生效的只有 auditSink 对应的那一条：
 # `enabled` / `s3.enabled` / `elasticsearch.enabled` / `victorialogs.enabled` /
 # `openobserve.enabled` 都由 auditSink 推导，不用手改。

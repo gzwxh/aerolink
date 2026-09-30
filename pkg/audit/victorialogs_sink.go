@@ -22,7 +22,7 @@ var ErrVictoriaLogsDisabled = errors.New("victorialogs archiving is disabled")
 
 // VictoriaLogsSink 把审计/访问日志写进 VictoriaLogs，并从它检索。
 //
-// 与 ES sink 的区别（见 docs/dev/plans/2026-09-21-additional-audit-log-sinks.md）：
+// 与 ES sink 的区别（见 docs/dev/plans/2026-09-21-新增审计落地方式.md）：
 //   - 写入走 ES bulk 兼容接口 `/insert/elasticsearch/_bulk`（纯 HTTP，不引第三方客户端库）；
 //   - 检索走 LogsQL（`/select/logsql/query`），而不是 ES 的查询 DSL；
 //   - **单流**，不自己按天分区；过期数据由服务端 `-retentionPeriod` 负责（客户端不删）。
