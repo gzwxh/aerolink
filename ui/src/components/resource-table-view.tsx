@@ -1,10 +1,10 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import {
   flexRender,
   PaginationState,
   Table as TableInstance,
 } from '@tanstack/react-table'
+import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -201,6 +201,10 @@ export function ResourceTableView<T>({
             <div
               className={cn(
                 'relative overflow-auto scrollbar-hide',
+                // Table 原语自带 `overflow-x-auto` 的外壳，浏览器会把「最近滚动容器」算成它，
+                // 表头的 sticky 于是挂在那个永不纵向滚动的盒子上、吸不住。这里把它压平，
+                // 横向与纵向都由本容器负责（原语本身不动）。
+                '[&_[data-slot=table-container]]:overflow-visible',
                 fitViewportHeight ? 'min-h-[240px]' : maxBodyHeightClassName
               )}
               style={
@@ -210,7 +214,10 @@ export function ResourceTableView<T>({
               }
             >
               <Table className={columnSizing ? 'table-fixed' : undefined}>
-                <TableHeader className="bg-muted">
+                {/* 表头吸顶：列表滚动后仍能对上列名（见上面滚动容器处的注释）。
+                    分隔线用 inset 阴影而不是 border：表格是 border-collapse: collapse，
+                    行边框不跟着 sticky 元素走，滚动后会留在原处。 */}
+                <TableHeader className="bg-muted sticky top-0 z-10 shadow-[0_1px_0_0_var(--border)]">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
                       {headerGroup.headers.map((header, index) => (
