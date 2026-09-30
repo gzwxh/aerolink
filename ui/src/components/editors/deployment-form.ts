@@ -40,13 +40,6 @@ export interface VolumeForm {
   }
 }
 
-export interface VolumeMountForm {
-  name: string
-  mountPath: string
-  subPath?: string
-  readOnly?: boolean
-}
-
 /**
  * 容器的监听端口。
  *
@@ -72,7 +65,6 @@ export interface ContainerConfig {
     requests: { cpu: string; memory: string }
     limits: { cpu: string; memory: string }
   }
-  volumeMounts?: VolumeMountForm[]
   /** NVIDIA GPU 上限（nvidia.com/gpu）。 */
   gpu?: string
   container: Container
@@ -463,9 +455,9 @@ function buildContainers(configs: ContainerConfig[]): Container[] {
           }),
         },
       }),
-      ...(cfg.volumeMounts &&
-        cfg.volumeMounts.length > 0 && {
-          volumeMounts: cfg.volumeMounts.map((mount) => ({
+      ...(extra.volumeMounts &&
+        extra.volumeMounts.length > 0 && {
+          volumeMounts: extra.volumeMounts.map((mount) => ({
             name: mount.name,
             mountPath: mount.mountPath,
             subPath: mount.subPath,
@@ -885,12 +877,6 @@ export function parseYamlToFormData(
           res.limits?.['nvidia.com/gpu'] === null
             ? undefined
             : String(res.limits['nvidia.com/gpu']),
-        volumeMounts: ((c.volumeMounts as Array<any>) || []).map((vm) => ({
-          name: vm.name || '',
-          mountPath: vm.mountPath || '',
-          subPath: vm.subPath,
-          readOnly: !!vm.readOnly,
-        })),
         container: {
           name: c.name || `container-${i + 1}`,
           image: c.image || '',
@@ -906,6 +892,14 @@ export function parseYamlToFormData(
           livenessProbe: c.livenessProbe,
           startupProbe: c.startupProbe,
           securityContext: c.securityContext,
+          // 容器内的挂载由容器面板的「存储」编辑，写的就是这个字段；生成 YAML 也从
+          // 这里取。曾经在配置结构里另存一份，结果面板写的是这份、生成读的是那份。
+          volumeMounts: ((c.volumeMounts as Array<any>) || []).map((vm) => ({
+            name: vm.name || '',
+            mountPath: vm.mountPath || '',
+            subPath: vm.subPath,
+            readOnly: !!vm.readOnly,
+          })),
         },
       }
     }

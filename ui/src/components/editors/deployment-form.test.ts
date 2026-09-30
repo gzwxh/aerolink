@@ -357,4 +357,62 @@ describe('存储卷的生成与反向解析', () => {
       },
     ])
   })
+
+  /**
+   * 容器面板的「存储」直接写 container.volumeMounts，生成 YAML 也必须从这里取，
+   * 否则界面上挂好了、YAML 里却没有 volumeMounts（挂载不生效）。
+   */
+  it('容器挂载写进生成的 volumeMounts，并能读回容器面板', () => {
+    const form: DeploymentFormData = {
+      ...withVolumes([
+        {
+          name: 'data',
+          sourceType: 'hostPath',
+          options: { path: '/data', hostPathType: 'DirectoryOrCreate' },
+        },
+      ]),
+      containers: [
+        {
+          ...initialFormData.containers[0],
+          name: 'app',
+          image: 'nginx:1.25',
+          container: {
+            ...initialFormData.containers[0].container,
+            name: 'app',
+            image: 'nginx:1.25',
+            volumeMounts: [
+              {
+                name: 'data',
+                mountPath: '/usr/share/nginx/html',
+                readOnly: true,
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    const doc = yaml.load(generateWorkloadYaml(form, 'deployments')) as {
+      spec: {
+        template: { spec: { containers: Array<{ volumeMounts?: unknown }> } }
+      }
+    }
+    expect(doc.spec.template.spec.containers[0].volumeMounts).toEqual([
+      { name: 'data', mountPath: '/usr/share/nginx/html', readOnly: true },
+    ])
+
+    const parsed = parseYamlToFormData(
+      generateWorkloadYaml(form, 'deployments'),
+      'deployments',
+      initialFormData
+    )
+    expect(parsed.containers[0].container.volumeMounts).toEqual([
+      {
+        name: 'data',
+        mountPath: '/usr/share/nginx/html',
+        subPath: undefined,
+        readOnly: true,
+      },
+    ])
+  })
 })
