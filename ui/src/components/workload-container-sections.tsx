@@ -18,6 +18,7 @@ import { CommandListInput } from '@/components/command-list-input'
 import {
   isValidClusterIP,
   isValidContainerPort,
+  knownNodePortRange,
   type PortForm,
   type PortServiceType,
 } from '@/components/editors/deployment-form'
@@ -55,9 +56,9 @@ export function PortsEditor({
     staleTime: 10 * 60 * 1000,
     retry: false,
   })
-  // 范围由 kube-apiserver 的 --service-node-port-range 决定，取不到时用 K8s 默认值。
-  const nodePortMin = nodePortRange?.min ?? 30000
-  const nodePortMax = nodePortRange?.max ?? 32767
+  // 只有拿到集群真实配置时才按它提示与校验：接口读不到 flag、或当前用户不是管理员
+  // （接口在 admin 组）时都是 null，此时不拿 K8s 默认值当集群事实。
+  const range = knownNodePortRange(nodePortRange)
 
   const updatePort = (index: number, patch: Partial<PortForm>) => {
     onUpdate(ports.map((p, i) => (i === index ? { ...p, ...patch } : p)))
@@ -76,11 +77,13 @@ export function PortsEditor({
       'containerAdv.portRangeError',
       '容器端口必须为 1-65535 的数字'
     ),
-    nodePort: t('containerAdv.nodePortRangeError', {
-      min: nodePortMin,
-      max: nodePortMax,
-      defaultValue: `监听端口必须在 ${nodePortMin}-${nodePortMax} 范围内`,
-    }),
+    nodePort: range
+      ? t('containerAdv.nodePortRangeError', {
+          min: range.min,
+          max: range.max,
+          defaultValue: `监听端口必须在 ${range.min}-${range.max} 范围内`,
+        })
+      : '',
     servicePort: t(
       'containerAdv.servicePortRangeError',
       '监听端口必须为 1-65535'
@@ -93,11 +96,13 @@ export function PortsEditor({
 
   const portError = (p: PortForm) => {
     if (!isValidContainerPort(p.containerPort)) return messages.containerPort
-    // 监听端口留空是合法的：集群会自动分配一个。
+    // 监听端口留空是合法的：集群会自动分配一个。范围未知时不判，免得拿默认值把
+    // 合法端口标红；真越界由 API 拒绝。
     if (
+      range &&
       p.serviceType === 'NodePort' &&
       p.nodePort &&
-      (p.nodePort < nodePortMin || p.nodePort > nodePortMax)
+      (p.nodePort < range.min || p.nodePort > range.max)
     )
       return messages.nodePort
     if (p.servicePort && !isValidContainerPort(p.servicePort))
@@ -251,8 +256,14 @@ export function PortsEditor({
                 ) : (
                   <Input
                     type="number"
-                    min={port.serviceType === 'NodePort' ? nodePortMin : 1}
-                    max={port.serviceType === 'NodePort' ? nodePortMax : 65535}
+                    min={
+                      port.serviceType === 'NodePort' && range ? range.min : 1
+                    }
+                    max={
+                      port.serviceType === 'NodePort' && range
+                        ? range.max
+                        : 65535
+                    }
                     value={
                       port.serviceType === 'NodePort'
                         ? (port.nodePort ?? '')
@@ -338,15 +349,20 @@ export function PortsEditor({
           ])
         }
       >
-        {t('containerAdv.addPortOrService', '添加端口或 Service')}
+        {t('containerAdv.addPortOrService', '添加端口或Service')}
       </Button>
       {ports.some((p) => p.serviceType === 'NodePort') && (
         <p className="text-xs text-muted-foreground">
-          {t('containerAdv.nodePortRangeHint', {
-            min: nodePortMin,
-            max: nodePortMax,
-            defaultValue: '监听端口范围 {{min}}-{{max}}，留空自动分配',
-          })}
+          {range
+            ? t('containerAdv.nodePortRangeHint', {
+                min: range.min,
+                max: range.max,
+                defaultValue: '监听端口范围 {{min}}-{{max}}，留空自动分配',
+              })
+            : t(
+                'containerAdv.nodePortRangeHintUnknown',
+                '留空自动分配，端口范围以集群实际配置为准'
+              )}
         </p>
       )}
     </div>

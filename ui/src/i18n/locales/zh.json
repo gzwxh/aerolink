@@ -2911,6 +2911,7 @@
     "containerPortPlaceholder": "e.g. 8080",
     "portRangeError": "端口必须为 1-65535 的数字",
     "nodePortRangeHint": "监听端口范围 {{min}}-{{max}}，留空自动分配",
+    "nodePortRangeHintUnknown": "留空自动分配，端口范围以集群实际配置为准",
     "healthTitle": "健康检查",
     "probe": {
       "readiness": "就绪检查",

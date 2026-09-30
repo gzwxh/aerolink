@@ -2848,6 +2848,7 @@
     "argsPlaceholder": "e.g. /usr/sbin/httpd -f httpd.conf",
     "containerPortPlaceholder": "e.g. 8080",
     "nodePortRangeHint": "NodePort range {{min}}-{{max}}, empty = auto-assign",
+    "nodePortRangeHintUnknown": "Empty = auto-assign; the range follows the cluster configuration",
     "portRangeError": "Port must be a number between 1 and 65535",
     "remove": "Remove",
     "portName": "Name",
