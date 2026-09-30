@@ -71,7 +71,7 @@ export function ImageEditor({ container, onUpdate }: ImageEditorProps) {
           placeholder="nginx:latest"
           autoComplete="off"
         />
-        {showTagDropdown && (
+        {showTagDropdown && (tagLoading || !!tagOptions?.length) && (
           <div className="absolute z-10 mt-1 w-full bg-popover border rounded shadow max-h-60 overflow-auto">
             {tagLoading && (
               <div className="px-3 py-2 text-sm text-muted-foreground">
