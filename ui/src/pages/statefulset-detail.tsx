@@ -68,14 +68,14 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
         .join(',')
     : undefined
 
-  const {
-    data: relatedPods,
-    isLoading: isLoadingPods,
-    refetch: refetchPods,
-  } = useResourcesWatch('pods', namespace, {
-    labelSelector,
-    enabled: !!statefulset?.spec?.selector.matchLabels,
-  })
+  const { data: relatedPods, isLoading: isLoadingPods } = useResourcesWatch(
+    'pods',
+    namespace,
+    {
+      labelSelector,
+      enabled: !!statefulset?.spec?.selector.matchLabels,
+    }
+  )
   const { data: statefulSetEvents, isLoading: isEventsLoading } =
     useResourcesEvents('statefulsets', name, namespace)
 
@@ -372,13 +372,6 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
     t,
   ])
 
-  // Pods 是 SSE 推进来的（本地 state，不归 react-query 管），外壳只重取查询是刷不到它的：
-  // 漏掉 refetchPods() 就会出现「Pod 已删除、点刷新列表还是旧的、整页重载才对」。
-  const handleRefresh = async () => {
-    refetchPods()
-    await refetch()
-  }
-
   return (
     <ResourceDetailShell
       resourceType="statefulsets"
@@ -388,7 +381,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       data={statefulset}
       isLoading={isLoading}
       error={isError ? error : null}
-      onRefresh={handleRefresh}
+      onRefresh={refetch}
       onSaveYaml={handleSaveYaml}
       overview={
         statefulset ? (

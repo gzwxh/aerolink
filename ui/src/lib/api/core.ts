@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { usePageRefreshEpoch } from '@/contexts/page-refresh-context'
 import { useQuery } from '@tanstack/react-query'
 import { Pod } from 'kubernetes-types/core/v1'
 
@@ -740,6 +741,9 @@ const WATCH_FALLBACK_POLL_INTERVAL = 5000
 const WATCH_STREAM_PROBE_INTERVAL = 30000
 
 // Hook：资源列表的 SSE watch（初始快照 + ADDED/MODIFIED/DELETED）
+//
+// 列表数据在本地 state 里，不写进 react-query 缓存：外壳点「刷新」时
+// `refetchQueries` 碰不到它，靠订阅页面刷新信号（见 page-refresh-context）驱动重连重取。
 export function useResourcesWatch<T extends ResourceType>(
   resource: T,
   namespace?: string,
@@ -754,6 +758,7 @@ export function useResourcesWatch<T extends ResourceType>(
     fallbackPollInterval?: number
   }
 ) {
+  const pageRefreshEpoch = usePageRefreshEpoch()
   const [data, setData] = useState<ResourcesItems<T> | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
@@ -1031,19 +1036,40 @@ export function useResourcesWatch<T extends ResourceType>(
   // 定时器与可见性监听通过 ref 调用，避免与 connect 形成循环依赖。
   connectRef.current = connect
 
-  const refetch = useCallback(() => {
-    // 降级期间重新取一次列表就够了：再抢 SSE 也只会立刻被拒。
-    if (degradedRef.current) {
-      void pollList()
-      return
-    }
-    disconnect()
-    // 连续重连时指数退避（1s → 30s 封顶），避免服务端抖动时所有页面同时回连；
-    // 连接成功后在 onopen 里清零。
-    const delay = Math.min(1000 * 2 ** reconnectAttemptRef.current, 30000)
-    reconnectAttemptRef.current += 1
-    reconnectTimerRef.current = setTimeout(connect, delay)
-  }, [disconnect, connect, pollList])
+  const refetch = useCallback(
+    (options?: { immediate?: boolean }) => {
+      // 降级期间重新取一次列表就够了：再抢 SSE 也只会立刻被拒。
+      if (degradedRef.current) {
+        void pollList()
+        return
+      }
+      disconnect()
+      // 用户显式点「刷新」（含页面刷新信号）时立刻重连一次：退避是给自动重连抗抖动用的，
+      // 不该让一次手动刷新等上几十秒。
+      if (options?.immediate) {
+        reconnectAttemptRef.current = 0
+        reconnectTimerRef.current = setTimeout(connect, 0)
+        return
+      }
+      // 连续重连时指数退避（1s → 30s 封顶），避免服务端抖动时所有页面同时回连；
+      // 连接成功后在 onopen 里清零。
+      const delay = Math.min(1000 * 2 ** reconnectAttemptRef.current, 30000)
+      reconnectAttemptRef.current += 1
+      reconnectTimerRef.current = setTimeout(connect, delay)
+    },
+    [disconnect, connect, pollList]
+  )
+
+  // 页面外壳点「刷新」时重新连接并重取快照。首次挂载不算刷新（先记下初始代数），
+  // refetch 身份变化（labelSelector 变了等）也不触发，所以只依赖代数本身。
+  const refetchRef = useRef(refetch)
+  refetchRef.current = refetch
+  const appliedEpochRef = useRef(pageRefreshEpoch)
+  useEffect(() => {
+    if (appliedEpochRef.current === pageRefreshEpoch) return
+    appliedEpochRef.current = pageRefreshEpoch
+    refetchRef.current({ immediate: true })
+  }, [pageRefreshEpoch])
 
   useEffect(() => {
     if (options?.enabled === false) return

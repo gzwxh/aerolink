@@ -18,12 +18,13 @@ import { MFAPromptDialog } from './components/mfa-prompt-dialog'
 import { ServiceStatusOverlay } from './components/service-status-overlay'
 import { SessionSupersededDialog } from './components/session-superseded-dialog'
 import { SiteHeader } from './components/site-header'
-import { WriteConfirmDialog } from './components/write-confirm-dialog'
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar'
 import { Toaster } from './components/ui/sonner'
+import { WriteConfirmDialog } from './components/write-confirm-dialog'
 import { AIChatProvider } from './contexts/ai-chat-context'
 import { ClusterProvider } from './contexts/cluster-context'
 import { NavigationProvider } from './contexts/navigation-context'
+import { PageRefreshProvider } from './contexts/page-refresh-context'
 import { TerminalProvider, useTerminal } from './contexts/terminal-context'
 import { useCluster } from './hooks/use-cluster'
 import { useSessionHeartbeat } from './hooks/use-session-heartbeat'
@@ -110,23 +111,25 @@ function AppProviders({ children }: { children: ReactNode }) {
   useSessionHeartbeat()
 
   return (
-    <TerminalProvider>
-      <ClusterProvider>
-        <NavigationProvider>
-          <GlobalSearchProvider>
-            <AIChatProvider>
-              {children}
-              {/* 账号被顶下线的提示（单点登录）：主界面与独立 AI 页共用一个实例。 */}
-              <SessionSupersededDialog />
-              {/* 服务异常横幅、以及登录跳转成环时的阻断页：主界面与独立 AI 页共用。 */}
-              <ServiceStatusOverlay />
-              {/* k8s 写操作的二次确认弹窗（按集群逐类开关，见 lib/write-confirm.ts）。 */}
-              <WriteConfirmDialog />
-            </AIChatProvider>
-          </GlobalSearchProvider>
-        </NavigationProvider>
-      </ClusterProvider>
-    </TerminalProvider>
+    <PageRefreshProvider>
+      <TerminalProvider>
+        <ClusterProvider>
+          <NavigationProvider>
+            <GlobalSearchProvider>
+              <AIChatProvider>
+                {children}
+                {/* 账号被顶下线的提示（单点登录）：主界面与独立 AI 页共用一个实例。 */}
+                <SessionSupersededDialog />
+                {/* 服务异常横幅、以及登录跳转成环时的阻断页：主界面与独立 AI 页共用。 */}
+                <ServiceStatusOverlay />
+                {/* k8s 写操作的二次确认弹窗（按集群逐类开关，见 lib/write-confirm.ts）。 */}
+                <WriteConfirmDialog />
+              </AIChatProvider>
+            </GlobalSearchProvider>
+          </NavigationProvider>
+        </ClusterProvider>
+      </TerminalProvider>
+    </PageRefreshProvider>
   )
 }
 

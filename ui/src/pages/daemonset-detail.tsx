@@ -75,14 +75,14 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
         .join(',')
     : undefined
 
-  const {
-    data: relatedPods,
-    isLoading: isLoadingPods,
-    refetch: refetchPods,
-  } = useResourcesWatch('pods', namespace, {
-    labelSelector,
-    enabled: !!daemonset?.spec?.selector.matchLabels,
-  })
+  const { data: relatedPods, isLoading: isLoadingPods } = useResourcesWatch(
+    'pods',
+    namespace,
+    {
+      labelSelector,
+      enabled: !!daemonset?.spec?.selector.matchLabels,
+    }
+  )
   const { data: daemonsetEvents, isLoading: isEventsLoading } =
     useResourcesEvents('daemonsets', name, namespace)
 
@@ -329,13 +329,6 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
     t,
   ])
 
-  // Pods 是 SSE 推进来的（本地 state，不归 react-query 管），外壳只重取查询是刷不到它的：
-  // 漏掉 refetchPods() 就会出现「Pod 已删除、点刷新列表还是旧的、整页重载才对」。
-  const handleRefresh = async () => {
-    refetchPods()
-    await refetch()
-  }
-
   return (
     <ResourceDetailShell
       resourceType="daemonsets"
@@ -345,7 +338,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
       data={daemonset}
       isLoading={isLoading}
       error={isError ? error : null}
-      onRefresh={handleRefresh}
+      onRefresh={refetch}
       onSaveYaml={handleSaveYaml}
       overview={
         daemonset ? (

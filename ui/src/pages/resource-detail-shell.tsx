@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useRequestPageRefresh } from '@/contexts/page-refresh-context'
 import {
   IconCopy,
   IconLoader,
@@ -180,23 +181,23 @@ export function ResourceDetailShell<T>({
   // 集群切换入口据此弹「未保存」确认（见 ClusterProvider）。
   useUnsavedEdits(yamlDirty)
 
+  // 把「这一页要刷新了」广播给不在 react-query 里的数据源（SSE 列表）。
+  const requestPageRefresh = useRequestPageRefresh()
+
   const handleRefresh = useCallback(async () => {
     setRefreshKey((prev) => prev + 1)
     setIsRefreshing(true)
+    // 这一页上的数据不止主资源一份，刷新按钮的语义是「重新取这一页的全部数据」：
+    // 1) 主资源走页面传进来的 onRefresh；
+    // 2) 事件、相关资源、监控曲线等是各自独立的查询（见 components/resource-overview.tsx
+    //    的 useResourcesEvents / useRelatedResources），按 type: 'active' 一并重取
+    //    （范围恰好是这一页）；refetchQueries 不看 staleTime，刚点就一定能拿到新数据。
+    //    传 cancelRefetch: false：主资源此时正由 onRefresh 在取，复用它那条请求，不重发。
+    // 3) 走 SSE 的列表（详情页的 Pods）数据在本地 state 里、不在 react-query 缓存中，
+    //    refetchQueries 碰不到它，靠广播页面刷新信号让那条连接重连并重取快照——漏掉它就会
+    //    出现「Pod 已删掉、点刷新列表还是旧的、只能整页重载」（见 page-refresh-context）。
+    requestPageRefresh()
     try {
-      // 这一页上的数据不止主资源一份：事件、相关资源、监控曲线等都是各自独立的查询
-      // （见 components/resource-overview.tsx 的 useResourcesEvents / useRelatedResources），
-      // 而页面传进来的 onRefresh 只覆盖主资源。以前这里只调 onRefresh，于是点「刷新」时
-      // 那些区块仍是旧数据、看起来"没反应"，只能整页重载才更新——这正是用户反馈的
-      // "有时点刷新不生效，要按浏览器刷新才行"。
-      // 注意：走 SSE 的列表不在 react-query 里（详情页的 Pods，见 useResourcesWatch 的
-      // 注释），refetchQueries 碰不到它，必须由页面的 onRefresh 一并调用那条 watch 的
-      // refetch —— 否则 Pod 删掉后点刷新列表还是旧的（六个详情页都是这么接的：
-      // Deployment / StatefulSet / DaemonSet / Job / Service / HelmRelease）。
-      // 这里是用户显式发起的刷新，把当前挂载着的查询（type: 'active'，范围恰好是这一页）
-      // 一并重取；refetchQueries 不看 staleTime，所以刚点就一定能拿到新数据。
-      // 传 cancelRefetch: false：主资源此时正由 onRefresh 在取（fetch 是同步进入 fetching 的），
-      // 复用它那条请求，不会为同一个资源多发一次。
       await Promise.all([
         onRefresh(),
         queryClient.refetchQueries(
@@ -207,7 +208,7 @@ export function ResourceDetailShell<T>({
     } finally {
       setIsRefreshing(false)
     }
-  }, [onRefresh, queryClient])
+  }, [onRefresh, queryClient, requestPageRefresh])
 
   const handleSaveYaml = useCallback(
     async (content: T) => {

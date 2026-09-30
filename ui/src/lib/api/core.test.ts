@@ -1,3 +1,7 @@
+import {
+  PageRefreshProvider,
+  useRequestPageRefresh,
+} from '@/contexts/page-refresh-context'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -211,5 +215,49 @@ describe('useResourcesWatch', () => {
       await Promise.resolve()
     })
     expect(fetchMock).toHaveBeenCalledTimes(callsAfterReconnect)
+  })
+
+  // 详情页外壳点「刷新」的语义是「重新取这一页的全部数据」：SSE 的数据在本地 state 里，
+  // react-query 的 refetchQueries 碰不到它，只能由页面刷新信号驱动重连重取。
+  it('页面刷新信号到来时立刻重连重取', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+
+    const { result } = renderHook(
+      () => ({
+        watch: useResourcesWatch('pods', 'default'),
+        requestPageRefresh: useRequestPageRefresh(),
+      }),
+      { wrapper: PageRefreshProvider }
+    )
+    expect(FakeEventSource.instances).toHaveLength(1)
+
+    act(() => {
+      result.current.requestPageRefresh()
+    })
+    // immediate 重连走 0ms 定时器：让出一个宏任务就够。
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(FakeEventSource.instances).toHaveLength(2)
+    expect(FakeEventSource.instances[0].closed).toBe(true)
+    expect(FakeEventSource.instances[1].closed).toBe(false)
+  })
+
+  // 显式刷新不吃指数退避：默认 refetch 要等 1s（连续重连更久），immediate 立刻重连。
+  it('immediate 重连不等退避', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+
+    const { result } = renderHook(() => useResourcesWatch('pods', 'default'))
+
+    act(() => {
+      result.current.refetch()
+      result.current.refetch({ immediate: true })
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(FakeEventSource.instances).toHaveLength(2)
   })
 })
