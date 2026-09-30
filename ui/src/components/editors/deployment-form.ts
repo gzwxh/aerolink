@@ -40,17 +40,24 @@ export interface VolumeForm {
   }
 }
 
+export type PortServiceType = 'none' | 'ClusterIP' | 'NodePort' | 'LoadBalancer'
+
 /**
- * 容器的监听端口。
+ * 容器的监听端口，以及为它声明的 Service。
  *
- * 这里只描述 *容器* 暴露了什么，不再顺带生成 Service：Service 是独立对象，
- * 关联（它的选择器选中哪些 Pod）由 Service 自己决定，在「服务」页面创建与修改；
- * 工作负载表单只展示已关联的 Service 名称并给出跳转入口。
+ * `serviceType !== 'none'` 时保存会一并生成对应的 Service 文档（见
+ * `buildServiceDocuments`）：同一类型的端口合成一个 Service，选择器就是本工作负载的标签。
+ * 关联关系由 Service 侧的选择器决定，因此从工作负载删除端口不会删掉已建的 Service。
  */
 export interface PortForm {
   name?: string
   containerPort: number
   protocol: 'TCP' | 'UDP'
+  serviceType: PortServiceType
+  servicePort?: number
+  nodePort?: number
+  /** 静态 ClusterIP（必须落在 service CIDR 内）。 */
+  clusterIP?: string
 }
 
 export interface ContainerConfig {
@@ -305,6 +312,40 @@ export function validateStep(
   }
 }
 
+/** 容器端口必须在 1-65535。 */
+export function isValidContainerPort(port: number): boolean {
+  return !!port && port >= 1 && port <= 65535
+}
+
+/** 静态 ClusterIP 的格式：四段十进制 IPv4。 */
+export function isValidClusterIP(value: string): boolean {
+  const octets = value.trim().split('.')
+  return (
+    octets.length === 4 &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+  )
+}
+
+/**
+ * 端口行里与集群配置无关的硬错误：容器端口超出 1-65535，或静态 ClusterIP 格式不对。
+ *
+ * 校验放在提交前，是因为容器端口非法时 `buildServiceDocuments` 会静默跳过该行 ——
+ * 用户以为勾了 Service，实际什么都没建。NodePort 的合法范围由 kube-apiserver 的
+ * `--service-node-port-range` 决定，只有界面能拿到，因此不在这里判。
+ */
+export function hasInvalidPorts(formData: DeploymentFormData): boolean {
+  return formData.containers.some((container) =>
+    container.ports.some((port) => {
+      if (!isValidContainerPort(port.containerPort)) return true
+      return (
+        port.serviceType === 'ClusterIP' &&
+        !!port.clusterIP?.trim() &&
+        !isValidClusterIP(port.clusterIP)
+      )
+    })
+  )
+}
+
 function buildVolumes(volumeForms: VolumeForm[]): Volume[] {
   const volumes: Volume[] = []
   for (const volume of volumeForms) {
@@ -548,6 +589,90 @@ const formatQuantity = (value: string, unit: 'count' | 'percent') => {
   return unit === 'percent' ? `${num}%` : num
 }
 
+/**
+ * 工作负载标签，`app` 缺省补成工作负载名。
+ *
+ * 生成的 Service 用它当选择器，必须与工作负载 metadata 上的那份完全一致 ——
+ * 两处各算一遍就迟早会漂移。
+ */
+function workloadLabels(formData: DeploymentFormData): Record<string, string> {
+  const labels = formData.labels.reduce(
+    (acc, label) => {
+      if (label.key && label.value) acc[label.key] = label.value
+      return acc
+    },
+    {} as Record<string, string>
+  )
+  if (!labels.app && formData.name) labels.app = formData.name
+  return labels
+}
+
+/**
+ * 端口行里请求了 Service 的部分，按类型分组生成 Service 文档。
+ *
+ * 一个类型一个 Service（同一 Service 挂多个端口），名称沿用 `33c323d` 的约定：
+ * ClusterIP 用工作负载名，其余类型加 `-<类型小写>` 后缀；选择器取工作负载标签。
+ * 没有端口请求 Service 时返回空数组，调用方据此保持单文档 YAML。
+ */
+export function buildServiceDocuments(
+  formData: DeploymentFormData
+): Array<Record<string, unknown>> {
+  const labelsObj = workloadLabels(formData)
+
+  const groups = new Map<
+    Exclude<PortServiceType, 'none'>,
+    Array<{ port: Record<string, unknown>; clusterIP?: string }>
+  >()
+  for (const container of formData.containers) {
+    for (const p of container.ports) {
+      if (p.serviceType === 'none' || !p.containerPort) continue
+      const entries = groups.get(p.serviceType) || []
+      // 同一个容器端口在一个 Service 里只需要一条映射（多容器可能重复声明同一端口）。
+      if (entries.some((entry) => entry.port.targetPort === p.containerPort))
+        continue
+      entries.push({
+        port: {
+          ...(p.name ? { name: p.name } : {}),
+          port: p.servicePort || p.containerPort,
+          targetPort: p.containerPort,
+          ...(p.serviceType === 'NodePort' && p.nodePort
+            ? { nodePort: p.nodePort }
+            : {}),
+          ...(p.protocol === 'TCP' ? {} : { protocol: p.protocol }),
+        },
+        clusterIP: p.clusterIP?.trim() || undefined,
+      })
+      groups.set(p.serviceType, entries)
+    }
+  }
+
+  const docs: Array<Record<string, unknown>> = []
+  for (const [type, entries] of groups) {
+    const spec: Record<string, unknown> = {
+      type,
+      selector: labelsObj,
+      ports: entries.map((entry) => entry.port),
+    }
+    // 静态 ClusterIP：允许在 service CIDR 内指定固定地址，只在 ClusterIP 上有意义。
+    const staticIP = entries.find((entry) => entry.clusterIP)?.clusterIP
+    if (type === 'ClusterIP' && staticIP) spec.clusterIP = staticIP
+    docs.push({
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: {
+        name:
+          type === 'ClusterIP'
+            ? formData.name
+            : `${formData.name}-${type.toLowerCase()}`,
+        namespace: formData.namespace,
+        labels: labelsObj,
+      },
+      spec,
+    })
+  }
+  return docs
+}
+
 export function generateDeploymentYaml(formData: DeploymentFormData): string {
   return generateWorkloadYaml(formData, 'deployments')
 }
@@ -556,17 +681,7 @@ export function generateWorkloadYaml(
   formData: DeploymentFormData,
   resourceType: WorkloadResourceType
 ): string {
-  const labelsObj = formData.labels.reduce(
-    (acc, label) => {
-      if (label.key && label.value) acc[label.key] = label.value
-      return acc
-    },
-    {} as Record<string, string>
-  )
-
-  if (!labelsObj.app && formData.name) {
-    labelsObj.app = formData.name
-  }
+  const labelsObj = workloadLabels(formData)
 
   const annotations = pairsToRecord(formData.annotations || [])
   if (formData.description.trim()) {
@@ -811,6 +926,16 @@ export function generateWorkloadYaml(
     }
   }
 
+  // 有端口请求 Service 时输出多文档 YAML：Service 在前，工作负载在后，
+  // 一次 apply 全部落地（后端逐文档鉴权与写入）。
+  const serviceDocs = buildServiceDocuments(formData)
+  if (serviceDocs.length > 0) {
+    const dumpOpts = { indent: 2, noRefs: true }
+    return [...serviceDocs, manifest]
+      .map((doc) => yaml.dump(doc, dumpOpts))
+      .join('---\n')
+  }
+
   return yaml.dump(manifest, { indent: 2, noRefs: true })
 }
 /** 尽力而为的反向解析：工作负载 YAML（+ Service 文档）-> 表单状态。 */
@@ -856,10 +981,12 @@ export function parseYamlToFormData(
         name: c.name || `container-${i + 1}`,
         image: c.image || '',
         isInit,
+        // Service 类型先留空，随后由 Service 文档回填（见下方 "Map Service docs"）。
         ports: ((c.ports as Array<any>) || []).map((p) => ({
           name: p.name,
           containerPort: Number(p.containerPort) || 0,
           protocol: p.protocol === 'UDP' ? ('UDP' as const) : ('TCP' as const),
+          serviceType: 'none' as const,
         })),
         pullPolicy: c.imagePullPolicy || 'IfNotPresent',
         resources: {
@@ -1162,6 +1289,33 @@ export function parseYamlToFormData(
     if (resourceType === 'cronjobs' && spec.schedule)
       base.schedule = String(spec.schedule)
 
+    // 把 Service 文档映射回端口行：按 targetPort 找到对应的容器端口，
+    // 记下它的 Service 类型、服务端口与 NodePort（静态 ClusterIP 不回填）。
+    for (const svc of docs.filter((d) => d && d.kind === 'Service')) {
+      const svcSpec = (svc.spec || {}) as Record<string, any>
+      const svcType = String(svcSpec.type || 'ClusterIP')
+      // 表单只支持这三种类型；ExternalName 这类手写的 Service 不进端口行。
+      if (
+        svcType !== 'ClusterIP' &&
+        svcType !== 'NodePort' &&
+        svcType !== 'LoadBalancer'
+      )
+        continue
+      for (const sp of (svcSpec.ports as Array<any>) || []) {
+        const target = Number(sp.targetPort)
+        for (const c of base.containers) {
+          for (const p of c.ports) {
+            if (p.containerPort !== target) continue
+            p.serviceType = svcType
+            // 服务端口与容器端口相同时是默认推导，不算用户填过。
+            if (sp.port !== undefined && Number(sp.port) !== target)
+              p.servicePort = Number(sp.port)
+            if (sp.nodePort !== undefined) p.nodePort = Number(sp.nodePort)
+          }
+        }
+      }
+    }
+
     return base
   } catch {
     return fallback
@@ -1267,17 +1421,27 @@ export function mergeEditedManifest(
 }
 
 /**
- * 可选地把生成 manifest 的第一个文档与线上对象合并，
- * 其余文档（例如生成的 Service）保持原样。
+ * 可选地把生成 manifest 里与线上对象同 kind 的文档合并到线上对象之上，
+ * 其余文档（例如一并生成的 Service）保持原样。
+ *
+ * 这里按 kind 定位而不是取第一个文档：端口请求了 Service 时，生成的 YAML 是
+ * 「Service 在前、工作负载在后」，拿第一个文档去合并会把 Service 和线上对象搅在一起。
  */
 export function applyEditedManifest(
   content: string,
   original: Record<string, unknown>
 ): string {
   const docs = yaml.loadAll(content)
-  if (docs.length === 0 || !isPlainObject(docs[0])) return content
-  return [
-    yaml.dump(mergeEditedManifest(docs[0], original)),
-    ...docs.slice(1).map((doc) => yaml.dump(doc)),
-  ].join('---\n')
+  if (docs.length === 0) return content
+  const index = docs.findIndex(
+    (doc) => isPlainObject(doc) && doc.kind === original.kind
+  )
+  if (index === -1) return content
+  return docs
+    .map((doc, i) =>
+      i === index && isPlainObject(doc)
+        ? yaml.dump(mergeEditedManifest(doc, original))
+        : yaml.dump(doc)
+    )
+    .join('---\n')
 }

@@ -2,6 +2,7 @@ import yaml from 'js-yaml'
 import { describe, expect, it } from 'vitest'
 
 import {
+  applyEditedManifest,
   generateWorkloadYaml,
   initialFormData,
   mergeEditedManifest,
@@ -9,6 +10,33 @@ import {
   type DeploymentFormData,
   type VolumeForm,
 } from './deployment-form'
+
+/** 生成出来的 YAML 文档；测试只读这几个字段，需要往下钻的字段在断言里收窄。 */
+type GeneratedDoc = {
+  kind: string
+  metadata: { name?: string }
+  spec: Record<string, unknown>
+}
+
+/** 一个带端口行的 Deployment 表单：用来断言 Service 文档的生成、反解与合并。 */
+function formWithPorts(
+  ports: DeploymentFormData['containers'][number]['ports']
+): DeploymentFormData {
+  return {
+    ...initialFormData,
+    name: 'web',
+    namespace: 'default',
+    labels: [{ key: 'app', value: 'web' }],
+    containers: [
+      {
+        ...initialFormData.containers[0],
+        name: 'app',
+        image: 'nginx:1.25',
+        ports,
+      },
+    ],
+  }
+}
 
 /**
  * 表单编辑线上对象的合并规则。
@@ -168,28 +196,20 @@ describe('mergeEditedManifest', () => {
 })
 
 /**
- * Service 是独立对象：工作负载表单只描述容器端口，不再顺带产出 Service 文档，
- * 关联改由 Service 自己的选择器决定（在「服务」页面维护）。
+ * 端口行选了 Service 类型时，保存会连同工作负载生成多文档 YAML
+ * （Service 在前、工作负载在后）；`serviceType: 'none'` 的端口不产出任何 Service。
  */
 describe('工作负载 YAML 生成', () => {
-  const formData = {
-    ...initialFormData,
-    name: 'web',
-    namespace: 'default',
-    labels: [{ key: 'app', value: 'web' }],
-    containers: [
-      {
-        ...initialFormData.containers[0],
-        name: 'app',
-        image: 'nginx:1.25',
-        ports: [
-          { name: 'http', containerPort: 8080, protocol: 'TCP' as const },
-        ],
-      },
-    ],
-  }
+  const formData = formWithPorts([
+    {
+      name: 'http',
+      containerPort: 8080,
+      protocol: 'TCP' as const,
+      serviceType: 'none' as const,
+    },
+  ])
 
-  it('生成单个工作负载文档，容器端口保留', () => {
+  it('端口不请求 Service 时只生成工作负载文档，容器端口保留', () => {
     const text = generateWorkloadYaml(formData, 'deployments')
 
     expect(text).not.toContain('kind: Service')
@@ -209,6 +229,204 @@ describe('工作负载 YAML 生成', () => {
       expect(text, resourceType).not.toContain('kind: Service')
       expect(text.match(/^---$/m), resourceType).toBeNull()
     }
+  })
+
+  it('ClusterIP 端口生成选择器指向工作负载标签的 Service', () => {
+    const docs = yaml.loadAll(
+      generateWorkloadYaml(
+        formWithPorts([
+          {
+            name: 'http',
+            containerPort: 8080,
+            protocol: 'TCP',
+            serviceType: 'ClusterIP',
+          },
+        ]),
+        'deployments'
+      )
+    ) as unknown as GeneratedDoc[]
+
+    expect(docs.map((doc) => doc.kind)).toEqual(['Service', 'Deployment'])
+    expect(docs[0].metadata.name).toBe('web')
+    expect(docs[0].spec.type).toBe('ClusterIP')
+    expect(docs[0].spec.selector).toEqual({ app: 'web' })
+    expect(docs[0].spec.ports).toEqual([
+      { name: 'http', port: 8080, targetPort: 8080 },
+    ])
+  })
+
+  it('同类型端口合成一个 Service，不同类型各一个并带类型后缀', () => {
+    const docs = yaml.loadAll(
+      generateWorkloadYaml(
+        formWithPorts([
+          { containerPort: 80, protocol: 'TCP', serviceType: 'ClusterIP' },
+          {
+            containerPort: 443,
+            protocol: 'TCP',
+            serviceType: 'ClusterIP',
+            servicePort: 8443,
+          },
+          {
+            containerPort: 53,
+            protocol: 'UDP',
+            serviceType: 'NodePort',
+            nodePort: 30053,
+          },
+        ]),
+        'deployments'
+      )
+    ) as unknown as GeneratedDoc[]
+
+    const services = docs.filter((doc) => doc.kind === 'Service')
+    expect(services.map((doc) => doc.metadata.name)).toEqual([
+      'web',
+      'web-nodeport',
+    ])
+    expect(services[0].spec.ports).toEqual([
+      { port: 80, targetPort: 80 },
+      { port: 8443, targetPort: 443 },
+    ])
+    expect(services[1].spec.ports).toEqual([
+      { port: 53, targetPort: 53, nodePort: 30053, protocol: 'UDP' },
+    ])
+  })
+
+  it('LoadBalancer 的名字带类型后缀，静态 ClusterIP 只写进 ClusterIP', () => {
+    const loadBalancer = yaml.loadAll(
+      generateWorkloadYaml(
+        formWithPorts([
+          { containerPort: 8080, protocol: 'TCP', serviceType: 'LoadBalancer' },
+        ]),
+        'deployments'
+      )
+    ) as unknown as GeneratedDoc[]
+    expect(loadBalancer[0].metadata.name).toBe('web-loadbalancer')
+
+    const staticIP = yaml.loadAll(
+      generateWorkloadYaml(
+        formWithPorts([
+          {
+            containerPort: 80,
+            protocol: 'TCP',
+            serviceType: 'ClusterIP',
+            clusterIP: '10.96.0.10',
+          },
+        ]),
+        'deployments'
+      )
+    ) as unknown as GeneratedDoc[]
+    expect(staticIP[0].spec.clusterIP).toBe('10.96.0.10')
+  })
+
+  it('把 Service 文档反解回端口行', () => {
+    const parsed = parseYamlToFormData(
+      generateWorkloadYaml(
+        formWithPorts([
+          {
+            containerPort: 8080,
+            protocol: 'TCP',
+            serviceType: 'NodePort',
+            servicePort: 30080,
+            nodePort: 30080,
+          },
+          { containerPort: 9090, protocol: 'TCP', serviceType: 'none' },
+        ]),
+        'deployments'
+      ),
+      'deployments',
+      initialFormData
+    )
+
+    expect(parsed.containers[0].ports).toEqual([
+      {
+        name: undefined,
+        containerPort: 8080,
+        protocol: 'TCP',
+        serviceType: 'NodePort',
+        servicePort: 30080,
+        nodePort: 30080,
+      },
+      {
+        name: undefined,
+        containerPort: 9090,
+        protocol: 'TCP',
+        serviceType: 'none',
+      },
+    ])
+  })
+
+  it('手写的 ExternalName Service 不写进端口行', () => {
+    const parsed = parseYamlToFormData(
+      [
+        `apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: example.com
+  ports:
+    - port: 80
+      targetPort: 8080`,
+        generateWorkloadYaml(
+          formWithPorts([
+            { containerPort: 8080, protocol: 'TCP', serviceType: 'none' },
+          ]),
+          'deployments'
+        ),
+      ].join('\n---\n'),
+      'deployments',
+      initialFormData
+    )
+
+    expect(parsed.containers[0].ports[0].serviceType).toBe('none')
+  })
+})
+
+/**
+ * 编辑模式会把表单生成的 manifest 叠加到线上对象上。生成的多文档里第一个是
+ * Service，因此这里必须按 kind 找到工作负载再合并，否则会把 Service 和线上
+ * Deployment 揉成一个对象。
+ */
+describe('applyEditedManifest', () => {
+  it('只合并工作负载文档，生成的 Service 原样保留', () => {
+    const original = {
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name: 'web', namespace: 'default' },
+      spec: {
+        selector: { matchLabels: { app: 'web' } },
+        template: {
+          metadata: { labels: { app: 'web' } },
+          spec: {
+            serviceAccountName: 'web-sa',
+            containers: [{ name: 'app', image: 'old' }],
+          },
+        },
+      },
+    }
+
+    const docs = yaml.loadAll(
+      applyEditedManifest(
+        generateWorkloadYaml(
+          formWithPorts([
+            { containerPort: 8080, protocol: 'TCP', serviceType: 'ClusterIP' },
+          ]),
+          'deployments'
+        ),
+        original
+      )
+    ) as unknown as GeneratedDoc[]
+
+    expect(docs.map((doc) => doc.kind)).toEqual(['Service', 'Deployment'])
+    expect(docs[0].spec.selector).toEqual({ app: 'web' })
+    expect(docs[0].spec.type).toBe('ClusterIP')
+    // 表单没建模的字段从线上对象保留下来。
+    const deployment = docs[1].spec as {
+      template: { spec: { serviceAccountName?: string } }
+    }
+    expect(deployment.template.spec.serviceAccountName).toBe('web-sa')
   })
 })
 
