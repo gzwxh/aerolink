@@ -3,6 +3,7 @@ import type { OnMount } from '@monaco-editor/react'
 import {
   IconClearAll,
   IconDownload,
+  IconHighlight,
   IconMaximize,
   IconMinimize,
   IconPalette,
@@ -23,8 +24,14 @@ import {
 } from '@/lib/ansi-parser'
 import { useLogsWebSocket } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
+import {
+  findTermRanges,
+  normalizeLineTextForSearch,
+  normalizeSearchTerm,
+} from '@/lib/log-search'
 import { MonacoEditor } from '@/lib/monaco-loader'
 import { defineMonacoLogThemes } from '@/lib/monaco-theme'
+import { suppressMonacoFindWidgetHovers } from '@/lib/suppress-monaco-find-widget-hovers'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -67,8 +74,63 @@ export interface LogViewerProps {
 }
 
 const ANSI_CSS = generateAnsiCss()
+// 过滤命中行的视觉标记：左侧标记条 + 半透明底，用语义 token 的透明度修饰，
+// 在各终端主题的深浅背景上都可辨认。
+// 高亮配色：命中行与关键字共用一个颜色（可在设置里改，存 localStorage）。
+// 行级用低透明度打底 + 左侧标记条，词级用高透明度让关键字一眼可见；
+// 默认 amber 在深浅两套日志主题下都能和背景拉开对比。
+const DEFAULT_HIGHLIGHT_COLOR = '#f59e0b'
+function buildHighlightCss(color: string) {
+  return `
+.log-filter-match-line {
+  background: color-mix(in oklab, ${color} 26%, transparent);
+  box-shadow: inset 2px 0 0 ${color};
+}
+.log-highlight-term {
+  background: color-mix(in oklab, ${color} 60%, transparent);
+  border-radius: 2px;
+}
+`
+}
+// 过滤命中行保留的上下文行数（前后各 N 行）。默认 0 = 纯 grep 模式，
+// 只显示命中行本身（tail -f | grep 的效果），不带上下文；
+// 可在设置面板调整，存 localStorage（log-viewer-filter-context-lines）。
+const DEFAULT_FILTER_CONTEXT_LINES = 0
+const FILTER_CONTEXT_OPTIONS = [0, 1, 3, 5, 10, 15]
+// 同一批到达的日志合并成一次过滤重建的延迟，避免高频日志下反复全量重绘。
+const FILTER_RENDER_DELAY_MS = 120
 // Monaco 的 NeverGrowsWhenTypingAtEdges 取值，保持为数字以避免在运行时引入 Monaco。
 const NEVER_GROWS_WHEN_TYPING_AT_EDGES: editor.TrackedRangeStickiness = 1
+
+// 一行日志：剥离转义后的纯文本 + 行内各段的 ANSI 样式段。
+// 过滤视图以行缓冲为数据源整体重建，流式追加只服务无过滤的实时路径。
+interface FilterableLogLine {
+  text: string
+  segments: Array<{ text: string; styles: AnsiState }>
+}
+
+// 把一条日志的 ANSI 段按换行拆成行（段跨行时两侧各留一份样式），
+// 同时预计算每行剥离样式后的纯文本供匹配判断使用。
+function splitSegmentsIntoLines(
+  segments: Array<{ text: string; styles: AnsiState }>
+): FilterableLogLine[] {
+  const rawLines: Array<Array<{ text: string; styles: AnsiState }>> = [[]]
+  for (const segment of segments) {
+    const parts = segment.text.split('\n')
+    parts.forEach((part, index) => {
+      if (index > 0) {
+        rawLines.push([])
+      }
+      if (part.length > 0) {
+        rawLines[rawLines.length - 1].push({ text: part, styles: segment.styles })
+      }
+    })
+  }
+  return rawLines.map((lineSegments) => ({
+    text: lineSegments.map((segment) => segment.text).join(''),
+    segments: lineSegments,
+  }))
+}
 const TERMINAL_THEME_KEYS = Object.keys(TERMINAL_THEMES) as TerminalTheme[]
 const TERMINAL_THEME_ENTRIES = Object.entries(TERMINAL_THEMES) as Array<
   [TerminalTheme, (typeof TERMINAL_THEMES)[TerminalTheme]]
@@ -102,10 +164,22 @@ export function LogViewer({
     const saved = localStorage.getItem('log-viewer-tail-lines')
     return saved ? parseInt(saved, 10) : 100
   })
+  // 过滤命中行保留的上下文行数（0 = 只显示命中行）
+  const [filterContextLines, setFilterContextLines] = useState(() => {
+    const saved = localStorage.getItem('log-viewer-filter-context-lines')
+    return saved !== null
+      ? parseInt(saved, 10)
+      : DEFAULT_FILTER_CONTEXT_LINES
+  })
   const { t } = useTranslation()
   const [timestamps, setTimestamps] = useState(false)
   const [previous, setPrevious] = useState(false)
   const [filterTerm, setFilterTerm] = useState('')
+  const [highlightTerm, setHighlightTerm] = useState('')
+  const [highlightColor, setHighlightColor] = useState(() => {
+    const saved = localStorage.getItem('log-viewer-highlight-color')
+    return saved || DEFAULT_HIGHLIGHT_COLOR
+  })
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [isReconnecting, setIsReconnecting] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -134,8 +208,163 @@ export function LogViewer({
   const [logCount, setLogCount] = useState(0) // Track log count for re-rendering
   const ansiStateRef = useRef<AnsiState>({})
   const decorationIdsRef = useRef<string[]>([])
+  const highlightIdsRef = useRef<string[]>([])
   const normalizedFilterTermRef = useRef('')
+  const normalizedHighlightTermRef = useRef('')
   const pendingLogsRef = useRef<string[]>([])
+  // 全量日志行缓冲：过滤视图从这里整体重建。
+  const logLinesRef = useRef<FilterableLogLine[]>([])
+  // 无过滤流式路径的写入条数；清空过滤词还原全量视图时用它恢复计数。
+  const streamLogCountRef = useRef(0)
+  // 当前编辑器显示的是过滤重建视图还是全量流式视图。
+  const isFilterViewRef = useRef(false)
+  const filterRenderTimerRef = useRef<number | null>(null)
+  const scheduleFilterRenderRef = useRef<() => void>(() => {})
+  const suppressFindWidgetHoversRef = useRef<(() => void) | null>(null)
+
+  // 关键字高亮：对当前模型的全部行扫描命中片段并替换装饰。调用点只有
+  // 「高亮词变化」「过滤视图重建后」两处，流式追加走 writeLogToEditor 的增量路径。
+  const applyHighlightDecorations = useCallback(() => {
+    const model = editorRef.current?.getModel()
+    if (!model) {
+      return
+    }
+    const term = normalizedHighlightTermRef.current
+    const highlightDecorations: editor.IModelDeltaDecoration[] = []
+    if (term) {
+      for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
+        for (const range of findTermRanges(
+          model.getLineContent(lineNumber),
+          term
+        )) {
+          highlightDecorations.push({
+            range: {
+              startLineNumber: lineNumber,
+              startColumn: range.start + 1,
+              endLineNumber: lineNumber,
+              endColumn: range.end + 1,
+            },
+            options: {
+              inlineClassName: 'log-highlight-term',
+              stickiness: NEVER_GROWS_WHEN_TYPING_AT_EDGES,
+            },
+          })
+        }
+      }
+    }
+    highlightIdsRef.current = model.deltaDecorations(
+      highlightIdsRef.current,
+      highlightDecorations
+    )
+  }, [])
+
+  // 过滤视图（重）渲染：以 logLinesRef 为唯一数据源整体重建编辑器内容与
+  // ANSI 装饰。有过滤词时只显示匹配行（grep 风格，行数即命中数）；
+  // 无过滤词时重建全量（用于清空过滤后还原流式视图的内容）。
+  const renderLogView = useCallback(() => {
+    const model = editorRef.current?.getModel()
+    if (!model) {
+      return
+    }
+
+    const term = normalizedFilterTermRef.current
+    const allLines = logLinesRef.current
+
+    const matchSet = new Set<number>()
+    if (term) {
+      allLines.forEach((line, index) => {
+        if (normalizeLineTextForSearch(line.text).includes(term)) {
+          matchSet.add(index)
+        }
+      })
+    }
+
+    const visibleIndexes: number[] = []
+    if (term) {
+      const shown = new Set<number>()
+      for (const index of matchSet) {
+        const from = Math.max(0, index - filterContextLines)
+        const to = Math.min(allLines.length - 1, index + filterContextLines)
+        for (let i = from; i <= to; i++) {
+          if (!shown.has(i)) {
+            shown.add(i)
+            visibleIndexes.push(i)
+          }
+        }
+      }
+      visibleIndexes.sort((a, b) => a - b)
+    } else {
+      for (let i = 0; i < allLines.length; i++) {
+        visibleIndexes.push(i)
+      }
+    }
+
+    const renderedLines = visibleIndexes.map((index) => allLines[index])
+    const decorations: editor.IModelDeltaDecoration[] = []
+    renderedLines.forEach((line, renderIndex) => {
+      const lineNumber = renderIndex + 1
+      let column = 1
+      for (const segment of line.segments) {
+        if (segment.text.length === 0) {
+          continue
+        }
+        const className = getAnsiClassNames(segment.styles)
+        if (className) {
+          decorations.push({
+            range: {
+              startLineNumber: lineNumber,
+              startColumn: column,
+              endLineNumber: lineNumber,
+              endColumn: column + segment.text.length,
+            },
+            options: {
+              inlineClassName: className,
+              stickiness: NEVER_GROWS_WHEN_TYPING_AT_EDGES,
+            },
+          })
+        }
+        column += segment.text.length
+      }
+      if (matchSet.has(visibleIndexes[renderIndex])) {
+        decorations.push({
+          range: {
+            startLineNumber: lineNumber,
+            startColumn: 1,
+            endLineNumber: lineNumber,
+            endColumn: 1,
+          },
+          options: {
+            className: 'log-filter-match-line',
+            stickiness: NEVER_GROWS_WHEN_TYPING_AT_EDGES,
+          },
+        })
+      }
+    })
+
+    model.setValue(renderedLines.map((line) => line.text).join('\n'))
+    decorationIdsRef.current = model.deltaDecorations(
+      decorationIdsRef.current,
+      decorations
+    )
+    // setValue 会丢弃全部装饰，装饰 id 跟踪随之作废；关键字高亮在重建后统一补齐。
+    highlightIdsRef.current = []
+    applyHighlightDecorations()
+
+    // 过滤视图显示命中行数；还原全量时恢复流式累计的条数。
+    setLogCount(term ? matchSet.size : streamLogCountRef.current)
+  }, [applyHighlightDecorations, filterContextLines])
+
+  // 同一批到达的多条日志只触发一次重建。
+  const scheduleFilterRender = useCallback(() => {
+    if (filterRenderTimerRef.current !== null) {
+      return
+    }
+    filterRenderTimerRef.current = window.setTimeout(() => {
+      filterRenderTimerRef.current = null
+      renderLogView()
+    }, FILTER_RENDER_DELAY_MS)
+  }, [renderLogView])
+  scheduleFilterRenderRef.current = scheduleFilterRender
   const sortedPods = useMemo(() => {
     if (!pods) {
       return undefined
@@ -155,8 +384,25 @@ export function LogViewer({
   )
 
   useEffect(() => {
-    normalizedFilterTermRef.current = filterTerm.toLocaleLowerCase()
-  }, [filterTerm])
+    normalizedFilterTermRef.current = normalizeSearchTerm(
+      filterTerm
+    ).toLocaleLowerCase()
+    if (normalizedFilterTermRef.current) {
+      isFilterViewRef.current = true
+      scheduleFilterRenderRef.current()
+    } else if (isFilterViewRef.current) {
+      // 清空过滤词：还原全量视图
+      isFilterViewRef.current = false
+      renderLogView()
+    }
+  }, [filterTerm, renderLogView])
+
+  useEffect(() => {
+    normalizedHighlightTermRef.current = normalizeSearchTerm(
+      highlightTerm
+    ).toLocaleLowerCase()
+    applyHighlightDecorations()
+  }, [highlightTerm, applyHighlightDecorations])
 
   useEffect(() => {
     if (podName) {
@@ -211,12 +457,24 @@ export function LogViewer({
     localStorage.setItem('log-viewer-font-size', size.toString())
   }, [])
 
+  // 处理高亮颜色变更并持久化到 localStorage
+  const handleHighlightColorChange = useCallback((color: string) => {
+    setHighlightColor(color)
+    localStorage.setItem('log-viewer-highlight-color', color)
+  }, [])
+
   // 处理 tail 行数变更并持久化到 localStorage
   const handleTailLinesChange = useCallback((lines: number) => {
     setTailLines(lines)
     if (lines !== -1) {
       localStorage.setItem('log-viewer-tail-lines', lines.toString())
     }
+  }, [])
+
+  // 处理过滤上下文行数变更并持久化到 localStorage
+  const handleFilterContextLinesChange = useCallback((lines: number) => {
+    setFilterContextLines(lines)
+    localStorage.setItem('log-viewer-filter-context-lines', lines.toString())
   }, [])
 
   // 快速循环切换主题的函数
@@ -241,15 +499,25 @@ export function LogViewer({
     const { segments, finalState } = parseAnsi(log, ansiStateRef.current)
     ansiStateRef.current = finalState
 
-    const plainText = segments.map((s) => s.text).join('')
+    // 所有行都先进缓冲（含被过滤掉的），过滤视图以它为数据源整体重建。
+    const lines = splitSegmentsIntoLines(segments)
+    logLinesRef.current.push(...lines)
 
-    if (normalizedFilterTermRef.current) {
+    const term = normalizedFilterTermRef.current
+    if (term) {
+      // 过滤开启时不逐条写入编辑器：命中行触发一次合并重建，由重建逻辑
+      // 统一补齐前后上下文。
       if (
-        !plainText.toLocaleLowerCase().includes(normalizedFilterTermRef.current)
+        lines.some((line) =>
+          normalizeLineTextForSearch(line.text).includes(term)
+        )
       ) {
-        return
+        scheduleFilterRenderRef.current()
       }
+      return
     }
+
+    const plainText = segments.map((s) => s.text).join('')
 
     const lineCount = model.getLineCount()
     const lineMaxColumn = model.getLineMaxColumn(lineCount)
@@ -313,6 +581,36 @@ export function LogViewer({
       decorationIdsRef.current.push(...newIds)
     }
 
+    // 关键字高亮：流式路径只扫描本次插入的行，避免每条日志都全量重扫。
+    // 插入文本与 lines 一一对应：prefix 换行后内容从 lineCount+1 行起，
+    // 模型为空（prefix 为空串）时从第 1 行起。
+    const highlightTermLower = normalizedHighlightTermRef.current
+    if (highlightTermLower) {
+      const firstLineNumber = prefix === '\n' ? lineCount + 1 : lineCount
+      const highlightDecorations: editor.IModelDeltaDecoration[] = []
+      lines.forEach((line, index) => {
+        for (const range of findTermRanges(line.text, highlightTermLower)) {
+          highlightDecorations.push({
+            range: {
+              startLineNumber: firstLineNumber + index,
+              startColumn: range.start + 1,
+              endLineNumber: firstLineNumber + index,
+              endColumn: range.end + 1,
+            },
+            options: {
+              inlineClassName: 'log-highlight-term',
+              stickiness: NEVER_GROWS_WHEN_TYPING_AT_EDGES,
+            },
+          })
+        }
+      })
+      if (highlightDecorations.length > 0) {
+        highlightIdsRef.current.push(
+          ...model.deltaDecorations([], highlightDecorations)
+        )
+      }
+    }
+
     const visibleRange = editorRef.current.getVisibleRanges()[0]
     if (visibleRange?.endLineNumber + 2 >= lineCount) {
       editorRef.current.revealLine(model.getLineCount())
@@ -321,7 +619,8 @@ export function LogViewer({
       setShowScrollToBottom(true)
     }
 
-    setLogCount((count) => count + 1)
+    streamLogCountRef.current += 1
+    setLogCount(streamLogCountRef.current)
   }, [])
 
   // 处理编辑器挂载
@@ -337,6 +636,11 @@ export function LogViewer({
           seedSearchStringFromSelection: 'never',
         },
       })
+
+      suppressFindWidgetHoversRef.current?.()
+      suppressFindWidgetHoversRef.current = suppressMonacoFindWidgetHovers(
+        editor.getContainerDomNode()
+      )
 
       const pendingLogs = pendingLogsRef.current
       pendingLogsRef.current = []
@@ -354,9 +658,15 @@ export function LogViewer({
 
   const cleanLog = useCallback(() => {
     setLogCount(0)
+    streamLogCountRef.current = 0
     ansiStateRef.current = {}
     decorationIdsRef.current = []
     pendingLogsRef.current = []
+    logLinesRef.current = []
+    if (filterRenderTimerRef.current !== null) {
+      clearTimeout(filterRenderTimerRef.current)
+      filterRenderTimerRef.current = null
+    }
     if (editorRef.current) {
       const model = editorRef.current.getModel()
       if (model) {
@@ -408,6 +718,10 @@ export function LogViewer({
       if (stopStreamingRef.current) {
         stopStreamingRef.current()
       }
+      if (filterRenderTimerRef.current !== null) {
+        clearTimeout(filterRenderTimerRef.current)
+      }
+      suppressFindWidgetHoversRef.current?.()
     }
   }, [])
 
@@ -523,7 +837,7 @@ export function LogViewer({
     <Card
       className={`h-full min-h-0 flex flex-col py-4 gap-0 ${isFullscreen ? 'fixed inset-0 z-50 m-0 rounded-none' : ''} ${wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'} `}
     >
-      <style>{ANSI_CSS}</style>
+      <style>{ANSI_CSS + buildHighlightCss(highlightColor)}</style>
       <CardHeader>
         <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
@@ -555,9 +869,18 @@ export function LogViewer({
             <div className="relative min-w-0 flex-1 basis-40 md:w-48 md:flex-none md:basis-auto">
               <IconSearch className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={'Filter logs...'}
+                placeholder={t('logViewer.filterPlaceholder')}
                 value={filterTerm}
                 onChange={(e) => setFilterTerm(e.target.value)}
+                className="pl-8 w-full pr-8"
+              />
+            </div>
+            <div className="relative min-w-0 flex-1 basis-40 md:w-48 md:flex-none md:basis-auto">
+              <IconHighlight className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={t('logViewer.highlightPlaceholder')}
+                value={highlightTerm}
+                onChange={(e) => setHighlightTerm(e.target.value)}
                 className="pl-8 w-full pr-8"
               />
             </div>
@@ -701,6 +1024,62 @@ export function LogViewer({
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  {/* Highlight Color Picker */}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="highlight-color">
+                      {t('logViewer.highlightColor')}
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="highlight-color"
+                        type="color"
+                        value={highlightColor}
+                        onChange={(e) =>
+                          handleHighlightColorChange(e.target.value)
+                        }
+                        className="h-8 w-12 cursor-pointer rounded-md border border-input bg-transparent p-0.5"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          handleHighlightColorChange(DEFAULT_HIGHLIGHT_COLOR)
+                        }
+                      >
+                        {t('logViewer.resetHighlightColor')}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Filter Context Lines Selector */}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="filter-context-lines">
+                      {t('logViewer.filterContextLines')}
+                    </Label>
+                    <Select
+                      value={filterContextLines.toString()}
+                      onValueChange={(value) =>
+                        handleFilterContextLinesChange(Number(value))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">
+                          {t('logViewer.filterContextMatchesOnly')}
+                        </SelectItem>
+                        {FILTER_CONTEXT_OPTIONS.filter((n) => n > 0).map(
+                          (n) => (
+                            <SelectItem key={n} value={n.toString()}>
+                              {t('logViewer.filterContextNLines', { n })}
+                            </SelectItem>
+                          )
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Font Size Selector */}

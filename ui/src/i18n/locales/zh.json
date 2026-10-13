@@ -1107,6 +1107,8 @@
       "drainNodesDescription": "所选节点将逐个停止调度并执行驱逐。Pod 驱逐可能影响业务，且无法自动回滚。",
       "restartResourcesTitle": "重启已选择的 {{count}} 个 {{resource}}？",
       "restartResourcesDescription": "此操作会更新每个 {{resource}} 的 Pod 模板并触发滚动更新。Paused 或 OnDelete 策略可能不会立即重启，且不会等待滚动更新健康完成。",
+      "scaleResourcesTitle": "将已选择的 {{count}} 个 {{resource}} 扩缩容到 {{replicas}} 个副本？",
+      "scaleResourcesDescription": "此操作会把每个选中的 {{resource}} 的副本数统一设置为 {{replicas}}，并触发滚动更新。",
       "resourcesLabel": "将要操作的资源"
     },
     "watch": "监听",
@@ -1649,13 +1651,17 @@
       "admin": "系统管理员",
       "auditor": "审计管理员",
       "security-admin": "安全管理员",
-      "viewer": "只读管理员"
+      "viewer": "只读管理员",
+      "cluster-admin": "集群管理员",
+      "cluster-viewer": "集群只读管理员"
     },
     "systemRoleDescriptions": {
       "admin": "系统管理员：控制台与集群的全部管理权限",
       "auditor": "审计管理员：只读查看审计日志，并可配置审计记录的存储策略",
       "security-admin": "安全管理员：身份、授权与安全策略",
-      "viewer": "只读管理员：只读查看全部 Kubernetes 资源（不含 secrets）、容器日志与控制台设置"
+      "viewer": "只读管理员：只读查看全部 Kubernetes 资源（不含 secrets）、容器日志与控制台设置",
+      "cluster-admin": "集群管理员：被授权的 K8s 集群内全部资源（含 secrets）的全权操作，不含控制台设置",
+      "cluster-viewer": "集群只读管理员：只读查看被授权的 K8s 集群内全部资源（不含 secrets）与容器日志，不含控制台设置"
     },
     "settingsResources": {
       "all": "全部设置章节"
@@ -3905,6 +3911,13 @@
     "title": "日志",
     "lineCount": "{{count}} 行",
     "filtered": "（已筛选）",
+    "filterPlaceholder": "过滤：只显示命中行",
+    "highlightPlaceholder": "搜索：高亮命中关键字",
+    "highlightColor": "高亮颜色",
+    "resetHighlightColor": "恢复默认",
+    "filterContextLines": "过滤上下文行数",
+    "filterContextMatchesOnly": "仅命中行",
+    "filterContextNLines": "前后各 {{n}} 行",
     "reconnecting": "重连中...",
     "tailLines": "末尾行数",
     "allLines": "全部",

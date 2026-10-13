@@ -349,8 +349,13 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // 该用例用多个子�
 
 	t.Run("reserved role names cannot be reused", func(t *testing.T) {
 		// 最高权限角色是系统管理员（受保护、不可删），已退休的 super-admin 也不得再用：
-		// 同名自定义角色会被误认为内置的最高权限入口。
-		for _, name := range []string{model.DefaultAdminRole.Name, model.SuperRoleName} {
+		// 同名自定义角色会被误认为内置的最高权限入口；其余受保护内置角色同样不得冒名。
+		for _, name := range []string{
+			model.DefaultAdminRole.Name,
+			model.SuperRoleName,
+			model.DefaultClusterAdminRole.Name,
+			model.DefaultClusterViewerRole.Name,
+		} {
 			body := `{"name":"` + name + `","clusters":["*"],"namespaces":["*"],"resources":["pods"],"verbs":["get"]}`
 			response := perform(http.MethodPost, "/roles", body)
 			if response.Code != http.StatusConflict {
@@ -388,6 +393,30 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // 该用例用多个子�
 		}
 		if stored.Description != model.DefaultViewerRole.Description {
 			t.Fatalf("viewer description changed: %q", stored.Description)
+		}
+	})
+
+	// 集群管理员 / 集群只读管理员：随 InitDefaultRole 播种，且同样受保护。
+	t.Run("cluster roles are seeded and protected", func(t *testing.T) {
+		if err := model.InitDefaultRole(); err != nil {
+			t.Fatalf("init default roles: %v", err)
+		}
+		for _, seeded := range []*model.Role{&model.DefaultClusterAdminRole, &model.DefaultClusterViewerRole} {
+			role, err := model.GetRoleByName(seeded.Name)
+			if err != nil {
+				t.Fatalf("load seeded role %s: %v", seeded.Name, err)
+			}
+			rolePath := "/roles/" + strconv.FormatUint(uint64(role.ID), 10)
+
+			response := perform(http.MethodPut, rolePath,
+				`{"name":"`+seeded.Name+`","description":"weakened","resources":["pods"],"verbs":["get"]}`)
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("update %s returned %d, want %d; body=%s", seeded.Name, response.Code, http.StatusForbidden, response.Body.String())
+			}
+			response = perform(http.MethodDelete, rolePath, "")
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("delete %s returned %d, want %d; body=%s", seeded.Name, response.Code, http.StatusForbidden, response.Body.String())
+			}
 		}
 	})
 }

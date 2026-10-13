@@ -191,6 +191,38 @@ var (
 		Resources:   append([]string{"*", common.SystemSettingsResource}, denyPatterns("secrets")...),
 		Verbs:       []string{string(common.VerbGet), string(common.VerbLog)},
 	}
+	// DefaultClusterAdminRole 集群管理员：被授权的 K8s 集群内全部资源（含 secrets）
+	// 的全权操作，不持有任何控制台设置章节。
+	//
+	// 角色只定义「资源 × 操作」；生效范围是权限绑定组把它授出的那个集群，不是
+	// 所有集群。与 admin 的差别是它没有 settings：集群管理员只管集群，管不了用户、
+	// RBAC 与安全策略（settings 族资源必须显式授权，通配 * 不覆盖它，
+	// 见 rbac.settingsRoleAllows），因此它进不了管理 API，也不参与三权分立。
+	DefaultClusterAdminRole = Role{
+		Name:        "cluster-admin",
+		Description: "Cluster administrator: full access to all resources within the granted cluster, no console settings",
+		IsSystem:    true,
+		Clusters:    []string{"*"},
+		Namespaces:  []string{"*"},
+		Resources:   []string{"*"},
+		Verbs:       []string{"*"},
+	}
+	// DefaultClusterViewerRole 集群只读管理员：被授权的 K8s 集群内全部资源（排除
+	// secrets）的只读查看与容器日志，不持有任何控制台设置章节。
+	//
+	// 生效范围同样是权限绑定组授出的那个集群。与 viewer 的差别是 settings：它只
+	// 观测集群，看不到控制台设置页面。secrets 的排除口径与 viewer 一致。
+	DefaultClusterViewerRole = Role{
+		Name:        "cluster-viewer",
+		Description: "Cluster read-only administrator: read access to all resources within the granted cluster plus pod logs, no console settings",
+		IsSystem:    true,
+		Clusters:    []string{"*"},
+		Namespaces:  []string{"*"},
+		// 注意必须带裸 "*"：match() 的否定项（"!secrets"）只在命中时拒绝，
+		// 列表里没有肯定项时永远匹配失败——只写 "!secrets" 的角色什么也放不了。
+		Resources: append([]string{"*"}, denyPatterns("secrets")...),
+		Verbs:     []string{string(common.VerbGet), string(common.VerbLog)},
+	}
 )
 
 // denyPatterns 把资源名转成 match() 的否定模式（"!" 前缀）。
@@ -210,17 +242,20 @@ func denyPatterns(resources ...string) []string {
 const SuperRoleName = "super-admin"
 
 // ProtectedRoleNames 是所有受保护的内置角色：系统管理员、安全管理员（授权）、
-// 审计管理员（审计）和只读管理员。
+// 审计管理员（审计）、只读管理员、集群管理员与集群只读管理员。
 //
 // 前三个角色的权限集就是三权分立的支点（尤其 security-admin / auditor 把「安全授权」
-// 与「审计」单独委派出去）；只读管理员虽然不参与职责分离，但其规则由代码维护、
-// 不应被误删或误改。因此控制台只允许查看它们，不提供修改或删除入口；要修回正确
-// 定义只能靠 MigrateSystemRoleRules 或 RestoreSystemRoleDefaults。
+// 与「审计」单独委派出去）；只读管理员、集群管理员与集群只读管理员虽不参与职责分离
+// （后两者进不了任何设置章节），但其规则由代码维护、不应被误删或误改。因此控制台
+// 只允许查看它们，不提供修改或删除入口；要修回正确定义只能靠 MigrateSystemRoleRules
+// 或 RestoreSystemRoleDefaults。
 var ProtectedRoleNames = []string{
 	DefaultAdminRole.Name,
 	DefaultSecurityAdminRole.Name,
 	DefaultAuditorRole.Name,
 	DefaultViewerRole.Name,
+	DefaultClusterAdminRole.Name,
+	DefaultClusterViewerRole.Name,
 }
 
 // IsProtectedRoleName 判断是否为受保护的内置角色（三员与只读管理员）。
@@ -267,10 +302,16 @@ var MutuallyExclusiveRoleGroups = [][]string{
 // 它不属于三员，职责分离不受影响。
 // 代次 5：只读管理员获得 `log`（查看容器日志）——日志是只读观测数据，只读账号本该能看；
 // 此前只给 get，导致只读账号打开日志页签必然 403。
-const CurrentRoleRulesVersion = 5
+// 代次 6：新增内置「集群管理员」（cluster-admin）与「集群只读管理员」（cluster-viewer）：
+// 前者是所授权集群内全部资源（含 secrets）的全权操作，后者是所授权集群内全部资源
+// （排除 secrets）的只读查看 + 容器日志；两者都不持有控制台设置章节，不参与职责分离。
+// 代次 7：修正集群角色的描述与 cluster-viewer 的资源列表——生效范围是「被授权的那个
+// 集群」（由权限绑定组决定），不是所有 K8s 集群；cluster-viewer 的资源列表必须带裸
+// "*"（match() 只认肯定项），排除 secrets 用否定项收窄。
+const CurrentRoleRulesVersion = 7
 
 // SystemRoles 返回内置系统角色，顺序即界面展示顺序：
-// 系统管理员 → 审计管理员 → 安全管理员 → 只读管理员。
+// 系统管理员 → 审计管理员 → 安全管理员 → 只读管理员 → 集群管理员 → 集群只读管理员。
 // 系统角色的名称是权限判定的依据（例如 admin 用于放行管理接口），因此名称固定；
 // 但角色内的规则（集群/命名空间/资源/动作）与描述允许在控制台调整。
 func SystemRoles() []Role {
@@ -279,6 +320,8 @@ func SystemRoles() []Role {
 		DefaultAuditorRole,
 		DefaultSecurityAdminRole,
 		DefaultViewerRole,
+		DefaultClusterAdminRole,
+		DefaultClusterViewerRole,
 	}
 }
 

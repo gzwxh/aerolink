@@ -112,11 +112,14 @@ func grantVerbUnion(grants model.ResourceGrants) []string {
 }
 
 // roleNameReserved 报告该名称是否被内置角色占用——这些角色必须保持唯一且不会混淆：
-// 最高权限角色（admin）以及已退役的 super 角色名
+// 最高权限角色（admin）、已退役的 super 角色名
 // （一个叫这个名字的自定义角色会被误认为是旧的应急入口，
-// 见 RetireSuperRole）。
+// 见 RetireSuperRole）以及其余受保护的内置角色。
 func roleNameReserved(name string) bool {
-	return name == model.DefaultAdminRole.Name || name == model.SuperRoleName
+	if name == model.DefaultAdminRole.Name || name == model.SuperRoleName {
+		return true
+	}
+	return model.IsProtectedRoleName(name)
 }
 
 // protectedRoleError 说明受保护角色为什么不能改 / 不能删。
@@ -124,8 +127,8 @@ func roleNameReserved(name string) bool {
 // 三种受保护原因不同，必须分开说：
 //   - admin 是最高权限角色（代次 3 起不受限），它的定义就是“最高权限”本身；
 //   - security-admin / auditor 是职责分离的支点，能改就能把它们改回去；
-//   - viewer 不参与职责分离，但它的规则由代码维护，改乱或删掉就不再是
-//     「全部资源的只读入口」。
+//   - viewer / cluster-admin / cluster-viewer 不参与职责分离，但它们的规则由代码维护，
+//     改乱或删掉就不再是「全部资源的只读入口 / 集群的全权与只读入口」。
 func protectedRoleError(roleName, action string) string {
 	if roleName == model.DefaultAdminRole.Name {
 		if action == "deleted" {
@@ -133,7 +136,9 @@ func protectedRoleError(roleName, action string) string {
 		}
 		return fmt.Sprintf("the highest-privilege role %s is protected: its permissions cannot be modified", roleName)
 	}
-	if roleName == model.DefaultViewerRole.Name {
+	if roleName == model.DefaultViewerRole.Name ||
+		roleName == model.DefaultClusterAdminRole.Name ||
+		roleName == model.DefaultClusterViewerRole.Name {
 		return fmt.Sprintf("the built-in %s role is maintained in code and cannot be %s", roleName, action)
 	}
 	return fmt.Sprintf("the built-in %s role is required by the three-way separation of duties and cannot be %s", roleName, action)

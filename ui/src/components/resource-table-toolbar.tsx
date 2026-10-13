@@ -1,7 +1,6 @@
 import React from 'react'
 import { ColumnDef, Table } from '@tanstack/react-table'
 import {
-  ChevronDown,
   Plus,
   RefreshCw,
   Search,
@@ -13,14 +12,6 @@ import { useTranslation } from 'react-i18next'
 import { ResourceType } from '@/types/api'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -110,12 +101,9 @@ export function ResourceTableToolbar<T>({
   const getSelectedRows = () =>
     table.getSelectedRowModel().rows.map((row) => row.original)
   // 调用方显式隐藏的操作（例如调用方没有权限）
-  // 不得在溢出菜单里重新出现。
+  // 不得在批量按钮里重新出现。
   const visibleBatchActions = batchActions.filter((action) => !action.hidden)
   const hasBatchActions = visibleBatchActions.length > 0 || showBatchDelete
-  const showBatchActionsInline =
-    alwaysShowBatchActions ||
-    visibleBatchActions.length + (showBatchDelete ? 1 : 0) <= 2
 
   return (
     <div className="flex flex-col gap-3">
@@ -253,23 +241,21 @@ export function ResourceTableToolbar<T>({
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {(selectedRowCount > 0 || alwaysShowBatchActions) &&
-              showBatchActionsInline && (
+              hasBatchActions && (
                 <>
-                  {batchActions
-                    .filter((action) => !action.hidden)
-                    .map((action) => (
-                      <Button
-                        key={action.id}
-                        variant="outline"
-                        disabled={selectedRowCount === 0 || action.disabled}
-                        onClick={() => action.onSelect(getSelectedRows())}
-                        className="gap-2 tabular-nums"
-                      >
-                        {action.icon}
-                        {action.label}
-                        {!alwaysShowBatchActions && ` (${selectedRowCount})`}
-                      </Button>
-                    ))}
+                  {visibleBatchActions.map((action) => (
+                    <Button
+                      key={action.id}
+                      variant="outline"
+                      disabled={selectedRowCount === 0 || action.disabled}
+                      onClick={() => action.onSelect(getSelectedRows())}
+                      className="gap-2 tabular-nums"
+                    >
+                      {action.icon}
+                      {action.label}
+                      {!alwaysShowBatchActions && ` (${selectedRowCount})`}
+                    </Button>
+                  ))}
                   {showBatchDelete && (
                     <Button
                       variant="destructive"
@@ -293,48 +279,6 @@ export function ResourceTableToolbar<T>({
                     </span>
                   )}
                 </>
-              )}
-            {selectedRowCount > 0 &&
-              !showBatchActionsInline &&
-              !alwaysShowBatchActions &&
-              hasBatchActions && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-2">
-                      {t('resourceTable.bulkActions')}
-                      <ChevronDown className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>
-                      {t('resourceTable.selectedCount', {
-                        count: selectedRowCount,
-                      })}
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {visibleBatchActions.map((action) => (
-                      <DropdownMenuItem
-                        key={action.id}
-                        onSelect={() => action.onSelect(getSelectedRows())}
-                      >
-                        {action.icon}
-                        {action.label}
-                      </DropdownMenuItem>
-                    ))}
-                    {visibleBatchActions.length > 0 && showBatchDelete && (
-                      <DropdownMenuSeparator />
-                    )}
-                    {showBatchDelete && (
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={onOpenDeleteDialog}
-                      >
-                        <Trash2 className="size-4" />
-                        {t('common.actions.delete')}
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
               )}
             {showCreateButton && onCreateClick && (
               <Button onClick={onCreateClick} className="gap-1">

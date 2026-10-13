@@ -11,16 +11,19 @@ interface SystemRoleLike {
 
 /**
  * 受保护的内置角色（与后端 model.ProtectedRoleNames 一致）：系统管理员、安全
- * 管理员（授权）、审计管理员（审计）与只读管理员。
+ * 管理员（授权）、审计管理员（审计）、只读管理员、集群管理员与集群只读管理员。
  *
- * 三员角色的定义就是“分立”本身；只读管理员虽不参与职责分离，但其规则由代码
- * 维护、不应被误改误删。因此界面上只提供查看，不提供编辑与删除。
+ * 三员角色的定义就是“分立”本身；只读管理员与两个集群角色虽不参与职责分离（集群
+ * 角色进不了任何设置章节），但其规则由代码维护、不应被误改误删。因此界面上只提供
+ * 查看，不提供编辑与删除。
  */
 export const PROTECTED_ROLE_NAMES = [
   'admin',
   'security-admin',
   'auditor',
   'viewer',
+  'cluster-admin',
+  'cluster-viewer',
 ] as const
 
 /** 是否为受保护的内置角色（不可修改、不可删除）。 */
@@ -41,6 +44,14 @@ export function protectedRoleRank(role: SystemRoleLike): number {
 /** 是否为只读管理员：不参与职责分离，但同样受保护。 */
 export function isViewerRole(role: SystemRoleLike): boolean {
   return role.name === 'viewer'
+}
+
+/**
+ * 是否为集群角色（集群管理员 / 集群只读管理员）：同样受保护，但它们的成员维护
+ * 只发生在「权限绑定组」里（按集群授出），不进入全局的直接分配与控制台角色页签。
+ */
+export function isClusterRole(role: SystemRoleLike): boolean {
+  return role.name === 'cluster-admin' || role.name === 'cluster-viewer'
 }
 
 /**

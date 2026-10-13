@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ColumnFiltersState,
+  ColumnSizingState,
   PaginationState,
   RowSelectionState,
   SortingState,
@@ -88,6 +89,21 @@ export function useResourceTableState({
       pageSize: savedPageSize ? Number(savedPageSize) : 20,
     }
   })
+  // 列宽偏好：只存用户手动调整过的列（columnId -> 像素宽），
+  // 未调整的列走列定义里的 size。读入时过滤掉非法值。
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
+    const saved = readStoredJSON<Record<string, unknown> | null>(
+      localStorage,
+      getClusterScopedStorageKey(`-${resourceName}-columnSizing`),
+      null
+    )
+    if (!saved) {
+      return {}
+    }
+    return Object.fromEntries(
+      Object.entries(saved).filter(([, size]) => Number.isFinite(size))
+    ) as ColumnSizingState
+  })
   const [refreshInterval, setRefreshInterval] = useState(5000)
   const [selectedNamespace, setSelectedNamespace] = useState<
     string | undefined
@@ -167,6 +183,13 @@ export function useResourceTableState({
   }, [pagination.pageSize, resourceName])
 
   useEffect(() => {
+    localStorage.setItem(
+      getClusterScopedStorageKey(`-${resourceName}-columnSizing`),
+      JSON.stringify(columnSizing)
+    )
+  }, [columnSizing, resourceName])
+
+  useEffect(() => {
     const storageKey = getClusterScopedStorageKey(
       `-${resourceName}-columnFilters`
     )
@@ -229,6 +252,8 @@ export function useResourceTableState({
     debouncedSearchQuery,
     columnVisibility,
     setColumnVisibility,
+    columnSizing,
+    setColumnSizing,
     pagination,
     setPagination,
     refreshInterval,

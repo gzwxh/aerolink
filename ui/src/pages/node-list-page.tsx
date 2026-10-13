@@ -388,11 +388,11 @@ export function NodeListPage() {
         size: 120,
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            {/* 主机名经常比列宽长（k8s-prod-middleware-progress-1 这种）：
-                截断显示，悬浮看全名，否则会压到右侧的状态列上。 */}
+            {/* 主机名完整显示：超长时在列内换行（break-all），不截断；
+                想要单行展示可以用列头右侧的拖拽手柄把这一列拉宽。 */}
             <Link
               to={`/nodes/${row.original.metadata!.name}`}
-              className="block truncate"
+              className="block whitespace-normal break-all"
               title={row.original.metadata!.name}
             >
               {row.original.metadata!.name}

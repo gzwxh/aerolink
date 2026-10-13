@@ -112,6 +112,8 @@ function ResourceTableContent<T>({
     debouncedSearchQuery,
     columnVisibility,
     setColumnVisibility,
+    columnSizing,
+    setColumnSizing,
     pagination,
     setPagination,
     refreshInterval,
@@ -228,6 +230,8 @@ function ResourceTableContent<T>({
       ),
       enableSorting: false,
       enableHiding: false,
+      // 勾选列只放复选框，不允许拖宽。
+      enableResizing: false,
       // 只有一个复选框，固定布局下不该占用默认列宽。
       size: 44,
     }
@@ -324,6 +328,11 @@ function ResourceTableContent<T>({
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
+    // 列宽拖拽：拖动表头右缘实时调宽，持久化见 use-resource-table-state。
+    // minSize/maxSize 来自 defaultColumn（80~600px），超出自动截停。
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
     getRowId: (row) => {
       const metadata = (
         row as {
@@ -347,6 +356,7 @@ function ResourceTableContent<T>({
       pagination,
       rowSelection,
       columnVisibility,
+      columnSizing,
     },
     onPaginationChange: setPagination,
     // 让 TanStack Table 依据过滤后的数据自动处理分页

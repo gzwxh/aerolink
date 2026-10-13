@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react'
-import { IconNotes, IconReload, IconTag } from '@tabler/icons-react'
+import { IconNotes, IconReload, IconScale, IconTag } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Deployment } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { restartWorkload, useResources } from '@/lib/api'
+import {
+  patchResource,
+  restartWorkload,
+  useResources,
+} from '@/lib/api'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { shortenImageName } from '@/lib/image-name'
 import {
@@ -14,10 +18,18 @@ import {
   getDeploymentStatus,
   resolveCreateNamespace,
 } from '@/lib/k8s'
-import { formatDate } from '@/lib/utils'
+import { formatDate, translateError } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import {
   Tooltip,
   TooltipContent,
@@ -60,6 +72,118 @@ function EmptyValue() {
   return <span className="text-muted-foreground text-sm">-</span>
 }
 
+// 数量列的行内扩缩容：把「就绪 / 期望」里的期望值变成可点击的步进器入口
+// （参考 TCE 控制台的健康列），确认后按 spec.replicas patch。
+function ReplicasCell({
+  deployment,
+  canUpdate,
+}: {
+  deployment: Deployment
+  canUpdate: boolean
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [replicas, setReplicas] = useState(deployment.spec?.replicas ?? 1)
+  const [isApplying, setIsApplying] = useState(false)
+
+  const ready = deployment.status?.readyReplicas || 0
+  const desired = deployment.spec?.replicas ?? 0
+
+  const handleApply = async () => {
+    setIsApplying(true)
+    try {
+      await patchResource(
+        'deployments',
+        deployment.metadata!.name!,
+        deployment.metadata!.namespace!,
+        { spec: { replicas } }
+      )
+      toast.success(
+        t('detail.status.scaledTo', { resource: 'Deployment', replicas })
+      )
+      setOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+    } catch (error) {
+      toast.error(translateError(error, t))
+    } finally {
+      setIsApplying(false)
+    }
+  }
+
+  if (!canUpdate) {
+    return (
+      <div>
+        {ready} / {desired}
+      </div>
+    )
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          // 每次打开都按当前值重置，避免上一行/上次留下的草稿。
+          setReplicas(deployment.spec?.replicas ?? 1)
+        }
+        setOpen(next)
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={t('detail.dialogs.scaleDeployment.description')}
+          className="underline-offset-2 hover:underline"
+        >
+          {ready} / {desired}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56" align="start">
+        <div className="space-y-3">
+          <Label htmlFor={`replicas-${deployment.metadata?.uid}`}>
+            {t('common.fields.replicas')}
+          </Label>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="size-9 p-0"
+              onClick={() => setReplicas(Math.max(0, replicas - 1))}
+              disabled={isApplying || replicas <= 0}
+            >
+              -
+            </Button>
+            <Input
+              id={`replicas-${deployment.metadata?.uid}`}
+              type="number"
+              min="0"
+              value={replicas}
+              onChange={(e) =>
+                setReplicas(Math.max(0, parseInt(e.target.value) || 0))
+              }
+              disabled={isApplying}
+              className="text-center"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="size-9 p-0"
+              onClick={() => setReplicas(replicas + 1)}
+              disabled={isApplying}
+            >
+              +
+            </Button>
+          </div>
+          <Button onClick={handleApply} disabled={isApplying} className="w-full">
+            {t('common.actions.scale')}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // 标签、注解都用「图标 + 数量」，具体键值放在 tooltip 里，避免撑宽表格。
 function MetadataSummaryCell({
   entries,
@@ -100,7 +224,9 @@ export function DeploymentListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
+  const [isScaleDialogOpen, setIsScaleDialogOpen] = useState(false)
   const [batchDeployments, setBatchDeployments] = useState<Deployment[]>([])
+  const [batchReplicas, setBatchReplicas] = useState(1)
 
   // 重启会 patch pod 模板，因此需要 update 权限。
   const canUpdate = useCanAnyNamespace()('deployments', 'update')
@@ -114,6 +240,18 @@ export function DeploymentListPage() {
         onSelect: (deployments) => {
           setBatchDeployments(deployments)
           setIsRestartDialogOpen(true)
+        },
+      },
+      {
+        id: 'scale',
+        label: t('common.actions.scale'),
+        icon: <IconScale className="size-4" />,
+        hidden: !canUpdate,
+        onSelect: (deployments) => {
+          setBatchDeployments(deployments)
+          // 用第一个选中项的当前副本数作为初值，比固定 1 更贴近意图。
+          setBatchReplicas(deployments[0]?.spec?.replicas ?? 1)
+          setIsScaleDialogOpen(true)
         },
       },
     ],
@@ -140,16 +278,9 @@ export function DeploymentListPage() {
       columnHelper.accessor((row) => row.status?.readyReplicas ?? 0, {
         id: 'ready',
         header: t('common.fields.ready'),
-        cell: ({ row }) => {
-          const status = row.original.status
-          const ready = status?.readyReplicas || 0
-          const desired = status?.replicas || 0
-          return (
-            <div>
-              {ready} / {desired}
-            </div>
-          )
-        },
+        cell: ({ row }) => (
+          <ReplicasCell deployment={row.original} canUpdate={canUpdate} />
+        ),
       }),
       columnHelper.accessor((row) => getDeploymentStatus(row), {
         id: 'status_conditions',
@@ -303,7 +434,7 @@ export function DeploymentListPage() {
         ),
       }),
     ],
-    [t]
+    [t, canUpdate]
   )
 
   // URL 的命名空间段只能表达一个命名空间。多选时表格自己把选择存在
@@ -432,6 +563,73 @@ export function DeploymentListPage() {
           queryClient.invalidateQueries({ queryKey: ['deployments'] })
         }
         destructive={true}
+      />
+
+      <ResourceBatchActionDialog
+        open={isScaleDialogOpen}
+        onOpenChange={setIsScaleDialogOpen}
+        resources={batchDeployments}
+        title={t('resourceTable.batchActions.scaleResourcesTitle', {
+          count: batchDeployments.length,
+          resource: t('nav.deployments'),
+          replicas: batchReplicas,
+        })}
+        description={t('resourceTable.batchActions.scaleResourcesDescription', {
+          resource: t('nav.deployments'),
+          replicas: batchReplicas,
+        })}
+        actionLabel={t('common.actions.scale')}
+        options={(isRunning) => (
+          <div className="space-y-2">
+            <Label htmlFor="batch-replicas">
+              {t('common.fields.replicas')}
+            </Label>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="size-9 p-0"
+                onClick={() =>
+                  setBatchReplicas(Math.max(0, batchReplicas - 1))
+                }
+                disabled={isRunning || batchReplicas <= 0}
+              >
+                -
+              </Button>
+              <Input
+                id="batch-replicas"
+                type="number"
+                min="0"
+                value={batchReplicas}
+                onChange={(e) =>
+                  setBatchReplicas(Math.max(0, parseInt(e.target.value) || 0))
+                }
+                disabled={isRunning}
+                className="text-center"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="size-9 p-0"
+                onClick={() => setBatchReplicas(batchReplicas + 1)}
+                disabled={isRunning}
+              >
+                +
+              </Button>
+            </div>
+          </div>
+        )}
+        onExecute={(deployment) =>
+          patchResource(
+            'deployments',
+            deployment.metadata!.name!,
+            deployment.metadata!.namespace!,
+            { spec: { replicas: batchReplicas } }
+          )
+        }
+        onComplete={() =>
+          queryClient.invalidateQueries({ queryKey: ['deployments'] })
+        }
       />
     </>
   )

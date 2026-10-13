@@ -223,7 +223,10 @@ export function ResourceTableView<T>({
                       {headerGroup.headers.map((header, index) => (
                         <TableHead
                           key={header.id}
-                          className={index <= 1 ? 'text-left' : 'text-center'}
+                          className={cn(
+                            'relative',
+                            index <= 1 ? 'text-left' : 'text-center'
+                          )}
                           style={
                             columnSizing
                               ? // 按 size 的**比例**分配，而不是写死像素：写死会让总宽超过
@@ -261,6 +264,23 @@ export function ResourceTableView<T>({
                               header.column.columnDef.header,
                               header.getContext()
                             )
+                          )}
+                          {/* 列宽拖拽手柄：贴右缘的窄条，hover 显形，拖动中常亮。
+                              双击恢复该列的默认宽度。 */}
+                          {columnSizing && header.column.getCanResize() && (
+                            <span
+                              role="separator"
+                              aria-orientation="vertical"
+                              onMouseDown={header.getResizeHandler()}
+                              onTouchStart={header.getResizeHandler()}
+                              onDoubleClick={() => header.column.resetSize()}
+                              className={cn(
+                                'absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize touch-none select-none',
+                                header.column.getIsResizing()
+                                  ? 'bg-primary'
+                                  : 'bg-transparent hover:bg-primary/40'
+                              )}
+                            />
                           )}
                         </TableHead>
                       ))}

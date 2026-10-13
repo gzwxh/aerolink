@@ -43,7 +43,11 @@ import {
   type BindingGroup,
 } from '@/lib/api'
 import { ApiError } from '@/lib/api-client'
-import { isProtectedRole, systemRoleDescription } from '@/lib/system-roles'
+import {
+  isClusterRole,
+  isProtectedRole,
+  systemRoleDescription,
+} from '@/lib/system-roles'
 import { translateError } from '@/lib/utils'
 import { useCluster } from '@/hooks/use-cluster'
 import {
@@ -1434,8 +1438,9 @@ export function BindingGroupFormPage({
   }, [knownSubjects, subjects, subjectKind, t])
 
   // 受保护的内置角色（系统管理员 / 只读管理员 / 审计管理员 / 安全管理员）改由
-  // 「系统管理员」等页签维护，不在这里分配；旧数据里已经绑定的仍然显示并保留，
-  // 避免一次无关的编辑把已有授权静默丢掉。
+  // 「系统管理员」等页签维护，不在这里分配；集群角色（集群管理员 / 集群只读管理员）
+  // 同样受保护，但它们的生效范围就是「单个集群全域」，成员只在这里按集群授出。
+  // 旧数据里已经绑定的条目仍然显示并保留，避免一次无关的编辑把已有授权静默丢掉。
   const roleTransfer = useMemo(() => {
     const selected = new Set(roleIds)
     const known = new Set<number>()
@@ -1452,7 +1457,7 @@ export function BindingGroupFormPage({
       }
       if (selected.has(role.id)) {
         included.push(item)
-      } else if (!isProtectedRole(role)) {
+      } else if (!isProtectedRole(role) || isClusterRole(role)) {
         available.push(item)
       }
     }

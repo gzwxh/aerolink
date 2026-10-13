@@ -1107,6 +1107,8 @@
       "drainNodesDescription": "Selected nodes will be cordoned and drained one at a time. Pod eviction can be disruptive and cannot be automatically rolled back.",
       "restartResourcesTitle": "Restart {{count}} selected {{resource}}?",
       "restartResourcesDescription": "This updates each {{resource}} Pod template and triggers a rollout. Paused or OnDelete strategies may not restart immediately, and rollout health is not monitored.",
+      "scaleResourcesTitle": "Scale {{count}} selected {{resource}} to {{replicas}} replicas?",
+      "scaleResourcesDescription": "This sets the replica count of every selected {{resource}} to {{replicas}} and triggers a rollout.",
       "resourcesLabel": "Resources to act on"
     },
     "watch": "Watch",
@@ -1649,13 +1651,17 @@
       "admin": "System Administrator",
       "auditor": "Audit Administrator",
       "security-admin": "Security Administrator",
-      "viewer": "Read-only Administrator"
+      "viewer": "Read-only Administrator",
+      "cluster-admin": "Cluster Administrator",
+      "cluster-viewer": "Cluster Read-only Administrator"
     },
     "systemRoleDescriptions": {
       "admin": "System administrator: unrestricted console and cluster administration",
       "auditor": "Audit administrator: read-only access to audit logs, plus the audit retention policy",
       "security-admin": "Security administrator: identity, authorization and security policy",
-      "viewer": "Read-only administrator: read access to Kubernetes resources, pod logs and console settings"
+      "viewer": "Read-only administrator: read access to Kubernetes resources, pod logs and console settings",
+      "cluster-admin": "Cluster administrator: full access to all resources within the granted cluster, no console settings",
+      "cluster-viewer": "Cluster read-only administrator: read access to all resources within the granted cluster plus pod logs, no console settings"
     },
     "settingsResources": {
       "all": "All settings sections"
@@ -3905,6 +3911,13 @@
     "title": "Logs",
     "lineCount": "{{count}} lines",
     "filtered": "(filtered)",
+    "filterPlaceholder": "Filter: show matching lines only",
+    "highlightPlaceholder": "Search: highlight matches",
+    "highlightColor": "Highlight Color",
+    "resetHighlightColor": "Reset",
+    "filterContextLines": "Filter Context Lines",
+    "filterContextMatchesOnly": "Matches only",
+    "filterContextNLines": "{{n}} lines around",
     "reconnecting": "Reconnecting...",
     "tailLines": "Tail Lines",
     "allLines": "All",
