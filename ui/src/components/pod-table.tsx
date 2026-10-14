@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { IconLoader } from '@tabler/icons-react'
 import { Pod } from 'kubernetes-types/core/v1'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { MetricsData, PodWithMetrics } from '@/types/api'
@@ -10,6 +11,7 @@ import { formatDate } from '@/lib/utils'
 import { MetricCell } from './metrics-cell'
 import { NodeLink } from './node-link'
 import { PodStatusIcon } from './pod-status-icon'
+import { ResourceRowActions } from './resource-row-actions'
 import { Column, SimpleTable } from './simple-table'
 import { Badge } from './ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -21,6 +23,7 @@ export function PodTable(props: {
   hiddenNode?: boolean
 }) {
   const { pods, isLoading } = props
+  const { t } = useTranslation()
 
   // Pod 表格列
   const podColumns = useMemo(
@@ -127,8 +130,21 @@ export function PodTable(props: {
           )
         },
       },
+      {
+        header: t('common.fields.actions'),
+        accessor: (pod: Pod) => pod,
+        cell: (value: unknown) => (
+          <div className="flex justify-end">
+            <ResourceRowActions
+              resourceType="pods"
+              resource={value as PodWithMetrics}
+            />
+          </div>
+        ),
+        align: 'right' as const,
+      },
     ],
-    [props.hiddenNode]
+    [props.hiddenNode, t]
   )
 
   if (isLoading) {
