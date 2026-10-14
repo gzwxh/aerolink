@@ -3,6 +3,8 @@ package resources
 import (
 	"fmt"
 
+	certmanageracmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
+	certmanagerapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/cluster"
 	"github.com/zxh326/kite/pkg/common"
@@ -181,6 +183,12 @@ func newResourceHandlers() map[string]resourceHandler {
 		string(common.NodeMetrics):                       NewGenericResourceHandler[*metricsv1.NodeMetrics, *metricsv1.NodeMetricsList](common.NodeMetrics),
 		string(common.Gateways):                          NewGenericResourceHandler[*gatewayapiv1.Gateway, *gatewayapiv1.GatewayList](common.Gateways),
 		string(common.HTTPRoutes):                        NewGenericResourceHandler[*gatewayapiv1.HTTPRoute, *gatewayapiv1.HTTPRouteList](common.HTTPRoutes),
+		string(common.Certificates):                      NewGenericResourceHandler[*certmanagerapiv1.Certificate, *certmanagerapiv1.CertificateList](common.Certificates),
+		string(common.CertificateRequests):               NewGenericResourceHandler[*certmanagerapiv1.CertificateRequest, *certmanagerapiv1.CertificateRequestList](common.CertificateRequests),
+		string(common.Issuers):                           NewGenericResourceHandler[*certmanagerapiv1.Issuer, *certmanagerapiv1.IssuerList](common.Issuers),
+		string(common.ClusterIssuers):                    NewGenericResourceHandler[*certmanagerapiv1.ClusterIssuer, *certmanagerapiv1.ClusterIssuerList](common.ClusterIssuers),
+		string(common.Orders):                            NewGenericResourceHandler[*certmanageracmev1.Order, *certmanageracmev1.OrderList](common.Orders),
+		string(common.Challenges):                        NewGenericResourceHandler[*certmanageracmev1.Challenge, *certmanageracmev1.ChallengeList](common.Challenges),
 		string(common.HorizontalPodAutoscalers): newVersionedResourceHandler(
 			newResourceVersionCandidate("autoscaling/v2", string(common.HorizontalPodAutoscalers), NewGenericResourceHandler[*autoscalingv2.HorizontalPodAutoscaler, *autoscalingv2.HorizontalPodAutoscalerList](common.HorizontalPodAutoscalers)),
 			newResourceVersionCandidate("autoscaling/v1", string(common.HorizontalPodAutoscalers), NewGenericResourceHandler[*autoscalingv1.HorizontalPodAutoscaler, *autoscalingv1.HorizontalPodAutoscalerList](common.HorizontalPodAutoscalers)),
@@ -253,6 +261,7 @@ func RegisterRoutes(group *gin.RouterGroup) {
 		otherGroup.GET("/:namespace/:name/history", crHandler.ListHistory)
 		otherGroup.GET("/:namespace/:name/describe", crHandler.Describe)
 		otherGroup.PUT("/:namespace/:name", crHandler.Update)
+		otherGroup.PATCH("/:namespace/:name", crHandler.Patch)
 		otherGroup.DELETE("/:namespace/:name", crHandler.Delete)
 	}
 }

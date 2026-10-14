@@ -10,12 +10,14 @@ import {
 } from 'kubernetes-types/core/v1'
 import { ObjectMeta } from 'kubernetes-types/meta/v1'
 
-import { CustomResource, ResourceType } from '@/types/api'
+import { CustomResource } from '@/types/api'
 import { DeploymentStatusType, PodStatus, SimpleContainer } from '@/types/k8s'
 
 import {
   getResourceDetailPath,
+  getResourceTypeFromKind,
   isClusterScopedResource,
+  pluralizeKind,
   resourceMetadataList,
 } from './resource-metadata'
 import { getAge } from './utils'
@@ -447,30 +449,35 @@ export function getOwnerInfo(metadata?: ObjectMeta) {
   }
 
   const ownerRef = ownerRefs[0]
+  const apiVersion = ownerRef.apiVersion || ''
+  const group = apiVersion.includes('/') ? apiVersion.split('/')[0] : ''
 
-  const resourcePath = ownerRef.kind.toLowerCase() + 's'
-  if (isStandardK8sResource(ownerRef.kind)) {
+  // 内置资源按目录反查路由名：Ingress→ingresses、NetworkPolicy→networkpolicies
+  // 这类不规则复数不能靠 kind + 's' 拼。
+  const resourceType = getResourceTypeFromKind(ownerRef.kind)
+  if (resourceType) {
     return {
       kind: ownerRef.kind,
       name: ownerRef.name,
       path: getResourceDetailPath(
-        resourcePath,
+        resourceType,
         ownerRef.name,
-        isClusterScopedResource(resourcePath as ResourceType)
-          ? undefined
-          : metadata.namespace
+        isClusterScopedResource(resourceType) ? undefined : metadata.namespace
       ),
       controller: ownerRef.controller || false,
     }
-  } else {
-    const apiVersion = ownerRef.apiVersion || ''
-    const group = apiVersion.includes('/') ? apiVersion.split('/')[0] : ''
-    return {
-      kind: ownerRef.kind,
-      name: ownerRef.name,
-      path: `/crds/${ownerRef.kind.toLowerCase()}s.${group}/${metadata.namespace}/${ownerRef.name}`,
-      controller: ownerRef.controller || false,
-    }
+  }
+
+  // 自定义资源按 CRD 名（复数.group）拼链接；集群级 CR 没有 namespace，
+  // 不能拼出空段。
+  const crdName = `${pluralizeKind(ownerRef.kind)}.${group}`
+  return {
+    kind: ownerRef.kind,
+    name: ownerRef.name,
+    path: metadata.namespace
+      ? `/crds/${crdName}/${metadata.namespace}/${ownerRef.name}`
+      : `/crds/${crdName}/${ownerRef.name}`,
+    controller: ownerRef.controller || false,
   }
 }
 

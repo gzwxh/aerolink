@@ -242,4 +242,35 @@ metadata:
 			t.Fatalf("node was not updated after apply: %#v", object.GetLabels())
 		}
 	})
+
+	t.Run("null and comment-only documents are skipped", func(t *testing.T) {
+		requestUser := user
+		requestUser.Roles = []common.Role{{
+			Name:       "ingress-creator",
+			Clusters:   []string{"prod"},
+			Namespaces: []string{"default"},
+			Resources:  []string{"ingresses"},
+			Verbs:      []string{string(common.VerbCreate)},
+		}}
+		response := perform(requestUser, `---
+# 只有一段注释的占位文档
+---
+null
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: null-doc-web
+  namespace: default
+spec: {}
+`)
+		if response.Code != http.StatusOK {
+			t.Fatalf("apply returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+		}
+		object := &unstructured.Unstructured{}
+		object.SetGroupVersionKind(ingressGVK)
+		if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "null-doc-web", Namespace: "default"}, object); err != nil {
+			t.Fatalf("get created ingress: %v", err)
+		}
+	})
 }

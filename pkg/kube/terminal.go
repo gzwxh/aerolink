@@ -72,7 +72,6 @@ func (session *TerminalSession) Start(ctx context.Context, subResource string) e
 			Container: session.container,
 			Stdin:     true,
 			Stdout:    true,
-			Stderr:    true,
 			TTY:       true,
 		}, scheme.ParameterCodec)
 	} else {
@@ -81,10 +80,11 @@ func (session *TerminalSession) Start(ctx context.Context, subResource string) e
 			Command:   []string{"sh", "-c", "bash || sh"},
 			Stdin:     true,
 			Stdout:    true,
-			Stderr:    true,
 			TTY:       true,
 		}, scheme.ParameterCodec)
 	}
+	// 注意：TTY 模式下不带 stderr=true —— stderr 由 stdout 流复用，
+	// 同时声明会被服务端以 "cannot exec with tty and stderr" 拒绝。
 
 	exec, err := newRemoteCommandExecutor(session.k8sClient.Configuration, req.URL())
 	if err != nil {

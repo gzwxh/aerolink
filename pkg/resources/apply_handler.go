@@ -65,6 +65,12 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 		if docYAML == "" {
 			continue
 		}
+		// null 文档（含只有注释的分隔段）没有可应用的内容：跳过而不是报错。
+		// 解析失败时忽略这里的错误，由后面的 decode 统一给出报错。
+		var docValue interface{}
+		if err := syaml.Unmarshal(rawDoc, &docValue); err == nil && docValue == nil {
+			continue
+		}
 
 		obj := &unstructured.Unstructured{}
 		_, _, err = decodeUniversal.Decode(rawDoc, nil, obj)

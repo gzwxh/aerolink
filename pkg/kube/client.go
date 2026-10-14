@@ -21,6 +21,8 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
+	certmanageracmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
+	certmanagerapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	metricsv1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,6 +82,8 @@ func init() {
 	_ = scheme.AddToScheme(runtimeScheme)
 	_ = apiextensionsv1.AddToScheme(runtimeScheme)
 	_ = gatewayapiv1.Install(runtimeScheme)
+	_ = certmanagerapiv1.AddToScheme(runtimeScheme)
+	_ = certmanageracmev1.AddToScheme(runtimeScheme)
 	_ = metricsv1.AddToScheme(runtimeScheme)
 }
 

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -882,6 +883,104 @@ func TestCRRBACAllNamespaces(t *testing.T) {
 	}
 }
 
+func TestCRPatch(t *testing.T) {
+	user := newWidgetUser(
+		[]string{"cluster-a"},
+		[]string{"default"},
+		[]string{string(common.VerbUpdate)},
+	)
+	// recordHistory 通过 OperatorID 外键关联操作者，测试库里的用户行自增 ID 是 1。
+	user.ID = 1
+
+	t.Run("merge patch updates fields without replacing the object", func(t *testing.T) {
+		var sentToClient *unstructured.Unstructured
+		fixture := newCRAPITestFixture(t, crAPITestConfig{
+			user:  user,
+			write: true,
+			clusterAObjects: []client.Object{
+				newWidgetCRD(apiextensionsv1.NamespaceScoped),
+				newWidget("target", "default", map[string]string{"team": "api"}),
+			},
+			clusterAInterceptors: interceptor.Funcs{
+				Patch: func(ctx context.Context, underlying client.WithWatch, object client.Object, patch client.Patch, options ...client.PatchOption) error {
+					if cr, ok := object.(*unstructured.Unstructured); ok {
+						sentToClient = cr.DeepCopy()
+					}
+					return underlying.Patch(ctx, object, patch, options...)
+				},
+			},
+		})
+		response := performCRAPIRequest(t, fixture, http.MethodPatch, "/api/v1/widgets.example.com/default/target", `{"spec":{"size":"large"}}`, nil)
+		if response.Code != http.StatusOK {
+			t.Fatalf("patch returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+		}
+		updated := decodeCRAPIResponse[unstructured.Unstructured](t, response)
+		if updated.GetLabels()["team"] != "api" {
+			t.Fatalf("merge patch replaced stored labels: %v", updated.GetLabels())
+		}
+		if size, _, err := unstructured.NestedString(updated.Object, "spec", "size"); err != nil || size != "large" {
+			t.Fatalf("patched spec.size = %q, err=%v; want large", size, err)
+		}
+		if sentToClient == nil || sentToClient.GroupVersionKind() != widgetGVK || sentToClient.GetName() != "target" {
+			t.Fatalf("client received %+v, want %s default/target", sentToClient, widgetGVK)
+		}
+
+		stored := &unstructured.Unstructured{}
+		stored.SetGroupVersionKind(widgetGVK)
+		if err := fixture.clients["cluster-a"].Get(context.Background(), types.NamespacedName{Namespace: "default", Name: "target"}, stored); err != nil {
+			t.Fatalf("get stored widget: %v", err)
+		}
+		if storedSize, _, err := unstructured.NestedString(stored.Object, "spec", "size"); err != nil || storedSize != "large" {
+			t.Fatalf("stored spec.size = %q, err=%v; want large", storedSize, err)
+		}
+	})
+
+	t.Run("json patch type is honored", func(t *testing.T) {
+		fixture := newCRAPITestFixture(t, crAPITestConfig{
+			user:  user,
+			write: true,
+			clusterAObjects: []client.Object{
+				newWidgetCRD(apiextensionsv1.NamespaceScoped),
+				newWidget("target", "default", nil),
+			},
+		})
+		response := performCRAPIRequest(t, fixture, http.MethodPatch, "/api/v1/widgets.example.com/default/target?patchType=json", `[{"op":"replace","path":"/spec/size","value":"huge"}]`, nil)
+		if response.Code != http.StatusOK {
+			t.Fatalf("patch returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+		}
+		updated := decodeCRAPIResponse[unstructured.Unstructured](t, response)
+		if size, _, err := unstructured.NestedString(updated.Object, "spec", "size"); err != nil || size != "huge" {
+			t.Fatalf("patched spec.size = %q, err=%v; want huge", size, err)
+		}
+	})
+
+	t.Run("records patch history", func(t *testing.T) {
+		fixture := newCRAPITestFixture(t, crAPITestConfig{
+			user:  user,
+			write: true,
+			clusterAObjects: []client.Object{
+				newWidgetCRD(apiextensionsv1.NamespaceScoped),
+				newWidget("target", "default", nil),
+			},
+		})
+		response := performCRAPIRequest(t, fixture, http.MethodPatch, "/api/v1/widgets.example.com/default/target", `{"spec":{"size":"large"}}`, nil)
+		if response.Code != http.StatusOK {
+			t.Fatalf("patch returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+		}
+
+		var history model.ResourceHistory
+		if err := model.DB.Where("operation_type = ? AND resource_name = ?", "patch", "target").First(&history).Error; err != nil {
+			t.Fatalf("load patch history: %v", err)
+		}
+		if !history.Success {
+			t.Fatalf("history marked as failed: %s", history.ErrorMessage)
+		}
+		if !strings.Contains(string(history.PreviousYAML), "size: small") || !strings.Contains(string(history.ResourceYAML), "size: large") {
+			t.Fatalf("history YAMLs = %q -> %q, want small -> large", history.PreviousYAML, history.ResourceYAML)
+		}
+	})
+}
+
 func TestCRRBACHTTPVerbs(t *testing.T) {
 	allVerbs := []string{
 		string(common.VerbGet),
@@ -897,6 +996,7 @@ func TestCRRBACHTTPVerbs(t *testing.T) {
 	}{
 		{name: "GET requires get", method: http.MethodGet, path: "/api/v1/widgets.example.com/default/target", missingVerb: string(common.VerbGet)},
 		{name: "PUT requires update", method: http.MethodPut, path: "/api/v1/widgets.example.com/default/target", body: `{"apiVersion":"example.com/v1","kind":"Widget"}`, missingVerb: string(common.VerbUpdate)},
+		{name: "PATCH requires update", method: http.MethodPatch, path: "/api/v1/widgets.example.com/default/target", body: `{"spec":{"size":"large"}}`, missingVerb: string(common.VerbUpdate)},
 		{name: "DELETE requires delete", method: http.MethodDelete, path: "/api/v1/widgets.example.com/default/target?wait=false", missingVerb: string(common.VerbDelete)},
 	} {
 		t.Run(test.name, func(t *testing.T) {

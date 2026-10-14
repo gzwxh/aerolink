@@ -223,6 +223,7 @@ describe('SidebarConfigProvider', () => {
         'sidebar-groups-config',
         'sidebar-groups-infrastructure',
         'sidebar-groups-security',
+        'sidebar-groups-certmanager',
         'sidebar-groups-other',
         applicationGroupId,
       ].join(',')
@@ -239,6 +240,7 @@ describe('SidebarConfigProvider', () => {
           'sidebar-groups-config',
           'sidebar-groups-infrastructure',
           'sidebar-groups-security',
+          'sidebar-groups-certmanager',
           'sidebar-groups-other',
           applicationGroupId,
         ].join(',')
@@ -256,6 +258,7 @@ describe('SidebarConfigProvider', () => {
           'sidebar-groups-config',
           'sidebar-groups-infrastructure',
           'sidebar-groups-security',
+          'sidebar-groups-certmanager',
           'sidebar-groups-other',
           applicationGroupId,
         ].join(',')
@@ -273,6 +276,7 @@ describe('SidebarConfigProvider', () => {
           'sidebar-groups-config',
           'sidebar-groups-infrastructure',
           'sidebar-groups-security',
+          'sidebar-groups-certmanager',
           'sidebar-groups-other',
           applicationGroupId,
         ].join(',')

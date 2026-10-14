@@ -1,9 +1,65 @@
 import type { Service } from 'kubernetes-types/core/v1'
+import type { ObjectMeta } from 'kubernetes-types/meta/v1'
 import { describe, expect, it } from 'vitest'
 
 import type { CustomResource } from '@/types/api'
 
-import { getPrinterColumnValue, servicesForWorkload } from './k8s'
+import { getOwnerInfo, getPrinterColumnValue, servicesForWorkload } from './k8s'
+
+describe('getOwnerInfo', () => {
+  it('uses the catalog route name for irregular plural kinds', () => {
+    const info = getOwnerInfo({
+      name: 'web',
+      namespace: 'default',
+      ownerReferences: [
+        {
+          apiVersion: 'networking.k8s.io/v1',
+          kind: 'Ingress',
+          name: 'web',
+          controller: true,
+        },
+      ],
+    } as ObjectMeta)
+    expect(info?.path).toBe('/ingresses/default/web')
+    expect(info?.controller).toBe(true)
+  })
+
+  it('links cluster-scoped owners without a namespace segment', () => {
+    const info = getOwnerInfo({
+      name: 'pod',
+      namespace: 'default',
+      ownerReferences: [
+        { apiVersion: 'v1', kind: 'Node', name: 'control-plane-1' },
+      ],
+    } as ObjectMeta)
+    expect(info?.path).toBe('/nodes/control-plane-1')
+  })
+
+  it('links namespaced custom owners by CRD name', () => {
+    const info = getOwnerInfo({
+      name: 'job',
+      namespace: 'default',
+      ownerReferences: [
+        { apiVersion: 'example.com/v1', kind: 'Widget', name: 'target' },
+      ],
+    } as ObjectMeta)
+    expect(info?.path).toBe('/crds/widgets.example.com/default/target')
+  })
+
+  it('links cluster-scoped custom owners without a namespace segment', () => {
+    const info = getOwnerInfo({
+      name: 'plugin',
+      ownerReferences: [
+        { apiVersion: 'example.com/v1', kind: 'Widget', name: 'target' },
+      ],
+    } as ObjectMeta)
+    expect(info?.path).toBe('/crds/widgets.example.com/target')
+  })
+
+  it('returns null without owner references', () => {
+    expect(getOwnerInfo({ name: 'pod' } as ObjectMeta)).toBeNull()
+  })
+})
 
 const resource = {
   apiVersion: 'example.io/v1',

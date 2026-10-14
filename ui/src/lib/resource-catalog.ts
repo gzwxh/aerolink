@@ -24,6 +24,7 @@ import {
   IconTopologyBus,
   IconUser,
   IconUsers,
+  IconCertificate,
 } from '@tabler/icons-react'
 
 type SidebarGroupKey =
@@ -33,6 +34,7 @@ type SidebarGroupKey =
   | 'sidebar.groups.storage'
   | 'sidebar.groups.config'
   | 'sidebar.groups.security'
+  | 'sidebar.groups.certmanager'
   | 'sidebar.groups.other'
   | 'sidebar.groups.application'
   | 'sidebar.groups.infrastructure'
@@ -63,6 +65,7 @@ export const resourceIconMap = {
   IconServer2,
   IconBell,
   IconCode,
+  IconCertificate,
 } as const
 
 export type ResourceIconName = keyof typeof resourceIconMap
@@ -95,6 +98,7 @@ export const sidebarGroupOrder = [
   'sidebar.groups.config',
   'sidebar.groups.infrastructure',
   'sidebar.groups.security',
+  'sidebar.groups.certmanager',
   'sidebar.groups.other',
   // 「应用」（Helm）放到最底下。
   'sidebar.groups.application',
@@ -194,6 +198,66 @@ export const resourceCatalog = [
     titleKey: 'nav.httproutes',
     icon: 'IconRoute',
     sidebar: { groupKey: 'sidebar.groups.traffic', order: 4 },
+  },
+  {
+    type: 'certificates',
+    singular: 'certificate',
+    singularLabel: 'Certificate',
+    pluralLabel: 'Certificates',
+    clusterScope: false,
+    titleKey: 'nav.certificates',
+    icon: 'IconCertificate',
+    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 0 },
+  },
+  {
+    type: 'certificaterequests',
+    singular: 'certificaterequest',
+    singularLabel: 'CertificateRequest',
+    pluralLabel: 'CertificateRequests',
+    clusterScope: false,
+    titleKey: 'nav.certificaterequests',
+    icon: 'IconCertificate',
+    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 1, defaultHidden: true },
+  },
+  {
+    type: 'issuers',
+    singular: 'issuer',
+    singularLabel: 'Issuer',
+    pluralLabel: 'Issuers',
+    clusterScope: false,
+    titleKey: 'nav.issuers',
+    icon: 'IconShieldCheck',
+    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 2 },
+  },
+  {
+    type: 'clusterissuers',
+    singular: 'clusterissuer',
+    singularLabel: 'ClusterIssuer',
+    pluralLabel: 'ClusterIssuers',
+    clusterScope: true,
+    titleKey: 'nav.clusterissuers',
+    icon: 'IconShieldCheck',
+    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 3 },
+  },
+  {
+    type: 'orders',
+    singular: 'order',
+    singularLabel: 'Order',
+    pluralLabel: 'Orders',
+    clusterScope: false,
+    titleKey: 'nav.orders',
+    icon: 'IconCertificate',
+    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 4, defaultHidden: true },
+  },
+  {
+    type: 'challenges',
+    singular: 'challenge',
+    singularLabel: 'Challenge',
+    pluralLabel: 'Challenges',
+    clusterScope: false,
+    titleKey: 'nav.challenges',
+    icon: 'IconCertificate',
+    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 5, defaultHidden: true },
   },
   {
     type: 'configmaps',
@@ -1101,6 +1165,36 @@ const clusterScopedKinds = new Set(
 
 export function isClusterScopedKind(kind?: string | null) {
   return !!kind && clusterScopedKinds.has(kind.toLowerCase())
+}
+
+/**
+ * 按 YAML 的 kind 反查资源路由名（复数）。目录条目按 type / singular /
+ * singularLabel / 显式 kind / pluralLabel 匹配，找不到时返回 undefined。
+ */
+export function getResourceTypeFromKind(kind?: string | null) {
+  if (!kind) return undefined
+  const normalized = kind.toLowerCase()
+  return catalogEntries.find(
+    (item) =>
+      item.type === normalized ||
+      item.singular === normalized ||
+      item.singularLabel.toLowerCase() === normalized ||
+      item.kind?.toLowerCase() === normalized ||
+      item.pluralLabel.toLowerCase() === normalized
+  )?.type
+}
+
+/**
+ * 按 Kubernetes 的复数规则推导资源名（与 kubebuilder 生成 CRD 时的默认复数
+ * 一致：s/x/z/ch/sh → +es，辅音 + y → ies，其余 +s）。目录里已有的类型应优先
+ * 走 getResourceTypeFromKind（含不规则复数），这里只兜底自定义资源；CRD 的
+ * 复数由作者定义，不合规则时仍可能拼错。
+ */
+export function pluralizeKind(kind: string) {
+  const lower = kind.toLowerCase()
+  if (/(?:s|x|z|ch|sh)$/.test(lower)) return `${lower}es`
+  if (/[^aeiou]y$/.test(lower)) return `${lower.slice(0, -1)}ies`
+  return `${lower}s`
 }
 
 export interface ResourceScopeSplit {

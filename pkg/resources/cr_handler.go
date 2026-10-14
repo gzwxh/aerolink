@@ -445,6 +445,99 @@ func (h *CRHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, &updatedCR)
 }
 
+// Patch 用 JSON Merge Patch（默认）或 JSON Patch（?patchType=json）更新自定义资源：
+// 只提交要改的字段，避免整对象 PUT 在并发编辑时互相覆盖。
+// CRD 不支持 strategic-merge patch，所以不提供该选项。
+func (h *CRHandler) Patch(c *gin.Context) {
+	crdName := c.Param("crd")
+	name := c.Param("name")
+
+	if crdName == "" || name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "CRD name and resource name are required"})
+		return
+	}
+
+	cs := c.MustGet("cluster").(*cluster.ClientSet)
+	ctx := c.Request.Context()
+
+	patchBytes, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read patch data"})
+		return
+	}
+
+	patchType := types.MergePatchType
+	if c.Query("patchType") == "json" {
+		patchType = types.JSONPatchType
+	}
+
+	// 获取 CRD 定义
+	crd, err := h.getCRDByName(ctx, cs.K8sClient, crdName)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "CustomResourceDefinition not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !validateCRNamespace(c, crd) {
+		return
+	}
+
+	// 依据 CRD 构造 GVR
+	gvr := h.getGVRFromCRD(crd)
+
+	// 先读取已存在的自定资源
+	existingCR := &unstructured.Unstructured{}
+	existingCR.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   gvr.Group,
+		Version: gvr.Version,
+		Kind:    crd.Spec.Names.Kind,
+	})
+
+	var namespacedName types.NamespacedName
+	if crd.Spec.Scope == apiextensionsv1.NamespaceScoped {
+		namespace := c.Param("namespace")
+		if namespace == common.AllNamespaces {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "This custom resource is namespace-scoped, use /:crd/:namespace/:name endpoint"})
+			return
+		}
+		if namespace == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "namespace is required for namespaced custom resources"})
+			return
+		}
+		namespacedName = types.NamespacedName{Namespace: namespace, Name: name}
+	} else {
+		namespacedName = types.NamespacedName{Name: name}
+	}
+
+	if err := cs.K8sClient.Get(ctx, namespacedName, existingCR); err != nil {
+		if errors.IsNotFound(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Custom resource not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	previousCR := existingCR.DeepCopy()
+	var success bool
+	var errMsg string
+	defer func() {
+		h.recordHistory(c, crd, "patch", previousCR, existingCR, success, errMsg)
+	}()
+
+	if err := cs.K8sClient.Patch(ctx, existingCR, client.RawPatch(patchType, patchBytes)); err != nil {
+		errMsg = err.Error()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	success = true
+	c.JSON(http.StatusOK, existingCR)
+}
+
 func (h *CRHandler) ListHistory(c *gin.Context) {
 	if rejectUnsupportedResourceHistory(c) {
 		return

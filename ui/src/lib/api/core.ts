@@ -26,6 +26,7 @@ import {
   WorkloadRevisionResourceType,
   WorkloadRevisionsResponse,
 } from '@/types/api'
+import type { CustomResource } from '@/types/api'
 import { getResourceQueryKey } from '@/lib/resource-metadata'
 import { useCluster } from '@/hooks/use-cluster'
 
@@ -585,6 +586,20 @@ export const patchResource = async <T extends ResourceType>(
 ): Promise<void> => {
   const endpoint = `/${resource}/${namespace || '_all'}/${name}`
   await apiClient.patch(`${endpoint}`, body)
+}
+
+// 自定义资源走 CRD 路由（/:crd/:namespace/:name）；CRD 不支持 strategic-merge
+// patch，后端默认按 JSON Merge Patch 处理，patchType 'json' 切换为 JSON Patch。
+export const patchCustomResource = async (
+  crd: string,
+  name: string,
+  namespace: string | undefined,
+  body: DeepPartial<CustomResource>,
+  patchType?: 'json'
+): Promise<void> => {
+  const endpoint = `/${crd}/${namespace || '_all'}/${name}`
+  const query = patchType ? `?patchType=${patchType}` : ''
+  await apiClient.patch(`${endpoint}${query}`, body)
 }
 
 export const restartWorkload = async (

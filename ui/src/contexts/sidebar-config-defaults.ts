@@ -71,7 +71,7 @@ defaultMenus['sidebar.groups.application'].push({
   icon: getResourceIconComponent('IconPackage'),
 })
 
-export const SIDEBAR_CONFIG_VERSION = 6
+export const SIDEBAR_CONFIG_VERSION = 8
 
 /** 「集群」分组（节点 / 命名空间 / 事件）：分组 id 由分组 key 推导而来（`.` → `-`）。 */
 export const SIDEBAR_CLUSTER_GROUP_KEY = 'sidebar.groups.cluster'
@@ -214,13 +214,140 @@ function applyClusterGroupLayout(config: SidebarConfig): SidebarConfig {
   return { ...config, groups, groupOrder: groups.map((group) => group.id) }
 }
 
+/**
+ * v8 移除「资源关系图」：把老配置里已存在的、目录中已不存在的 link 条目
+ * （含其隐藏/置顶状态）清掉，避免残留指向已删除页面的入口。只清理目录
+ * 生成的 link，用户自己加的 CRD / API 分组条目不受影响。
+ */
+function removeStaleEntries(config: SidebarConfig): SidebarConfig {
+  const knownURLs = new Set(
+    Object.values(defaultMenus)
+      .flat()
+      .map((menu) => menu.url)
+  )
+  const staleIds = new Set<string>()
+
+  const groups = config.groups
+    .map((group) => {
+      const items = group.items.filter((item) => {
+        if (item.type === 'link' && item.url && !knownURLs.has(item.url)) {
+          staleIds.add(item.id)
+          return false
+        }
+        return true
+      })
+      if (items.length === group.items.length) {
+        return group
+      }
+      return {
+        ...group,
+        items: items.map((item, index) => ({ ...item, order: index })),
+      }
+    })
+    // 目录分组清空后整组移除（ensureDefaultEntries 会按目录重建）；自定义分组保留
+    .filter((group) => group.isCustom || group.items.length > 0)
+
+  if (staleIds.size === 0) {
+    return config
+  }
+
+  return {
+    ...config,
+    groups,
+    hiddenItems: config.hiddenItems.filter((id) => !staleIds.has(id)),
+    pinnedItems: config.pinnedItems.filter((id) => !staleIds.has(id)),
+  }
+}
+
+/**
+ * v7 起新增的默认条目（cert-manager 资源面）就地补进老配置：
+ * 缺失的分组整组创建，已有分组里缺失的链接条目追加；defaultHidden 照常进
+ * hiddenItems。按 url 判断，幂等；代价是用户手动删过的目录链接会在升级时
+ * 被补回来（目录链接的常规移除方式是隐藏，可接受）。
+ */
+function ensureDefaultEntries(config: SidebarConfig): SidebarConfig {
+  let hiddenItems = config.hiddenItems
+  const groups = [...config.groups]
+  const groupOrder = [...config.groupOrder]
+
+  Object.entries(defaultMenus).forEach(([groupKey, items]) => {
+    const groupId = groupKey
+      .toLowerCase()
+      .replace(/\./g, '-')
+      .replace(/\s+/g, '-')
+    const index = groups.findIndex((group) => group.id === groupId)
+
+    if (index === -1) {
+      const sidebarItems: SidebarItem[] = items.map((item, order) => {
+        const id = `${groupId}-${item.url?.replace(/[^a-zA-Z0-9]/g, '-')}`
+        if (item.defaultHidden) {
+          hiddenItems = [...hiddenItems, id]
+        }
+        return {
+          id,
+          type: 'link',
+          titleKey: item.titleKey,
+          url: item.url!,
+          icon: getIconName(item.icon),
+          visible: true,
+          pinned: false,
+          order,
+        }
+      })
+      groups.push({
+        id: groupId,
+        nameKey: groupKey,
+        items: sidebarItems,
+        visible: true,
+        collapsed: false,
+        order: groups.length,
+      })
+      groupOrder.push(groupId)
+      return
+    }
+
+    const group = groups[index]
+    const added = items
+      .filter(
+        (menu) =>
+          !group.items.some(
+            (item) => item.type === 'link' && item.url === menu.url
+          )
+      )
+      .map((menu, offset) => {
+        const id = `${groupId}-${menu.url?.replace(/[^a-zA-Z0-9]/g, '-')}`
+        if (menu.defaultHidden) {
+          hiddenItems = [...hiddenItems, id]
+        }
+        return {
+          id,
+          type: 'link' as const,
+          titleKey: menu.titleKey,
+          url: menu.url!,
+          icon: getIconName(menu.icon),
+          visible: true,
+          pinned: false,
+          order: group.items.length + offset,
+        }
+      })
+
+    if (added.length > 0) {
+      groups[index] = { ...group, items: [...group.items, ...added] }
+    }
+  })
+
+  return { ...config, groups, groupOrder, hiddenItems }
+}
+
 export function migrateSidebarConfig(
   storedConfig: StoredSidebarConfig
 ): SidebarConfig {
-  return applyClusterGroupLayout({
-    ...storedConfig,
-    version: SIDEBAR_CONFIG_VERSION,
-    groups: storedConfig.groups.map((group) => ({
+  return ensureDefaultEntries(
+    removeStaleEntries(
+      applyClusterGroupLayout({
+        ...storedConfig,
+        version: SIDEBAR_CONFIG_VERSION,
+        groups: storedConfig.groups.map((group) => ({
       ...group,
       items: group.items.map((item): SidebarItem => {
         const apiGroup = item.apiGroup || item.crdGroup
@@ -252,5 +379,7 @@ export function migrateSidebarConfig(
         }
       }),
     })),
-  })
+      })
+    )
+  )
 }

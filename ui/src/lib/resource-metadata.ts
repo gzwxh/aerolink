@@ -10,6 +10,8 @@ export {
   getResourceShortLabel,
   getResourceSingular,
   getResourceSingularLabel,
+  getResourceTypeFromKind,
   isClusterScopedResource,
+  pluralizeKind,
   resourceMetadataList,
 } from './resource-catalog'

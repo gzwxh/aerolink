@@ -81,6 +81,12 @@ const (
 	NodeMetrics                       ResourceType = "nodemetrics"
 	Gateways                          ResourceType = "gateways"
 	HTTPRoutes                        ResourceType = "httproutes"
+	Certificates                      ResourceType = "certificates"
+	CertificateRequests               ResourceType = "certificaterequests"
+	Issuers                           ResourceType = "issuers"
+	ClusterIssuers                    ResourceType = "clusterissuers"
+	Orders                            ResourceType = "orders"
+	Challenges                        ResourceType = "challenges"
 	HorizontalPodAutoscalers          ResourceType = "horizontalpodautoscalers"
 	HelmReleases                      ResourceType = "helmrelease"
 )
@@ -208,6 +214,16 @@ var Registry = []ResourceMeta{
 	// gateway.networking.k8s.io/v1（网关 API）
 	{Kind: "Gateway", Singular: "gateway", Plural: Gateways, Group: "gateway.networking.k8s.io", Version: "v1"},
 	{Kind: "HTTPRoute", Singular: "httproute", Plural: HTTPRoutes, Group: "gateway.networking.k8s.io", Version: "v1", Related: true},
+
+	// cert-manager.io/v1（证书签发）
+	{Kind: "Certificate", Singular: "certificate", Plural: Certificates, Group: "cert-manager.io", Version: "v1"},
+	{Kind: "CertificateRequest", Singular: "certificaterequest", Plural: CertificateRequests, Group: "cert-manager.io", Version: "v1"},
+	{Kind: "Issuer", Singular: "issuer", Plural: Issuers, Group: "cert-manager.io", Version: "v1"},
+	{Kind: "ClusterIssuer", Singular: "clusterissuer", Plural: ClusterIssuers, Group: "cert-manager.io", Version: "v1", ClusterScoped: true},
+
+	// acme.cert-manager.io/v1（ACME 签发过程对象）
+	{Kind: "Order", Singular: "order", Plural: Orders, Group: "acme.cert-manager.io", Version: "v1"},
+	{Kind: "Challenge", Singular: "challenge", Plural: Challenges, Group: "acme.cert-manager.io", Version: "v1"},
 
 	// autoscaling/v2（自动扩缩）
 	{Kind: "HorizontalPodAutoscaler", Singular: "horizontalpodautoscaler", Plural: HorizontalPodAutoscalers, Short: []string{"hpa"}, Group: "autoscaling", Version: "v2", Searchable: true, Related: true},

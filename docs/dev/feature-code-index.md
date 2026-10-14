@@ -118,6 +118,7 @@
 | 节点与调度 | `ui/src/pages/node-list-page.tsx`、`node-detail.tsx`、`ui/src/components/node-scheduling-section.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/node_handler.go` | — |
 | 事件 | `ui/src/pages/event-list-page.tsx`、`ui/src/components/event-table.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/event_handler.go` | — |
 | 相关资源 | `ui/src/components/related-resource-table.tsx`、`ui/src/pages/resource-detail-shell.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/related_resources.go` | — |
+| cert-manager CR（证书/签发器等 6 类内置注册） | `ui/src/lib/resource-catalog.ts`（certmanager 分组）、`ui/src/types/cert-manager.ts` | `ui/src/lib/api/core.ts`（通用 CR 通道） | `pkg/kube/client.go`、`pkg/resources/handler.go`（certmanageracmev1 / certmanagerapiv1 注册，CRD 未装时该类整体缺席）、`pkg/resources/cert_manager_registry_test.go` | — |
 | 资源模板 | `ui/src/components/settings/template-management.tsx` | `ui/src/lib/api/admin.ts` | `pkg/templates` | `resource_templates` |
 | 镜像 tag 选择 | `ui/src/components/editors/image-editor.tsx` | `ui/src/lib/api/core.ts` | `pkg/images/handler.go` | — |
 | 全局搜索 | `ui/src/components/global-search.tsx`、`global-search-provider.tsx`、`ui/src/components/search.tsx` | `ui/src/lib/api/core.ts` | `pkg/search` | — |

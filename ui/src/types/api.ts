@@ -1,6 +1,20 @@
 // 自定资源的 API 类型
 
 import {
+  Certificate,
+  CertificateList,
+  CertificateRequest,
+  CertificateRequestList,
+  Challenge,
+  ChallengeList,
+  ClusterIssuer,
+  ClusterIssuerList,
+  Issuer,
+  IssuerList,
+  Order,
+  OrderList,
+} from './cert-manager'
+import {
   CustomResourceDefinition,
   CustomResourceDefinitionList,
 } from 'kubernetes-types/apiextensions/v1'
@@ -356,6 +370,12 @@ export interface ResourcesTypeMap {
     items: HTTPRoute[]
     metadata?: listMetadataType
   }
+  certificates: CertificateList
+  certificaterequests: CertificateRequestList
+  issuers: IssuerList
+  clusterissuers: ClusterIssuerList
+  orders: OrderList
+  challenges: ChallengeList
   configmaps: ConfigMapList
   secrets: SecretList
   persistentvolumeclaims: PersistentVolumeClaimList
@@ -478,6 +498,12 @@ export interface ResourceTypeMap {
   componentstatuses: KubernetesResource
   gateways: Gateway
   httproutes: HTTPRoute
+  certificates: Certificate
+  certificaterequests: CertificateRequest
+  issuers: Issuer
+  clusterissuers: ClusterIssuer
+  orders: Order
+  challenges: Challenge
   configmaps: ConfigMap
   secrets: Secret
   persistentvolumeclaims: PersistentVolumeClaim
