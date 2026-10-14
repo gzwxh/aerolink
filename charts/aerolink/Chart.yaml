@@ -13,10 +13,10 @@ type: application
 
 # chart 版本号。每次修改 chart 或其模板（包括 app 版本）都应递增。
 # 版本号遵循语义化版本规范（https://semver.org/）
-version: 1.0.0
+version: 1.0.1
 
 # 这是部署的应用自身的版本号。每次修改应用都应递增；它不要求遵循
 # 语义化版本，反映应用使用的版本即可。建议用引号包裹。
 # 形式与 git tag 一致（vX.Y.Z）：chart 默认镜像 tag 取这个值，
 # 写成 v 前缀才能对应发布流水线推上来的镜像 tag。
-appVersion: "v1.0.0"
+appVersion: "v1.0.1"
