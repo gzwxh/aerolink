@@ -378,9 +378,7 @@ export function RBACRoleFormDialog({
       }
       onGrant={(id) => grantPrivileges([id])}
       onRevoke={(id) => revokePrivileges([id])}
-      onGrantAll={() =>
-        grantPrivileges(privilegeTransfer.available.map((item) => item.id))
-      }
+      onGrantAll={(ids) => grantPrivileges(ids)}
       onRevokeAll={() =>
         revokePrivileges(privilegeTransfer.included.map((item) => item.id))
       }

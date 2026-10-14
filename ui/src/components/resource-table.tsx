@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ColumnDef,
   getCoreRowModel,
+  getExpandedRowModel,
   getFacetedRowModel,
+  type SortingState,
   getFacetedUniqueValues,
   getFilteredRowModel,
+  getGroupedRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
@@ -50,6 +53,8 @@ export interface ResourceTableProps<T> {
   initialNamespace?: string // Optional namespace preset (e.g. from the URL)
   /** 预设搜索词（例如从工作负载页跳来时只显示某一个对象）。 */
   initialSearch?: string
+  /** 初始排序（例如命名空间页默认按「项目」列排序展示）。 */
+  initialSorting?: SortingState
   onNamespaceChange?: (namespace: string) => void // Notified when the user changes the namespace filter
   searchQueryFilter?: (item: T, query: string) => boolean // Custom filter function
   showCreateButton?: boolean // If true, show create button
@@ -61,6 +66,15 @@ export interface ResourceTableProps<T> {
   alwaysShowBatchActions?: boolean // Keep batch buttons visible (disabled) without a selection
   showBatchDelete?: boolean // Render the built-in batch delete button
   onRowSelectionChange?: (rows: T[]) => void // Notified when the row selection changes
+  /**
+   * 可选的行分组：按某一列的值把行聚成组，每组前渲染一条全宽的组标题行
+   * （例如 /namespaces 按权限绑定名分组）。组行本身不参与勾选，全选
+   * 只作用于资源行；分组列可以处于隐藏状态（仅作分组依据）。
+   */
+  grouping?: {
+    columnId: string
+    renderGroupHeader: (value: string, rowCount: number) => React.ReactNode
+  }
   /**
    * 用于权限校验的资源（默认取解析出的资源
    * 类型）。除非某个命名空间授予了相应 verb，否则创建与批量删除
@@ -82,6 +96,7 @@ function ResourceTableContent<T>({
   resourceType,
   initialNamespace,
   initialSearch,
+  initialSorting,
   onNamespaceChange,
   columns,
   clusterScope = false,
@@ -95,6 +110,7 @@ function ResourceTableContent<T>({
   alwaysShowBatchActions = false,
   showBatchDelete = true,
   onRowSelectionChange,
+  grouping,
   permissionResource,
 }: ResourceTableProps<T>) {
   const { t } = useTranslation()
@@ -130,6 +146,7 @@ function ResourceTableContent<T>({
     defaultHiddenColumns,
     initialNamespace,
     initialSearch,
+    initialSorting,
   })
 
   // 在内置处理器执行后通知父组件（例如同步 URL）。
@@ -207,33 +224,78 @@ function ResourceTableContent<T>({
     return resource.shortLabel || resource.pluralLabel || resourceName
   })()
 
+  // 分组列 id 的稳定引用。state.grouping 必须引用稳定：TanStack 的分组
+  // row model 以它为缓存依赖，若每次渲染都是新数组，模型就会重算，而
+  // 重算会触发 autoResetExpanded → onStateChange → setState → 再渲染，
+  // 形成每秒近千次的渲染风暴（页面整体卡死）。
+  const groupingColumnId = grouping?.columnId
+  const groupingState = useMemo(
+    () => (groupingColumnId ? [groupingColumnId] : undefined),
+    [groupingColumnId]
+  )
+
   // 在展示所有命名空间时加入命名空间列
   const enhancedColumns = useMemo(() => {
     const selectColumn: ColumnDef<T> = {
       id: 'select',
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && 'indeterminate')
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label={t('resourceTable.selectAllRows')}
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label={t('resourceTable.selectRow')}
-        />
-      ),
+      header: ({ table }) => {
+        // 分组模式下页面里混着组标题行：全选只作用于资源行（叶子行）。
+        // 否则会把组行也选中——组行的 original 是第一个成员行，批量操作
+        // 会重复计数/删除。
+        if (grouping) {
+          const leafRows = table
+            .getRowModel()
+            .rows.flatMap((row) => (row.getIsGrouped() ? row.subRows : [row]))
+          const allSelected =
+            leafRows.length > 0 &&
+            leafRows.every((leaf) => leaf.getIsSelected())
+          const someSelected = leafRows.some((leaf) => leaf.getIsSelected())
+          return (
+            <Checkbox
+              checked={allSelected || (someSelected && 'indeterminate')}
+              onCheckedChange={(value) => {
+                const next = { ...table.getState().rowSelection }
+                leafRows.forEach((leaf) => {
+                  if (value) {
+                    next[leaf.id] = true
+                  } else {
+                    delete next[leaf.id]
+                  }
+                })
+                table.setRowSelection(next)
+              }}
+              aria-label={t('resourceTable.selectAllRows')}
+            />
+          )
+        }
+        return (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && 'indeterminate')
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label={t('resourceTable.selectAllRows')}
+          />
+        )
+      },
+      cell: ({ row }) =>
+        grouping && row.getIsGrouped() ? null : (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label={t('resourceTable.selectRow')}
+            // 参照资源管理器：默认隐藏，悬停所在行或已选中时显示
+            className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=checked]:opacity-100"
+          />
+        ),
       enableSorting: false,
       enableHiding: false,
       // 勾选列只放复选框，不允许拖宽。
       enableResizing: false,
-      // 只有一个复选框，固定布局下不该占用默认列宽。
-      size: 44,
+      // 只有一个复选框（16px + 单元格左 padding 8px），固定布局下贴紧
+      // 第一数据列（参照资源管理器：复选框紧跟名称），不占多余列宽。
+      size: 26,
     }
 
     const baseColumns = [selectColumn, ...columns]
@@ -286,7 +348,7 @@ function ResourceTableContent<T>({
       }
     }
     return baseColumns
-  }, [columns, clusterScope, selectedNamespace, selectedNamespaces.length, t])
+  }, [columns, clusterScope, selectedNamespace, selectedNamespaces.length, grouping, t])
 
   const namespaceFilteredData = useMemo(() => {
     if (clusterScope || selectedNamespaces.length <= 1) {
@@ -301,8 +363,13 @@ function ResourceTableContent<T>({
   }, [clusterScope, data, selectedNamespaces])
 
   const memoizedData = useMemo(
-    () => (namespaceFilteredData || []) as T[],
-    [namespaceFilteredData]
+    () => (namespaceFilteredData ? [...namespaceFilteredData] : []) as T[],
+    // 分组列的 accessor 会闭包捕获异步加载的数据（如 /namespaces 的权限绑定
+    // 映射）。这类数据到位时只会让 columns 引用变化、data 引用不变，TanStack
+    // 的分组 row model 于是不会重算，分组停留在旧值（全「未绑定」）。把
+    // columns 纳入依赖并浅拷贝一层，让 data 引用随 columns 一起变化，从而
+    // 触发分组重新计算。
+    [namespaceFilteredData, columns]
   )
 
   useEffect(() => {
@@ -324,6 +391,16 @@ function ResourceTableContent<T>({
     getPaginationRowModel: getPaginationRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    // expanded 是受控的常量 true；关掉自动重置，避免分组模型重算时
+    // 反复触发 onStateChange 形成渲染风暴（见上面 groupingState 的说明）。
+    autoResetExpanded: false,
+    // 分组模式：行按 groupingState 聚组，组全部展开，分页按组计
+    ...(groupingState
+      ? {
+          getGroupedRowModel: getGroupedRowModel(),
+          getExpandedRowModel: getExpandedRowModel(),
+        }
+      : {}),
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
@@ -357,6 +434,13 @@ function ResourceTableContent<T>({
       rowSelection,
       columnVisibility,
       columnSizing,
+      ...(groupingState
+        ? { grouping: groupingState, expanded: true as const }
+        : {}),
+      // v8 会把分组列强制排到列首，勾选列会被挤到第二位。把勾选列钉在
+      // 左侧（state.columnPinning），表头与所有行（含组标题行）的第一个
+      // 单元格都是复选框。
+      ...(groupingState ? { columnPinning: { left: ['select'] } } : {}),
     },
     onPaginationChange: setPagination,
     // 让 TanStack Table 依据过滤后的数据自动处理分页
@@ -585,6 +669,7 @@ function ResourceTableContent<T>({
         searchQuery={searchQuery}
         pagination={pagination}
         setPagination={setPagination}
+        grouping={grouping}
         renderRowDetails={renderRowDetails}
       />
 

@@ -1195,7 +1195,8 @@ function TransferSection({
   included: TransferItem[]
   onGrant: (id: string) => void
   onRevoke: (id: string) => void
-  onGrantAll: () => void
+  /** 透传给 TransferBox：带上过滤词时只搬当前可见条目。 */
+  onGrantAll: (ids: string[]) => void
   onRevokeAll: () => void
   /** 过滤框左侧的附加控件，例如「用户 / 用户组」切换。 */
   availableFilterAddon?: ReactNode
@@ -1755,9 +1756,7 @@ export function BindingGroupFormPage({
           included={subjectTransfer.included}
           onGrant={(id) => grantSubjects([id])}
           onRevoke={(id) => revokeSubjects([id])}
-          onGrantAll={() =>
-            grantSubjects(subjectTransfer.available.map((item) => item.id))
-          }
+          onGrantAll={grantSubjects}
           onRevokeAll={() => setSubjects([])}
         />
 
@@ -1807,9 +1806,7 @@ export function BindingGroupFormPage({
           included={roleTransfer.included}
           onGrant={(id) => grantRoles([id])}
           onRevoke={(id) => revokeRoles([id])}
-          onGrantAll={() =>
-            grantRoles(roleTransfer.available.map((item) => item.id))
-          }
+          onGrantAll={grantRoles}
           onRevokeAll={() => setRoleIds([])}
         />
       </div>
@@ -1840,9 +1837,7 @@ export function BindingGroupFormPage({
           included={namespaceTransfer.included}
           onGrant={(id) => grantNamespaces([id])}
           onRevoke={(id) => revokeNamespaces([id])}
-          onGrantAll={() =>
-            grantNamespaces(namespaceTransfer.available.map((item) => item.id))
-          }
+          onGrantAll={grantNamespaces}
           onRevokeAll={() => setNamespaces([])}
         />
 

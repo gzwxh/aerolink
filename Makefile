@@ -91,13 +91,13 @@ deps: ## Install frontend and backend dependencies
 .PHONY: build
 build: ## Build both frontend and backend (always rebuilds both)
 	cd $(UI_DIR) && pnpm run build
-	CGO_ENABLED=1 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
+	@CGO_ENABLED=1 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 	@echo "✅ Build completed successfully! (parquet search uses the embedded DuckDB engine)"
 	@echo "🚀 Run './$(BINARY_NAME)' to start the server"
 
 build-cli: ## Build both frontend and backend without CGO (pure-Go duckdb CLI driver)
 	cd $(UI_DIR) && pnpm run build
-	CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
+	@CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 	@echo "✅ Build completed successfully! (parquet search shells out to the duckdb binary)"
 	@echo "🚀 Run './$(BINARY_NAME)' to start the server"
 
@@ -116,10 +116,10 @@ cross-compile: frontend ## Cross-compile for multiple architectures
 	@echo "ℹ️  交叉编译走纯 Go 驱动（-tags duckdb_cli）：SDK 驱动的 libduckdb 是按平台分发的预编译"
 	@echo "    静态库，交叉编译要为每个目标再配一套 C 工具链；这几份产物需要目标机有 duckdb 可执行文件。"
 	mkdir -p bin
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-amd64 .
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-arm64 .
-	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-arm64 .
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe .
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-amd64 .
+	@GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-arm64 .
+	@GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-arm64 .
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-windows-amd64.exe .
 	# GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o bin/$(BINARY_NAME)-darwin-amd64 .
 
 # 授权迁移工具（Rancher → AeroLink 权限绑定组）的单文件构建。
@@ -176,7 +176,7 @@ GO_SOURCES := $(shell find . -type f -name '*.go' \
 # libstdc++/libc（运行镜像不能用 distroless/static），交叉编译见 cross-compile 的说明。
 backend: ## Build backend only (always rebuilds; CGO + embedded DuckDB engine)
 	@echo "🏗️ Building backend with the DuckDB Go SDK (CGO)..."
-	CGO_ENABLED=1 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
+	@CGO_ENABLED=1 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 
 # 纯 Go 后端构建（`-tags duckdb_cli`）：parquet 检索改为 exec 外部 duckdb 可执行文件。
 #
@@ -186,7 +186,7 @@ backend: ## Build backend only (always rebuilds; CGO + embedded DuckDB engine)
 # 以及 SDK 驱动出问题时的退路。用这个构建时，镜像/目标机要有 `duckdb` 可执行文件。
 backend-cli: ## Build backend without CGO (pure-Go duckdb CLI driver; needs the duckdb binary at runtime)
 	@echo "🏗️ Building backend with the pure-Go DuckDB CLI driver..."
-	CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
+	@CGO_ENABLED=0 go build -tags duckdb_cli -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
 
 # Production targets
 run: backend ## Run the built application (loads dev.env when present)

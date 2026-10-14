@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { useTerminal } from '@/contexts/terminal-context'
-import { ArrowLeft, Plus, Settings, TerminalSquare } from 'lucide-react'
+import { House, Plus, Settings, TerminalSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
@@ -57,14 +57,11 @@ export function SiteHeader() {
             <button
               type="button"
               onClick={() => navigate('/')}
-              aria-label={t(
-                'common.actions.backToOverview',
-                'Back to overview'
-              )}
-              title={t('common.actions.backToOverview', 'Back to overview')}
+              aria-label={t('common.actions.goHome', 'Go home')}
+              title={t('common.actions.goHome', 'Go home')}
               className="flex items-center justify-center rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <House className="h-4 w-4" />
             </button>
           )}
           <DynamicBreadcrumb />

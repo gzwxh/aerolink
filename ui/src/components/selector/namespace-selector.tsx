@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { Namespace } from 'kubernetes-types/core/v1'
 import { Check, ChevronDown, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { fetchUserBindingGroups, useResources } from '@/lib/api'
+import { useNamespaceBindingMap } from '@/hooks/use-namespace-binding-map'
+import { useResources } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -56,23 +56,15 @@ export function NamespaceSelector({
     })
   }, [data])
 
-  // 权限绑定：当前用户可见的组及其命名空间，用于下拉分组展示
-  const { data: bindingGroups = [] } = useQuery({
-    queryKey: ['user-binding-groups'],
-    queryFn: fetchUserBindingGroups,
-    staleTime: 60_000,
-  })
+  // 权限绑定：当前集群下「命名空间 → 组名」映射，用于下拉分组与条目内联展示
+  const bindingMap = useNamespaceBindingMap()
 
   const namespaceGroups = useMemo(() => {
-    const owner = new Map<string, string>()
-    bindingGroups.forEach((g) =>
-      (g.namespaces ?? []).forEach((n) => owner.set(n.namespace, g.name))
-    )
     const grouped = new Map<string, Namespace[]>()
     const loose: Namespace[] = []
     sortedNamespaces.forEach((ns) => {
       const name = ns.metadata?.name || ''
-      const groupName = owner.get(name)
+      const groupName = bindingMap.get(name)
       if (groupName) {
         if (!grouped.has(groupName)) grouped.set(groupName, [])
         grouped.get(groupName)!.push(ns)
@@ -81,9 +73,15 @@ export function NamespaceSelector({
       }
     })
     return { grouped: Array.from(grouped.entries()), loose }
-  }, [sortedNamespaces, bindingGroups])
+  }, [sortedNamespaces, bindingMap])
 
-  const renderNamespaceItem = (ns: Namespace) => {
+  // groupName 编码进 cmdk 的 value（显示文本不变）：cmdk 只按条目 value 过滤，
+  // 组名不进 value 的话，搜索框里输入权限绑定组名无法命中该组下的命名空间。
+  const renderNamespaceItem = (
+    ns: Namespace,
+    groupName?: string,
+    indent?: boolean
+  ) => {
     const name = ns.metadata?.name || ''
     const selected = multiple
       ? selectedNamespaces.includes(name)
@@ -92,9 +90,9 @@ export function NamespaceSelector({
     return (
       <CommandItem
         key={name}
-        value={name}
+        value={groupName ? `${groupName} ${name}` : name}
         onSelect={() => handleNamespaceSelect(name)}
-        className="flex items-center"
+        className={cn('flex items-center', indent && 'pl-7')}
       >
         {multiple ? (
           <Checkbox
@@ -141,8 +139,9 @@ export function NamespaceSelector({
           )
 
   const selectNamespace = (namespace: string) => {
+    // 选中后不立即收起：等鼠标移出下拉区域时才关闭
+    // （见 PopoverContent 的 onMouseLeave）。
     handleNamespaceChange(namespace)
-    setOpen(false)
   }
 
   const toggleNamespace = (namespace: string) => {
@@ -160,8 +159,24 @@ export function NamespaceSelector({
     )
   }
 
+  // 组级选择：该组全部已选时点击取消整组，否则把组内命名空间并入选中
+  const toggleGroupSelection = (list: Namespace[]) => {
+    const names = list
+      .map((ns) => ns.metadata?.name || '')
+      .filter(Boolean)
+    const allSelected =
+      names.length > 0 &&
+      names.every((name) => selectedNamespaces.includes(name))
+    const next = allSelected
+      ? selectedNamespaces.filter((name) => !names.includes(name))
+      : Array.from(new Set([...selectedNamespaces, ...names]))
+    handleNamespaceChange(next.length > 0 ? next.join(',') : '_all')
+  }
+
   const handleNamespaceSelect = (namespace: string) => {
-    if (multiple && selectedNamespaces.length >= 2) {
+    // 多选模式：点击条目只切换勾选，不收起下拉，方便连续选择多个命名空间
+    // （收起由点击下拉外部或再点触发按钮完成）。
+    if (multiple) {
       toggleNamespace(namespace)
       return
     }
@@ -190,6 +205,9 @@ export function NamespaceSelector({
       <PopoverContent
         className="w-[max(var(--radix-popover-trigger-width),18rem)] max-w-[min(300px,calc(100vw-1rem))] p-0"
         align="start"
+        // 收起时机：鼠标移出下拉区域才关闭，选中条目不收起，
+        // 方便连续查看/选择多个命名空间。
+        onMouseLeave={() => setOpen(false)}
       >
         <Command>
           <CommandInput
@@ -214,10 +232,7 @@ export function NamespaceSelector({
                   <CommandGroup>
                     <CommandItem
                       value="_all"
-                      onSelect={() => {
-                        handleNamespaceChange('_all')
-                        setOpen(false)
-                      }}
+                      onSelect={() => handleNamespaceChange('_all')}
                     >
                       <Check
                         className={cn(
@@ -234,11 +249,51 @@ export function NamespaceSelector({
                   </CommandGroup>
                 )}
 
-                {namespaceGroups.grouped.map(([groupName, list]) => (
-                  <CommandGroup key={groupName} heading={groupName}>
-                    {list.map(renderNamespaceItem)}
-                  </CommandGroup>
-                ))}
+                {namespaceGroups.grouped.map(([groupName, list]) => {
+                  const names = list
+                    .map((ns) => ns.metadata?.name || '')
+                    .filter(Boolean)
+                  const allSelected =
+                    names.length > 0 &&
+                    names.every((name) => selectedNamespaces.includes(name))
+                  const someSelected = names.some((name) =>
+                    selectedNamespaces.includes(name)
+                  )
+                  return (
+                    <CommandGroup
+                      key={groupName}
+                      // 多选时组名由可点选的组头行展示，heading 不再重复渲染
+                      heading={multiple ? undefined : groupName}
+                    >
+                      {multiple && (
+                        <div
+                          className="flex cursor-pointer items-center px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent/50"
+                          onClick={() => toggleGroupSelection(list)}
+                        >
+                          <Checkbox
+                            checked={
+                              allSelected || (someSelected && 'indeterminate')
+                            }
+                            onCheckedChange={() => toggleGroupSelection(list)}
+                            onClick={(event) => event.stopPropagation()}
+                            aria-label={t(
+                              'common.namespaceSelector.toggleGroup',
+                              {
+                                name: groupName,
+                                defaultValue:
+                                  'Select all namespaces in group {{name}}',
+                              }
+                            )}
+                            className="mr-2"
+                          />
+                          <span className="truncate">{groupName}</span>
+                        </div>
+                      )}
+                      {/* 组内条目右移缩进，与组头形成从属层次 */}
+                      {list.map((ns) => renderNamespaceItem(ns, groupName, true))}
+                    </CommandGroup>
+                  )
+                })}
                 {namespaceGroups.loose.length > 0 && (
                   <CommandGroup
                     heading={
@@ -250,7 +305,7 @@ export function NamespaceSelector({
                         : undefined
                     }
                   >
-                    {namespaceGroups.loose.map(renderNamespaceItem)}
+                    {namespaceGroups.loose.map((ns) => renderNamespaceItem(ns))}
                   </CommandGroup>
                 )}
               </>

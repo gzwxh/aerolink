@@ -578,3 +578,60 @@ func TestDeleteBindingGroupRecordsAuditDetail(t *testing.T) {
 		t.Fatalf("audit snapshot must include the member grant, got %q", detail.PreviousYAML)
 	}
 }
+
+// doGetAsUser 以指定用户身份调用 handler：GetUserBindingGroups 依赖 gin 上下文里的 user。
+func doGetAsUser(t *testing.T, h gin.HandlerFunc, user model.User) *httptest.ResponseRecorder {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Set("user", user)
+	h(c)
+	return recorder
+}
+
+// 管理员可访问管理接口时，/projects 返回全部（未保留）权限绑定组，而不是只按成员
+// 身份过滤：命名空间选择器与命名空间页据此展示完整的「命名空间 → 权限绑定名称」。
+func TestGetUserBindingGroupsAdminSeesAllLiveGroups(t *testing.T) {
+	h := setupHandlerTestDB(t)
+
+	live := createGroup(t, h, "c1", "live")
+	if rec := setNamespaces(t, h, live.ID, "dev"); rec.Code != http.StatusOK {
+		t.Fatalf("binding namespaces: %d %s", rec.Code, rec.Body.String())
+	}
+	createGroup(t, h, "c1", "other")
+	createGroup(t, h, "c2", "c2-group")
+	if err := model.DB.Create(&model.BindingGroup{
+		Cluster: "c1", Name: "retained", Detached: true,
+	}).Error; err != nil {
+		t.Fatalf("seeding detached group: %v", err)
+	}
+
+	admin := model.User{
+		Username: "admin",
+		Roles:    []common.Role{{Name: model.DefaultAdminRole.Name}},
+	}
+	rec := doGetAsUser(t, h.GetUserBindingGroups, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list projects as admin: status %d body %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		BindingGroups []model.BindingGroup `json:"bindingGroups"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+
+	names := make(map[string]bool, len(resp.BindingGroups))
+	for _, g := range resp.BindingGroups {
+		names[g.Name] = true
+	}
+	for _, want := range []string{"live", "other", "c2-group"} {
+		if !names[want] {
+			t.Fatalf("admin should see all live groups, missing %q in %+v", want, resp.BindingGroups)
+		}
+	}
+	if names["retained"] {
+		t.Fatalf("detached group must not be returned, got %+v", resp.BindingGroups)
+	}
+}

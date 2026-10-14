@@ -161,7 +161,8 @@ export function TransferBox({
   onGrant: (id: string) => void
   /** 把某条从右侧搬回「可用」。 */
   onRevoke: (id: string) => void
-  onGrantAll: () => void
+  /** 全选搬运：带上过滤词时只搬当前可见的条目，参数即要搬运的 id 列表。 */
+  onGrantAll: (ids: string[]) => void
   onRevokeAll: () => void
   moveLabels: TransferMoveLabels
   listClassName?: string
@@ -189,8 +190,8 @@ export function TransferBox({
       key: 'grant-all',
       icon: IconChevronsRight,
       label: moveLabels.grantAll,
-      disabled: available.length === 0,
-      run: onGrantAll,
+      disabled: shownAvailable.length === 0,
+      run: () => onGrantAll(shownAvailable.map((item) => item.id)),
     },
     {
       key: 'grant-selected',

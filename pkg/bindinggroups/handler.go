@@ -660,13 +660,27 @@ func (h *Handler) SetBindingGroupMembers(c *gin.Context) {
 }
 
 // GetUserBindingGroups 返回当前用户可见的权限绑定组（成员身份），供导航与
-// 命名空间分组展示使用。
+// 命名空间分组展示使用。管理员（可访问管理接口）额外看到本部署内全部权限
+// 绑定组，用于在命名空间选择器等位置展示完整的「命名空间 → 权限绑定名称」
+// 归属关系；两者都不返回已保留（detached、不参与授权）的组。
 // 路由：GET /api/v1/projects
 func (h *Handler) GetUserBindingGroups(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	var projects []model.BindingGroup
 	if err := model.DB.Preload("Namespaces").Find(&projects).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list projects: " + err.Error()})
+		return
+	}
+
+	if rbac.CanAccessAdminAPI(user) {
+		result := make([]model.BindingGroup, 0, len(projects))
+		for _, p := range projects {
+			if p.Detached {
+				continue
+			}
+			result = append(result, p)
+		}
+		c.JSON(http.StatusOK, gin.H{"bindingGroups": result})
 		return
 	}
 

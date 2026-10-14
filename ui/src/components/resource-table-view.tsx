@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -54,6 +55,14 @@ interface ResourceTableViewProps<T> {
   pageSizeOptions?: number[]
   /** 可选的全宽详情，渲染在每一行数据下方的一行里。 */
   renderRowDetails?: (row: T) => React.ReactNode
+  /**
+   * 行分组配置（见 ResourceTableProps.grouping）：每个分组行渲染成
+   * 一条全宽的组标题行，标题内容由 renderGroupHeader 提供。
+   */
+  grouping?: {
+    columnId: string
+    renderGroupHeader: (value: string, rowCount: number) => React.ReactNode
+  }
 }
 
 export function ResourceTableView<T>({
@@ -77,11 +86,27 @@ export function ResourceTableView<T>({
   showAllPageSize = true,
   pageSizeOptions = [10, 20, 50, 100],
   renderRowDetails,
+  grouping,
 }: ResourceTableViewProps<T>) {
   const { t } = useTranslation()
   // 可见列 size 之和：下面把每列宽度换算成它的占比（总宽恒为 100%）。
   // 这样列数再多、内容再长，表格都待在容器里，不会出现横向滚动。
   const totalColumnSize = table.getTotalSize() || 1
+  // 复选框列固定像素宽：若按 size 占比分配，宽屏下这一列会被等比放大，
+  // 复选框和第一数据列之间出现大片空白（参照资源管理器，两者应紧邻）。
+  // 其余列用 calc 从「容器宽 - 固定宽」里按原占比分摊，总宽仍恒为 100%。
+  const SELECT_COLUMN_WIDTH = 32
+  const selectLeafColumn = table
+    .getVisibleLeafColumns()
+    .find((column) => column.id === 'select')
+  const fixedSelectWidth =
+    columnSizing && selectLeafColumn ? SELECT_COLUMN_WIDTH : 0
+  const restColumnSize =
+    totalColumnSize - (selectLeafColumn?.getSize() ?? 0) || 1
+  const restColumnCount = Math.max(
+    table.getVisibleLeafColumns().length - (selectLeafColumn ? 1 : 0),
+    1
+  )
 
   const renderRows = () => {
     const rows = table.getRowModel().rows
@@ -97,12 +122,54 @@ export function ResourceTableView<T>({
     }
 
     return rows.map((row) => {
+      // 组标题行：第一格是与数据行对齐的组级复选框（勾选/取消整组资源行），
+      // 其余列合并放组名。用原生 td 渲染，避开「首列宽度收缩为 0」
+      // 的规则（与下面的详情行同样的处理）。
+      if (grouping && row.getIsGrouped()) {
+        const leafRows = row.subRows
+        const allSelected =
+          leafRows.length > 0 && leafRows.every((leaf) => leaf.getIsSelected())
+        const someSelected = leafRows.some((leaf) => leaf.getIsSelected())
+        return (
+          <TableRow
+            key={row.id}
+            className="group bg-muted/60 hover:bg-muted/60"
+          >
+            {/* 组级复选框与组名同格紧邻（参照资源管理器的分组头），不再分列；
+                左内边距与数据行复选框一致（p-2），保证上下对齐 */}
+            <td colSpan={columnCount} className="py-2 pl-2 pr-4 text-left">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={allSelected || (someSelected && 'indeterminate')}
+                  onCheckedChange={(value) => {
+                    const next = { ...table.getState().rowSelection }
+                    leafRows.forEach((leaf) => {
+                      if (value) {
+                        next[leaf.id] = true
+                      } else {
+                        delete next[leaf.id]
+                      }
+                    })
+                    table.setRowSelection(next)
+                  }}
+                  aria-label={t('resourceTable.selectGroupRows')}
+                  className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=checked]:opacity-100 data-[state=indeterminate]:opacity-100"
+                />
+                {grouping.renderGroupHeader(
+                  String(row.getValue(grouping.columnId) ?? ''),
+                  row.subRows.length
+                )}
+              </div>
+            </td>
+          </TableRow>
+        )
+      }
       const details = renderRowDetails?.(row.original)
       return (
         <React.Fragment key={row.id}>
           <TableRow
             data-state={row.getIsSelected() && 'selected'}
-            className={details ? 'border-b-0' : undefined}
+            className={cn('group', details && 'border-b-0')}
           >
             {row.getVisibleCells().map((cell, index) => (
               <TableCell
@@ -229,11 +296,16 @@ export function ResourceTableView<T>({
                           )}
                           style={
                             columnSizing
-                              ? // 按 size 的**比例**分配，而不是写死像素：写死会让总宽超过
-                                // 容器，列一多就逼出横向滚动条（用户反馈的就是这个）。
-                                {
-                                  width: `${((header.getSize() || 1) / totalColumnSize) * 100}%`,
-                                }
+                              ? header.column.id === 'select'
+                                ? { width: `${fixedSelectWidth || header.getSize()}px` }
+                                : // 按 size 的**比例**分配，而不是写死像素：写死会让总宽超过
+                                  // 容器，列一多就逼出横向滚动条（用户反馈的就是这个）。
+                                  // 复选框列固定 px 后，其余列从剩余宽度里按原占比分摊。
+                                  {
+                                    width: fixedSelectWidth
+                                      ? `calc(${((header.getSize() || 1) / restColumnSize) * 100}% - ${(fixedSelectWidth / restColumnCount).toFixed(2)}px)`
+                                      : `${((header.getSize() || 1) / totalColumnSize) * 100}%`,
+                                  }
                               : undefined
                           }
                         >

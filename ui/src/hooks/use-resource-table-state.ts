@@ -20,6 +20,8 @@ interface UseResourceTableStateOptions {
    * `?search=<service 名>`，只显示那一个对象）。
    */
   initialSearch?: string
+  /** 初始排序（例如命名空间页默认按「项目」分组的列排序展示）。 */
+  initialSorting?: SortingState
 }
 
 function readStoredJSON<T>(storage: Storage, key: string, fallback: T): T {
@@ -41,8 +43,9 @@ export function useResourceTableState({
   defaultHiddenColumns,
   initialNamespace,
   initialSearch,
+  initialSorting,
 }: UseResourceTableStateOptions) {
-  const [sorting, setSorting] = useState<SortingState>([])
+  const [sorting, setSorting] = useState<SortingState>(initialSorting ?? [])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() =>
     readStoredJSON(
       sessionStorage,
