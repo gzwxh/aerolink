@@ -8,7 +8,9 @@ import {
 } from 'react'
 import { useRequestPageRefresh } from '@/contexts/page-refresh-context'
 import {
+  IconClipboardText,
   IconCopy,
+  IconDots,
   IconLoader,
   IconPencil,
   IconRefresh,
@@ -29,6 +31,13 @@ import { useCan } from '@/hooks/use-can'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ResponsiveTabs } from '@/components/ui/responsive-tabs'
 import { CloneResourceDialog } from '@/components/clone-resource-dialog'
 import { DescribeDialog } from '@/components/describe-dialog'
@@ -65,6 +74,11 @@ interface ResourceDetailShellProps<T> {
   preYamlTabs?: ResourceDetailShellTab<T>[]
   extraTabs?: ResourceDetailShellTab<T>[]
   headerActions?: ReactNode
+  /**
+   * 收进「更多」（…）菜单的页面级操作，用于不常用或高危项；
+   * 菜单里描述 / 克隆 / 删除由 shell 自带，追加在这些项之后。
+   */
+  moreActions?: ReactNode
   /**
    * 有可视化表单编辑页的资源传入该路径，标题栏就会多一个「编辑」按钮
    * （路径来源见 `lib/resource-catalog.ts` 的 `getResourceFormEditPath`）。
@@ -106,6 +120,7 @@ export function ResourceDetailShell<T>({
   preYamlTabs = [],
   extraTabs = [],
   headerActions,
+  moreActions,
   editPath,
   titleIcon,
   yamlToolbar,
@@ -133,6 +148,7 @@ export function ResourceDetailShell<T>({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false)
+  const [isDescribeOpen, setIsDescribeOpen] = useState(false)
   const [searchParams] = useSearchParams()
   const isIframe = searchParams.get('iframe') === 'true'
   const navigate = useNavigate()
@@ -419,34 +435,53 @@ export function ResourceDetailShell<T>({
                 <IconRefresh className="w-4 h-4" />
                 {t('common.actions.refresh')}
               </Button>
-              {effectiveShowDescribe ? (
-                <DescribeDialog
-                  resourceType={resourceType}
-                  namespace={namespace}
-                  name={name}
-                />
-              ) : null}
-              {effectiveShowClone ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsCloneDialogOpen(true)}
-                >
-                  <IconCopy className="size-4" />
-                  {t('common.actions.clone')}
-                </Button>
-              ) : null}
               {headerActions}
-              {effectiveShowDelete && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setIsDeleteDialogOpen(true)}
-                >
-                  <IconTrash className="w-4 h-4" />
-                  {t('common.actions.delete')}
-                </Button>
-              )}
+              {moreActions ||
+              effectiveShowDescribe ||
+              effectiveShowClone ||
+              effectiveShowDelete ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-8 px-0"
+                      aria-label={t('common.actions.more')}
+                    >
+                      <IconDots className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-40">
+                    {moreActions}
+                    {moreActions ? <DropdownMenuSeparator /> : null}
+                    {effectiveShowDescribe && (
+                      <DropdownMenuItem
+                        onSelect={() => setIsDescribeOpen(true)}
+                      >
+                        <IconClipboardText className="size-4" />
+                        {t('common.actions.describe')}
+                      </DropdownMenuItem>
+                    )}
+                    {effectiveShowClone && (
+                      <DropdownMenuItem
+                        onSelect={() => setIsCloneDialogOpen(true)}
+                      >
+                        <IconCopy className="size-4" />
+                        {t('common.actions.clone')}
+                      </DropdownMenuItem>
+                    )}
+                    {effectiveShowDelete && (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => setIsDeleteDialogOpen(true)}
+                      >
+                        <IconTrash className="size-4" />
+                        {t('common.actions.delete')}
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
           </div>
         }
@@ -475,6 +510,16 @@ export function ResourceDetailShell<T>({
           resourceName={name}
           resourceType={resourceType}
           namespace={namespace}
+        />
+      )}
+
+      {effectiveShowDescribe && (
+        <DescribeDialog
+          resourceType={resourceType}
+          namespace={namespace}
+          name={name}
+          open={isDescribeOpen}
+          onOpenChange={setIsDescribeOpen}
         />
       )}
 

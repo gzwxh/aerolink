@@ -20,13 +20,22 @@ export function DescribeDialog({
   resourceType,
   namespace,
   name,
+  open,
+  onOpenChange,
 }: {
   resourceType: ResourceType
   namespace?: string
   name: string
+  // 受控模式：由调用方（如详情页的「更多」菜单）打开，此时不渲染触发按钮。
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const { t } = useTranslation()
-  const [isDescribeOpen, setIsDescribeOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = open !== undefined
+  const isDescribeOpen = isControlled ? open : internalOpen
+  const setOpen = (next: boolean) =>
+    isControlled ? onOpenChange?.(next) : setInternalOpen(next)
   const { data: describeText } = useDescribe(resourceType, name, namespace, {
     enabled: isDescribeOpen,
     staleTime: 0,
@@ -38,13 +47,15 @@ export function DescribeDialog({
   })
 
   return (
-    <Dialog open={isDescribeOpen} onOpenChange={setIsDescribeOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <IconClipboardText className="w-4 h-4" />
-          {t('common.actions.describe')}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isDescribeOpen} onOpenChange={setOpen}>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <IconClipboardText className="w-4 h-4" />
+            {t('common.actions.describe')}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="!max-w-dvw">
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>

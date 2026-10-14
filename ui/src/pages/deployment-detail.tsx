@@ -51,8 +51,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -96,7 +96,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   const [exposeBaseline, setExposeBaseline] =
     useState<ServiceFormData>(initialData)
   const [isScalePopoverOpen, setIsScalePopoverOpen] = useState(false)
-  const [isRestartPopoverOpen, setIsRestartPopoverOpen] = useState(false)
+  const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
   const [isTerminalDialogOpen, setIsTerminalDialogOpen] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
@@ -266,7 +266,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       toast.success(
         t('detail.status.restartInitiated', { resource: 'Deployment' })
       )
-      setIsRestartPopoverOpen(false)
+      setIsRestartDialogOpen(false)
       setRefreshInterval(1000)
     } catch (error) {
       toast.error(translateError(error, t))
@@ -607,52 +607,6 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
               {t('common.actions.edit')}
             </Button>
           ) : null}
-          {canExec ? (
-            <Dialog
-              open={isTerminalDialogOpen}
-              onOpenChange={setIsTerminalDialogOpen}
-            >
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <IconTerminal2 className="w-4 h-4" />
-                  {t('common.tabs.terminal')}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-5xl">
-                <DialogHeader className="sr-only">
-                  <DialogTitle>{t('common.tabs.terminal')}</DialogTitle>
-                  <DialogDescription>
-                    {t('common.messages.terminalDialogDescription')}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="h-[70vh] min-h-0">
-                  {relatedPods && relatedPods.length > 0 ? (
-                    <Terminal
-                      namespace={namespace}
-                      pods={relatedPods}
-                      containers={containers}
-                      initContainers={initContainers}
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      {t('common.messages.noPods')}
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          ) : null}
-          {canCreateService && relatedResources && !hasRelatedService ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={openExposeDialog}
-              disabled={isExposing}
-            >
-              <IconNetwork className="w-4 h-4" />
-              {t('common.actions.expose')}
-            </Button>
-          ) : null}
           {canUpdate ? (
             <Popover
               open={isScalePopoverOpen}
@@ -714,50 +668,6 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
                     <IconScale className="w-4 h-4 mr-2" />
                     {t('common.actions.scale')}
                   </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          ) : null}
-          {canUpdate ? (
-            <Popover
-              open={isRestartPopoverOpen}
-              onOpenChange={setIsRestartPopoverOpen}
-            >
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <IconReload className="w-4 h-4" />
-                  {t('common.actions.restart')}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="end">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h4 className="font-medium">
-                      {t('detail.dialogs.restartDeployment.title')}
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      {t('detail.dialogs.restartDeployment.description')}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsRestartPopoverOpen(false)}
-                      className="flex-1"
-                    >
-                      {t('common.actions.cancel')}
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        handleRestart()
-                        setIsRestartPopoverOpen(false)
-                      }}
-                      className="flex-1"
-                    >
-                      <IconReload className="w-4 h-4 mr-2" />
-                      {t('common.actions.restart')}
-                    </Button>
-                  </div>
                 </div>
               </PopoverContent>
             </Popover>
@@ -890,6 +800,87 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
             </DialogContent>
           </Dialog>
           <UnsavedChangesConfirmDialog {...exposeGuard.confirmDialogProps} />
+          <Dialog
+            open={isTerminalDialogOpen}
+            onOpenChange={setIsTerminalDialogOpen}
+          >
+            <DialogContent className="sm:max-w-5xl">
+              <DialogHeader className="sr-only">
+                <DialogTitle>{t('common.tabs.terminal')}</DialogTitle>
+                <DialogDescription>
+                  {t('common.messages.terminalDialogDescription')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="h-[70vh] min-h-0">
+                {relatedPods && relatedPods.length > 0 ? (
+                  <Terminal
+                    namespace={namespace}
+                    pods={relatedPods}
+                    containers={containers}
+                    initContainers={initContainers}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    {t('common.messages.noPods')}
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={isRestartDialogOpen}
+            onOpenChange={setIsRestartDialogOpen}
+          >
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>
+                  {t('detail.dialogs.restartDeployment.title')}
+                </DialogTitle>
+                <DialogDescription>
+                  {t('detail.dialogs.restartDeployment.description')}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsRestartDialogOpen(false)}
+                >
+                  {t('common.actions.cancel')}
+                </Button>
+                <Button
+                  onClick={() => {
+                    handleRestart()
+                    setIsRestartDialogOpen(false)
+                  }}
+                >
+                  <IconReload className="w-4 h-4 mr-2" />
+                  {t('common.actions.restart')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      }
+      moreActions={
+        <>
+          {canExec && (
+            <DropdownMenuItem onSelect={() => setIsTerminalDialogOpen(true)}>
+              <IconTerminal2 className="size-4" />
+              {t('common.tabs.terminal')}
+            </DropdownMenuItem>
+          )}
+          {canCreateService && relatedResources && !hasRelatedService && (
+            <DropdownMenuItem onSelect={() => openExposeDialog()}>
+              <IconNetwork className="size-4" />
+              {t('common.actions.expose')}
+            </DropdownMenuItem>
+          )}
+          {canUpdate && (
+            <DropdownMenuItem onSelect={() => setIsRestartDialogOpen(true)}>
+              <IconReload className="size-4" />
+              {t('common.actions.restart')}
+            </DropdownMenuItem>
+          )}
         </>
       }
       preYamlTabs={extraTabs.filter((tab) =>
