@@ -67,7 +67,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { HelmChartIcon } from '@/components/helm-chart-icon'
-import { LogViewer } from '@/components/log-viewer'
+
 import {
   CompactRelatedResourcesCard,
   MetadataListCard,
@@ -75,6 +75,7 @@ import {
 import { PodStatusIcon } from '@/components/pod-status-icon'
 import { SimpleTable } from '@/components/simple-table'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
+import { TerminalLauncher } from '@/components/terminal-launcher'
 import { WorkloadSummaryCard } from '@/components/workload-overview-parts'
 import { WorkloadPodsCard } from '@/components/workload-pods-card'
 import { YamlEditor } from '@/components/yaml-editor'
@@ -1584,12 +1585,14 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
         value: 'logs',
         label: t('common.tabs.logs'),
         content: (
-          <LogViewer
+          <TerminalLauncher
+            mode="logs"
             namespace={namespace}
             pods={releasePods || []}
             containers={containers}
             initContainers={initContainers}
             labelSelector={labelSelector}
+            source="helmrelease"
           />
         ),
       },

@@ -60,7 +60,7 @@ import {
   MetadataListCard,
 } from '@/components/pod-overview-sidebar'
 import { PodTable } from '@/components/pod-table'
-import { Terminal } from '@/components/terminal'
+import { TerminalLauncher } from '@/components/terminal-launcher'
 import {
   WorkloadInfoBlock,
   WorkloadInfoRow,
@@ -228,7 +228,14 @@ export function NodeDetail(props: { name: string }) {
           {
             value: 'terminal',
             label: t('common.tabs.terminal'),
-            content: <Terminal type="node" nodeName={name} />,
+            content: (
+              <TerminalLauncher
+                mode="terminal"
+                type="node"
+                nodeName={name}
+                source="node"
+              />
+            ),
           },
         ]
       : []),

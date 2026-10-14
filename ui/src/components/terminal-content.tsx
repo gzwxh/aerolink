@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   IconAlertTriangle,
   IconClearAll,
@@ -52,6 +53,8 @@ import { PodSelector } from './selector/pod-selector'
 
 export interface TerminalProps {
   type?: 'node' | 'pod' | 'kubectl'
+  /** 会话所属集群：给出时覆盖当前的集群，用于把会话钉在开session时的集群上。 */
+  clusterName?: string
   namespace?: string
   podName?: string
   nodeName?: string
@@ -63,9 +66,14 @@ export interface TerminalProps {
   selectedContainerName?: string
   /** 为 true 时隐藏内部工具栏并填满父容器 */
   embedded?: boolean
+  /** 内嵌模式下一并把工具栏（选择器/主题/字号/清屏）渲染出去 */
+  embeddedToolbar?: boolean
+  /** 内嵌工具栏的挂载点（一般为底部工作区的表头） */
+  toolbarPortalElement?: HTMLElement | null
 }
 
 export function Terminal({
+  clusterName,
   namespace,
   podName,
   pods,
@@ -77,6 +85,8 @@ export function Terminal({
   selectedContainerName,
   type = 'pod',
   embedded = false,
+  embeddedToolbar = false,
+  toolbarPortalElement = null,
 }: TerminalProps) {
   const containers = useMemo(() => {
     return toSimpleContainer(initContainers, _containers, ephemeralContainers)
@@ -119,7 +129,9 @@ export function Terminal({
   })
   const speedUpdateTimerRef = useRef<NodeJS.Timeout | null>(null)
   const { t } = useTranslation()
-  const { currentCluster } = useCluster()
+  const { currentCluster: activeCluster } = useCluster()
+  // 会话传入的集群优先：切换集群时不要把已有会话带到新集群上重连。
+  const currentCluster = clusterName ?? activeCluster
   // 终端命令走裸 WebSocket、绕过 api-client，拦不住具体命令；集群开了写操作确认时，
   // 至少要在进入前把「这里不受保护」讲清楚（见 lib/write-confirm.ts）。
   // 用 state 记住本次挂载里已经点过确认的集群，切集群回来时不重复弹。
@@ -555,6 +567,180 @@ export function Terminal({
     />
   )
 
+  // 会话级工具栏：Pod/容器选择器、主题、字号、清屏。独立模式下放在卡片表头，
+  // 内嵌到工作区时用 portal 挂到工作区表头（内嵌时全屏交给工作区，不重复给按钮）。
+  const terminalToolbar = (
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+      {/* Container Selector */}
+      {containers.length > 1 && (
+        <ContainerSelector
+          containers={containers}
+          showAllOption={false}
+          selectedContainer={selectedContainer}
+          onContainerChange={handleContainerChange}
+        />
+      )}
+
+      {/* Pod Selector */}
+      {pods && pods.length > 0 && (
+        <PodSelector
+          pods={pods}
+          selectedPod={selectedPod}
+          onPodChange={handlePodChange}
+        />
+      )}
+
+      {/* Quick Theme Toggle */}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={cycleTheme}
+        title={`Current theme: ${TERMINAL_THEMES[terminalTheme].name} (Ctrl+T to cycle)`}
+        className="relative"
+      >
+        <IconPalette className="h-4 w-4" />
+        <div
+          className="absolute -top-1 -right-1 w-3 h-3 rounded-full border border-border"
+          style={{
+            backgroundColor: TERMINAL_THEMES[terminalTheme].background,
+          }}
+        ></div>
+      </Button>
+
+      {/* Settings */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm">
+            <IconSettings className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80" align="end">
+          <div className="space-y-4">
+            {/* Terminal Theme Selector */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="terminal-theme">Terminal Theme</Label>
+                <Select value={terminalTheme} onValueChange={handleThemeChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(TERMINAL_THEMES).map(([key, theme]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full border border-border"
+                            style={{
+                              backgroundColor: theme.background,
+                            }}
+                          ></div>
+                          <span className="text-sm">{theme.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Theme Preview */}
+              <div
+                className="p-3 rounded space-y-1"
+                style={{
+                  backgroundColor: TERMINAL_THEMES[terminalTheme].background,
+                  color: TERMINAL_THEMES[terminalTheme].foreground,
+                  fontSize: `${fontSize}px`,
+                }}
+              >
+                <div>
+                  <span
+                    style={{
+                      color: TERMINAL_THEMES[terminalTheme].green,
+                    }}
+                  >
+                    user@pod:~$
+                  </span>{' '}
+                  ls -la
+                </div>
+                <div style={{ color: TERMINAL_THEMES[terminalTheme].blue }}>
+                  drwxr-xr-x 3 user user 4096 Dec 9 10:30 .
+                </div>
+                <div style={{ color: TERMINAL_THEMES[terminalTheme].yellow }}>
+                  -rw-r--r-- 1 user user 220 Dec 9 10:30 README.md
+                </div>
+                <div style={{ color: TERMINAL_THEMES[terminalTheme].red }}>
+                  -rwx------ 1 user user 1024 Dec 9 10:30 script.sh
+                </div>
+              </div>
+            </div>
+
+            {/* Font Size Selector */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="font-size">Font Size</Label>
+                <Select
+                  value={fontSize.toString()}
+                  onValueChange={(value) => handleFontSizeChange(Number(value))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10px</SelectItem>
+                    <SelectItem value="11">11px</SelectItem>
+                    <SelectItem value="12">12px</SelectItem>
+                    <SelectItem value="13">13px</SelectItem>
+                    <SelectItem value="14">14px</SelectItem>
+                    <SelectItem value="15">15px</SelectItem>
+                    <SelectItem value="16">16px</SelectItem>
+                    <SelectItem value="18">18px</SelectItem>
+                    <SelectItem value="20">20px</SelectItem>
+                    <SelectItem value="22">22px</SelectItem>
+                    <SelectItem value="24">24px</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Cursor Style Selector */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="cursor-style">Cursor Style</Label>
+                <Select
+                  value={cursorStyle}
+                  onValueChange={handleCursorStyleChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="block">Block</SelectItem>
+                    <SelectItem value="underline">Underline</SelectItem>
+                    <SelectItem value="bar">Bar</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Clear Terminal */}
+      <Button variant="outline" size="sm" onClick={clearTerminal}>
+        <IconClearAll className="h-4 w-4" />
+      </Button>
+
+      {!embedded && (
+        <Button variant="outline" size="sm" onClick={toggleFullscreen}>
+          {isFullscreen ? (
+            <IconMinimize className="h-4 w-4" />
+          ) : (
+            <IconMaximize className="h-4 w-4" />
+          )}
+        </Button>
+      )}
+    </div>
+  )
+
   // 集群开了操作确认时，终端要先确认一次：这里的命令不受界面拦截层保护
   // （裸 WebSocket，拦不住具体命令），至少得让人知道风险。
   if (needsTerminalAck) {
@@ -569,10 +755,15 @@ export function Terminal({
     )
   }
 
-  // 内嵌模式：没有头部，完全填满父容器
+  // 内嵌模式：没有卡片表头，完全填满父容器；会话级工具栏挂到工作区表头。
   if (embedded) {
     return (
-      <div className="flex flex-col h-full w-full min-h-0">{terminalDiv}</div>
+      <div className="flex flex-col h-full w-full min-h-0">
+        {embeddedToolbar && toolbarPortalElement
+          ? createPortal(terminalToolbar, toolbarPortalElement)
+          : null}
+        {terminalDiv}
+      </div>
     )
   }
 
@@ -599,187 +790,7 @@ export function Terminal({
             />
           </div>
 
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 md:w-auto md:justify-end">
-            {/* Container Selector */}
-            {containers.length > 1 && (
-              <ContainerSelector
-                containers={containers}
-                showAllOption={false}
-                selectedContainer={selectedContainer}
-                onContainerChange={handleContainerChange}
-              />
-            )}
-
-            {/* Pod Selector */}
-            {pods && pods.length > 0 && (
-              <PodSelector
-                pods={pods}
-                selectedPod={selectedPod}
-                onPodChange={handlePodChange}
-              />
-            )}
-
-            {/* Quick Theme Toggle */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cycleTheme}
-              title={`Current theme: ${TERMINAL_THEMES[terminalTheme].name} (Ctrl+T to cycle)`}
-              className="relative"
-            >
-              <IconPalette className="h-4 w-4" />
-              <div
-                className="absolute -top-1 -right-1 w-3 h-3 rounded-full border border-border"
-                style={{
-                  backgroundColor: TERMINAL_THEMES[terminalTheme].background,
-                }}
-              ></div>
-            </Button>
-
-            {/* Settings */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <IconSettings className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="end">
-                <div className="space-y-4">
-                  {/* Terminal Theme Selector */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="terminal-theme">Terminal Theme</Label>
-                      <Select
-                        value={terminalTheme}
-                        onValueChange={handleThemeChange}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(TERMINAL_THEMES).map(
-                            ([key, theme]) => (
-                              <SelectItem key={key} value={key}>
-                                <div className="flex items-center gap-2">
-                                  <div
-                                    className="w-3 h-3 rounded-full border border-border"
-                                    style={{
-                                      backgroundColor: theme.background,
-                                    }}
-                                  ></div>
-                                  <span className="text-sm">{theme.name}</span>
-                                </div>
-                              </SelectItem>
-                            )
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Theme Preview */}
-                    <div
-                      className="p-3 rounded space-y-1"
-                      style={{
-                        backgroundColor:
-                          TERMINAL_THEMES[terminalTheme].background,
-                        color: TERMINAL_THEMES[terminalTheme].foreground,
-                        fontSize: `${fontSize}px`,
-                      }}
-                    >
-                      <div>
-                        <span
-                          style={{
-                            color: TERMINAL_THEMES[terminalTheme].green,
-                          }}
-                        >
-                          user@pod:~$
-                        </span>{' '}
-                        ls -la
-                      </div>
-                      <div
-                        style={{ color: TERMINAL_THEMES[terminalTheme].blue }}
-                      >
-                        drwxr-xr-x 3 user user 4096 Dec 9 10:30 .
-                      </div>
-                      <div
-                        style={{ color: TERMINAL_THEMES[terminalTheme].yellow }}
-                      >
-                        -rw-r--r-- 1 user user 220 Dec 9 10:30 README.md
-                      </div>
-                      <div
-                        style={{ color: TERMINAL_THEMES[terminalTheme].red }}
-                      >
-                        -rwx------ 1 user user 1024 Dec 9 10:30 script.sh
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Font Size Selector */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="font-size">Font Size</Label>
-                      <Select
-                        value={fontSize.toString()}
-                        onValueChange={(value) =>
-                          handleFontSizeChange(Number(value))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="10">10px</SelectItem>
-                          <SelectItem value="11">11px</SelectItem>
-                          <SelectItem value="12">12px</SelectItem>
-                          <SelectItem value="13">13px</SelectItem>
-                          <SelectItem value="14">14px</SelectItem>
-                          <SelectItem value="15">15px</SelectItem>
-                          <SelectItem value="16">16px</SelectItem>
-                          <SelectItem value="18">18px</SelectItem>
-                          <SelectItem value="20">20px</SelectItem>
-                          <SelectItem value="22">22px</SelectItem>
-                          <SelectItem value="24">24px</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Cursor Style Selector */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="cursor-style">Cursor Style</Label>
-                      <Select
-                        value={cursorStyle}
-                        onValueChange={handleCursorStyleChange}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="block">Block</SelectItem>
-                          <SelectItem value="underline">Underline</SelectItem>
-                          <SelectItem value="bar">Bar</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Clear Terminal */}
-            <Button variant="outline" size="sm" onClick={clearTerminal}>
-              <IconClearAll className="h-4 w-4" />
-            </Button>
-
-            <Button variant="outline" size="sm" onClick={toggleFullscreen}>
-              {isFullscreen ? (
-                <IconMinimize className="h-4 w-4" />
-              ) : (
-                <IconMaximize className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
+          {terminalToolbar}
         </div>
       </CardHeader>
 

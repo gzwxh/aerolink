@@ -34,14 +34,14 @@ import { Label } from '@/components/ui/label'
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { ResourceEditor } from '@/components/editors/resource-editor'
 import { EventTable } from '@/components/event-table'
-import { LogViewer } from '@/components/log-viewer'
+
 import { PodDebugDialog } from '@/components/pod-debug-dialog'
 import { PodFileBrowser } from '@/components/pod-file-browser'
 import { PodMonitoring } from '@/components/pod-monitoring'
 import { PodOverview } from '@/components/pod-overview'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ContainerSelector } from '@/components/selector/container-selector'
-import { Terminal } from '@/components/terminal'
+import { TerminalLauncher } from '@/components/terminal-launcher'
 import { VolumeTable } from '@/components/volume-table'
 
 import {
@@ -249,13 +249,15 @@ export function PodDetail(props: { namespace: string; name: string }) {
         value: 'logs',
         label: t('common.tabs.logs'),
         content: (
-          <LogViewer
+          <TerminalLauncher
+            mode="logs"
             namespace={namespace}
             podName={name}
             containers={pod?.spec?.containers}
             initContainers={pod?.spec?.initContainers}
             ephemeralContainers={pod?.spec?.ephemeralContainers}
             selectedContainerName={tabContainerName}
+            source="pod"
           />
         ),
       },
@@ -263,7 +265,8 @@ export function PodDetail(props: { namespace: string; name: string }) {
         value: 'terminal',
         label: t('common.tabs.terminal'),
         content: (
-          <Terminal
+          <TerminalLauncher
+            mode="terminal"
             namespace={namespace}
             podName={name}
             containers={pod?.spec?.containers}
@@ -271,6 +274,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
             ephemeralContainers={pod?.spec?.ephemeralContainers}
             attachContainerName={attachContainerName}
             selectedContainerName={tabContainerName}
+            source="pod"
           />
         ),
       },

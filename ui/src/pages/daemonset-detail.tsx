@@ -24,11 +24,11 @@ import {
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { DaemonSetOverview } from '@/components/daemonset-overview'
 import { EventTable } from '@/components/event-table'
-import { LogViewer } from '@/components/log-viewer'
+
 import { PodMonitoring } from '@/components/pod-monitoring'
 import { PodTable } from '@/components/pod-table'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
-import { Terminal } from '@/components/terminal'
+import { TerminalLauncher } from '@/components/terminal-launcher'
 import { VolumeTable } from '@/components/volume-table'
 import { WorkloadHistoryTabs } from '@/components/workload-history-tabs'
 
@@ -222,12 +222,14 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
         value: 'logs',
         label: t('common.tabs.logs', { defaultValue: 'Logs' }),
         content: (
-          <LogViewer
+          <TerminalLauncher
+            mode="logs"
             namespace={namespace}
             pods={pods}
             containers={containers}
             initContainers={initContainers}
             labelSelector={labelSelector}
+            source="daemonset"
           />
         ),
       },
@@ -236,11 +238,13 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
         label: t('common.tabs.terminal', { defaultValue: 'Terminal' }),
         content:
           pods.length > 0 ? (
-            <Terminal
+            <TerminalLauncher
+              mode="terminal"
               namespace={namespace}
               pods={pods}
               containers={containers}
               initContainers={initContainers}
+              source="daemonset"
             />
           ) : null,
       }

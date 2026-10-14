@@ -27,7 +27,11 @@ export function SiteHeader() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { user, capabilities } = useAuth()
-  const { toggleTerminal, isOpen } = useTerminal()
+  const { toggleTerminal, sessions } = useTerminal()
+  // 顶栏按钮只管 kubectl 会话：工作区里可能还有别的 Pod/节点/日志会话。
+  const hasKubectlSession = sessions.some(
+    (session) => session.type === 'kubectl'
+  )
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const isAdmin = user?.isAdmin() ?? false
   const can = useCanAnyNamespace()
@@ -94,7 +98,7 @@ export function SiteHeader() {
                   'Toggle Kubectl Terminal'
                 )}
                 className={`flex items-center justify-center rounded-sm p-1 transition-colors ${
-                  isOpen
+                  hasKubectlSession
                     ? 'text-success hover:text-success/80'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}

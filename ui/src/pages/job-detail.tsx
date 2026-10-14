@@ -17,12 +17,12 @@ import { Button } from '@/components/ui/button'
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { EventTable } from '@/components/event-table'
 import { JobOverview } from '@/components/job-overview'
-import { LogViewer } from '@/components/log-viewer'
+
 import { PodMonitoring } from '@/components/pod-monitoring'
 import { PodTable } from '@/components/pod-table'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ResourceHistoryTable } from '@/components/resource-history-table'
-import { Terminal } from '@/components/terminal'
+import { TerminalLauncher } from '@/components/terminal-launcher'
 import { VolumeTable } from '@/components/volume-table'
 
 import {
@@ -159,12 +159,14 @@ export function JobDetail(props: { namespace: string; name: string }) {
         value: 'logs',
         label: t('common.tabs.logs', { defaultValue: 'Logs' }),
         content: (
-          <LogViewer
+          <TerminalLauncher
+            mode="logs"
             namespace={namespace}
             pods={currentPods}
             containers={containers}
             initContainers={initContainers}
             labelSelector={labelSelector}
+            source="job"
           />
         ),
       },
@@ -172,11 +174,13 @@ export function JobDetail(props: { namespace: string; name: string }) {
         value: 'terminal',
         label: t('common.tabs.terminal', { defaultValue: 'Terminal' }),
         content: (
-          <Terminal
+          <TerminalLauncher
+            mode="terminal"
             namespace={namespace}
             pods={currentPods}
             containers={containers}
             initContainers={initContainers}
+            source="job"
           />
         ),
       },

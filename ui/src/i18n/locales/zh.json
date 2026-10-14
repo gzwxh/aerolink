@@ -354,7 +354,7 @@
       "namespaceNotFoundOnCluster": "命名空间 {{namespace}} 在当前集群中不存在，可能来自其他集群。",
       "namespaceNotFoundHint": "请选择下方的一个命名空间，或查看全部命名空间的资源。",
       "createFailed": "创建失败",
-      "terminalDialogDescription": "选择 Pod 与容器后，在弹窗内直接执行命令。",
+      "terminalDialogDescription": "选择 Pod 与容器后，在页面底部的终端工作区打开。",
       "containerUpdated": "容器更新成功",
       "disabled": "已禁用",
       "enabled": "已启用",
@@ -3972,5 +3972,29 @@
       "hint": "终端里的命令会直接发给 Kubernetes，不经过界面上的二次确认——这里拦不住你敲的命令。请确认你清楚即将执行的操作。",
       "title": "该集群已开启操作确认"
     }
+  },
+  "terminalLauncher": {
+    "hint": "会话会开在页面底部的工作区里，切换页面、同时开多个会话都不会中断。",
+    "openLogs": "打开日志",
+    "openTerminal": "打开终端",
+    "logs": {
+      "title": "在底部工作区打开日志",
+      "description": "可以同时跟进多个 Pod / 容器的日志，切换页面也不会中断。"
+    },
+    "terminal": {
+      "title": "在底部工作区打开终端",
+      "description": "选好容器后打开终端，切换页面不会中断会话。",
+      "nodeDescription": "节点终端会开在底部工作区，切换页面不会中断。"
+    }
+  },
+  "terminalWorkspace": {
+    "title": "终端工作区",
+    "newTerminal": "新建终端",
+    "fullscreen": "全屏",
+    "exitFullscreen": "退出全屏",
+    "minimize": "收起",
+    "restore": "展开",
+    "closeAllSessions": "关闭全部会话",
+    "closeSession": "关闭该会话"
   }
 }

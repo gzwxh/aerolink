@@ -70,12 +70,12 @@ import {
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { DeploymentOverview } from '@/components/deployment-overview'
 import { EventTable } from '@/components/event-table'
-import { LogViewer } from '@/components/log-viewer'
+
 import { PodMonitoring } from '@/components/pod-monitoring'
 import { PodTable } from '@/components/pod-table'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ServicePortsEditor } from '@/components/service-ports-editor'
-import { Terminal } from '@/components/terminal'
+import { TerminalLauncher } from '@/components/terminal-launcher'
 import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 import { VolumeTable } from '@/components/volume-table'
 import { WorkloadHistoryTabs } from '@/components/workload-history-tabs'
@@ -450,12 +450,14 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
         value: 'logs',
         label: t('common.tabs.logs'),
         content: (
-          <LogViewer
+          <TerminalLauncher
+            mode="logs"
             namespace={namespace}
             pods={pods}
             containers={containers}
             initContainers={initContainers}
             labelSelector={labelSelector}
+            source="deployment"
           />
         ),
       },
@@ -464,11 +466,13 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
         label: t('common.tabs.terminal'),
         content:
           pods.length > 0 ? (
-            <Terminal
+            <TerminalLauncher
+              mode="terminal"
               namespace={namespace}
               pods={pods}
               containers={containers}
               initContainers={initContainers}
+              source="deployment"
             />
           ) : null,
       }
@@ -804,7 +808,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
             open={isTerminalDialogOpen}
             onOpenChange={setIsTerminalDialogOpen}
           >
-            <DialogContent className="sm:max-w-5xl">
+            <DialogContent className="sm:max-w-2xl">
               <DialogHeader className="sr-only">
                 <DialogTitle>{t('common.tabs.terminal')}</DialogTitle>
                 <DialogDescription>
@@ -813,11 +817,14 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
               </DialogHeader>
               <div className="h-[70vh] min-h-0">
                 {relatedPods && relatedPods.length > 0 ? (
-                  <Terminal
+                  <TerminalLauncher
+                    mode="terminal"
                     namespace={namespace}
                     pods={relatedPods}
                     containers={containers}
                     initContainers={initContainers}
+                    source="deployment"
+                    onOpen={() => setIsTerminalDialogOpen(false)}
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

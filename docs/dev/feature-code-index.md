@@ -131,7 +131,7 @@
 | 概览页 | `ui/src/pages/overview.tsx`、`ui/src/components/cluster-stats-cards.tsx`、`resources-charts.tsx` | `ui/src/lib/api/core.ts`、`ui/src/lib/api/observability.ts` | `pkg/system/handler.go`（`GetOverview`） | — |
 | Pod/节点监控图表 | `ui/src/components/pod-monitoring.tsx`、`node-monitoring.tsx` | `ui/src/lib/api/observability.ts` | `pkg/prometheus` | — |
 | 日志查看 | `ui/src/components/log-viewer.tsx`、`log-viewer-content.tsx` | `ui/src/lib/api/core.ts`、`ui/src/lib/useWebSocket.ts` | `pkg/resources/logs_handler.go`、`pkg/wsutil` | — |
-| 终端（Pod/节点/kubectl） | `ui/src/components/terminal.tsx`、`terminal-content.tsx`、`floating-terminal.tsx`、`ui/src/contexts/terminal-context.tsx` | `ui/src/lib/useWebSocket.ts` | `pkg/terminal`、`pkg/kube/terminal.go` | — |
+| 终端与日志工作区（底部常驻、多会话） | `ui/src/components/terminal.tsx`、`terminal-content.tsx`、`floating-terminal.tsx`、`terminal-launcher.tsx`（详情页里的 Pod/节点/日志入口）、`ui/src/contexts/terminal-context.tsx`（会话列表） | `ui/src/lib/useWebSocket.ts` | `pkg/terminal`、`pkg/kube/terminal.go` | — |
 | Pod 文件浏览 | `ui/src/components/pod-file-browser.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/pod_handler.go` | `resource_histories`（文件操作审计） |
 | Pod 调试 | `ui/src/components/pod-debug-dialog.tsx` | `ui/src/lib/api/core.ts` | `pkg/resources/pod_debug_handler.go` | — |
 | 代理访问（k8s API 直连） | `ui/src/components/resource-iframe-dialog-content.tsx` | `ui/src/lib/api/core.ts` | `pkg/proxy` | — |

@@ -354,7 +354,7 @@
       "namespaceNotFoundOnCluster": "Namespace {{namespace}} does not exist in the current cluster. It may belong to another cluster.",
       "namespaceNotFoundHint": "Pick one of the namespaces below, or view resources across all namespaces.",
       "createFailed": "Create failed",
-      "terminalDialogDescription": "Pick a pod and container, then run commands inside the dialog.",
+      "terminalDialogDescription": "Pick a pod and container, then open it in the terminal workspace at the bottom of the page.",
       "containerUpdated": "Container updated successfully",
       "disabled": "Disabled",
       "enabled": "Enabled",
@@ -3972,5 +3972,29 @@
       "hint": "Commands in the terminal go straight to Kubernetes and are not covered by the confirmation step used in the UI, so nothing here can stop what you type. Make sure you know what you are about to run.",
       "title": "This cluster requires confirmation for operations"
     }
+  },
+  "terminalLauncher": {
+    "hint": "Sessions open in the workspace at the bottom of the page, so switching pages and running several at once do not interrupt them.",
+    "openLogs": "Open logs",
+    "openTerminal": "Open terminal",
+    "logs": {
+      "title": "Open logs in the bottom workspace",
+      "description": "Follow several pods or containers at once; switching pages does not interrupt the streams."
+    },
+    "terminal": {
+      "title": "Open a terminal in the bottom workspace",
+      "description": "Pick a container and open a terminal; switching pages does not interrupt it.",
+      "nodeDescription": "The node terminal opens in the bottom workspace and survives page switches."
+    }
+  },
+  "terminalWorkspace": {
+    "title": "Terminal workspace",
+    "newTerminal": "New terminal",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "minimize": "Collapse",
+    "restore": "Expand",
+    "closeAllSessions": "Close all sessions",
+    "closeSession": "Close this session"
   }
 }

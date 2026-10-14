@@ -58,6 +58,119 @@ function TerminalConsumer() {
   )
 }
 
+function WorkspaceConsumer() {
+  const {
+    sessions,
+    activeSessionId,
+    activeSession,
+    openSession,
+    activateSession,
+    closeSession,
+  } = useTerminal()
+
+  return (
+    <div>
+      <span data-testid="sessions">
+        {sessions.map((session) => session.title).join('|')}
+      </span>
+      <span data-testid="active">{activeSessionId ?? 'none'}</span>
+      <span data-testid="active-title">{activeSession?.title ?? 'none'}</span>
+      <span data-testid="active-cluster">
+        {activeSession?.clusterName ?? 'none'}
+      </span>
+      <button
+        type="button"
+        onClick={() =>
+          openSession({
+            type: 'pod',
+            source: 'pod',
+            namespace: 'default',
+            podName: 'web-0',
+            containerName: 'app',
+          })
+        }
+      >
+        open-pod
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          openSession({
+            type: 'logs',
+            source: 'pod',
+            namespace: 'default',
+            podName: 'web-0',
+          })
+        }
+      >
+        open-logs
+      </button>
+      <button
+        type="button"
+        onClick={() => activateSession(sessions[0]?.id ?? '')}
+      >
+        activate-first
+      </button>
+      <button
+        type="button"
+        onClick={() => activeSessionId && closeSession(activeSessionId)}
+      >
+        close-active
+      </button>
+    </div>
+  )
+}
+
+describe('TerminalProvider 工作区会话', () => {
+  it('同时保留多个会话、同一目标去重、关闭后回落到剩余会话', async () => {
+    render(
+      <TerminalProvider>
+        <WorkspaceConsumer />
+      </TerminalProvider>
+    )
+
+    expect(screen.getByTestId('sessions')).toBeEmptyDOMElement()
+    expect(screen.getByTestId('active')).toHaveTextContent('none')
+
+    fireEvent.click(screen.getByRole('button', { name: 'open-pod' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('sessions')).toHaveTextContent('web-0 · app')
+    })
+
+    // 同一目标重复打开只激活已有会话，不新建。
+    fireEvent.click(screen.getByRole('button', { name: 'open-pod' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('sessions').textContent?.split('|')).toHaveLength(
+        1
+      )
+    })
+
+    // 不同种类（日志）可以并存。
+    fireEvent.click(screen.getByRole('button', { name: 'open-logs' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('sessions').textContent?.split('|')).toHaveLength(
+        2
+      )
+    })
+    expect(screen.getByTestId('active-title')).toHaveTextContent('web-0')
+
+    // 切回第一个会话。
+    fireEvent.click(screen.getByRole('button', { name: 'activate-first' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('active-title')).toHaveTextContent('web-0 · app')
+    })
+
+    // 关掉当前会话后自动落到剩余会话上。
+    fireEvent.click(screen.getByRole('button', { name: 'close-active' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('sessions').textContent?.split('|')).toHaveLength(
+        1
+      )
+    })
+    expect(screen.getByTestId('active')).not.toHaveTextContent('none')
+  })
+})
+
 describe('TerminalProvider', () => {
   it('drives the terminal state through its public actions', async () => {
     render(
