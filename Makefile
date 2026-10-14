@@ -38,7 +38,7 @@ LOAD_DEV_ENV = if [ -f "$(abspath $(DEV_ENV))" ]; then set -a; . "$(abspath $(DE
 # 发布版本号（前端展示与镜像构建共用）；发新版时修改这里。
 # 形式与 git tag 一致（vX.Y.Z）：CI 发布用 tag 覆盖这里，本地构建用这个默认值，
 # 两边格式相同，界面展示与 /api/v1/version 才对得上。
-VERSION ?= v1.0.0
+VERSION ?= v1.0.1
 BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
@@ -325,7 +325,7 @@ docs-build: ## Build documentation
 	cd docs && pnpm run docs:build
 
 # ----- Docker 镜像 -----
-IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
+IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.1
 # 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径）。
 # 后端依赖在仓库里 vendored（构建不下载 Go 模块），所以这里只剩前端依赖源；直连环境可置空：
 #   make image DOCKER_BUILD_ARGS=

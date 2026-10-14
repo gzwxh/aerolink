@@ -7,7 +7,7 @@
 **所有集群，一个工作空间。**
 
 鸢联 AeroLink 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维、可观测性、访问控制与 AI 辅助排障。
-本仓库为基于上游项目的**公司内部二开版本**，当前版本 `v1.0.0`。
+本仓库为基于上游项目的**公司内部二开版本**，当前版本 `v1.0.1`。
 
 | 项 | 取值 | 说明 |
 | --- | --- | --- |
@@ -18,10 +18,10 @@
 | 含义 | Aero = 天空/航空，Link = 连接 | |
 | 品牌故事 | 飞在 K8s 之上，连通每一个集群 | |
 | 环境变量前缀 | `AEROLINK_` | 所有环境变量统一用它（如 `AEROLINK_ENCRYPT_KEY`）；改名前的 `KITE_*` 已不再生效 |
-| 构建版本号 | `v1.0.0` | 机器可读的实际版本号：git tag、镜像 tag、`/api/v1/version` 与界面侧栏显示都用它 |
-| 品牌版本串 | `AeroLink 1.0.0 (based on Kite x.y.z)` | 面向人的展示写法，只出现在文档与发布说明里，把「我们的版本」与「所基于的上游版本」一并交代 |
+| 构建版本号 | `v1.0.1` | 机器可读的实际版本号：git tag、镜像 tag、`/api/v1/version` 与界面侧栏显示都用它 |
+| 品牌版本串 | `AeroLink 1.0.1 (based on Kite x.y.z)` | 面向人的展示写法，只出现在文档与发布说明里，把「我们的版本」与「所基于的上游版本」一并交代 |
 
-两个版本口径不要混用：`v1.0.0` 是构建与发布**实际使用**的版本号（`make image`、CI 的 tag 触发、镜像 tag 都按它走）；`AeroLink 1.0.0 (based on Kite x.y.z)` 只是给人看的写法。代码里没有任何地方生成后者，界面上显示的是前者。
+两个版本口径不要混用：`v1.0.1` 是构建与发布**实际使用**的版本号（`make image`、CI 的 tag 触发、镜像 tag 都按它走）；`AeroLink 1.0.1 (based on Kite x.y.z)` 只是给人看的写法。代码里没有任何地方生成后者，界面上显示的是前者。
 
 - **副标题**：飞在 Kubernetes 之上，连通每一个集群
 - **口号**：一线连万群，鸢飞控全局
@@ -115,8 +115,8 @@ set -a; . ./dev.env; set +a; ./aerolink
 make image     # 构建镜像（默认 tag 见 Makefile 的 IMAGE 变量）
 make push      # 构建并推送到公司 SWR
 # 等价于：
-# docker build -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0 .
-# docker push  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
+# docker build -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.1 .
+# docker push  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.1
 ```
 
 受限网络下 `make image/push` 已内置国内镜像源参数（daocloud 基础镜像 + npmmirror + goproxy.cn），直连环境可用 `make image DOCKER_BUILD_ARGS=` 置空。
@@ -140,7 +140,7 @@ docker run -d --name aerolink -p 8080:8080 \
   -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
-  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.1
 ```
 
 生产推荐启动方式（含全部安全参数，密钥用 `openssl rand -base64 32` 生成并妥善保存）：
@@ -155,7 +155,7 @@ docker run -d --name aerolink --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://aerolink.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.1
 ```
 
 首次访问会引导创建管理员账号，之后在「系统设置」中完成其余策略配置。
