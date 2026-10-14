@@ -151,12 +151,14 @@ func TestPodWatchRejectsOverLimitConnections(t *testing.T) {
 	}
 
 	for i := 0; i < common.MaxWatchPerUser; i++ {
+		//nolint:bodyclose // 连接需保持打开以占用限额名额，body 由 openWatch 注册的 t.Cleanup 关闭
 		if response := openWatch(); response.StatusCode != http.StatusOK {
 			t.Fatalf("第 %d 条连接返回 %d, want %d", i+1, response.StatusCode, http.StatusOK)
 		}
 	}
 	waitForWatchConnections(t, "alice", "cluster-a", common.MaxWatchPerUser)
 
+	//nolint:bodyclose // 读完 body 后已显式 Close，另有 openWatch 注册的 t.Cleanup 兜底
 	overLimit := openWatch()
 	if overLimit.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("超限连接返回 %d, want %d", overLimit.StatusCode, http.StatusTooManyRequests)
@@ -179,6 +181,7 @@ func TestPodWatchRejectsOverLimitConnections(t *testing.T) {
 	// 断开一条后名额释放，新连接可以正常建立。
 	cancels[0]()
 	waitForWatchConnections(t, "alice", "cluster-a", common.MaxWatchPerUser-1)
+	//nolint:bodyclose // 连接需保持打开以占用限额名额，body 由 openWatch 注册的 t.Cleanup 关闭
 	if response := openWatch(); response.StatusCode != http.StatusOK {
 		t.Fatalf("释放名额后连接返回 %d, want %d", response.StatusCode, http.StatusOK)
 	}

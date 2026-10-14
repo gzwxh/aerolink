@@ -63,7 +63,8 @@ func IsAnnouncementScrollMode(mode string) bool {
 	}
 }
 
-// 因此两张表不共用，见 plans/2026-09-21-顶部通知栏.md §3。
+// Announcement 与站内信（Notification）分两张表存储，互不共用，
+// 见 plans/2026-09-21-顶部通知栏.md §3。
 type Announcement struct {
 	Model
 	Title    string `json:"title" gorm:"type:varchar(255);not null"`

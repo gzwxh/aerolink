@@ -1095,35 +1095,7 @@ func (h *PodHandler) Watch(c *gin.Context) {
 			_, _ = fmt.Fprintf(c.Writer, ": ping\n\n") // comment line per SSE
 			flusher.Flush()
 		case <-ticker.C:
-			metricsMap = h.watchMetricsMap(c, cs, hub, ns, labelSelector, metricsInterval)
-			updates := make([]podMetricsUpdate, 0, len(metricsMap))
-			nextUsage := make(map[string][2]int64, len(metricsMap))
-			for _, metrics := range metricsMap {
-				if !rbac.CanAccessCurrent(user, string(common.Pods), string(common.VerbGet), cs.Name, metrics.Namespace) {
-					continue
-				}
-				// 与 GetPodMetrics 同一口径：没有容器用量时不下发，避免把数字刷成 0。
-				if len(metrics.Containers) == 0 {
-					continue
-				}
-				key := metrics.Namespace + "/" + metrics.Name
-				cpuUsage, memUsage := podUsageFromMetrics(metrics)
-				if prev, ok := lastUsage[key]; ok && prev[0] == cpuUsage && prev[1] == memUsage {
-					nextUsage[key] = prev
-					continue
-				}
-				nextUsage[key] = [2]int64{cpuUsage, memUsage}
-				updates = append(updates, podMetricsUpdate{
-					Namespace:   metrics.Namespace,
-					Name:        metrics.Name,
-					CPUUsage:    cpuUsage,
-					MemoryUsage: memUsage,
-				})
-			}
-			lastUsage = nextUsage
-			if len(updates) > 0 {
-				_ = writeSSE(c, cs.Name, "metrics", updates)
-			}
+			metricsMap, lastUsage = h.pushPodMetricsUpdates(c, cs, hub, user, ns, labelSelector, metricsInterval, lastUsage)
 		case event, ok := <-watchEvents:
 			if !ok {
 				_ = writeSSE(c, cs.Name, "close", gin.H{"message": "watch channel closed"})
@@ -1154,4 +1126,38 @@ func (h *PodHandler) Watch(c *gin.Context) {
 			}
 		}
 	}
+}
+
+// pushPodMetricsUpdates 拉一轮最新用量并按需下发 metrics 事件：只推与上一轮有变化的 Pod，
+// 推送量与变化量成正比。返回更新后的 metricsMap 与 lastUsage（每轮只保留当前仍可见的 Pod）。
+func (h *PodHandler) pushPodMetricsUpdates(c *gin.Context, cs *cluster.ClientSet, hub *podWatchHub, user model.User, ns, labelSelector string, metricsInterval time.Duration, lastUsage map[string][2]int64) (map[string]metricsv1.PodMetrics, map[string][2]int64) {
+	metricsMap := h.watchMetricsMap(c, cs, hub, ns, labelSelector, metricsInterval)
+	updates := make([]podMetricsUpdate, 0, len(metricsMap))
+	nextUsage := make(map[string][2]int64, len(metricsMap))
+	for _, metrics := range metricsMap {
+		if !rbac.CanAccessCurrent(user, string(common.Pods), string(common.VerbGet), cs.Name, metrics.Namespace) {
+			continue
+		}
+		// 与 GetPodMetrics 同一口径：没有容器用量时不下发，避免把数字刷成 0。
+		if len(metrics.Containers) == 0 {
+			continue
+		}
+		key := metrics.Namespace + "/" + metrics.Name
+		cpuUsage, memUsage := podUsageFromMetrics(metrics)
+		if prev, ok := lastUsage[key]; ok && prev[0] == cpuUsage && prev[1] == memUsage {
+			nextUsage[key] = prev
+			continue
+		}
+		nextUsage[key] = [2]int64{cpuUsage, memUsage}
+		updates = append(updates, podMetricsUpdate{
+			Namespace:   metrics.Namespace,
+			Name:        metrics.Name,
+			CPUUsage:    cpuUsage,
+			MemoryUsage: memUsage,
+		})
+	}
+	if len(updates) > 0 {
+		_ = writeSSE(c, cs.Name, "metrics", updates)
+	}
+	return metricsMap, nextUsage
 }
