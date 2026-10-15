@@ -342,6 +342,7 @@ function HelmChartVersionsTable({ chart }: { chart: HelmChartDetail }) {
       <CardContent>
         <SimpleTable
           data={chart.versions}
+          storageKey="aerolink-helm-chart-versions-columnSizing"
           emptyMessage={t('helmCharts.messages.noVersions')}
           columns={[
             {

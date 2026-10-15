@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -70,6 +71,16 @@ export function TableColumnToggle<T>({
             </DropdownMenuCheckboxItem>
           )
         })}
+        <DropdownMenuSeparator />
+        {/* 清空列序与列宽覆盖，回到列定义的默认布局（显示/隐藏的勾选保留）。 */}
+        <DropdownMenuItem
+          onClick={() => {
+            table.setColumnOrder([])
+            table.setColumnSizing({})
+          }}
+        >
+          {t('resourceTable.resetColumnLayout', '恢复默认列布局')}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

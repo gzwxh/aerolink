@@ -48,6 +48,10 @@ import { ApiError } from '@/lib/api-client'
 import { formatDate, translateError } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import {
+  useTableColumnOrder,
+  useTableColumnSizing,
+} from '@/hooks/use-table-column-preferences'
+import {
   useDraftDirty,
   useUnsavedChangesGuard,
 } from '@/hooks/use-unsaved-changes-guard'
@@ -165,6 +169,13 @@ export function UserGroupsTab() {
   // 用户组列表是全局数据，不带集群前缀。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
     'aerolink-user-groups-columnVisibility'
+  )
+  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  const [columnSizing, setColumnSizing] = useTableColumnSizing(
+    'aerolink-user-groups-columnSizing'
+  )
+  const [columnOrder, setColumnOrder] = useTableColumnOrder(
+    'aerolink-user-groups-columnOrder'
   )
 
   const [showAddGroup, setShowAddGroup] = useState(false)
@@ -693,11 +704,24 @@ export function UserGroupsTab() {
   const table = useReactTable<GroupEntry>({
     data: filtered,
     columns,
-    state: { pagination, sorting, columnVisibility, columnFilters },
+    state: {
+      pagination,
+      sorting,
+      columnVisibility,
+      columnFilters,
+      columnSizing,
+      columnOrder,
+    },
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnFiltersChange: setColumnFilters,
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
+    // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    defaultColumn: { size: 160, minSize: 80, maxSize: 600 },
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -1079,6 +1103,7 @@ export function UserGroupsTab() {
                 columnCount={columns.length}
                 isLoading={isLoading}
                 data={filtered}
+                enableReorder
                 allPageSize={filtered.length}
                 emptyState={emptyState}
                 hasActiveFilters={Boolean(search) || columnFilters.length > 0}

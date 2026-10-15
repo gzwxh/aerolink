@@ -42,6 +42,10 @@ import {
   systemRoleLabel,
 } from '@/lib/system-roles'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
+import {
+  useTableColumnOrder,
+  useTableColumnSizing,
+} from '@/hooks/use-table-column-preferences'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -168,6 +172,13 @@ export function RBACManagement() {
   // 列显示偏好：与资源列表 / 用户组列表一致，用齿轮菜单勾选，并持久化。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
     'aerolink-rbac-roles-columnVisibility'
+  )
+  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  const [columnSizing, setColumnSizing] = useTableColumnSizing(
+    'aerolink-rbac-roles-columnSizing'
+  )
+  const [columnOrder, setColumnOrder] = useTableColumnOrder(
+    'aerolink-rbac-roles-columnOrder'
   )
 
   const editRole = useMemo(
@@ -454,10 +465,16 @@ export function RBACManagement() {
   const table = useReactTable<Role>({
     data: filtered,
     columns,
-    state: { pagination, sorting, columnVisibility },
+    state: { pagination, sorting, columnVisibility, columnSizing, columnOrder },
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
+    // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    defaultColumn: { size: 160, minSize: 80, maxSize: 600 },
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: pinnedRolesFirstRowModel,
@@ -536,6 +553,7 @@ export function RBACManagement() {
             columnCount={columns.length}
             isLoading={isLoading}
             data={filtered}
+            enableReorder
             allPageSize={filtered.length}
             emptyState={emptyState}
             hasActiveFilters={Boolean(search)}

@@ -121,6 +121,7 @@ export function EventTable(props: {
         <SimpleTable
           data={sortedEvents}
           columns={eventColumns}
+          storageKey="aerolink-events-columnSizing"
           emptyMessage={t('events.noEventsFound')}
         />
       </CardContent>

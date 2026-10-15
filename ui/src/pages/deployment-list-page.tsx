@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { IconNotes, IconReload, IconScale, IconTag } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
+import type { Container } from 'kubernetes-types/core/v1'
 import { Deployment } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -11,6 +12,7 @@ import {
   restartWorkload,
   useResources,
 } from '@/lib/api'
+import { copyToClipboard } from '@/lib/clipboard'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { shortenImageName } from '@/lib/image-name'
 import {
@@ -218,6 +220,52 @@ function MetadataSummaryCell({
   )
 }
 
+// 容器与镜像：列表里只显示镜像名与 tag，完整地址悬浮查看，点击即复制。
+export function ContainerImageCell({ containers }: { containers: Container[] }) {
+  const { t } = useTranslation()
+
+  if (containers.length === 0) {
+    return <EmptyValue />
+  }
+
+  const copyImage = async (event: React.MouseEvent, image: string) => {
+    // 行点击会跳详情页，复制不能连带触发。
+    event.stopPropagation()
+    if (await copyToClipboard(image)) {
+      toast.success(t('common.messages.copied', '已复制到剪贴板'))
+    } else {
+      toast.error(
+        t('common.messages.copyFailed', '复制失败，请手动选择文本后复制')
+      )
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-0.5 text-xs">
+      {containers.map((container) => (
+        <Tooltip key={container.name}>
+          <TooltipTrigger asChild>
+            <div
+              className="flex w-full min-w-0 max-w-72 cursor-copy items-baseline justify-center gap-1"
+              onClick={(event) => void copyImage(event, container.image || '')}
+            >
+              <span className="shrink-0 text-muted-foreground">
+                {container.name}:{' '}
+              </span>
+              <span className="min-w-0 truncate font-mono underline-offset-2 hover:underline">
+                {shortenImageName(container.image || '')}
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm break-all font-mono text-xs">
+            {container.name}: {container.image}
+          </TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  )
+}
+
 export function DeploymentListPage() {
   const { namespace: namespaceParam } = useParams()
   const { t } = useTranslation()
@@ -321,34 +369,11 @@ export function DeploymentListPage() {
           id: 'containers_images',
           enableSorting: false,
           header: t('common.fields.containersAndImages'),
-          cell: ({ row }) => {
-            const containers =
-              row.original.spec?.template.spec?.containers ?? []
-            if (containers.length === 0) {
-              return <EmptyValue />
-            }
-            return (
-              <div className="flex flex-col items-center gap-0.5 text-xs">
-                {containers.map((container) => (
-                  <div
-                    key={container.name}
-                    className="flex w-full min-w-0 max-w-72 items-baseline justify-center gap-1"
-                  >
-                    <span className="shrink-0 text-muted-foreground">
-                      {container.name}:{' '}
-                    </span>
-                    {/* 只显示镜像名与 tag，完整地址通过 title 悬浮查看，避免长地址折行 */}
-                    <span
-                      className="min-w-0 truncate font-mono"
-                      title={container.image}
-                    >
-                      {shortenImageName(container.image || '')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )
-          },
+          cell: ({ row }) => (
+            <ContainerImageCell
+              containers={row.original.spec?.template.spec?.containers ?? []}
+            />
+          ),
         }
       ),
       columnHelper.accessor(

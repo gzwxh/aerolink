@@ -185,6 +185,7 @@
    - `ui/src/components/resource-table.tsx`：列表状态、筛选、选择、工具栏、分页
    - `ui/src/components/resource-table-view.tsx`：行渲染入口（多数列表页走它）
    - `ui/src/components/action-table.tsx`：设置类表格
+   - 列宽 / 列序自定义（口径见 `plans/2026-10-15-表格列宽列序自定义.md`）：列宽拖拽手柄 `ui/src/components/column-resize-handle.tsx`（ResourceTableView / ActionTable / SimpleTable 共用，视觉只走语义 token）；列偏好 hook——资源列表在 `use-resource-table-state.ts`（集群隔离 key），设置页表格用 `use-table-column-preferences.ts`，列顺序拖拽走 `ResourceTableView` 的 `enableReorder`（勾选列/操作列固定两端）；非 TanStack 的 `simple-table.tsx` 传 `storageKey` 即启用列宽拖拽（按列下标持久化）；齿轮菜单的「恢复默认列布局」在 `table-column-toggle.tsx`
    - `ui/src/components/resource-table-toolbar.tsx`：筛选/刷新间隔/列显示
    - 立刻刷新：`ui/src/components/refresh-button.tsx`（`resource-table` 把数据层的 `refetch` 透传成 `onRefresh`，按钮只负责反馈与去抖，**不要在里面另开请求**）
    - 行操作菜单：`ui/src/components/resource-row-actions.tsx`（工作负载六类 + Service + ConfigMap / Secret + PV / StorageClass 共用；某类不支持某项就关掉 `resourceTraits` 里对应的开关，**不要**在每个页面另写一份菜单）；列表页只负责加一列 `columnHelper.display({ id: 'actions' })`，且必须是最后一列

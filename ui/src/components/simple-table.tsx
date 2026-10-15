@@ -1,5 +1,8 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
+import { cn } from '@/lib/utils'
+
+import { ColumnResizeHandle } from './column-resize-handle'
 import { Button } from './ui/button'
 import {
   Table,
@@ -9,6 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table'
+
+/** 拖宽的下限，与 ResourceTable 的 defaultColumn.minSize 一致。 */
+const MIN_COLUMN_WIDTH = 80
 
 interface Column<T> {
   header: string
@@ -21,6 +27,11 @@ interface SimpleTableProps<T> {
   data: T[]
   columns: Column<T>[]
   emptyMessage?: string
+  /**
+   * 传入 localStorage key 即启用表头列宽拖拽并持久化（SimpleTable 不是
+   * TanStack 表格，列没有稳定 id，按列下标存储）；不传则行为不变。
+   */
+  storageKey?: string
   pagination?: {
     enabled: boolean
     pageSize?: number
@@ -34,8 +45,110 @@ export function SimpleTable<T>({
   data,
   columns,
   emptyMessage = 'No data available',
+  storageKey,
   pagination,
 }: SimpleTableProps<T>) {
+  // 列宽拖拽（按列下标记录像素宽）：被拖过的列写死 width + minWidth，
+  // 其余列继续按内容自适应（table-auto），与资源列表的自动布局同一模型。
+  const [columnWidths, setColumnWidths] = useState<Record<number, number>>(
+    () => {
+      if (!storageKey) {
+        return {}
+      }
+      try {
+        const stored = localStorage.getItem(storageKey)
+        if (!stored) {
+          return {}
+        }
+        const parsed = JSON.parse(stored) as Record<string, unknown>
+        const widths: Record<number, number> = {}
+        for (const [index, width] of Object.entries(parsed)) {
+          const columnIndex = Number(index)
+          if (
+            Number.isInteger(columnIndex) &&
+            columnIndex >= 0 &&
+            typeof width === 'number' &&
+            Number.isFinite(width)
+          ) {
+            widths[columnIndex] = width
+          }
+        }
+        return widths
+      } catch {
+        return {}
+      }
+    }
+  )
+  useEffect(() => {
+    if (!storageKey) {
+      return
+    }
+    localStorage.setItem(storageKey, JSON.stringify(columnWidths))
+  }, [columnWidths, storageKey])
+
+  const resizeStateRef = useRef<{
+    index: number
+    startX: number
+    startWidth: number
+  } | null>(null)
+  const [resizingIndex, setResizingIndex] = useState<number | null>(null)
+
+  const handleResizeStart = (
+    index: number,
+    event: React.MouseEvent | React.TouchEvent
+  ) => {
+    const th = (event.currentTarget as HTMLElement).closest('th')
+    if (!th) {
+      return
+    }
+    event.preventDefault()
+    const point = 'touches' in event ? event.touches[0] : event
+    resizeStateRef.current = {
+      index,
+      startX: point.clientX,
+      startWidth: th.getBoundingClientRect().width,
+    }
+    setResizingIndex(index)
+  }
+
+  useEffect(() => {
+    if (resizingIndex === null) {
+      return
+    }
+    const handleMove = (event: MouseEvent | TouchEvent) => {
+      const state = resizeStateRef.current
+      if (!state) {
+        return
+      }
+      const point = 'touches' in event ? event.touches[0] : event
+      if (!point) {
+        return
+      }
+      const width = Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.round(state.startWidth + point.clientX - state.startX)
+      )
+      setColumnWidths((prev) =>
+        prev[state.index] === width ? prev : { ...prev, [state.index]: width }
+      )
+    }
+    const handleEnd = () => {
+      resizeStateRef.current = null
+      setResizingIndex(null)
+    }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleEnd)
+    // 手柄上 touch-action:none 挡住了滚动，这里被动监听即可。
+    window.addEventListener('touchmove', handleMove, { passive: true })
+    window.addEventListener('touchend', handleEnd)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleEnd)
+      window.removeEventListener('touchmove', handleMove)
+      window.removeEventListener('touchend', handleEnd)
+    }
+  }, [resizingIndex])
+
   const isControlled =
     pagination &&
     typeof pagination.currentPage === 'number' &&
@@ -106,15 +219,30 @@ export function SimpleTable<T>({
             {columns.map((column, index) => (
               <TableHead
                 key={index}
-                className={
+                className={cn(
+                  'group/th relative',
                   column.align === 'left'
                     ? 'text-left'
                     : column.align === 'right'
                       ? 'text-right'
                       : 'text-center'
+                )}
+                style={
+                  columnWidths[index]
+                    ? {
+                        width: `${columnWidths[index]}px`,
+                        minWidth: `${columnWidths[index]}px`,
+                      }
+                    : undefined
                 }
               >
                 {column.header}
+                {storageKey && (
+                  <ColumnResizeHandle
+                    resizing={resizingIndex === index}
+                    onPointerDown={(event) => handleResizeStart(index, event)}
+                  />
+                )}
               </TableHead>
             ))}
           </TableRow>

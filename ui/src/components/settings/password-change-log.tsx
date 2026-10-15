@@ -17,6 +17,10 @@ import {
 import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
+import {
+  useTableColumnOrder,
+  useTableColumnSizing,
+} from '@/hooks/use-table-column-preferences'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -43,6 +47,13 @@ export function PasswordChangeLog() {
   // 日志是全局数据，键不带集群前缀。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
     'aerolink-password-change-logs-columnVisibility'
+  )
+  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  const [columnSizing, setColumnSizing] = useTableColumnSizing(
+    'aerolink-password-change-logs-columnSizing'
+  )
+  const [columnOrder, setColumnOrder] = useTableColumnOrder(
+    'aerolink-password-change-logs-columnOrder'
   )
   const [userId, setUserId] = useState<number | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState('')
@@ -143,9 +154,15 @@ export function PasswordChangeLog() {
     data: logData?.data ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
-    state: { pagination, columnVisibility },
+    state: { pagination, columnVisibility, columnSizing, columnOrder },
     onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
+    // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    defaultColumn: { size: 160, minSize: 80, maxSize: 600 },
     manualPagination: true,
     pageCount: Math.ceil((logData?.total ?? 0) / pagination.pageSize) || 0,
   })
@@ -262,6 +279,7 @@ export function PasswordChangeLog() {
           columnCount={columns.length}
           isLoading={isLoading}
           data={logData?.data}
+          enableReorder
           allPageSize={totalRowCount}
           emptyState={emptyState}
           hasActiveFilters={

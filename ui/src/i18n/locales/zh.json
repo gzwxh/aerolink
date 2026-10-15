@@ -1091,6 +1091,8 @@
     "errorLoading": "加载 {{resourceName}} 失败",
     "tryAgain": "重试",
     "toggleColumns": "显示列",
+    "resetColumnLayout": "恢复默认列布局",
+    "columnResizeHint": "拖动调整列宽，双击恢复默认",
     "delete": "删除",
     "unboundGroup": "未绑定",
     "deleteSelected": "删除 ({{count}})",
@@ -3438,7 +3440,12 @@
       "notebook": "笔记本",
       "clean-slate": "石板",
       "claude": "陶土",
-      "emerald": "墨绿"
+      "emerald": "墨绿",
+      "indigo": "靛蓝",
+      "ocean": "海洋",
+      "sunset": "落日",
+      "jfrog": "JFrog",
+      "nexus": "星云"
     },
     "font": "字体",
     "displayScale": "显示缩放",

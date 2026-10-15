@@ -74,6 +74,7 @@ export function ServiceTable(props: {
         <SimpleTable
           data={services || []}
           columns={serviceColumns}
+          storageKey="aerolink-services-columnSizing"
           emptyMessage="No services found"
         />
       </CardContent>

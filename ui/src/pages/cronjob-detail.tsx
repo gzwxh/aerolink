@@ -275,6 +275,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
               <SimpleTable<Job>
                 data={sortedJobs}
                 columns={jobColumns}
+                storageKey="aerolink-cronjob-jobs-columnSizing"
                 emptyMessage={t(
                   'cronjobs.noJobs',
                   'No jobs found for this CronJob'

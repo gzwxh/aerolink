@@ -121,6 +121,7 @@ function ResourcesTable({ resources }: { resources?: HelmReleaseResource[] }) {
       <CardContent>
         <SimpleTable
           data={resources || []}
+          storageKey="aerolink-helmrelease-resources-columnSizing"
           emptyMessage={t('helm.messages.noResources')}
           columns={[
             {
@@ -605,6 +606,7 @@ function HelmReleaseHistoryTable({
       <CardContent>
         <SimpleTable
           data={data?.items || []}
+          storageKey="aerolink-helmrelease-history-columnSizing"
           emptyMessage={t('helm.messages.noHistory', 'No history found')}
           columns={[
             {

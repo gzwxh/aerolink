@@ -68,6 +68,7 @@ export function RelatedResourcesTable(props: {
         <SimpleTable
           data={relatedResources || []}
           columns={relatedColumns}
+          storageKey="aerolink-related-resources-columnSizing"
           emptyMessage={t('common.messages.noData', '暂无数据')}
         />
       </CardContent>

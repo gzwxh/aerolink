@@ -143,6 +143,8 @@ function ResourceTableContent<T>({
     setColumnVisibility,
     columnSizing,
     setColumnSizing,
+    columnOrder,
+    setColumnOrder,
     pagination,
     setPagination,
     refreshInterval,
@@ -315,8 +317,6 @@ function ResourceTableContent<T>({
         ),
       enableSorting: false,
       enableHiding: false,
-      // 勾选列只放复选框，不允许拖宽。
-      enableResizing: false,
       // 只有一个复选框（16px + 单元格左 padding 8px），固定布局下贴紧
       // 第一数据列（参照资源管理器：复选框紧跟名称），不占多余列宽。
       size: 26,
@@ -434,6 +434,8 @@ function ResourceTableContent<T>({
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
     onColumnSizingChange: setColumnSizing,
+    // 列顺序拖拽：拖动表头换位（勾选列/操作列固定在两端），持久化同上。
+    onColumnOrderChange: setColumnOrder,
     getRowId: (row) => {
       const metadata = (
         row as {
@@ -458,6 +460,7 @@ function ResourceTableContent<T>({
       rowSelection,
       columnVisibility,
       columnSizing,
+      columnOrder,
       ...(groupingState
         ? { grouping: groupingState, expanded: true as const }
         : {}),
@@ -691,6 +694,7 @@ function ResourceTableContent<T>({
         isLoading={isLoading}
         data={namespaceFilteredData as T[] | undefined}
         fitViewportHeight={true}
+        enableReorder
         emptyState={emptyState}
         hasActiveFilters={hasActiveFilters}
         filteredRowCount={filteredRowCount}

@@ -246,6 +246,7 @@ export function WorkloadRevisionsTable({
         <SimpleTable
           data={data?.items ?? []}
           emptyMessage={t('workloads.messages.noRevisions')}
+          storageKey="aerolink-workload-revisions-columnSizing"
           columns={columns}
           pagination={{ enabled: true, pageSize: 10 }}
         />

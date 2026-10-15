@@ -269,6 +269,7 @@ export function ResourceHistoryTable<T extends ResourceType>({
           <SimpleTable
             data={history || []}
             columns={historyColumns}
+            storageKey="aerolink-resource-history-columnSizing"
             emptyMessage={t('resourceHistory.noHistoryFound')}
             pagination={{
               enabled: true,

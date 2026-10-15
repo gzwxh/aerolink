@@ -35,6 +35,10 @@ import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
 import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate, translateError } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
+import {
+  useTableColumnOrder,
+  useTableColumnSizing,
+} from '@/hooks/use-table-column-preferences'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -87,6 +91,13 @@ export function UserManagement() {
   // 用户列表是全局数据、与当前集群无关，所以这里用不带集群前缀的键。
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
     'aerolink-users-columnVisibility'
+  )
+  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  const [columnSizing, setColumnSizing] = useTableColumnSizing(
+    'aerolink-users-columnSizing'
+  )
+  const [columnOrder, setColumnOrder] = useTableColumnOrder(
+    'aerolink-users-columnOrder'
   )
   const { data: roles = [] } = useRoleList()
   // 认证方式除了内置的密码 / LDAP，还可能是任意已配置的 OAuth 提供方名称。
@@ -466,10 +477,18 @@ export function UserManagement() {
       pagination,
       sorting,
       columnVisibility,
+      columnSizing,
+      columnOrder,
     },
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
+    // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    defaultColumn: { size: 160, minSize: 80, maxSize: 600 },
     manualPagination: true,
     manualSorting: true,
     pageCount: Math.ceil((data?.total ?? 0) / pagination.pageSize) || 0,
@@ -746,6 +765,7 @@ export function UserManagement() {
             columnCount={columns.length}
             isLoading={isLoading}
             data={data?.users}
+            enableReorder
             allPageSize={totalRowCount}
             emptyState={emptyState}
             hasActiveFilters={

@@ -188,6 +188,7 @@ export function VolumeTable({
         <SimpleTable
           data={tableData}
           columns={columns}
+          storageKey="aerolink-volumes-columnSizing"
           emptyMessage="No volumes configured for this resource."
           pagination={{
             enabled: tableData.length > 10,

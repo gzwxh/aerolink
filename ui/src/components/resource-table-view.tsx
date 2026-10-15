@@ -1,4 +1,9 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import {
   flexRender,
   PaginationState,
@@ -7,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
+import { ColumnResizeHandle } from './column-resize-handle'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -34,6 +40,11 @@ interface ResourceTableViewProps<T> {
   maxBodyHeightClassName?: string
   containerClassName?: string
   fitViewportHeight?: boolean
+  /**
+   * 启用表头列顺序拖拽（HTML5 DnD，拖动 th 换位）。配合 TanStack 的
+   * columnOrder 状态使用；勾选列（select）与操作列（actions）固定在两端。
+   */
+  enableReorder?: boolean
   emptyState: React.ReactNode
   hasActiveFilters: boolean
   filteredRowCount: number
@@ -74,6 +85,7 @@ export function ResourceTableView<T>({
   maxBodyHeightClassName = 'max-h-[calc(100dvh-210px)]',
   containerClassName = 'flex flex-col gap-3',
   fitViewportHeight = false,
+  enableReorder = false,
   emptyState,
   hasActiveFilters,
   filteredRowCount,
@@ -101,12 +113,100 @@ export function ResourceTableView<T>({
     .find((column) => column.id === 'select')
   const fixedSelectWidth =
     columnSizing && selectLeafColumn ? SELECT_COLUMN_WIDTH : 0
+  // 带勾选列（select）= 资源列表页：用自动布局按内容排布（紧凑 + 名称完整）。
+  // 不带勾选列的自定义表（审计日志等）保留 table-fixed 比例分配，避免长内容撑宽。
+  const isSelectionTable = Boolean(selectLeafColumn)
+  const firstDataColumn =
+    table.getVisibleLeafColumns().find((column) => column.id !== 'select') ??
+    null
+  const firstDataColumnId = firstDataColumn?.id
+  const manualColumnSizing = table.getState().columnSizing
   const restColumnSize =
     totalColumnSize - (selectLeafColumn?.getSize() ?? 0) || 1
   const restColumnCount = Math.max(
     table.getVisibleLeafColumns().length - (selectLeafColumn ? 1 : 0),
     1
   )
+
+  // 列顺序拖拽（HTML5 DnD）：拖动表头到目标列的左/右半边换位。
+  // 勾选列（select）与操作列（actions）是结构列，不可拖也不可作落点。
+  const dragColumnIdRef = useRef<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{
+    id: string
+    after: boolean
+  } | null>(null)
+  const clearDragState = useCallback(() => {
+    dragColumnIdRef.current = null
+    setDropTarget(null)
+  }, [])
+  const canReorderColumn = useCallback(
+    (columnId: string) =>
+      enableReorder && columnId !== 'select' && columnId !== 'actions',
+    [enableReorder]
+  )
+  const applyColumnOrder = useCallback(
+    (fromId: string, targetId: string, after: boolean) => {
+      const order = table.getVisibleLeafColumns().map((column) => column.id)
+      const fromIndex = order.indexOf(fromId)
+      const targetIndex = order.indexOf(targetId)
+      if (fromIndex < 0 || targetIndex < 0) {
+        return
+      }
+      order.splice(fromIndex, 1)
+      const adjustedTargetIndex = order.indexOf(targetId)
+      order.splice(after ? adjustedTargetIndex + 1 : adjustedTargetIndex, 0, fromId)
+      // 结构列强制归位：勾选列最左、操作列最右。
+      const selectIndex = order.indexOf('select')
+      if (selectIndex > 0) {
+        order.splice(selectIndex, 1)
+        order.unshift('select')
+      }
+      const actionsIndex = order.indexOf('actions')
+      if (actionsIndex >= 0 && actionsIndex !== order.length - 1) {
+        order.splice(actionsIndex, 1)
+        order.push('actions')
+      }
+      table.setColumnOrder(order)
+    },
+    [table]
+  )
+  const makeReorderProps = (columnId: string) => {
+    if (!canReorderColumn(columnId)) {
+      return {}
+    }
+    return {
+      draggable: true as const,
+      onDragStart: (event: React.DragEvent) => {
+        dragColumnIdRef.current = columnId
+        event.dataTransfer.effectAllowed = 'move'
+        // Firefox 需要 setData 才会真正进入拖拽。
+        event.dataTransfer.setData('text/plain', columnId)
+      },
+      onDragOver: (event: React.DragEvent) => {
+        const fromId = dragColumnIdRef.current
+        if (!fromId || fromId === columnId) {
+          return
+        }
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'move'
+        const rect = event.currentTarget.getBoundingClientRect()
+        setDropTarget({
+          id: columnId,
+          after: event.clientX > rect.left + rect.width / 2,
+        })
+      },
+      onDrop: (event: React.DragEvent) => {
+        event.preventDefault()
+        const fromId = dragColumnIdRef.current
+        const target = dropTarget
+        clearDragState()
+        if (fromId && target && fromId !== columnId) {
+          applyColumnOrder(fromId, columnId, target.after)
+        }
+      },
+      onDragEnd: clearDragState,
+    }
+  }
 
   const renderRows = () => {
     const rows = table.getRowModel().rows
@@ -171,16 +271,30 @@ export function ResourceTableView<T>({
             data-state={row.getIsSelected() && 'selected'}
             className={cn('group', details && 'border-b-0')}
           >
-            {row.getVisibleCells().map((cell, index) => (
-              <TableCell
-                key={cell.id}
-                className={`align-middle ${index <= 1 ? 'text-left' : 'text-center'}`}
-              >
-                {cell.column.columnDef.cell
-                  ? flexRender(cell.column.columnDef.cell, cell.getContext())
-                  : String(cell.getValue() || '-')}
-              </TableCell>
-            ))}
+            {row.getVisibleCells().map((cell, index) => {
+              const isNameColumn =
+                isSelectionTable && cell.column.id === firstDataColumnId
+              return (
+                <TableCell
+                  key={cell.id}
+                  className={`align-middle ${index <= 1 ? 'text-left' : 'text-center'}${
+                    isNameColumn
+                      ? // 名称列：覆盖列定义里 Link 的 truncate，超长名称换行而非截断。
+                        ' [&_*]:!whitespace-normal'
+                      : ''
+                  }`}
+                  style={
+                    isNameColumn
+                      ? { maxWidth: '400px', overflowWrap: 'break-word' }
+                      : undefined
+                  }
+                >
+                  {cell.column.columnDef.cell
+                    ? flexRender(cell.column.columnDef.cell, cell.getContext())
+                    : String(cell.getValue() || '-')}
+                </TableCell>
+              )
+            })}
           </TableRow>
           {details ? (
             <TableRow className="bg-muted/20 hover:bg-muted/20">
@@ -280,7 +394,11 @@ export function ResourceTableView<T>({
                   : undefined
               }
             >
-              <Table className={columnSizing ? 'table-fixed' : undefined}>
+              <Table
+                className={
+                  columnSizing && !isSelectionTable ? 'table-fixed' : undefined
+                }
+              >
                 {/* 表头吸顶：列表滚动后仍能对上列名（见上面滚动容器处的注释）。
                     分隔线用 inset 阴影而不是 border：表格是 border-collapse: collapse，
                     行边框不跟着 sticky 元素走，滚动后会留在原处。 */}
@@ -291,22 +409,33 @@ export function ResourceTableView<T>({
                         <TableHead
                           key={header.id}
                           className={cn(
-                            'relative',
-                            index <= 1 ? 'text-left' : 'text-center'
+                            // group/th：列宽手柄在悬停整个表头时显形。
+                            'group/th relative',
+                            index <= 1 ? 'text-left' : 'text-center',
+                            // 列序拖拽落点指示：落在目标列的左/右半边。
+                            dropTarget?.id === header.column.id &&
+                              (dropTarget.after
+                                ? 'shadow-[inset_-2px_0_0_0_var(--primary)]'
+                                : 'shadow-[inset_2px_0_0_0_var(--primary)]')
                           )}
+                          {...makeReorderProps(header.column.id)}
                           style={
-                            columnSizing
-                              ? header.column.id === 'select'
-                                ? { width: `${fixedSelectWidth || header.getSize()}px` }
-                                : // 按 size 的**比例**分配，而不是写死像素：写死会让总宽超过
-                                  // 容器，列一多就逼出横向滚动条（用户反馈的就是这个）。
-                                  // 复选框列固定 px 后，其余列从剩余宽度里按原占比分摊。
-                                  {
-                                    width: fixedSelectWidth
-                                      ? `calc(${((header.getSize() || 1) / restColumnSize) * 100}% - ${(fixedSelectWidth / restColumnCount).toFixed(2)}px)`
-                                      : `${((header.getSize() || 1) / totalColumnSize) * 100}%`,
-                                  }
-                              : undefined
+                            !columnSizing
+                              ? undefined
+                              : header.column.id === 'select'
+                                ? { width: `${fixedSelectWidth || SELECT_COLUMN_WIDTH}px` }
+                                : isSelectionTable
+                                  ? // 自动布局：只有手动拖过的列才写死像素，其余按内容自适应。
+                                    manualColumnSizing[header.column.id] !==
+                                    undefined
+                                    ? { width: `${manualColumnSizing[header.column.id]}px` }
+                                    : undefined
+                                  : // 固定布局：按 size 比例分配（写死会让总宽超过容器，列一多就横向滚动）。
+                                    {
+                                      width: fixedSelectWidth
+                                        ? `calc(${((header.getSize() || 1) / restColumnSize) * 100}% - ${(fixedSelectWidth / restColumnCount).toFixed(2)}px)`
+                                        : `${((header.getSize() || 1) / totalColumnSize) * 100}%`,
+                                    }
                           }
                         >
                           {header.isPlaceholder ? null : header.column.getCanSort() ? (
@@ -337,21 +466,13 @@ export function ResourceTableView<T>({
                               header.getContext()
                             )
                           )}
-                          {/* 列宽拖拽手柄：贴右缘的窄条，hover 显形，拖动中常亮。
-                              双击恢复该列的默认宽度。 */}
+                          {/* 列宽拖拽手柄：贴右缘的窄条，悬停表头显形，拖动中常亮。
+                              双击恢复该列的默认宽度。视觉统一走共享组件。 */}
                           {columnSizing && header.column.getCanResize() && (
-                            <span
-                              role="separator"
-                              aria-orientation="vertical"
-                              onMouseDown={header.getResizeHandler()}
-                              onTouchStart={header.getResizeHandler()}
+                            <ColumnResizeHandle
+                              resizing={header.column.getIsResizing()}
+                              onPointerDown={header.getResizeHandler()}
                               onDoubleClick={() => header.column.resetSize()}
-                              className={cn(
-                                'absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize touch-none select-none',
-                                header.column.getIsResizing()
-                                  ? 'bg-primary'
-                                  : 'bg-transparent hover:bg-primary/40'
-                              )}
                             />
                           )}
                         </TableHead>
@@ -361,7 +482,10 @@ export function ResourceTableView<T>({
                 </TableHeader>
                 <TableBody
                   className={cn(
-                    shrinkFirstColumn && '**:data-[slot=table-cell]:first:w-0'
+                    // w-0 只在固定布局下用来收紧勾选列；自动布局由表头 32px 固定。
+                    shrinkFirstColumn &&
+                      !isSelectionTable &&
+                      '**:data-[slot=table-cell]:first:w-0'
                   )}
                 >
                   {renderRows()}

@@ -1091,6 +1091,8 @@
     "errorLoading": "Error loading {{resourceName}}",
     "tryAgain": "Try Again",
     "toggleColumns": "Toggle columns",
+    "resetColumnLayout": "Reset column layout",
+    "columnResizeHint": "Drag to resize; double-click to reset",
     "delete": "Delete",
     "unboundGroup": "Unbound",
     "deleteSelected": "Delete ({{count}})",
@@ -3916,7 +3918,12 @@
       "notebook": "Notebook",
       "clean-slate": "Clean Slate",
       "claude": "Claude",
-      "emerald": "Emerald"
+      "emerald": "Emerald",
+      "indigo": "Indigo",
+      "ocean": "Ocean",
+      "sunset": "Sunset",
+      "jfrog": "JFrog",
+      "nexus": "Nexus"
     },
     "font": "Font",
     "displayScale": "Display Scale",

@@ -22,6 +22,10 @@ import { isLoginSuccess, statusBadge, statusText } from '@/lib/status-badge'
 import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
 import { formatDate } from '@/lib/utils'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
+import {
+  useTableColumnOrder,
+  useTableColumnSizing,
+} from '@/hooks/use-table-column-preferences'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -115,6 +119,13 @@ export function ArchiveQuery() {
   })
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
     'aerolink-archive-query-columnVisibility'
+  )
+  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  const [columnSizing, setColumnSizing] = useTableColumnSizing(
+    'aerolink-archive-query-columnSizing'
+  )
+  const [columnOrder, setColumnOrder] = useTableColumnOrder(
+    'aerolink-archive-query-columnOrder'
   )
   const [timeRange, setTimeRange] = useState<AuditTimeRange>(() =>
     defaultAuditTimeRange()
@@ -395,9 +406,15 @@ export function ArchiveQuery() {
     data: data?.data ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
-    state: { pagination, columnVisibility },
+    state: { pagination, columnVisibility, columnSizing, columnOrder },
     onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
+    // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    defaultColumn: { size: 160, minSize: 80, maxSize: 600 },
     manualPagination: true,
     pageCount: Math.ceil((data?.total ?? 0) / pagination.pageSize) || 0,
   })
@@ -658,6 +675,7 @@ export function ArchiveQuery() {
             columnCount={columns.length}
             isLoading={isLoading}
             data={data?.data}
+            enableReorder
             allPageSize={data?.total ?? 0}
             emptyState={emptyState}
             hasActiveFilters={hasActiveFilters}

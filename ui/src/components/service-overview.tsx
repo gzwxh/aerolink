@@ -194,7 +194,12 @@ function ServiceEndpointResourceCard({
             {loadingText}
           </div>
         ) : (
-          <SimpleTable data={data} columns={columns} emptyMessage={emptyText} />
+          <SimpleTable
+            data={data}
+            columns={columns}
+            storageKey="aerolink-service-overview-columnSizing"
+            emptyMessage={emptyText}
+          />
         )}
       </CardContent>
     </Card>
