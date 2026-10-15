@@ -111,7 +111,7 @@ export function FloatingTerminal() {
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragging.current) return
-    const maxHeight = window.innerHeight * 0.5
+    const maxHeight = window.innerHeight * 0.75
     const newH = Math.min(
       maxHeight,
       Math.max(MIN_HEIGHT, startH.current + (startY.current - e.clientY))
