@@ -180,6 +180,7 @@ export function SecretDetail(props: { namespace: string; name: string }) {
       resourceLabel="Secret"
       name={name}
       namespace={namespace}
+      clonePath={`/secrets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/clone`}
       data={data}
       isLoading={isLoading}
       error={isError ? error : null}

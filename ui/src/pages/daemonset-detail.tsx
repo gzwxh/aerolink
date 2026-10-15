@@ -314,6 +314,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
       resourceLabel="DaemonSet"
       name={name}
       namespace={namespace}
+      clonePath={`/daemonsets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/clone`}
       data={daemonset}
       isLoading={isLoading}
       error={isError ? error : null}

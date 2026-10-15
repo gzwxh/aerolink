@@ -58,6 +58,12 @@ export interface PortForm {
   nodePort?: number
   /** 静态 ClusterIP（必须落在 service CIDR 内）。 */
   clusterIP?: string
+  /**
+   * 反显时记录的线上 Service 名。线上 Service 的名字未必符合
+   * `<负载名>-<类型>` 的生成约定（老对象、手建的都可能是裸负载名），
+   * 生成时沿用这个名字走 apply 的 update；只有新建的端口行才按约定命名。
+   */
+  serviceName?: string
 }
 
 export interface ContainerConfig {
@@ -593,8 +599,8 @@ const formatQuantity = (value: string, unit: 'count' | 'percent') => {
 /**
  * 工作负载标签，`app` 缺省补成工作负载名。
  *
- * 生成的 Service 用它当选择器，必须与工作负载 metadata 上的那份完全一致 ——
- * 两处各算一遍就迟早会漂移。
+ * 写到工作负载 metadata.labels 上；不要拿它当 Service 的 selector——
+ * 克隆时它仍是源负载的标签（prepareCloneResource 不改写 metadata.labels）。
  */
 function workloadLabels(formData: DeploymentFormData): Record<string, string> {
   const labels = formData.labels.reduce(
@@ -609,29 +615,55 @@ function workloadLabels(formData: DeploymentFormData): Record<string, string> {
 }
 
 /**
- * 端口行里请求了 Service 的部分，按类型分组生成 Service 文档。
+ * Pod 模板标签，`app` 缺省补成工作负载名。
  *
- * 一个类型一个 Service（同一 Service 挂多个端口），名称沿用 `33c323d` 的约定：
- * ClusterIP 用工作负载名，其余类型加 `-<类型小写>` 后缀；选择器取工作负载标签。
+ * 生成的 Pod 模板与 Service 的 selector 都用它：Service 选中的是 Pod，
+ * selector 必须来自 Pod 实际拥有的标签。克隆场景下 formData.podLabels
+ * 已指向新名字（prepareCloneResource 改写了模板），而 formData.labels
+ * 还留着源负载的 metadata.labels——用后者当 selector 会让克隆体的
+ * Service 选中源负载的 Pod。
+ */
+function podTemplateLabels(
+  formData: DeploymentFormData
+): Record<string, string> {
+  const labels = pairsToRecord(formData.podLabels || [])
+  if (!labels.app && formData.name) labels.app = formData.name
+  return labels
+}
+
+/**
+ * 端口行里请求了 Service 的部分，按「类型 + 线上 Service 名」分组生成 Service 文档。
+ *
+ * 命名：反显带上线上名字的端口行沿用该名字（名字与 `<负载名>-<类型>` 约定不一致的
+ * 老 Service / 手建 Service，apply 才能按同名 Get 到并走 update；否则会当成新建，
+ * 撞上线上 Service 已占用的 nodePort 直接报 already allocated）。新建的端口行
+ * 沿用 `33c323d` 的约定：ClusterIP 用工作负载名，其余类型加 `-<类型小写>` 后缀。
  * 没有端口请求 Service 时返回空数组，调用方据此保持单文档 YAML。
  */
 export function buildServiceDocuments(
   formData: DeploymentFormData
 ): Array<Record<string, unknown>> {
-  const labelsObj = workloadLabels(formData)
+  const labelsObj = podTemplateLabels(formData)
 
   const groups = new Map<
-    Exclude<PortServiceType, 'none'>,
-    Array<{ port: Record<string, unknown>; clusterIP?: string }>
+    string,
+    {
+      type: Exclude<PortServiceType, 'none'>
+      name: string
+      entries: Array<{ port: Record<string, unknown>; clusterIP?: string }>
+    }
   >()
   for (const container of formData.containers) {
     for (const p of container.ports) {
       if (p.serviceType === 'none' || !p.containerPort) continue
-      const entries = groups.get(p.serviceType) || []
+      const key = `${p.serviceType}|${p.serviceName || ''}`
+      const group =
+        groups.get(key) ||
+        { type: p.serviceType, name: p.serviceName || '', entries: [] }
       // 同一个容器端口在一个 Service 里只需要一条映射（多容器可能重复声明同一端口）。
-      if (entries.some((entry) => entry.port.targetPort === p.containerPort))
+      if (group.entries.some((entry) => entry.port.targetPort === p.containerPort))
         continue
-      entries.push({
+      group.entries.push({
         port: {
           ...(p.name ? { name: p.name } : {}),
           port: p.servicePort || p.containerPort,
@@ -643,12 +675,12 @@ export function buildServiceDocuments(
         },
         clusterIP: p.clusterIP?.trim() || undefined,
       })
-      groups.set(p.serviceType, entries)
+      groups.set(key, group)
     }
   }
 
   const docs: Array<Record<string, unknown>> = []
-  for (const [type, entries] of groups) {
+  for (const { type, name, entries } of groups.values()) {
     const spec: Record<string, unknown> = {
       type,
       selector: labelsObj,
@@ -662,9 +694,10 @@ export function buildServiceDocuments(
       kind: 'Service',
       metadata: {
         name:
-          type === 'ClusterIP'
+          name ||
+          (type === 'ClusterIP'
             ? formData.name
-            : `${formData.name}-${type.toLowerCase()}`,
+            : `${formData.name}-${type.toLowerCase()}`),
         namespace: formData.namespace,
         labels: labelsObj,
       },
@@ -699,9 +732,7 @@ export function generateWorkloadYaml(
   }
 
   const podMeta: Record<string, unknown> = {
-    labels: pairsToRecord(formData.podLabels || []).app
-      ? pairsToRecord(formData.podLabels || [])
-      : { ...pairsToRecord(formData.podLabels || []), app: formData.name },
+    labels: podTemplateLabels(formData),
   }
   const podAnnotations = pairsToRecord(formData.podAnnotations || [])
   if (Object.keys(podAnnotations).length > 0) {
@@ -939,6 +970,40 @@ export function generateWorkloadYaml(
 
   return yaml.dump(manifest, { indent: 2, noRefs: true })
 }
+/**
+ * 编辑页的反显输入：把线上工作负载与同命名空间下 selector 匹配它的
+ * Service 拼成文档数组（parseYamlToFormData 从中识别 kind: 'Service'
+ * 反显「网络」区块）。Service 是独立对象，编辑页若只拿工作负载单文档，
+ * 网络区块会永远显示「不创建服务」。
+ */
+export function workloadWithServiceDocs(
+  workload: Record<string, unknown>,
+  services: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  const spec = (workload.spec || {}) as {
+    selector?: { matchLabels?: Record<string, string> }
+    template?: { metadata?: { labels?: Record<string, string> } }
+  }
+  // Service 的 selector 指向的是 Pod 标签，而不是工作负载的 spec.selector：
+  // Rancher 等工具创建的 Service 常带额外键（如 workload.user.cattle.io/*），
+  // 只比对 spec.selector.matchLabels 会漏掉它们。合并 Pod 模板标签作基准。
+  const matchLabels = {
+    ...(spec.template?.metadata?.labels || {}),
+    ...(spec.selector?.matchLabels || {}),
+  }
+  const docs = [workload]
+  for (const svc of services) {
+    const svcSpec = (svc.spec || {}) as { selector?: Record<string, string> }
+    const selector = svcSpec.selector || {}
+    // 空 selector 在新版本 K8s 里不选中任何 Pod，不会反显到端口行。
+    if (Object.keys(selector).length === 0) continue
+    if (!Object.entries(selector).every(([k, v]) => matchLabels[k] === v))
+      continue
+    docs.push(svc)
+  }
+  return docs
+}
+
 /** 尽力而为的反向解析：工作负载 YAML（+ Service 文档）-> 表单状态。 */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function parseYamlToFormData(
@@ -1290,8 +1355,11 @@ export function parseYamlToFormData(
     if (resourceType === 'cronjobs' && spec.schedule)
       base.schedule = String(spec.schedule)
 
-    // 把 Service 文档映射回端口行：按 targetPort 找到对应的容器端口，
-    // 记下它的 Service 类型、服务端口与 NodePort（静态 ClusterIP 不回填）。
+    // 把 Service 文档映射回端口行：按 targetPort（数字或端口名）找到对应的
+    // 容器端口行，记下它的 Service 类型、服务端口与 NodePort。多个 Service
+    // 指向同一个容器端口时（比如同端口建了 ClusterIP 与 NodePort），按文档
+    // 顺序各占一行，不互相覆盖——否则后处理的 Service 会抹掉先前的反显。
+    const claimedRows = new Set<string>()
     for (const svc of docs.filter((d) => d && d.kind === 'Service')) {
       const svcSpec = (svc.spec || {}) as Record<string, any>
       const svcType = String(svcSpec.type || 'ClusterIP')
@@ -1303,17 +1371,35 @@ export function parseYamlToFormData(
       )
         continue
       for (const sp of (svcSpec.ports as Array<any>) || []) {
-        const target = Number(sp.targetPort)
-        for (const c of base.containers) {
-          for (const p of c.ports) {
-            if (p.containerPort !== target) continue
-            p.serviceType = svcType
-            // 服务端口与容器端口相同时是默认推导，不算用户填过。
-            if (sp.port !== undefined && Number(sp.port) !== target)
-              p.servicePort = Number(sp.port)
-            if (sp.nodePort !== undefined) p.nodePort = Number(sp.nodePort)
-          }
-        }
+        const targetName =
+          typeof sp.targetPort === 'string' ? sp.targetPort : ''
+        const target =
+          sp.targetPort !== undefined
+            ? Number(sp.targetPort)
+            : Number(sp.port)
+        const candidates: Array<{ key: string; p: any }> = []
+        base.containers.forEach((c, ci) => {
+          c.ports.forEach((p, pi) => {
+            if (targetName ? p.name === targetName : p.containerPort === target)
+              candidates.push({ key: `${ci}:${pi}`, p })
+          })
+        })
+        const row =
+          candidates.find(({ key }) => !claimedRows.has(key)) || candidates[0]
+        if (!row) continue
+        claimedRows.add(row.key)
+        row.p.serviceType = svcType
+        // 记下线上 Service 的名字，生成时沿用（见 buildServiceDocuments）。
+        const svcName = String(
+          ((svc.metadata as Record<string, unknown> | undefined)?.name as
+            | string
+            | undefined) || ''
+        )
+        if (svcName) row.p.serviceName = svcName
+        // 服务端口与容器端口相同时是默认推导，不算用户填过。
+        if (sp.port !== undefined && Number(sp.port) !== target)
+          row.p.servicePort = Number(sp.port)
+        if (sp.nodePort !== undefined) row.p.nodePort = Number(sp.nodePort)
       }
     }
 

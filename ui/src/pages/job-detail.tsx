@@ -237,6 +237,7 @@ export function JobDetail(props: { namespace: string; name: string }) {
       resourceLabel="Job"
       name={name}
       namespace={namespace}
+      clonePath={`/jobs/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/clone`}
       data={job}
       isLoading={isLoading}
       error={isError ? jobError : null}

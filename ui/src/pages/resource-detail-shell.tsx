@@ -84,6 +84,11 @@ interface ResourceDetailShellProps<T> {
    * （路径来源见 `lib/resource-catalog.ts` 的 `getResourceFormEditPath`）。
    */
   editPath?: string
+  /**
+   * 设置后「克隆」不再打开 YAML 克隆弹窗，而是跳转到该路径
+   * （例如工作负载的表单克隆页，见 deployment-create-page 的克隆分支）。
+   */
+  clonePath?: string
   titleIcon?: ReactNode
   yamlToolbar?:
     ReactNode | ((context: ResourceDetailShellContext<T>) => ReactNode)
@@ -92,6 +97,11 @@ interface ResourceDetailShellProps<T> {
   showDescribe?: boolean
   showDelete?: boolean
   showClone?: boolean
+  /**
+   * 删除该资源时会一并删除的关联 Service 名单（调用方算好并做权限过滤），
+   * 删除弹窗里会展示联动提醒。
+   */
+  deleteRelatedServices?: string[]
   /**
    * YAML 标签页是否提供编辑与保存。只读用户仍能看到该标签页，
    * 以便查看 manifest。
@@ -122,6 +132,7 @@ export function ResourceDetailShell<T>({
   headerActions,
   moreActions,
   editPath,
+  clonePath,
   titleIcon,
   yamlToolbar,
   loadingMessage,
@@ -129,6 +140,7 @@ export function ResourceDetailShell<T>({
   showDescribe = true,
   showDelete = true,
   showClone = true,
+  deleteRelatedServices,
   yamlEditable = true,
   defaultTab,
   permissionResource,
@@ -464,7 +476,11 @@ export function ResourceDetailShell<T>({
                     )}
                     {effectiveShowClone && (
                       <DropdownMenuItem
-                        onSelect={() => setIsCloneDialogOpen(true)}
+                        onSelect={() =>
+                          clonePath
+                            ? navigate(clonePath)
+                            : setIsCloneDialogOpen(true)
+                        }
                       >
                         <IconCopy className="size-4" />
                         {t('common.actions.clone')}
@@ -510,6 +526,7 @@ export function ResourceDetailShell<T>({
           resourceName={name}
           resourceType={resourceType}
           namespace={namespace}
+          relatedServices={deleteRelatedServices}
         />
       )}
 
@@ -523,7 +540,7 @@ export function ResourceDetailShell<T>({
         />
       )}
 
-      {effectiveShowClone ? (
+      {effectiveShowClone && !clonePath ? (
         <CloneResourceDialog
           open={isCloneDialogOpen}
           onOpenChange={setIsCloneDialogOpen}

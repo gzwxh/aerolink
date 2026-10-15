@@ -127,6 +127,10 @@ export const router = createBrowserRouter(
           element: <DeploymentCreatePage />,
         },
         {
+          path: 'deployments/:namespace/:name/clone',
+          element: <DeploymentCreatePage clone />,
+        },
+        {
           path: 'deployments/:namespace',
           element: <DeploymentListPage />,
         },
@@ -141,6 +145,10 @@ export const router = createBrowserRouter(
         {
           path: 'services/:namespace/:name/edit',
           element: <ServiceCreatePage />,
+        },
+        {
+          path: 'services/:namespace/:name/clone',
+          element: <ServiceCreatePage clone />,
         },
         {
           path: 'services/:namespace',
@@ -159,6 +167,10 @@ export const router = createBrowserRouter(
           element: <DeploymentCreatePage resourceType="cronjobs" />,
         },
         {
+          path: 'cronjobs/:namespace/:name/clone',
+          element: <DeploymentCreatePage resourceType="cronjobs" clone />,
+        },
+        {
           path: 'cronjobs/:namespace',
           element: <CronJobListPage />,
         },
@@ -173,6 +185,10 @@ export const router = createBrowserRouter(
         {
           path: 'jobs/:namespace/:name/edit',
           element: <DeploymentCreatePage resourceType="jobs" />,
+        },
+        {
+          path: 'jobs/:namespace/:name/clone',
+          element: <DeploymentCreatePage resourceType="jobs" clone />,
         },
         {
           path: 'jobs/:namespace',
@@ -191,6 +207,10 @@ export const router = createBrowserRouter(
           element: <DeploymentCreatePage resourceType="pods" />,
         },
         {
+          path: 'pods/:namespace/:name/clone',
+          element: <DeploymentCreatePage resourceType="pods" clone />,
+        },
+        {
           path: 'pods/:namespace',
           element: <PodListPage />,
         },
@@ -207,6 +227,10 @@ export const router = createBrowserRouter(
           element: <DeploymentCreatePage resourceType="daemonsets" />,
         },
         {
+          path: 'daemonsets/:namespace/:name/clone',
+          element: <DeploymentCreatePage resourceType="daemonsets" clone />,
+        },
+        {
           path: 'daemonsets/:namespace',
           element: <DaemonSetListPage />,
         },
@@ -221,6 +245,10 @@ export const router = createBrowserRouter(
         {
           path: 'statefulsets/:namespace/:name/edit',
           element: <DeploymentCreatePage resourceType="statefulsets" />,
+        },
+        {
+          path: 'statefulsets/:namespace/:name/clone',
+          element: <DeploymentCreatePage resourceType="statefulsets" clone />,
         },
         {
           path: 'statefulsets/:namespace',
@@ -240,6 +268,10 @@ export const router = createBrowserRouter(
           element: <ConfigMapCreatePage />,
         },
         {
+          path: 'configmaps/:namespace/:name/clone',
+          element: <ConfigMapCreatePage clone />,
+        },
+        {
           path: 'secrets/create',
           element: <SecretCreatePage />,
         },
@@ -250,6 +282,10 @@ export const router = createBrowserRouter(
         {
           path: 'secrets/:namespace/:name/edit',
           element: <SecretCreatePage />,
+        },
+        {
+          path: 'secrets/:namespace/:name/clone',
+          element: <SecretCreatePage clone />,
         },
         {
           // 集群级存储资源：没有命名空间段。

@@ -162,6 +162,7 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
       resourceLabel="ConfigMap"
       name={name}
       namespace={namespace}
+      clonePath={`/configmaps/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/clone`}
       data={data}
       isLoading={isLoading}
       error={isError ? error : null}

@@ -123,6 +123,7 @@ export function ServiceDetail(props: { name: string; namespace?: string }) {
       resourceLabel="Service"
       name={name}
       namespace={namespace}
+      clonePath={`/services/${encodeURIComponent(namespace || 'default')}/${encodeURIComponent(name)}/clone`}
       data={data}
       isLoading={isLoading}
       error={isError ? error : null}

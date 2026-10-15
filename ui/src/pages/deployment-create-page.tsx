@@ -7,7 +7,13 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { applyResource, useResource, useResources } from '@/lib/api'
+import {
+  applyResource,
+  deleteResource,
+  useResource,
+  useResources,
+} from '@/lib/api'
+import { prepareCloneResource } from '@/lib/clone-manifest'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { cn, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
@@ -32,6 +38,7 @@ import {
 import { Tabs, TabsTrigger } from '@/components/ui/tabs'
 import {
   applyEditedManifest,
+  buildServiceDocuments,
   createDefaultContainer,
   defaultNetwork,
   generateWorkloadYaml,
@@ -42,6 +49,7 @@ import {
   StrategyForm,
   validateStep,
   VolumeForm,
+  workloadWithServiceDocs,
   type DeploymentFormData,
   type VolumeSourceType,
   type WorkloadResourceType,
@@ -201,19 +209,29 @@ const KIND_LABELS: Partial<Record<WorkloadResourceType, string>> = {
 
 interface DeploymentCreatePageProps {
   resourceType?: WorkloadResourceType
+  /** 克隆路由（`…/:namespace/:name/clone`）设置：以源对象反显创建表单。 */
+  clone?: boolean
 }
 
 /**
  * 工作负载表单页的入口：创建路由渲染它时没有
  * `:name` 参数，而编辑路由（`…/:namespace/:name/edit`）会提供一个，
- * 从而让页面切换为编辑已有对象。
+ * 从而让页面切换为编辑已有对象；克隆路由（`…/clone`）则切换为
+ * 以源对象反显的创建表单。
  */
 export function DeploymentCreatePage({
   resourceType = 'deployments',
+  clone = false,
 }: DeploymentCreatePageProps = {}) {
   const { namespace, name } = useParams()
   if (name) {
-    return (
+    return clone ? (
+      <DeploymentClonePage
+        resourceType={resourceType}
+        name={name}
+        namespace={namespace || 'default'}
+      />
+    ) : (
       <DeploymentEditPage
         resourceType={resourceType}
         name={name}
@@ -224,19 +242,77 @@ export function DeploymentCreatePage({
   return <DeploymentFormPage resourceType={resourceType} />
 }
 
+/**
+ * 编辑保存后需要删除的 Service：表单只会自动创建「负载名」「负载名-nodeport」
+ * 「负载名-loadbalancer」三种名字（见 buildServiceDocuments）。把端口行从
+ * NodePort 改成 ClusterIP 之类之后，apply 只更新 YAML 里仍在的文档，不再生成
+ * 的旧 Service 会残留在集群里，还挂着同样的 selector——下一次进编辑页又把它
+ * 反显回端口行，看起来就像「改了不生效」。这里只清理自动命名的 Service，
+ * 手写的 Service 一律不动。
+ */
+function staleManagedServiceNames(
+  formData: DeploymentFormData,
+  originalManifest: Record<string, unknown> | undefined,
+  liveServices: Array<Record<string, unknown>>
+): string[] {
+  const spec = (originalManifest?.spec || {}) as {
+    selector?: { matchLabels?: Record<string, string> }
+    template?: { metadata?: { labels?: Record<string, string> } }
+  }
+  // 与反显同一基准：Service selector 指向 Pod 标签（可能带 Rancher 等注入的
+  // 额外键），合并 Pod 模板标签与工作负载 selector 判定。metadata.labels 也
+  // 并进来：历史版本克隆生成的 Service selector 用的是源负载的 metadata 标签
+  // （app: 源名），只有按它才能认领这些坏残留。
+  const metadataLabels = ((originalManifest?.metadata || {}) as {
+    labels?: Record<string, string>
+  }).labels
+  const matchLabels = {
+    ...(metadataLabels || {}),
+    ...(spec.template?.metadata?.labels || {}),
+    ...(spec.selector?.matchLabels || {}),
+  }
+  if (Object.keys(matchLabels).length === 0) return []
+  const generated = new Set(
+    buildServiceDocuments(formData).map(
+      (d) => String((d.metadata as Record<string, unknown>).name)
+    )
+  )
+  const autoNames = new Set([
+    formData.name,
+    `${formData.name}-nodeport`,
+    `${formData.name}-loadbalancer`,
+  ])
+  const stale: string[] = []
+  for (const svc of liveServices) {
+    const s = svc as {
+      metadata?: { name?: unknown }
+      spec?: { selector?: Record<string, string> }
+    }
+    const sel = s.spec?.selector || {}
+    if (Object.keys(sel).length === 0) continue
+    if (!Object.entries(sel).every(([k, v]) => matchLabels[k] === v)) continue
+    const name = String(s.metadata?.name || '')
+    if (autoNames.has(name) && !generated.has(name)) stale.push(name)
+  }
+  return stale
+}
+
 interface DeploymentFormPageProps {
   resourceType: WorkloadResourceType
   /** 编辑时设置：身份字段被锁定，保存即更新。 */
   editName?: string
-  /** 编辑模式下预填的表单状态。 */
+  /** 克隆时设置：页面标题与返回目标指向源对象，其余行为与创建一致。 */
+  cloneSourceName?: string
+  /** 编辑/克隆模式下预填的表单状态。 */
   initialData?: DeploymentFormData
-  /** 正在编辑的线上对象，用于保存时保留未建模的字段。 */
+  /** 正在编辑（或克隆）的对象，用于保存时保留未建模的字段。 */
   originalManifest?: Record<string, unknown>
 }
 
 function DeploymentFormPage({
   resourceType,
   editName,
+  cloneSourceName,
   initialData,
   originalManifest,
 }: DeploymentFormPageProps) {
@@ -256,6 +332,14 @@ function DeploymentFormPage({
         ...(resourceType === 'cronjobs' ? { schedule: '*/5 * * * *' } : {}),
       }
   )
+  // 编辑模式下取同命名空间的 Service 列表：保存成功后用于清理
+  // 改型/删端口后不再生成的自动命名 Service（见 staleManagedServiceNames）。
+  const editNamespace =
+    ((originalManifest?.metadata as Record<string, unknown> | undefined)
+      ?.namespace as string | undefined) || formData.namespace
+  const { data: liveServices } = useResources('services', editNamespace, {
+    disable: !isEdit,
+  })
   const [activeTab, setActiveTab] = useState<MainTab | number>(() => {
     const tabParam = searchParams.get('tab')
     if (tabParam === 'pod') return 'pod'
@@ -299,10 +383,16 @@ function DeploymentFormPage({
         kind: kindLabel,
         defaultValue: `${kindLabel}: 编辑`,
       })
-    : t('workloadWizard.pageTitle', {
-        kind: kindLabel,
-        defaultValue: `${kindLabel}: 创建`,
-      })
+    : cloneSourceName
+      ? t('workloadWizard.clonePageTitle', {
+          kind: kindLabel,
+          name: cloneSourceName,
+          defaultValue: `${kindLabel}: 从 ${cloneSourceName} 克隆`,
+        })
+      : t('workloadWizard.pageTitle', {
+          kind: kindLabel,
+          defaultValue: `${kindLabel}: 创建`,
+        })
   usePageTitle(pageTitle)
 
   const update = (updates: Partial<DeploymentFormData>) =>
@@ -422,6 +512,29 @@ function DeploymentFormPage({
     setCreateError(null)
     try {
       await applyResource(finalYaml, formData.namespace)
+      // apply 只创建/更新 YAML 里仍在的文档：把端口行从 NodePort 改成
+      // ClusterIP 后，旧的 name-nodeport 不会自己消失。这里显式删掉
+      // 不再生成的自动命名 Service，避免残留对象把下一次反显拉回旧状态。
+      if (isEdit && originalManifest) {
+        const stale = staleManagedServiceNames(
+          formData,
+          originalManifest,
+          (liveServices || []) as Array<Record<string, unknown>>
+        )
+        const results = await Promise.allSettled(
+          stale.map((svcName) =>
+            deleteResource('services', svcName, formData.namespace)
+          )
+        )
+        if (results.some((r) => r.status === 'rejected')) {
+          toast.warning(
+            t(
+              'workloadWizard.staleServiceCleanupFailed',
+              '部分不再使用的 Service 清理失败，可在 Service 列表中手动删除'
+            )
+          )
+        }
+      }
       queryClient.invalidateQueries()
       toast.success(t('common.messages.applied', 'Applied successfully'))
       // 返回到（刚创建或刚编辑过的）对象详情页。
@@ -511,8 +624,10 @@ function DeploymentFormPage({
           aria-label={t('common.actions.backToList', '返回列表')}
           title={t('common.actions.backToList', '返回列表')}
           onClick={() =>
-            isEdit
-              ? navigate(`/${resourceType}/${targetNamespace}/${editName}`)
+            isEdit || cloneSourceName
+              ? navigate(
+                  `/${resourceType}/${targetNamespace}/${cloneSourceName || editName}`
+                )
               : navigate(`/${resourceType}`)
           }
         >
@@ -1422,8 +1537,10 @@ function DeploymentFormPage({
         <Button
           variant="outline"
           onClick={() =>
-            isEdit
-              ? navigate(`/${resourceType}/${targetNamespace}/${editName}`)
+            isEdit || cloneSourceName
+              ? navigate(
+                  `/${resourceType}/${targetNamespace}/${cloneSourceName || editName}`
+                )
               : navigate(`/${resourceType}`)
           }
         >
@@ -1461,17 +1578,108 @@ function DeploymentEditPage({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { data, isError, error } = useResource(resourceType, name, namespace)
+  // 创建时随工作负载一并落地的 Service 是独立对象：编辑时把它们查回来，
+  // 与工作负载拼成多文档 YAML 一起反解析，否则「网络」区块永远显示「不创建服务」。
+  const { data: services, error: servicesError } = useResources(
+    'services',
+    namespace,
+    { disable: !data }
+  )
+
+  const initialData = useMemo(() => {
+    if (!data) return null
+    const docs = workloadWithServiceDocs(
+      data as Record<string, unknown>,
+      (services || []) as Array<Record<string, unknown>>
+    )
+    return parseYamlToFormData(
+      docs.map((doc) => YAML.dump(doc)).join('---\n'),
+      resourceType,
+      {
+        ...initialFormData,
+        name,
+        namespace,
+      }
+    )
+  }, [data, services, resourceType, name, namespace])
+
+  if (isError) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <p className="text-sm text-destructive">{translateError(error, t)}</p>
+        <Button
+          variant="outline"
+          onClick={() => navigate(`/${resourceType}/${namespace}/${name}`)}
+        >
+          {t('common.actions.cancel', '取消')}
+        </Button>
+      </div>
+    )
+  }
+
+  // initialData 只在表单挂载时初始化一次：Service 列表还没取回就挂载的话，
+  // 「网络」区块会永远停在「不创建服务」，晚到的反显不会再被应用。
+  // 列表查询失败（如 RBAC 拒绝）时降级为「无 Service」，不卡住编辑页。
+  if (!initialData || (services === undefined && !servicesError)) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <DeploymentFormPage
+      resourceType={resourceType}
+      editName={name}
+      initialData={initialData}
+      originalManifest={data as Record<string, unknown>}
+    />
+  )
+}
+
+/**
+ * 加载克隆源对象，把它预处理成克隆草稿（改名 + 剥离服务端字段 +
+ * 对齐 selector，见 lib/clone-manifest）后交给与创建页相同的表单。
+ * 保存走创建而不是更新，名称默认加 `-copy` 后缀且可改。
+ */
+function DeploymentClonePage({
+  resourceType,
+  name,
+  namespace,
+}: {
+  resourceType: WorkloadResourceType
+  name: string
+  namespace: string
+}) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { data, isError, error } = useResource(resourceType, name, namespace)
+  const targetName = `${name}-copy`
+
+  const cloneManifest = useMemo(
+    () =>
+      data
+        ? (prepareCloneResource(
+            data,
+            resourceType,
+            name,
+            targetName
+          ) as Record<string, unknown>)
+        : null,
+    [data, resourceType, name, targetName]
+  )
 
   const initialData = useMemo(
     () =>
-      data
-        ? parseYamlToFormData(YAML.dump(data), resourceType, {
+      cloneManifest
+        ? parseYamlToFormData(YAML.dump(cloneManifest), resourceType, {
             ...initialFormData,
-            name,
+            name: targetName,
             namespace,
           })
         : null,
-    [data, resourceType, name, namespace]
+    [cloneManifest, resourceType, targetName, namespace]
   )
 
   if (isError) {
@@ -1499,9 +1707,9 @@ function DeploymentEditPage({
   return (
     <DeploymentFormPage
       resourceType={resourceType}
-      editName={name}
+      cloneSourceName={name}
       initialData={initialData}
-      originalManifest={data as Record<string, unknown>}
+      originalManifest={cloneManifest || undefined}
     />
   )
 }

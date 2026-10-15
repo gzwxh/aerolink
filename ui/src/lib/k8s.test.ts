@@ -185,12 +185,22 @@ describe('servicesForWorkload', () => {
     expect(matched.map((s) => s.metadata?.name)).toEqual(['web'])
   })
 
-  it('同名前缀的 Service 也算关联（控制台过去的命名习惯）', () => {
+  it('名字前缀只对无 selector 的 Service 兜底，不能凌驾于 selector 之上', () => {
+    // 克隆负载的 Service（nginx-clone）名字同样以 web- 风格前缀开头，
+    // 但 selector 指向别的 Pod —— 不该出现在本负载的关联信息里。
     const matched = servicesForWorkload(services, {
       name: 'web',
       labels: { app: 'nothing-matches' },
     })
-    expect(matched.map((s) => s.metadata?.name)).toEqual(['web', 'web-canary'])
+    expect(matched.map((s) => s.metadata?.name)).toEqual([])
+  })
+
+  it('无 selector 的 Service 按名字兜底关联（控制台过去的命名习惯）', () => {
+    const matched = servicesForWorkload(
+      [service('web-legacy'), service('web-clone', { app: 'clone' })],
+      { name: 'web', labels: { app: 'web' } }
+    )
+    expect(matched.map((s) => s.metadata?.name)).toEqual(['web-legacy'])
   })
 
   it('空选择器（ExternalName 之类）不算关联', () => {

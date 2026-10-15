@@ -358,6 +358,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       resourceLabel="StatefulSet"
       name={name}
       namespace={namespace}
+      clonePath={`/statefulsets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/clone`}
       data={statefulset}
       isLoading={isLoading}
       error={isError ? error : null}

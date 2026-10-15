@@ -485,10 +485,13 @@ export function getOwnerInfo(metadata?: ObjectMeta) {
 /**
  * 选出与某个工作负载关联的 Service。
  *
- * 判定同时认两种来源：
- *   - 名字等于工作负载名、或以 `<工作负载名>-` 开头（控制台过去自动生成的命名习惯）；
- *   - Service 的 selector 被工作负载的 Pod 标签完全覆盖 —— 这才是真正决定关联的规则
- *     （Service 选中哪些 Pod 由它自己的 selector 决定）。
+ * 判定规则：
+ *   - Service 自带 selector 时一律按 selector 判定 —— Service 选中哪些 Pod
+ *     由它自己的 selector 决定（labels 应传 Pod 模板标签）；
+ *   - 名字等于工作负载名、或以 `<工作负载名>-` 开头，只对**没有 selector** 的
+ *     Service 兜底（控制台过去自动生成的命名习惯）。名字前缀不能凌驾于
+ *     selector 之上：克隆负载的 Service（如 nginx-clone）名字同样以
+ *     `nginx-` 开头，selector 却指向别的 Pod。
  *
  * 关联本身在「服务」页面维护，这里只用于只读展示与跳转。
  */
@@ -499,17 +502,16 @@ export function servicesForWorkload(
   const workloadName = (options.name || '').trim()
   const labels = options.labels || {}
   return services.filter((service) => {
-    const svcName = service.metadata?.name || ''
-    if (
-      workloadName &&
-      (svcName === workloadName || svcName.startsWith(`${workloadName}-`))
-    ) {
-      return true
-    }
     const selector = (service.spec?.selector || {}) as Record<string, string>
     const keys = Object.keys(selector)
-    if (keys.length === 0) return false
-    return keys.every((key) => labels[key] === selector[key])
+    if (keys.length > 0) {
+      return keys.every((key) => labels[key] === selector[key])
+    }
+    const svcName = service.metadata?.name || ''
+    return (
+      workloadName !== '' &&
+      (svcName === workloadName || svcName.startsWith(`${workloadName}-`))
+    )
   })
 }
 

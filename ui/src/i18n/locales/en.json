@@ -1304,6 +1304,7 @@
     "resetYaml": "Reset to generated YAML"
   },
   "workloadWizard": {
+    "clonePageTitle": "{{kind}}: Clone from {{name}}",
     "name": "{{kind}} Name *",
     "namespace": "Namespace *",
     "labels": "Labels *",
@@ -1442,6 +1443,7 @@
     "pvcName": "PVC Name",
     "volumeSection": "Volumes",
     "networkSection": "Network",
+    "staleServiceCleanupFailed": "Failed to clean up some services that are no longer used; delete them manually in the Services list.",
     "volumeTypeEmptyDir": "Empty Directory",
     "volumeTypeHostPath": "Host Path (Bind-Mount)",
     "volumeTypeConfigMap": "ConfigMap",
@@ -2718,7 +2720,10 @@
     "wait": "Wait",
     "forceDelete": "Force delete (set grace period to 0)",
     "finalizerNote": "If finalizers exist and resource is not deleted after 3 seconds, finalizers will be removed automatically",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "relatedServicesTitle": "Related Services will also be deleted",
+    "relatedServicesHint": "These Services select this workload and will be deleted together with it.",
+    "relatedServicesDeleteFailed": "Failed to delete related Services: {{names}}. Remove them manually from the Services list."
   },
   "helmCharts": {
     "actions": {
@@ -2958,6 +2963,7 @@
   },
   "configmapCreate": {
     "editPageTitle": "ConfigMap: Edit",
+    "clonePageTitle": "ConfigMap: Clone from {{name}}",
     "pageTitle": "ConfigMap: Create",
     "namePlaceholder": "Enter a name",
     "tabData": "Data",
@@ -2986,6 +2992,7 @@
   },
   "secretCreate": {
     "editPageTitle": "Secret: Edit",
+    "clonePageTitle": "Secret: Clone from {{name}}",
     "pageTitle": "Secret: Create",
     "namePlaceholder": "Enter a name",
     "tabData": "Data",
@@ -3064,6 +3071,7 @@
   "serviceCreate": {
     "pageTitle": "Service: Create",
     "editPageTitle": "Service: Edit",
+    "clonePageTitle": "Service: Clone from {{name}}",
     "noCreatePermission": "You do not have permission to create Services in namespace {{namespace}}.",
     "serviceName": "Service Name",
     "serviceType": "Service Type",

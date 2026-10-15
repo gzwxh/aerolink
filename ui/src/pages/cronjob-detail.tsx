@@ -391,6 +391,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       resourceLabel="CronJob"
       name={name}
       namespace={namespace}
+      clonePath={`/cronjobs/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/clone`}
       data={cronjob}
       isLoading={isLoading}
       error={isError ? cronJobError : null}

@@ -9,6 +9,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { applyResource, useResource } from '@/lib/api'
+import { prepareCloneResource } from '@/lib/clone-manifest'
 import { splitSecretData } from '@/lib/base64'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
@@ -131,7 +132,7 @@ const parseSecretYaml = (text: string): Secret | null => {
   }
 }
 
-export function SecretCreatePage() {
+export function SecretCreatePage({ clone = false }: { clone?: boolean }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -139,11 +140,17 @@ export function SecretCreatePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const can = useCan()
 
-  const isEdit = Boolean(editName)
+  // 克隆路由也有 :name，但保存走创建：名称与命名空间保持可编辑。
+  const isEdit = Boolean(editName) && !clone
 
   const pageTitle = isEdit
     ? t('secretCreate.editPageTitle', 'Secret: 编辑')
-    : t('secretCreate.pageTitle', 'Secret: 创建')
+    : clone && editName
+      ? t('secretCreate.clonePageTitle', {
+          name: editName,
+          defaultValue: `Secret: 从 ${editName} 克隆`,
+        })
+      : t('secretCreate.pageTitle', 'Secret: 创建')
   usePageTitle(pageTitle)
 
   const [namespace, setNamespace] = useState(() =>
@@ -209,35 +216,44 @@ export function SecretCreatePage() {
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  // 编辑模式：把线上对象读回来预填（创建模式下不发请求）。
+  // 编辑/克隆模式：把线上对象读回来预填（纯创建模式下不发请求）。
   const { data: existing } = useResource('secrets', editName || '', namespace, {
-    enabled: isEdit,
+    enabled: Boolean(editName),
   })
   useEffect(() => {
     if (!existing) return
-    const annotations = existing.metadata?.annotations || {}
+    // 克隆：先做通用预处理（剥离服务端字段、改名 <源名>-copy）再反显。
+    const source = clone
+      ? (prepareCloneResource(
+          existing,
+          'secrets',
+          editName || '',
+          `${editName || ''}-copy`
+        ) as Secret)
+      : existing
+    const annotations = source.metadata?.annotations || {}
     // 描述注解：读新键并兼容改名前的旧键；两者都不作为「额外注解」展示。
     const rest = { ...annotations }
     delete rest[DESCRIPTION_ANNOTATION]
     delete rest[LEGACY_DESCRIPTION_ANNOTATION]
-    setName(existing.metadata?.name || '')
-    setNamespace(existing.metadata?.namespace || namespace)
+    setName(source.metadata?.name || '')
+    setNamespace(source.metadata?.namespace || namespace)
     setDescription(readDescription(annotations))
-    setSecretType(existing.type || SECRET_TYPE_OPAQUE)
+    setSecretType(source.type || SECRET_TYPE_OPAQUE)
     setCustomType(
-      existing.type && !KNOWN_SECRET_TYPES.includes(existing.type)
-        ? existing.type
+      source.type && !KNOWN_SECRET_TYPES.includes(source.type)
+        ? source.type
         : ''
     )
-    setImmutable(existing.immutable === true)
+    setImmutable(source.immutable === true)
     // data 里既有明文值（stringData 写入后由 apiserver 编码）也有二进制值，
     // 二者用「能否安全编码往返」区分，避免把 keystore 这类内容当文本改坏。
-    const { text, binary } = splitSecretData(existing.data)
+    const { text, binary } = splitSecretData(source.data)
     setDataRows(rowsFromPairs(text))
     setBinaryRows(
       rowsFromPairs(binary).map((row) => ({ ...row, fileName: row.key }))
     )
-    setLabels(rowsFromPairs(Object.entries(existing.metadata?.labels || {})))
+    setLabels(rowsFromPairs(Object.entries(source.metadata?.labels || {})))
     setAnnotations(rowsFromPairs(Object.entries(rest)))
     // 只有线上对象变化时重填，否则会把用户正在编辑的内容冲掉。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -615,7 +631,7 @@ export function SecretCreatePage() {
           aria-label={t('common.actions.backToList', '返回列表')}
           title={t('common.actions.backToList', '返回列表')}
           onClick={() =>
-            isEdit && editName
+            editName
               ? navigate(
                   `/secrets/${encodeURIComponent(namespace)}/${editName}`
                 )
@@ -1074,7 +1090,7 @@ export function SecretCreatePage() {
         <Button
           variant="outline"
           onClick={() =>
-            isEdit && editName
+            editName
               ? navigate(
                   `/secrets/${encodeURIComponent(namespace)}/${editName}`
                 )

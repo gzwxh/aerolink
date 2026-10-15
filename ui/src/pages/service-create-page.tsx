@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
+import type { Service } from 'kubernetes-types/core/v1'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { applyResource, updateResource, useResource } from '@/lib/api'
+import { prepareCloneResource } from '@/lib/clone-manifest'
 import {
   allowedServiceTypes,
   formFromService,
@@ -39,14 +41,15 @@ import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { ServicePortsEditor } from '@/components/service-ports-editor'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 
-export function ServiceCreatePage() {
+export function ServiceCreatePage({ clone = false }: { clone?: boolean }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const { namespace: namespaceParam, name: editName } = useParams()
   const can = useCan()
-  const isEdit = Boolean(editName)
+  // 克隆路由也有 :name，但保存走创建：名称与命名空间保持可编辑。
+  const isEdit = Boolean(editName) && !clone
 
   const [formData, setFormData] = useState<ServiceFormData>(() => ({
     ...initialData,
@@ -65,22 +68,38 @@ export function ServiceCreatePage() {
 
   const pageTitle = isEdit
     ? t('serviceCreate.editPageTitle', 'Service: 编辑')
-    : t('serviceCreate.pageTitle', 'Service: 创建')
+    : clone && editName
+      ? t('serviceCreate.clonePageTitle', {
+          name: editName,
+          defaultValue: `Service: 从 ${editName} 克隆`,
+        })
+      : t('serviceCreate.pageTitle', 'Service: 创建')
   usePageTitle(pageTitle)
 
-  // 编辑模式：读回线上对象预填（创建模式下不发请求）。
+  // 编辑/克隆模式：读回线上对象预填（纯创建模式下不发请求）。
   const { data: existing } = useResource(
     'services',
     editName || '',
     namespaceParam,
-    { enabled: isEdit }
+    { enabled: Boolean(editName) }
   )
   useEffect(() => {
     if (!existing) return
-    const next = formFromService(existing)
+    // 克隆：先做通用预处理（剥离服务端字段、改名 <源名>-copy、清理
+    // clusterIP / nodePort 等不可复用的字段），再走与编辑相同的反显路径。
+    const source = clone
+      ? (prepareCloneResource(
+          existing,
+          'services',
+          editName || '',
+          `${editName || ''}-copy`
+        ) as unknown as Service)
+      : existing
+    const next = formFromService(source)
     setFormData(next)
     setFormSnapshot(JSON.stringify({ formData: next, editedYaml: '' }))
     // 只在线上对象变化时重填，否则会把正在编辑的内容冲掉。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing])
 
   // 写入一个已存在的 Service 用的是 update 权限。

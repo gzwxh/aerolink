@@ -9,6 +9,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { applyResource, useResource } from '@/lib/api'
+import { prepareCloneResource } from '@/lib/clone-manifest'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
   DESCRIPTION_ANNOTATION,
@@ -58,7 +59,8 @@ const parseConfigMapYaml = (text: string): ConfigMap | null => {
 
 /**
  * ConfigMap 的表单页：没有 `:name` 时是创建，有 `:name`（路由 `…/:namespace/:name/edit`）
- * 时读出线上对象预填，保存即更新（同一套表单，避免创建与修改两套界面走偏）。
+ * 时读出线上对象预填，保存即更新（同一套表单，避免创建与修改两套界面走偏）；
+ * 克隆路由（`…/clone`）同样读源对象预填（名称预填 `<源名>-copy`），但保存走创建。
  */
 /** 把线上对象的 map 字段转成键/值行；空对象给一行空行，保证表格不为空。 */
 function rowsFromRecord(record: Record<string, string> | undefined): DataRow[] {
@@ -69,18 +71,24 @@ function rowsFromRecord(record: Record<string, string> | undefined): DataRow[] {
   return rows.length > 0 ? rows : [{ key: '', value: '' }]
 }
 
-export function ConfigMapCreatePage() {
+export function ConfigMapCreatePage({ clone = false }: { clone?: boolean }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { namespace: namespaceParam, name: editName } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const can = useCan()
-  const isEdit = Boolean(editName)
+  // 克隆路由也有 :name，但保存走创建：名称与命名空间保持可编辑。
+  const isEdit = Boolean(editName) && !clone
 
   const pageTitle = isEdit
     ? t('configmapCreate.editPageTitle', 'ConfigMap: 编辑')
-    : t('configmapCreate.pageTitle', 'ConfigMap: 创建')
+    : clone && editName
+      ? t('configmapCreate.clonePageTitle', {
+          name: editName,
+          defaultValue: `ConfigMap: 从 ${editName} 克隆`,
+        })
+      : t('configmapCreate.pageTitle', 'ConfigMap: 创建')
   usePageTitle(pageTitle)
 
   const [namespace, setNamespace] = useState(() =>
@@ -134,26 +142,35 @@ export function ConfigMapCreatePage() {
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  // 编辑模式：把线上对象读回来预填（创建模式下不发请求）。
+  // 编辑/克隆模式：把线上对象读回来预填（纯创建模式下不发请求）。
   const { data: existing } = useResource(
     'configmaps',
     editName || '',
     namespace,
-    { enabled: isEdit }
+    { enabled: Boolean(editName) }
   )
   useEffect(() => {
     if (!existing) return
-    const annotations = existing.metadata?.annotations || {}
+    // 克隆：先做通用预处理（剥离服务端字段、改名 <源名>-copy）再反显。
+    const source = clone
+      ? (prepareCloneResource(
+          existing,
+          'configmaps',
+          editName || '',
+          `${editName || ''}-copy`
+        ) as ConfigMap)
+      : existing
+    const annotations = source.metadata?.annotations || {}
     // 描述注解：读新键并兼容改名前的旧键；两者都不作为「额外注解」展示。
     const rest = { ...annotations }
     delete rest[DESCRIPTION_ANNOTATION]
     delete rest[LEGACY_DESCRIPTION_ANNOTATION]
-    setName(existing.metadata?.name || '')
-    setNamespace(existing.metadata?.namespace || namespace)
+    setName(source.metadata?.name || '')
+    setNamespace(source.metadata?.namespace || namespace)
     setDescription(readDescription(annotations))
-    setDataRows(rowsFromRecord(existing.data))
-    setBinaryRows(rowsFromRecord(existing.binaryData))
-    setLabels(rowsFromRecord(existing.metadata?.labels))
+    setDataRows(rowsFromRecord(source.data))
+    setBinaryRows(rowsFromRecord(source.binaryData))
+    setLabels(rowsFromRecord(source.metadata?.labels))
     setAnnotations(rowsFromRecord(rest))
     // 只有线上对象变化时重填，否则会把用户正在编辑的内容冲掉。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -470,7 +487,7 @@ export function ConfigMapCreatePage() {
           aria-label={t('common.actions.backToList', '返回列表')}
           title={t('common.actions.backToList', '返回列表')}
           onClick={() =>
-            isEdit && editName
+            editName
               ? navigate(
                   `/configmaps/${encodeURIComponent(namespace)}/${editName}`
                 )
@@ -841,7 +858,7 @@ export function ConfigMapCreatePage() {
         <Button
           variant="outline"
           onClick={() =>
-            isEdit && editName
+            editName
               ? navigate(
                   `/configmaps/${encodeURIComponent(namespace)}/${editName}`
                 )

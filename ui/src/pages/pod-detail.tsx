@@ -328,6 +328,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
         resourceLabel="Pod"
         name={name}
         namespace={namespace}
+        clonePath={`/pods/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/clone`}
         data={pod}
         isLoading={isLoading}
         error={isError ? podError : null}

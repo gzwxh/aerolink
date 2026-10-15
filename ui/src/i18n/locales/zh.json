@@ -1361,6 +1361,7 @@
     "failedToCreate": "创建工作负载失败：",
     "pageTitle": "{{kind}}: 创建",
     "editPageTitle": "{{kind}}: 编辑",
+    "clonePageTitle": "{{kind}}: 从 {{name}} 克隆",
     "noCreatePermission": "你没有权限在命名空间 {{namespace}} 中创建 {{kind}}。",
     "noUpdatePermission": "你没有权限在命名空间 {{namespace}} 中更新 {{kind}}。",
     "namePlaceholder": "独特的名称",
@@ -1442,6 +1443,7 @@
     "pvcName": "PVC 名称",
     "volumeSection": "存储卷",
     "networkSection": "网络",
+    "staleServiceCleanupFailed": "部分不再使用的 Service 清理失败，可在 Service 列表中手动删除",
     "volumeTypeEmptyDir": "空目录",
     "volumeTypeHostPath": "主机路径（Bind-Mount）",
     "volumeTypeConfigMap": "ConfigMap",
@@ -2607,7 +2609,10 @@
     "wait": "等待",
     "forceDelete": "强制删除（Grace Period 设为 0）",
     "finalizerNote": "如果存在 Finalizer，资源 3 秒内未删除时将自动清理 Finalizer",
-    "deleting": "删除中..."
+    "deleting": "删除中...",
+    "relatedServicesTitle": "将同时删除关联的 Service",
+    "relatedServicesHint": "以下 Service 的选择器指向该工作负载，确认后会与工作负载一并删除。",
+    "relatedServicesDeleteFailed": "以下关联 Service 删除失败：{{names}}，请到 Service 列表手动处理。"
   },
   "aiChat": {
     "disclaimer": "AI 回复仅供参考，请仔细核实。",
@@ -2988,6 +2993,7 @@
   },
   "configmapCreate": {
     "editPageTitle": "ConfigMap: 编辑",
+    "clonePageTitle": "ConfigMap: 从 {{name}} 克隆",
     "pageTitle": "ConfigMap: 创建",
     "namePlaceholder": "请输入名称",
     "tabData": "数据",
@@ -3016,6 +3022,7 @@
   },
   "secretCreate": {
     "editPageTitle": "Secret: 编辑",
+    "clonePageTitle": "Secret: 从 {{name}} 克隆",
     "pageTitle": "Secret: 创建",
     "namePlaceholder": "请输入名称",
     "tabData": "数据",
@@ -3094,6 +3101,7 @@
   "serviceCreate": {
     "pageTitle": "Service: 创建",
     "editPageTitle": "Service: 编辑",
+    "clonePageTitle": "Service: 从 {{name}} 克隆",
     "noCreatePermission": "你没有权限在命名空间 {{namespace}} 中创建 Service。",
     "serviceName": "服务名称",
     "serviceType": "服务类型",

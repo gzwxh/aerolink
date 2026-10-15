@@ -10,21 +10,27 @@ const deleteResource = vi.hoisted(() => vi.fn())
 const navigate = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
 const toastSuccess = vi.hoisted(() => vi.fn())
+const toastWarning = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/api', () => ({ deleteResource }))
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }))
 vi.mock('sonner', () => ({
-  toast: { error: toastError, success: toastSuccess },
+  toast: { error: toastError, success: toastSuccess, warning: toastWarning },
 }))
-// 组件只用 t(key, defaultValue)，直接回 defaultValue（与其他组件测试同一套写法）。
+// 组件只用 t(key, defaultValue)，直接回 defaultValue（与其他组件测试同一套写法）；
+// 带插值参数的调用返回 key + 参数 JSON，便于断言插值内容。
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, defaultValue?: unknown) =>
-      typeof defaultValue === 'string' ? defaultValue : key,
+      typeof defaultValue === 'string'
+        ? defaultValue
+        : defaultValue !== undefined
+          ? `${key}:${JSON.stringify(defaultValue)}`
+          : key,
   }),
 }))
 
-function renderDialog() {
+function renderDialog(relatedServices?: string[]) {
   return render(
     <ResourceDeleteConfirmationDialog
       open
@@ -32,6 +38,7 @@ function renderDialog() {
       resourceName="demo"
       resourceType="deployments"
       namespace="default"
+      relatedServices={relatedServices}
     />
   )
 }
@@ -69,5 +76,72 @@ describe('ResourceDeleteConfirmationDialog 的失败反馈', () => {
       expect(navigate).toHaveBeenCalled()
     })
     expect(toastError).not.toHaveBeenCalled()
+  })
+})
+
+describe('ResourceDeleteConfirmationDialog 的关联 Service 联动删除', () => {
+  it('主体删除成功后逐个删除关联 Service', async () => {
+    deleteResource.mockResolvedValue(undefined)
+    renderDialog(['nginx-nodeport', 'nginx-clusterip'])
+
+    await confirmDelete()
+
+    await waitFor(() => {
+      expect(deleteResource).toHaveBeenCalledWith(
+        'services',
+        'nginx-nodeport',
+        'default'
+      )
+    })
+    expect(deleteResource).toHaveBeenCalledWith(
+      'services',
+      'nginx-clusterip',
+      'default'
+    )
+    expect(toastSuccess).toHaveBeenCalled()
+    expect(toastWarning).not.toHaveBeenCalled()
+  })
+
+  it('部分 Service 删除失败时弹警告（404 视为已删除，不算失败）', async () => {
+    deleteResource.mockImplementation(
+      (_type: string, name: string) =>
+        name === 'nginx-nodeport'
+          ? Promise.reject(new Error('services "nginx-nodeport" not found'))
+          : name === 'nginx-clusterip'
+            ? Promise.reject(new Error('internal error'))
+            : Promise.resolve(undefined)
+    )
+    renderDialog(['nginx-nodeport', 'nginx-clusterip'])
+
+    await confirmDelete()
+
+    await waitFor(() => {
+      expect(toastWarning).toHaveBeenCalledWith(
+        expect.stringContaining('nginx-clusterip')
+      )
+    })
+    // 404 的那个不算失败，不该出现在警告里。
+    expect(toastWarning).toHaveBeenCalledWith(
+      expect.not.stringContaining('nginx-nodeport')
+    )
+    expect(toastSuccess).toHaveBeenCalled()
+  })
+
+  it('主体删除失败时不联动删 Service', async () => {
+    deleteResource.mockRejectedValueOnce(new Error('boom'))
+    renderDialog(['nginx-nodeport'])
+
+    await confirmDelete()
+
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith('boom')
+    })
+    expect(deleteResource).toHaveBeenCalledTimes(1)
+    expect(deleteResource).not.toHaveBeenCalledWith(
+      'services',
+      'nginx-nodeport',
+      expect.anything(),
+      expect.anything()
+    )
   })
 })

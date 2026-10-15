@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ResourceType } from '@/types/api'
 import { deleteResource } from '@/lib/api'
+import { deleteRelatedServices } from '@/lib/related-service-cleanup'
 import {
   getResourceListPath,
   getResourceSingularLabel,
 } from '@/lib/resource-metadata'
 
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
+import { RelatedServicesDeleteWarning } from './related-services-delete-warning'
 
 interface ResourceDeleteConfirmationDialogProps {
   open: boolean
@@ -18,6 +21,11 @@ interface ResourceDeleteConfirmationDialogProps {
   resourceType: ResourceType
   namespace?: string
   additionalNote?: string
+  /**
+   * 与该资源关联、将随本次删除一并删除的 Service 名单（调用方算好并做权限过滤）。
+   * 非空时弹窗里展示联动提醒，确认后会先删资源再删这些 Service。
+   */
+  relatedServices?: string[]
 }
 
 export function ResourceDeleteConfirmationDialog({
@@ -27,9 +35,11 @@ export function ResourceDeleteConfirmationDialog({
   resourceType,
   namespace,
   additionalNote,
+  relatedServices,
 }: ResourceDeleteConfirmationDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   const handleDelete = async (force?: boolean, wait?: boolean) => {
     setIsDeleting(true)
@@ -38,9 +48,21 @@ export function ResourceDeleteConfirmationDialog({
         force,
         wait,
       })
+      // 主体资源已删除后再联动清理关联 Service，主体失败时不动它们。
+      const failedServices =
+        relatedServices && relatedServices.length
+          ? await deleteRelatedServices(relatedServices, namespace)
+          : []
       toast.success(
         `${getResourceSingularLabel(resourceType) || resourceType} deleted successfully`
       )
+      if (failedServices.length) {
+        toast.warning(
+          t('deleteConfirmation.relatedServicesDeleteFailed', {
+            names: failedServices.join(', '),
+          })
+        )
+      }
       navigate(getResourceListPath(resourceType))
     } catch (error) {
       // 资源可能已经不存在（被并发删除或强制删除）：
@@ -72,6 +94,11 @@ export function ResourceDeleteConfirmationDialog({
       namespace={namespace}
       additionalNote={additionalNote}
       showAdditionalOptions={true}
+      extraContent={
+        relatedServices?.length ? (
+          <RelatedServicesDeleteWarning names={relatedServices} />
+        ) : undefined
+      }
     />
   )
 }

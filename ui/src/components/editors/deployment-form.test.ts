@@ -7,6 +7,7 @@ import {
   initialFormData,
   mergeEditedManifest,
   parseYamlToFormData,
+  workloadWithServiceDocs,
   type DeploymentFormData,
   type VolumeForm,
 } from './deployment-form'
@@ -291,6 +292,39 @@ describe('工作负载 YAML 生成', () => {
     ])
   })
 
+  it('克隆场景（labels 仍是源负载标签）时，Service selector 用 Pod 模板标签', () => {
+    // prepareCloneResource 只改写 Pod 模板标签与 selector，metadata.labels
+    // 保持源负载的 app: nginx。生成的 Service 若拿 metadata 标签当 selector，
+    // 就会选中源负载的 Pod（出现在源负载的相关资源里）。
+    const cloneForm: DeploymentFormData = {
+      ...formWithPorts([
+        {
+          containerPort: 80,
+          protocol: 'TCP' as const,
+          serviceType: 'NodePort' as const,
+        },
+      ]),
+      name: 'nginx-copy',
+      labels: [{ key: 'app', value: 'nginx' }],
+      podLabels: [{ key: 'app', value: 'nginx-copy' }],
+    }
+    const docs = yaml.loadAll(
+      generateWorkloadYaml(cloneForm, 'deployments')
+    ) as unknown as GeneratedDoc[]
+
+    const workload = docs.find((doc) => doc.kind === 'Deployment')
+    const podTemplateLabels = (
+      (workload?.spec as { template?: { metadata?: { labels?: unknown } } })
+        ?.template?.metadata?.labels
+    )
+    expect(podTemplateLabels).toEqual({ app: 'nginx-copy' })
+
+    const svc = docs.find((doc) => doc.kind === 'Service')
+    expect(svc).toBeDefined()
+    expect(svc?.metadata.name).toBe('nginx-copy-nodeport')
+    expect(svc?.spec.selector).toEqual({ app: 'nginx-copy' })
+  })
+
   it('LoadBalancer 的名字带类型后缀，静态 ClusterIP 只写进 ClusterIP', () => {
     const loadBalancer = yaml.loadAll(
       generateWorkloadYaml(
@@ -345,6 +379,7 @@ describe('工作负载 YAML 生成', () => {
         serviceType: 'NodePort',
         servicePort: 30080,
         nodePort: 30080,
+        serviceName: 'web-nodeport',
       },
       {
         name: undefined,
@@ -353,6 +388,74 @@ describe('工作负载 YAML 生成', () => {
         serviceType: 'none',
       },
     ])
+  })
+
+  it('线上 Service 名与命名约定不一致时，反显后生成沿用线上名字', () => {
+    // 老 Service / 手建 Service 可能是裸负载名：生成若按约定改名，
+    // apply 会当成新建，撞上线上 Service 已占用的 nodePort 报 already allocated。
+    const source = yaml.loadAll(
+      [
+        `apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: default
+  labels:
+    app: web
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 27862`,
+        generateWorkloadYaml(
+          formWithPorts([
+            { containerPort: 8080, protocol: 'TCP', serviceType: 'none' },
+          ]),
+          'deployments'
+        ),
+      ].join('\n---\n')
+    ) as unknown as GeneratedDoc[]
+    const parsed = parseYamlToFormData(
+      source.map((doc) => yaml.dump(doc)).join('\n---\n'),
+      'deployments',
+      initialFormData
+    )
+
+    expect(parsed.containers[0].ports[0]).toMatchObject({
+      serviceType: 'NodePort',
+      nodePort: 27862,
+      serviceName: 'web',
+    })
+
+    const docs = yaml.loadAll(
+      generateWorkloadYaml(parsed, 'deployments')
+    ) as unknown as GeneratedDoc[]
+    expect(docs[0].kind).toBe('Service')
+    expect(docs[0].metadata.name).toBe('web')
+    expect(docs[0].spec.ports).toEqual([
+      { port: 8080, targetPort: 8080, nodePort: 27862 },
+    ])
+  })
+
+  it('新建的端口行没有线上名字，仍按 <负载名>-<类型> 约定命名', () => {
+    const docs = yaml.loadAll(
+      generateWorkloadYaml(
+        formWithPorts([
+          {
+            containerPort: 8080,
+            protocol: 'TCP',
+            serviceType: 'NodePort',
+            serviceName: '',
+          },
+        ]),
+        'deployments'
+      )
+    ) as unknown as GeneratedDoc[]
+    expect(docs[0].metadata.name).toBe('web-nodeport')
   })
 
   it('手写的 ExternalName Service 不写进端口行', () => {
@@ -381,6 +484,211 @@ spec:
     )
 
     expect(parsed.containers[0].ports[0].serviceType).toBe('none')
+  })
+})
+
+/**
+ * 编辑页的反显输入：线上工作负载是单对象，Service 是独立对象，必须由页面
+ * 查回来拼成多文档才能反显「网络」区块。这里盯的是「只收 selector 匹配的
+ * Service」——把别的负载的 Service 拼进来会把端口反显到错误的容器端口行。
+ */
+describe('workloadWithServiceDocs', () => {
+  const deployment = {
+    apiVersion: 'apps/v1',
+    kind: 'Deployment',
+    metadata: { name: 'web', namespace: 'default' },
+    spec: {
+      selector: { matchLabels: { app: 'web' } },
+      template: {
+        metadata: { labels: { app: 'web' } },
+        spec: {
+          containers: [
+            {
+              name: 'app',
+              image: 'nginx:1.25',
+              ports: [{ containerPort: 8080, protocol: 'TCP' }],
+            },
+          ],
+        },
+      },
+    },
+  }
+
+  const service = (name: string, selector: unknown, type = 'ClusterIP') => ({
+    apiVersion: 'v1',
+    kind: 'Service',
+    metadata: { name, namespace: 'default' },
+    spec: { type, selector, ports: [{ port: 8080, targetPort: 8080 }] },
+  })
+
+  it('selector 匹配的 Service 拼进文档并反显到端口行', () => {
+    const docs = workloadWithServiceDocs(deployment, [
+      service('web', { app: 'web' }),
+    ])
+    expect(docs.map((doc) => (doc as { kind: string }).kind)).toEqual([
+      'Deployment',
+      'Service',
+    ])
+
+    const parsed = parseYamlToFormData(
+      docs.map((doc) => yaml.dump(doc)).join('---\n'),
+      'deployments',
+      initialFormData
+    )
+    expect(parsed.containers[0].ports[0].serviceType).toBe('ClusterIP')
+  })
+
+  it('多个 Service 指向同一容器端口时各占一行，不互相覆盖', () => {
+    // 常见配置：两行容器端口都是 80，一行 ClusterIP、一行 NodePort。
+    const twoPortDeployment = {
+      ...deployment,
+      spec: {
+        ...deployment.spec,
+        template: {
+          metadata: { labels: { app: 'web' } },
+          spec: {
+            containers: [
+              {
+                name: 'app',
+                image: 'nginx:1.25',
+                ports: [
+                  { containerPort: 80, protocol: 'TCP' },
+                  { containerPort: 80, protocol: 'TCP' },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    }
+    const svc = (name: string, type: string, ports: unknown[]) => ({
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: { name, namespace: 'default' },
+      spec: { type, selector: { app: 'web' }, ports },
+    })
+    const parsed = parseYamlToFormData(
+      workloadWithServiceDocs(twoPortDeployment, [
+        svc('web', 'ClusterIP', [{ port: 80, targetPort: 80 }]),
+        svc('web-nodeport', 'NodePort', [
+          { port: 80, targetPort: 80, nodePort: 30888 },
+        ]),
+      ])
+        .map((doc) => yaml.dump(doc))
+        .join('---\n'),
+      'deployments',
+      initialFormData
+    )
+    expect(parsed.containers[0].ports).toEqual([
+      {
+        name: undefined,
+        containerPort: 80,
+        protocol: 'TCP',
+        serviceType: 'ClusterIP',
+        serviceName: 'web',
+      },
+      {
+        name: undefined,
+        containerPort: 80,
+        protocol: 'TCP',
+        serviceType: 'NodePort',
+        nodePort: 30888,
+        serviceName: 'web-nodeport',
+      },
+    ])
+  })
+
+  it('targetPort 写端口名时按名字匹配容器端口行', () => {
+    const namedDeployment = {
+      ...deployment,
+      spec: {
+        ...deployment.spec,
+        template: {
+          metadata: { labels: { app: 'web' } },
+          spec: {
+            containers: [
+              {
+                name: 'app',
+                image: 'nginx:1.25',
+                ports: [{ name: 'http', containerPort: 80, protocol: 'TCP' }],
+              },
+            ],
+          },
+        },
+      },
+    }
+    const namedService = {
+      ...service('web', { app: 'web' }),
+      spec: {
+        type: 'ClusterIP',
+        selector: { app: 'web' },
+        ports: [{ port: 8080, targetPort: 'http' }],
+      },
+    }
+    const parsed = parseYamlToFormData(
+      workloadWithServiceDocs(namedDeployment, [namedService])
+        .map((doc) => yaml.dump(doc))
+        .join('---\n'),
+      'deployments',
+      initialFormData
+    )
+    expect(parsed.containers[0].ports[0].serviceType).toBe('ClusterIP')
+    expect(parsed.containers[0].ports[0].servicePort).toBe(8080)
+  })
+
+  it('selector 不匹配、空 selector 与 ExternalName 的 Service 不拼进来', () => {
+    const docs = workloadWithServiceDocs(deployment, [
+      service('other', { app: 'other' }),
+      service('empty', {}),
+      service('ext', undefined, 'ExternalName'),
+    ])
+    expect(docs).toHaveLength(1)
+  })
+
+  it('兼容 Rancher 风格 Service：selector 带额外键（在 Pod 标签上）也能反显', () => {
+    // Rancher 创建的工作负载会在 Pod 模板标签上注入额外键（如
+    // workload.user.cattle.io/*），Service 的 selector 也带这些键，但
+    // spec.selector.matchLabels 里只有 app —— 旧逻辑只比对 matchLabels
+    // 会漏掉这种 Service，现在以 Pod 模板标签为基准应能匹配。
+    const rancherDeployment = {
+      ...deployment,
+      spec: {
+        ...deployment.spec,
+        selector: { matchLabels: { app: 'web' } },
+        template: {
+          ...deployment.spec.template,
+          metadata: {
+            labels: {
+              app: 'web',
+              'workload.user.cattle.io/workload-port': '80',
+            },
+          },
+        },
+      },
+    }
+    const rancherService = service('web', {
+      app: 'web',
+      'workload.user.cattle.io/workload-port': '80',
+    })
+    const docs = workloadWithServiceDocs(rancherDeployment, [rancherService])
+    expect(docs.map((doc) => (doc as { kind: string }).kind)).toEqual([
+      'Deployment',
+      'Service',
+    ])
+
+    const parsed = parseYamlToFormData(
+      docs.map((doc) => yaml.dump(doc)).join('---\n'),
+      'deployments',
+      initialFormData
+    )
+    expect(parsed.containers[0].ports[0].serviceType).toBe('ClusterIP')
+  })
+
+  it('克隆负载的 Service（selector 指向新名字）不会被反显进源负载', () => {
+    const docs = workloadWithServiceDocs(deployment, [
+      service('web-clone', { app: 'web-clone' }),
+    ])
+    expect(docs).toHaveLength(1)
   })
 })
 

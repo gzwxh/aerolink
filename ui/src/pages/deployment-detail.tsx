@@ -139,14 +139,19 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   const { data: relatedResources, refetch: refetchRelatedResources } =
     useRelatedResources('deployments', name, namespace)
 
-  // 与该工作负载关联的 Service（名称匹配或选择器匹配）——
+  // 与该工作负载关联的 Service（选择器匹配；无 selector 的按名字兜底）——
   // 由 Endpoints 卡片使用；同一命名空间中不相关的 Service
   // 不是该 Deployment 概览需要关心的。
+  // Service 的 selector 指向的是 Pod 标签，因此以 Pod 模板标签为基准
+  // （Rancher 等工具创建的 Service 常带额外键），并合并工作负载 selector。
   const associatedServices = useMemo(
     () =>
       servicesForWorkload(relatedServices || [], {
         name,
-        labels: deployment?.spec?.selector?.matchLabels || {},
+        labels: {
+          ...(deployment?.spec?.template?.metadata?.labels || {}),
+          ...(deployment?.spec?.selector?.matchLabels || {}),
+        },
       }),
     [relatedServices, name, deployment]
   )
@@ -154,6 +159,18 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   const hasRelatedService = useMemo(
     () => relatedResources?.some((resource) => resource.type === 'services'),
     [relatedResources]
+  )
+  // 删除联动：删 Deployment 时要一并删除的关联 Service。
+  // 只有真的有 services 删除权限才联动（fail-closed），
+  // 否则弹窗里只删 Deployment 本身。
+  const deletableRelatedServices = useMemo(
+    () =>
+      can('services', 'delete', { namespace })
+        ? associatedServices
+            .map((svc) => svc.metadata?.name || '')
+            .filter(Boolean)
+        : [],
+    [associatedServices, can, namespace]
   )
   // 终端弹窗与 containers 标签页共用同一份容器列表。
   const containers = useMemo(
@@ -550,6 +567,8 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       resourceLabel="Deployment"
       name={name}
       namespace={namespace}
+      clonePath={`/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/clone`}
+      deleteRelatedServices={deletableRelatedServices}
       data={deployment}
       isLoading={isLoading}
       error={isError ? error : null}
