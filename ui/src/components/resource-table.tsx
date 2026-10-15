@@ -81,6 +81,16 @@ export interface ResourceTableProps<T> {
    * 会被隐藏；传空字符串可完全跳过该控制。
    */
   permissionResource?: string
+  /**
+   * 外部数据模式：传入后组件不再自行拉取，改用调用方提供的数据
+   * （例如详情页里按 labelSelector 监听的 Pod 列表）。监听开关与
+   * 命名空间选择器由调用方决定，组件不再渲染。
+   */
+  data?: T[]
+  /** 外部数据模式的加载态。 */
+  isLoading?: boolean
+  /** 外部数据模式的刷新回调（透传给工具栏的刷新按钮）。 */
+  refetch?: () => void
 }
 
 export function ResourceTable<T>(props: ResourceTableProps<T>) {
@@ -112,6 +122,9 @@ function ResourceTableContent<T>({
   onRowSelectionChange,
   grouping,
   permissionResource,
+  data: externalData,
+  isLoading: externalIsLoading,
+  refetch: externalRefetch,
 }: ResourceTableProps<T>) {
   const { t } = useTranslation()
   const {
@@ -181,14 +194,15 @@ function ResourceTableContent<T>({
           : ''
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteProgress, setDeleteProgress] = useState({ done: 0, total: 0 })
+  const external = externalData !== undefined
   const {
-    resourceType: resolvedResourceType,
-    data,
-    isLoading,
-    isError,
-    error,
-    refetch,
-    isConnected,
+    resourceType: fetchedResourceType,
+    data: fetchedData,
+    isLoading: fetchedIsLoading,
+    isError: fetchedIsError,
+    error: fetchedError,
+    refetch: fetchedRefetch,
+    isConnected: fetchedIsConnected,
   } = useResourceTableData<T>({
     resourceName,
     resourceType,
@@ -196,7 +210,17 @@ function ResourceTableContent<T>({
     useSSE,
     refreshInterval,
     labelSelector: effectiveLabelSelector,
+    disabled: external,
   })
+  const resolvedResourceType = (
+    external ? resourceType ?? resourceName.toLowerCase() : fetchedResourceType
+  ) as ResourceType
+  const data = external ? externalData : fetchedData
+  const isLoading = external ? !!externalIsLoading : fetchedIsLoading
+  const isError = external ? false : fetchedIsError
+  const error = external ? null : fetchedError
+  const refetch = external ? externalRefetch : fetchedRefetch
+  const isConnected = external ? false : fetchedIsConnected
   // 创建按钮与批量删除不绑定单个命名空间，因此
   // 遵循"某处已授权"规则。AeroLink 没有其元数据的资源
   // （页面传入了展示名，例如 "Helm Releases"）不做处理。
@@ -486,7 +510,10 @@ function ResourceTableContent<T>({
         row as { metadata?: { name?: string; namespace?: string } }
       )?.metadata
       const name = metadata?.name
-      const namespace = clusterScope ? undefined : metadata?.namespace
+      // 集群作用域对象的 metadata.namespace 本来就是 undefined；
+      // 名字空间对象带上自己的命名空间，外部数据模式的嵌入表格
+      // （clusterScope=true）也能删对目标。
+      const namespace = metadata?.namespace
 
       if (!name) {
         setDeleteProgress((prev) => ({ ...prev, done: prev.done + 1 }))
@@ -513,14 +540,13 @@ function ResourceTableContent<T>({
       setDeleteDialogOpen(false)
       // 重新拉取数据
       if (!useSSE) {
-        refetch()
+        refetch?.()
       }
     } finally {
       setIsDeleting(false)
     }
   }, [
     table,
-    clusterScope,
     resolvedResourceType,
     t,
     useSSE,
@@ -580,7 +606,8 @@ function ResourceTableContent<T>({
         <ErrorMessage
           resourceName={displayResourceName}
           error={error}
-          refetch={refetch}
+          // 外部数据模式下 isError 恒为 false，这里不会走到 undefined。
+          refetch={refetch ?? (() => {})}
         />
       )
     }
@@ -634,7 +661,9 @@ function ResourceTableContent<T>({
       <ResourceTableToolbar
         table={table}
         resourceName={displayResourceName}
-        resourceType={resolvedResourceType}
+        // 外部数据模式的监听由调用方负责，隐藏「监听」开关
+        //（resourceType 是它唯一的显示条件）。
+        resourceType={external ? undefined : resolvedResourceType}
         clusterScope={clusterScope}
         extraToolbars={extraToolbars}
         showCreateButton={showCreateButton && canCreate}

@@ -10,6 +10,8 @@ interface UseResourceTableDataOptions {
   useSSE: boolean
   refreshInterval: number
   labelSelector?: string
+  /** 外部数据模式：不发起请求，数据由调用方提供（例如详情页内嵌表格）。 */
+  disabled?: boolean
 }
 
 export function useResourceTableData<T>({
@@ -19,6 +21,7 @@ export function useResourceTableData<T>({
   useSSE,
   refreshInterval,
   labelSelector,
+  disabled,
 }: UseResourceTableDataOptions) {
   const resolvedResourceType = (resourceType ??
     (resourceName.toLowerCase() as ResourceType)) as ResourceType
@@ -26,13 +29,13 @@ export function useResourceTableData<T>({
   const query = useResources(resolvedResourceType, namespace, {
     refreshInterval: useSSE ? 0 : refreshInterval,
     reduce: true,
-    disable: useSSE,
+    disable: useSSE || disabled,
     labelSelector,
   })
 
   const watch = useResourcesWatch(resolvedResourceType, namespace, {
     reduce: true,
-    enabled: useSSE,
+    enabled: useSSE && !disabled,
     labelSelector,
     // 被限流时按同一节奏降级为轮询，观感与关掉 SSE 的页面一致。
     fallbackPollInterval: refreshInterval,

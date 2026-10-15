@@ -410,3 +410,50 @@ describe('ResourceTable grouping', () => {
     expect(await screen.findByText('Delete 2 services?')).toBeInTheDocument()
   })
 })
+
+describe('ResourceTable external data mode', () => {
+  const externalRows: Row[] = [
+    { metadata: { name: 'pod-1', namespace: 'aerolink', uid: 'ext-1' } },
+    { metadata: { name: 'pod-2', namespace: 'aerolink', uid: 'ext-2' } },
+  ]
+
+  function renderExternalTable() {
+    return render(
+      <ResourceTable<Row>
+        resourceName="Pods"
+        resourceType="pods"
+        columns={columns}
+        clusterScope={true}
+        data={externalRows}
+      />
+    )
+  }
+
+  it('renders rows passed via data and ignores what its own hook returns', () => {
+    // hook 的 mock 返回的是 svc-* 行；外部数据模式下必须只显示传入的行
+    renderExternalTable()
+
+    expect(screen.getByText('pod-1')).toBeInTheDocument()
+    expect(screen.getByText('pod-2')).toBeInTheDocument()
+    expect(screen.queryByText('svc-1')).not.toBeInTheDocument()
+  })
+
+  // 回归：外部数据模式的嵌入表格（详情页 Pod tab）以 clusterScope=true
+  // 隐藏命名空间选择器，批量删除必须按行上的 metadata.namespace 定位，
+  // 否则会打到集群级路径（/_all/:name）导致名字空间资源删除失败。
+  it('batch delete targets each row namespace in external mode', async () => {
+    mockDeleteResource.mockResolvedValue(undefined)
+    renderExternalTable()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('checkbox', { name: /select all/i }))
+    await user.click(await screen.findByRole('button', { name: /delete/i }))
+    await user.click(await screen.findByRole('button', { name: /^delete$/i }))
+
+    await waitFor(() => {
+      expect(mockDeleteResource).toHaveBeenCalledTimes(2)
+    })
+    expect(mockDeleteResource).toHaveBeenCalledWith('pods', 'pod-1', 'aerolink')
+    expect(mockDeleteResource).toHaveBeenCalledWith('pods', 'pod-2', 'aerolink')
+  })
+})
