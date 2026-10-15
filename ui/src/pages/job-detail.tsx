@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { IconEdit } from '@tabler/icons-react'
+import { IconEdit, IconFileText, IconTerminal2 } from '@tabler/icons-react'
 import { Job } from 'kubernetes-types/batch/v1'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -17,12 +17,11 @@ import { Button } from '@/components/ui/button'
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { EventTable } from '@/components/event-table'
 import { JobOverview } from '@/components/job-overview'
-
 import { PodMonitoring } from '@/components/pod-monitoring'
 import { PodTable } from '@/components/pod-table'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ResourceHistoryTable } from '@/components/resource-history-table'
-import { TerminalLauncher } from '@/components/terminal-launcher'
+import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
 import { VolumeTable } from '@/components/volume-table'
 
 import {
@@ -38,6 +37,7 @@ export function JobDetail(props: { namespace: string; name: string }) {
   // 终端需要 pods:exec，日志需要 pods:log；只读管理员两者都有。
   const canExec = can('pods', 'exec', { namespace })
   const canLog = can('pods', 'log', { namespace })
+  const openWorkspaceSession = useOpenWorkspaceSession()
   // 编辑页会改写对象，是写操作。注意 Job 的 Pod 模板本身不可变（只能改
   // 并行度、重试次数这类字段），改成模板里的内容会由 API 拒绝。
   const canUpdate = can('jobs', 'update', { namespace })
@@ -156,35 +156,6 @@ export function JobDetail(props: { namespace: string; name: string }) {
         ),
       },
       {
-        value: 'logs',
-        label: t('common.tabs.logs', { defaultValue: 'Logs' }),
-        content: (
-          <TerminalLauncher
-            mode="logs"
-            namespace={namespace}
-            pods={currentPods}
-            containers={containers}
-            initContainers={initContainers}
-            labelSelector={labelSelector}
-            source="job"
-          />
-        ),
-      },
-      {
-        value: 'terminal',
-        label: t('common.tabs.terminal', { defaultValue: 'Terminal' }),
-        content: (
-          <TerminalLauncher
-            mode="terminal"
-            namespace={namespace}
-            pods={currentPods}
-            containers={containers}
-            initContainers={initContainers}
-            source="job"
-          />
-        ),
-      },
-      {
         value: 'volumes',
         label: (
           <>
@@ -272,16 +243,57 @@ export function JobDetail(props: { namespace: string; name: string }) {
       onRefresh={handleRefresh}
       onSaveYaml={handleSaveYaml}
       headerActions={
-        canUpdate ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(`/jobs/${namespace}/${name}/edit`)}
-          >
-            <IconEdit className="w-4 h-4" />
-            {t('common.actions.edit')}
-          </Button>
-        ) : null
+        <>
+          {canLog ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                openWorkspaceSession({
+                  mode: 'logs',
+                  namespace,
+                  pods: pods ?? [],
+                  containers,
+                  initContainers,
+                  labelSelector,
+                  source: 'job',
+                })
+              }
+            >
+              <IconFileText className="w-4 h-4" />
+              {t('common.tabs.logs')}
+            </Button>
+          ) : null}
+          {canExec && (pods?.length ?? 0) > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                openWorkspaceSession({
+                  mode: 'terminal',
+                  namespace,
+                  pods: pods ?? [],
+                  containers,
+                  initContainers,
+                  source: 'job',
+                })
+              }
+            >
+              <IconTerminal2 className="w-4 h-4" />
+              {t('common.tabs.terminal')}
+            </Button>
+          ) : null}
+          {canUpdate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/jobs/${namespace}/${name}/edit`)}
+            >
+              <IconEdit className="w-4 h-4" />
+              {t('common.actions.edit')}
+            </Button>
+          ) : null}
+        </>
       }
       overview={
         job ? (
@@ -300,10 +312,7 @@ export function JobDetail(props: { namespace: string; name: string }) {
         ['pods', 'containers'].includes(tab.value)
       )}
       extraTabs={tabs.filter(
-        (tab) =>
-          !['pods', 'containers'].includes(tab.value) &&
-          (tab.value !== 'terminal' || canExec) &&
-          (tab.value !== 'logs' || canLog)
+        (tab) => !['pods', 'containers'].includes(tab.value)
       )}
     />
   )

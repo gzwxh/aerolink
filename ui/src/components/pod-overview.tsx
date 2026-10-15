@@ -11,6 +11,7 @@ import {
 } from '@/lib/k8s'
 import { cn, formatDate, getAge } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
 import { NodeLink } from '@/components/node-link'
 import { PodStatusIcon } from '@/components/pod-status-icon'
 
@@ -83,22 +84,24 @@ export function PodOverview({
   }, [events])
   const [selectedContainer, setSelectedContainer] =
     useState<PodOverviewContainer | null>(null)
-  const [, setSearchParams] = useSearchParams()
+  const openWorkspaceSession = useOpenWorkspaceSession()
 
   const handleContainerSelect = (
     item: PodOverviewContainer,
     action: PodContainerAction = 'details'
   ) => {
     if (action === 'logs' || action === 'terminal') {
-      setSearchParams(
-        (prev) => {
-          const nextParams = new URLSearchParams(prev)
-          nextParams.set('tab', action)
-          nextParams.set('container', item.container.name)
-          return nextParams
-        },
-        { replace: true }
-      )
+      // 直接开进底部工作区，不再跳页签。
+      openWorkspaceSession({
+        mode: action,
+        namespace,
+        podName: name,
+        containers: pod.spec?.containers,
+        initContainers: pod.spec?.initContainers,
+        ephemeralContainers: pod.spec?.ephemeralContainers,
+        selectedContainerName: item.container.name,
+        source: 'pod',
+      })
       setSelectedContainer(null)
       return
     }

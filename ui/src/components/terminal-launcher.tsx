@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type {
   Container,
   EphemeralContainer,
@@ -37,6 +37,64 @@ export interface TerminalLauncherProps {
   onOpen?: () => void
 }
 
+export type OpenWorkspaceSessionOptions = Omit<
+  TerminalLauncherProps,
+  'className' | 'onOpen'
+>
+
+/**
+ * 不经过选择界面、按默认目标把会话直接开进底部工作区：
+ * 终端落到点名（或第一个）Pod 的预选/attach/第一个容器；日志没点名 Pod 时按 labelSelector 聚合。
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useOpenWorkspaceSession() {
+  const { openSession } = useTerminal()
+
+  return useCallback((options: OpenWorkspaceSessionOptions) => {
+    const isLogs = options.mode === 'logs'
+    const isNode = options.type === 'node'
+    const sessionType = isNode ? 'node' : isLogs ? 'logs' : 'pod'
+    const podName =
+      options.podName ??
+      (!isNode && !isLogs ? options.pods?.[0]?.metadata?.name : undefined)
+    const containerName = isNode
+      ? undefined
+      : isLogs
+        ? // 日志未点名容器时聚合全部容器；终端必须落到具体容器。
+          options.selectedContainerName
+        : (options.selectedContainerName ??
+          options.attachContainerName ??
+          toSimpleContainer(
+            options.initContainers,
+            options.containers,
+            options.ephemeralContainers
+          )[0]?.name)
+
+    openSession({
+      type: sessionType,
+      namespace: options.namespace,
+      podName,
+      nodeName: options.nodeName,
+      containerName,
+      pods: options.pods,
+      containers: options.containers,
+      initContainers: options.initContainers,
+      ephemeralContainers: options.ephemeralContainers,
+      attachContainerName: options.attachContainerName,
+      labelSelector: options.labelSelector,
+      source: options.source,
+      title: createLauncherTitle({
+        type: sessionType,
+        podName,
+        nodeName: options.nodeName,
+        containerName,
+        labelSelector: options.labelSelector,
+        namespace: options.namespace,
+      }),
+    })
+  }, [openSession])
+}
+
 /**
  * 详情页里的会话启动器：选好 Pod/容器后把终端或日志开进底部工作区，
  * 而不是就地渲染。这样切换页签、切到别的页面都不会中断会话。
@@ -59,7 +117,7 @@ export function TerminalLauncher({
   onOpen,
 }: TerminalLauncherProps) {
   const { t } = useTranslation()
-  const { openSession } = useTerminal()
+  const openWorkspaceSession = useOpenWorkspaceSession()
   const isLogs = mode === 'logs'
   const isNode = type === 'node'
 
@@ -80,27 +138,20 @@ export function TerminalLauncher({
   )
 
   const handleOpen = () => {
-    openSession({
-      type: isNode ? 'node' : isLogs ? 'logs' : 'pod',
+    openWorkspaceSession({
+      mode,
+      type,
       namespace,
       podName: selectedPod || undefined,
       nodeName,
-      containerName: selectedContainer || undefined,
       pods,
       containers,
       initContainers,
       ephemeralContainers,
       attachContainerName,
+      selectedContainerName: selectedContainer || undefined,
       labelSelector,
       source,
-      title: createLauncherTitle({
-        type: isNode ? 'node' : isLogs ? 'logs' : 'pod',
-        podName: selectedPod || podName,
-        nodeName,
-        containerName: selectedContainer,
-        labelSelector,
-        namespace,
-      }),
     })
     onOpen?.()
   }

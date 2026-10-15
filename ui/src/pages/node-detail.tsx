@@ -7,6 +7,7 @@ import {
   IconLock,
   IconPencil,
   IconReload,
+  IconTerminal2,
 } from '@tabler/icons-react'
 import { Node } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
@@ -60,7 +61,11 @@ import {
   MetadataListCard,
 } from '@/components/pod-overview-sidebar'
 import { PodTable } from '@/components/pod-table'
-import { TerminalLauncher } from '@/components/terminal-launcher'
+import {
+  TerminalLauncher,
+  useOpenWorkspaceSession,
+} from '@/components/terminal-launcher'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
   WorkloadInfoBlock,
   WorkloadInfoRow,
@@ -81,6 +86,7 @@ export function NodeDetail(props: { name: string }) {
   const canCreateNode = can('nodes', 'create')
   const canUpdateNode = can('nodes', 'update')
   const canExecNode = can('nodes', 'exec')
+  const openWorkspaceSession = useOpenWorkspaceSession()
 
   const [isDrainPopoverOpen, setIsDrainPopoverOpen] = useState(false)
   const [isCordonPopoverOpen, setIsCordonPopoverOpen] = useState(false)
@@ -263,6 +269,23 @@ export function NodeDetail(props: { name: string }) {
         showDescribe={canReadNode}
         showClone={canCreateNode}
         showDelete={false}
+        moreActions={
+          canExecNode ? (
+            <DropdownMenuItem
+              onSelect={() =>
+                openWorkspaceSession({
+                  mode: 'terminal',
+                  type: 'node',
+                  nodeName: name,
+                  source: 'node',
+                })
+              }
+            >
+              <IconTerminal2 className="size-4" />
+              {t('common.tabs.terminal')}
+            </DropdownMenuItem>
+          ) : null
+        }
         overview={
           data ? (
             <NodeOverview

@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import {
   IconCircleCheckFilled,
   IconExclamationCircle,
+  IconFileText,
 } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import type { Container, Pod } from 'kubernetes-types/core/v1'
@@ -75,7 +76,11 @@ import {
 import { PodStatusIcon } from '@/components/pod-status-icon'
 import { SimpleTable } from '@/components/simple-table'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
-import { TerminalLauncher } from '@/components/terminal-launcher'
+import {
+  TerminalLauncher,
+  useOpenWorkspaceSession,
+} from '@/components/terminal-launcher'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { WorkloadSummaryCard } from '@/components/workload-overview-parts'
 import { WorkloadPodsCard } from '@/components/workload-pods-card'
 import { YamlEditor } from '@/components/yaml-editor'
@@ -1475,6 +1480,7 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
   const canUpdateRelease = can('helmrelease', 'update', { namespace })
   // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
   const canLog = can('pods', 'log', { namespace })
+  const openWorkspaceSession = useOpenWorkspaceSession()
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
   const [autoUpgradeDialogOpen, setAutoUpgradeDialogOpen] = useState(false)
   const { data, isLoading, error, refetch } = useResource(
@@ -1632,6 +1638,26 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
       isLoading={isLoading}
       error={error}
       onRefresh={refetch}
+      moreActions={
+        canLog ? (
+          <DropdownMenuItem
+            onSelect={() =>
+              openWorkspaceSession({
+                mode: 'logs',
+                namespace,
+                pods: releasePods ?? [],
+                containers,
+                initContainers,
+                labelSelector,
+                source: 'helmrelease',
+              })
+            }
+          >
+            <IconFileText className="size-4" />
+            {t('common.tabs.logs')}
+          </DropdownMenuItem>
+        ) : null
+      }
       showClone={false}
       titleIcon={
         data ? (

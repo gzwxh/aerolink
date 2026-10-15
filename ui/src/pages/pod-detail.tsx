@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { IconAdjustments, IconBug, IconEdit } from '@tabler/icons-react'
+import {
+  IconAdjustments,
+  IconBug,
+  IconEdit,
+  IconFileText,
+  IconTerminal2,
+} from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Container, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -41,7 +47,8 @@ import { PodMonitoring } from '@/components/pod-monitoring'
 import { PodOverview } from '@/components/pod-overview'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ContainerSelector } from '@/components/selector/container-selector'
-import { TerminalLauncher } from '@/components/terminal-launcher'
+import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { VolumeTable } from '@/components/volume-table'
 
 import {
@@ -56,10 +63,8 @@ export function PodDetail(props: { namespace: string; name: string }) {
   const [selectedContainerName, setSelectedContainerName] = useState<string>()
   const [resizeContainer, setResizeContainer] = useState<Container | null>(null)
   const [isResizing, setIsResizing] = useState(false)
-  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const tabContainerName = searchParams.get('container') || undefined
 
   const { t } = useTranslation()
   const { clusters, currentCluster } = useCluster()
@@ -114,16 +119,22 @@ export function PodDetail(props: { namespace: string; name: string }) {
     const queryKey = getResourceQueryKey('pods', updatedNamespace, updatedName)
     queryClient.setQueryData(queryKey, updatedPod)
     setIsDebugDialogOpen(false)
-    const nextParams = new URLSearchParams(searchParams)
-    nextParams.set('tab', 'terminal')
-    nextParams.set('container', containerName)
     if (updatedNamespace === namespace && updatedName === name) {
-      setSearchParams(nextParams, { replace: true })
-    } else {
-      navigate({
-        pathname: getResourceDetailPath('pods', updatedName, updatedNamespace),
-        search: `?${nextParams.toString()}`,
+      // 调试容器是临时容器，直接把终端开进底部工作区。
+      openWorkspaceSession({
+        mode: 'terminal',
+        namespace,
+        podName: name,
+        containers: updatedPod.spec?.containers,
+        initContainers: updatedPod.spec?.initContainers,
+        ephemeralContainers: updatedPod.spec?.ephemeralContainers,
+        selectedContainerName: containerName,
+        source: 'pod',
       })
+    } else {
+      navigate(
+        getResourceDetailPath('pods', updatedName, updatedNamespace)
+      )
     }
   }
 
@@ -165,6 +176,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
   const canExec = can('pods', 'exec', { namespace })
   // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
   const canLog = can('pods', 'log', { namespace })
+  const openWorkspaceSession = useOpenWorkspaceSession()
   const resizeAvailable =
     canUpdate && resizeSupported && (pod?.spec?.containers?.length ?? 0) > 0
   const debugAvailable =
@@ -246,39 +258,6 @@ export function PodDetail(props: { namespace: string; name: string }) {
         ),
       },
       {
-        value: 'logs',
-        label: t('common.tabs.logs'),
-        content: (
-          <TerminalLauncher
-            mode="logs"
-            namespace={namespace}
-            podName={name}
-            containers={pod?.spec?.containers}
-            initContainers={pod?.spec?.initContainers}
-            ephemeralContainers={pod?.spec?.ephemeralContainers}
-            selectedContainerName={tabContainerName}
-            source="pod"
-          />
-        ),
-      },
-      {
-        value: 'terminal',
-        label: t('common.tabs.terminal'),
-        content: (
-          <TerminalLauncher
-            mode="terminal"
-            namespace={namespace}
-            podName={name}
-            containers={pod?.spec?.containers}
-            initContainers={pod?.spec?.initContainers}
-            ephemeralContainers={pod?.spec?.ephemeralContainers}
-            attachContainerName={attachContainerName}
-            selectedContainerName={tabContainerName}
-            source="pod"
-          />
-        ),
-      },
-      {
         value: 'files',
         label: t('common.tabs.files'),
         content: (
@@ -340,7 +319,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
         ),
       },
     ],
-    [attachContainerName, isLoading, name, namespace, pod, t, tabContainerName]
+    [isLoading, name, namespace, pod, t]
   )
   return (
     <>
@@ -399,13 +378,49 @@ export function PodDetail(props: { namespace: string; name: string }) {
             )}
           </>
         }
+        moreActions={
+          <>
+            {canLog && (
+              <DropdownMenuItem
+                onSelect={() =>
+                  openWorkspaceSession({
+                    mode: 'logs',
+                    namespace,
+                    podName: name,
+                    containers: pod?.spec?.containers,
+                    initContainers: pod?.spec?.initContainers,
+                    ephemeralContainers: pod?.spec?.ephemeralContainers,
+                    source: 'pod',
+                  })
+                }
+              >
+                <IconFileText className="size-4" />
+                {t('common.tabs.logs')}
+              </DropdownMenuItem>
+            )}
+            {canExec && (
+              <DropdownMenuItem
+                onSelect={() =>
+                  openWorkspaceSession({
+                    mode: 'terminal',
+                    namespace,
+                    podName: name,
+                    containers: pod?.spec?.containers,
+                    initContainers: pod?.spec?.initContainers,
+                    ephemeralContainers: pod?.spec?.ephemeralContainers,
+                    attachContainerName,
+                    source: 'pod',
+                  })
+                }
+              >
+                <IconTerminal2 className="size-4" />
+                {t('common.tabs.terminal')}
+              </DropdownMenuItem>
+            )}
+          </>
+        }
         preYamlTabs={extraTabs.filter((tab) => tab.value === 'containers')}
-        extraTabs={extraTabs.filter(
-          (tab) =>
-            tab.value !== 'containers' &&
-            (tab.value !== 'terminal' || canExec) &&
-            (tab.value !== 'logs' || canLog)
-        )}
+        extraTabs={extraTabs.filter((tab) => tab.value !== 'containers')}
       />
       {isDebugDialogOpen && debugAvailable && (
         <PodDebugDialog

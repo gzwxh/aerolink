@@ -1,8 +1,14 @@
 /// <reference types="@testing-library/jest-dom" />
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  TerminalProvider,
+  useTerminal,
+  type WorkspaceSession,
+} from '@/contexts/terminal-context'
 import {
   ResourceRowActions,
   type RowActionResourceType,
@@ -50,6 +56,7 @@ vi.mock('react-i18next', () => ({
         'common.actions.edit': 'EDIT',
         'common.actions.delete': 'DELETE',
         'common.tabs.terminal': 'TERMINAL',
+        'common.tabs.logs': 'LOGS',
         'resourceActions.viewYaml': 'VIEW_YAML',
         'resourceActions.editImage': 'EDIT_IMAGE',
         'resourceActions.pause': 'PAUSE',
@@ -66,13 +73,39 @@ vi.mock('react-i18next', () => ({
 
 const workload = { metadata: { namespace: 'default', name: 'web' } }
 
-async function openMenu(resourceType: RowActionResourceType) {
-  render(
+/** 直开功能依赖 TerminalProvider；探针把当前会话列表抛出来供断言。 */
+function TerminalSessionProbe({
+  onSessions,
+}: {
+  onSessions: (sessions: WorkspaceSession[]) => void
+}) {
+  onSessions(useTerminal().sessions)
+  return null
+}
+
+function renderWithTerminal(
+  ui: ReactElement,
+  onSessions?: (sessions: WorkspaceSession[]) => void
+) {
+  return render(
+    <TerminalProvider>
+      {ui}
+      {onSessions ? <TerminalSessionProbe onSessions={onSessions} /> : null}
+    </TerminalProvider>
+  )
+}
+
+async function openMenu(
+  resourceType: RowActionResourceType,
+  onSessions?: (sessions: WorkspaceSession[]) => void
+) {
+  renderWithTerminal(
     <ResourceRowActions
       resourceType={resourceType}
       // 各类型的真实对象结构不同，菜单只读 metadata 与 spec 里的少量字段。
       resource={workload as never}
-    />
+    />,
+    onSessions
   )
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'ACTIONS' }))
@@ -166,6 +199,34 @@ describe('资源行操作菜单', () => {
     expect(screen.queryByRole('menuitem', { name: 'RESTART' })).toBeNull()
   })
 
+  // Pod 的日志/终端从列表直开底部工作区会话，不再跳详情页页签。
+  it('Pod 的日志与终端直开工作区会话，不跳详情页', async () => {
+    let latest: WorkspaceSession[] = []
+    const trackSessions = (sessions: WorkspaceSession[]) => {
+      latest = sessions
+    }
+
+    await openMenu('pods', trackSessions)
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('menuitem', { name: 'LOGS' }))
+    expect(navigate).not.toHaveBeenCalled()
+    expect(latest.at(-1)).toMatchObject({
+      type: 'logs',
+      namespace: 'default',
+      podName: 'web',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'ACTIONS' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'TERMINAL' }))
+    expect(navigate).not.toHaveBeenCalled()
+    expect(latest.at(-1)).toMatchObject({
+      type: 'pod',
+      namespace: 'default',
+      podName: 'web',
+    })
+  })
+
   // 这些资源没有容器/历史版本：只有元数据与编辑，不能把工作负载那几项显示出来。
   it.each(['services', 'configmaps', 'secrets'] as const)(
     '%s 只保留编辑、YAML、标签注解与删除',
@@ -201,7 +262,7 @@ describe('资源行操作菜单', () => {
   it.each(['persistentvolumes', 'storageclasses'] as const)(
     '%s 的编辑路径不带命名空间段',
     async (resourceType) => {
-      render(
+      renderWithTerminal(
         <ResourceRowActions
           resourceType={resourceType}
           resource={{ metadata: { name: 'pv-data-01' } } as never}
@@ -248,7 +309,7 @@ describe('资源行操作菜单', () => {
   it('没有任何相关权限时整列不渲染', () => {
     can.mockReturnValue(false)
 
-    const { container } = render(
+    const { container } = renderWithTerminal(
       <ResourceRowActions
         resourceType="deployments"
         resource={workload as never}

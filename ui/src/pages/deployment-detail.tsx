@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   IconEdit,
+  IconFileText,
   IconNetwork,
   IconReload,
   IconScale,
@@ -70,12 +71,11 @@ import {
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { DeploymentOverview } from '@/components/deployment-overview'
 import { EventTable } from '@/components/event-table'
-
 import { PodMonitoring } from '@/components/pod-monitoring'
 import { PodTable } from '@/components/pod-table'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ServicePortsEditor } from '@/components/service-ports-editor'
-import { TerminalLauncher } from '@/components/terminal-launcher'
+import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
 import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 import { VolumeTable } from '@/components/volume-table'
 import { WorkloadHistoryTabs } from '@/components/workload-history-tabs'
@@ -97,7 +97,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     useState<ServiceFormData>(initialData)
   const [isScalePopoverOpen, setIsScalePopoverOpen] = useState(false)
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
-  const [isTerminalDialogOpen, setIsTerminalDialogOpen] = useState(false)
+  const openWorkspaceSession = useOpenWorkspaceSession()
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -445,36 +445,6 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
             </div>
           </div>
         ),
-      },
-      {
-        value: 'logs',
-        label: t('common.tabs.logs'),
-        content: (
-          <TerminalLauncher
-            mode="logs"
-            namespace={namespace}
-            pods={pods}
-            containers={containers}
-            initContainers={initContainers}
-            labelSelector={labelSelector}
-            source="deployment"
-          />
-        ),
-      },
-      {
-        value: 'terminal',
-        label: t('common.tabs.terminal'),
-        content:
-          pods.length > 0 ? (
-            <TerminalLauncher
-              mode="terminal"
-              namespace={namespace}
-              pods={pods}
-              containers={containers}
-              initContainers={initContainers}
-              source="deployment"
-            />
-          ) : null,
       }
     )
 
@@ -601,6 +571,45 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       }
       headerActions={
         <>
+          {canLog ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                openWorkspaceSession({
+                  mode: 'logs',
+                  namespace,
+                  pods: relatedPods ?? [],
+                  containers,
+                  initContainers,
+                  labelSelector,
+                  source: 'deployment',
+                })
+              }
+            >
+              <IconFileText className="w-4 h-4" />
+              {t('common.tabs.logs')}
+            </Button>
+          ) : null}
+          {canExec && (relatedPods?.length ?? 0) > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                openWorkspaceSession({
+                  mode: 'terminal',
+                  namespace,
+                  pods: relatedPods ?? [],
+                  containers,
+                  initContainers,
+                  source: 'deployment',
+                })
+              }
+            >
+              <IconTerminal2 className="w-4 h-4" />
+              {t('common.tabs.terminal')}
+            </Button>
+          ) : null}
           {canUpdate ? (
             <Button
               variant="outline"
@@ -805,36 +814,6 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
           </Dialog>
           <UnsavedChangesConfirmDialog {...exposeGuard.confirmDialogProps} />
           <Dialog
-            open={isTerminalDialogOpen}
-            onOpenChange={setIsTerminalDialogOpen}
-          >
-            <DialogContent className="sm:max-w-2xl">
-              <DialogHeader className="sr-only">
-                <DialogTitle>{t('common.tabs.terminal')}</DialogTitle>
-                <DialogDescription>
-                  {t('common.messages.terminalDialogDescription')}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="h-[70vh] min-h-0">
-                {relatedPods && relatedPods.length > 0 ? (
-                  <TerminalLauncher
-                    mode="terminal"
-                    namespace={namespace}
-                    pods={relatedPods}
-                    containers={containers}
-                    initContainers={initContainers}
-                    source="deployment"
-                    onOpen={() => setIsTerminalDialogOpen(false)}
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    {t('common.messages.noPods')}
-                  </div>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Dialog
             open={isRestartDialogOpen}
             onOpenChange={setIsRestartDialogOpen}
           >
@@ -870,12 +849,6 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
       }
       moreActions={
         <>
-          {canExec && (
-            <DropdownMenuItem onSelect={() => setIsTerminalDialogOpen(true)}>
-              <IconTerminal2 className="size-4" />
-              {t('common.tabs.terminal')}
-            </DropdownMenuItem>
-          )}
           {canCreateService && relatedResources && !hasRelatedService && (
             <DropdownMenuItem onSelect={() => openExposeDialog()}>
               <IconNetwork className="size-4" />
@@ -894,10 +867,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
         ['pods', 'containers'].includes(tab.value)
       )}
       extraTabs={extraTabs.filter(
-        (tab) =>
-          !['pods', 'containers'].includes(tab.value) &&
-          (tab.value !== 'terminal' || canExec) &&
-          (tab.value !== 'logs' || canLog)
+        (tab) => !['pods', 'containers'].includes(tab.value)
       )}
     />
   )

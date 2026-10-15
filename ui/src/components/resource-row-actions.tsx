@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import {
   IconDots,
   IconFileCode,
+  IconFileText,
   IconHistory,
   IconNotes,
   IconPencil,
@@ -15,7 +16,7 @@ import {
 } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
-import type { Container } from 'kubernetes-types/core/v1'
+import type { Container, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -58,6 +59,7 @@ import { KVEditor, type KVPair } from '@/components/kv-editor'
 import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 import { WorkloadRevisionsTable } from '@/components/workload-revisions-table'
 import { YamlEditor } from '@/components/yaml-editor'
+import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
 
 /**
  * 行操作菜单覆盖的资源类型。
@@ -311,6 +313,9 @@ export function ResourceRowActions<T extends RowActionResourceType>({
   const canDelete = can(resourceType, 'delete', { namespace })
   // 终端是连进 Pod 执行命令，判的是 pods 的 exec 权限。
   const canExec = can('pods', 'exec', { namespace })
+  // 日志走独立的 log 动词（只读管理员有，自定义角色可能没有）。
+  const canLog = can('pods', 'log', { namespace })
+  const openWorkspaceSession = useOpenWorkspaceSession()
 
   const [dialog, setDialog] = useState<DialogKind | null>(null)
   const [showDelete, setShowDelete] = useState(false)
@@ -381,6 +386,19 @@ export function ResourceRowActions<T extends RowActionResourceType>({
     setImages(nextImages)
     setImageBaseline(nextImages)
     setDialog('image')
+  }
+
+  /** Pod 行的日志/终端直开底部工作区，不经详情页选择。 */
+  const openPodSession = (mode: 'logs' | 'terminal') => {
+    openWorkspaceSession({
+      mode,
+      namespace,
+      podName: name,
+      containers: containerSpecs.containers,
+      initContainers: containerSpecs.initContainers,
+      ephemeralContainers: (resource as Pod).spec?.ephemeralContainers,
+      source: 'pod',
+    })
   }
 
   const handleTogglePaused = async () => {
@@ -539,13 +557,31 @@ export function ResourceRowActions<T extends RowActionResourceType>({
               {t('resourceActions.viewYaml')}
             </DropdownMenuItem>
           )}
-          {traits.terminal && canExec && (
-            <DropdownMenuItem
-              onSelect={() => navigate(`${detailPath}?tab=terminal`)}
-            >
-              <IconTerminal2 className="size-4" />
-              {t('common.tabs.terminal')}
-            </DropdownMenuItem>
+          {resourceType === 'pods' ? (
+            <>
+              {canLog && (
+                <DropdownMenuItem onSelect={() => openPodSession('logs')}>
+                  <IconFileText className="size-4" />
+                  {t('common.tabs.logs')}
+                </DropdownMenuItem>
+              )}
+              {canExec && (
+                <DropdownMenuItem onSelect={() => openPodSession('terminal')}>
+                  <IconTerminal2 className="size-4" />
+                  {t('common.tabs.terminal')}
+                </DropdownMenuItem>
+              )}
+            </>
+          ) : (
+            traits.terminal &&
+            canExec && (
+              <DropdownMenuItem
+                onSelect={() => navigate(`${detailPath}?tab=terminal`)}
+              >
+                <IconTerminal2 className="size-4" />
+                {t('common.tabs.terminal')}
+              </DropdownMenuItem>
+            )
           )}
           {traits.imagePatch !== null && canUpdate && (
             <DropdownMenuItem onSelect={openImageDialog}>
