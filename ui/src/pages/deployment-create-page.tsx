@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as YAML from 'js-yaml'
-import { ArrowLeft, ChevronDown, Loader2, Plus, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronDown, Loader2, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -307,6 +307,8 @@ interface DeploymentFormPageProps {
   initialData?: DeploymentFormData
   /** 正在编辑（或克隆）的对象，用于保存时保留未建模的字段。 */
   originalManifest?: Record<string, unknown>
+  /** Pod 编辑时解析出的所属 Deployment 名字（无归属为空），用于引导去工作负载编辑。 */
+  ownerDeploymentName?: string
 }
 
 function DeploymentFormPage({
@@ -315,6 +317,7 @@ function DeploymentFormPage({
   cloneSourceName,
   initialData,
   originalManifest,
+  ownerDeploymentName,
 }: DeploymentFormPageProps) {
   const isEdit = !!editName
   const { t } = useTranslation()
@@ -635,6 +638,38 @@ function DeploymentFormPage({
         </Button>
         <h1 className="text-2xl font-bold">{pageTitle}</h1>
       </div>
+
+      {/* Pod 的 spec 创建后大多不可变（K8s 仅允许改镜像等少量字段）：
+          提前提示去所属 Deployment 编辑，避免保存时才报 Forbidden。 */}
+      {isEdit && resourceType === 'pods' && (
+        <div className="rounded-md border border-warning/40 border-l-4 border-l-warning bg-warning/5 px-3 py-2 text-sm text-warning">
+          <p>{t('workloadWizard.podEditHint')}</p>
+          <p>
+            {ownerDeploymentName
+              ? t('workloadWizard.podEditOwnerHint', {
+                  deployment: ownerDeploymentName,
+                })
+              : t('workloadWizard.podEditOwnerlessHint')}
+            {ownerDeploymentName && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 font-medium underline underline-offset-2 hover:opacity-80"
+                  onClick={() =>
+                    navigate(
+                      `/deployments/${targetNamespace}/${ownerDeploymentName}/edit`
+                    )
+                  }
+                >
+                  {t('workloadWizard.podEditGoToDeployment')}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Scrollable content */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
@@ -1603,6 +1638,31 @@ function DeploymentEditPage({
     )
   }, [data, services, resourceType, name, namespace])
 
+  // Pod 由 ReplicaSet → Deployment 两级控制器拥有：顺着 ownerReferences
+  // 找到所属 Deployment，提示条据此给出直达的编辑入口。
+  const ownerRsName = useMemo(() => {
+    if (resourceType !== 'pods' || !data) return undefined
+    const refs = ((data as Record<string, unknown>).metadata as
+      | Record<string, unknown>
+      | undefined)?.ownerReferences as Array<Record<string, unknown>> | undefined
+    const rs = refs?.find((ref) => ref.kind === 'ReplicaSet')
+    return typeof rs?.name === 'string' ? rs.name : undefined
+  }, [data, resourceType])
+  const { data: ownerRs } = useResource(
+    'replicasets',
+    ownerRsName || '',
+    namespace,
+    { enabled: !!ownerRsName }
+  )
+  const ownerDeploymentName = useMemo(() => {
+    if (!ownerRs) return undefined
+    const refs = ((ownerRs as Record<string, unknown>).metadata as
+      | Record<string, unknown>
+      | undefined)?.ownerReferences as Array<Record<string, unknown>> | undefined
+    const dep = refs?.find((ref) => ref.kind === 'Deployment')
+    return typeof dep?.name === 'string' ? dep.name : undefined
+  }, [ownerRs])
+
   if (isError) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
@@ -1634,6 +1694,7 @@ function DeploymentEditPage({
       editName={name}
       initialData={initialData}
       originalManifest={data as Record<string, unknown>}
+      ownerDeploymentName={ownerDeploymentName}
     />
   )
 }
