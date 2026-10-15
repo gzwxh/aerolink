@@ -27,15 +27,20 @@ import {
   patchResource,
   restartWorkload,
   updateResource,
+  useResources,
   type DeepPartial,
 } from '@/lib/api'
 import { getResourceFormEditPath } from '@/lib/resource-catalog'
+import { servicesForWorkload } from '@/lib/k8s'
+import { deleteRelatedServices } from '@/lib/related-service-cleanup'
 import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import {
   useDraftDirty,
   useUnsavedChangesGuard,
 } from '@/hooks/use-unsaved-changes-guard'
+import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { RelatedServicesDeleteWarning } from '@/components/related-services-delete-warning'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -54,7 +59,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { KVEditor, type KVPair } from '@/components/kv-editor'
 import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 import { WorkloadRevisionsTable } from '@/components/workload-revisions-table'
@@ -317,6 +321,35 @@ export function ResourceRowActions<T extends RowActionResourceType>({
   const canLog = can('pods', 'log', { namespace })
   const openWorkspaceSession = useOpenWorkspaceSession()
 
+  // 删除联动：删 Deployment 时把选择器指向它的 Service 一并删除，
+  // 删除弹窗里展示提醒。只有真的有 services 删除权限才联动（fail-closed）。
+  // 同一列表所有行的查询键相同，react-query 会去重成一次请求。
+  const canServicesDelete = can('services', 'delete', { namespace })
+  const { data: namespaceServices } = useResources('services', namespace, {
+    disable: resourceType !== 'deployments',
+    staleTime: 30_000,
+  })
+  const workloadSpec = (
+    resource as unknown as {
+      spec?: {
+        selector?: { matchLabels?: Record<string, string> }
+        template?: { metadata?: { labels?: Record<string, string> } }
+      }
+    }
+  ).spec
+  const relatedServiceNames =
+    resourceType === 'deployments' && canServicesDelete
+      ? servicesForWorkload(namespaceServices || [], {
+          name,
+          labels: {
+            ...(workloadSpec?.template?.metadata?.labels || {}),
+            ...(workloadSpec?.selector?.matchLabels || {}),
+          },
+        })
+          .map((svc) => svc.metadata?.name || '')
+          .filter(Boolean)
+      : []
+
   const [dialog, setDialog] = useState<DialogKind | null>(null)
   const [showDelete, setShowDelete] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -520,7 +553,18 @@ export function ResourceRowActions<T extends RowActionResourceType>({
     setIsDeleting(true)
     try {
       await deleteResource(resourceType, name, namespace)
+      // 主体资源已删除后再联动清理关联 Service，主体失败时不动它们。
+      const failedServices = relatedServiceNames.length
+        ? await deleteRelatedServices(relatedServiceNames, namespace)
+        : []
       toast.success(t('resourceTable.deleteSuccess', { name }))
+      if (failedServices.length) {
+        toast.warning(
+          t('deleteConfirmation.relatedServicesDeleteFailed', {
+            names: failedServices.join(', '),
+          })
+        )
+      }
       setShowDelete(false)
       await refresh()
     } catch (error) {
@@ -794,6 +838,11 @@ export function ResourceRowActions<T extends RowActionResourceType>({
         namespace={namespace}
         onConfirm={() => void handleDelete()}
         isDeleting={isDeleting}
+        extraContent={
+          relatedServiceNames.length ? (
+            <RelatedServicesDeleteWarning names={relatedServiceNames} />
+          ) : undefined
+        }
       />
 
       <UnsavedChangesConfirmDialog {...imageGuard.confirmDialogProps} />
