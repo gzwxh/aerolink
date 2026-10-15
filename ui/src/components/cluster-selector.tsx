@@ -1,4 +1,5 @@
 import { IconCheck, IconChevronDown } from '@tabler/icons-react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { statusBadge } from '@/lib/status-badge'
@@ -14,6 +15,25 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ClusterBadgeIcon } from '@/components/cluster-badge'
 
+/** 只在文本真的被 truncate 裁掉时才挂原生 title：完整可见也弹提示的话，
+ *  会盖住侧边栏后面的菜单内容（ResizeObserver 兜容器宽度变化）。 */
+function useTruncatedTitle(text: string | undefined) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [truncated, setTruncated] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => setTruncated(el.scrollWidth > el.clientWidth)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text])
+
+  return { ref, title: truncated ? text : undefined }
+}
+
 export function ClusterSelector() {
   const { t } = useTranslation()
   const {
@@ -23,6 +43,13 @@ export function ClusterSelector() {
     isSwitching,
     isLoading,
   } = useCluster()
+
+  const currentClusterData = clusters.find((c) => c.name === currentCluster)
+  const currentDescription = currentClusterData?.description?.trim()
+  const currentError = currentClusterData?.error
+
+  const nameTitle = useTruncatedTitle(currentClusterData?.name)
+  const descTitle = useTruncatedTitle(currentError || currentDescription)
 
   if (isLoading || isSwitching) {
     return (
@@ -36,10 +63,6 @@ export function ClusterSelector() {
       </div>
     )
   }
-
-  const currentClusterData = clusters.find((c) => c.name === currentCluster)
-  const currentDescription = currentClusterData?.description?.trim()
-  const currentError = currentClusterData?.error
 
   return (
     <DropdownMenu>
@@ -56,8 +79,9 @@ export function ClusterSelector() {
             <span className="flex min-w-0 items-center gap-2">
               <ClusterBadgeIcon cluster={currentClusterData} />
               <span
+                ref={nameTitle.ref}
                 className="truncate text-sm font-medium"
-                title={currentClusterData?.name}
+                title={nameTitle.title}
               >
                 {isSwitching
                   ? t('cluster.switchingShort', '切换中...')
@@ -71,13 +95,14 @@ export function ClusterSelector() {
             </span>
             {!isSwitching && (currentError || currentDescription) && (
               <span
+                ref={descTitle.ref}
                 className={cn(
                   'truncate text-xs',
                   currentError
                     ? 'text-destructive'
                     : 'text-sidebar-foreground/70'
                 )}
-                title={currentError || currentDescription}
+                title={descTitle.title}
               >
                 {currentError || currentDescription}
               </span>

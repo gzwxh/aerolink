@@ -502,7 +502,9 @@ export function ConsoleRoleMembers({
                 <TableRow key={row.key}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{row.subject}</span>
+                      <span className="font-medium" title={row.subject}>
+                        {row.subject}
+                      </span>
                       <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                         {row.subjectType === 'group'
                           ? t('consoleRoles.subjectGroup', '用户组')
@@ -529,7 +531,10 @@ export function ConsoleRoleMembers({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm">
+                    <span
+                      className="text-sm"
+                      title={row.roleLabels.join(' / ')}
+                    >
                       {row.roleLabels.join(' / ')}
                     </span>
                   </TableCell>

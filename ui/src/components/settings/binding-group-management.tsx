@@ -829,6 +829,7 @@ export function BindingGroupManagement() {
                         <button
                           type="button"
                           className="font-medium hover:text-primary hover:underline"
+                          title={g.name}
                           onClick={() => openDetail(g.name)}
                         >
                           {g.name}
@@ -853,7 +854,10 @@ export function BindingGroupManagement() {
                         )}
                       </div>
                       {g.description && (
-                        <div className="text-xs text-muted-foreground">
+                        <div
+                          className="text-xs text-muted-foreground"
+                          title={g.description}
+                        >
                           {g.description}
                         </div>
                       )}

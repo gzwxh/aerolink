@@ -81,6 +81,9 @@ export function APIKeyManagement() {
       {
         id: 'key',
         header: t('common.fields.apiKey', 'API Key'),
+        // 密钥本身很长（几十个字符），列宽改成按占比固定后，默认宽度太小会和
+        // 右侧的「显示/隐藏」「复制」两个图标按钮挤在一起，这里单独放宽。
+        size: 320,
         cell: ({ row: { original: apiKey } }) => {
           const isVisible = visibleKeys.has(apiKey.id)
           const displayKey = isVisible ? apiKey.apiKey : '•'.repeat(18)

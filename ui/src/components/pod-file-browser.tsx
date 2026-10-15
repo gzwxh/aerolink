@@ -279,7 +279,7 @@ export function PodFileBrowser({
                         <IconFile className="w-4 h-4 text-muted-foreground" />
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell title={file.name}>
                       {file.isDir ? (
                         <Button
                           variant="link"
