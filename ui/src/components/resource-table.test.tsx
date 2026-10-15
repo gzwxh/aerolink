@@ -2,6 +2,7 @@
 import { createColumnHelper } from '@tanstack/react-table'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createEvent, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ResourceTable } from './resource-table'
@@ -455,5 +456,91 @@ describe('ResourceTable external data mode', () => {
     })
     expect(mockDeleteResource).toHaveBeenCalledWith('pods', 'pod-1', 'aerolink')
     expect(mockDeleteResource).toHaveBeenCalledWith('pods', 'pod-2', 'aerolink')
+  })
+})
+
+describe('ResourceTable column reorder', () => {
+  const reorderColumns = [
+    columnHelper.accessor('metadata.name', { header: 'Name' }),
+    columnHelper.accessor('metadata.uid', { header: 'UID' }),
+  ]
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  function headerTexts() {
+    return screen
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent ?? '')
+  }
+
+  function findHeader(text: string) {
+    return screen
+      .getAllByRole('columnheader')
+      .find((header) => header.textContent?.includes(text))!
+  }
+
+  it('reorders columns via header drag & drop and persists the order', () => {
+    render(
+      <ResourceTable<Row>
+        resourceName="services"
+        columns={reorderColumns}
+        clusterScope={true}
+      />
+    )
+
+    // 初始顺序：数据列按定义排列（Name 在 UID 前）
+    expect(headerTexts().indexOf('UID')).toBeGreaterThan(
+      headerTexts().indexOf('Name')
+    )
+
+    // 把 UID 拖到 Name 左半边（clientX=0 < 列宽中点，落点判定为 before）。
+    // jsdom 没有 DragEvent 接口，fireEvent 的附加属性不会生效，
+    // 必须用 createEvent + defineProperty 携带 clientX。
+    const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
+    const dragStart = createEvent.dragStart(findHeader('UID'))
+    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer })
+    fireEvent(findHeader('UID'), dragStart)
+    const drop = createEvent.drop(findHeader('Name'))
+    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer })
+    Object.defineProperty(drop, 'clientX', { value: 0 })
+    fireEvent(findHeader('Name'), drop)
+
+    const after = headerTexts()
+    expect(after.indexOf('UID')).toBeLessThan(after.indexOf('Name'))
+    // 持久化到 localStorage；TanStack 会把 accessor key 的点转成下划线列 id
+    // （getClusterScopedStorageKey 已 mock 成原样返回）
+    expect(
+      JSON.parse(localStorage.getItem('-services-columnOrder') ?? '[]')
+    ).toEqual(['select', 'metadata_uid', 'metadata_name'])
+  })
+
+  it('keeps the select column pinned first after reordering', () => {
+    render(
+      <ResourceTable<Row>
+        resourceName="services"
+        columns={reorderColumns}
+        clusterScope={true}
+      />
+    )
+
+    const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
+    // 把 Name 拖到 UID 右半边（clientX 超过列宽中点）：结构列（勾选列）仍必须钉在最左
+    const dragStart = createEvent.dragStart(findHeader('Name'))
+    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer })
+    fireEvent(findHeader('Name'), dragStart)
+    const drop = createEvent.drop(findHeader('UID'))
+    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer })
+    Object.defineProperty(drop, 'clientX', { value: 9999 })
+    fireEvent(findHeader('UID'), drop)
+
+    const after = headerTexts()
+    expect(after.indexOf('Name')).toBeGreaterThan(after.indexOf('UID'))
+    expect(
+      within(screen.getAllByRole('columnheader')[0]).getByRole('checkbox', {
+        name: /select all/i,
+      })
+    ).toBeInTheDocument()
   })
 })

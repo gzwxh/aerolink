@@ -198,11 +198,15 @@ export function ResourceTableView<T>({
       onDrop: (event: React.DragEvent) => {
         event.preventDefault()
         const fromId = dragColumnIdRef.current
-        const target = dropTarget
         clearDragState()
-        if (fromId && target && fromId !== columnId) {
-          applyColumnOrder(fromId, columnId, target.after)
+        if (!fromId || fromId === columnId) {
+          return
         }
+        // 落点在 drop 时现算，不依赖 dragOver 先行写入的 state
+        //（真实浏览器里 dragOver 必先触发，但直接读 event 更可靠）。
+        const rect = event.currentTarget.getBoundingClientRect()
+        const after = event.clientX > rect.left + rect.width / 2
+        applyColumnOrder(fromId, columnId, after)
       },
       onDragEnd: clearDragState,
     }
