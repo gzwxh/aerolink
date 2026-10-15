@@ -1,0 +1,161 @@
+/* 星云主题：与 kkRepo（klboke/kkRepo）nexus 皮肤对齐的中性灰 + 松柏绿主色配色。
+   色值逐项取自 kkRepo 的 browse-ui/.../assets/themes/nexus.css 语义 token：
+   --brand #2f7650 / --brand-strong #286744 / --brand-tint #edf7f1 /
+   --brand-bright #347f56 / --accent #2f6fa7 / --ink 阶 / --line / --surface /
+   --surface-sunken / --canvas / --danger|warning|success|info / --topbar 系。
+   注意 kkRepo nexus 的 --accent 与 --info 同值（#2f6fa7），映射后 --attention 与
+   --info、--chart-5 与 --chart-2 同色，属预期。
+   一处按 AA 微调：--success（kkRepo #347a53）压在本主题的沉底填充
+   （--surface-sunken #eceeef）上只有 4.45，不到 AA，取同色相略加深的 #347953。
+   其余文字 token 沿用 kkRepo 原值。
+
+   kkRepo nexus 与其余皮肤有一处根本差异：它的顶栏是白底（--topbar #ffffff），
+   所以“顶栏映射到侧边栏”得到的是一支浅色侧边栏（前景 --topbar-ink #1f2226、
+   选中 --brand）。这与本仓浅色默认主题的浅侧边栏一致，选中态无需额外规则
+   （默认的 --primary/10 铺底 + --primary 上色在浅底上就看得很清楚）。
+
+   暗色（.dark）是唯一不按 kkRepo 深色系派生的主题：nexus 的 --topbar 是白底，
+   它没有可用的深色系 token（--ink-1 就是整套里最深的了），套用其余皮肤的派生式会
+   得到一个背景是白色的“暗色”主题，不成立。这里因此用 nexus 自己的中性色阶
+   （--ink-1 #1f2226 作页面底、--ink-2 #34383d 作次表面、--surface-sunken #eceeef
+   作前景文字）翻出这套暗色，并用主色的浅化值 #5cb98a 作暗底上的主色（kkRepo 的
+   --brand/--brand-bright 都偏深，压在暗底上作按钮底不到 AA）。这是本主题唯一
+   引入 kkRepo 之外色值的地方，按深浅把中性阶对应翻面即可，非随手取色。
+
+   暗色描边同样是例外（同其余新增主题）：kkRepo 没有可作描边的暗色 token，用本仓
+   其余暗色主题一致的半透明白描边（--border 14% / --input 22%）。
+
+   表格是唯一需要落到组件层的例外：kkRepo 的 .nx-table 直接引用 --table-head-ink /
+   --row-hover，而 AeroLink 的表格原语把这两处写死成 text-foreground /
+   hover:bg-muted/50，没有 CSS 变量入口，因此用主题作用域规则落地（见文件末尾，
+   只影响星云，不动 ui/components/ui 原语）。表头底色不用规则：AeroLink 用的是
+   bg-muted，把 --muted 指向 kkRepo 的 --header（= --surface-sunken）即可。
+   其余 kkRepo token 在 AeroLink 里没有消费方，不映射（照抄过来就是死变量）：
+   --surface-muted、--brand-tint-strong、--accent-soft、--ink-4、
+   --success|warning|info 的 -bg/-line、--account-avatar-*、--focus、
+   --topbar-selection、--r-* / --s-* / --fs-* / --fw-* / --lh-*。 */
+.color-nexus {
+  --background: #f5f6f7; /* --canvas */
+  --foreground: #34383d; /* --ink-2 */
+  --card: #ffffff; /* --surface */
+  --card-foreground: #34383d; /* --ink-2 */
+  --popover: #ffffff; /* --surface */
+  --popover-foreground: #34383d; /* --ink-2 */
+  --primary: #2f7650; /* --brand */
+  --primary-foreground: #ffffff; /* --active-ink */
+  --secondary: #eceeef; /* --surface-sunken */
+  --secondary-foreground: #1f2226; /* --ink-1 */
+  --muted: #eceeef; /* --header（= --surface-sunken）：AeroLink 的表头带与沉底填充 */
+  --muted-foreground: #626970; /* --ink-3 */
+  --accent: #edf7f1; /* --brand-tint */
+  --accent-foreground: #286744; /* --brand-strong */
+  --destructive: #ad372f; /* --danger */
+  --destructive-foreground: #ffffff; /* kkRepo 无对应 token（--danger 只用于文字/描边）*/
+  --success: #347953; /* --success 同色相加深 */
+  --success-foreground: #ffffff;
+  --info: #2f6fa7; /* --info */
+  --info-foreground: #ffffff;
+  --warning: #9a5b16; /* --warning */
+  --warning-foreground: #ffffff;
+  --attention: #2f6fa7; /* --accent（kkRepo nexus 与 --info 同值）*/
+  --attention-foreground: #ffffff;
+  --border: #d7dadd; /* --line */
+  --input: #b9bec4; /* --line-strong */
+  --ring: #2f7650; /* --brand */
+  --chart-1: #2f7650; /* --brand */
+  --chart-2: #2f6fa7; /* --info */
+  --chart-3: #347953; /* --success */
+  --chart-4: #9a5b16; /* --warning */
+  --chart-5: #2f6fa7; /* --accent */
+  /* kkRepo nexus 的顶栏是白底，映射到侧边栏即一支浅色侧边栏 */
+  --sidebar: #ffffff; /* --topbar */
+  --sidebar-foreground: #1f2226; /* --topbar-ink */
+  --sidebar-primary: #2f7650; /* --brand（kkRepo --topbar-active） */
+  --sidebar-primary-foreground: #ffffff; /* --active-ink */
+  --sidebar-accent: #f1f3f4; /* --topbar-hover */
+  --sidebar-accent-foreground: #1f2226; /* --topbar-ink */
+  --sidebar-border: #d7dadd; /* --topbar-line */
+  --sidebar-ring: #2f7650; /* --brand */
+  /* 表格：kkRepo 的 --table-head-ink / --row-hover */
+  --table-head-ink: #626970; /* --table-head-ink（= --ink-3）*/
+  --row-hover: #edf7f1; /* --row-hover（= --brand-tint）*/
+  --radius: 0.375rem; /* --r-md: 6px */
+  --shadow-2xs: 0 1px 2px rgba(31, 34, 38, 0.08); /* --shadow-sm */
+  --shadow-xs: 0 1px 2px rgba(31, 34, 38, 0.08);
+  --shadow-sm: 0 1px 2px rgba(31, 34, 38, 0.08);
+  --shadow: 0 8px 22px rgba(31, 34, 38, 0.1); /* --shadow-soft */
+  --shadow-md: 0 8px 22px rgba(31, 34, 38, 0.1);
+  --shadow-lg: 0 16px 38px rgba(31, 34, 38, 0.2); /* --shadow-pop */
+  --shadow-xl: 0 26px 72px rgba(22, 25, 29, 0.3); /* --shadow-modal */
+  --shadow-2xl: 0 26px 72px rgba(22, 25, 29, 0.3);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+}
+
+.dark.color-nexus {
+  /* 见文件头：nexus 顶栏是白底，没有可用深色系，这里用自身中性阶翻面 + 主色浅化值 */
+  --background: #1f2226; /* --ink-1 */
+  --foreground: #eceeef; /* --surface-sunken */
+  --card: #2b2f34; /* --ink-1 与 --ink-2 之间的深中性 */
+  --card-foreground: #eceeef;
+  --popover: #2b2f34;
+  --popover-foreground: #eceeef;
+  --primary: #5cb98a; /* 主色浅化值（暗底上作按钮底需 ≥4.5）*/
+  --primary-foreground: #1f2226; /* --ink-1 */
+  --secondary: #34383d; /* --ink-2 */
+  --secondary-foreground: #eceeef;
+  --muted: #17191c; /* 比页面底更暗一档的深中性 */
+  --muted-foreground: #a9b0b6; /* 中性阶上的次要文字色 */
+  --accent: #2b2f34;
+  --accent-foreground: #7ec9a3; /* 主色浅化值再提亮，作选中文字色 */
+  --destructive: #e8bab6; /* --danger-line */
+  --destructive-foreground: #1f2226; /* --ink-1 */
+  /* 暗色状态色：按本主题中性阶与各状态色相翻面派生 */
+  --success: #87b19a;
+  --success-foreground: #1f2226;
+  --info: #84aacb;
+  --info-foreground: #1f2226;
+  --warning: #c4a078;
+  --warning-foreground: #1f2226;
+  --attention: #84aacb;
+  --attention-foreground: #1f2226;
+  --border: oklch(1 0 0 / 14%); /* 不取自 kkRepo，见文件头注释 */
+  --input: oklch(1 0 0 / 22%); /* 同上：表单边界需比分隔线更实 */
+  --ring: #5cb98a;
+  --chart-1: #5cb98a; /* 主色浅化值 */
+  --chart-2: #bfd4e6; /* --info-line */
+  --chart-3: #b8ddc7; /* --success-line */
+  --chart-4: #ead09e; /* --warning-line */
+  --chart-5: #2f6fa7; /* --accent */
+  --sidebar: #2b2f34; /* 与 --card 同档，暗底上的侧边栏 */
+  --sidebar-foreground: #eceeef;
+  --sidebar-primary: #5cb98a;
+  --sidebar-primary-foreground: #1f2226;
+  --sidebar-accent: #34383d; /* --ink-2 */
+  --sidebar-accent-foreground: #eceeef;
+  --sidebar-border: oklch(1 0 0 / 14%);
+  --sidebar-ring: #5cb98a;
+  --table-head-ink: #a9b0b6; /* 深底上的次要文字色 */
+  --row-hover: rgba(255, 255, 255, 0.09);
+  --radius: 0.375rem; /* --r-md: 6px */
+  --shadow-2xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 38px rgba(0, 0, 0, 0.55);
+  --shadow-xl: 0 26px 72px rgba(0, 0, 0, 0.6);
+  --shadow-2xl: 0 26px 72px rgba(0, 0, 0, 0.6);
+}
+
+/* 表格：把 kkRepo 的 --table-head-ink / --row-hover 落到 AeroLink 的表格原语上
+   （原语写死了 text-foreground / hover:bg-muted/50）。表头底色走 --muted，
+   不需要规则。行悬浮限定了「含真实单元格的行」：resource-table-view 里展开的行
+   详情用的是原生 <td> 且刻意写成 hover:bg-muted/20（悬浮不变色），不能被这条规则
+   覆盖。 */
+.color-nexus [data-slot='table-head'] {
+  color: var(--table-head-ink);
+}
+.color-nexus [data-slot='table-row']:has([data-slot='table-cell']):hover {
+  background-color: var(--row-hover);
+}

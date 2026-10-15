@@ -53,7 +53,7 @@
 | HTTP 客户端与 API 模块 | `ui/src/lib/api.ts`（聚合导出）+ `ui/src/lib/api/*.ts`（按域拆：`admin`/`auth`/`bootstrap`/`cluster`/`core`/`notification`/`observability`/`shared`/`system`） |
 | i18n | `ui/src/i18n/index.ts` + `ui/src/i18n/locales/{zh,en}.json` |
 | 子路径部署 | `ui/src/lib/subpath.ts`、`ui/src/lib/base-path.ts` |
-| 配色主题（7 套语义 token） | `ui/src/styles/themes/*.css`（`index.css` 里的 import 顺序即覆盖顺序）+ `ui/src/components/color-theme-provider.tsx`；状态色 token 的语义与迁移口径见 `docs/dev/plans/2026-09-21-语义状态色token.md` |
+| 配色主题（12 套语义 token） | `ui/src/styles/themes/*.css`（`index.css` 里的 import 顺序即覆盖顺序）+ `ui/src/components/color-theme-provider.tsx`；状态色 token 的语义与迁移口径见 `docs/dev/plans/2026-09-21-语义状态色token.md`；其中 `indigo`/`ocean`/`sunset`/`jfrog`/`nexus` 五套对齐 kkRepo 皮肤的映射口径见 `docs/dev/plans/2026-10-15-新增五个 kkRepo 皮肤主题.md` |
 | 主题的对比度/描边契约 | `ui/src/styles/themes/theme-contrast.test.ts`（读 CSS 变量算 WCAG，不需要浏览器） |
 | 浏览器兼容基线 | `ui/vite.config.ts` → `build.target`（Chrome/Edge 111、Firefox 128、Safari/iOS 16.4） |
 

@@ -1,0 +1,170 @@
+/* 海洋主题：与 kkRepo（klboke/kkRepo）ocean 皮肤对齐的深海军蓝导航 + 天蓝主色配色。
+   色值逐项取自 kkRepo 的 browse-ui/.../assets/themes/ocean.css 语义 token：
+   --brand #0369a1 / --brand-strong #075985 / --brand-tint #e0f2fe /
+   --brand-bright #7dd3fc / --accent #0f766e / --ink 阶 / --line / --surface /
+   --surface-sunken / --canvas / --danger|warning|success|info / --topbar 系。
+   注意 kkRepo ocean 的 --info 与 --brand 同值（#0369a1），映射后 --info 与
+   --primary、--chart-2 与 --chart-1 同色，属预期。
+   说明：kkRepo 只提供浅色 token，暗色（.dark）变体由其深色系 token
+   （--topbar、--topbar-line、--topbar-ink、--topbar-muted、--ink-1/--ink-2、
+   --brand-bright、各 --*-line）派生，不引入 kkRepo 之外的色值。
+   AeroLink 没有独立的顶栏变量，kkRepo 的深色顶栏（--topbar #082f49）映射到侧边栏，
+   选中态用 --brand-bright（即 kkRepo 的 --topbar-active）。
+
+   一处按 AA 微调：--warning（kkRepo #a16207）压在本主题的沉底填充
+   （--surface-sunken #eaf3f7）上只有 4.38，不到 AA，取同色相略加深的 #9d5f07。
+   其余文字 token 沿用 kkRepo 原值。
+
+   暗色描边是“从 kkRepo 取值”的一个例外：kkRepo 的暗色系里没有任何用作描边的
+   色值，原先拿 --topbar-line 同时当 --card / --border / --input，卡片描边与输入框
+   边界都是 1.00:1（完全看不见）。这里改用本仓其余暗色主题一致的半透明白描边
+   （--border 14% / --input 22%），只影响这两个 token。
+
+   表格是唯一需要落到组件层的例外：kkRepo 的 .nx-table 直接引用 --table-head-ink /
+   --row-hover，而 AeroLink 的表格原语把这两处写死成 text-foreground /
+   hover:bg-muted/50，没有 CSS 变量入口，因此用主题作用域规则落地（见文件末尾，
+   只影响海洋，不动 ui/components/ui 原语）。表头底色不用规则：AeroLink 用的是
+   bg-muted，把 --muted 指向 kkRepo 的 --header（= --surface-sunken）即可。
+   其余 kkRepo token 在 AeroLink 里没有消费方，不映射（照抄过来就是死变量）：
+   --surface-muted、--brand-tint-strong、--accent-soft、--ink-4、
+   --success|warning|info 的 -bg/-line、--account-avatar-*、--focus、
+   --topbar-selection、--r-* / --s-* / --fs-* / --fw-* / --lh-*。 */
+.color-ocean {
+  --background: #f3f8fb; /* --canvas */
+  --foreground: #173b4d; /* --ink-2 */
+  --card: #ffffff; /* --surface */
+  --card-foreground: #173b4d; /* --ink-2 */
+  --popover: #ffffff; /* --surface */
+  --popover-foreground: #173b4d; /* --ink-2 */
+  --primary: #0369a1; /* --brand */
+  --primary-foreground: #ffffff; /* --active-ink */
+  --secondary: #eaf3f7; /* --surface-sunken */
+  --secondary-foreground: #082f49; /* --ink-1 */
+  --muted: #eaf3f7; /* --header（= --surface-sunken）：AeroLink 的表头带与沉底填充 */
+  --muted-foreground: #526d7c; /* --ink-3 */
+  --accent: #e0f2fe; /* --brand-tint */
+  --accent-foreground: #075985; /* --brand-strong */
+  --destructive: #b42318; /* --danger */
+  --destructive-foreground: #ffffff; /* kkRepo 无对应 token（--danger 只用于文字/描边）*/
+  --success: #047857; /* --success */
+  --success-foreground: #ffffff;
+  --info: #0369a1; /* --info（kkRepo ocean 与 --brand 同值）*/
+  --info-foreground: #ffffff;
+  --warning: #9d5f07; /* --warning 同色相加深 */
+  --warning-foreground: #ffffff;
+  --attention: #0f766e; /* --accent */
+  --attention-foreground: #ffffff;
+  --border: #d6e4eb; /* --line */
+  --input: #bccfd9; /* --line-strong */
+  --ring: #0369a1; /* --brand */
+  --chart-1: #0369a1; /* --brand */
+  --chart-2: #0369a1; /* --info */
+  --chart-3: #047857; /* --success */
+  --chart-4: #9d5f07; /* --warning */
+  --chart-5: #0f766e; /* --accent */
+  /* 深色侧边栏沿用 kkRepo 顶栏 token */
+  --sidebar: #082f49; /* --topbar */
+  --sidebar-foreground: #f0f9ff; /* --topbar-ink */
+  --sidebar-primary: #7dd3fc; /* --brand-bright（kkRepo --topbar-active） */
+  --sidebar-primary-foreground: #082f49; /* --topbar */
+  --sidebar-accent: rgba(255, 255, 255, 0.09); /* --topbar-hover */
+  --sidebar-accent-foreground: #f0f9ff; /* --topbar-ink */
+  --sidebar-border: #164e63; /* --topbar-line */
+  --sidebar-ring: #7dd3fc; /* --brand-bright */
+  /* 表格：kkRepo 的 --table-head-ink / --row-hover */
+  --table-head-ink: #526d7c; /* --table-head-ink（= --ink-3）*/
+  --row-hover: #e0f2fe; /* --row-hover（= --brand-tint）*/
+  --radius: 0.5rem; /* --r-md: 8px */
+  --shadow-2xs: 0 1px 2px rgba(8, 47, 73, 0.07); /* --shadow-sm */
+  --shadow-xs: 0 1px 2px rgba(8, 47, 73, 0.07);
+  --shadow-sm: 0 1px 2px rgba(8, 47, 73, 0.07);
+  --shadow: 0 10px 28px rgba(14, 74, 105, 0.09); /* --shadow-soft */
+  --shadow-md: 0 10px 28px rgba(14, 74, 105, 0.09);
+  --shadow-lg: 0 20px 48px rgba(8, 47, 73, 0.2); /* --shadow-pop */
+  --shadow-xl: 0 30px 84px rgba(8, 47, 73, 0.3); /* --shadow-modal */
+  --shadow-2xl: 0 30px 84px rgba(8, 47, 73, 0.3);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+}
+
+.dark.color-ocean {
+  --background: #082f49; /* --topbar */
+  --foreground: #f0f9ff; /* --topbar-ink */
+  --card: #164e63; /* --topbar-line */
+  --card-foreground: #f0f9ff;
+  --popover: #164e63; /* --topbar-line */
+  --popover-foreground: #f0f9ff;
+  --primary: #7dd3fc; /* --brand-bright */
+  --primary-foreground: #082f49; /* --ink-1 */
+  --secondary: #173b4d; /* --ink-2 */
+  --secondary-foreground: #f0f9ff;
+  --muted: #082f49; /* --ink-1（kkRepo 无暗色契约；取深色系里已作表面用的 --ink-1，与 --topbar 同值）*/
+  --muted-foreground: #bae6fd; /* --topbar-muted */
+  --accent: #164e63; /* --topbar-line */
+  --accent-foreground: #7dd3fc; /* --brand-bright */
+  --destructive: #fecaca; /* --danger-line */
+  --destructive-foreground: #082f49; /* --ink-1 */
+  /* 暗色状态色按 kkRepo 深色系的色相派生（kkRepo 无暗色状态契约）*/
+  --success: #afd4c9;
+  --success-foreground: #082f49;
+  --info: #b1d1e2;
+  --info-foreground: #082f49;
+  --warning: #dec8a8;
+  --warning-foreground: #082f49;
+  --attention: #b2d3d1;
+  --attention-foreground: #082f49;
+  --border: oklch(1 0 0 / 14%); /* 不取自 kkRepo，见文件头注释 */
+  --input: oklch(1 0 0 / 22%); /* 同上：表单边界需比分隔线更实 */
+  --ring: #7dd3fc; /* --brand-bright */
+  --chart-1: #7dd3fc; /* --brand-bright */
+  --chart-2: #bae6fd; /* --info-line */
+  --chart-3: #a7f3d0; /* --success-line */
+  --chart-4: #fde68a; /* --warning-line */
+  --chart-5: #0f766e; /* --accent */
+  --sidebar: #082f49; /* --ink-1 */
+  --sidebar-foreground: #f0f9ff; /* --topbar-ink */
+  --sidebar-primary: #7dd3fc; /* --brand-bright */
+  --sidebar-primary-foreground: #082f49; /* --ink-1 */
+  --sidebar-accent: #164e63; /* --topbar-line */
+  --sidebar-accent-foreground: #f0f9ff; /* --topbar-ink */
+  --sidebar-border: #164e63; /* --topbar-line */
+  --sidebar-ring: #7dd3fc; /* --brand-bright */
+  /* 表格：kkRepo 没有暗色 token，按上面的派生规则取深色系里同角色的值 */
+  --table-head-ink: #bae6fd; /* --topbar-muted（深底上的次要文字色）*/
+  --row-hover: rgba(255, 255, 255, 0.09); /* --topbar-hover */
+  --radius: 0.5rem; /* --r-md: 8px */
+  --shadow-2xs: 0 1px 2px rgba(8, 47, 73, 0.4);
+  --shadow-xs: 0 1px 2px rgba(8, 47, 73, 0.4);
+  --shadow-sm: 0 1px 2px rgba(8, 47, 73, 0.4);
+  --shadow: 0 10px 28px rgba(8, 47, 73, 0.5);
+  --shadow-md: 0 10px 28px rgba(8, 47, 73, 0.5);
+  --shadow-lg: 0 20px 48px rgba(8, 47, 73, 0.55);
+  --shadow-xl: 0 30px 84px rgba(8, 47, 73, 0.6);
+  --shadow-2xl: 0 30px 84px rgba(8, 47, 73, 0.6);
+}
+
+/* 侧边栏是深底，菜单选中项默认用 --primary/10 铺底、--primary 上色，深蓝叠深蓝
+   看不清。这里改用亮蓝（--brand-bright）实底 + 深字的选中样式。 */
+.color-ocean [data-sidebar='menu-button'][data-active='true'],
+.color-ocean [data-sidebar='menu-sub-button'][data-active='true'] {
+  background-color: var(--sidebar-primary);
+  color: var(--sidebar-primary-foreground);
+}
+
+/* 菜单图标固定用 --sidebar-primary，选中时会同色叠在实底上，这里一并压成前景色。 */
+.color-ocean [data-sidebar='menu-button'][data-active='true'] svg,
+.color-ocean [data-sidebar='menu-sub-button'][data-active='true'] svg {
+  color: var(--sidebar-primary-foreground);
+}
+
+/* 表格：把 kkRepo 的 --table-head-ink / --row-hover 落到 AeroLink 的表格原语上
+   （原语写死了 text-foreground / hover:bg-muted/50）。表头底色走 --muted，
+   不需要规则。行悬浮限定了「含真实单元格的行」：resource-table-view 里展开的行
+   详情用的是原生 <td> 且刻意写成 hover:bg-muted/20（悬浮不变色），不能被这条规则
+   覆盖。 */
+.color-ocean [data-slot='table-head'] {
+  color: var(--table-head-ink);
+}
+.color-ocean [data-slot='table-row']:has([data-slot='table-cell']):hover {
+  background-color: var(--row-hover);
+}

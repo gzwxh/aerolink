@@ -9,6 +9,11 @@ export const colorThemes = {
   'clean-slate': '',
   claude: '',
   emerald: '',
+  indigo: '',
+  ocean: '',
+  sunset: '',
+  jfrog: '',
+  nexus: '',
 }
 
 export type ColorTheme = keyof typeof colorThemes
