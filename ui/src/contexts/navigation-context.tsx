@@ -9,7 +9,12 @@ import {
   useRef,
   useState,
 } from 'react'
+// 应用内历史栈记录与回放的都是完整路由地址（含集群前缀），必须用原始 API，
+// 不能走集群包装版（会被再补一层前缀）。
+/* eslint-disable no-restricted-imports */
 import { useLocation, useNavigate, useNavigationType } from 'react-router-dom'
+
+/* eslint-enable no-restricted-imports */
 
 import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
 

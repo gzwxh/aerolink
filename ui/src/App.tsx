@@ -4,6 +4,8 @@ import { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useSearchParams } from 'react-router-dom'
 
+import { useRawNavigate } from '@/lib/cluster-path'
+
 import { AIChatbox, StandaloneAIChatbox } from './components/ai-chat/ai-chatbox'
 import { AppSidebar } from './components/app-sidebar'
 import { ErrorBoundary } from './components/error-boundary'
@@ -18,6 +20,7 @@ import { MFAPromptDialog } from './components/mfa-prompt-dialog'
 import { ServiceStatusOverlay } from './components/service-status-overlay'
 import { SessionSupersededDialog } from './components/session-superseded-dialog'
 import { SiteHeader } from './components/site-header'
+import { Button } from './components/ui/button'
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar'
 import { Toaster } from './components/ui/sonner'
 import { WriteConfirmDialog } from './components/write-confirm-dialog'
@@ -32,7 +35,12 @@ import { useSessionTakeoverNotice } from './hooks/use-session-takeover-notice'
 
 function ClusterGate({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
-  const { isLoading, error } = useCluster()
+  // 「申请权限」走无前缀地址：由 LegacyClusterRedirect 落到上次/默认集群的
+  // 设置页（权限绑定页的作用域就是顶栏所选集群）；不能用包装导航——那会
+  // 补上这个不可访问的 slug，又跳回本错误页。
+  const navigate = useRawNavigate()
+  const { isLoading, error, slugError, clusters, setCurrentCluster } =
+    useCluster()
 
   if (isLoading) {
     return (
@@ -50,6 +58,35 @@ function ClusterGate({ children }: { children: ReactNode }) {
       <div className="flex h-screen items-center justify-center">
         <div className="text-destructive">
           <p>{t('cluster.error', { error: error.message })}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 深链了一个无权限 / 不存在的集群：fail-closed，不给任何集群上下文。
+  if (slugError) {
+    const defaultCluster =
+      clusters.find((cluster) => cluster.isDefault) ?? clusters[0]
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-lg font-semibold">{t('cluster.slugErrorTitle')}</p>
+        <p className="max-w-md text-sm text-muted-foreground">
+          {t('cluster.slugErrorDescription')}
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/settings/rbac?rbacTab=binding-groups')}
+          >
+            {t('cluster.slugErrorRequestAccess')}
+          </Button>
+          {defaultCluster ? (
+            <Button onClick={() => setCurrentCluster(defaultCluster.name)}>
+              {t('cluster.slugErrorSwitchTo', {
+                name: defaultCluster.name,
+              })}
+            </Button>
+          ) : null}
         </div>
       </div>
     )

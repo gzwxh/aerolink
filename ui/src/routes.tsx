@@ -1,7 +1,9 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter } from 'react-router-dom'
 
 import App, { StandaloneAIChatApp } from './App'
+import { ClusterNavigate } from './components/cluster-link'
 import { InitCheckRoute } from './components/init-check-route'
+import { LegacyClusterRedirect } from './components/legacy-cluster-redirect'
 import { ProtectedRoute } from './components/protected-route'
 import { getSubPath } from './lib/subpath'
 import { AccountPage } from './pages/account-page'
@@ -46,17 +48,9 @@ export const router = createBrowserRouter(
       ),
     },
     {
-      path: '/ai-chat-box',
-      element: (
-        <InitCheckRoute>
-          <ProtectedRoute>
-            <StandaloneAIChatApp />
-          </ProtectedRoute>
-        </InitCheckRoute>
-      ),
-    },
-    {
-      path: '/',
+      // 全站业务页面统一挂在集群前缀下：/_clusters/<slug>/...
+      // URL 是集群上下文的唯一事实源（方案：docs/dev/plans/2026-10-15-集群信息进入浏览器地址栏.md）。
+      path: '/_clusters/:clusterSlug',
       element: (
         <InitCheckRoute>
           <ProtectedRoute>
@@ -85,25 +79,31 @@ export const router = createBrowserRouter(
         {
           // 兼容旧链接：/settings/users → /settings/user?tab=users
           path: 'settings/users',
-          element: <Navigate to="/settings/user?tab=users" replace />,
+          element: <ClusterNavigate to="/settings/user?tab=users" replace />,
         },
         {
           // 兼容旧链接：/settings/group → /settings/user?tab=group
           path: 'settings/group',
-          element: <Navigate to="/settings/user?tab=group" replace />,
+          element: <ClusterNavigate to="/settings/user?tab=group" replace />,
         },
         {
           // 兼容旧链接：/settings/binding-groups → /settings/rbac?rbacTab=binding-groups
           path: 'settings/binding-groups',
           element: (
-            <Navigate to="/settings/rbac?rbacTab=binding-groups" replace />
+            <ClusterNavigate
+              to="/settings/rbac?rbacTab=binding-groups"
+              replace
+            />
           ),
         },
         {
           // 兼容旧链接：/settings/oauth → /settings/security?tab=authProviders
           path: 'settings/oauth',
           element: (
-            <Navigate to="/settings/security?tab=authProviders" replace />
+            <ClusterNavigate
+              to="/settings/security?tab=authProviders"
+              replace
+            />
           ),
         },
         {
@@ -337,6 +337,29 @@ export const router = createBrowserRouter(
           element: <ResourceDetail />,
         },
       ],
+    },
+    {
+      // 独立 AI 助手页：同样挂在集群前缀下（无集群段时走下面的兜底重定向）。
+      path: '/_clusters/:clusterSlug/ai-chat-box',
+      element: (
+        <InitCheckRoute>
+          <ProtectedRoute>
+            <StandaloneAIChatApp />
+          </ProtectedRoute>
+        </InitCheckRoute>
+      ),
+    },
+    {
+      // 旧路径兜底：/、/deployments/...、/_clusters（不带 slug）→ 补集群段。
+      // 放在所有具名路由之后，按「上次使用 → 默认集群」跳转。
+      path: '*',
+      element: (
+        <InitCheckRoute>
+          <ProtectedRoute>
+            <LegacyClusterRedirect />
+          </ProtectedRoute>
+        </InitCheckRoute>
+      ),
     },
   ],
   {

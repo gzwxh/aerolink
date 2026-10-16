@@ -1,10 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import {
-  createMemoryRouter,
-  RouterProvider,
-  useNavigate,
-} from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
+
+import { useClusterNavigate } from '@/lib/cluster-path'
 
 import { NavigationProvider, useNavigationHistory } from './navigation-context'
 
@@ -13,7 +11,7 @@ const LEGACY_STORAGE_KEY = 'kite-navigation-history'
 
 function Probe() {
   const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
 
   return (
     <div>

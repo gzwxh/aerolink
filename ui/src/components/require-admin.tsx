@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { IconLoader2, IconShieldLock } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -12,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 
 function LoadingState() {
   const { t } = useTranslation()
@@ -53,7 +53,9 @@ function AccessDenied({
         </CardHeader>
         <CardContent>
           <Button asChild variant="outline">
-            <Link to="/">{t('accessDenied.backToHome', 'Back to Home')}</Link>
+            <ClusterLink to="/">
+              {t('accessDenied.backToHome', 'Back to Home')}
+            </ClusterLink>
           </Button>
         </CardContent>
       </Card>
