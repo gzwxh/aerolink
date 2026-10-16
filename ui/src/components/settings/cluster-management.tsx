@@ -83,6 +83,14 @@ export function ClusterManagement() {
 
   const [showClusterDialog, setShowClusterDialog] = useState(false)
   const [showImportDialog, setShowImportDialog] = useState(false)
+  // 导入时按 context 名匹配集群：同名集群的短名已固化，导入对话框里这些行只读。
+  const existingSlugs = useMemo(
+    () =>
+      Object.fromEntries(
+        clusters.map((cluster) => [cluster.name, cluster.slug])
+      ),
+    [clusters]
+  )
   const [editingCluster, setEditingCluster] = useState<Cluster | null>(null)
   const [badgeCluster, setBadgeCluster] = useState<Cluster | null>(null)
   const [deletingCluster, setDeletingCluster] = useState<Cluster | null>(null)
@@ -429,7 +437,13 @@ export function ClusterManagement() {
   })
 
   const importMutation = useMutation({
-    mutationFn: (config: string) => importClusters({ config }),
+    mutationFn: ({
+      config,
+      slugs,
+    }: {
+      config: string
+      slugs: Record<string, string>
+    }) => importClusters({ config, slugs }),
     onSuccess: ({ importedCount }) => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
@@ -694,9 +708,10 @@ export function ClusterManagement() {
           setShowImportDialog(open)
           if (!open) importMutation.reset()
         }}
-        onSubmit={(config) => importMutation.mutate(config)}
+        onSubmit={(config, slugs) => importMutation.mutate({ config, slugs })}
         isSubmitting={importMutation.isPending}
         error={importMutation.error?.message}
+        existingSlugs={existingSlugs}
       />
 
       <Dialog

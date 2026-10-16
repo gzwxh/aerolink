@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { IconEdit, IconEye, IconServer } from '@tabler/icons-react'
+import { IconCopy, IconEdit, IconEye, IconServer } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Cluster } from '@/types/api'
 import { ClusterCreateRequest } from '@/lib/api'
 import { apiClient } from '@/lib/api-client'
+import { copyToClipboard } from '@/lib/clipboard'
+import { withClusterPath } from '@/lib/cluster-path'
+import { isValidClusterSlug } from '@/lib/cluster-slug'
+import { withSubPath } from '@/lib/subpath'
 import {
   useDraftDirty,
   useUnsavedChangesGuard,
@@ -42,6 +46,8 @@ function createClusterFormData(cluster?: Cluster | null) {
   return {
     name: cluster?.name || '',
     description: cluster?.description || '',
+    // URL 短名只在创建时可选填；编辑模式下短名已固化，不进表单。
+    slug: '',
     // 编辑时**不回填**配置。
     //
     // 后端存的是加密凭据：回显既泄露凭据，还会因为「原样提交回去 → 后端再加密一次」
@@ -133,7 +139,19 @@ function ClusterDialogContent({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(formData)
+    if (isEditMode) {
+      // 短名创建时固化：编辑表单不含 slug 输入（后端更新接口不接收该字段，
+      // 这里原样透传其余字段即可）。
+      onSubmit(formData)
+      return
+    }
+    const slug = formData.slug.trim()
+    // 手填值非法时前端先挡一层；留空则交给后端自动生成。
+    if (slug && !isValidClusterSlug(slug)) {
+      toast.error(t('clusterManagement.dialog.slugInvalid'))
+      return
+    }
+    onSubmit({ ...formData, slug: slug || undefined })
   }
 
   const handleChange = (field: string, value: string | boolean) => {
@@ -141,6 +159,20 @@ function ClusterDialogContent({
       ...prev,
       [field]: value,
     }))
+  }
+
+  // 短名固化后唯一能改的就是「分享哪个链接」，所以编辑态提供完整地址的一键复制。
+  const handleCopyClusterLink = async () => {
+    const slug = cluster?.slug
+    if (!slug) return
+    const link = `${window.location.origin}${withSubPath(
+      withClusterPath('/', slug)
+    )}`
+    if (await copyToClipboard(link)) {
+      toast.success(t('common.messages.copied'))
+    } else {
+      toast.error(t('common.messages.copyFailed'))
+    }
   }
 
   return (
@@ -216,6 +248,52 @@ function ClusterDialogContent({
             </div>
           )}
         </div>
+
+        {isEditMode ? (
+          <div className="space-y-2">
+            <Label htmlFor="cluster-slug">
+              {t('clusterManagement.dialog.slugLabel')}
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="cluster-slug"
+                value={cluster?.slug ?? ''}
+                readOnly
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCopyClusterLink}
+                disabled={!cluster?.slug}
+              >
+                <IconCopy className="h-4 w-4" />
+                {t('common.actions.copy')}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t('clusterManagement.dialog.slugReadonlyHint')}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="cluster-slug">
+              {t('clusterManagement.dialog.slugLabel')}
+            </Label>
+            <Input
+              id="cluster-slug"
+              value={formData.slug}
+              onChange={(e) => handleChange('slug', e.target.value)}
+              placeholder={t('clusterManagement.dialog.slugAutoPlaceholder')}
+              aria-invalid={
+                !!formData.slug.trim() && !isValidClusterSlug(formData.slug)
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('clusterManagement.dialog.slugHint')}
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="cluster-description">

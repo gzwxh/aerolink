@@ -1,4 +1,6 @@
 import { ReactNode } from 'react'
+// 跳转目标是 /setup（登录前页面，无集群段），必须用原始 Navigate。
+/* eslint-disable-next-line no-restricted-imports */
 import { Navigate } from 'react-router-dom'
 
 import { useInitCheck } from '@/lib/api'

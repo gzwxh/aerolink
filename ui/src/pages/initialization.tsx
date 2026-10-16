@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { useBranding } from '@/contexts/branding-context'
 import {
@@ -7,11 +7,14 @@ import {
   IconServer,
   IconUser,
 } from '@tabler/icons-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { createSuperUser, importClusters, useInitCheck } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
+import { filledSlugs, findInvalidSlugContext } from '@/lib/cluster-slug'
+import { parseKubeconfigContexts } from '@/lib/kubeconfig'
 import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
 import { translateError } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
@@ -27,10 +30,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { ClusterNavigate } from '@/components/cluster-link'
 import { Footer } from '@/components/footer'
 import { LanguageToggle } from '@/components/language-toggle'
 import { PasswordInput } from '@/components/password-input'
 import { PasswordRulesPanel } from '@/components/password-rules-panel'
+import { ClusterSlugFields } from '@/components/settings/cluster-slug-fields'
 
 interface InitStepProps {
   step: number
@@ -103,7 +108,8 @@ export function InitializationPage() {
   const { logoUrl, siteName } = useBranding()
   // 初始化页没有子页面标题：浏览器标签只展示控制台名称。
   usePageTitle('')
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
+  const queryClient = useQueryClient()
   const { data: initCheck, isLoading, refetch } = useInitCheck()
   const { checkAuth, user, isLoading: isAuthLoading } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -128,6 +134,16 @@ export function InitializationPage() {
   const [kubeconfig, setKubeconfig] = useState('')
   const [isFileMode, setIsFileMode] = useState(false)
   const [isInCluster, setIsInCluster] = useState(false)
+  // context 名 → 手填短名（留空走后端自动生成）。与导入对话框共用同一套校验。
+  const [slugs, setSlugs] = useState<Record<string, string>>({})
+  const importContexts = useMemo(
+    () => parseKubeconfigContexts(isInCluster ? '' : kubeconfig),
+    [kubeconfig, isInCluster]
+  )
+  const invalidSlugContext = useMemo(
+    () => findInvalidSlugContext(importContexts, slugs),
+    [importContexts, slugs]
+  )
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -152,7 +168,7 @@ export function InitializationPage() {
 
   // 已初始化则重定向到首页
   if (initCheck?.initialized) {
-    return <Navigate to="/" replace />
+    return <ClusterNavigate to="/" replace />
   }
 
   const step = initCheck?.step || 0
@@ -167,7 +183,7 @@ export function InitializationPage() {
   }
 
   if (step > 0 && !user) {
-    return <Navigate to="/login" replace />
+    return <ClusterNavigate to="/login" replace />
   }
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -211,10 +227,22 @@ export function InitializationPage() {
       return
     }
 
+    // 手填短名里只要有一个非法就整批不提交（后端 fail-closed，前端提前挡一层）。
+    if (invalidSlugContext) {
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      await importClusters({ config: kubeconfig, inCluster: isInCluster })
+      await importClusters({
+        config: kubeconfig,
+        inCluster: isInCluster,
+        slugs: filledSlugs(importContexts, slugs),
+      })
       toast.success(t('initialization.step2.importSuccess'))
+      // 集群列表在初始化期间（还没有集群时）已被缓存：不失效的话，
+      // 导入成功后跳回首页的兜底重定向会拿到旧空列表，误报「没有可用集群」。
+      await queryClient.invalidateQueries({ queryKey: ['clusters'] })
       await refetch()
       // initialized 变为 true 后会重定向到首页
     } catch (err) {
@@ -484,10 +512,26 @@ export function InitializationPage() {
                       {t('initialization.step2.kubeconfigHint')}
                     </p>
                   </div>
+
+                  {/* 逐行短名：与导入对话框共用 ClusterSlugFields。in-cluster 模式
+                      没有 kubeconfig 文本，短名由后端自动生成，这里不展示。 */}
+                  {!isInCluster && (
+                    <ClusterSlugFields
+                      contexts={importContexts}
+                      slugs={slugs}
+                      onSlugChange={(context, slug) =>
+                        setSlugs((prev) => ({ ...prev, [context]: slug }))
+                      }
+                      invalidContext={invalidSlugContext}
+                    />
+                  )}
+
                   <Button
                     type="submit"
                     disabled={
-                      isSubmitting || (!isInCluster && !kubeconfig.trim())
+                      isSubmitting ||
+                      (!isInCluster && !kubeconfig.trim()) ||
+                      !!invalidSlugContext
                     }
                     className="w-full"
                   >
