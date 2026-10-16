@@ -1093,6 +1093,9 @@
     "unavailable": {
       "title": "No cluster available",
       "noCluster": "Your account has no accessible clusters. Please contact an administrator to grant cluster access.",
+      "slugMissingTitle": "Cluster data migration is incomplete",
+      "slugMissing": "Your account has accessible clusters, but the server has not generated their URL short names (clusters.slug) yet, so the page cannot locate a cluster. Ask an administrator to apply the schema change, then click Retry.",
+      "retry": "Retry",
       "redirecting": "Entering cluster..."
     }
   },

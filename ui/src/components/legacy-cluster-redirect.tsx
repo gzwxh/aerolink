@@ -22,7 +22,11 @@ export function LegacyClusterRedirect() {
   const location = useRawLocation()
   const navigate = useRawNavigate()
   const { t } = useTranslation()
-  const { data: clusters, isFetching } = useCurrentClusterList({
+  const {
+    data: clusters,
+    isFetching,
+    refetch,
+  } = useCurrentClusterList({
     enabled: true,
   })
   const [gaveUp, setGaveUp] = useState(false)
@@ -47,20 +51,45 @@ export function LegacyClusterRedirect() {
   }, [clusters, isFetching, location, navigate])
 
   if (gaveUp) {
+    // 列表里有集群、但一个短名都没有：服务端的 slug 还没落地（列缺失或回填没跑），
+    // 这时重定向不存在可用的目标。与「确实没有集群」区分开，否则整站只剩一句
+    // 无法解释的「没有可用的集群」（实际故障见 docs/dev/plans/2026-10-15-集群信息进入浏览器地址栏.md §4）。
+    const slugMissing = (clusters?.length ?? 0) > 0
     return (
       <div className="flex min-h-svh flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-lg font-semibold">
-          {t('cluster.unavailable.title')}
+          {t(
+            slugMissing
+              ? 'cluster.unavailable.slugMissingTitle'
+              : 'cluster.unavailable.title'
+          )}
         </p>
         <p className="text-sm text-muted-foreground">
-          {t('cluster.unavailable.noCluster')}
+          {t(
+            slugMissing
+              ? 'cluster.unavailable.slugMissing'
+              : 'cluster.unavailable.noCluster'
+          )}
         </p>
-        <Button
-          variant="outline"
-          onClick={() => window.location.assign('/login')}
-        >
-          {t('session.signInAgain')}
-        </Button>
+        <div className="flex gap-2">
+          {slugMissing && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setGaveUp(false)
+                void refetch()
+              }}
+            >
+              {t('cluster.unavailable.retry')}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => window.location.assign('/login')}
+          >
+            {t('session.signInAgain')}
+          </Button>
+        </div>
       </div>
     )
   }

@@ -1093,6 +1093,9 @@
     "unavailable": {
       "title": "没有可用的集群",
       "noCluster": "当前账号没有可访问的集群，请联系管理员分配集群权限。",
+      "slugMissingTitle": "集群数据未完成迁移",
+      "slugMissing": "当前账号有可访问的集群，但服务端还没有为它们生成 URL 短名（clusters.slug），页面无法定位到集群。请联系管理员按升级说明补齐库结构，再点「重新检测」。",
+      "retry": "重新检测",
       "redirecting": "正在进入集群..."
     }
   },
