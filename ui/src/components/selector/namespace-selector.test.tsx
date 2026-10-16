@@ -208,7 +208,7 @@ describe('NamespaceSelector', () => {
     expect(screen.getByText('appmarket')).toBeInTheDocument()
   })
 
-  it('单选模式选中后不立即收起，鼠标移出下拉区域才关闭', async () => {
+  it('单选模式点击条目后收起下拉', async () => {
     useResources.mockReturnValue({ data: namespaces, isLoading: false })
     useNamespaceBindingMap.mockReturnValue(new Map())
     const handleNamespaceChange = vi.fn()
@@ -227,15 +227,148 @@ describe('NamespaceSelector', () => {
     fireEvent.click(screen.getByRole('combobox'))
     await screen.findAllByText('kube-system')
 
-    // 回归：此前单选「选中即收起」。现在选中后下拉保持打开，
-    // 由鼠标移出下拉区域触发收起。
     fireEvent.click(screen.getByText('kube-system'))
     expect(handleNamespaceChange).toHaveBeenLastCalledWith('kube-system')
-    expect(screen.getByText('kube-system')).toBeInTheDocument()
-
-    fireEvent.mouseLeave(screen.getByRole('dialog'))
     await waitFor(() => {
       expect(screen.queryByText('kube-system')).not.toBeInTheDocument()
     })
+  })
+
+  it('多选模式鼠标移出下拉区域不会收起', async () => {
+    setup()
+    fireEvent.click(screen.getByRole('combobox'))
+    await screen.findAllByText('press')
+
+    // 回归：此前靠 onMouseLeave 收起，鼠标一移出列表就关，无法连续勾选
+    fireEvent.mouseLeave(screen.getByRole('dialog'))
+    expect(screen.getByText('press')).toBeInTheDocument()
+  })
+
+  it('多选模式焦点掉到浮层外不会收起下拉', async () => {
+    setup()
+    fireEvent.click(screen.getByRole('combobox'))
+    await screen.findAllByText('press')
+
+    // 回归：cmdk 的条目是不可聚焦的 div，真实点击会让焦点从搜索框掉回 body，
+    // Radix 据此判定「焦点离开浮层」并收起下拉，表现就是点一次就关。
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    outside.focus()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(screen.getByText('press')).toBeInTheDocument()
+    outside.remove()
+  })
+
+  it('含已选项的分组整体上浮到最前，组内条目保持完整', async () => {
+    useResources.mockReturnValue({ data: namespaces, isLoading: false })
+    // apisix 与 appmarket 同属 press 组，这里只选 apisix
+    useNamespaceBindingMap.mockReturnValue(
+      new Map([
+        ['apisix', 'press'],
+        ['appmarket', 'press'],
+      ])
+    )
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <NamespaceSelector
+          multiple
+          showAll
+          selectedNamespace="apisix"
+          handleNamespaceChange={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+    fireEvent.click(screen.getByRole('combobox'))
+    const listbox = await screen.findByRole('listbox')
+
+    // 含已选项的 press 组排在「其他 Namespace」之前
+    const pressHeading = within(listbox).getByText('press')
+    const otherHeading = within(listbox).getByText('Other namespaces')
+    expect(
+      pressHeading.compareDocumentPosition(otherHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+
+    // 回归：条目没有脱离原分组，同组未选中的 appmarket 仍跟在组头之后
+    const appmarketRow = within(listbox)
+      .getByTitle('appmarket')
+      .closest('[cmdk-item]') as HTMLElement
+    expect(
+      pressHeading.compareDocumentPosition(appmarketRow) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
+  it('散装的已选项上浮：其他 Namespace 分组整体排到权限绑定组之前', async () => {
+    useResources.mockReturnValue({ data: namespaces, isLoading: false })
+    useNamespaceBindingMap.mockReturnValue(new Map([['apisix', 'press']]))
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <NamespaceSelector
+          multiple
+          showAll
+          selectedNamespace="kube-system"
+          handleNamespaceChange={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+    fireEvent.click(screen.getByRole('combobox'))
+    const listbox = await screen.findByRole('listbox')
+
+    const otherHeading = within(listbox).getByText('Other namespaces')
+    const pressHeading = within(listbox).getByText('press')
+    expect(
+      otherHeading.compareDocumentPosition(pressHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
+  it('同一分组内已选项排到组内最前，未选中的仍按原顺序跟在后面', async () => {
+    useResources.mockReturnValue({ data: namespaces, isLoading: false })
+    // apisix 与 appmarket 同属 press，这里选字母序靠后的 appmarket
+    useNamespaceBindingMap.mockReturnValue(
+      new Map([
+        ['apisix', 'press'],
+        ['appmarket', 'press'],
+      ])
+    )
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <NamespaceSelector
+          multiple
+          showAll
+          selectedNamespace="appmarket"
+          handleNamespaceChange={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+    fireEvent.click(screen.getByRole('combobox'))
+    const listbox = await screen.findByRole('listbox')
+
+    const rowOf = (name: string) =>
+      within(listbox).getByTitle(name).closest('[cmdk-item]') as HTMLElement
+    const selectedRow = rowOf('appmarket')
+    const restRow = rowOf('apisix')
+    const groupHeading = within(listbox).getByText('press')
+
+    // 已选项升到组内第一个，但仍留在组头之后
+    expect(
+      groupHeading.compareDocumentPosition(selectedRow) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(
+      selectedRow.compareDocumentPosition(restRow) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
   })
 })

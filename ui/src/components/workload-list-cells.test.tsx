@@ -31,21 +31,21 @@ vi.mock('react-i18next', () => ({
 
 import { toast } from 'sonner'
 
-import { ContainerImageCell } from './deployment-list-page'
+import { WorkloadImageCell } from './workload-list-cells'
 
 const containers = [
   { name: 'app', image: 'registry.example.com/team/app:v1.2.3' },
   { name: 'sidecar', image: 'registry.example.com/team/proxy:v0.1.0' },
 ]
 
-describe('容器与镜像列', () => {
+describe('镜像列', () => {
   it('无容器时显示空值占位', () => {
-    const { container } = render(<ContainerImageCell containers={[]} />)
+    const { container } = render(<WorkloadImageCell containers={[]} />)
     expect(container).toHaveTextContent('-')
   })
 
   it('每个容器显示名称与缩短后的镜像，悬浮可见完整地址', () => {
-    render(<ContainerImageCell containers={containers} />)
+    render(<WorkloadImageCell containers={containers} />)
     expect(screen.getByText('app:')).toBeInTheDocument()
     expect(screen.getByText('sidecar:')).toBeInTheDocument()
     // Tooltip 透传后完整地址始终渲染在文档里
@@ -54,10 +54,16 @@ describe('容器与镜像列', () => {
     ).toBeInTheDocument()
   })
 
+  it('单容器时不再重复容器名', () => {
+    render(<WorkloadImageCell containers={[containers[0]]} />)
+    expect(screen.queryByText('app:')).not.toBeInTheDocument()
+    expect(screen.getByText(/team\/app:v1\.2\.3$/)).toBeInTheDocument()
+  })
+
   it('点击即复制完整镜像地址', async () => {
     mockCopyToClipboard.mockResolvedValue(true)
     const user = userEvent.setup()
-    render(<ContainerImageCell containers={containers} />)
+    render(<WorkloadImageCell containers={containers} />)
     await user.click(screen.getByText('app:'))
     expect(mockCopyToClipboard).toHaveBeenCalledWith(
       'registry.example.com/team/app:v1.2.3'
@@ -68,10 +74,8 @@ describe('容器与镜像列', () => {
   it('复制失败时给出失败提示', async () => {
     mockCopyToClipboard.mockResolvedValue(false)
     const user = userEvent.setup()
-    render(<ContainerImageCell containers={containers} />)
+    render(<WorkloadImageCell containers={containers} />)
     await user.click(screen.getByText('sidecar:'))
-    expect(toast.error).toHaveBeenCalledWith(
-      '复制失败，请手动选择文本后复制'
-    )
+    expect(toast.error).toHaveBeenCalledWith('复制失败，请手动选择文本后复制')
   })
 })

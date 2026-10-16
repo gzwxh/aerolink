@@ -3,32 +3,25 @@ import { IconNotes, IconReload, IconScale, IconTag } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Deployment } from 'kubernetes-types/apps/v1'
-import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
-import { toast } from 'sonner'
 
 import { patchResource, restartWorkload, useResources } from '@/lib/api'
-import { copyToClipboard } from '@/lib/clipboard'
 import { useClusterNavigate } from '@/lib/cluster-path'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
-import { shortenImageName } from '@/lib/image-name'
 import {
   createSearchFilter,
   getDeploymentStatus,
+  groupPodsByNamespace,
   resolveCreateNamespace,
+  sumPodRestarts,
 } from '@/lib/k8s'
-import { formatDate, translateError } from '@/lib/utils'
+import { formatAge, formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 import {
   Tooltip,
   TooltipContent,
@@ -42,6 +35,11 @@ import {
   ResourceTable,
   type ResourceTableBatchAction,
 } from '@/components/resource-table'
+import {
+  EmptyValue,
+  WorkloadHealthBar,
+  WorkloadImageCell,
+} from '@/components/workload-list-cells'
 
 const deploymentSearchFilter = createSearchFilter<Deployment>(
   (d) => d.metadata?.name,
@@ -49,6 +47,15 @@ const deploymentSearchFilter = createSearchFilter<Deployment>(
 )
 
 const columnHelper = createColumnHelper<Deployment>()
+
+// 参考版式里没有的列保留但默认隐藏，需要时从表头「列」菜单打开。
+const HIDDEN_BY_DEFAULT_COLUMNS = [
+  'namespace',
+  'labels',
+  'annotations',
+  'resource_limits',
+  'created',
+]
 
 // 注解值可能很长（如 last-applied-configuration），tooltip 里按长度裁剪。
 const METADATA_VALUE_MAX_LENGTH = 60
@@ -66,126 +73,6 @@ function truncateMetadataValue(value: string) {
 // 纯数字的 CPU 值（如 "1"）补上单位，带单位的（如 "500m"）保持原样。
 function formatCpuLimit(value: string, coresUnit: string) {
   return /^[\d.]+$/.test(value) ? `${value} ${coresUnit}` : value
-}
-
-function EmptyValue() {
-  return <span className="text-muted-foreground text-sm">-</span>
-}
-
-// 数量列的行内扩缩容：把「就绪 / 期望」里的期望值变成可点击的步进器入口
-// （参考 TCE 控制台的健康列），确认后按 spec.replicas patch。
-function ReplicasCell({
-  deployment,
-  canUpdate,
-}: {
-  deployment: Deployment
-  canUpdate: boolean
-}) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const [open, setOpen] = useState(false)
-  const [replicas, setReplicas] = useState(deployment.spec?.replicas ?? 1)
-  const [isApplying, setIsApplying] = useState(false)
-
-  const ready = deployment.status?.readyReplicas || 0
-  const desired = deployment.spec?.replicas ?? 0
-
-  const handleApply = async () => {
-    setIsApplying(true)
-    try {
-      await patchResource(
-        'deployments',
-        deployment.metadata!.name!,
-        deployment.metadata!.namespace!,
-        { spec: { replicas } }
-      )
-      toast.success(
-        t('detail.status.scaledTo', { resource: 'Deployment', replicas })
-      )
-      setOpen(false)
-      queryClient.invalidateQueries({ queryKey: ['deployments'] })
-    } catch (error) {
-      toast.error(translateError(error, t))
-    } finally {
-      setIsApplying(false)
-    }
-  }
-
-  if (!canUpdate) {
-    return (
-      <div>
-        {ready} / {desired}
-      </div>
-    )
-  }
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        if (next) {
-          // 每次打开都按当前值重置，避免上一行/上次留下的草稿。
-          setReplicas(deployment.spec?.replicas ?? 1)
-        }
-        setOpen(next)
-      }}
-    >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          title={t('detail.dialogs.scaleDeployment.description')}
-          className="underline-offset-2 hover:underline"
-        >
-          {ready} / {desired}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-56" align="start">
-        <div className="space-y-3">
-          <Label htmlFor={`replicas-${deployment.metadata?.uid}`}>
-            {t('common.fields.replicas')}
-          </Label>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="size-9 p-0"
-              onClick={() => setReplicas(Math.max(0, replicas - 1))}
-              disabled={isApplying || replicas <= 0}
-            >
-              -
-            </Button>
-            <Input
-              id={`replicas-${deployment.metadata?.uid}`}
-              type="number"
-              min="0"
-              value={replicas}
-              onChange={(e) =>
-                setReplicas(Math.max(0, parseInt(e.target.value) || 0))
-              }
-              disabled={isApplying}
-              className="text-center"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="size-9 p-0"
-              onClick={() => setReplicas(replicas + 1)}
-              disabled={isApplying}
-            >
-              +
-            </Button>
-          </div>
-          <Button
-            onClick={handleApply}
-            disabled={isApplying}
-            className="w-full"
-          >
-            {t('common.actions.scale')}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
 }
 
 // 标签、注解都用「图标 + 数量」，具体键值放在 tooltip 里，避免撑宽表格。
@@ -219,56 +106,6 @@ function MetadataSummaryCell({
         </div>
       </TooltipContent>
     </Tooltip>
-  )
-}
-
-// 容器与镜像：列表里只显示镜像名与 tag，完整地址悬浮查看，点击即复制。
-export function ContainerImageCell({
-  containers,
-}: {
-  containers: Container[]
-}) {
-  const { t } = useTranslation()
-
-  if (containers.length === 0) {
-    return <EmptyValue />
-  }
-
-  const copyImage = async (event: React.MouseEvent, image: string) => {
-    // 行点击会跳详情页，复制不能连带触发。
-    event.stopPropagation()
-    if (await copyToClipboard(image)) {
-      toast.success(t('common.messages.copied', '已复制到剪贴板'))
-    } else {
-      toast.error(
-        t('common.messages.copyFailed', '复制失败，请手动选择文本后复制')
-      )
-    }
-  }
-
-  return (
-    <div className="flex flex-col items-center gap-0.5 text-xs">
-      {containers.map((container) => (
-        <Tooltip key={container.name}>
-          <TooltipTrigger asChild>
-            <div
-              className="flex w-full min-w-0 max-w-72 cursor-copy items-baseline justify-center gap-1"
-              onClick={(event) => void copyImage(event, container.image || '')}
-            >
-              <span className="shrink-0 text-muted-foreground">
-                {container.name}:{' '}
-              </span>
-              <span className="min-w-0 truncate font-mono underline-offset-2 hover:underline">
-                {shortenImageName(container.image || '')}
-              </span>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-sm break-all font-mono text-xs">
-            {container.name}: {container.image}
-          </TooltipContent>
-        </Tooltip>
-      ))}
-    </div>
   )
 }
 
@@ -312,30 +149,17 @@ export function DeploymentListPage() {
     [t, canUpdate]
   )
 
+  // 重启次数要按 selector 在 Pod 上汇总（Deployment 自身没有这个字段）。
+  // URL 带单个命名空间时只拉这个命名空间，其余情况（全部 / 多选）退化为全量。
+  const { data: pods } = useResources('pods', namespaceParam, {
+    staleTime: 30_000,
+  })
+  const podsByNamespace = useMemo(() => groupPodsByNamespace(pods), [pods])
+  const podsLoaded = pods !== undefined
+
   // 定义 Deployment 表格的列
   const columns = useMemo(
     () => [
-      columnHelper.accessor('metadata.name', {
-        header: t('common.fields.name'),
-        cell: ({ row }) => (
-          <div className="font-medium app-link">
-            <ClusterLink
-              to={`/deployments/${row.original.metadata!.namespace}/${
-                row.original.metadata!.name
-              }`}
-            >
-              {row.original.metadata!.name}
-            </ClusterLink>
-          </div>
-        ),
-      }),
-      columnHelper.accessor((row) => row.status?.readyReplicas ?? 0, {
-        id: 'ready',
-        header: t('common.fields.ready'),
-        cell: ({ row }) => (
-          <ReplicasCell deployment={row.original} canUpdate={canUpdate} />
-        ),
-      }),
       columnHelper.accessor((row) => getDeploymentStatus(row), {
         id: 'status_conditions',
         header: t('common.fields.status'),
@@ -348,6 +172,112 @@ export function DeploymentListPage() {
             </Badge>
           )
         },
+      }),
+      columnHelper.accessor('metadata.name', {
+        header: t('common.fields.name'),
+        cell: ({ row }) => (
+          // 状态列排在最前，名称列不再是表格认定的「首个数据列」，这里显式
+          // 保持左对齐与长名字换行。
+          <div className="max-w-[400px] text-left font-medium break-words app-link">
+            <ClusterLink
+              to={`/deployments/${row.original.metadata!.namespace}/${
+                row.original.metadata!.name
+              }`}
+            >
+              {row.original.metadata!.name}
+            </ClusterLink>
+          </div>
+        ),
+      }),
+      // 分组依据（见下面的 grouping）：按命名空间成组展示，列本身默认隐藏。
+      columnHelper.accessor((row) => row.metadata?.namespace ?? '', {
+        id: 'namespace',
+        header: t('common.fields.namespace'),
+        cell: ({ getValue }) => (
+          <Badge variant="outline" className="max-w-full truncate">
+            {getValue()}
+          </Badge>
+        ),
+      }),
+      columnHelper.accessor(
+        (row) => row.spec?.template.spec?.containers ?? [],
+        {
+          id: 'containers_images',
+          enableSorting: false,
+          header: t('common.fields.images'),
+          cell: ({ row }) => (
+            <WorkloadImageCell
+              containers={row.original.spec?.template.spec?.containers ?? []}
+            />
+          ),
+        }
+      ),
+      columnHelper.accessor((row) => row.status?.readyReplicas ?? 0, {
+        id: 'ready',
+        header: t('common.fields.ready'),
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {row.original.status?.readyReplicas ?? 0} /{' '}
+            {row.original.spec?.replicas ?? 0}
+          </span>
+        ),
+      }),
+      columnHelper.accessor((row) => row.status?.updatedReplicas ?? 0, {
+        id: 'updated',
+        header: t('common.fields.upToDate'),
+        cell: ({ getValue }) => (
+          <span className="tabular-nums">{getValue()}</span>
+        ),
+      }),
+      columnHelper.accessor((row) => row.status?.availableReplicas ?? 0, {
+        id: 'available',
+        header: t('common.fields.available'),
+        cell: ({ getValue }) => (
+          <span className="tabular-nums">{getValue()}</span>
+        ),
+      }),
+      columnHelper.accessor(
+        (row) =>
+          sumPodRestarts(
+            podsByNamespace,
+            row.metadata?.namespace,
+            row.spec?.selector?.matchLabels
+          ),
+        {
+          id: 'restarts',
+          header: t('common.fields.restarts'),
+          cell: ({ getValue }) =>
+            podsLoaded ? (
+              <span className="tabular-nums">{getValue()}</span>
+            ) : (
+              <EmptyValue />
+            ),
+        }
+      ),
+      columnHelper.accessor('metadata.creationTimestamp', {
+        id: 'uptime',
+        header: t('common.fields.uptime'),
+        cell: ({ getValue }) => (
+          <span className="text-muted-foreground text-sm tabular-nums">
+            {getValue() ? formatAge(getValue()!, t) : '-'}
+          </span>
+        ),
+      }),
+      // 健康列就是旧「就绪」上的扩缩容入口，挪到比例条上。
+      columnHelper.display({
+        id: 'health',
+        header: t('common.fields.health'),
+        cell: ({ row }) => (
+          <WorkloadHealthBar
+            ready={row.original.status?.readyReplicas ?? 0}
+            desired={row.original.spec?.replicas ?? 0}
+            name={row.original.metadata!.name!}
+            namespace={row.original.metadata!.namespace!}
+            resourceType="deployments"
+            resourceLabel={t('nav.deployments')}
+            canUpdate={canUpdate}
+          />
+        ),
       }),
       columnHelper.accessor((row) => row.metadata?.labels, {
         id: 'labels',
@@ -369,19 +299,6 @@ export function DeploymentListPage() {
           />
         ),
       }),
-      columnHelper.accessor(
-        (row) => row.spec?.template.spec?.containers ?? [],
-        {
-          id: 'containers_images',
-          enableSorting: false,
-          header: t('common.fields.containersAndImages'),
-          cell: ({ row }) => (
-            <ContainerImageCell
-              containers={row.original.spec?.template.spec?.containers ?? []}
-            />
-          ),
-        }
-      ),
       columnHelper.accessor(
         (row) => row.spec?.template.spec?.containers ?? [],
         {
@@ -441,6 +358,7 @@ export function DeploymentListPage() {
         }
       ),
       columnHelper.accessor('metadata.creationTimestamp', {
+        id: 'created',
         header: t('common.fields.created'),
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
@@ -465,7 +383,20 @@ export function DeploymentListPage() {
         ),
       }),
     ],
-    [t, canUpdate]
+    [t, canUpdate, podsByNamespace, podsLoaded]
+  )
+
+  // 按命名空间分组展示（列本身就是分组依据，默认隐藏）。
+  const grouping = useMemo(
+    () => ({
+      columnId: 'namespace',
+      renderGroupHeader: (value: string) => (
+        <span className="font-medium">
+          {t('common.fields.namespace')}：{value}
+        </span>
+      ),
+    }),
+    [t]
   )
 
   // URL 的命名空间段只能表达一个命名空间。多选时表格自己把选择存在
@@ -551,6 +482,9 @@ export function DeploymentListPage() {
         resourceName="Deployments"
         columns={columns}
         searchQueryFilter={deploymentSearchFilter}
+        defaultHiddenColumns={HIDDEN_BY_DEFAULT_COLUMNS}
+        grouping={grouping}
+        initialSorting={[{ id: 'namespace', desc: false }]}
         showCreateButton={true}
         onCreateClick={handleCreateClick}
         batchActions={batchActions}

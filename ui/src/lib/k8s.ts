@@ -670,3 +670,44 @@ export function resolveCreateNamespace(
   }
   return 'default'
 }
+
+/** 按命名空间给 Pod 建索引：工作负载列表页据此按 selector 汇总重启次数。 */
+export function groupPodsByNamespace(
+  pods: Pod[] | undefined
+): Map<string, Pod[]> {
+  const grouped = new Map<string, Pod[]>()
+  for (const pod of pods ?? []) {
+    const namespace = pod.metadata?.namespace
+    if (!namespace) continue
+    const list = grouped.get(namespace)
+    if (list) {
+      list.push(pod)
+    } else {
+      grouped.set(namespace, [pod])
+    }
+  }
+  return grouped
+}
+
+/**
+ * Deployment / StatefulSet / DaemonSet 自身没有重启次数字段，只能按
+ * spec.selector 在同一命名空间里找出它的 Pod 再累加（口径同 Pod 列表的
+ * 「重启」列，见 getPodStatus）。selector 为空时不做猜测，返回 0。
+ */
+export function sumPodRestarts(
+  podsByNamespace: Map<string, Pod[]> | undefined,
+  namespace: string | undefined,
+  matchLabels: Record<string, string> | undefined
+): number {
+  const selector = Object.entries(matchLabels ?? {})
+  if (!namespace || selector.length === 0) return 0
+
+  let restarts = 0
+  for (const pod of podsByNamespace?.get(namespace) ?? []) {
+    const labels = pod.metadata?.labels ?? {}
+    if (selector.every(([key, value]) => labels[key] === value)) {
+      restarts += getPodStatus(pod).restarts
+    }
+  }
+  return restarts
+}

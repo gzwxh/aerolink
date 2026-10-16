@@ -260,6 +260,17 @@ function ResourceTableContent<T>({
     [groupingColumnId]
   )
 
+  // 分组列的取值已经由组标题给出，行内每一行再显示一遍纯属重复。列可见性偏好
+  // 存在 localStorage 里、且优先于页面声明的 defaultHiddenColumns，用户一旦把
+  // 这一列打开就会永久显示，所以这里按分组依据强制隐藏。
+  const effectiveColumnVisibility = useMemo(
+    () =>
+      groupingColumnId
+        ? { ...columnVisibility, [groupingColumnId]: false }
+        : columnVisibility,
+    [columnVisibility, groupingColumnId]
+  )
+
   // 在展示所有命名空间时加入命名空间列
   const enhancedColumns = useMemo(() => {
     const selectColumn: ColumnDef<T> = {
@@ -324,7 +335,13 @@ function ResourceTableContent<T>({
       size: 26,
     }
 
-    const baseColumns = [selectColumn, ...columns]
+    // 分组列同时从齿轮菜单里摘掉：它的显示开关被强制为关（见
+    // effectiveColumnVisibility），留着只会多一个点了没反应的勾选项。
+    const baseColumns = [selectColumn, ...columns].map((column) =>
+      groupingColumnId && (column as { id?: string }).id === groupingColumnId
+        ? { ...column, enableHiding: false }
+        : column
+    )
 
     // 只有在非集群范围、展示所有命名空间、
     // 且传入的列里还没有命名空间列时，才加入命名空间列
@@ -380,6 +397,7 @@ function ResourceTableContent<T>({
     selectedNamespace,
     selectedNamespaces.length,
     grouping,
+    groupingColumnId,
     t,
   ])
 
@@ -465,7 +483,7 @@ function ResourceTableContent<T>({
       globalFilter: isLabelSelector ? '' : searchQuery,
       pagination,
       rowSelection,
-      columnVisibility,
+      columnVisibility: effectiveColumnVisibility,
       columnSizing,
       ...(groupingState
         ? { grouping: groupingState, expanded: true as const }

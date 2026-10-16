@@ -137,6 +137,7 @@
       "firstSeen": "首次出现",
       "from": "来源",
       "groupsClaim": "用户组 Claim",
+      "health": "健康",
       "hostIP": "主机 IP",
       "hostname": "主机名",
       "image": "镜像",
@@ -237,6 +238,7 @@
       "updateRevision": "更新版本",
       "updated": "已更新",
       "updatedReplicas": "已更新副本",
+      "uptime": "存活时间",
       "user": "用户",
       "username": "用户名",
       "usernameClaim": "用户名 Claim",
@@ -281,6 +283,7 @@
     },
     "messages": {
       "addNewItem": "添加新的{{resource}}",
+      "healthSummary": "就绪 {{ready}} / {{desired}}",
       "applied": "应用成功",
       "noOptionsFound": "没有可选项",
       "applying": "应用中...",
@@ -379,7 +382,11 @@
     },
     "units": {
       "pods": "pods",
-      "cores": "核"
+      "cores": "核",
+      "days": "天",
+      "hours": "小时",
+      "minutes": "分钟",
+      "seconds": "秒"
     },
     "values": {
       "disabled": "已禁用",

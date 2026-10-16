@@ -139,6 +139,7 @@
       "groupsClaim": "Groups Claim",
       "oidcGroup": "LDAP / OIDC Group",
       "oidcGroups": "LDAP / OIDC Groups",
+      "health": "Health",
       "hostIP": "Host IP",
       "hostname": "Hostname",
       "image": "Image",
@@ -237,6 +238,7 @@
       "updateRevision": "Update Revision",
       "updated": "Updated",
       "updatedReplicas": "Updated Replicas",
+      "uptime": "Uptime",
       "user": "User",
       "username": "Username",
       "usernameClaim": "Username Claim",
@@ -281,6 +283,7 @@
     },
     "messages": {
       "addNewItem": "Add a new {{resource}}",
+      "healthSummary": "Ready {{ready}} / {{desired}}",
       "applied": "Applied successfully",
       "noOptionsFound": "No options found",
       "applying": "Applying...",
@@ -379,7 +382,11 @@
     },
     "units": {
       "pods": "pods",
-      "cores": "cores"
+      "cores": "cores",
+      "days": "d",
+      "hours": "h",
+      "minutes": "m",
+      "seconds": "s"
     },
     "values": {
       "disabled": "Disabled",

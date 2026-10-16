@@ -56,6 +56,30 @@ export function getAge(timestamp: string): string {
   }
 }
 
+/**
+ * 与 getAge 同口径，但单位走 i18n（中文「297天」、英文「297d」）。
+ * 列表页的「存活时间」列用它，避免中文界面里混进 `d`/`h` 后缀。
+ */
+export function formatAge(timestamp: string, t: TFunction): string {
+  const diffMs = Date.now() - new Date(timestamp).getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const diffHours = Math.floor(
+    (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+  )
+  const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+  const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000)
+
+  if (diffDays > 0) {
+    return `${diffDays}${t('common.units.days')}`
+  } else if (diffHours > 0) {
+    return `${diffHours}${t('common.units.hours')}`
+  } else if (diffMinutes > 0) {
+    return `${diffMinutes}${t('common.units.minutes')}`
+  } else {
+    return `${diffSeconds}${t('common.units.seconds')}`
+  }
+}
+
 export function isVersionAtLeast(version: string | undefined, target: string) {
   const parsed = parseVersion(version)
   const targetParsed = parseVersion(target)

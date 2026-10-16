@@ -10,6 +10,7 @@ import {
   formatBytes,
   formatChartXTicks,
   formatCPU,
+  formatAge,
   formatDate,
   formatMemory,
   formatPodMetrics,
@@ -100,6 +101,16 @@ describe('time formatting helpers', () => {
     ['30 seconds ago', '2024-01-03T11:59:30Z', '30s'],
   ])('formats age for %s', (_label, timestamp, expected) => {
     expect(getAge(timestamp)).toBe(expected)
+  })
+
+  it('formats age with i18n units', () => {
+    const t = ((key: string) =>
+      ({ 'common.units.days': '天', 'common.units.hours': '小时' })[
+        key
+      ] ?? key) as unknown as TFunction
+
+    expect(formatAge('2024-01-01T12:00:00Z', t)).toBe('2天')
+    expect(formatAge('2024-01-03T09:00:00Z', t)).toBe('3小时')
   })
 
   it('formats a timestamp using the app date format', () => {

@@ -242,10 +242,12 @@ describe('ResourceTable grouping', () => {
 
   beforeEach(() => {
     tableData.rows = groupedRows
+    localStorage.clear()
   })
 
   afterEach(() => {
     tableData.rows = fakeRows
+    localStorage.clear()
   })
 
   function renderGroupedTable() {
@@ -409,6 +411,33 @@ describe('ResourceTable grouping', () => {
     await user.click(screen.getByRole('button', { name: /delete/i }))
 
     expect(await screen.findByText('Delete 2 services?')).toBeInTheDocument()
+  })
+
+  // 回归：列可见性偏好存在 localStorage 里，且优先于页面声明的
+  // defaultHiddenColumns。用户（或在某一列被改为默认隐藏之前）留下的「可见」
+  // 偏好会让分组列在每一行里重复一遍组标题已经给出的值。分组列必须按分组依据
+  // 强制隐藏，并同时从齿轮菜单里摘掉——它的开关已经切不动了。
+  it('hides the grouping column even if the saved preference shows it', async () => {
+    localStorage.setItem(
+      '-services-columnVisibility',
+      JSON.stringify({ bindingGroup: true })
+    )
+    renderGroupedTable()
+
+    // 组标题照旧给出分组值，资源行里不再重复
+    expect(screen.getByText('press (2)')).toBeInTheDocument()
+    expect(screen.queryByText('press')).not.toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(
+      screen.getByRole('button', { name: 'resourceTable.toggleColumns' })
+    )
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: 'Name' })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('menuitemcheckbox', { name: 'Binding Group' })
+    ).not.toBeInTheDocument()
   })
 })
 

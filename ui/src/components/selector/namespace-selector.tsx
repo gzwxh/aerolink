@@ -56,7 +56,12 @@ export function NamespaceSelector({
     })
   }, [data])
 
-  // 权限绑定：当前集群下「命名空间 → 组名」映射，用于下拉分组与条目内联展示
+  const selectedSet = useMemo(
+    () => new Set(selectedNamespaces),
+    [selectedNamespaces]
+  )
+
+  // 权限绑定：当前集群下「命名空间 → 组名」映射，用于下拉分组与组级整选
   const bindingMap = useNamespaceBindingMap()
 
   const namespaceGroups = useMemo(() => {
@@ -74,6 +79,46 @@ export function NamespaceSelector({
     })
     return { grouped: Array.from(grouped.entries()), loose }
   }, [sortedNamespaces, bindingMap])
+
+  // 含已选项的分组整体上浮：组头连着组内条目一起排到前面（参考截图：选中的
+  // 项目分组排在前面），重开下拉就能一眼看到已选范围落在哪几个组里。
+  // 散装的「其他 Namespace」也参与排序，避免只选了散装项时看不出任何变化。
+  // 这里只管组间顺序，组内的「已选优先」在渲染时做：toggleGroupSelection 依赖
+  // 组内原有字母序决定「补齐整组」的取值顺序。
+  const orderedSections = useMemo(() => {
+    type Section = {
+      key: string
+      /** 权限绑定组名；散装分组没有组名，标题另有兜底文案 */
+      heading?: string
+      list: Namespace[]
+      /** 权限绑定组：多选时组头是可点选的整组勾选行 */
+      isBindingGroup: boolean
+    }
+    const sections: Section[] = namespaceGroups.grouped.map(([name, list]) => ({
+      key: name,
+      heading: name,
+      list,
+      isBindingGroup: true,
+    }))
+    if (namespaceGroups.loose.length > 0) {
+      sections.push({
+        key: '__loose__',
+        list: namespaceGroups.loose,
+        isBindingGroup: false,
+      })
+    }
+    const hasSelected = (section: Section) =>
+      section.list.some((ns) => selectedSet.has(ns.metadata?.name || ''))
+    return sections
+      .filter(hasSelected)
+      .concat(sections.filter((section) => !hasSelected(section)))
+  }, [namespaceGroups, selectedSet])
+
+  // 散装分组的兜底标题：只有存在权限绑定分组时才需要一个区分用的标题
+  const looseHeading =
+    namespaceGroups.grouped.length > 0
+      ? t('common.namespaceSelector.other', 'Other namespaces')
+      : undefined
 
   // groupName 编码进 cmdk 的 value（显示文本不变）：cmdk 只按条目 value 过滤，
   // 组名不进 value 的话，搜索框里输入权限绑定组名无法命中该组下的命名空间。
@@ -139,9 +184,9 @@ export function NamespaceSelector({
           )
 
   const selectNamespace = (namespace: string) => {
-    // 选中后不立即收起：等鼠标移出下拉区域时才关闭
-    // （见 PopoverContent 的 onMouseLeave）。
     handleNamespaceChange(namespace)
+    // 单选：选完即收起；多选时条目走 toggleNamespace，不收下拉，方便连续勾选
+    setOpen(false)
   }
 
   const toggleNamespace = (namespace: string) => {
@@ -205,16 +250,27 @@ export function NamespaceSelector({
       <PopoverContent
         className="w-[max(var(--radix-popover-trigger-width),18rem)] max-w-[min(300px,calc(100vw-1rem))] p-0"
         align="start"
-        // 收起时机：鼠标移出下拉区域才关闭，选中条目不收起，
-        // 方便连续查看/选择多个命名空间。
-        onMouseLeave={() => setOpen(false)}
+        // 关闭时机只认「点击外部 / Esc / 再点触发按钮」，不要用 onMouseLeave 收起：
+        // 多选时鼠标稍一移出列表，连续勾选就会被打断。
+        // 另：cmdk 的条目是不可聚焦的 div，点它会让焦点从搜索框掉回 body，Radix 会
+        // 把这当成「焦点离开浮层」而立刻收起下拉 —— 表现就是点一次就关。多选下忽略它。
+        onFocusOutside={(event) => {
+          if (multiple) event.preventDefault()
+        }}
       >
         <Command>
           <CommandInput
             placeholder={t('common.namespaceSelector.search', 'Search...')}
             className="h-9"
           />
-          <CommandList className="max-h-[min(50dvh,300px)] overflow-x-hidden overflow-y-auto overscroll-contain">
+          <CommandList
+            // 分组之间画分隔线：用相邻兄弟选择器，并排除被 cmdk 过滤隐藏的分组，
+            // 这样搜索时不会留下悬空线，首个可见分组自己也不带线。
+            className={cn(
+              'max-h-[min(50dvh,300px)] overflow-x-hidden overflow-y-auto overscroll-contain',
+              '[&_[cmdk-group]:not([hidden])~[cmdk-group]:not([hidden])]:border-t'
+            )}
+          >
             {isLoading ? (
               <div className="flex items-center justify-center p-6 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -249,65 +305,75 @@ export function NamespaceSelector({
                   </CommandGroup>
                 )}
 
-                {namespaceGroups.grouped.map(([groupName, list]) => {
-                  const names = list
+                {orderedSections.map((section) => {
+                  const names = section.list
                     .map((ns) => ns.metadata?.name || '')
                     .filter(Boolean)
                   const allSelected =
                     names.length > 0 &&
-                    names.every((name) => selectedNamespaces.includes(name))
+                    names.every((name) => selectedSet.has(name))
                   const someSelected = names.some((name) =>
-                    selectedNamespaces.includes(name)
+                    selectedSet.has(name)
                   )
+                  // 组内也把已选项排到最前，其余保持原有字母序：组级上浮 + 组内
+                  // 上浮，重开下拉就能一眼看到这个组里已经选了哪几个
+                  const items = section.list
+                    .filter((ns) => selectedSet.has(ns.metadata?.name || ''))
+                    .concat(
+                      section.list.filter(
+                        (ns) => !selectedSet.has(ns.metadata?.name || '')
+                      )
+                    )
                   return (
                     <CommandGroup
-                      key={groupName}
-                      // 多选时组名由可点选的组头行展示，heading 不再重复渲染
-                      heading={multiple ? undefined : groupName}
+                      key={section.key}
+                      // 多选时权限绑定组的组名由可点选的组头行展示，heading 不再重复渲染；
+                      // 散装分组没有组头行，一律靠 heading 标明
+                      heading={
+                        section.isBindingGroup
+                          ? multiple
+                            ? undefined
+                            : section.heading
+                          : looseHeading
+                      }
                     >
-                      {multiple && (
+                      {multiple && section.isBindingGroup && (
                         <div
                           className="flex cursor-pointer items-center px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent/50"
-                          onClick={() => toggleGroupSelection(list)}
+                          onClick={() => toggleGroupSelection(section.list)}
                         >
                           <Checkbox
                             checked={
                               allSelected || (someSelected && 'indeterminate')
                             }
-                            onCheckedChange={() => toggleGroupSelection(list)}
+                            onCheckedChange={() =>
+                              toggleGroupSelection(section.list)
+                            }
                             onClick={(event) => event.stopPropagation()}
                             aria-label={t(
                               'common.namespaceSelector.toggleGroup',
                               {
-                                name: groupName,
+                                name: section.heading,
                                 defaultValue:
                                   'Select all namespaces in group {{name}}',
                               }
                             )}
                             className="mr-2"
                           />
-                          <span className="truncate">{groupName}</span>
+                          <span className="truncate">{section.heading}</span>
                         </div>
                       )}
                       {/* 组内条目右移缩进，与组头形成从属层次 */}
-                      {list.map((ns) => renderNamespaceItem(ns, groupName, true))}
+                      {items.map((ns) =>
+                        renderNamespaceItem(
+                          ns,
+                          section.heading,
+                          section.isBindingGroup
+                        )
+                      )}
                     </CommandGroup>
                   )
                 })}
-                {namespaceGroups.loose.length > 0 && (
-                  <CommandGroup
-                    heading={
-                      namespaceGroups.grouped.length > 0
-                        ? t(
-                            'common.namespaceSelector.other',
-                            'Other namespaces'
-                          )
-                        : undefined
-                    }
-                  >
-                    {namespaceGroups.loose.map((ns) => renderNamespaceItem(ns))}
-                  </CommandGroup>
-                )}
               </>
             )}
           </CommandList>

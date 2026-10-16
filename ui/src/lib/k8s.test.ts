@@ -1,10 +1,59 @@
-import type { Service } from 'kubernetes-types/core/v1'
+import type { Pod, Service } from 'kubernetes-types/core/v1'
 import type { ObjectMeta } from 'kubernetes-types/meta/v1'
 import { describe, expect, it } from 'vitest'
 
 import type { CustomResource } from '@/types/api'
 
-import { getOwnerInfo, getPrinterColumnValue, servicesForWorkload } from './k8s'
+import {
+  getOwnerInfo,
+  getPrinterColumnValue,
+  groupPodsByNamespace,
+  servicesForWorkload,
+  sumPodRestarts,
+} from './k8s'
+
+describe('sumPodRestarts', () => {
+  const pod = (
+    name: string,
+    namespace: string,
+    labels: Record<string, string>,
+    restarts: number[]
+  ) =>
+    ({
+      metadata: { name, namespace, labels },
+      status: {
+        phase: 'Running',
+        containerStatuses: restarts.map((restartCount, index) => ({
+          name: `c${index}`,
+          ready: true,
+          restartCount,
+          state: { running: { startedAt: '2024-01-01T00:00:00Z' } },
+        })),
+      },
+    }) as Pod
+
+  const pods = groupPodsByNamespace([
+    pod('web-1', 'default', { app: 'web' }, [1, 2]),
+    pod('web-2', 'default', { app: 'web' }, [0]),
+    pod('web-1', 'other', { app: 'web' }, [5]),
+    pod('api-1', 'default', { app: 'api' }, [3]),
+  ])
+
+  it('按 selector 匹配同一命名空间的 Pod 并累加容器重启次数', () => {
+    expect(sumPodRestarts(pods, 'default', { app: 'web' })).toBe(3)
+    expect(sumPodRestarts(pods, 'default', { app: 'api' })).toBe(3)
+  })
+
+  it('selector 为空或命名空间未知时不猜 Pod', () => {
+    expect(sumPodRestarts(pods, 'default', undefined)).toBe(0)
+    expect(sumPodRestarts(pods, 'default', {})).toBe(0)
+    expect(sumPodRestarts(pods, undefined, { app: 'web' })).toBe(0)
+  })
+
+  it('selector 只命中部分标签时不算数', () => {
+    expect(sumPodRestarts(pods, 'default', { app: 'web', tier: 'fe' })).toBe(0)
+  })
+})
 
 describe('getOwnerInfo', () => {
   it('uses the catalog route name for irregular plural kinds', () => {
