@@ -18,7 +18,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
 import type { Container, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import type { ResourceTypeMap } from '@/types/api'
@@ -30,17 +29,16 @@ import {
   useResources,
   type DeepPartial,
 } from '@/lib/api'
-import { getResourceFormEditPath } from '@/lib/resource-catalog'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { servicesForWorkload } from '@/lib/k8s'
 import { deleteRelatedServices } from '@/lib/related-service-cleanup'
+import { getResourceFormEditPath } from '@/lib/resource-catalog'
 import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import {
   useDraftDirty,
   useUnsavedChangesGuard,
 } from '@/hooks/use-unsaved-changes-guard'
-import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
-import { RelatedServicesDeleteWarning } from '@/components/related-services-delete-warning'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -59,11 +57,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { KVEditor, type KVPair } from '@/components/kv-editor'
+import { RelatedServicesDeleteWarning } from '@/components/related-services-delete-warning'
+import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
 import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 import { WorkloadRevisionsTable } from '@/components/workload-revisions-table'
 import { YamlEditor } from '@/components/yaml-editor'
-import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
 
 /**
  * 行操作菜单覆盖的资源类型。
@@ -293,7 +293,7 @@ export function ResourceRowActions<T extends RowActionResourceType>({
   resource: ResourceTypeMap[T]
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
   const can = useCan()
 

@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { IconEdit, IconFileText, IconTerminal2 } from '@tabler/icons-react'
 import { Job } from 'kubernetes-types/batch/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -11,6 +10,7 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,7 @@ import {
 export function JobDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const can = useCan()
   // 终端需要 pods:exec，日志需要 pods:log；只读管理员两者都有。
   const canExec = can('pods', 'exec', { namespace })

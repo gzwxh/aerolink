@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { CronJob, Job } from 'kubernetes-types/batch/v1'
 import { Event as KubernetesEvent } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { useRelatedResources } from '@/lib/api'
 import { formatJobStatusBadge, getJobStatusBadge } from '@/lib/job-status'
@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ClusterLink } from '@/components/cluster-link'
 import {
   ContainerImagesList,
   WorkloadInfoBlock,
@@ -330,12 +331,12 @@ function CronJobInformationCard({ cronjob }: { cronjob: CronJob }) {
               truncate={!!ownerInfo}
             >
               {ownerInfo ? (
-                <Link
+                <ClusterLink
                   to={ownerInfo.path}
                   className="app-link inline-block max-w-full truncate"
                 >
                   {ownerInfo.kind}/{ownerInfo.name}
-                </Link>
+                </ClusterLink>
               ) : (
                 <span className="text-muted-foreground">
                   {t('common.values.none')}
@@ -417,9 +418,9 @@ function CronJobInformationCard({ cronjob }: { cronjob: CronJob }) {
             </WorkloadInfoRow>
             <WorkloadInfoRow label={t('common.fields.volumes', 'Volumes')}>
               {volumesCount > 0 ? (
-                <Link to={volumeTabSearch} className="app-link">
+                <ClusterLink to={volumeTabSearch} className="app-link">
                   {volumesCount}
-                </Link>
+                </ClusterLink>
               ) : (
                 0
               )}
@@ -466,7 +467,7 @@ export function CronJobJobLink({
   }
 
   return (
-    <Link
+    <ClusterLink
       to={isIframe ? `${path}?iframe=true` : path}
       className={cn(
         'app-link block max-w-full cursor-pointer truncate text-left font-mono',
@@ -475,7 +476,7 @@ export function CronJobJobLink({
       title={jobName}
     >
       {jobName}
-    </Link>
+    </ClusterLink>
   )
 }
 

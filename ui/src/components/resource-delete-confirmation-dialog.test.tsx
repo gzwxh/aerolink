@@ -13,7 +13,12 @@ const toastSuccess = vi.hoisted(() => vi.fn())
 const toastWarning = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/api', () => ({ deleteResource }))
-vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }))
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigate,
+  // 集群包装导航（cluster-path）会读路由参数；这些用例不关心集群段，给空即可。
+  useParams: () => ({}),
+  useLocation: () => ({ pathname: '/', search: '', hash: '', key: 'test' }),
+}))
 vi.mock('sonner', () => ({
   toast: { error: toastError, success: toastSuccess, warning: toastWarning },
 }))
@@ -103,13 +108,12 @@ describe('ResourceDeleteConfirmationDialog 的关联 Service 联动删除', () =
   })
 
   it('部分 Service 删除失败时弹警告（404 视为已删除，不算失败）', async () => {
-    deleteResource.mockImplementation(
-      (_type: string, name: string) =>
-        name === 'nginx-nodeport'
-          ? Promise.reject(new Error('services "nginx-nodeport" not found'))
-          : name === 'nginx-clusterip'
-            ? Promise.reject(new Error('internal error'))
-            : Promise.resolve(undefined)
+    deleteResource.mockImplementation((_type: string, name: string) =>
+      name === 'nginx-nodeport'
+        ? Promise.reject(new Error('services "nginx-nodeport" not found'))
+        : name === 'nginx-clusterip'
+          ? Promise.reject(new Error('internal error'))
+          : Promise.resolve(undefined)
     )
     renderDialog(['nginx-nodeport', 'nginx-clusterip'])
 

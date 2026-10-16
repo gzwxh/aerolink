@@ -4,11 +4,12 @@ import * as yaml from 'js-yaml'
 import type { Service } from 'kubernetes-types/core/v1'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { applyResource, updateResource, useResource } from '@/lib/api'
 import { prepareCloneResource } from '@/lib/clone-manifest'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import {
   allowedServiceTypes,
   formFromService,
@@ -43,7 +44,7 @@ import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 
 export function ServiceCreatePage({ clone = false }: { clone?: boolean }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const { namespace: namespaceParam, name: editName } = useParams()

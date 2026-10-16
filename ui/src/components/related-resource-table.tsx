@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { IconLoader } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { RelatedResources, ResourceType } from '@/types/api'
 import { useRelatedResources } from '@/lib/api'
@@ -10,6 +10,7 @@ import {
   getResourceDetailPath,
   getResourceMetadata,
 } from '@/lib/resource-catalog'
+import { ClusterLink } from '@/components/cluster-link'
 
 import { Column, SimpleTable } from './simple-table'
 import { Badge } from './ui/badge'
@@ -96,11 +97,11 @@ function RelatedResourceCell({ rs }: { rs: RelatedResources }) {
   // 面包屑都不变，既没法在新标签页打开，也没法分享或后退，反而更容易迷失。
   // iframe 模式（详情页本身被嵌在别的页面里）继续带 `iframe=true` 保持一致。
   return (
-    <Link
+    <ClusterLink
       to={isIframe ? `${path}?iframe=true` : path}
       className="font-medium app-link cursor-pointer"
     >
       {rs.name}
-    </Link>
+    </ClusterLink>
   )
 }

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation } from 'react-router-dom'
 
+import { useClusterLocation } from '@/lib/cluster-path'
 import { getResourceCatalogEntry } from '@/lib/resource-catalog'
 import {
   Breadcrumb,
@@ -10,6 +10,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { ClusterLink } from '@/components/cluster-link'
 
 interface BreadcrumbSegment {
   label: string
@@ -17,7 +18,7 @@ interface BreadcrumbSegment {
 }
 
 export function DynamicBreadcrumb() {
-  const location = useLocation()
+  const location = useClusterLocation()
   const { t } = useTranslation()
 
   const generateBreadcrumbs = (): BreadcrumbSegment[] => {
@@ -115,7 +116,7 @@ export function DynamicBreadcrumb() {
             <BreadcrumbItem>
               {crumb.href && index < breadcrumbs.length - 1 ? (
                 <BreadcrumbLink asChild>
-                  <Link to={crumb.href}>{crumb.label}</Link>
+                  <ClusterLink to={crumb.href}>{crumb.label}</ClusterLink>
                 </BreadcrumbLink>
               ) : (
                 <BreadcrumbPage>{crumb.label}</BreadcrumbPage>

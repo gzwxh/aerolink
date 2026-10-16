@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Ingress } from 'kubernetes-types/networking/v1'
-import { Link } from 'react-router-dom'
 
 import { createSearchFilter } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 
 const filter = createSearchFilter<Ingress>((ns) => ns.metadata?.name)
@@ -19,11 +19,11 @@ export function IngressListPage() {
         header: 'Name',
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/ingresses/${row.original.metadata!.namespace}/${row.original.metadata!.name}`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

@@ -3,7 +3,6 @@ import { IconEdit } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import { Secret } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { updateResource, useResource } from '@/lib/api'
@@ -12,6 +11,7 @@ import {
   encodeBase64Map,
   encodeBase64Utf8,
 } from '@/lib/base64'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -86,7 +86,7 @@ function SecretYamlToolbar({
 export function SecretDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const can = useCan()
   const [showDecodedYaml, setShowDecodedYaml] = useState(false)
   // 数据条目的增删改属于写操作，没有 update 权限时只读展示。

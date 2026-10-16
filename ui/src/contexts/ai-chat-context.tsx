@@ -6,8 +6,9 @@ import {
   useMemo,
   useState,
 } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 
+import { useClusterLocation } from '@/lib/cluster-path'
 import { PageContext } from '@/components/ai-chat/ai-chat-types'
 import { toSingularResource } from '@/components/ai-chat/ai-chat-utils'
 
@@ -23,7 +24,7 @@ const AIChatContext = createContext<AIChatContextType | undefined>(undefined)
 
 export function AIChatProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
-  const location = useLocation()
+  const location = useClusterLocation()
   const params = useParams()
 
   const openChat = useCallback(() => {

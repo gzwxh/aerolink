@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { LogOut, UserCog } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 
 import { resolveAvatarSrc } from '@/lib/avatar-url'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { MFA_SETUP_REQUEST_EVENT } from '@/lib/mfa-prompt'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -26,7 +26,7 @@ import { SidebarCustomizer } from './sidebar-customizer'
  */
 export function UserMenu() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
 

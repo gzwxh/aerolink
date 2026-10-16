@@ -1,6 +1,5 @@
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ClusterLink } from '@/components/cluster-link'
 
 import type { HelmReleaseChartSelection } from './helmrelease-chart-selection'
 
@@ -119,7 +119,7 @@ export function HelmReleaseChartSelector({
           <>
             <span>{chartSourceLabel}</span>
             {chartDetailPath ? (
-              <Link
+              <ClusterLink
                 to={chartDetailPath}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -128,7 +128,7 @@ export function HelmReleaseChartSelector({
                 {t('helm.messages.chartDetailsLink', {
                   defaultValue: 'Chart details',
                 })}
-              </Link>
+              </ClusterLink>
             ) : null}
           </>
         )}

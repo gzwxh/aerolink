@@ -8,7 +8,6 @@ import {
   IconX,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import {
   useClusterList,
@@ -25,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 
 interface SettingsHintProps {
   onDismiss?: () => void
@@ -148,7 +148,7 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
                 </span>
               </div>
             ) : (
-              <Link
+              <ClusterLink
                 key={item.key}
                 to={item.href}
                 className="group flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 transition-all hover:border-primary/50 hover:bg-muted/50"
@@ -162,12 +162,12 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
                 <span className="ml-2 text-xs text-muted-foreground group-hover:text-primary">
                   →
                 </span>
-              </Link>
+              </ClusterLink>
             )
           )}
         </div>
         <div className="mt-3 flex justify-end">
-          <Link to="/settings/general">
+          <ClusterLink to="/settings/general">
             <Button
               variant="outline"
               size="sm"
@@ -175,7 +175,7 @@ export function SettingsHint({ onDismiss }: SettingsHintProps) {
             >
               {t('settingsHint.viewAll', 'View All Settings')}
             </Button>
-          </Link>
+          </ClusterLink>
         </div>
       </CardContent>
     </Card>

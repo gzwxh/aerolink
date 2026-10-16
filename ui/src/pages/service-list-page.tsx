@@ -2,8 +2,9 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Service } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
   createSearchFilter,
@@ -13,6 +14,7 @@ import {
 } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
@@ -26,7 +28,7 @@ const serviceSearchFilter = createSearchFilter<Service>(
 const columnHelper = createColumnHelper<Service>()
 
 export function ServiceListPage() {
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const { namespace: namespaceParam } = useParams()
   // 从工作负载页点 Service 名称跳过来时带 `?search=<name>`：只显示那一个。
   const [searchParams] = useSearchParams()
@@ -51,13 +53,13 @@ export function ServiceListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/services/${row.original.metadata!.namespace}/${
                 row.original.metadata!.name
               }`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

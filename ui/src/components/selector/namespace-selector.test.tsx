@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   fireEvent,
   render,
@@ -5,7 +6,6 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 
 import { NamespaceSelector } from './namespace-selector'
@@ -131,10 +131,7 @@ describe('NamespaceSelector', () => {
     }
     const { rerender } = render(
       <QueryClientProvider client={qc}>
-        <NamespaceSelector
-          {...props}
-          selectedNamespace="_all"
-        />
+        <NamespaceSelector {...props} selectedNamespace="_all" />
       </QueryClientProvider>
     )
     fireEvent.click(screen.getByRole('combobox'))
@@ -197,14 +194,17 @@ describe('NamespaceSelector', () => {
     expect(screen.getByText('kube-system')).toBeInTheDocument()
 
     // 已选一个时再点另一个：并入多选，下拉仍然保持打开（回归：
-    // 此前已选少于 2 个时点击条目会收起下拉，无法连续多选）
+    // 此前已选少于 2 个时点击条目会收起下拉，无法连续多选）。
+    // 顺序按点选顺序追加（选中值本身与顺序无关，展示端只按个数/勾选态判断）。
     rerender(
       <QueryClientProvider client={qc}>
         <NamespaceSelector {...props} selectedNamespace="kube-system" />
       </QueryClientProvider>
     )
     fireEvent.click(screen.getByText('appmarket'))
-    expect(handleNamespaceChange).toHaveBeenLastCalledWith('appmarket,kube-system')
+    expect(handleNamespaceChange).toHaveBeenLastCalledWith(
+      'kube-system,appmarket'
+    )
     expect(screen.getByText('appmarket')).toBeInTheDocument()
   })
 

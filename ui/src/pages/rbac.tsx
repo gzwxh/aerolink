@@ -1,4 +1,6 @@
-import { Navigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
+
+import { ClusterNavigate } from '@/components/cluster-link'
 
 /**
  * RBAC 现在位于系统设置中。这样旧的 /rbac 深链
@@ -14,7 +16,9 @@ export function RBACRedirect() {
   })
   const query = params.toString()
 
-  return <Navigate to={`/settings/rbac${query ? `?${query}` : ''}`} replace />
+  return (
+    <ClusterNavigate to={`/settings/rbac${query ? `?${query}` : ''}`} replace />
+  )
 }
 
 export default RBACRedirect

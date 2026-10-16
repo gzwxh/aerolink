@@ -2,7 +2,6 @@ import { useCallback, useState, type FormEvent } from 'react'
 import * as yaml from 'js-yaml'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import type {
@@ -15,6 +14,7 @@ import {
   installHelmRelease,
   useHelmChartContent,
 } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { translateError } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard'
@@ -54,7 +54,7 @@ export function HelmInstallDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const [releaseName, setReleaseName] = useState(() =>
     defaultReleaseName(chart.name)
   )

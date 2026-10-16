@@ -46,11 +46,11 @@ import {
 } from '@/lib/api'
 import { ApiError } from '@/lib/api-client'
 import { formatDate, translateError } from '@/lib/utils'
-import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import {
   useTableColumnOrder,
   useTableColumnSizing,
 } from '@/hooks/use-table-column-preferences'
+import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import {
   useDraftDirty,
   useUnsavedChangesGuard,

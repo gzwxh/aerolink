@@ -1,8 +1,8 @@
 import { Container, Volume } from 'kubernetes-types/core/v1'
-import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 import { Column, SimpleTable } from '@/components/simple-table'
 
 interface VolumeTableProps {
@@ -48,32 +48,32 @@ export function VolumeTable({
   const getVolumeDetails = (volume: Volume): React.ReactNode => {
     if (volume.persistentVolumeClaim) {
       return (
-        <Link
+        <ClusterLink
           to={`/persistentvolumeclaims/${namespace}/${volume.persistentVolumeClaim.claimName}`}
           className="app-link"
         >
           {volume.persistentVolumeClaim.claimName}
-        </Link>
+        </ClusterLink>
       )
     }
     if (volume.configMap) {
       return (
-        <Link
+        <ClusterLink
           to={`/configmaps/${namespace}/${volume.configMap.name}`}
           className="app-link"
         >
           {volume.configMap.name || 'N/A'}
-        </Link>
+        </ClusterLink>
       )
     }
     if (volume.secret) {
       return (
-        <Link
+        <ClusterLink
           to={`/secrets/${namespace}/${volume.secret.secretName}`}
           className="app-link"
         >
           {volume.secret.secretName || 'N/A'}
-        </Link>
+        </ClusterLink>
       )
     }
     if (volume.hostPath) {

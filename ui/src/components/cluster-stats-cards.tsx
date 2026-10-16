@@ -7,7 +7,6 @@ import {
   IconServer,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { OverviewData } from '@/types/api'
 import {
@@ -16,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 
 interface ClusterStatsCardsProps {
   stats?: OverviewData
@@ -111,12 +111,12 @@ export function ClusterStatsCards({
                       <CardDescription>{stat.label}</CardDescription>
                       <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                         {stat.routePath ? (
-                          <Link
+                          <ClusterLink
                             to={stat.routePath}
                             className="hover:text-primary/80 hover:underline transition-colors cursor-pointer"
                           >
                             {stat.value}
-                          </Link>
+                          </ClusterLink>
                         ) : (
                           stat.value
                         )}

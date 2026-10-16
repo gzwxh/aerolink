@@ -3,15 +3,16 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { StorageClass } from 'kubernetes-types/storage/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { patchResource, useResources } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { createSearchFilter } from '@/lib/k8s'
 import { formatDate, translateError } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
@@ -37,7 +38,7 @@ const columnHelper = createColumnHelper<StorageClass>()
 
 export function StorageClassListPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
   // 设为默认需要改写 annotation，是写操作。
   const canUpdateStorageClass = useCanAnyNamespace()('storageclasses', 'update')
@@ -95,9 +96,9 @@ export function StorageClassListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link to={`/storageclasses/${row.original.metadata!.name}`}>
+            <ClusterLink to={`/storageclasses/${row.original.metadata!.name}`}>
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

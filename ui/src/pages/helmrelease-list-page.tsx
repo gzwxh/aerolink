@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { HelmRelease } from '@/types/api'
 import { createSearchFilter } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 
 const helmReleaseSearchFilter = createSearchFilter<HelmRelease>(
@@ -28,11 +28,11 @@ export function HelmReleaseListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/helmrelease/${row.original.metadata?.namespace}/${row.original.metadata?.name}`}
             >
               {row.original.metadata?.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

@@ -4,7 +4,7 @@ import { Deployment } from 'kubernetes-types/apps/v1'
 import type { Service } from 'kubernetes-types/core/v1'
 import { Event as KubernetesEvent, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { useRelatedResources } from '@/lib/api'
@@ -13,6 +13,7 @@ import { getDeploymentStatus, getEventTime, getOwnerInfo } from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import {
   ContainerImagesList,
@@ -193,12 +194,12 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground">
                 {/* 名称直接链到服务页面（带 search，只显示这一个）：关联关系在那边维护。 */}
-                <Link
+                <ClusterLink
                   to={`/services/${encodeURIComponent(entry.namespace)}?search=${encodeURIComponent(entry.name)}`}
                   className="app-link"
                 >
                   {entry.name}
-                </Link>
+                </ClusterLink>
                 <span className="ml-1">
                   /{entry.protocol}:{entry.port}
                 </span>
@@ -322,12 +323,12 @@ function DeploymentInformationCard({ deployment }: { deployment: Deployment }) {
               truncate={!!ownerInfo}
             >
               {ownerInfo ? (
-                <Link
+                <ClusterLink
                   to={ownerInfo.path}
                   className="app-link inline-block max-w-full truncate"
                 >
                   {ownerInfo.kind}/{ownerInfo.name}
-                </Link>
+                </ClusterLink>
               ) : (
                 <span className="text-muted-foreground">
                   {t('common.values.none')}
@@ -376,9 +377,9 @@ function DeploymentInformationCard({ deployment }: { deployment: Deployment }) {
             </WorkloadInfoRow>
             <WorkloadInfoRow label={t('common.fields.volumes')}>
               {volumesCount > 0 ? (
-                <Link to={volumeTabSearch} className="app-link">
+                <ClusterLink to={volumeTabSearch} className="app-link">
                   {volumesCount}
-                </Link>
+                </ClusterLink>
               ) : (
                 0
               )}

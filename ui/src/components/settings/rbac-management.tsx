@@ -41,11 +41,11 @@ import {
   systemRoleDescription,
   systemRoleLabel,
 } from '@/lib/system-roles'
-import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import {
   useTableColumnOrder,
   useTableColumnSizing,
 } from '@/hooks/use-table-column-preferences'
+import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

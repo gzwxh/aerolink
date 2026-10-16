@@ -6,7 +6,6 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import type { ArchiveBackend, ArchiveKind } from '@/types/api'
 import {
@@ -21,11 +20,11 @@ import { decodeClusterName } from '@/lib/current-cluster'
 import { isLoginSuccess, statusBadge, statusText } from '@/lib/status-badge'
 import { migrateLegacyKiteStorageKey } from '@/lib/storage-migration'
 import { formatDate } from '@/lib/utils'
-import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import {
   useTableColumnOrder,
   useTableColumnSizing,
 } from '@/hooks/use-table-column-preferences'
+import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -36,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTableView } from '@/components/resource-table-view'
 import { TableColumnToggle } from '@/components/table-column-toggle'
 
@@ -90,7 +90,9 @@ function textColumn(
     id,
     header,
     cell: ({ row }) => {
-      const text = format ? format(row.original[key]) : display(row.original[key])
+      const text = format
+        ? format(row.original[key])
+        : display(row.original[key])
       // truncate：归档里的路径、UA 可能很长，不截断会把相邻列挤变形。
       return (
         <span className="block truncate text-sm" title={text}>
@@ -662,12 +664,12 @@ export function ArchiveQuery() {
                     '检索后端跟随存储方式：Elasticsearch、DuckDB（直接查 parquet，无需额外部署组件）、VictoriaLogs 或 OpenObserve。当前存储方式对应的后端还不可用，请在「审计设置 → 归档」补齐配置后重试。'
                   )}
             </p>
-            <Link
+            <ClusterLink
               to="?tab=setting"
               className="mt-3 inline-block text-primary underline-offset-4 hover:underline"
             >
               {t('audit.archive.goToSetting', '前往审计设置')}
-            </Link>
+            </ClusterLink>
           </div>
         ) : (
           <ResourceTableView

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -12,6 +12,7 @@ import {
   useResource,
   useResources,
 } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import {
   accessModeOptions,
   capacityPattern,
@@ -48,7 +49,7 @@ import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 
 export function PVCreatePage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
   const { name: editName } = useParams()
   const can = useCan()

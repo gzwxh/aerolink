@@ -7,8 +7,9 @@ import {
 } from 'react'
 import { useAIChatContext } from '@/contexts/ai-chat-context'
 import { useAuth } from '@/contexts/auth-context'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
+import { useClusterLocation } from '@/lib/cluster-path'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { AIChatPanel } from '@/components/ai-chat/ai-chat-panel'
 import { AIChatTrigger } from '@/components/ai-chat/ai-chat-trigger'
@@ -41,7 +42,7 @@ export function AIChatbox({
   const { isOpen, openChat, closeChat } = useAIChatContext()
   const { capabilities } = useAuth()
   const aiEnabled = capabilities.aiEnabled
-  const { pathname } = useLocation()
+  const { pathname } = useClusterLocation()
   const shouldShowAIChatbox = standalone || !/^\/settings\/?$/.test(pathname)
 
   const [height, setHeight] = useState(() =>

@@ -60,6 +60,8 @@ export const createSuperUser = async (
 export interface ImportClustersRequest {
   config: string
   inCluster?: boolean
+  /** 按 context 名逐行指定 URL 短名；未指定的 context 由后端自动生成。 */
+  slugs?: Record<string, string>
 }
 
 export const importClusters = async (

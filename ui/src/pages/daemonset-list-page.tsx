@@ -8,14 +8,16 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DaemonSet } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 
 import { restartWorkload } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
 import { ResourceRowActions } from '@/components/resource-row-actions'
 import {
@@ -33,7 +35,7 @@ const columnHelper = createColumnHelper<DaemonSet>()
 export function DaemonSetListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const { namespace: namespaceParam } = useParams()
 
   // 定义 DaemonSet 表格的列
@@ -43,13 +45,13 @@ export function DaemonSetListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/daemonsets/${row.original.metadata!.namespace}/${
                 row.original.metadata!.name
               }`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

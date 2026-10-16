@@ -4,7 +4,7 @@ import * as yaml from 'js-yaml'
 import { CustomResourceDefinition } from 'kubernetes-types/apiextensions/v1'
 import { Eye } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 
 import { CustomResource, ResourceType } from '@/types/api'
 import { useResource } from '@/lib/api'
@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 import { YamlEditor } from '@/components/yaml-editor'
 
@@ -69,7 +70,7 @@ export function CRListPage() {
 
           return (
             <div className="font-medium app-link">
-              <Link to={path}>{resource.metadata.name}</Link>
+              <ClusterLink to={path}>{resource.metadata.name}</ClusterLink>
             </div>
           )
         },

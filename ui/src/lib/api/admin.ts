@@ -25,6 +25,8 @@ import { downloadFile, fetchAPI } from './shared'
 export interface ClusterCreateRequest {
   name: string
   description?: string
+  /** URL 短名（/_clusters/<slug>/...）。留空由后端自动生成；手填值非法/冲突后端报错。 */
+  slug?: string
   config?: string
   prometheusURL?: string
   inCluster?: boolean
@@ -32,11 +34,16 @@ export interface ClusterCreateRequest {
   isDefault?: boolean
 }
 
-export interface ClusterUpdateRequest extends Omit<ClusterCreateRequest, 'name'> {
+export interface ClusterUpdateRequest extends Omit<
+  ClusterCreateRequest,
+  'name' | 'slug'
+> {
   // 刻意不要求 name：更新是**部分更新**，后端按「字段是否出现」决定改不改
   // （见 UpdateCluster 的指针 DTO）。原来的 `extends ClusterCreateRequest` 让 name
   // 变成了必填，只想改一两个字段的调用（如本文件的确认开关）就没法通过类型检查。
   name?: string
+  // 短名同样排除：它在创建时固化，后端的更新 DTO 不接收该字段。
+  // 从类型上就断掉，免得以后有人「顺手」把表单里的 slug 一起提交上去。
   enabled?: boolean
   // 写操作二次确认开关（见 lib/write-confirm.ts）：只提交要改的项，
   // 后端按字段是否出现决定改不改（与徽章字段同一约定）。

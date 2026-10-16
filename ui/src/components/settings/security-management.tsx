@@ -227,7 +227,9 @@ export function SecurityManagement() {
     mutationFn: (username: string) => unblockLoginUser(username),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locked-login-users'] })
-      toast.success(t('securitySettings.lockedUsers.unblocked', 'User unblocked'))
+      toast.success(
+        t('securitySettings.lockedUsers.unblocked', 'User unblocked')
+      )
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -1354,9 +1356,13 @@ export function SecurityManagement() {
                   <span className="font-medium">{item.username}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">
-                      {t('securitySettings.lockedUsers.until', 'Until {{time}}', {
-                        time: formatDate(item.blockedUntil),
-                      })}
+                      {t(
+                        'securitySettings.lockedUsers.until',
+                        'Until {{time}}',
+                        {
+                          time: formatDate(item.blockedUntil),
+                        }
+                      )}
                     </span>
                     {!readOnly && (
                       <Button
@@ -1372,7 +1378,9 @@ export function SecurityManagement() {
                           'securitySettings.lockedUsers.unblock',
                           'Unblock'
                         )}
-                        onClick={() => unblockUserMutation.mutate(item.username)}
+                        onClick={() =>
+                          unblockUserMutation.mutate(item.username)
+                        }
                       >
                         <IconX className="h-4 w-4" />
                       </Button>

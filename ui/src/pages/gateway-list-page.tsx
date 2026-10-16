@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
-import { Link } from 'react-router-dom'
 
 import { Gateway } from '@/types/gateway'
 import { createSearchFilter } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 
 const filter = createSearchFilter<Gateway>((gw) => gw.metadata?.name)
@@ -18,11 +18,11 @@ export function GatewayListPage() {
         header: 'Name',
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/gateways/${row.original.metadata!.namespace}/${row.original.metadata!.name}`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

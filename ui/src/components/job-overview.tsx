@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Job } from 'kubernetes-types/batch/v1'
 import { Event as KubernetesEvent, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { useRelatedResources } from '@/lib/api'
 import { formatJobStatusBadge, getJobStatusBadge } from '@/lib/job-status'
@@ -10,6 +10,7 @@ import { getEventTime, getOwnerInfo } from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 import {
   ContainerImagesList,
   SelectorBadges,
@@ -198,12 +199,12 @@ function JobInformationCard({ job }: { job: Job }) {
               truncate={!!ownerInfo}
             >
               {ownerInfo ? (
-                <Link
+                <ClusterLink
                   to={ownerInfo.path}
                   className="app-link inline-block max-w-full truncate"
                 >
                   {ownerInfo.kind}/{ownerInfo.name}
-                </Link>
+                </ClusterLink>
               ) : (
                 <span className="text-muted-foreground">
                   {t('common.values.none')}
@@ -296,9 +297,9 @@ function JobInformationCard({ job }: { job: Job }) {
             <WorkloadInfoRow
               label={t('common.fields.volumes', { defaultValue: 'Volumes' })}
             >
-              <Link to={volumeTabSearch} className="app-link">
+              <ClusterLink to={volumeTabSearch} className="app-link">
                 {volumesCount}
-              </Link>
+              </ClusterLink>
             </WorkloadInfoRow>
           </div>
 

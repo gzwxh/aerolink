@@ -8,7 +8,7 @@ import * as yaml from 'js-yaml'
 import type { Container, Pod } from 'kubernetes-types/core/v1'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import type {
@@ -59,6 +59,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -67,8 +68,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ClusterLink } from '@/components/cluster-link'
 import { HelmChartIcon } from '@/components/helm-chart-icon'
-
 import {
   CompactRelatedResourcesCard,
   MetadataListCard,
@@ -80,7 +81,6 @@ import {
   TerminalLauncher,
   useOpenWorkspaceSession,
 } from '@/components/terminal-launcher'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { WorkloadSummaryCard } from '@/components/workload-overview-parts'
 import { WorkloadPodsCard } from '@/components/workload-pods-card'
 import { YamlEditor } from '@/components/yaml-editor'
@@ -172,12 +172,12 @@ function HelmReleaseResourceLink({
   }
 
   return (
-    <Link
+    <ClusterLink
       to={isIframe ? `${path}?iframe=true` : path}
       className="font-medium app-link"
     >
       {label}
-    </Link>
+    </ClusterLink>
   )
 }
 

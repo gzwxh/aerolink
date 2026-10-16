@@ -2,13 +2,14 @@ import { useMemo } from 'react'
 import { StatefulSet } from 'kubernetes-types/apps/v1'
 import { Event as KubernetesEvent, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { DeploymentStatusType } from '@/types/k8s'
 import { useRelatedResources } from '@/lib/api'
 import { getEventTime, getOwnerInfo } from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import {
   ContainerImagesList,
@@ -211,12 +212,12 @@ function StatefulSetInformationCard({
               truncate={!!ownerInfo}
             >
               {ownerInfo ? (
-                <Link
+                <ClusterLink
                   to={ownerInfo.path}
                   className="app-link inline-block max-w-full truncate"
                 >
                   {ownerInfo.kind}/{ownerInfo.name}
-                </Link>
+                </ClusterLink>
               ) : (
                 <span className="text-muted-foreground">
                   {t('common.values.none')}
@@ -285,9 +286,9 @@ function StatefulSetInformationCard({
               label={t('common.fields.volumes', { defaultValue: 'Volumes' })}
             >
               {volumesCount > 0 ? (
-                <Link to={volumeTabSearch} className="app-link">
+                <ClusterLink to={volumeTabSearch} className="app-link">
                   {volumesCount}
-                </Link>
+                </ClusterLink>
               ) : (
                 0
               )}

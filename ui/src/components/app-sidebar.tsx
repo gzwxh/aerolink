@@ -9,10 +9,10 @@ import { IconLayoutDashboard } from '@tabler/icons-react'
 import { CustomResourceDefinition } from 'kubernetes-types/apiextensions/v1'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation } from 'react-router-dom'
 
 import { SidebarCustomResourceItem, SidebarItem } from '@/types/sidebar'
 import { useResources } from '@/lib/api'
+import { useClusterLocation } from '@/lib/cluster-path'
 import { splitSiteName } from '@/lib/site-name'
 import { cn } from '@/lib/utils'
 import {
@@ -30,6 +30,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { ClusterLink } from '@/components/cluster-link'
 import {
   getSettingsSections,
   settingsSubTabs,
@@ -74,7 +75,7 @@ function SiteNameText({
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { t } = useTranslation()
   const { user } = useAuth()
-  const location = useLocation()
+  const location = useClusterLocation()
   const { isMobile, setOpenMobile } = useSidebar()
   const { config, isLoading, getIconComponent } = useSidebarConfig()
   const { logoUrl, siteName, isCustomBranding } = useBranding()
@@ -254,13 +255,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         asChild
                         isActive={isActive(child.url)}
                       >
-                        <Link
+                        <ClusterLink
                           to={child.url}
                           onClick={handleMenuItemClick}
                           title={childTitle}
                         >
                           <span>{childTitle}</span>
-                        </Link>
+                        </ClusterLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   )
@@ -279,10 +280,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           asChild
           isActive={isActive(item.url)}
         >
-          <Link to={item.url} onClick={handleMenuItemClick}>
+          <ClusterLink to={item.url} onClick={handleMenuItemClick}>
             <IconComponent className="text-sidebar-primary" />
             <span>{title}</span>
-          </Link>
+          </ClusterLink>
         </SidebarMenuButton>
       </SidebarMenuItem>
     )
@@ -308,14 +309,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton asChild className="h-auto">
-                <Link to="/" onClick={handleMenuItemClick}>
+                <ClusterLink to="/" onClick={handleMenuItemClick}>
                   <img
                     src={logoUrl}
                     alt={`${siteName} Logo`}
                     className="ml-1 h-8 w-8"
                   />
                   <SiteNameText name={siteName} />
-                </Link>
+                </ClusterLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -338,7 +339,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5 hover:bg-accent/50 transition-colors h-auto"
             >
-              <Link to="/" onClick={handleMenuItemClick}>
+              <ClusterLink to="/" onClick={handleMenuItemClick}>
                 <div className="relative flex items-center justify-between w-full">
                   <div className="flex items-center gap-2">
                     <img
@@ -356,7 +357,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </div>
                   </div>
                 </div>
-              </Link>
+              </ClusterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -386,10 +387,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   isActive={isActive('/')}
                   className="transition-all duration-200 hover:bg-accent/60 active:scale-95 data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary data-[active=true]:shadow-sm"
                 >
-                  <Link to="/" onClick={handleMenuItemClick}>
+                  <ClusterLink to="/" onClick={handleMenuItemClick}>
                     <IconLayoutDashboard className="text-sidebar-primary" />
                     <span className="font-medium">{t('nav.overview')}</span>
-                  </Link>
+                  </ClusterLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -470,13 +471,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                               sub && 'pr-8'
                             )}
                           >
-                            <Link
+                            <ClusterLink
                               to={`/settings/${section.value}`}
                               onClick={handleMenuItemClick}
                             >
                               <SectionIcon className="text-sidebar-primary" />
                               <span>{section.label}</span>
-                            </Link>
+                            </ClusterLink>
                           </SidebarMenuButton>
                           {sub && (
                             <button
@@ -522,7 +523,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                     }
                                     className="data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary"
                                   >
-                                    <Link
+                                    <ClusterLink
                                       to={`/settings/${section.value}?${sub.param}=${subTab.value}`}
                                       onClick={handleMenuItemClick}
                                     >
@@ -531,7 +532,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                           defaultValue: subTab.defaultLabel,
                                         })}
                                       </span>
-                                    </Link>
+                                    </ClusterLink>
                                   </SidebarMenuSubButton>
                                 </SidebarMenuSubItem>
                               ))}

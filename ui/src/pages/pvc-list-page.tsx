@@ -2,12 +2,12 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { PersistentVolumeClaim } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { createSearchFilter } from '@/lib/k8s'
 import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate, parseBytes } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 
 const pvcSearchFilter = createSearchFilter<PersistentVolumeClaim>(
@@ -30,13 +30,13 @@ export function PVCListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/persistentvolumeclaims/${row.original.metadata!.namespace}/${
                 row.original.metadata!.name
               }`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),
@@ -72,9 +72,9 @@ export function PVCListPage() {
           if (volumeName) {
             return (
               <div className="font-medium app-link">
-                <Link to={`/persistentvolumes/${volumeName}`}>
+                <ClusterLink to={`/persistentvolumes/${volumeName}`}>
                   {volumeName}
-                </Link>
+                </ClusterLink>
               </div>
             )
           }
@@ -89,7 +89,9 @@ export function PVCListPage() {
           if (scName) {
             return (
               <div className="font-medium app-link">
-                <Link to={`/storageclasses/${scName}`}>{scName}</Link>
+                <ClusterLink to={`/storageclasses/${scName}`}>
+                  {scName}
+                </ClusterLink>
               </div>
             )
           }

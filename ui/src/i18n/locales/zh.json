@@ -1085,7 +1085,16 @@
     "switching": "切换集群中...",
     "switchingShort": "切换中...",
     "default": "默认",
-    "syncError": "同步异常"
+    "syncError": "同步异常",
+    "slugErrorTitle": "无法访问该集群",
+    "slugErrorDescription": "地址里的集群不存在，或者你没有访问权限。可以切换到你有权限的集群继续使用。",
+    "slugErrorRequestAccess": "申请权限",
+    "slugErrorSwitchTo": "切换到集群：{{name}}",
+    "unavailable": {
+      "title": "没有可用的集群",
+      "noCluster": "当前账号没有可访问的集群，请联系管理员分配集群权限。",
+      "redirecting": "正在进入集群..."
+    }
   },
   "resourceTable": {
     "errorLoading": "加载 {{resourceName}} 失败",
@@ -2440,6 +2449,13 @@
       "importFileHint": "选择 kubeconfig 文件，或在下方粘贴文件内容。",
       "name": "名称",
       "namePlaceholder": "输入集群名称",
+      "slugLabel": "URL 短名",
+      "slugAutoPlaceholder": "留空自动生成",
+      "slugHint": "用于浏览器地址（/_clusters/短名/...），创建后不可修改。只能包含小写字母、数字和中划线，以字母或数字开头，最长 48 字符。",
+      "slugInvalid": "URL 短名只能包含小写字母、数字和中划线，以字母或数字开头，最长 48 字符。",
+      "slugInvalidForContext": "「{{context}}」的 URL 短名只能包含小写字母、数字和中划线，以字母或数字开头，最长 48 字符。",
+      "slugPerContext": "URL 短名（可选）",
+      "slugPerContextHint": "为每个 context 手动指定浏览器地址里的短名；留空的由系统自动生成。",
       "description": "描述",
       "descriptionPlaceholder": "输入集群描述（可选）",
       "type": "类型",
@@ -2452,7 +2468,10 @@
       "isDefault": "设为默认",
       "configLoadFailed": "加载当前配置失败",
       "configLoaded": "当前配置已加载",
-      "viewCurrentConfig": "查看当前配置"
+      "viewCurrentConfig": "查看当前配置",
+      "slugReadonlyHint": "短名在创建时固化，不随集群改名变化；已分享出去的链接会一直有效。",
+      "slugExistingBadge": "已存在",
+      "slugExistingHint": "标「已存在」的 context 在平台里已有同名集群，短名在创建时已固化：重新导入只更新它的配置，不会改短名。"
     },
     "writeConfirm": {
       "hints": {

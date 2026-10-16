@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Namespace } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { createSearchFilter } from '@/lib/k8s'
 import { getAge } from '@/lib/utils'
 import { useNamespaceBindingMap } from '@/hooks/use-namespace-binding-map'
+import { ClusterLink } from '@/components/cluster-link'
 import { CreateNamespaceDialog } from '@/components/create-namespace-dialog'
 import { NamespaceRowActions } from '@/components/namespace-row-actions'
 import { ResourceTable } from '@/components/resource-table'
@@ -43,9 +43,9 @@ export function NamespaceListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link to={`/namespaces/${row.original.metadata!.name}`}>
+            <ClusterLink to={`/namespaces/${row.original.metadata!.name}`}>
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

@@ -1,10 +1,11 @@
 // 一个基于 useLocation 解析查询参数的自定义 hook
 
 import React from 'react'
-import { useLocation } from 'react-router-dom'
+
+import { useClusterLocation } from '@/lib/cluster-path'
 
 export function useQuery() {
-  const { search } = useLocation()
+  const { search } = useClusterLocation()
 
   return React.useMemo(() => new URLSearchParams(search), [search])
 }

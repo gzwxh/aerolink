@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ResourceType } from '@/types/api'
 import { deleteResource } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { deleteRelatedServices } from '@/lib/related-service-cleanup'
 import {
   getResourceListPath,
@@ -38,7 +38,7 @@ export function ResourceDeleteConfirmationDialog({
   relatedServices,
 }: ResourceDeleteConfirmationDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false)
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const { t } = useTranslation()
 
   const handleDelete = async (force?: boolean, wait?: boolean) => {

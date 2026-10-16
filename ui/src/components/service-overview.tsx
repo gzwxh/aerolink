@@ -9,7 +9,6 @@ import {
 } from 'kubernetes-types/core/v1'
 import { EndpointSlice } from 'kubernetes-types/discovery/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { useRelatedResources } from '@/lib/api'
 import { API_BASE_URL } from '@/lib/api-client'
@@ -18,6 +17,7 @@ import { getEventTime, getOwnerInfo, getServiceExternalIP } from '@/lib/k8s'
 import { withSubPath } from '@/lib/subpath'
 import { formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 import { Column, SimpleTable } from '@/components/simple-table'
 import {
   SelectorBadges,
@@ -157,12 +157,12 @@ function ServiceEndpointResourceCard({
         cell: (value: unknown) => {
           const metadata = value as ServiceEndpointResource['metadata']
           return (
-            <Link
+            <ClusterLink
               to={`/${resourceType}/${metadata!.namespace}/${metadata!.name}`}
               className="font-medium app-link"
             >
               {metadata!.name}
-            </Link>
+            </ClusterLink>
           )
         },
         align: 'left',
@@ -237,12 +237,12 @@ function ServiceInformationCard({
               truncate={!!ownerInfo}
             >
               {ownerInfo ? (
-                <Link
+                <ClusterLink
                   to={ownerInfo.path}
                   className="app-link inline-block max-w-full truncate"
                 >
                   {ownerInfo.kind}/{ownerInfo.name}
-                </Link>
+                </ClusterLink>
               ) : (
                 <span className="text-muted-foreground">
                   {t('common.values.none')}

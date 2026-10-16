@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Download, ExternalLink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 
 import type {
@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ResponsiveTabs } from '@/components/ui/responsive-tabs'
+import { ClusterLink } from '@/components/cluster-link'
 import { ErrorMessage } from '@/components/error-message'
 import { HelmChartIcon } from '@/components/helm-chart-icon'
 import { HelmInstallDialog } from '@/components/helm-install-dialog'
@@ -352,7 +353,7 @@ function HelmChartVersionsTable({ chart }: { chart: HelmChartDetail }) {
                 const item = value as HelmChartVersion
                 const isCurrent = item.version === chart.version
                 return (
-                  <Link
+                  <ClusterLink
                     to={chartDetailPath(chart, item.version)}
                     className={cn(
                       'app-link tabular-nums',
@@ -360,7 +361,7 @@ function HelmChartVersionsTable({ chart }: { chart: HelmChartDetail }) {
                     )}
                   >
                     {item.version}
-                  </Link>
+                  </ClusterLink>
                 )
               },
             },

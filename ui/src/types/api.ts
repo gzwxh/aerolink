@@ -1,20 +1,6 @@
 // 自定资源的 API 类型
 
 import {
-  Certificate,
-  CertificateList,
-  CertificateRequest,
-  CertificateRequestList,
-  Challenge,
-  ChallengeList,
-  ClusterIssuer,
-  ClusterIssuerList,
-  Issuer,
-  IssuerList,
-  Order,
-  OrderList,
-} from './cert-manager'
-import {
   CustomResourceDefinition,
   CustomResourceDefinitionList,
 } from 'kubernetes-types/apiextensions/v1'
@@ -80,6 +66,20 @@ import { StorageClass, StorageClassList } from 'kubernetes-types/storage/v1'
 
 import type { ResourceType } from '@/lib/resource-metadata'
 
+import {
+  Certificate,
+  CertificateList,
+  CertificateRequest,
+  CertificateRequestList,
+  Challenge,
+  ChallengeList,
+  ClusterIssuer,
+  ClusterIssuerList,
+  Issuer,
+  IssuerList,
+  Order,
+  OrderList,
+} from './cert-manager'
 import { Gateway, HTTPRoute } from './gateway'
 
 export type { ResourceType } from '@/lib/resource-metadata'
@@ -656,6 +656,8 @@ export interface RelatedResources {
 export interface Cluster {
   id: number
   name: string
+  /** URL 短名（/_clusters/<slug>/...）：创建时固化，不随集群改名变化。 */
+  slug: string
   description?: string
   version?: string
   config?: string

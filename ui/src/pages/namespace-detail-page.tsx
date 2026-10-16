@@ -9,7 +9,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
 import { Namespace } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -18,6 +17,7 @@ import {
   useResource,
   useResources,
 } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { getPodStatus } from '@/lib/k8s'
 import { getResourceDetailPath } from '@/lib/resource-catalog'
 import { getAge, translateError } from '@/lib/utils'
@@ -25,6 +25,7 @@ import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CloneResourceDialog } from '@/components/clone-resource-dialog'
+import { ClusterLink } from '@/components/cluster-link'
 import {
   DeleteNamespaceDialog,
   EditNamespaceDialog,
@@ -88,7 +89,7 @@ function downloadNamespaceYaml(resource: unknown, name: string) {
 
 export function NamespaceDetailPage({ name }: { name: string }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
   const can = useCan()
   // 克隆 / 编辑 / 删除命名空间都是写操作；只读角色只保留下载 YAML。
@@ -349,7 +350,7 @@ export function NamespaceDetailPage({ name }: { name: string }) {
                         <Badge variant="outline" className="text-xs">
                           {t('status.active', 'Active')}
                         </Badge>
-                        <Link
+                        <ClusterLink
                           to={getResourceDetailPath(
                             w.resourceType,
                             w.name,
@@ -359,7 +360,7 @@ export function NamespaceDetailPage({ name }: { name: string }) {
                           title={w.name}
                         >
                           {w.name}
-                        </Link>
+                        </ClusterLink>
                         <span className="text-xs text-muted-foreground">
                           {w.kind}
                         </span>
@@ -411,13 +412,13 @@ export function NamespaceDetailPage({ name }: { name: string }) {
                         <PodStatusIcon status={p.status} />
                         {p.status}
                       </Badge>
-                      <Link
+                      <ClusterLink
                         to={`/pods/${p.namespace}/${p.name}`}
                         className="app-link truncate font-medium"
                         title={p.name}
                       >
                         {p.name}
-                      </Link>
+                      </ClusterLink>
                       <span className="text-xs">{p.ready}</span>
                       <span className="text-xs text-muted-foreground">
                         {p.restarts}

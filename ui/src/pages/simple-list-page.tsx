@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { ResourceType, ResourceTypeMap } from '@/types/api'
 import { formatDate } from '@/lib/utils'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 
 import {
@@ -45,11 +45,11 @@ export function SimpleListPage<T extends keyof ResourceTypeMap>({
         header: 'Name',
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/${resourceType}${isClusterScope ? '' : `/${row.original.metadata!.namespace}`}/${row.original.metadata!.name}`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

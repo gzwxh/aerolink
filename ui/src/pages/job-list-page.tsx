@@ -2,13 +2,15 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Job } from 'kubernetes-types/batch/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { createSearchFilter, resolveCreateNamespace } from '@/lib/k8s'
 import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
@@ -21,7 +23,7 @@ const columnHelper = createColumnHelper<Job>()
 
 export function JobListPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const { namespace: namespaceParam } = useParams()
 
   // 定义 Job 表格的列
@@ -31,13 +33,13 @@ export function JobListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/jobs/${row.original.metadata!.namespace}/${
                 row.original.metadata!.name
               }`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

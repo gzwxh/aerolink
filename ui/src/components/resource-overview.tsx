@@ -1,13 +1,13 @@
 import { useMemo, type ReactNode } from 'react'
 import type { ObjectMeta } from 'kubernetes-types/meta/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import type { ResourceType } from '@/types/api'
 import { useRelatedResources, useResourcesEvents } from '@/lib/api'
 import { getEventTime, getOwnerInfo } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ClusterLink } from '@/components/cluster-link'
 import {
   WorkloadInfoBlock,
   WorkloadInfoRow,
@@ -88,12 +88,12 @@ export function ResourceOverview({
                     truncate={!!ownerInfo}
                   >
                     {ownerInfo ? (
-                      <Link
+                      <ClusterLink
                         to={ownerInfo.path}
                         className="app-link inline-block max-w-full truncate"
                       >
                         {ownerInfo.kind}/{ownerInfo.name}
-                      </Link>
+                      </ClusterLink>
                     ) : (
                       <span className="text-muted-foreground">
                         {t('common.values.none')}

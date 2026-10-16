@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Event as KubernetesEvent, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import {
   getEventTime,
@@ -11,9 +11,10 @@ import {
 } from '@/lib/k8s'
 import { cn, formatDate, getAge } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
+import { ClusterLink } from '@/components/cluster-link'
 import { NodeLink } from '@/components/node-link'
 import { PodStatusIcon } from '@/components/pod-status-icon'
+import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
 
 import { ContainerDetailDialog } from './pod-container-detail-dialog'
 import {
@@ -255,12 +256,12 @@ function PodInformationCard({ pod }: { pod: Pod }) {
               truncate={!!ownerInfo}
             >
               {ownerInfo ? (
-                <Link
+                <ClusterLink
                   to={ownerInfo.path}
                   className="app-link inline-block max-w-full truncate"
                 >
                   {ownerInfo.kind}/{ownerInfo.name}
-                </Link>
+                </ClusterLink>
               ) : (
                 <span className="text-muted-foreground">
                   {t('common.values.none')}
@@ -301,9 +302,9 @@ function PodInformationCard({ pod }: { pod: Pod }) {
                 : '-'}
             </PodInfoRow>
             <PodInfoRow label={t('common.fields.volumes')}>
-              <Link to={volumeTabSearch} className="app-link">
+              <ClusterLink to={volumeTabSearch} className="app-link">
                 {pod.spec?.volumes?.length ?? 0}
-              </Link>
+              </ClusterLink>
             </PodInfoRow>
             {pod.spec?.runtimeClassName ? (
               <PodInfoRow label={t('pods.runtimeClass')} mono>

@@ -21,11 +21,11 @@ import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { decodeClusterName } from '@/lib/current-cluster'
 import { operationTypeBadge, outcomeText } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
-import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import {
   useTableColumnOrder,
   useTableColumnSizing,
 } from '@/hooks/use-table-column-preferences'
+import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

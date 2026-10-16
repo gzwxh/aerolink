@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { IconCopy, IconLoader2 } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { ResourceType, ResourceTypeMap } from '@/types/api'
@@ -23,6 +22,7 @@ import {
   serviceSelectsPodLabels,
 } from '@/lib/clone-service'
 import { isWorkloadSelectorType } from '@/lib/clone-workload'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import {
   getResourceCatalogEntry,
   getResourceDetailPath,
@@ -165,7 +165,7 @@ function CloneResourceDialogContent({
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   // 关联 Service 的克隆体：改名 + selector 指向新 Pod 标签（见 lib/clone-service.ts）。
   // 「关联」的判定要用**源对象**的 Pod 标签——Service 的 selector 是它的子集。
   const relatedServiceClones = useMemo(() => {

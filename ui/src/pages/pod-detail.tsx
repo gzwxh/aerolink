@@ -9,7 +9,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { Container, Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -18,6 +17,7 @@ import {
   useResource,
   useResourcesEvents,
 } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import {
   getResourceDetailPath,
   getResourceQueryKey,
@@ -36,11 +36,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { ResourceEditor } from '@/components/editors/resource-editor'
 import { EventTable } from '@/components/event-table'
-
 import { PodDebugDialog } from '@/components/pod-debug-dialog'
 import { PodFileBrowser } from '@/components/pod-file-browser'
 import { PodMonitoring } from '@/components/pod-monitoring'
@@ -48,7 +48,6 @@ import { PodOverview } from '@/components/pod-overview'
 import { RelatedResourcesTable } from '@/components/related-resource-table'
 import { ContainerSelector } from '@/components/selector/container-selector'
 import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { VolumeTable } from '@/components/volume-table'
 
 import {
@@ -64,7 +63,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
   const [resizeContainer, setResizeContainer] = useState<Container | null>(null)
   const [isResizing, setIsResizing] = useState(false)
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
 
   const { t } = useTranslation()
   const { clusters, currentCluster } = useCluster()
@@ -132,9 +131,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
         source: 'pod',
       })
     } else {
-      navigate(
-        getResourceDetailPath('pods', updatedName, updatedNamespace)
-      )
+      navigate(getResourceDetailPath('pods', updatedName, updatedNamespace))
     }
   }
 

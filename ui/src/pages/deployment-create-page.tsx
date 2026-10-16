@@ -2,9 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconAlertCircle } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as YAML from 'js-yaml'
-import { ArrowLeft, ArrowRight, ChevronDown, Loader2, Plus, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  Loader2,
+  Plus,
+  X,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -14,6 +21,7 @@ import {
   useResources,
 } from '@/lib/api'
 import { prepareCloneResource } from '@/lib/clone-manifest'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
 import { cn, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
@@ -263,9 +271,11 @@ function staleManagedServiceNames(
   // 额外键），合并 Pod 模板标签与工作负载 selector 判定。metadata.labels 也
   // 并进来：历史版本克隆生成的 Service selector 用的是源负载的 metadata 标签
   // （app: 源名），只有按它才能认领这些坏残留。
-  const metadataLabels = ((originalManifest?.metadata || {}) as {
-    labels?: Record<string, string>
-  }).labels
+  const metadataLabels = (
+    (originalManifest?.metadata || {}) as {
+      labels?: Record<string, string>
+    }
+  ).labels
   const matchLabels = {
     ...(metadataLabels || {}),
     ...(spec.template?.metadata?.labels || {}),
@@ -273,8 +283,8 @@ function staleManagedServiceNames(
   }
   if (Object.keys(matchLabels).length === 0) return []
   const generated = new Set(
-    buildServiceDocuments(formData).map(
-      (d) => String((d.metadata as Record<string, unknown>).name)
+    buildServiceDocuments(formData).map((d) =>
+      String((d.metadata as Record<string, unknown>).name)
     )
   )
   const autoNames = new Set([
@@ -321,7 +331,7 @@ function DeploymentFormPage({
 }: DeploymentFormPageProps) {
   const isEdit = !!editName
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -1611,7 +1621,7 @@ function DeploymentEditPage({
   namespace: string
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const { data, isError, error } = useResource(resourceType, name, namespace)
   // 创建时随工作负载一并落地的 Service 是独立对象：编辑时把它们查回来，
   // 与工作负载拼成多文档 YAML 一起反解析，否则「网络」区块永远显示「不创建服务」。
@@ -1642,9 +1652,10 @@ function DeploymentEditPage({
   // 找到所属 Deployment，提示条据此给出直达的编辑入口。
   const ownerRsName = useMemo(() => {
     if (resourceType !== 'pods' || !data) return undefined
-    const refs = ((data as Record<string, unknown>).metadata as
-      | Record<string, unknown>
-      | undefined)?.ownerReferences as Array<Record<string, unknown>> | undefined
+    const refs = (
+      (data as Record<string, unknown>).metadata as
+        Record<string, unknown> | undefined
+    )?.ownerReferences as Array<Record<string, unknown>> | undefined
     const rs = refs?.find((ref) => ref.kind === 'ReplicaSet')
     return typeof rs?.name === 'string' ? rs.name : undefined
   }, [data, resourceType])
@@ -1656,9 +1667,10 @@ function DeploymentEditPage({
   )
   const ownerDeploymentName = useMemo(() => {
     if (!ownerRs) return undefined
-    const refs = ((ownerRs as Record<string, unknown>).metadata as
-      | Record<string, unknown>
-      | undefined)?.ownerReferences as Array<Record<string, unknown>> | undefined
+    const refs = (
+      (ownerRs as Record<string, unknown>).metadata as
+        Record<string, unknown> | undefined
+    )?.ownerReferences as Array<Record<string, unknown>> | undefined
     const dep = refs?.find((ref) => ref.kind === 'Deployment')
     return typeof dep?.name === 'string' ? dep.name : undefined
   }, [ownerRs])
@@ -1714,19 +1726,17 @@ function DeploymentClonePage({
   namespace: string
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const { data, isError, error } = useResource(resourceType, name, namespace)
   const targetName = `${name}-copy`
 
   const cloneManifest = useMemo(
     () =>
       data
-        ? (prepareCloneResource(
-            data,
-            resourceType,
-            name,
-            targetName
-          ) as Record<string, unknown>)
+        ? (prepareCloneResource(data, resourceType, name, targetName) as Record<
+            string,
+            unknown
+          >)
         : null,
     [data, resourceType, name, targetName]
   )

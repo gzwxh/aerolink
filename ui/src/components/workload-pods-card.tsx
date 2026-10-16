@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { getPodStatus } from '@/lib/k8s'
 import { cn, formatDate, getAge } from '@/lib/utils'
@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ClusterLink } from '@/components/cluster-link'
 import { NodeLink } from '@/components/node-link'
 
 type TranslationFn = ReturnType<typeof useTranslation>['t']
@@ -126,13 +127,13 @@ function WorkloadPodRow({ pod }: { pod: Pod }) {
       <TableCell className="px-4 py-1.5">
         <div className="min-w-0 leading-tight">
           {path ? (
-            <Link
+            <ClusterLink
               to={isIframe ? `${path}?iframe=true` : path}
               className="app-link block max-w-full cursor-pointer truncate text-left font-mono"
               title={podName}
             >
               {podName}
-            </Link>
+            </ClusterLink>
           ) : (
             <span className="block max-w-full truncate font-mono">
               {podName}

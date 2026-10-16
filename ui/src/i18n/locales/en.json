@@ -1085,7 +1085,16 @@
     "switching": "Switching cluster...",
     "switchingShort": "Switching...",
     "default": "Default",
-    "syncError": "Sync error"
+    "syncError": "Sync error",
+    "slugErrorTitle": "Cannot access this cluster",
+    "slugErrorDescription": "The cluster in the URL does not exist, or you do not have access to it. You can switch to a cluster you have access to.",
+    "slugErrorRequestAccess": "Request access",
+    "slugErrorSwitchTo": "Switch to cluster: {{name}}",
+    "unavailable": {
+      "title": "No cluster available",
+      "noCluster": "Your account has no accessible clusters. Please contact an administrator to grant cluster access.",
+      "redirecting": "Entering cluster..."
+    }
   },
   "resourceTable": {
     "errorLoading": "Error loading {{resourceName}}",
@@ -2440,6 +2449,13 @@
       "importFileHint": "Choose a kubeconfig file, or paste its content below.",
       "name": "Name",
       "namePlaceholder": "Enter cluster name",
+      "slugLabel": "URL slug",
+      "slugAutoPlaceholder": "Leave empty to auto-generate",
+      "slugHint": "Used in the browser URL (/_clusters/<slug>/...); it is fixed after creation. Lowercase letters, digits and dashes only, starting with a letter or digit, up to 48 characters.",
+      "slugInvalid": "The URL slug may only contain lowercase letters, digits and dashes, must start with a letter or digit, and is limited to 48 characters.",
+      "slugInvalidForContext": "The URL slug for \"{{context}}\" may only contain lowercase letters, digits and dashes, must start with a letter or digit, and is limited to 48 characters.",
+      "slugPerContext": "URL slug (optional)",
+      "slugPerContextHint": "Assign the browser-URL slug for each context manually; empty ones are generated automatically.",
       "description": "Description",
       "descriptionPlaceholder": "Enter cluster description (optional)",
       "type": "Type",
@@ -2452,7 +2468,10 @@
       "isDefault": "Set as Default",
       "configLoadFailed": "Failed to load the current configuration",
       "configLoaded": "Current configuration loaded",
-      "viewCurrentConfig": "View current configuration"
+      "viewCurrentConfig": "View current configuration",
+      "slugReadonlyHint": "The slug is fixed at creation and does not follow cluster renames; already-shared links keep working.",
+      "slugExistingBadge": "Existing",
+      "slugExistingHint": "Contexts marked “Existing” already have a cluster with the same name. Their slug was fixed at creation, so re-importing only updates their config, never the slug."
     },
     "writeConfirm": {
       "hints": {

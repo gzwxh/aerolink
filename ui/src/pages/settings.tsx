@@ -6,9 +6,10 @@ import {
 } from '@/contexts/settings-section-context'
 import { IconEye } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { Navigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 
 import { usePageTitle } from '@/hooks/use-page-title'
+import { ClusterNavigate } from '@/components/cluster-link'
 import { RequireSettingsAccess } from '@/components/require-admin'
 import {
   getSettingsSections,
@@ -57,7 +58,10 @@ export function SettingsRedirect() {
   const query = params.toString()
 
   return (
-    <Navigate to={`/settings/${section}${query ? `?${query}` : ''}`} replace />
+    <ClusterNavigate
+      to={`/settings/${section}${query ? `?${query}` : ''}`}
+      replace
+    />
   )
 }
 
@@ -105,7 +109,7 @@ export function SettingsPage() {
 
   if (sectionParam && !requested) {
     return (
-      <Navigate
+      <ClusterNavigate
         to={`/settings/${sections[0]?.value || DEFAULT_SECTION}`}
         replace
       />
@@ -113,7 +117,7 @@ export function SettingsPage() {
   }
 
   if (!active) {
-    return <Navigate to="/" replace />
+    return <ClusterNavigate to="/" replace />
   }
 
   return (

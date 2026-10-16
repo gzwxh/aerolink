@@ -2,12 +2,12 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Event } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { createSearchFilter } from '@/lib/k8s'
 import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 
 const eventSearchFilter = createSearchFilter<Event>(
@@ -49,9 +49,9 @@ export function EventListPage() {
             return (
               <div className="flex flex-col gap-0.5">
                 <div className="text-xs text-muted-foreground">{kind}</div>
-                <Link to={link} className="font-medium app-link text-sm">
+                <ClusterLink to={link} className="font-medium app-link text-sm">
                   {name}
-                </Link>
+                </ClusterLink>
               </div>
             )
           },

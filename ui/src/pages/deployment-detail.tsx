@@ -10,7 +10,6 @@ import {
 import { Deployment } from 'kubernetes-types/apps/v1'
 import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -23,6 +22,7 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import {
   getDeploymentStatus,
   servicesForWorkload,
@@ -100,7 +100,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   const openWorkspaceSession = useOpenWorkspaceSession()
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const can = useCan()
   // 扩缩容 / 重启（PATCH 模板）是写操作，暴露服务则会创建 Service。
   const canUpdate = can('deployments', 'update', { namespace })

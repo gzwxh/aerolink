@@ -2,17 +2,15 @@ import { useMemo, useState } from 'react'
 import { IconNotes, IconReload, IconScale, IconTag } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
-import type { Container } from 'kubernetes-types/core/v1'
 import { Deployment } from 'kubernetes-types/apps/v1'
+import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
-import {
-  patchResource,
-  restartWorkload,
-  useResources,
-} from '@/lib/api'
+import { patchResource, restartWorkload, useResources } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import { shortenImageName } from '@/lib/image-name'
 import {
@@ -22,7 +20,6 @@ import {
 } from '@/lib/k8s'
 import { formatDate, translateError } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
-import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +34,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { ClusterLink } from '@/components/cluster-link'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
 import { ResourceRowActions } from '@/components/resource-row-actions'
@@ -177,7 +175,11 @@ function ReplicasCell({
               +
             </Button>
           </div>
-          <Button onClick={handleApply} disabled={isApplying} className="w-full">
+          <Button
+            onClick={handleApply}
+            disabled={isApplying}
+            className="w-full"
+          >
             {t('common.actions.scale')}
           </Button>
         </div>
@@ -221,7 +223,11 @@ function MetadataSummaryCell({
 }
 
 // 容器与镜像：列表里只显示镜像名与 tag，完整地址悬浮查看，点击即复制。
-export function ContainerImageCell({ containers }: { containers: Container[] }) {
+export function ContainerImageCell({
+  containers,
+}: {
+  containers: Container[]
+}) {
   const { t } = useTranslation()
 
   if (containers.length === 0) {
@@ -269,7 +275,7 @@ export function ContainerImageCell({ containers }: { containers: Container[] }) 
 export function DeploymentListPage() {
   const { namespace: namespaceParam } = useParams()
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
   const [isScaleDialogOpen, setIsScaleDialogOpen] = useState(false)
@@ -313,13 +319,13 @@ export function DeploymentListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/deployments/${row.original.metadata!.namespace}/${
                 row.original.metadata!.name
               }`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),
@@ -614,9 +620,7 @@ export function DeploymentListPage() {
                 variant="outline"
                 size="sm"
                 className="size-9 p-0"
-                onClick={() =>
-                  setBatchReplicas(Math.max(0, batchReplicas - 1))
-                }
+                onClick={() => setBatchReplicas(Math.max(0, batchReplicas - 1))}
                 disabled={isRunning || batchReplicas <= 0}
               >
                 -

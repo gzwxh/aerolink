@@ -19,10 +19,11 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { type ResourceType } from '@/types/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { getResourceListPath } from '@/lib/resource-catalog'
 import { getResourceMetadata } from '@/lib/resource-metadata'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
@@ -163,7 +164,7 @@ export function ResourceDetailShell<T>({
   const [isDescribeOpen, setIsDescribeOpen] = useState(false)
   const [searchParams] = useSearchParams()
   const isIframe = searchParams.get('iframe') === 'true'
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const listPath = getResourceListPath(resourceType)
 
   // 过去所有操作默认可见，导致只读用户看到后端本会拒绝的

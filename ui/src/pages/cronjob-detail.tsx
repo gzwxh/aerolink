@@ -7,7 +7,6 @@ import {
 } from '@tabler/icons-react'
 import { CronJob, Job } from 'kubernetes-types/batch/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -17,6 +16,7 @@ import {
   useResources,
   useResourcesEvents,
 } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import {
   formatJobStatusBadge,
   getJobStatusBadge,
@@ -45,7 +45,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
   const [isTogglingSuspend, setIsTogglingSuspend] = useState(false)
   const [isRunningNow, setIsRunningNow] = useState(false)
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const can = useCan()
   // 立即运行会创建 Job，暂停 / 恢复 / 编辑会更新 CronJob：只读角色不该看到入口。
   const canUpdateCronJob = can('cronjobs', 'update', { namespace })

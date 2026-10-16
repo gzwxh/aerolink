@@ -5,11 +5,12 @@ import * as YAML from 'js-yaml'
 import { ConfigMap } from 'kubernetes-types/core/v1'
 import { ArrowLeft, Loader2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { applyResource, useResource } from '@/lib/api'
 import { prepareCloneResource } from '@/lib/clone-manifest'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
   DESCRIPTION_ANNOTATION,
@@ -73,7 +74,7 @@ function rowsFromRecord(record: Record<string, string> | undefined): DataRow[] {
 
 export function ConfigMapCreatePage({ clone = false }: { clone?: boolean }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
   const { namespace: namespaceParam, name: editName } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()

@@ -18,9 +18,9 @@ import {
   IconSun,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 
 import { globalSearch, SearchResult } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import {
   getResourceCatalogEntry,
   getResourceIconComponent,
@@ -119,7 +119,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
   const [isLoading, setIsLoading] = useState(false)
   const searchRequestIdRef = useRef(0)
   const mountedRef = useRef(true)
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const { user } = useAuth()
   const { config, getIconComponent } = useSidebarConfig()
   const { setTheme, actualTheme } = useAppearance()

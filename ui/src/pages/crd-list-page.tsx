@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { CustomResourceDefinition } from 'kubernetes-types/apiextensions/v1'
-import { Link } from 'react-router-dom'
 
 import { createSearchFilter } from '@/lib/k8s'
 import { getAge } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 
 const searchQueryFilter = createSearchFilter<CustomResourceDefinition>(
@@ -25,9 +25,9 @@ export function CRDListPage() {
         header: 'Name',
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link to={`/crds/${row.original.metadata!.name}`}>
+            <ClusterLink to={`/crds/${row.original.metadata!.name}`}>
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

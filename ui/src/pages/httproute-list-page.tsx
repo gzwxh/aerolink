@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
-import { Link } from 'react-router-dom'
 
 import { HTTPRoute } from '@/types/gateway'
 import { createSearchFilter } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceTable } from '@/components/resource-table'
 
 const filter = createSearchFilter<HTTPRoute>((hr) => hr.metadata?.name)
@@ -18,11 +18,11 @@ export function HTTPRouteListPage() {
         header: 'Name',
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link
+            <ClusterLink
               to={`/httproutes/${row.original.metadata!.namespace}/${row.original.metadata!.name}`}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

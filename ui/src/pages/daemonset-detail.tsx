@@ -8,7 +8,6 @@ import {
 import { DaemonSet } from 'kubernetes-types/apps/v1'
 import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import {
@@ -17,6 +16,7 @@ import {
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
@@ -46,7 +46,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
   const [isRestartPopoverOpen, setIsRestartPopoverOpen] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const can = useCan()
   // 重启 / 进编辑页都会改写对象，是写操作：只读角色看不到入口，容器编辑同理。
   const canUpdate = can('daemonsets', 'update', { namespace })

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Node } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { NodeWithMetrics } from '@/types/api'
 import { updateResource } from '@/lib/api'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { getAge, translateError } from '@/lib/utils'
 import {
   useDraftDirty,
@@ -68,7 +68,7 @@ export function NodeEditDialog({
   onOpenChange,
 }: NodeEditDialogProps) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const queryClient = useQueryClient()
 
   const [tab, setTab] = useState('taints')

@@ -3,11 +3,11 @@ import { IconEdit } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import { ConfigMap } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { updateResource, useResource } from '@/lib/api'
 import { decodeBase64Utf8 } from '@/lib/base64'
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { buildDecodedConfigMap, restoreBinaryData } from '@/lib/configmap-yaml'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
@@ -61,7 +61,7 @@ function ConfigMapYamlToolbar({
 export function ConfigMapDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
   const can = useCan()
   // 增删键值属于写操作，没有 update 权限时只读展示。
   const canUpdate = can('configmaps', 'update', { namespace })

@@ -2,11 +2,11 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Pod } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import { PodWithMetrics } from '@/types/api'
 import { createSearchFilter, getPodStatus } from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
+import { ClusterLink } from '@/components/cluster-link'
 
 import { MetricCell } from './metrics-cell'
 import { NodeLink } from './node-link'
@@ -47,7 +47,7 @@ export function PodTable(props: {
           <div className="font-medium app-link">
             {/* Pod 名很长（aero-link-6b5c5fb7f7-hug 这种），列宽固定时截断显示，
                 悬浮看全名，否则会压到右侧的列上。 */}
-            <Link
+            <ClusterLink
               to={`/pods/${row.original.metadata!.namespace}/${
                 row.original.metadata!.name
               }`}
@@ -55,7 +55,7 @@ export function PodTable(props: {
               title={row.original.metadata!.name}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),

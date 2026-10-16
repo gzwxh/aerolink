@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from 'react'
 import { IconExternalLink, IconMaximize } from '@tabler/icons-react'
 
+import { useCurrentClusterSlug, withClusterPath } from '@/lib/cluster-path'
 import { withSubPath } from '@/lib/subpath'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,6 +18,10 @@ export function ResourceIframeDialogContent({
   path: string
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  // 弹窗内嵌的是详情页（业务路径）：必须补上集群前缀再进 iframe，
+  // 否则 iframe 里按存储的集群取数，可能与所在页面的集群不一致。
+  const clusterSlug = useCurrentClusterSlug()
+  const prefixedPath = withClusterPath(path, clusterSlug)
   const handleOpenCurrentPage = () => {
     const url = new URL(iframeRef.current!.contentWindow!.location.href)
     url.searchParams.delete('iframe')
@@ -39,7 +44,7 @@ export function ResourceIframeDialogContent({
           </Button>
           <Button asChild variant="outline" size="icon">
             <a
-              href={withSubPath(path)}
+              href={withSubPath(prefixedPath)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open resource in new tab"
@@ -51,7 +56,7 @@ export function ResourceIframeDialogContent({
       </DialogHeader>
       <iframe
         ref={iframeRef}
-        src={`${withSubPath(path)}?iframe=true`}
+        src={`${withSubPath(prefixedPath)}?iframe=true`}
         className="min-h-0 w-full flex-grow border-none"
       />
     </DialogContent>

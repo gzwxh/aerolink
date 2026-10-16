@@ -10,7 +10,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { NodeWithMetrics } from '@/types/api'
@@ -25,6 +24,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { ClusterLink } from '@/components/cluster-link'
 import { MetricCell } from '@/components/metrics-cell'
 import { NodeDeleteDialog } from '@/components/node-delete-dialog'
 import { NodeDrainDialog } from '@/components/node-drain-dialog'
@@ -211,10 +211,7 @@ function NodeLabelsCell({ node }: { node: NodeWithMetrics }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <div className="flex w-full min-w-0 items-center gap-1 overflow-hidden">
-          <Badge
-            variant="outline"
-            className="min-w-0 truncate font-normal"
-          >
+          <Badge variant="outline" className="min-w-0 truncate font-normal">
             {labels[0][0]}={labels[0][1]}
           </Badge>
           {labels.length > 1 && (
@@ -390,13 +387,13 @@ export function NodeListPage() {
           <div className="font-medium app-link">
             {/* 主机名完整显示：超长时在列内换行（break-all），不截断；
                 想要单行展示可以用列头右侧的拖拽手柄把这一列拉宽。 */}
-            <Link
+            <ClusterLink
               to={`/nodes/${row.original.metadata!.name}`}
               className="block whitespace-normal break-all"
               title={row.original.metadata!.name}
             >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),
@@ -460,12 +457,12 @@ export function NodeListPage() {
         id: 'pods',
         header: t('common.fields.pods', 'Pod 数'),
         cell: ({ row }) => (
-          <Link
+          <ClusterLink
             to={`/nodes/${row.original.metadata!.name}?tab=pods`}
             className="block transition-colors hover:text-primary/80"
           >
             <MetricCell metrics={row.original.metrics} type="pods" />
-          </Link>
+          </ClusterLink>
         ),
       }),
       columnHelper.accessor((row) => row.metrics?.cpuUsage || 0, {
@@ -529,10 +526,7 @@ export function NodeListPage() {
         cell: ({ getValue }) => {
           const kernelVersion = getValue()
           return kernelVersion ? (
-            <span
-              className="block truncate text-sm"
-              title={kernelVersion}
-            >
+            <span className="block truncate text-sm" title={kernelVersion}>
               {kernelVersion}
             </span>
           ) : (

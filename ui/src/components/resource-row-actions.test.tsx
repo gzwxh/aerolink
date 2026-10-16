@@ -1,14 +1,14 @@
 /// <reference types="@testing-library/jest-dom" />
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
 import {
   TerminalProvider,
   useTerminal,
   type WorkspaceSession,
 } from '@/contexts/terminal-context'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 import {
   ResourceRowActions,
   type RowActionResourceType,
@@ -19,7 +19,12 @@ const { navigate, can } = vi.hoisted(() => ({
   can: vi.fn(),
 }))
 
-vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }))
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigate,
+  // 集群包装导航（cluster-path）会读路由参数；这些用例不关心集群段，给空即可。
+  useParams: () => ({}),
+  useLocation: () => ({ pathname: '/', search: '', hash: '', key: 'test' }),
+}))
 vi.mock('@/hooks/use-can', () => ({ useCan: () => can }))
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -29,6 +34,8 @@ vi.mock('@/lib/api', () => ({
   patchResource: vi.fn(),
   restartWorkload: vi.fn(),
   updateResource: vi.fn(),
+  // 删 Deployment 时联动查同命名空间 Service；这些用例不关心联动结果。
+  useResources: () => ({ data: undefined }),
 }))
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },

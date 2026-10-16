@@ -2,12 +2,13 @@ import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { PersistentVolume } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
 
+import { useClusterNavigate } from '@/lib/cluster-path'
 import { createSearchFilter } from '@/lib/k8s'
 import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate, parseBytes } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { ClusterLink } from '@/components/cluster-link'
 import { ResourceRowActions } from '@/components/resource-row-actions'
 import { ResourceTable } from '@/components/resource-table'
 
@@ -23,7 +24,7 @@ const columnHelper = createColumnHelper<PersistentVolume>()
 
 export function PVListPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
 
   // 定义 PV 表格的列
   const columns = useMemo(
@@ -32,9 +33,11 @@ export function PVListPage() {
         header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
-            <Link to={`/persistentvolumes/${row.original.metadata!.name}`}>
+            <ClusterLink
+              to={`/persistentvolumes/${row.original.metadata!.name}`}
+            >
               {row.original.metadata!.name}
-            </Link>
+            </ClusterLink>
           </div>
         ),
       }),
@@ -73,7 +76,9 @@ export function PVListPage() {
           if (scName) {
             return (
               <div className="font-medium app-link">
-                <Link to={`/storageclasses/${scName}`}>{scName}</Link>
+                <ClusterLink to={`/storageclasses/${scName}`}>
+                  {scName}
+                </ClusterLink>
               </div>
             )
           }
@@ -114,11 +119,11 @@ export function PVListPage() {
             if (claimRef && claimRef.name && claimRef.namespace) {
               return (
                 <div className="font-medium app-link">
-                  <Link
+                  <ClusterLink
                     to={`/persistentvolumeclaims/${claimRef.namespace}/${claimRef.name}`}
                   >
                     {claimRef.namespace}/{claimRef.name}
-                  </Link>
+                  </ClusterLink>
                 </div>
               )
             }

@@ -3,8 +3,8 @@ import { useAuth } from '@/contexts/auth-context'
 import { useTerminal } from '@/contexts/terminal-context'
 import { House, Plus, Settings, TerminalSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 
+import { useClusterLocation, useClusterNavigate } from '@/lib/cluster-path'
 import { resourceMetadataList } from '@/lib/resource-catalog'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -24,7 +24,8 @@ import { UserMenu } from './user-menu'
 
 export function SiteHeader() {
   const isMobile = useIsMobile()
-  const navigate = useNavigate()
+  const navigate = useClusterNavigate()
+  const { pathname } = useClusterLocation()
   const { t } = useTranslation()
   const { user, capabilities } = useAuth()
   const { toggleTerminal, sessions } = useTerminal()
@@ -57,7 +58,7 @@ export function SiteHeader() {
             className="mx-2 data-[orientation=vertical]:h-4"
           />
           <NavigationControls />
-          {location.pathname.startsWith('/settings') && (
+          {pathname.startsWith('/settings') && (
             <button
               type="button"
               onClick={() => navigate('/')}

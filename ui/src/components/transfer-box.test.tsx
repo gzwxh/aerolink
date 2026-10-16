@@ -59,15 +59,16 @@ function renderBox(props: {
 
 describe('TransferBox 全选搬运', () => {
   // 回归：过滤后点「全选」此前搬的是全量数据，应该只搬当前可见（过滤后）的条目。
+  // 过滤词用 'alp'：只命中 alpha（'a' 会连 beta/gamma 一起命中——三个 label 都含 a）。
   it('有过滤词时只搬运匹配的条目', async () => {
     const user = userEvent.setup()
     const onGrantAll = vi.fn()
-    renderBox({ onGrantAll, filterValue: 'a' })
+    renderBox({ onGrantAll, filterValue: 'alp' })
 
     await user.click(screen.getByRole('button', { name: 'GRANT_ALL' }))
 
     expect(onGrantAll).toHaveBeenCalledTimes(1)
-    expect(onGrantAll).toHaveBeenCalledWith(['a', 'c'])
+    expect(onGrantAll).toHaveBeenCalledWith(['a'])
   })
 
   it('没有过滤词时搬运全部条目', async () => {

@@ -21,7 +21,6 @@ import {
   XCircle,
 } from 'lucide-react'
 import { Trans, useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { HelmChart, HelmRepository } from '@/types/api'
@@ -62,6 +61,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ClusterLink } from '@/components/cluster-link'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { ErrorMessage } from '@/components/error-message'
 import { HelmChartIcon } from '@/components/helm-chart-icon'
@@ -140,12 +140,12 @@ function chartDetailPath(chart: HelmChart) {
 
 function ChartNameLink({ chart }: { chart: HelmChart }) {
   return (
-    <Link
+    <ClusterLink
       to={chartDetailPath(chart)}
       className="block truncate font-medium app-link"
     >
       {chart.name}
-    </Link>
+    </ClusterLink>
   )
 }
 
@@ -671,7 +671,9 @@ export function HelmChartListPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>{t('resourceTable.toggleColumns', '显示列')}</DropdownMenuLabel>
+                  <DropdownMenuLabel>
+                    {t('resourceTable.toggleColumns', '显示列')}
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {table
                     .getAllLeafColumns()

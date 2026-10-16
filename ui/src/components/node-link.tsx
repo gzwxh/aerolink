@@ -1,7 +1,6 @@
-import { Link } from 'react-router-dom'
-
 import { cn } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
+import { ClusterLink } from '@/components/cluster-link'
 
 interface NodeLinkProps {
   name?: string
@@ -31,12 +30,12 @@ export function NodeLink({ name, className, title }: NodeLinkProps) {
   }
 
   return (
-    <Link
+    <ClusterLink
       to={`/nodes/${name}`}
       className={cn('app-link', className)}
       title={title ?? name}
     >
       {name}
-    </Link>
+    </ClusterLink>
   )
 }

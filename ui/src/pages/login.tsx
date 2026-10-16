@@ -16,7 +16,7 @@ import {
   IconUser,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { Navigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import {
   fetchLoginCaptcha,
@@ -40,6 +40,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ClusterNavigate } from '@/components/cluster-link'
 import { Footer } from '@/components/footer'
 import { LanguageToggle } from '@/components/language-toggle'
 
@@ -183,9 +184,9 @@ export function LoginPage() {
     const storedHref = sessionStorage.getItem('loginRedirectHref')
     if (storedHref) {
       sessionStorage.removeItem('loginRedirectHref')
-      return <Navigate to={storedHref} replace />
+      return <ClusterNavigate to={storedHref} replace />
     }
-    return <Navigate to={redirectHref || '/'} replace />
+    return <ClusterNavigate to={redirectHref || '/'} replace />
   }
 
   const handleLogin = async (provider: string) => {
