@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { Cluster } from '@/types/api'
+
 import {
   acknowledgeTerminal,
   classifyWriteOperation,
@@ -21,7 +22,9 @@ describe('classifyWriteOperation', () => {
     expect(classifyWriteOperation('DELETE', '/deployments/default/nginx')).toBe(
       'delete'
     )
-    expect(classifyWriteOperation('POST', '/deployments/default')).toBe('create')
+    expect(classifyWriteOperation('POST', '/deployments/default')).toBe(
+      'create'
+    )
     expect(classifyWriteOperation('PUT', '/deployments/default/nginx')).toBe(
       'update'
     )
@@ -29,7 +32,9 @@ describe('classifyWriteOperation', () => {
   })
 
   it('只读请求不参与确认', () => {
-    expect(classifyWriteOperation('GET', '/deployments/default/nginx')).toBeNull()
+    expect(
+      classifyWriteOperation('GET', '/deployments/default/nginx')
+    ).toBeNull()
     expect(classifyWriteOperation('HEAD', '/nodes')).toBeNull()
   })
 
@@ -70,7 +75,9 @@ describe('classifyWriteOperation', () => {
     expect(classifyWriteOperation('PUT', '/helmrelease/ns/rel/upgrade')).toBe(
       'update'
     )
-    expect(classifyWriteOperation('DELETE', '/helmrelease/ns/rel')).toBe('delete')
+    expect(classifyWriteOperation('DELETE', '/helmrelease/ns/rel')).toBe(
+      'delete'
+    )
   })
 })
 
@@ -93,6 +100,16 @@ describe('parseWriteTarget', () => {
       resource: 'nodes',
       namespace: undefined,
       name: 'node-1',
+    })
+  })
+
+  it('同样剥掉 /_clusters/<集群名> 前缀', () => {
+    expect(
+      parseWriteTarget('/_clusters/prod-1/deployments/default/nginx')
+    ).toEqual({
+      resource: 'deployments',
+      namespace: 'default',
+      name: 'nginx',
     })
   })
 })
@@ -130,6 +147,20 @@ describe('按集群的确认策略', () => {
     window.sessionStorage.setItem('current-cluster', 'dev')
 
     expect(writeConfirmFor('DELETE', '/deployments/default/nginx')).toEqual({
+      cluster: 'dev',
+      kind: 'delete',
+      method: 'DELETE',
+      target: { resource: 'deployments', namespace: 'default', name: 'nginx' },
+    })
+  })
+
+  it('带 /_clusters/<集群名> 前缀的请求同样给出确认请求', () => {
+    setClusterConfirmPolicies([cluster('dev', { confirmDelete: true })])
+    window.sessionStorage.setItem('current-cluster', 'dev')
+
+    expect(
+      writeConfirmFor('DELETE', '/_clusters/dev/deployments/default/nginx')
+    ).toEqual({
       cluster: 'dev',
       kind: 'delete',
       method: 'DELETE',

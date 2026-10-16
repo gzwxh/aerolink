@@ -16,17 +16,13 @@
  * 因此不在覆盖范围内；集群自身的管理接口（/admin/*）也不弹——改开关本身不该再被确认一次。
  */
 
+import type { Cluster } from '@/types/api'
 import { getCurrentCluster } from '@/lib/current-cluster'
 import { getResourceCatalogEntry } from '@/lib/resource-catalog'
-import type { Cluster } from '@/types/api'
 
 /** 参与二次确认的操作类别，与后端 model.Cluster 的 Confirm* 列一一对应。 */
 export type WriteOperationKind =
-  | 'create'
-  | 'update'
-  | 'delete'
-  | 'restart'
-  | 'nodeMaintenance'
+  'create' | 'update' | 'delete' | 'restart' | 'nodeMaintenance'
 
 export interface WriteConfirmPolicy {
   create: boolean
@@ -87,13 +83,33 @@ export function requiresWriteConfirm(
 }
 
 /** 命令式动作的路径后缀：它们与普通 CRUD 共用 method，只能靠路径区分。 */
-const ACTION_PATH_SUFFIXES: Array<{ pattern: RegExp; kind: WriteOperationKind }> = [
-  { pattern: /\/(drain|cordon|uncordon|taint|untaint)$/, kind: 'nodeMaintenance' },
+const ACTION_PATH_SUFFIXES: Array<{
+  pattern: RegExp
+  kind: WriteOperationKind
+}> = [
+  {
+    pattern: /\/(drain|cordon|uncordon|taint|untaint)$/,
+    kind: 'nodeMaintenance',
+  },
 ]
 
 function stripQuery(url: string): string {
   const index = url.indexOf('?')
   return index === -1 ? url : url.slice(0, index)
+}
+
+/**
+ * 剥掉 API 请求路径里的 `/_clusters/<集群名>` 前缀（lib/current-cluster.ts 的
+ * withCurrentClusterPath() 产出的**后端选集群**段，值是编码后的集群名）。
+ * 注意它与浏览器地址的 `/_clusters/<slug>` 前缀（lib/cluster-path.ts）同形不同源；
+ * 这里只处理发给后端的请求 URL，与前端导航无关。
+ */
+function stripApiClusterPrefix(path: string): string {
+  const segments = path.split('/').filter(Boolean)
+  if (segments[0] === '_clusters' && segments.length >= 2) {
+    return `/${segments.slice(2).join('/')}`
+  }
+  return path
 }
 
 /**
@@ -116,13 +132,18 @@ export function classifyWriteOperation(
     return explicit
   }
 
-  const path = stripQuery(url)
+  const path = stripApiClusterPrefix(stripQuery(url))
   if (path.startsWith('/admin/') || path.startsWith('/auth/')) {
     return null
   }
 
   const normalized = method.toUpperCase()
-  if (normalized !== 'POST' && normalized !== 'PUT' && normalized !== 'PATCH' && normalized !== 'DELETE') {
+  if (
+    normalized !== 'POST' &&
+    normalized !== 'PUT' &&
+    normalized !== 'PATCH' &&
+    normalized !== 'DELETE'
+  ) {
     return null
   }
 
@@ -134,7 +155,11 @@ export function classifyWriteOperation(
 
   // YAML apply 与 Helm release 是 k8s 写操作，但路径首段不是资源复数名。
   if (path.startsWith('/resources/apply') || path.startsWith('/helmrelease/')) {
-    return normalized === 'DELETE' ? 'delete' : normalized === 'POST' ? 'create' : 'update'
+    return normalized === 'DELETE'
+      ? 'delete'
+      : normalized === 'POST'
+        ? 'create'
+        : 'update'
   }
 
   const first = path.split('/').filter(Boolean)[0]
@@ -153,11 +178,17 @@ export function classifyWriteOperation(
 
 /** 从 `/{resource}/{namespace}/{name}` 这类路径解析出给用户看的操作对象。 */
 export function parseWriteTarget(path: string): WriteTarget {
-  const segments = stripQuery(path).split('/').filter(Boolean)
+  const segments = stripApiClusterPrefix(stripQuery(path))
+    .split('/')
+    .filter(Boolean)
   const resource = segments[0] ?? ''
 
   if (resource === 'resources' || resource === 'helmrelease') {
-    return { resource, name: segments[2] || segments[1], namespace: segments[1] }
+    return {
+      resource,
+      name: segments[2] || segments[1],
+      namespace: segments[1],
+    }
   }
   if (segments.length < 2) {
     return { resource }
@@ -230,7 +261,9 @@ export function resolveWriteConfirm(confirmed: boolean) {
  * 终端（交互式 kubectl 与 exec）走裸 WebSocket，不经过 api-client，所以拦不住具体命令；
  * 能做的只是在进入前提示一次「这里不受保护」（见 components/terminal-content.tsx）。
  */
-export function hasAnyWriteConfirm(cluster: string | null | undefined): boolean {
+export function hasAnyWriteConfirm(
+  cluster: string | null | undefined
+): boolean {
   if (!cluster) {
     return false
   }
