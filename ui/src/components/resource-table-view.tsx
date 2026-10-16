@@ -1,9 +1,4 @@
-import React, {
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import {
   flexRender,
   PaginationState,
@@ -12,7 +7,6 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
-import { ColumnResizeHandle } from './column-resize-handle'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -31,6 +25,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+import { ColumnResizeHandle } from './column-resize-handle'
+
 interface ResourceTableViewProps<T> {
   table: TableInstance<T>
   columnCount: number
@@ -40,11 +36,6 @@ interface ResourceTableViewProps<T> {
   maxBodyHeightClassName?: string
   containerClassName?: string
   fitViewportHeight?: boolean
-  /**
-   * 启用表头列顺序拖拽（HTML5 DnD，拖动 th 换位）。配合 TanStack 的
-   * columnOrder 状态使用；勾选列（select）与操作列（actions）固定在两端。
-   */
-  enableReorder?: boolean
   emptyState: React.ReactNode
   hasActiveFilters: boolean
   filteredRowCount: number
@@ -85,7 +76,6 @@ export function ResourceTableView<T>({
   maxBodyHeightClassName = 'max-h-[calc(100dvh-210px)]',
   containerClassName = 'flex flex-col gap-3',
   fitViewportHeight = false,
-  enableReorder = false,
   emptyState,
   hasActiveFilters,
   filteredRowCount,
@@ -127,90 +117,6 @@ export function ResourceTableView<T>({
     table.getVisibleLeafColumns().length - (selectLeafColumn ? 1 : 0),
     1
   )
-
-  // 列顺序拖拽（HTML5 DnD）：拖动表头到目标列的左/右半边换位。
-  // 勾选列（select）与操作列（actions）是结构列，不可拖也不可作落点。
-  const dragColumnIdRef = useRef<string | null>(null)
-  const [dropTarget, setDropTarget] = useState<{
-    id: string
-    after: boolean
-  } | null>(null)
-  const clearDragState = useCallback(() => {
-    dragColumnIdRef.current = null
-    setDropTarget(null)
-  }, [])
-  const canReorderColumn = useCallback(
-    (columnId: string) =>
-      enableReorder && columnId !== 'select' && columnId !== 'actions',
-    [enableReorder]
-  )
-  const applyColumnOrder = useCallback(
-    (fromId: string, targetId: string, after: boolean) => {
-      const order = table.getVisibleLeafColumns().map((column) => column.id)
-      const fromIndex = order.indexOf(fromId)
-      const targetIndex = order.indexOf(targetId)
-      if (fromIndex < 0 || targetIndex < 0) {
-        return
-      }
-      order.splice(fromIndex, 1)
-      const adjustedTargetIndex = order.indexOf(targetId)
-      order.splice(after ? adjustedTargetIndex + 1 : adjustedTargetIndex, 0, fromId)
-      // 结构列强制归位：勾选列最左、操作列最右。
-      const selectIndex = order.indexOf('select')
-      if (selectIndex > 0) {
-        order.splice(selectIndex, 1)
-        order.unshift('select')
-      }
-      const actionsIndex = order.indexOf('actions')
-      if (actionsIndex >= 0 && actionsIndex !== order.length - 1) {
-        order.splice(actionsIndex, 1)
-        order.push('actions')
-      }
-      table.setColumnOrder(order)
-    },
-    [table]
-  )
-  const makeReorderProps = (columnId: string) => {
-    if (!canReorderColumn(columnId)) {
-      return {}
-    }
-    return {
-      draggable: true as const,
-      onDragStart: (event: React.DragEvent) => {
-        dragColumnIdRef.current = columnId
-        event.dataTransfer.effectAllowed = 'move'
-        // Firefox 需要 setData 才会真正进入拖拽。
-        event.dataTransfer.setData('text/plain', columnId)
-      },
-      onDragOver: (event: React.DragEvent) => {
-        const fromId = dragColumnIdRef.current
-        if (!fromId || fromId === columnId) {
-          return
-        }
-        event.preventDefault()
-        event.dataTransfer.dropEffect = 'move'
-        const rect = event.currentTarget.getBoundingClientRect()
-        setDropTarget({
-          id: columnId,
-          after: event.clientX > rect.left + rect.width / 2,
-        })
-      },
-      onDrop: (event: React.DragEvent) => {
-        event.preventDefault()
-        const fromId = dragColumnIdRef.current
-        clearDragState()
-        if (!fromId || fromId === columnId) {
-          return
-        }
-        // 落点在 drop 时现算，不依赖 dragOver 先行写入的 state
-        //（真实浏览器里 dragOver 必先触发，但直接读 event 更可靠）。
-        const rect = event.currentTarget.getBoundingClientRect()
-        const after = event.clientX > rect.left + rect.width / 2
-        applyColumnOrder(fromId, columnId, after)
-      },
-      onDragEnd: clearDragState,
-    }
-  }
 
   const renderRows = () => {
     const rows = table.getRowModel().rows
@@ -415,24 +321,22 @@ export function ResourceTableView<T>({
                           className={cn(
                             // group/th：列宽手柄在悬停整个表头时显形。
                             'group/th relative',
-                            index <= 1 ? 'text-left' : 'text-center',
-                            // 列序拖拽落点指示：落在目标列的左/右半边。
-                            dropTarget?.id === header.column.id &&
-                              (dropTarget.after
-                                ? 'shadow-[inset_-2px_0_0_0_var(--primary)]'
-                                : 'shadow-[inset_2px_0_0_0_var(--primary)]')
+                            index <= 1 ? 'text-left' : 'text-center'
                           )}
-                          {...makeReorderProps(header.column.id)}
                           style={
                             !columnSizing
                               ? undefined
                               : header.column.id === 'select'
-                                ? { width: `${fixedSelectWidth || SELECT_COLUMN_WIDTH}px` }
+                                ? {
+                                    width: `${fixedSelectWidth || SELECT_COLUMN_WIDTH}px`,
+                                  }
                                 : isSelectionTable
                                   ? // 自动布局：只有手动拖过的列才写死像素，其余按内容自适应。
                                     manualColumnSizing[header.column.id] !==
                                     undefined
-                                    ? { width: `${manualColumnSizing[header.column.id]}px` }
+                                    ? {
+                                        width: `${manualColumnSizing[header.column.id]}px`,
+                                      }
                                     : undefined
                                   : // 固定布局：按 size 比例分配（写死会让总宽超过容器，列一多就横向滚动）。
                                     {

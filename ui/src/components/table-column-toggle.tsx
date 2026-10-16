@@ -72,10 +72,9 @@ export function TableColumnToggle<T>({
           )
         })}
         <DropdownMenuSeparator />
-        {/* 清空列序与列宽覆盖，回到列定义的默认布局（显示/隐藏的勾选保留）。 */}
+        {/* 清空列宽覆盖，回到列定义的默认宽度（显示/隐藏的勾选保留）。 */}
         <DropdownMenuItem
           onClick={() => {
-            table.setColumnOrder([])
             table.setColumnSizing({})
           }}
         >

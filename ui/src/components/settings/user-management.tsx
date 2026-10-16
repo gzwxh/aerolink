@@ -34,11 +34,8 @@ import { resolveAvatarSrc } from '@/lib/avatar-url'
 import { buildPasswordRules, isPasswordRulesValid } from '@/lib/password-rules'
 import { neutralBadge, statusBadge } from '@/lib/status-badge'
 import { formatDate, translateError } from '@/lib/utils'
+import { useTableColumnSizing } from '@/hooks/use-table-column-preferences'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
-import {
-  useTableColumnOrder,
-  useTableColumnSizing,
-} from '@/hooks/use-table-column-preferences'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -92,12 +89,9 @@ export function UserManagement() {
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
     'aerolink-users-columnVisibility'
   )
-  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  // 列宽偏好：与资源列表同一套交互（拖表头右缘调宽，双击复位）。
   const [columnSizing, setColumnSizing] = useTableColumnSizing(
     'aerolink-users-columnSizing'
-  )
-  const [columnOrder, setColumnOrder] = useTableColumnOrder(
-    'aerolink-users-columnOrder'
   )
   const { data: roles = [] } = useRoleList()
   // 认证方式除了内置的密码 / LDAP，还可能是任意已配置的 OAuth 提供方名称。
@@ -478,13 +472,11 @@ export function UserManagement() {
       sorting,
       columnVisibility,
       columnSizing,
-      columnOrder,
     },
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
-    onColumnOrderChange: setColumnOrder,
     // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
@@ -765,7 +757,6 @@ export function UserManagement() {
             columnCount={columns.length}
             isLoading={isLoading}
             data={data?.users}
-            enableReorder
             allPageSize={totalRowCount}
             emptyState={emptyState}
             hasActiveFilters={

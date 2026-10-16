@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ColumnFiltersState,
-  ColumnOrderState,
   ColumnSizingState,
   PaginationState,
   RowSelectionState,
@@ -108,19 +107,6 @@ export function useResourceTableState({
       Object.entries(saved).filter(([, size]) => Number.isFinite(size))
     ) as ColumnSizingState
   })
-  // 列顺序偏好：存可见列 id 的排列；陈旧的 id 会被 TanStack 忽略、
-  // 缺失的列按默认顺序追加，无需清理。
-  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => {
-    const saved = readStoredJSON<string[] | null>(
-      localStorage,
-      getClusterScopedStorageKey(`-${resourceName}-columnOrder`),
-      null
-    )
-    if (!Array.isArray(saved)) {
-      return []
-    }
-    return saved.filter((id): id is string => typeof id === 'string')
-  })
   const [refreshInterval, setRefreshInterval] = useState(5000)
   const [selectedNamespace, setSelectedNamespace] = useState<
     string | undefined
@@ -200,17 +186,6 @@ export function useResourceTableState({
   }, [pagination.pageSize, resourceName])
 
   useEffect(() => {
-    const storageKey = getClusterScopedStorageKey(
-      `-${resourceName}-columnOrder`
-    )
-    if (columnOrder.length === 0) {
-      localStorage.removeItem(storageKey)
-      return
-    }
-    localStorage.setItem(storageKey, JSON.stringify(columnOrder))
-  }, [columnOrder, resourceName])
-
-  useEffect(() => {
     localStorage.setItem(
       getClusterScopedStorageKey(`-${resourceName}-columnSizing`),
       JSON.stringify(columnSizing)
@@ -282,8 +257,6 @@ export function useResourceTableState({
     setColumnVisibility,
     columnSizing,
     setColumnSizing,
-    columnOrder,
-    setColumnOrder,
     pagination,
     setPagination,
     refreshInterval,

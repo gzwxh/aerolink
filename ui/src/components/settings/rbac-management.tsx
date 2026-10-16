@@ -41,10 +41,7 @@ import {
   systemRoleDescription,
   systemRoleLabel,
 } from '@/lib/system-roles'
-import {
-  useTableColumnOrder,
-  useTableColumnSizing,
-} from '@/hooks/use-table-column-preferences'
+import { useTableColumnSizing } from '@/hooks/use-table-column-preferences'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -173,12 +170,9 @@ export function RBACManagement() {
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
     'aerolink-rbac-roles-columnVisibility'
   )
-  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  // 列宽偏好：与资源列表同一套交互（拖表头右缘调宽，双击复位）。
   const [columnSizing, setColumnSizing] = useTableColumnSizing(
     'aerolink-rbac-roles-columnSizing'
-  )
-  const [columnOrder, setColumnOrder] = useTableColumnOrder(
-    'aerolink-rbac-roles-columnOrder'
   )
 
   const editRole = useMemo(
@@ -465,12 +459,11 @@ export function RBACManagement() {
   const table = useReactTable<Role>({
     data: filtered,
     columns,
-    state: { pagination, sorting, columnVisibility, columnSizing, columnOrder },
+    state: { pagination, sorting, columnVisibility, columnSizing },
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
-    onColumnOrderChange: setColumnOrder,
     // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
@@ -553,7 +546,6 @@ export function RBACManagement() {
             columnCount={columns.length}
             isLoading={isLoading}
             data={filtered}
-            enableReorder
             allPageSize={filtered.length}
             emptyState={emptyState}
             hasActiveFilters={Boolean(search)}

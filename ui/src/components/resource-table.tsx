@@ -4,13 +4,13 @@ import {
   getCoreRowModel,
   getExpandedRowModel,
   getFacetedRowModel,
-  type SortingState,
   getFacetedUniqueValues,
   getFilteredRowModel,
   getGroupedRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type SortingState,
 } from '@tanstack/react-table'
 import { Box, Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -143,8 +143,6 @@ function ResourceTableContent<T>({
     setColumnVisibility,
     columnSizing,
     setColumnSizing,
-    columnOrder,
-    setColumnOrder,
     pagination,
     setPagination,
     refreshInterval,
@@ -215,7 +213,9 @@ function ResourceTableContent<T>({
     disabled: external,
   })
   const resolvedResourceType = (
-    external ? resourceType ?? resourceName.toLowerCase() : fetchedResourceType
+    external
+      ? (resourceType ?? resourceName.toLowerCase())
+      : fetchedResourceType
   ) as ResourceType
   const data = external ? externalData : fetchedData
   const isLoading = external ? !!externalIsLoading : fetchedIsLoading
@@ -300,7 +300,9 @@ function ResourceTableContent<T>({
               table.getIsAllPageRowsSelected() ||
               (table.getIsSomePageRowsSelected() && 'indeterminate')
             }
-            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            onCheckedChange={(value) =>
+              table.toggleAllPageRowsSelected(!!value)
+            }
             aria-label={t('resourceTable.selectAllRows')}
           />
         )
@@ -372,7 +374,14 @@ function ResourceTableContent<T>({
       }
     }
     return baseColumns
-  }, [columns, clusterScope, selectedNamespace, selectedNamespaces.length, grouping, t])
+  }, [
+    columns,
+    clusterScope,
+    selectedNamespace,
+    selectedNamespaces.length,
+    grouping,
+    t,
+  ])
 
   const namespaceFilteredData = useMemo(() => {
     if (clusterScope || selectedNamespaces.length <= 1) {
@@ -434,8 +443,6 @@ function ResourceTableContent<T>({
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
     onColumnSizingChange: setColumnSizing,
-    // 列顺序拖拽：拖动表头换位（勾选列/操作列固定在两端），持久化同上。
-    onColumnOrderChange: setColumnOrder,
     getRowId: (row) => {
       const metadata = (
         row as {
@@ -460,7 +467,6 @@ function ResourceTableContent<T>({
       rowSelection,
       columnVisibility,
       columnSizing,
-      columnOrder,
       ...(groupingState
         ? { grouping: groupingState, expanded: true as const }
         : {}),
@@ -694,7 +700,6 @@ function ResourceTableContent<T>({
         isLoading={isLoading}
         data={namespaceFilteredData as T[] | undefined}
         fitViewportHeight={true}
-        enableReorder
         emptyState={emptyState}
         hasActiveFilters={hasActiveFilters}
         filteredRowCount={filteredRowCount}

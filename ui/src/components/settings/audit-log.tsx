@@ -21,10 +21,7 @@ import { defaultAuditTimeRange } from '@/lib/audit-time-range'
 import { decodeClusterName } from '@/lib/current-cluster'
 import { operationTypeBadge, outcomeText } from '@/lib/status-badge'
 import { formatDate } from '@/lib/utils'
-import {
-  useTableColumnOrder,
-  useTableColumnSizing,
-} from '@/hooks/use-table-column-preferences'
+import { useTableColumnSizing } from '@/hooks/use-table-column-preferences'
 import { useTableColumnVisibility } from '@/hooks/use-table-column-visibility'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -95,12 +92,9 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
   const [columnVisibility, setColumnVisibility] = useTableColumnVisibility(
     'aerolink-audit-logs-columnVisibility'
   )
-  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  // 列宽偏好：与资源列表同一套交互（拖表头右缘调宽，双击复位）。
   const [columnSizing, setColumnSizing] = useTableColumnSizing(
     'aerolink-audit-logs-columnSizing'
-  )
-  const [columnOrder, setColumnOrder] = useTableColumnOrder(
-    'aerolink-audit-logs-columnOrder'
   )
   const [operatorId, setOperatorId] = useState<number | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState('')
@@ -401,11 +395,10 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
     data: auditData?.data ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
-    state: { pagination, columnVisibility, columnSizing, columnOrder },
+    state: { pagination, columnVisibility, columnSizing },
     onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
-    onColumnOrderChange: setColumnOrder,
     // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
@@ -605,7 +598,6 @@ export function OperationLog({ operations }: OperationLogProps = {}) {
           columnCount={columns.length}
           isLoading={isLoading}
           data={auditData?.data}
-          enableReorder
           allPageSize={totalRowCount}
           emptyState={emptyState}
           // 列宽按列定义固定，时间列不再被压成 0 宽，长内容靠截断显示，

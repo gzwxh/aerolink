@@ -1,10 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import {
-  useTableColumnOrder,
-  useTableColumnSizing,
-} from './use-table-column-preferences'
+import { useTableColumnSizing } from './use-table-column-preferences'
 
 describe('useTableColumnSizing', () => {
   beforeEach(() => {
@@ -26,29 +23,5 @@ describe('useTableColumnSizing', () => {
     expect(JSON.parse(localStorage.getItem('test-sizing') ?? '')).toEqual({
       name: 300,
     })
-  })
-})
-
-describe('useTableColumnOrder', () => {
-  beforeEach(() => {
-    localStorage.clear()
-  })
-
-  it('从 localStorage 恢复列序并过滤非字符串项', () => {
-    localStorage.setItem(
-      'test-order',
-      JSON.stringify(['b', 'a', 42, null, 'c'])
-    )
-    const { result } = renderHook(() => useTableColumnOrder('test-order'))
-    expect(result.current[0]).toEqual(['b', 'a', 'c'])
-  })
-
-  it('调整列序后写入 localStorage', () => {
-    const { result } = renderHook(() => useTableColumnOrder('test-order'))
-    act(() => result.current[1](['b', 'a']))
-    expect(JSON.parse(localStorage.getItem('test-order') ?? '')).toEqual([
-      'b',
-      'a',
-    ])
   })
 })

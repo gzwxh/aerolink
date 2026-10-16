@@ -2,7 +2,6 @@
 import { createColumnHelper } from '@tanstack/react-table'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createEvent, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ResourceTable } from './resource-table'
@@ -78,9 +77,9 @@ const { fakeRows, tableData } = vi.hoisted(() => {
     { metadata: { name: 'svc-3', namespace: 'default', uid: 'uid-3' } },
   ]
   return {
-  fakeRows,
-  // 可变的数据源：分组测试会替换成自己的行
-  tableData: { rows: fakeRows as Row[] },
+    fakeRows,
+    // 可变的数据源：分组测试会替换成自己的行
+    tableData: { rows: fakeRows as Row[] },
   }
 })
 
@@ -283,10 +282,10 @@ describe('ResourceTable grouping', () => {
     const bindingOf = new Map<string, string>()
     const makeColumns = () => [
       columnHelper.accessor('metadata.name', { header: 'Name' }),
-      columnHelper.accessor(
-        (row) => bindingOf.get(row.metadata.name) ?? '',
-        { id: 'bindingGroup', header: 'Binding Group' }
-      ),
+      columnHelper.accessor((row) => bindingOf.get(row.metadata.name) ?? '', {
+        id: 'bindingGroup',
+        header: 'Binding Group',
+      }),
     ]
     const view = render(
       <ResourceTable<Row>
@@ -295,7 +294,8 @@ describe('ResourceTable grouping', () => {
         clusterScope={true}
         grouping={{
           columnId: 'bindingGroup',
-          renderGroupHeader: (value, count) => `${value || 'Unbound'} (${count})`,
+          renderGroupHeader: (value, count) =>
+            `${value || 'Unbound'} (${count})`,
         }}
       />
     )
@@ -313,7 +313,8 @@ describe('ResourceTable grouping', () => {
         clusterScope={true}
         grouping={{
           columnId: 'bindingGroup',
-          renderGroupHeader: (value, count) => `${value || 'Unbound'} (${count})`,
+          renderGroupHeader: (value, count) =>
+            `${value || 'Unbound'} (${count})`,
         }}
       />
     )
@@ -338,12 +339,13 @@ describe('ResourceTable grouping', () => {
     const columnsAfter = [
       columnHelper.accessor('metadata.name', { header: 'Name' }),
       // 映射到达：只有 ns-apisix 归入 grp
-      columnHelper.accessor((row: Row) =>
-        row.metadata.name === 'ns-apisix' ? 'grp' : ''
-      , {
-        id: 'bindingGroup',
-        header: 'Binding Group',
-      }),
+      columnHelper.accessor(
+        (row: Row) => (row.metadata.name === 'ns-apisix' ? 'grp' : ''),
+        {
+          id: 'bindingGroup',
+          header: 'Binding Group',
+        }
+      ),
     ]
     const grouping = {
       columnId: 'bindingGroup',
@@ -381,9 +383,7 @@ describe('ResourceTable grouping', () => {
     await user.click(screen.getByRole('button', { name: /delete/i }))
 
     // 3 个资源行被选中，组标题行不参与勾选（否则会数出 5 行）
-    expect(
-      await screen.findByText('Delete 3 services?')
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Delete 3 services?')).toBeInTheDocument()
   })
 
   // 回归：v8 会把分组列强制排到列首，勾选列被挤到第二位。分组模式下
@@ -459,8 +459,8 @@ describe('ResourceTable external data mode', () => {
   })
 })
 
-describe('ResourceTable column reorder', () => {
-  const reorderColumns = [
+describe('ResourceTable column order', () => {
+  const fixedOrderColumns = [
     columnHelper.accessor('metadata.name', { header: 'Name' }),
     columnHelper.accessor('metadata.uid', { header: 'UID' }),
   ]
@@ -469,78 +469,26 @@ describe('ResourceTable column reorder', () => {
     localStorage.clear()
   })
 
-  function headerTexts() {
-    return screen
-      .getAllByRole('columnheader')
-      .map((header) => header.textContent ?? '')
-  }
-
-  function findHeader(text: string) {
-    return screen
-      .getAllByRole('columnheader')
-      .find((header) => header.textContent?.includes(text))!
-  }
-
-  it('reorders columns via header drag & drop and persists the order', () => {
+  // 列只能手动调宽，不提供拖动表头换位：表头不带 draggable，
+  // 列顺序始终是列定义里的顺序（旧版本存下的列序偏好也不再被读取）。
+  it('renders columns in definition order and does not make headers draggable', () => {
+    localStorage.setItem(
+      '-services-columnOrder',
+      JSON.stringify(['select', 'metadata_uid', 'metadata_name'])
+    )
     render(
       <ResourceTable<Row>
         resourceName="services"
-        columns={reorderColumns}
+        columns={fixedOrderColumns}
         clusterScope={true}
       />
     )
 
-    // 初始顺序：数据列按定义排列（Name 在 UID 前）
-    expect(headerTexts().indexOf('UID')).toBeGreaterThan(
-      headerTexts().indexOf('Name')
-    )
-
-    // 把 UID 拖到 Name 左半边（clientX=0 < 列宽中点，落点判定为 before）。
-    // jsdom 没有 DragEvent 接口，fireEvent 的附加属性不会生效，
-    // 必须用 createEvent + defineProperty 携带 clientX。
-    const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
-    const dragStart = createEvent.dragStart(findHeader('UID'))
-    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer })
-    fireEvent(findHeader('UID'), dragStart)
-    const drop = createEvent.drop(findHeader('Name'))
-    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer })
-    Object.defineProperty(drop, 'clientX', { value: 0 })
-    fireEvent(findHeader('Name'), drop)
-
-    const after = headerTexts()
-    expect(after.indexOf('UID')).toBeLessThan(after.indexOf('Name'))
-    // 持久化到 localStorage；TanStack 会把 accessor key 的点转成下划线列 id
-    // （getClusterScopedStorageKey 已 mock 成原样返回）
-    expect(
-      JSON.parse(localStorage.getItem('-services-columnOrder') ?? '[]')
-    ).toEqual(['select', 'metadata_uid', 'metadata_name'])
-  })
-
-  it('keeps the select column pinned first after reordering', () => {
-    render(
-      <ResourceTable<Row>
-        resourceName="services"
-        columns={reorderColumns}
-        clusterScope={true}
-      />
-    )
-
-    const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
-    // 把 Name 拖到 UID 右半边（clientX 超过列宽中点）：结构列（勾选列）仍必须钉在最左
-    const dragStart = createEvent.dragStart(findHeader('Name'))
-    Object.defineProperty(dragStart, 'dataTransfer', { value: dataTransfer })
-    fireEvent(findHeader('Name'), dragStart)
-    const drop = createEvent.drop(findHeader('UID'))
-    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer })
-    Object.defineProperty(drop, 'clientX', { value: 9999 })
-    fireEvent(findHeader('UID'), drop)
-
-    const after = headerTexts()
-    expect(after.indexOf('Name')).toBeGreaterThan(after.indexOf('UID'))
-    expect(
-      within(screen.getAllByRole('columnheader')[0]).getByRole('checkbox', {
-        name: /select all/i,
-      })
-    ).toBeInTheDocument()
+    const headers = screen.getAllByRole('columnheader')
+    headers.forEach((header) => {
+      expect(header).not.toHaveAttribute('draggable')
+    })
+    const texts = headers.map((header) => header.textContent ?? '')
+    expect(texts.indexOf('Name')).toBeLessThan(texts.indexOf('UID'))
   })
 })

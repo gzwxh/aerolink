@@ -18,14 +18,11 @@ import {
   type Privilege,
   type TranslateFn,
 } from '@/lib/rbac-privileges'
+import { useTableColumnSizing } from '@/hooks/use-table-column-preferences'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ResourceTableView } from '@/components/resource-table-view'
-import {
-  useTableColumnOrder,
-  useTableColumnSizing,
-} from '@/hooks/use-table-column-preferences'
 
 /**
  * 权限一览（只读）：把控制台支持的「资源 + 操作」逐条列成权限，便于对照角色编辑器里的
@@ -107,22 +104,18 @@ export function RBACPermissionCatalog() {
     [t]
   )
 
-  // 列宽 / 列顺序偏好：与资源列表同一套交互（拖表头右缘调宽、拖表头换位）。
+  // 列宽偏好：与资源列表同一套交互（拖表头右缘调宽，双击复位）。
   const [columnSizing, setColumnSizing] = useTableColumnSizing(
     'aerolink-rbac-privileges-columnSizing'
-  )
-  const [columnOrder, setColumnOrder] = useTableColumnOrder(
-    'aerolink-rbac-privileges-columnOrder'
   )
 
   const table = useReactTable<Privilege>({
     data: filtered,
     columns,
-    state: { pagination, sorting, columnSizing, columnOrder },
+    state: { pagination, sorting, columnSizing },
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
-    onColumnOrderChange: setColumnOrder,
     // 列宽拖拽：拖动表头右缘实时调宽（min/max 来自 defaultColumn）。
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
@@ -169,7 +162,6 @@ export function RBACPermissionCatalog() {
           columnCount={columns.length}
           isLoading={false}
           data={filtered}
-          enableReorder
           allPageSize={filtered.length}
           emptyState={null}
           hasActiveFilters={Boolean(search)}

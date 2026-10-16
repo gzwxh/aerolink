@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ColumnOrderState, ColumnSizingState } from '@tanstack/react-table'
+import { ColumnSizingState } from '@tanstack/react-table'
 
 /**
- * 列宽 / 列顺序的偏好 hook：与 use-table-column-visibility（显示哪些列）
+ * 列宽的偏好 hook：与 use-table-column-visibility（显示哪些列）
  * 同一套 localStorage 模式，供「自带 useReactTable 的表格」使用（设置页
  * 各表格）。资源列表页的对应状态在 use-resource-table-state 里管理。
  *
@@ -42,21 +42,4 @@ export function useTableColumnSizing(storageKey: string) {
   }, [columnSizing, storageKey])
 
   return [columnSizing, setColumnSizing] as const
-}
-
-/** 列顺序偏好：存可见列 id 的排列；陈旧的 id 会被 TanStack 忽略。 */
-export function useTableColumnOrder(storageKey: string) {
-  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => {
-    const stored = readStoredJSON<unknown>(storageKey, null)
-    if (!Array.isArray(stored)) {
-      return []
-    }
-    return stored.filter((id): id is string => typeof id === 'string')
-  })
-
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(columnOrder))
-  }, [columnOrder, storageKey])
-
-  return [columnOrder, setColumnOrder] as const
 }
