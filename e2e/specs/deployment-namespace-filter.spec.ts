@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { e2eContextName } from '../env'
+import { clusterPathPattern } from '../support/cluster-url'
 /**
  * 回归：多选命名空间后列表页必须仍然可用。
  *
@@ -10,6 +12,39 @@ import { expect, test } from '@playwright/test'
  *
  * 口径：URL 的单段路径只能表达一个命名空间，多选由表格状态（sessionStorage）持有。
  */
+
+// 全新 kind 集群的 default 命名空间没有任何 Deployment，而资源表格在 URL 未指定
+// 命名空间时回落到 default（既有行为）——两个用例都靠表格行驱动交互。这里先幂等
+// apply 一个演示 Deployment（pause 镜像在 kind 节点上已预置，无需外网）。
+test.beforeAll(async ({ request }) => {
+  const clusterPath = `/api/v1/_clusters/${encodeURIComponent(e2eContextName)}`
+  const response = await request.post(`${clusterPath}/resources/apply`, {
+    data: {
+      yaml: [
+        'apiVersion: apps/v1',
+        'kind: Deployment',
+        'metadata:',
+        '  name: namespace-filter-demo',
+        '  namespace: default',
+        'spec:',
+        '  replicas: 1',
+        '  selector:',
+        '    matchLabels:',
+        '      app: namespace-filter-demo',
+        '  template:',
+        '    metadata:',
+        '      labels:',
+        '        app: namespace-filter-demo',
+        '    spec:',
+        '      containers:',
+        '        - name: pause',
+        '          image: registry.k8s.io/pause:3.10',
+      ].join('\n'),
+      namespace: 'default',
+    },
+  })
+  expect(response.ok()).toBeTruthy()
+})
 
 /** 工具栏里唯一带选中值文本的 combobox 就是命名空间选择器。 */
 function namespacePicker(page: import('@playwright/test').Page) {
@@ -69,7 +104,7 @@ test('selecting several namespaces keeps the table usable', async ({
   await expect(page.locator('table')).toBeVisible()
   // 多选值不该出现在 URL 上。
   expect(page.url()).not.toContain('%2C')
-  expect(new URL(page.url()).pathname).toBe('/deployments')
+  expect(new URL(page.url()).pathname).toMatch(clusterPathPattern('/deployments'))
 
   // 刷新后选择由 sessionStorage 恢复，页面依旧可用。
   await page.reload()
@@ -87,11 +122,21 @@ test('switching to a single namespace still syncs the URL', async ({
   await page.waitForSelector('table tbody tr', { timeout: 30_000 })
 
   await namespacePicker(page).click()
-  await page.getByPlaceholder('Search...').fill('kube-system')
+  // 表格未指定命名空间时回落到 default，直接勾选会得到 default,kube-system
+  // 的多选（多选不写 URL 路径段）。先切到 All Namespaces 清空集合，再单选目标。
+  await page
+    .locator('[cmdk-item]', { hasText: 'All Namespaces' })
+    .first()
+    .click()
+  const searchBox = page.getByPlaceholder('Search...')
+  if (!(await searchBox.isVisible().catch(() => false))) {
+    await namespacePicker(page).click()
+  }
+  await searchBox.fill('kube-system')
   await page.locator('[cmdk-item]', { hasText: 'kube-system' }).first().click()
 
   // 单选照旧写进 URL，并只展示该命名空间的资源。
-  await page.waitForURL((url) => url.pathname === '/deployments/kube-system')
+  await page.waitForURL((url) => clusterPathPattern('/deployments/kube-system').test(url.pathname))
   await expect(page.locator('table')).toBeVisible()
   await expect(
     page.getByText('does not exist in the current cluster')

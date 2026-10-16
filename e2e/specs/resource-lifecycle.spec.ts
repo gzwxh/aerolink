@@ -291,16 +291,19 @@ test.describe('deployment lifecycle', () => {
       await waitForDeploymentStable(request, name, 2)
 
       // ---- 重启：写 restartedAt 注解 ----
+      // 详情页头部的重启入口收在「更多」下拉菜单里，执行前有确认弹窗。
       await page
-        .locator('[data-slot="popover-trigger"]', { hasText: 'Restart' })
+        .getByRole('button', { name: 'More', exact: true })
         .click()
-      const restartPopover = page.locator(
-        '[data-slot="popover-content"]:visible'
-      )
-      await expect(
-        restartPopover.getByText('Restart Deployment', { exact: true })
-      ).toBeVisible()
-      await restartPopover
+      await page
+        .locator('[data-slot="dropdown-menu-content"]:visible')
+        .getByText('Restart', { exact: true })
+        .click()
+      const restartDialog = page.getByRole('dialog', {
+        name: 'Restart Deployment',
+      })
+      await expect(restartDialog).toBeVisible()
+      await restartDialog
         .getByRole('button', { name: 'Restart', exact: true })
         .click()
       await expect
@@ -380,8 +383,12 @@ test.describe('deployment lifecycle', () => {
         )
         .toBe('one')
 
-      // ---- 删除：详情页 Delete → 输入名称确认 ----
-      await page.getByRole('button', { name: 'Delete', exact: true }).click()
+      // ---- 删除：详情页「更多」→ Delete → 输入名称确认 ----
+      await page.getByRole('button', { name: 'More', exact: true }).click()
+      await page
+        .locator('[data-slot="dropdown-menu-content"]:visible')
+        .getByText('Delete', { exact: true })
+        .click()
       const deleteDialog = page.getByRole('dialog', {
         name: 'Delete Deployment',
       })
@@ -606,13 +613,14 @@ metadata:
   namespace: ${namespace}
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: local-path
+  storageClassName: standard
   resources:
     requests:
       storage: 64Mi
 `,
-    // local-path 的 volumeBindingMode 是 WaitForFirstConsumer：没有 Pod 消费
-    // 就会一直 Pending，所以要起一个挂载它的 Pod 才能等到 Bound。
+    // kind 自带的默认 StorageClass（standard，rancher.io/local-path）的
+    // volumeBindingMode 是 WaitForFirstConsumer：没有 Pod 消费就会一直 Pending，
+    // 所以要起一个挂载它的 Pod 才能等到 Bound。
     postCreate: async (request, name) => {
       await applyYaml(
         request,

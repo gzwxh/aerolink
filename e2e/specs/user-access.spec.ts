@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { kindClusterName } from '../env'
+import { e2eContextName } from '../env'
 import {
   deleteBindingGroup,
   deleteUserById,
@@ -104,7 +104,7 @@ test('password user lifecycle and access scopes', async ({
     )
     userIds.push(await findUserId(request, scopedUser.username))
     groupId = await grantRoleInNamespace(request, {
-      cluster: kindClusterName,
+      cluster: e2eContextName,
       groupName,
       roleName: 'viewer',
       namespace: 'kube-system',

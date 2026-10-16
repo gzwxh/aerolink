@@ -128,7 +128,10 @@ test('a namespace-scoped member cannot create a namespace', async ({
     try {
       await test.step('the namespace page offers no create entry', async () => {
         await userPage.goto(`${origin}/namespaces`)
-        await expect(userPage.getByRole('heading').first()).toBeVisible()
+        // 资源列表页没有标题，用工具栏的搜索框作为「列表已渲染」的信号。
+        await expect(
+          userPage.getByPlaceholder('Search Namespaces or app=nginx...')
+        ).toBeVisible()
         await expect(
           userPage.getByRole('button', { name: 'Create', exact: true })
         ).toHaveCount(0)

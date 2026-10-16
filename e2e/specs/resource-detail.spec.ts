@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { e2eContextName, e2eNodeName } from '../env'
 import { expectStatus } from '../support/admin-api'
+import { clusterPathPattern } from '../support/cluster-url'
 
 const nodeName = e2eNodeName
 const clusterPath = `/api/v1/_clusters/${encodeURIComponent(e2eContextName)}`
@@ -43,7 +44,7 @@ test.describe('resource detail navigation', () => {
     await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible()
   })
 
-  test('navigates from the pods list to pod detail, opens proxy, and loads logs, yaml, and terminal tabs', async ({
+  test('navigates from the pods list to pod detail, opens proxy, and loads yaml tab plus logs and terminal sessions', async ({
     page,
   }) => {
     const podName = `e2e-nginx-${Date.now()}`
@@ -114,31 +115,30 @@ spec:
     await expect(proxyPage.locator('body')).toContainText('Welcome to nginx!')
     await proxyPage.close()
 
-    await page.getByRole('tab', { name: 'Logs' }).click()
-    await page.waitForURL(
-      (url) =>
-        url.pathname === `/pods/default/${podName}` &&
-        url.searchParams.get('tab') === 'logs'
-    )
-    await expect(page.getByPlaceholder('Filter logs...')).toBeVisible()
-
+    // 页签只剩查看类内容；日志与终端都收在「更多」菜单里，开出去的是底部工作区的
+    // 独立会话（不占页签、不改当前 URL）。
     await page.getByRole('tab', { name: 'YAML' }).click()
     await page.waitForURL(
       (url) =>
-        url.pathname === `/pods/default/${podName}` &&
+        clusterPathPattern(`/pods/default/${podName}`).test(url.pathname) &&
         url.searchParams.get('tab') === 'yaml'
     )
     await expect(page.getByText('YAML Configuration')).toBeVisible()
 
-    await page.getByRole('tab', { name: 'Terminal' }).click()
-    await page.waitForURL(
-      (url) =>
-        url.pathname === `/pods/default/${podName}` &&
-        url.searchParams.get('tab') === 'terminal'
-    )
+    const moreMenu = page.locator('[data-slot="dropdown-menu-content"]:visible')
+
+    await page.getByRole('button', { name: 'More', exact: true }).click()
+    await moreMenu.getByText('Logs', { exact: true }).click()
+    await expect(
+      page.getByPlaceholder('Filter: show matching lines only')
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: 'More', exact: true }).click()
+    await moreMenu.getByText('Terminal', { exact: true }).click()
     await expect(page.locator('.xterm').first()).toBeVisible()
 
-    await page.getByRole('button', { name: 'Delete' }).click()
+    await page.getByRole('button', { name: 'More', exact: true }).click()
+    await moreMenu.getByText('Delete', { exact: true }).click()
 
     const deleteDialog = page.getByRole('dialog').filter({ hasText: podName })
     await expect(deleteDialog).toBeVisible()

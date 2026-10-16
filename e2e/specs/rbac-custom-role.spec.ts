@@ -6,14 +6,16 @@ import {
   type BrowserContext,
   type Page,
 } from '@playwright/test'
+import { clusterPathPattern } from '../support/cluster-url'
 
-import { englishStorageState, kindClusterName } from '../env'
+import { englishStorageState, e2eContextName } from '../env'
+import { loginWithPasswordUi } from '../support/users'
 
-const cluster = kindClusterName
+const cluster = e2eContextName
 const clusterPath = `/api/v1/_clusters/${encodeURIComponent(cluster)}`
 
 // 权限绑定组内被授权的命名空间，以及组外的对照命名空间。
-const grantedNamespace = 'kube-system'
+const grantedNamespace = 'kube-public'
 const deniedNamespace = 'default'
 
 async function expectJSON<T>(response: APIResponse, status: number) {
@@ -188,12 +190,8 @@ test('custom role is granted inside a permission binding namespace and denied ou
     const userPage = await userContext.newPage()
 
     await userPage.goto('/login')
-    await userPage.getByLabel('Username').fill(username)
-    await userPage.getByLabel('Password', { exact: true }).fill(password)
-    await userPage
-      .getByRole('button', { name: 'Sign In with Password' })
-      .click()
-    await userPage.waitForURL((url) => url.pathname === '/')
+    await loginWithPasswordUi(userPage, username, password)
+    await userPage.waitForURL((url) => clusterPathPattern('/').test(url.pathname))
 
     await test.step('cluster-scoped resources stay denied in the UI', async () => {
       await userPage.goto('/nodes')

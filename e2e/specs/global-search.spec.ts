@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import { clusterPathPattern } from '../support/cluster-url'
 test('admin can open global search and jump to the cluster settings tab', async ({
   page,
 }) => {
@@ -19,7 +20,7 @@ test('admin can open global search and jump to the cluster settings tab', async 
 
   await clusterResult.click()
 
-  await page.waitForURL((url) => url.pathname === '/settings/clusters')
+  await page.waitForURL((url) => clusterPathPattern('/settings/clusters').test(url.pathname))
 
   await expect(page.getByRole('button', { name: 'Add Cluster' })).toBeVisible()
 })

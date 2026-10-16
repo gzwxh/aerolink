@@ -677,7 +677,7 @@ test('backend APIs work end to end against the real test environment', async ({
             containers: [
               {
                 name: 'pause',
-                image: 'registry.k8s.io/pause:3.10.1',
+                image: 'registry.k8s.io/pause:3.10',
               },
             ],
           },
@@ -705,7 +705,7 @@ test('backend APIs work end to end against the real test environment', async ({
             containers: [
               {
                 name: 'pause',
-                image: 'registry.k8s.io/pause:3.10.1',
+                image: 'registry.k8s.io/pause:3.10',
               },
             ],
           },
@@ -732,7 +732,7 @@ test('backend APIs work end to end against the real test environment', async ({
             containers: [
               {
                 name: 'pause',
-                image: 'registry.k8s.io/pause:3.10.1',
+                image: 'registry.k8s.io/pause:3.10',
               },
             ],
           },

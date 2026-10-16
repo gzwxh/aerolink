@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 
+import { clusterPathPattern } from '../support/cluster-url'
 import { adminUser, authFile, ensureAuthDir } from '../env'
 
 test('bootstrap a reusable admin session', async ({ page }) => {
@@ -26,7 +27,7 @@ test('bootstrap a reusable admin session', async ({ page }) => {
   await page.getByLabel(/^Kubeconfig File \*$/).fill(kubeconfig)
   await page.getByRole('button', { name: 'Import Clusters' }).click()
 
-  await page.waitForURL((url) => url.pathname === '/')
+  await page.waitForURL((url) => clusterPathPattern('/').test(url.pathname))
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
 
   ensureAuthDir()

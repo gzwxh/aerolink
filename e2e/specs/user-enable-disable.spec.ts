@@ -1,6 +1,6 @@
 import { test } from '@playwright/test'
 
-import { kindClusterName } from '../env'
+import { e2eContextName } from '../env'
 import {
   deleteBindingGroup,
   deleteUserById,
@@ -41,10 +41,10 @@ test('password user can be disabled, re-enabled, and deleted', async ({
 
     // 授权：账号需要「有授权才能登录」，这里给它一个命名空间范围的 viewer。
     groupId = await grantRoleInNamespace(request, {
-      cluster: kindClusterName,
+      cluster: e2eContextName,
       groupName,
       roleName: 'viewer',
-      namespace: 'default',
+      namespace: 'kube-node-lease',
       subject: user.username,
     })
 

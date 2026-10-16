@@ -1,11 +1,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test'
 
-import {
-  authFile,
-  e2eBaseUrl,
-  englishStorageState,
-  kindClusterName,
-} from '../env'
+import { clusterPathPattern } from '../support/cluster-url'
+import { authFile, e2eBaseUrl, e2eContextName, englishStorageState } from '../env'
 
 const baseURL = e2eBaseUrl
 const ldapURL = process.env.AEROLINK_E2E_LDAP_URL
@@ -45,11 +41,11 @@ const customGroupClaimOAuthProvider = {
 }
 
 // 外部身份（LDAP / OIDC 用户组）通过**权限绑定**拿到 viewer：
-// 绑定组 = 集群 + 命名空间（default）+ 成员（用户组 × 角色）。
+// 绑定组 = 集群 + 命名空间（local-path-storage，避开其它用例占用的 default）+ 成员（用户组 × 角色）。
 // 绑定对象是用户组，所以成员的增删完全由目录维护，鸢联 AeroLink 侧不需要跟着改。
 const externalBinding = {
   name: 'e2e-external-scope',
-  namespace: 'default',
+  namespace: 'local-path-storage',
   groups: ['e2e-viewers', 'OAuth E2E'],
 }
 
@@ -88,7 +84,7 @@ async function expectSignedInUser(
   username: string,
   provider: string
 ) {
-  await page.waitForURL((url) => url.pathname === '/')
+  await page.waitForURL((url) => clusterPathPattern('/').test(url.pathname))
 
   // 授权效果：外部账号只被绑定到一个命名空间，命名空间列表就该只有它。
   // （权限绑定组的成员不持有全局角色，所以用户菜单不会出现 Role 行；
@@ -360,7 +356,7 @@ async function grantViewerToExternalGroups(page: Page) {
   expect(viewer, 'built-in viewer role should exist').toBeTruthy()
 
   const listResponse = await page.request.get(
-    `/api/v1/admin/binding-groups/?cluster=${encodeURIComponent(kindClusterName)}`
+    `/api/v1/admin/binding-groups/?cluster=${encodeURIComponent(e2eContextName)}`
   )
   const listBody = await listResponse.text()
   expect(listResponse.status(), listBody).toBe(200)
@@ -377,7 +373,7 @@ async function grantViewerToExternalGroups(page: Page) {
       '/api/v1/admin/binding-groups/',
       {
         data: {
-          cluster: kindClusterName,
+          cluster: e2eContextName,
           name: externalBinding.name,
           description: 'e2e: viewer for external groups',
         },
@@ -432,7 +428,7 @@ test.describe('external auth', () => {
       await configureUsernameClaimOAuthViaUI(adminPage)
       await configureRestrictedOAuthViaUI(adminPage)
       await configureCustomGroupClaimOAuthViaUI(adminPage)
-      // 外部用户组的授权：一个权限绑定（命名空间 default + viewer）。
+      // 外部用户组的授权：一个权限绑定（命名空间 local-path-storage + viewer）。
       await grantViewerToExternalGroups(adminPage)
     } finally {
       await adminContext.close()

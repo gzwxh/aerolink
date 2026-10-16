@@ -1,6 +1,7 @@
 import { expect, type Browser, type Page } from '@playwright/test'
 
 import { englishStorageState } from '../env'
+import { clusterPathPattern } from '../support/cluster-url'
 
 // 用户管理页（当前 UI）的公共操作：建账号、改密码、停用/启用、删除，
 // 以及用密码登录。几个用例都要用同一套选择器，集中在这里维护。
@@ -108,9 +109,20 @@ export async function loginWithPasswordUi(
   username: string,
   password: string
 ) {
-  await expect(
-    page.getByRole('button', { name: 'Sign In with Password' })
-  ).toBeVisible()
+  // e2e 环境启用 LDAP / Dex 后，登录页先列出各个凭据提供方，
+  // 要点「Sign in with a local account」才出现密码表单；只有密码提供方时
+  // 表单直接渲染。认证配置是异步拿到的，所以这里重试到密码登录栏可见。
+  const localAccount = page.getByRole('button', {
+    name: 'Sign in with a local account',
+  })
+  await expect(async () => {
+    if (await localAccount.isVisible().catch(() => false)) {
+      await localAccount.click()
+    }
+    await expect(
+      page.getByRole('button', { name: 'Sign In with Password' })
+    ).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 30_000 })
 
   await page.getByLabel('Username').fill(username)
   await page.getByLabel('Password', { exact: true }).fill(password)
@@ -136,7 +148,7 @@ export async function loginFreshContext(
 
   await page.goto(`${origin}/login`)
   await loginWithPasswordUi(page, username, password)
-  await page.waitForURL((url) => url.pathname === '/')
+  await page.waitForURL((url) => clusterPathPattern('/').test(url.pathname))
 
   return { context, page }
 }

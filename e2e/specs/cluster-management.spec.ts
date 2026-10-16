@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { kindClusterName } from '../env'
+import { e2eContextName } from '../env'
 
 test.describe('cluster management', () => {
   test('shows the imported kind cluster on the clusters tab', async ({
@@ -13,13 +13,13 @@ test.describe('cluster management', () => {
       page.getByRole('button', { name: 'Add Cluster' })
     ).toBeVisible()
     await expect(
-      page.getByRole('row').filter({ hasText: kindClusterName })
+      page.getByRole('row').filter({ hasText: e2eContextName })
     ).toBeVisible()
   })
 
   test('can update the cluster description', async ({ page }) => {
     const description = `E2E cluster description ${Date.now()}`
-    const row = page.getByRole('row').filter({ hasText: kindClusterName })
+    const row = page.getByRole('row').filter({ hasText: e2eContextName })
 
     await page.goto('/settings?tab=clusters')
     await expect(row).toBeVisible()

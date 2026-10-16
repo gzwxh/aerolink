@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 
+import { clusterPathPattern } from '../support/cluster-url'
 import { e2eContextName } from '../env'
 import { expectJSON, expectStatus } from '../support/admin-api'
 
@@ -72,7 +73,7 @@ test('a static StorageClass is created with WaitForFirstConsumer', async ({
       .fill('topology.kubernetes.io/zone=cn-south-1a,cn-south-1b')
 
     await page.getByRole('button', { name: 'Create StorageClass' }).click()
-    await page.waitForURL((url) => url.pathname === '/storageclasses')
+    await page.waitForURL((url) => clusterPathPattern('/storageclasses').test(url.pathname))
 
     const created = await expectJSON<StorageClass>(
       await request.get(`${clusterPath}/storageclasses/_all/${name}`),
@@ -151,7 +152,7 @@ test('a hostPath PersistentVolume is created with the fields from the form', asy
       .fill(`zz-e2e-pvc-${Date.now().toString(36)}`)
 
     await page.getByRole('button', { name: 'Create PersistentVolume' }).click()
-    await page.waitForURL((url) => url.pathname === '/persistentvolumes')
+    await page.waitForURL((url) => clusterPathPattern('/persistentvolumes').test(url.pathname))
 
     const created = await expectJSON<PersistentVolume>(
       await request.get(`${clusterPath}/persistentvolumes/_all/${name}`),

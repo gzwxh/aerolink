@@ -290,7 +290,12 @@ test.describe('helm release lifecycle', () => {
     await expectConfigMapMessage(request, 'v1')
 
     // ---- 5. 卸载 ----
-    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    // 详情页头部的删除入口收在「更多」下拉菜单里。
+    await page.getByRole('button', { name: 'More', exact: true }).click()
+    await page
+      .locator('[data-slot="dropdown-menu-content"]:visible')
+      .getByText('Delete', { exact: true })
+      .click()
     const deleteDialog = page.getByRole('dialog', {
       name: 'Delete Helm Release',
     })
