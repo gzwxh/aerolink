@@ -202,6 +202,7 @@
 4. **选择器**：`ui/src/components/selector/*`（命名空间、容器、Pod）
 5. **状态与上下文**：`ui/src/contexts/*`、`ui/src/hooks/*`
    - 应用内前进/后退：`ui/src/contexts/navigation-context.tsx`（自维护栈 + sessionStorage；**不要**改用 `window.history.back()`，仓库里大量 `navigate(..., { replace: true })` 会让浏览器历史栈与“上一页”对不上）+ `ui/src/components/navigation-controls.tsx`
+   - 集群前缀导航（集群信息进入浏览器地址栏，方案见 `plans/2026-10-15-集群信息进入浏览器地址栏.md`）：业务页面统一挂在 `/_clusters/<slug>/` 路由下（`ui/src/routes.tsx`），URL 是集群上下文的唯一事实源（`ui/src/contexts/cluster-context.tsx`）。组件里**写不带前缀的绝对业务路径**，由包装层补前缀：`ui/src/components/cluster-link.tsx`（`ClusterLink`/`ClusterNavigate`）+ `ui/src/lib/cluster-path.ts`（`useClusterNavigate`/`useClusterLocation`/`withClusterPath`/`swapClusterSlug`）；直接引 react-router-dom 的 `Link`/`Navigate`/`useNavigate`/`useLocation` 被 ESLint `no-restricted-imports` 拦截（确需原始语义用 `useRawNavigate`/`useRawLocation`）。旧无前缀地址由 `ui/src/components/legacy-cluster-redirect.tsx` 兜底重定向。集群 slug 的生成/校验在后端 `pkg/cluster/slug.go` + 回填迁移 `pkg/model/cluster_slug.go`；管理端录入在 `cluster-dialog.tsx` / `cluster-import-dialog.tsx`，逐行短名编辑器 `ui/src/components/settings/cluster-slug-fields.tsx` 由导入对话框与初始化向导 `ui/src/pages/initialization.tsx` 共用（客户端校验口径在 `ui/src/lib/cluster-slug.ts` 的 `findInvalidSlugContext`/`filledSlugs`）。回归测试 `ui/src/lib/cluster-path.test.ts`、`ui/src/lib/kubeconfig.test.ts`、`ui/src/contexts/cluster-context.test.tsx`（I1/I2/I3 与切换回退）、`ui/src/components/settings/cluster-import-dialog.test.tsx`（同名集群短名只读且不进提交载荷）
 6. **通用行为**：`ui/src/lib/unsaved-edits.ts`（切集群前未保存确认）、`ui/src/lib/current-cluster.ts`（集群维度 localStorage key 前缀）、`ui/src/hooks/use-page-title.ts`、`ui/src/lib/utils.ts`（`translateError`）
    - **快捷键登记表**（新增快捷键必须写在这里，避免与已有冲突）：`⌘K` 全局搜索（`global-search-provider.tsx`）；`⌘[` / `⌘]` 与 `Alt+←` / `Alt+→` 应用内前进后退（`navigation-context.tsx`，在输入框 / Monaco / xterm 内不拦截）
 7. **未保存 / 危险操作**：
@@ -247,6 +248,7 @@
 | 改「谁必须绑定 MFA」/ 自助绑定口径 | `pkg/model/security_setting.go`（`MFARequiredFor`）→ `pkg/auth/middleware.go`（绑定引导拦截）→ `pkg/auth/login_handler.go`（登录挑战）→ `pkg/users/handler.go`（自助绑定）→ `ui/src/lib/mfa-enrollment.ts`（前端镜像）；口径见 `plans/2026-09-20-目录账号自助绑定动态码.md` |
 | 换数据库（如切到 PostgreSQL 以扩副本） | `tools/dbmigrate`（搬数据）→ `pkg/common/common.go` 的 `DB_TYPE`/`DB_DSN` 环境变量 → `dev.env` / `charts/aerolink` 的 `db.*`；步骤与校验见 `plans/2026-09-20-从SQLite迁移到PostgreSQL.md` |
 | 用 PostgreSQL 部署（清单 / Helm / systemd） | `deploy/install-postgres.yaml`（K8s 清单，与 `deploy/install-mysql.yaml` 互斥）→ `charts/aerolink` 的 `db.type=postgres`+`db.dsn` → `deploy/aerolink@.service` + `deploy/aerolink.env.example`（裸进程/多副本）；建库、DSN、连接数、校验与 PG 特有的坑见 `plans/2026-09-21-PostgreSQL部署.md`，PG 12 的参数与升级路径见 `plans/2026-09-20-PostgreSQL12现状与升级路径.md` |
+| 集群信息进浏览器地址栏（集群 slug） | 方案 `plans/2026-10-15-集群信息进入浏览器地址栏.md`；后端 slug 生成/校验 `pkg/cluster/slug.go` + 回填迁移 `pkg/model/cluster_slug.go`（`clusters.slug` 列）；前端导航包装 `ui/src/lib/cluster-path.ts` + `ui/src/components/cluster-link.tsx`（见 §3 共享骨架第 5 条）；路由前缀与旧地址兜底 `ui/src/routes.tsx` + `legacy-cluster-redirect.tsx`；管理端录入 `ui/src/components/settings/cluster-dialog.tsx`、`cluster-import-dialog.tsx` |
 | 清理改名前的遗留对象（kite → aerolink） | `scripts/cleanup-legacy-kite-objects.sh`（默认 dry-run，`-y` 才真删；旧 `service/kite` 占着 NodePort 27862，不清掉新清单 apply 会失败；也覆盖 kube-system 里的 `kite-admin` 与 `kite-cluster-agent`）；systemd 侧的迁移见 `deploy/aerolink@.service` 文件头 |
 | 从 Rancher 迁移授权 | `scripts/migrate-rancher-rbac.sh`（入口）/ `scripts/build-rancherrbac.sh`（打成单文件）→ `tools/rancherrbac`（PRTB / CRTB + 角色模板 → 权限绑定组与角色，组名用 Rancher 上的项目名、角色名用角色模板 ID，不加前缀）；支持配置文件（`-init-config` 生成模板），Rancher API 密钥拿不到时用 `-from-dir` 读导出的集合 JSON；命名空间的聚合接口只返回 `local` 集群，其余集群按 `/k8s/clusters/<集群 ID>/v1/namespaces` 补读（离线时对应 `k8s_clusters_<集群 ID>_v1_namespaces.json`）；步骤与排错见 `tools/rancherrbac/README.md`，映射口径与未验证项见 `plans/2026-09-21-Rancher授权迁移脚本.md` |
 
@@ -278,5 +280,6 @@ make e2e-test            # Playwright + kind（spec 见 e2e/specs/*.spec.ts）
 - `vendor/` 已入库，改依赖要同时处理 `go.mod`/`go.sum` 与 `vendor/`
 - `ui/src/lib/api.ts` 与 `ui/src/lib/api/` 目录同时存在（前者聚合导出），新增 API 模块别搞混
 - 根目录 `AGENTS.md` 与 `CLAUDE.md` 都是代理约定文件，改一个记得同步另一个
+- URL 里的 `_clusters/<slug>` 是**前端导航**标识；API 的 `_clusters/<集群名>` 是**后端选集群**标识，两者同形不同源，不要混用（前端导航走 `ui/src/lib/cluster-path.ts`，API 路径走 `ui/src/lib/current-cluster.ts` 的 `withCurrentClusterPath`）
 - 前端 localStorage key 有集群前缀约定（`ui/src/lib/current-cluster.ts` 的 `getClusterScopedStorageKey`），新增 key 请沿用
 - 权限、审计、集群维度（`_all`/命名空间范围）任何一处漏掉，都会变成安全或合规缺陷
