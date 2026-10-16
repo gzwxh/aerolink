@@ -59,6 +59,14 @@
 - 「都能跑」不等于「结果一样」：包含匹配统一走 `pkg/model/dialect.go` 的 `PatternLike*`
   （PostgreSQL 用 `ILIKE`）；可空列的排序显式写 `col IS NULL, col DESC`。
 
+**库结构变更必须单独说明**——`pkg/model/` 里加列/改列/建唯一索引，或新增 `Migrate*Backfill`，
+都算一次需要人工执行的升级动作：生产库的应用账号通常不是表 owner，`AutoMigrate` 加列会被
+PostgreSQL 直接拒掉（`must be owner of table ...`，SQLSTATE 42501，只告警不阻断启动），所以不能
+指望「启动时自己长出来」。每次发布都要在发布说明里单列一节，写明**升级前需执行的 SQL**（三库等价
+写法）与执行账号的权限要求（PostgreSQL 需表 owner），不能只用 `feat(db): …` 一行字交代。判据、
+升级后核对与 `DB_MIGRATE` 的取舍见 `docs/dev/release-checklist.md` §1.1；`scripts/changelog.sh`
+检测到 `pkg/model/` 有改动时会自动生成这一节的标题与文件清单，SQL 由人工补齐。
+
 改完 SQL 除了 SQLite 单测，还要直连 MySQL（挑严格模式实例，先看 `@@sql_mode`）与 PostgreSQL
 各跑一遍真实函数；跨功能面的改动再用 `tools/apismoke` 对每套库跑一遍冒烟。
 

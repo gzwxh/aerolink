@@ -19,8 +19,33 @@
       两条路径都推公司 registry（`Makefile` 的 `IMAGE`，如 `swr.cn-south-1.myhuaweicloud.com/gzwxh/...`）。
       构建后先 `docker run --rm <image> /home/aerolink/aerolink -h` 确认镜像能起来。
 - [ ] **5. 打包并推送 chart**：`helm package charts/aerolink`，推送 chart（OCI 或内网/oss 仓库）。注意打包产物不得入库（见 §3）。
-- [ ] **6. 打 tag 并写发布说明**：`scripts/release.sh <version>` 完成 bump + commit + tag；发布说明用 `make changelog` 的产物，并附上二进制与 chart。
+- [ ] **6. 打 tag 并写发布说明**：`scripts/release.sh <version>` 完成 bump + commit + tag；发布说明用 `make changelog` 的产物，并附上二进制与 chart。产物里若出现「库结构变更」一节，**必须人工补齐该节的 SQL** 再发布（脚本只生成标题与文件清单，见 §1.1）。
 - [ ] **7. 发布后核对**：确认 `/api/v1/version` 返回值与 tag 一致（验证 ldflags 是否真的注入了版本号）。
+- [ ] **8. 核对库结构变更**：`git diff <上一个 tag>..HEAD -- pkg/model/` 有改动（加列/改列/唯一索引，或新的 `Migrate*Backfill`）即按 §1.1 交代升级动作，并把 SQL 写进发布说明。
+
+### 1.1 库结构变更（DDL）子流程
+
+应用账号在生产库上通常**不是表 owner**，而 `AutoMigrate` 加列、建唯一索引还需要 DDL 权限
+（PostgreSQL 硬性要求 owner，否则报 `must be owner of table ... (SQLSTATE 42501)`）。所以
+「启动时自动加列」这条路在生产不一定通，**库结构变更必须当成一次人工升级动作交代出去**
+（这条已成文为 `AGENTS.md`「数据库兼容」节的硬规则）：
+
+- **判据**：`git diff <上一个 tag>..HEAD -- pkg/model/` 有改动，或 `pkg/model` 下新增 `Migrate*Backfill`。
+  命中就在发布说明里单列一节，写清：改动内容、**升级前要执行的 SQL**（三库等价写法按
+  `docs/dev/cross-database-compatibility.md` 给），以及执行账号在 PostgreSQL 下必须是**表 owner**。
+- **升级后核对**：`kubectl logs <pod> | grep -E '^[EIW][0-9]{4}'`。`pkg/model/model.go` 的
+  `checkSchema()` 用只读方式逐条列出缺表/缺列（如 `库表 clusters 缺少列 slug`）与差异总数：
+  出现即说明那条 SQL 没执行、或执行了没重启。
+  注意日志去向（`main.go` 的 `applyLogFileEnv`）：设了 `AEROLINK_LOG_FILE` 之后 klog 关掉
+  stderr 输出，只有 ERROR 以上（klog 默认 `stderrthreshold=ERROR`）会同时进容器标准输出，
+  `Info` 级（`库结构与模型一致`）只写在那个文件里 —— 用 `kubectl logs` 看不到「一切正常」，
+  只能看到「出问题了」。
+- **`DB_MIGRATE=off` 的取舍**：它跳过的是 `runMigration` 的**全部**步骤，连数据回填
+  （`Migrate*Backfill`）一起跳过 —— 而回填只需要 DML 权限，本来在生产能跑。只有确认本版本
+  没有任何回填、且不想每次启动都刷一条「加列被拒」时才设它；带回填的版本要临时打开或手工执行。
+
+**2026-10-16 的实例**：v1.0.2 新增 `clusters.slug`，生产账号非 owner → 列没加上 → 前端拿不到
+短名 → 整个控制台停在兜底页（详见 `plans/2026-10-15-集群信息进入浏览器地址栏.md` §4）。
 
 ## 2. CI 发布（可选，默认关闭）
 
@@ -39,7 +64,7 @@
 与本地流程的两处差异，需要留意：
 
 - CI 用 `make cross-compile VERSION=<tag>` 覆盖 Makefile 的默认版本号，产物版本与 tag 天然一致；本地仍按 Makefile 的 `VERSION`。
-- CI 的 Release 正文由 `scripts/changelog.sh` 生成（上一个 tag..当前 tag 的分类聚合），不再是托管平台自动汇总的 commit 列表。
+- CI 的 Release 正文由 `scripts/changelog.sh` 生成（上一个 tag..当前 tag 的分类聚合），不再是托管平台自动汇总的 commit 列表；其中「库结构变更」一节的 SQL 同样要人工补齐（§1.1），CI 只负责生成标题与涉及文件清单。
 
 ## 3. 产物卫生（A4）
 
