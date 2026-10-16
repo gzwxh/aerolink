@@ -6,6 +6,10 @@
 # 不会有任何提交被静默丢弃。类型前缀必须用英文（`feat` / `fix` / `chore` …），
 # 描述用中文（见 AGENTS.md 的提交信息约定）。
 #
+# 区间内改动过 `pkg/model/` 时，额外生成「库结构变更」一节的标题与涉及文件清单，
+# 提醒补齐升级前需执行的 SQL（库结构变更必须单独说明，口径见
+# docs/dev/release-checklist.md §1.1）。
+#
 # 用法：scripts/changelog.sh [--from <ref>] [--to <ref>]
 
 set -eu
@@ -69,6 +73,8 @@ fi
 
 log=$(git log --pretty=format:"%h${SEP}%s" "$range")
 breaking=$(git log --pretty=format:'%h' --grep='BREAKING CHANGE' --grep='BREAKING-CHANGE' "$range")
+model_paths=$(git log --pretty=format: --name-only "$range" -- pkg/model |
+  grep -v '_test\.go$' | sed '/^$/d' | sort -u)
 
 feat=""
 fix=""
@@ -131,6 +137,19 @@ emit() {
   printf '## %s\n\n%s\n' "$1" "$2"
 }
 
+if [ -n "$model_paths" ]; then
+  ddl_files=$(printf '%s\n' "$model_paths" | sed 's/^/- `/; s/$/`/')
+  ddl_notes="本区间有提交改动了 pkg/model/，**发布前必须补齐本节**：写明升级前需执行的 SQL（三库等价写法）
+与执行账号的权限要求（PostgreSQL 下需表 owner）；确认本次不涉及库结构变更就把本节正文改成「无」。
+
+涉及文件：
+${ddl_files}
+"
+else
+  ddl_notes=""
+fi
+
+emit "库结构变更（升级前须执行 SQL）" "$ddl_notes"
 emit "不兼容变更" "$breaking_notes"
 emit "新功能" "$feat"
 emit "修复" "$fix"
