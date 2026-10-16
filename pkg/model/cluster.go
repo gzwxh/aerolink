@@ -32,6 +32,12 @@ type Cluster struct {
 	// 与「有字节行 ⇔ URL 指向它」的不变式脱钩（见 cluster_badge_icon.go）。
 	BadgeIconURL string `json:"badge_icon_url" gorm:"type:varchar(255)"`
 
+	// Slug 是集群在浏览器地址（/_clusters/<slug>/...）里的稳定短名：创建时固化，
+	// 此后不随集群改名变化（已分享的链接优先于可读性）。
+	// 列可空且无 default：旧行为 NULL，由 MigrateClusterSlugBackfill 回填；多行 NULL
+	// 在 SQLite/MySQL/PostgreSQL 的唯一索引下都合法，不能改成 default ''（R9）。
+	Slug *string `json:"slug" gorm:"type:varchar(64);uniqueIndex"`
+
 	// 写操作二次确认：按操作**类别**分别开关，默认全关——升级后行为完全不变，
 	// 由管理员在「系统设置 → 集群 → 操作确认」里逐项开启。
 	//
@@ -59,6 +65,14 @@ func AddCluster(cluster *Cluster) error {
 func GetClusterByName(name string) (*Cluster, error) {
 	var cluster Cluster
 	if err := DB.Where("name = ?", name).First(&cluster).Error; err != nil {
+		return nil, err
+	}
+	return &cluster, nil
+}
+
+func GetClusterBySlug(slug string) (*Cluster, error) {
+	var cluster Cluster
+	if err := DB.Where("slug = ?", slug).First(&cluster).Error; err != nil {
 		return nil, err
 	}
 	return &cluster, nil

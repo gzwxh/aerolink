@@ -204,9 +204,28 @@ func (cm *ClusterManager) GetClientSet(clusterName string) (*ClientSet, error) {
 	return nil, fmt.Errorf("cluster not found: %s", clusterName)
 }
 
-func ImportClustersFromKubeconfig(kubeconfig *clientcmdapi.Config, setDefault bool) int64 {
+// ImportClustersFromKubeconfig 把 kubeconfig 的每个 context 导入为集群。
+// slugs（key = context name）承载逐行手填的 URL 短名；未指定的 context 自动生成。
+// 校验 fail-closed：任一短名非法/批内重复/与既有集群冲突时整批不写、返回错误。
+// 已存在的集群只更新 config，slug 一律不动（slug 创建时固化）。
+func ImportClustersFromKubeconfig(kubeconfig *clientcmdapi.Config, setDefault bool, slugs map[string]string) (int64, error) {
 	if len(kubeconfig.Contexts) == 0 {
-		return 0
+		return 0, nil
+	}
+
+	existingClusters, err := model.ListClusters()
+	if err != nil {
+		return 0, err
+	}
+	if err := ValidateImportSlugs(slugs, existingClusters); err != nil {
+		return 0, err
+	}
+
+	takenSlugs := make(map[string]bool, len(existingClusters)+len(slugs))
+	for _, c := range existingClusters {
+		if c.Slug != nil && *c.Slug != "" {
+			takenSlugs[*c.Slug] = true
+		}
 	}
 
 	importedCount := 0
@@ -230,6 +249,14 @@ func ImportClustersFromKubeconfig(kubeconfig *clientcmdapi.Config, setDefault bo
 			Name:      contextName,
 			Config:    model.SecretString(configStr),
 			IsDefault: setDefault && contextName == kubeconfig.CurrentContext,
+		}
+		if slug, ok := slugs[contextName]; ok && slug != "" {
+			cluster.Slug = &slug
+			takenSlugs[slug] = true
+		} else {
+			slug := GenerateUniqueSlug(contextName, takenSlugs)
+			cluster.Slug = &slug
+			takenSlugs[slug] = true
 		}
 		existingCluster, err := model.GetClusterByName(contextName)
 		if err != nil {
@@ -255,7 +282,7 @@ func ImportClustersFromKubeconfig(kubeconfig *clientcmdapi.Config, setDefault bo
 		klog.Infof("Updated cluster config success: %s", contextName)
 		ensureClusterAuthorizations(contextName)
 	}
-	return int64(importedCount)
+	return int64(importedCount), nil
 }
 
 // ensureClusterAuthorizations 给新导入或重新导入的集群补齐内置授权：

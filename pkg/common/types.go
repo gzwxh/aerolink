@@ -44,6 +44,9 @@ type PasswordLoginRequest struct {
 type ImportClustersRequest struct {
 	Config    string `json:"config"`
 	InCluster bool   `json:"inCluster"`
+	// Slugs 按 context name 逐行指定 URL 短名（/_clusters/<slug>/... 用）；
+	// 未指定的 context 走自动生成。整批校验失败则一条都不写。
+	Slugs map[string]string `json:"slugs,omitempty"`
 }
 
 type ClusterInfo struct {
@@ -52,6 +55,9 @@ type ClusterInfo struct {
 	Version     string `json:"version"`
 	IsDefault   bool   `json:"isDefault"`
 	Error       string `json:"error,omitempty"`
+	// Slug 是集群在浏览器地址里的稳定短名（注意：与 API 路径 /_clusters/<集群名>
+	// 同形不同源，后者是编码后的集群名，见方案文档 §3.1）。
+	Slug string `json:"slug,omitempty"`
 	// 集群徽章（见 model.Cluster）：只有启用了徽章的集群才下发，
 	// 未启用时字段整体省略，前端据此决定是否展示。
 	BadgeEnabled     bool   `json:"badgeEnabled,omitempty"`

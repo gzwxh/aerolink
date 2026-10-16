@@ -376,6 +376,58 @@ func TestGetClustersIncludesBadgeOnlyWhenEnabled(t *testing.T) {
 	}
 }
 
+// 前端导航靠 slug 把 /_clusters/<slug> 对应到集群（切换器/兜底重定向都吃这份数据）：
+// 展示用集群列表必须把 slug 一并下发；库里还没有 slug 的旧数据（迁移回填前的 nil）
+// 则省略字段，前端走兜底逻辑。
+func TestGetClustersIncludesSlug(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	slug := "kind-e2e"
+	for _, cluster := range []*model.Cluster{
+		{Name: "kind-e2e", Enable: true, Slug: &slug},
+		{Name: "legacy", Enable: true},
+	} {
+		if err := model.AddCluster(cluster); err != nil {
+			t.Fatalf("creating cluster %s: %v", cluster.Name, err)
+		}
+	}
+
+	manager := &ClusterManager{
+		clusters: map[string]*ClientSet{
+			"kind-e2e": {Name: "kind-e2e", Version: "v1.31.2"},
+			"legacy":   {Name: "legacy", Version: "v1.31.2"},
+		},
+		errors: map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/clusters", nil)
+	ctx.Set("user", model.User{Username: "alice", Roles: []common.Role{{
+		Name:     "limited",
+		Clusters: []string{"kind-e2e", "legacy"},
+	}}})
+
+	manager.GetClusters(ctx)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	byName := map[string]map[string]any{}
+	for _, item := range listed {
+		name, _ := item["name"].(string)
+		byName[name] = item
+	}
+	if got := byName["kind-e2e"]["slug"]; got != "kind-e2e" {
+		t.Errorf("slug = %#v, want kind-e2e", got)
+	}
+	if _, ok := byName["legacy"]["slug"]; ok {
+		t.Errorf("nil slug should be omitted, got %#v", byName["legacy"]["slug"])
+	}
+}
+
 func setupClusterHandlerTestDB(t *testing.T) {
 	t.Helper()
 	originalDB := model.DB

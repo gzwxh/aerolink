@@ -99,10 +99,15 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 	clusterState, errorState, _ := cm.snapshotState()
 	result := make([]gin.H, 0, len(clusters))
 	for _, cluster := range clusters {
+		clusterSlug := ""
+		if cluster.Slug != nil {
+			clusterSlug = *cluster.Slug
+		}
 		clusterInfo := gin.H{
 			"id":               cluster.ID,
 			"name":             cluster.Name,
 			"description":      cluster.Description,
+			"slug":             clusterSlug,
 			"enabled":          cluster.Enable,
 			"inCluster":        cluster.InCluster,
 			"clusterAgent":     cluster.ClusterAgent,
@@ -176,6 +181,7 @@ func (cm *ClusterManager) CreateCluster(c *gin.Context) {
 	var req struct {
 		Name          string `json:"name" binding:"required"`
 		Description   string `json:"description"`
+		Slug          string `json:"slug"`
 		Config        string `json:"config"`
 		PrometheusURL string `json:"prometheusURL"`
 		InCluster     bool   `json:"inCluster"`
@@ -198,6 +204,36 @@ func (cm *ClusterManager) CreateCluster(c *gin.Context) {
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// URL 短名：留空走自动生成（重名自动加后缀）；手填值非法/冲突一律显式报错，
+	// 不静默改写——值是人指定的，静默改写会让人以为生效的是别的值。
+	clusterSlug := strings.TrimSpace(req.Slug)
+	if clusterSlug != "" {
+		if err := ValidateSlugFormat(clusterSlug); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if _, err := model.GetClusterBySlug(clusterSlug); err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "slug already exists"})
+			return
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	} else {
+		existing, err := model.ListClusters()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		taken := make(map[string]bool, len(existing))
+		for _, ec := range existing {
+			if ec.Slug != nil && *ec.Slug != "" {
+				taken[*ec.Slug] = true
+			}
+		}
+		clusterSlug = GenerateUniqueSlug(req.Name, taken)
 	}
 
 	if req.IsDefault {
@@ -234,6 +270,7 @@ func (cm *ClusterManager) CreateCluster(c *gin.Context) {
 	cluster := &model.Cluster{
 		Name:                   req.Name,
 		Description:            req.Description,
+		Slug:                   &clusterSlug,
 		Config:                 model.SecretString(req.Config),
 		PrometheusURL:          req.PrometheusURL,
 		InCluster:              req.InCluster,
@@ -284,6 +321,11 @@ func applyStoredDisplayInfo(info *common.ClusterInfo, stored *model.Cluster) {
 		return
 	}
 	info.Description = stored.Description
+	// Slug：前端导航靠它把 /_clusters/<slug> 对应到集群；迁移回填保证非空，
+	// 但库里理论上还可能有未回填的旧数据（nil），不下发即回落到兜底重定向。
+	if stored.Slug != nil {
+		info.Slug = *stored.Slug
+	}
 	if stored.BadgeEnabled {
 		info.BadgeEnabled = true
 		info.BadgeText = stored.BadgeText
@@ -721,8 +763,10 @@ func (cm *ClusterManager) ImportClustersFromKubeconfig(c *gin.Context) {
 
 	if clusterReq.InCluster {
 		// 集群内配置
+		inClusterSlug := common.SlugifyClusterName("in-cluster")
 		cluster := &model.Cluster{
 			Name:        "in-cluster",
+			Slug:        &inClusterSlug,
 			InCluster:   true,
 			Description: "Kubernetes in-cluster config",
 			IsDefault:   true,
@@ -748,7 +792,11 @@ func (cm *ClusterManager) ImportClustersFromKubeconfig(c *gin.Context) {
 		return
 	}
 
-	importedCount := ImportClustersFromKubeconfig(kubeconfig, cc == 0)
+	importedCount, err := ImportClustersFromKubeconfig(kubeconfig, cc == 0, clusterReq.Slugs)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	TriggerClusterSync()
 	// 等待同步完成
 	time.Sleep(1 * time.Second)

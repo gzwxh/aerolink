@@ -122,6 +122,7 @@ func InitDB() {
 	}
 	runMigration("绑定组成员命名空间索引", MigrateBindingGroupMemberNamespace)
 	runMigration("清理 users.wechat 旧列", MigrateDropUserWechatColumn)
+	runMigration("集群 slug 回填", MigrateClusterSlugBackfill)
 
 	// 不论是否跳过迁移，都用只读方式确认关键列在不在（不需要 DDL 权限）。
 	// 这样设了 DB_MIGRATE=off 也不会漏掉「忘了执行 DBA 的 SQL」。
