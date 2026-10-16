@@ -298,7 +298,7 @@ export function StorageMountsEditor({
       {mounts.map((mount, index) => (
         <div
           key={index}
-          className="grid grid-cols-[150px_minmax(0,1fr)_120px_70px_auto] items-center gap-2"
+          className="grid grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)_70px_auto] items-center gap-2"
         >
           <Select
             value={mount.name}
