@@ -361,4 +361,33 @@ describe('配色主题的 token 契约', () => {
       ).toBeGreaterThanOrEqual(MIN_SECONDARY_CARD_CONTRAST)
     }
   )
+
+  /**
+   * 图表系列色画在卡片上必须看得出来。只挡「隐形」退化（历史最差 1.01~1.49）；
+   * WCAG 1.4.11 的 3:1 是后续统一调色的目标（12 套主题 × 明暗的存量差距大，
+   * 见台账 2026-10-19），不以断言一步卡死。相邻系列的区分度靠色相而非亮度差
+   * （ΔL 对同亮度异色相的调色板不成立），不设机器断言。
+   */
+  const MIN_CHART_CARD_CONTRAST = 1.5
+
+  it.each(cases)(
+    '$theme / $mode 的图表系列色在卡片上可见',
+    ({ tokens, theme, mode }) => {
+      const problems = [1, 2, 3, 4, 5]
+        .map(
+          (i) =>
+            [`chart-${i}`, ratio(tokens, `chart-${i}`, 'card', 'card')] as const
+        )
+        .map(([name, value]) =>
+          value === null || value < MIN_CHART_CARD_CONTRAST
+            ? `${name}: ${value === null ? '未定义' : value.toFixed(2)}`
+            : null
+        )
+        .filter((v): v is string => v !== null)
+      expect(
+        problems,
+        `${theme}/${mode} 有图表系列色在卡片上不可见（要求 ≥ ${MIN_CHART_CARD_CONTRAST}）`
+      ).toEqual([])
+    }
+  )
 })
