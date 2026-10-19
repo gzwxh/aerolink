@@ -40,6 +40,37 @@ export function resolveClusterBadgeColor(color?: string): string {
     : DEFAULT_CLUSTER_BADGE_COLOR
 }
 
+/** 底色上更清晰的前景字色，及其对底色的 WCAG 对比度（1~21）。 */
+export interface ClusterBadgeForeground {
+  color: string
+  contrast: number
+}
+
+/**
+ * 按自选底色挑前景字色。
+ *
+ * 底色是管理员填的任意 `#RRGGBB`，写死白字在浅色底上不可读（遗留清单：
+ * 语义状态色 token §7.3）。按 WCAG 相对亮度算黑/白两字对该底的对比度取大者，
+ * 显示端与配置弹窗的预览走同一函数，所见即所得。
+ */
+export function resolveClusterBadgeForeground(
+  color?: string
+): ClusterBadgeForeground {
+  const hex = resolveClusterBadgeColor(color).slice(1)
+  // sRGB 通道线性化后再按 WCAG 加权（0.03928 是 8 位精度的分界）。
+  const channel = (i: number) => {
+    const raw = parseInt(hex.slice(i, i + 2), 16) / 255
+    return raw <= 0.03928 ? raw / 12.92 : ((raw + 0.055) / 1.055) ** 2.4
+  }
+  const luminance =
+    0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+  const black = (luminance + 0.05) / 0.05
+  const white = 1.05 / (luminance + 0.05)
+  return black > white
+    ? { color: '#000000', contrast: black }
+    : { color: '#ffffff', contrast: white }
+}
+
 /** 徽章是否该出现：启用了徽章并且有说明文案，否则连占位都不要。 */
 export function hasClusterBadge(
   cluster?: ClusterBadgeSource | null
@@ -77,13 +108,17 @@ export function ClusterBadge({
     return null
   }
   const text = cluster.badgeText.trim()
+  const foreground = resolveClusterBadgeForeground(cluster.badgeColor)
 
   return (
     <span
       title={text}
-      style={{ backgroundColor: resolveClusterBadgeColor(cluster.badgeColor) }}
+      style={{
+        backgroundColor: resolveClusterBadgeColor(cluster.badgeColor),
+        color: foreground.color,
+      }}
       className={cn(
-        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium leading-4 whitespace-nowrap text-white',
+        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium leading-4 whitespace-nowrap',
         className
       )}
     >
@@ -156,9 +191,12 @@ export function ClusterBadgeIcon({
   return (
     <span
       title={iconText}
-      style={{ backgroundColor: resolveClusterBadgeColor(cluster?.badgeColor) }}
+      style={{
+        backgroundColor: resolveClusterBadgeColor(cluster?.badgeColor),
+        color: resolveClusterBadgeForeground(cluster?.badgeColor).color,
+      }}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center overflow-hidden rounded font-medium leading-none text-white',
+        'inline-flex shrink-0 items-center justify-center overflow-hidden rounded font-medium leading-none',
         classes.text,
         className
       )}

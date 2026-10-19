@@ -9,6 +9,7 @@ import {
   DEFAULT_CLUSTER_BADGE_COLOR,
   hasClusterBadge,
   resolveClusterBadgeColor,
+  resolveClusterBadgeForeground,
 } from './cluster-badge'
 
 describe('resolveClusterBadgeColor', () => {
@@ -22,6 +23,37 @@ describe('resolveClusterBadgeColor', () => {
     expect(resolveClusterBadgeColor('#fff;background:url(x)')).toBe(
       DEFAULT_CLUSTER_BADGE_COLOR
     )
+  })
+})
+
+describe('resolveClusterBadgeForeground', () => {
+  it('浅色底选黑字，深色底（含默认色与非法回落）选白字', () => {
+    expect(resolveClusterBadgeForeground('#ffffff').color).toBe('#000000')
+    expect(resolveClusterBadgeForeground('#e6f4f0').color).toBe('#000000')
+    expect(resolveClusterBadgeForeground('#0011ff').color).toBe('#ffffff')
+    expect(resolveClusterBadgeForeground('#000000').color).toBe('#ffffff')
+    // 非法颜色回落默认色（深蓝），同样白字。
+    expect(resolveClusterBadgeForeground('red').color).toBe('#ffffff')
+  })
+
+  // 黑/白两字的对比度曲线在亮度约 0.18 处相交，交点约 4.58:1——
+  // 所以「自动选更清晰的那种」对任何底色都至少 AA（4.5:1），
+  // 这是不依赖具体取值的性质，配置弹窗也因此不需要低对比警示。
+  it('任何合法底色，选出的字色对比度都不低于 4.5:1', () => {
+    const samples = [
+      '#ffffff',
+      '#e6f4f0',
+      '#b0b0b0',
+      '#808080',
+      '#444444',
+      '#0011ff',
+      '#000000',
+    ]
+    for (const color of samples) {
+      expect(
+        resolveClusterBadgeForeground(color).contrast
+      ).toBeGreaterThanOrEqual(4.5)
+    }
   })
 })
 
@@ -67,6 +99,22 @@ describe('ClusterBadge', () => {
     const badge = screen.getByTitle('测试环境')
     expect(badge).toHaveTextContent('测试环境')
     expect(badge).toHaveStyle({ backgroundColor: '#0011ff' })
+    // 深色底自动配白字。
+    expect(badge).toHaveStyle({ color: '#ffffff' })
+  })
+
+  it('浅色自选底自动配黑字，不再写死白字', () => {
+    render(
+      <ClusterBadge
+        cluster={{
+          badgeEnabled: true,
+          badgeText: '测试环境',
+          badgeColor: '#e6f4f0',
+        }}
+      />
+    )
+
+    expect(screen.getByTitle('测试环境')).toHaveStyle({ color: '#000000' })
   })
 
   // 说明文本上限 16 个字符，且必须整段显示：宽度就是按这个口径留的，
@@ -111,6 +159,7 @@ describe('ClusterBadgeIcon', () => {
     const icon = screen.getByTitle('测试')
     expect(icon).toHaveTextContent('测试')
     expect(icon).toHaveStyle({ backgroundColor: '#0011ff' })
+    expect(icon).toHaveStyle({ color: '#ffffff' })
   })
 
   // 图标与徽章开关互相独立：只换图标、不显示说明的集群也必须能看到自己的图标，
