@@ -161,6 +161,8 @@ The first visit walks through creating the admin account; configure the remainin
 | `AEROLINK_KUBE_API_QPS` / `AEROLINK_KUBE_API_BURST` | built-in | Kubernetes API rate limits |
 | `AEROLINK_CACHE_SYNC_TIMEOUT` | built-in | cluster cache sync timeout |
 | `DISABLE_CACHE` | no | `true` disables the resource cache (debugging) |
+| `AEROLINK_CLUSTER_PROBE_INTERVAL` | `15` | interval (seconds) for actively probing each cluster API; drives the "data may be stale" hint in the UI, `0` disables probing |
+| `AEROLINK_CLUSTER_STALE_AFTER` | `45` | threshold (seconds) for calling cluster data stale; `0` keeps only "never connected" and watch errors |
 
 ### 4. Database options
 

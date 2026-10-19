@@ -195,6 +195,8 @@ docker run -d --name aerolink --restart unless-stopped \
 | `AEROLINK_KUBE_API_QPS` / `AEROLINK_KUBE_API_BURST` | 内置值 | 访问 K8s API 的限速参数，集群规模大时可上调 |
 | `AEROLINK_CACHE_SYNC_TIMEOUT` | 内置值 | 集群缓存同步超时 |
 | `DISABLE_CACHE` | 否 | `true` 关闭资源缓存（调试用） |
+| `AEROLINK_CLUSTER_PROBE_INTERVAL` | `15` | 主动探活各集群 API 的间隔（秒）；集群掉线时界面据此提示「数据可能已过期」，`0` 关闭探活 |
+| `AEROLINK_CLUSTER_STALE_AFTER` | `45` | 判定集群数据陈旧的门槛（秒），`0` 只保留「从未连上过」与 watch 报错两种判据 |
 
 ### 4. 数据库选择
 
