@@ -25,7 +25,7 @@ import {
   useResources,
   useResourcesEvents,
 } from '@/lib/api'
-import { getEventTime } from '@/lib/k8s'
+import { getEventTime, getNodeStatus } from '@/lib/k8s'
 import {
   cn,
   enrichNodeConditionsWithHealth,
@@ -38,6 +38,7 @@ import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -61,11 +62,11 @@ import {
   MetadataListCard,
 } from '@/components/pod-overview-sidebar'
 import { PodTable } from '@/components/pod-table'
+import { RefreshIntervalSelect } from '@/components/refresh-interval-select'
 import {
   TerminalLauncher,
   useOpenWorkspaceSession,
 } from '@/components/terminal-launcher'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
   WorkloadInfoBlock,
   WorkloadInfoRow,
@@ -107,10 +108,14 @@ export function NodeDetail(props: { name: string }) {
   })
 
   const [untaintKey, setUntaintKey] = useState('')
+  // 节点随时可能失联，默认自动刷新；用户可以在标题栏把它关掉。
+  const [refreshInterval, setRefreshInterval] = useState(5000)
 
   const { data, isLoading, isError, error, refetch } = useResource(
     'nodes',
-    name
+    name,
+    undefined,
+    { refreshInterval }
   )
 
   const {
@@ -119,6 +124,7 @@ export function NodeDetail(props: { name: string }) {
     refetch: refetchRelated,
   } = useResources('pods', undefined, {
     fieldSelector: `spec.nodeName=${name}`,
+    refreshInterval,
   })
 
   const handleSaveYaml = async (content: Node) => {
@@ -249,7 +255,12 @@ export function NodeDetail(props: { name: string }) {
       value: 'events',
       label: t('common.tabs.events'),
       content: (
-        <EventTable resource="nodes" namespace={undefined} name={name} />
+        <EventTable
+          resource="nodes"
+          namespace={undefined}
+          name={name}
+          refreshInterval={refreshInterval}
+        />
       ),
     },
   ]
@@ -292,164 +303,124 @@ export function NodeDetail(props: { name: string }) {
               node={data}
               podCount={relatedPods?.length || 0}
               canUpdate={canUpdateNode}
+              refreshInterval={refreshInterval}
               onUntaint={handleUntaint}
             />
           ) : null
         }
         headerActions={
-          canUpdateNode ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditOpen(true)}
-              >
-                <IconPencil className="w-4 h-4" />
-                {t('common.actions.edit', 'Edit')}
-              </Button>
-              <Popover
-                open={isDrainPopoverOpen}
-                onOpenChange={setIsDrainPopoverOpen}
-              >
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <IconDroplet className="w-4 h-4" />
-                    {t('common.actions.drain')}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80">
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium">
-                        {t('detail.dialogs.drainNode.title')}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        {t('detail.dialogs.drainNode.description')}
-                      </p>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="force"
-                          checked={drainOptions.force}
-                          onChange={(e) =>
-                            setDrainOptions({
-                              ...drainOptions,
-                              force: e.target.checked,
-                            })
-                          }
-                        />
-                        <Label htmlFor="force" className="text-sm">
-                          {t('detail.dialogs.drainNode.forceDrain')}
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="deleteLocalData"
-                          checked={drainOptions.deleteLocalData}
-                          onChange={(e) =>
-                            setDrainOptions({
-                              ...drainOptions,
-                              deleteLocalData: e.target.checked,
-                            })
-                          }
-                        />
-                        <Label htmlFor="deleteLocalData" className="text-sm">
-                          {t('detail.dialogs.drainNode.deleteLocalData')}
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="ignoreDaemonsets"
-                          checked={drainOptions.ignoreDaemonsets}
-                          onChange={(e) =>
-                            setDrainOptions({
-                              ...drainOptions,
-                              ignoreDaemonsets: e.target.checked,
-                            })
-                          }
-                        />
-                        <Label htmlFor="ignoreDaemonsets" className="text-sm">
-                          {t('detail.dialogs.drainNode.ignoreDaemonSets')}
-                        </Label>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="gracePeriod" className="text-sm">
-                          {t('detail.dialogs.drainNode.gracePeriod')}
-                        </Label>
-                        <Input
-                          id="gracePeriod"
-                          type="number"
-                          value={drainOptions.gracePeriod}
-                          onChange={(e) =>
-                            setDrainOptions({
-                              ...drainOptions,
-                              gracePeriod: parseInt(e.target.value) || 30,
-                            })
-                          }
-                          min={0}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleDrain}
-                        size="sm"
-                        variant="destructive"
-                      >
-                        {t('detail.dialogs.drainNode.drainButton')}
-                      </Button>
-                      <Button
-                        onClick={() => setIsDrainPopoverOpen(false)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        {t('common.actions.cancel')}
-                      </Button>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {data?.spec?.unschedulable ? (
-                <Button onClick={handleUncordon} variant="outline" size="sm">
-                  <IconReload className="w-4 h-4" />
-                  {t('common.actions.uncordon')}
+          <>
+            <RefreshIntervalSelect
+              value={refreshInterval}
+              onChange={setRefreshInterval}
+            />
+            {canUpdateNode ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditOpen(true)}
+                >
+                  <IconPencil className="w-4 h-4" />
+                  {t('common.actions.edit', 'Edit')}
                 </Button>
-              ) : (
                 <Popover
-                  open={isCordonPopoverOpen}
-                  onOpenChange={setIsCordonPopoverOpen}
+                  open={isDrainPopoverOpen}
+                  onOpenChange={setIsDrainPopoverOpen}
                 >
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm">
-                      <IconBan className="w-4 h-4" />
-                      {t('common.actions.cordon')}
+                      <IconDroplet className="w-4 h-4" />
+                      {t('common.actions.drain')}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-64">
+                  <PopoverContent className="w-80">
                     <div className="space-y-4">
                       <div>
                         <h4 className="font-medium">
-                          {t('detail.dialogs.cordonNode.title')}
+                          {t('detail.dialogs.drainNode.title')}
                         </h4>
                         <p className="text-sm text-muted-foreground">
-                          {t('detail.dialogs.cordonNode.description')}
+                          {t('detail.dialogs.drainNode.description')}
                         </p>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="force"
+                            checked={drainOptions.force}
+                            onChange={(e) =>
+                              setDrainOptions({
+                                ...drainOptions,
+                                force: e.target.checked,
+                              })
+                            }
+                          />
+                          <Label htmlFor="force" className="text-sm">
+                            {t('detail.dialogs.drainNode.forceDrain')}
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="deleteLocalData"
+                            checked={drainOptions.deleteLocalData}
+                            onChange={(e) =>
+                              setDrainOptions({
+                                ...drainOptions,
+                                deleteLocalData: e.target.checked,
+                              })
+                            }
+                          />
+                          <Label htmlFor="deleteLocalData" className="text-sm">
+                            {t('detail.dialogs.drainNode.deleteLocalData')}
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="ignoreDaemonsets"
+                            checked={drainOptions.ignoreDaemonsets}
+                            onChange={(e) =>
+                              setDrainOptions({
+                                ...drainOptions,
+                                ignoreDaemonsets: e.target.checked,
+                              })
+                            }
+                          />
+                          <Label htmlFor="ignoreDaemonsets" className="text-sm">
+                            {t('detail.dialogs.drainNode.ignoreDaemonSets')}
+                          </Label>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="gracePeriod" className="text-sm">
+                            {t('detail.dialogs.drainNode.gracePeriod')}
+                          </Label>
+                          <Input
+                            id="gracePeriod"
+                            type="number"
+                            value={drainOptions.gracePeriod}
+                            onChange={(e) =>
+                              setDrainOptions({
+                                ...drainOptions,
+                                gracePeriod: parseInt(e.target.value) || 30,
+                              })
+                            }
+                            min={0}
+                          />
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         <Button
-                          onClick={handleCordon}
+                          onClick={handleDrain}
                           size="sm"
                           variant="destructive"
                         >
-                          {t('detail.dialogs.cordonNode.cordonButton')}
+                          {t('detail.dialogs.drainNode.drainButton')}
                         </Button>
                         <Button
-                          onClick={() => setIsCordonPopoverOpen(false)}
+                          onClick={() => setIsDrainPopoverOpen(false)}
                           size="sm"
                           variant="outline"
                         >
@@ -459,109 +430,161 @@ export function NodeDetail(props: { name: string }) {
                     </div>
                   </PopoverContent>
                 </Popover>
-              )}
 
-              <Popover
-                open={isTaintPopoverOpen}
-                onOpenChange={setIsTaintPopoverOpen}
-              >
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <IconLock className="w-4 h-4" />
-                    {t('common.actions.taint')}
+                {data?.spec?.unschedulable ? (
+                  <Button onClick={handleUncordon} variant="outline" size="sm">
+                    <IconReload className="w-4 h-4" />
+                    {t('common.actions.uncordon')}
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80">
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium">
-                        {t('detail.dialogs.taintNode.title')}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        {t('detail.dialogs.taintNode.description')}
-                      </p>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="taintKey" className="text-sm">
-                          {t('detail.dialogs.taintNode.key')}
-                        </Label>
-                        <Input
-                          id="taintKey"
-                          value={taintData.key}
-                          onChange={(e) =>
-                            setTaintData({ ...taintData, key: e.target.value })
-                          }
-                          placeholder={t(
-                            'detail.dialogs.taintNode.keyPlaceholder'
-                          )}
-                        />
+                ) : (
+                  <Popover
+                    open={isCordonPopoverOpen}
+                    onOpenChange={setIsCordonPopoverOpen}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <IconBan className="w-4 h-4" />
+                        {t('common.actions.cordon')}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64">
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="font-medium">
+                            {t('detail.dialogs.cordonNode.title')}
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            {t('detail.dialogs.cordonNode.description')}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleCordon}
+                            size="sm"
+                            variant="destructive"
+                          >
+                            {t('detail.dialogs.cordonNode.cordonButton')}
+                          </Button>
+                          <Button
+                            onClick={() => setIsCordonPopoverOpen(false)}
+                            size="sm"
+                            variant="outline"
+                          >
+                            {t('common.actions.cancel')}
+                          </Button>
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="taintValue" className="text-sm">
-                          {t('detail.dialogs.taintNode.value')}
-                        </Label>
-                        <Input
-                          id="taintValue"
-                          value={taintData.value}
-                          onChange={(e) =>
-                            setTaintData({
-                              ...taintData,
-                              value: e.target.value,
-                            })
-                          }
-                          placeholder={t(
-                            'detail.dialogs.taintNode.valuePlaceholder'
-                          )}
-                        />
+                    </PopoverContent>
+                  </Popover>
+                )}
+
+                <Popover
+                  open={isTaintPopoverOpen}
+                  onOpenChange={setIsTaintPopoverOpen}
+                >
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <IconLock className="w-4 h-4" />
+                      {t('common.actions.taint')}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium">
+                          {t('detail.dialogs.taintNode.title')}
+                        </h4>
+                        <p className="text-sm text-muted-foreground">
+                          {t('detail.dialogs.taintNode.description')}
+                        </p>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="taintEffect" className="text-sm">
-                          {t('detail.dialogs.taintNode.effect')}
-                        </Label>
-                        <Select
-                          value={taintData.effect}
-                          onValueChange={(
-                            value:
-                              'NoSchedule' | 'PreferNoSchedule' | 'NoExecute'
-                          ) => setTaintData({ ...taintData, effect: value })}
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="taintKey" className="text-sm">
+                            {t('detail.dialogs.taintNode.key')}
+                          </Label>
+                          <Input
+                            id="taintKey"
+                            value={taintData.key}
+                            onChange={(e) =>
+                              setTaintData({
+                                ...taintData,
+                                key: e.target.value,
+                              })
+                            }
+                            placeholder={t(
+                              'detail.dialogs.taintNode.keyPlaceholder'
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="taintValue" className="text-sm">
+                            {t('detail.dialogs.taintNode.value')}
+                          </Label>
+                          <Input
+                            id="taintValue"
+                            value={taintData.value}
+                            onChange={(e) =>
+                              setTaintData({
+                                ...taintData,
+                                value: e.target.value,
+                              })
+                            }
+                            placeholder={t(
+                              'detail.dialogs.taintNode.valuePlaceholder'
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="taintEffect" className="text-sm">
+                            {t('detail.dialogs.taintNode.effect')}
+                          </Label>
+                          <Select
+                            value={taintData.effect}
+                            onValueChange={(
+                              value:
+                                'NoSchedule' | 'PreferNoSchedule' | 'NoExecute'
+                            ) => setTaintData({ ...taintData, effect: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="NoSchedule">
+                                NoSchedule
+                              </SelectItem>
+                              <SelectItem value="PreferNoSchedule">
+                                PreferNoSchedule
+                              </SelectItem>
+                              <SelectItem value="NoExecute">
+                                NoExecute
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleTaint}
+                          size="sm"
+                          variant="destructive"
                         >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="NoSchedule">
-                              NoSchedule
-                            </SelectItem>
-                            <SelectItem value="PreferNoSchedule">
-                              PreferNoSchedule
-                            </SelectItem>
-                            <SelectItem value="NoExecute">NoExecute</SelectItem>
-                          </SelectContent>
-                        </Select>
+                          {t('detail.dialogs.taintNode.addTaintButton')}
+                        </Button>
+                        <Button
+                          onClick={() => setIsTaintPopoverOpen(false)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {t('common.actions.cancel')}
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleTaint}
-                        size="sm"
-                        variant="destructive"
-                      >
-                        {t('detail.dialogs.taintNode.addTaintButton')}
-                      </Button>
-                      <Button
-                        onClick={() => setIsTaintPopoverOpen(false)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        {t('common.actions.cancel')}
-                      </Button>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </>
-          ) : null
+                  </PopoverContent>
+                </Popover>
+              </>
+            ) : null}
+          </>
         }
         extraTabs={extraTabs}
       />
@@ -580,12 +603,15 @@ function NodeOverview({
   node,
   podCount,
   canUpdate,
+  refreshInterval,
   onUntaint,
 }: {
   node: Node
   podCount: number
   /** 当前用户是否可以修改节点（污点、cordon 等）。 */
   canUpdate: boolean
+  /** 自动刷新间隔（毫秒），0 表示关闭。 */
+  refreshInterval: number
   onUntaint: (key?: string) => void
 }) {
   const { t } = useTranslation()
@@ -594,7 +620,9 @@ function NodeOverview({
   const annotations = node.metadata?.annotations || {}
   const { data: events, isLoading: isEventsLoading } = useResourcesEvents(
     'nodes',
-    name
+    name,
+    undefined,
+    { refreshInterval }
   )
   const { data: relatedResources, isLoading: isRelatedLoading } =
     useRelatedResources('nodes', name)
@@ -610,9 +638,26 @@ function NodeOverview({
       )
     })
   }, [events])
-  const isReady = node.status?.conditions?.some(
-    (condition) => condition.type === 'Ready' && condition.status === 'True'
-  )
+  const status = getNodeStatus(node)
+  // 心跳停了说明这份数据本身可能已经过期，和就绪状态分开提示。
+  const statusDetail = [
+    status.heartbeatStale
+      ? t('nodes.heartbeatStale', {
+          minutes: Math.max(
+            1,
+            Math.round((status.heartbeatAgeMs ?? 0) / 60000)
+          ),
+        })
+      : undefined,
+    status.pressures.length > 0
+      ? t('nodes.pressures', { pressures: status.pressures.join(', ') })
+      : undefined,
+    node.spec?.unschedulable
+      ? t('detail.fields.schedulingDisabled')
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ')
   const role =
     Object.keys(labels)
       .find((key) => key.startsWith('node-role.kubernetes.io/'))
@@ -639,23 +684,31 @@ function NodeOverview({
           label={t('common.fields.status')}
           value={
             <span className="inline-flex min-w-0 items-center gap-2">
-              {isReady ? (
+              {status.unreachable ? (
+                <IconExclamationCircle className="size-4 shrink-0 fill-destructive" />
+              ) : status.ready === 'True' ? (
                 <IconCircleCheckFilled className="size-4 shrink-0 fill-success" />
               ) : (
-                <IconExclamationCircle className="size-4 shrink-0 fill-destructive" />
+                <IconExclamationCircle
+                  className={`size-4 shrink-0 ${
+                    status.ready === 'Unknown'
+                      ? 'fill-muted-foreground'
+                      : 'fill-destructive'
+                  }`}
+                />
               )}
               <span className="truncate">
-                {isReady
-                  ? t('common.fields.ready')
-                  : t('common.messages.notReady')}
+                {status.unreachable
+                  ? t('nodes.status.unreachable')
+                  : status.ready === 'True'
+                    ? t('common.fields.ready')
+                    : status.ready === 'Unknown'
+                      ? t('nodes.status.unknown')
+                      : t('common.messages.notReady')}
               </span>
             </span>
           }
-          detail={
-            node.spec?.unschedulable
-              ? t('detail.fields.schedulingDisabled')
-              : undefined
-          }
+          detail={statusDetail || undefined}
         />
         <WorkloadSummaryCard label={t('common.fields.role')} value={role} />
         <WorkloadSummaryCard

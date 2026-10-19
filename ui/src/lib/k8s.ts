@@ -5,6 +5,7 @@ import {
   ContainerStatus,
   EphemeralContainer,
   Event as KubernetesEvent,
+  Node,
   Pod,
   Service,
 } from 'kubernetes-types/core/v1'
@@ -412,6 +413,134 @@ export function getDeploymentStatus(
   }
 
   return 'Unknown'
+}
+
+/** kubelet 每 10s 上报一次心跳，node-monitor-grace-period 默认 40s；超过 1 分钟没更新即视为心跳已停。 */
+export const NODE_HEARTBEAT_STALE_MS = 60_000
+
+/** node-controller 判定节点失联时打的污点。 */
+const UNREACHABLE_TAINT_KEYS = [
+  'node.kubernetes.io/unreachable',
+  'node.kubernetes.io/not-ready',
+]
+
+/** kubelet 上报的压力类条件；为 True 即节点资源吃紧。 */
+const PRESSURE_CONDITION_TYPES = [
+  'MemoryPressure',
+  'DiskPressure',
+  'PIDPressure',
+] as const
+
+export type NodeStatusKind =
+  | 'Ready'
+  | 'NotReady'
+  | 'Unreachable'
+  | 'Ready,SchedulingDisabled'
+  | 'NotReady,SchedulingDisabled'
+  | 'NetworkUnavailable'
+  | 'MemoryPressure'
+  | 'DiskPressure'
+  | 'PIDPressure'
+  | 'Unknown'
+
+export interface NodeStatus {
+  /** 展示用的状态字面量，与资源列表页既有取值保持一致。 */
+  kind: NodeStatusKind
+  /** Ready 条件的状态；条件缺失时按 Unknown。 */
+  ready: 'True' | 'False' | 'Unknown'
+  /** 失联：带着失联污点，或者 Ready 已不是 True 且心跳停了。 */
+  unreachable: boolean
+  /** 心跳超过 NODE_HEARTBEAT_STALE_MS 未更新。 */
+  heartbeatStale: boolean
+  /** 心跳距今毫秒数；没有 lastHeartbeatTime 时为 null。 */
+  heartbeatAgeMs: number | null
+  /** 已停止调度（spec.unschedulable）。 */
+  cordoned: boolean
+  /**
+   * 为 True 的压力条件（MemoryPressure/DiskPressure/PIDPressure）。
+   * 压力不参与 kind：Ready=True + 压力的组合信息只有这里能带上。
+   */
+  pressures: string[]
+}
+
+/**
+ * 汇总节点的就绪、失联与心跳新鲜度。
+ *
+ * 接口拿到的是 apiserver 的快照，`Ready=True` 也可能是缓存里的旧值，因此心跳陈旧
+ * 与就绪状态分开表达，由调用方决定怎么提示。
+ */
+export function getNodeStatus(
+  node?: Node,
+  now: number = Date.now()
+): NodeStatus {
+  const conditions = node?.status?.conditions || []
+  const readyCondition = conditions.find(
+    (condition) => condition.type === 'Ready'
+  )
+  const ready = (readyCondition?.status as NodeStatus['ready']) || 'Unknown'
+  const cordoned = node?.spec?.unschedulable === true
+  const taints = node?.spec?.taints || []
+  const heartbeatAgeMs = getHeartbeatAgeMs(
+    readyCondition?.lastHeartbeatTime,
+    now
+  )
+  const heartbeatStale =
+    heartbeatAgeMs !== null && heartbeatAgeMs > NODE_HEARTBEAT_STALE_MS
+  const unreachable =
+    taints.some((taint) => UNREACHABLE_TAINT_KEYS.includes(taint.key || '')) ||
+    (ready !== 'True' && heartbeatStale)
+  const pressures = PRESSURE_CONDITION_TYPES.filter(
+    (type) =>
+      conditions.find((condition) => condition.type === type)?.status === 'True'
+  )
+
+  const status = (kind: NodeStatusKind): NodeStatus => ({
+    kind,
+    ready,
+    unreachable,
+    heartbeatStale,
+    heartbeatAgeMs,
+    cordoned,
+    pressures,
+  })
+
+  // 失联比 cordon 更值得先说：停止调度的节点也可能已经掉线。
+  if (unreachable) {
+    return status('Unreachable')
+  }
+  if (ready === 'True') {
+    return status(cordoned ? 'Ready,SchedulingDisabled' : 'Ready')
+  }
+  if (ready === 'Unknown') {
+    return status('Unknown')
+  }
+  if (cordoned) {
+    return status('NotReady,SchedulingDisabled')
+  }
+
+  const notReadyReasons = [
+    'NetworkUnavailable',
+    ...PRESSURE_CONDITION_TYPES,
+  ] as const
+  const reason = notReadyReasons.find(
+    (type) =>
+      conditions.find((condition) => condition.type === type)?.status === 'True'
+  )
+  return status(reason || 'NotReady')
+}
+
+function getHeartbeatAgeMs(
+  lastHeartbeatTime?: string,
+  now: number = Date.now()
+): number | null {
+  if (!lastHeartbeatTime) {
+    return null
+  }
+  const heartbeat = new Date(lastHeartbeatTime).getTime()
+  if (Number.isNaN(heartbeat)) {
+    return null
+  }
+  return Math.max(0, now - heartbeat)
 }
 
 export function isStandardK8sResource(kind: string): boolean {

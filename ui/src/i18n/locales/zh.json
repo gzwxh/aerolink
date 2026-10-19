@@ -836,6 +836,12 @@
   "nodes": {
     "title": "Nodes",
     "cordoned": "已停止调度",
+    "status": {
+      "unreachable": "失联",
+      "unknown": "未知"
+    },
+    "heartbeatStale": "心跳已停 {{minutes}} 分钟，数据可能已过期",
+    "pressures": "存在压力条件：{{pressures}}",
     "cordonedCount": "已停止调度 {{count}} 个节点",
     "uncordonedCount": "已恢复调度 {{count}} 个节点"
   },
@@ -1146,6 +1152,8 @@
     },
     "watch": "监听",
     "refreshWatch": "重新连接并拉取",
+    "refreshInterval": "自动刷新间隔",
+    "refreshOff": "关闭",
     "namespace": "Namespace",
     "allNamespaces": "全部命名空间",
     "namespaceCount": "{{count}} 个命名空间",

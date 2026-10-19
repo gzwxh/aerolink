@@ -688,7 +688,8 @@ export const applyResource = async (
 export const useResourcesEvents = <T extends ResourceType>(
   resource: T,
   name: string,
-  namespace?: string
+  namespace?: string,
+  options?: { refreshInterval?: number }
 ) => {
   return useQuery({
     queryKey: ['resource-events', resource, namespace, name],
@@ -705,6 +706,7 @@ export const useResourcesEvents = <T extends ResourceType>(
     select: (data: ResourcesTypeMap['events']): ResourcesItems<'events'> =>
       data.items,
     placeholderData: (prevData) => prevData,
+    refetchInterval: options?.refreshInterval || 0,
   })
 }
 

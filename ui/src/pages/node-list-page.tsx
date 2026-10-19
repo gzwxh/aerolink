@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
+  IconAlertTriangle,
   IconBan,
   IconCircleCheckFilled,
   IconDownload,
@@ -14,7 +15,7 @@ import { toast } from 'sonner'
 
 import { NodeWithMetrics } from '@/types/api'
 import { cordonNode, uncordonNode } from '@/lib/api'
-import { createSearchFilter } from '@/lib/k8s'
+import { createSearchFilter, getNodeStatus, type NodeStatus } from '@/lib/k8s'
 import { statusBadge } from '@/lib/status-badge'
 import { formatDate, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
@@ -34,51 +35,6 @@ import {
   ResourceTable,
   type ResourceTableBatchAction,
 } from '@/components/resource-table'
-
-function getNodeStatus(node: NodeWithMetrics): string {
-  const conditions = node.status?.conditions || []
-  const isUnschedulable = node.spec?.unschedulable || false
-
-  // 先检查节点是否就绪
-  const readyCondition = conditions.find((c) => c.type === 'Ready')
-  const isReady = readyCondition?.status === 'True'
-
-  if (isUnschedulable) {
-    if (isReady) {
-      return 'Ready,SchedulingDisabled'
-    } else {
-      return 'NotReady,SchedulingDisabled'
-    }
-  }
-
-  if (isReady) {
-    return 'Ready'
-  }
-
-  const networkUnavailable = conditions.find(
-    (c) => c.type === 'NetworkUnavailable'
-  )
-  if (networkUnavailable?.status === 'True') {
-    return 'NetworkUnavailable'
-  }
-
-  const memoryPressure = conditions.find((c) => c.type === 'MemoryPressure')
-  if (memoryPressure?.status === 'True') {
-    return 'MemoryPressure'
-  }
-
-  const diskPressure = conditions.find((c) => c.type === 'DiskPressure')
-  if (diskPressure?.status === 'True') {
-    return 'DiskPressure'
-  }
-
-  const pidPressure = conditions.find((c) => c.type === 'PIDPressure')
-  if (pidPressure?.status === 'True') {
-    return 'PIDPressure'
-  }
-
-  return 'NotReady'
-}
 
 function getNodeRoles(node: NodeWithMetrics): string[] {
   const labels = node.metadata?.labels || {}
@@ -140,6 +96,21 @@ function getNodeIP(node: NodeWithMetrics): string {
 // 系统管理的键（kubernetes.io/...）是自动创建的，对运维来说是噪音，因此一律隐藏。
 const isSystemKey = (key: string) => key.includes('kubernetes.io')
 
+// 例外：节点异常时 node-controller / kubelet 打的这些污点必须留在污点列里，
+// 它们是「节点掉过线」「资源吃紧」的直接证据，藏起来就看不出异常。
+const VISIBLE_SYSTEM_TAINT_KEYS = new Set([
+  'node.kubernetes.io/unreachable',
+  'node.kubernetes.io/not-ready',
+  'node.kubernetes.io/network-unavailable',
+  'node.kubernetes.io/memory-pressure',
+  'node.kubernetes.io/disk-pressure',
+  'node.kubernetes.io/pid-pressure',
+])
+
+/** 污点列需要隐藏的键。 */
+const isHiddenTaintKey = (key: string) =>
+  isSystemKey(key) && !VISIBLE_SYSTEM_TAINT_KEYS.has(key)
+
 function formatNodeTaint(taint: {
   key: string
   value?: string
@@ -149,9 +120,11 @@ function formatNodeTaint(taint: {
   return `${taint.key}${value}:${taint.effect ?? ''}`
 }
 
-/** 节点的非系统污点。 */
+/** 节点上需要展示的污点。 */
 function nodeTaints(node: NodeWithMetrics) {
-  return (node.spec?.taints ?? []).filter((taint) => !isSystemKey(taint.key))
+  return (node.spec?.taints ?? []).filter(
+    (taint) => !isHiddenTaintKey(taint.key)
+  )
 }
 
 /** 节点的非系统标签，按 key 排序。 */
@@ -234,10 +207,39 @@ function NodeLabelsCell({ node }: { node: NodeWithMetrics }) {
   )
 }
 
+/** 表格里的状态徽章：失联单独提示，其余沿用 k8s 的状态字面量。 */
+function NodeStatusBadge({ status }: { status: NodeStatus }) {
+  const { t } = useTranslation()
+
+  if (status.unreachable) {
+    return (
+      <Badge {...statusBadge('failure')} className="text-xs">
+        <NodeStatusIcon status={status.kind} />
+        {t('nodes.status.unreachable')}
+      </Badge>
+    )
+  }
+
+  if (status.cordoned) {
+    return (
+      <Badge {...statusBadge('warning')} className="text-xs">
+        {t('nodes.cordoned', 'Cordoned')}
+      </Badge>
+    )
+  }
+
+  return (
+    <Badge variant="outline" className="text-muted-foreground px-1.5">
+      <NodeStatusIcon status={status.kind} />
+      {status.kind === 'Unknown' ? t('nodes.status.unknown') : status.kind}
+    </Badge>
+  )
+}
+
 const nodeSearchFilter = createSearchFilter<NodeWithMetrics>(
   (n) => n.metadata?.name,
   (n) => n.status?.nodeInfo?.kubeletVersion,
-  (n) => getNodeStatus(n),
+  (n) => getNodeStatus(n).kind,
   (n) => getNodeRoles(n),
   (n) => getNodeIP(n)
 )
@@ -397,23 +399,43 @@ export function NodeListPage() {
           </div>
         ),
       }),
-      columnHelper.accessor((row) => getNodeStatus(row), {
+      columnHelper.accessor((row) => getNodeStatus(row).kind, {
         id: 'status',
         header: t('common.fields.status'),
         cell: ({ row }) => {
-          if (row.original.spec?.unschedulable) {
-            return (
-              <Badge {...statusBadge('warning')} className="text-xs">
-                {t('nodes.cordoned', 'Cordoned')}
-              </Badge>
-            )
-          }
           const status = getNodeStatus(row.original)
           return (
-            <Badge variant="outline" className="text-muted-foreground px-1.5">
-              <NodeStatusIcon status={status} />
-              {status}
-            </Badge>
+            <div className="flex items-center gap-1.5">
+              <NodeStatusBadge status={status} />
+              {status.heartbeatStale && !status.unreachable && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <IconAlertTriangle className="text-warning size-3.5 shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t('nodes.heartbeatStale', {
+                      minutes: Math.max(
+                        1,
+                        Math.round((status.heartbeatAgeMs ?? 0) / 60000)
+                      ),
+                    })}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {/* Ready=True 时压力不进 kind（徽标仍显示「就绪」），单独用警告图标提示。 */}
+              {status.ready === 'True' && status.pressures.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <IconAlertTriangle className="text-warning size-3.5 shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t('nodes.pressures', {
+                      pressures: status.pressures.join(', '),
+                    })}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           )
         },
       }),

@@ -9,6 +9,7 @@ import {
 export type NodeStatusType =
   | 'Ready'
   | 'NotReady'
+  | 'Unreachable'
   | 'Ready,SchedulingDisabled'
   | 'NotReady,SchedulingDisabled'
   | 'NetworkUnavailable'
@@ -34,6 +35,7 @@ export const NodeStatusIcon = ({
       return <IconPlayerPause className={`fill-warning ${className}`} />
 
     case 'NotReady':
+    case 'Unreachable':
     case 'NotReady,SchedulingDisabled':
     case 'NetworkUnavailable':
       return <IconCircleXFilled className={`fill-destructive ${className}`} />

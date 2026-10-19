@@ -15,12 +15,15 @@ export function EventTable(props: {
   resource: ResourceType
   name: string
   namespace?: string
+  /** 自动刷新间隔（毫秒），不传表示不自动刷新。 */
+  refreshInterval?: number
 }) {
   const { t } = useTranslation()
   const { data: events, isLoading } = useResourcesEvents(
     props.resource,
     props.name,
-    props.namespace
+    props.namespace,
+    { refreshInterval: props.refreshInterval }
   )
   const sortedEvents = useMemo(() => {
     return (events || []).slice().sort((a, b) => {

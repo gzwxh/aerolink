@@ -1,12 +1,6 @@
 import React from 'react'
 import { ColumnDef, Table } from '@tanstack/react-table'
-import {
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-  XCircle,
-} from 'lucide-react'
+import { Plus, Search, Trash2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { ResourceType } from '@/types/api'
@@ -23,6 +17,7 @@ import {
 import { Toggle } from '@/components/ui/toggle'
 
 import { RefreshButton } from './refresh-button'
+import { RefreshIntervalSelect } from './refresh-interval-select'
 import { NamespaceSelector } from './selector/namespace-selector'
 import { TableColumnToggle } from './table-column-toggle'
 
@@ -141,25 +136,11 @@ export function ResourceTableToolbar<T>({
               }
             />
           ) : null}
-          <Select
-            value={refreshInterval.toString()}
-            onValueChange={(value) => onRefreshIntervalChange(Number(value))}
+          <RefreshIntervalSelect
+            value={refreshInterval}
+            onChange={onRefreshIntervalChange}
             disabled={useSSE}
-          >
-            <SelectTrigger className="w-full sm:w-[120px]">
-              <div className="flex items-center gap-2">
-                <RefreshCw className="h-4 w-4" />
-                <SelectValue />
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="0">Off</SelectItem>
-              <SelectItem value="1000">1s</SelectItem>
-              <SelectItem value="5000">5s</SelectItem>
-              <SelectItem value="10000">10s</SelectItem>
-              <SelectItem value="30000">30s</SelectItem>
-            </SelectContent>
-          </Select>
+          />
           {!clusterScope && (
             <NamespaceSelector
               selectedNamespace={selectedNamespace}

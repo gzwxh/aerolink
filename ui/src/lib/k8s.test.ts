@@ -1,13 +1,15 @@
-import type { Pod, Service } from 'kubernetes-types/core/v1'
+import type { Node, Pod, Service } from 'kubernetes-types/core/v1'
 import type { ObjectMeta } from 'kubernetes-types/meta/v1'
 import { describe, expect, it } from 'vitest'
 
 import type { CustomResource } from '@/types/api'
 
 import {
+  getNodeStatus,
   getOwnerInfo,
   getPrinterColumnValue,
   groupPodsByNamespace,
+  NODE_HEARTBEAT_STALE_MS,
   servicesForWorkload,
   sumPodRestarts,
 } from './k8s'
@@ -258,5 +260,143 @@ describe('servicesForWorkload', () => {
       labels: { app: 'web' },
     })
     expect(matched).toEqual([])
+  })
+})
+
+describe('getNodeStatus', () => {
+  const NOW = new Date('2026-10-16T08:00:00Z').getTime()
+
+  const node = (
+    ready: string,
+    options: {
+      heartbeatAgoMs?: number
+      taints?: string[]
+      unschedulable?: boolean
+      conditions?: { type: string; status: string }[]
+    } = {}
+  ) =>
+    ({
+      metadata: { name: 'k8s-node101' },
+      spec: {
+        unschedulable: options.unschedulable,
+        taints: (options.taints || []).map((key) => ({
+          key,
+          effect: 'NoSchedule',
+        })),
+      },
+      status: {
+        conditions: [
+          {
+            type: 'Ready',
+            status: ready,
+            ...(options.heartbeatAgoMs === undefined
+              ? {}
+              : {
+                  lastHeartbeatTime: new Date(
+                    NOW - options.heartbeatAgoMs
+                  ).toISOString(),
+                }),
+          },
+          ...(options.conditions || []),
+        ],
+      },
+    }) as Node
+
+  it('就绪且心跳新鲜时是 Ready', () => {
+    const status = getNodeStatus(node('True', { heartbeatAgoMs: 5000 }), NOW)
+
+    expect(status.kind).toBe('Ready')
+    expect(status.unreachable).toBe(false)
+    expect(status.heartbeatStale).toBe(false)
+  })
+
+  it('Ready=Unknown 且心跳停了算失联（node-controller 就是这么写的）', () => {
+    const status = getNodeStatus(
+      node('Unknown', { heartbeatAgoMs: 5 * 60_000 }),
+      NOW
+    )
+
+    expect(status.kind).toBe('Unreachable')
+    expect(status.unreachable).toBe(true)
+  })
+
+  it('带着 unreachable 污点算失联', () => {
+    const status = getNodeStatus(
+      node('False', { taints: ['node.kubernetes.io/unreachable'] }),
+      NOW
+    )
+
+    expect(status.kind).toBe('Unreachable')
+  })
+
+  it('Ready=True 但心跳停了：状态仍是 Ready，另外标注心跳已停', () => {
+    const age = NODE_HEARTBEAT_STALE_MS + 60_000
+    const status = getNodeStatus(node('True', { heartbeatAgoMs: age }), NOW)
+
+    expect(status.kind).toBe('Ready')
+    expect(status.unreachable).toBe(false)
+    expect(status.heartbeatStale).toBe(true)
+    expect(status.heartbeatAgeMs).toBe(age)
+  })
+
+  it('Ready=True 但有压力条件：kind 仍是 Ready，压力单独输出', () => {
+    const status = getNodeStatus(
+      node('True', {
+        heartbeatAgoMs: 5000,
+        conditions: [{ type: 'DiskPressure', status: 'True' }],
+      }),
+      NOW
+    )
+
+    expect(status.kind).toBe('Ready')
+    expect(status.pressures).toEqual(['DiskPressure'])
+  })
+
+  it('未就绪与压力的组合不丢：kind 用压力名，pressures 全量列出', () => {
+    const status = getNodeStatus(
+      node('False', {
+        conditions: [
+          { type: 'MemoryPressure', status: 'True' },
+          { type: 'PIDPressure', status: 'True' },
+        ],
+      }),
+      NOW
+    )
+
+    expect(status.kind).toBe('MemoryPressure')
+    expect(status.pressures).toEqual(['MemoryPressure', 'PIDPressure'])
+  })
+
+  it('刚加入、还没上报过心跳的节点不算失联', () => {
+    const status = getNodeStatus(node('Unknown'), NOW)
+
+    expect(status.kind).toBe('Unknown')
+    expect(status.heartbeatAgeMs).toBeNull()
+    expect(status.heartbeatStale).toBe(false)
+    expect(status.unreachable).toBe(false)
+  })
+
+  it('停止调度时给出 SchedulingDisabled 字面量', () => {
+    const status = getNodeStatus(
+      node('True', { heartbeatAgoMs: 1000, unschedulable: true }),
+      NOW
+    )
+
+    expect(status.kind).toBe('Ready,SchedulingDisabled')
+    expect(status.cordoned).toBe(true)
+  })
+
+  it('未就绪时按压力类条件给出原因', () => {
+    const pressured = {
+      metadata: { name: 'k8s-node101' },
+      status: {
+        conditions: [
+          { type: 'Ready', status: 'False' },
+          { type: 'DiskPressure', status: 'True' },
+        ],
+      },
+    } as Node
+
+    expect(getNodeStatus(pressured, NOW).kind).toBe('DiskPressure')
   })
 })

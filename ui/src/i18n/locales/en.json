@@ -836,6 +836,12 @@
   "nodes": {
     "title": "Nodes",
     "cordoned": "Cordoned",
+    "status": {
+      "unreachable": "Unreachable",
+      "unknown": "Unknown"
+    },
+    "heartbeatStale": "Heartbeat stopped {{minutes}} minute(s) ago; data may be stale",
+    "pressures": "Pressure conditions: {{pressures}}",
     "cordonedCount": "{{count}} node(s) cordoned",
     "uncordonedCount": "{{count}} node(s) uncordoned"
   },
@@ -1146,6 +1152,8 @@
     },
     "watch": "Watch",
     "refreshWatch": "Reconnect and fetch",
+    "refreshInterval": "Auto-refresh interval",
+    "refreshOff": "Off",
     "namespace": "Namespace",
     "allNamespaces": "All Namespaces",
     "namespaceCount": "{{count}} namespaces",
