@@ -657,11 +657,15 @@ export function buildServiceDocuments(
     for (const p of container.ports) {
       if (p.serviceType === 'none' || !p.containerPort) continue
       const key = `${p.serviceType}|${p.serviceName || ''}`
-      const group =
-        groups.get(key) ||
-        { type: p.serviceType, name: p.serviceName || '', entries: [] }
+      const group = groups.get(key) || {
+        type: p.serviceType,
+        name: p.serviceName || '',
+        entries: [],
+      }
       // 同一个容器端口在一个 Service 里只需要一条映射（多容器可能重复声明同一端口）。
-      if (group.entries.some((entry) => entry.port.targetPort === p.containerPort))
+      if (
+        group.entries.some((entry) => entry.port.targetPort === p.containerPort)
+      )
         continue
       group.entries.push({
         port: {
@@ -1374,9 +1378,7 @@ export function parseYamlToFormData(
         const targetName =
           typeof sp.targetPort === 'string' ? sp.targetPort : ''
         const target =
-          sp.targetPort !== undefined
-            ? Number(sp.targetPort)
-            : Number(sp.port)
+          sp.targetPort !== undefined ? Number(sp.targetPort) : Number(sp.port)
         const candidates: Array<{ key: string; p: any }> = []
         base.containers.forEach((c, ci) => {
           c.ports.forEach((p, pi) => {
@@ -1392,8 +1394,7 @@ export function parseYamlToFormData(
         // 记下线上 Service 的名字，生成时沿用（见 buildServiceDocuments）。
         const svcName = String(
           ((svc.metadata as Record<string, unknown> | undefined)?.name as
-            | string
-            | undefined) || ''
+            string | undefined) || ''
         )
         if (svcName) row.p.serviceName = svcName
         // 服务端口与容器端口相同时是默认推导，不算用户填过。

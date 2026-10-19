@@ -34,9 +34,7 @@ describe('findTermRanges', () => {
     expect(findTermRanges(line, 'I1013 10:48:35.394999')).toEqual([
       { start: 0, end: 21 },
     ])
-    expect(
-      findTermRanges(line, 'Warning: unknown field "status"')
-    ).toEqual([])
+    expect(findTermRanges(line, 'Warning: unknown field "status"')).toEqual([])
   })
 
   it('matches keyword copied with non-breaking spaces', () => {

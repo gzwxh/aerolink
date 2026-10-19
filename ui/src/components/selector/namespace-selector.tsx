@@ -3,9 +3,9 @@ import { Namespace } from 'kubernetes-types/core/v1'
 import { Check, ChevronDown, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { useNamespaceBindingMap } from '@/hooks/use-namespace-binding-map'
 import { useResources } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useNamespaceBindingMap } from '@/hooks/use-namespace-binding-map'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -206,9 +206,7 @@ export function NamespaceSelector({
 
   // 组级选择：该组全部已选时点击取消整组，否则把组内命名空间并入选中
   const toggleGroupSelection = (list: Namespace[]) => {
-    const names = list
-      .map((ns) => ns.metadata?.name || '')
-      .filter(Boolean)
+    const names = list.map((ns) => ns.metadata?.name || '').filter(Boolean)
     const allSelected =
       names.length > 0 &&
       names.every((name) => selectedNamespaces.includes(name))

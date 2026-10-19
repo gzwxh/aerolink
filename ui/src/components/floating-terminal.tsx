@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { useTerminal } from '@/contexts/terminal-context'
+import type { WorkspaceSession } from '@/contexts/terminal-context'
 import {
   ChevronDown,
   ChevronUp,
@@ -25,8 +26,6 @@ import {
 } from '@/components/ui/tooltip'
 import { LogViewer } from '@/components/log-viewer'
 import { Terminal } from '@/components/terminal'
-
-import type { WorkspaceSession } from '@/contexts/terminal-context'
 
 const MIN_HEIGHT = 120
 const DEFAULT_HEIGHT_VH = 40
@@ -90,7 +89,9 @@ export function FloatingTerminal() {
   useEffect(() => {
     if (!activeSessionId) return
     setMountedSessionIds((current) =>
-      current.includes(activeSessionId) ? current : [...current, activeSessionId]
+      current.includes(activeSessionId)
+        ? current
+        : [...current, activeSessionId]
     )
   }, [activeSessionId])
 
@@ -344,7 +345,10 @@ export function FloatingTerminal() {
             return (
               <div
                 key={session.id}
-                className={cn('absolute inset-0 min-h-0', active ? 'block' : 'hidden')}
+                className={cn(
+                  'absolute inset-0 min-h-0',
+                  active ? 'block' : 'hidden'
+                )}
               >
                 {session.type === 'logs' ? (
                   shouldMount ? (

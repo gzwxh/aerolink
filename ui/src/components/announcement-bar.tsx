@@ -14,12 +14,12 @@ import {
   announcementPlainText,
   type AnnouncementLevel,
 } from '@/lib/announcement-markup'
-import { useAnnouncements } from '@/lib/api'
 import {
   ANNOUNCEMENT_SCROLL_PAUSE_SECONDS,
   combinedScrollMode,
   pacedAnimationName,
 } from '@/lib/announcement-scroll'
+import { useAnnouncements } from '@/lib/api'
 import {
   Popover,
   PopoverContent,

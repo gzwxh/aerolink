@@ -6,7 +6,10 @@ import {
   serviceSelectsPodLabels,
 } from './clone-service'
 
-const service = (selector: Record<string, string> | undefined, name = 'nginx') => ({
+const service = (
+  selector: Record<string, string> | undefined,
+  name = 'nginx'
+) => ({
   metadata: { name },
   spec: selector ? { selector } : {},
 })

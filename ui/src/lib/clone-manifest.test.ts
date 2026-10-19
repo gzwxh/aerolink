@@ -29,8 +29,9 @@ const deployment = {
 
 describe('prepareCloneResource', () => {
   it('默认目标名是 `<源名>-copy`，显式传入 targetName 时用它', () => {
-    expect(prepareCloneResource(deployment, 'deployments', 'nginx').metadata)
-      .toMatchObject({ name: 'nginx-copy' })
+    expect(
+      prepareCloneResource(deployment, 'deployments', 'nginx').metadata
+    ).toMatchObject({ name: 'nginx-copy' })
     expect(
       prepareCloneResource(deployment, 'deployments', 'nginx', 'nginx-clone')
         .metadata

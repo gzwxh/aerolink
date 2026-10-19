@@ -95,25 +95,25 @@ describe('migrateSidebarConfig', () => {
         {
           ...v5Stored.groups[0],
           items: [
-        {
-          id: 'sidebar-groups-cluster--nodes',
-          titleKey: 'nav.nodes',
-          icon: 'IconServer',
-          url: '/nodes',
-          visible: true,
-          pinned: false,
-          order: 0,
-        },
-        {
-          id: 'sidebar-groups-cluster--resource-map',
-          titleKey: 'nav.resourceMap',
-          icon: 'IconTopologyBus',
-          url: '/resource-map',
-          visible: true,
-          pinned: true,
-          order: 1,
-        },
-      ],
+            {
+              id: 'sidebar-groups-cluster--nodes',
+              titleKey: 'nav.nodes',
+              icon: 'IconServer',
+              url: '/nodes',
+              visible: true,
+              pinned: false,
+              order: 0,
+            },
+            {
+              id: 'sidebar-groups-cluster--resource-map',
+              titleKey: 'nav.resourceMap',
+              icon: 'IconTopologyBus',
+              url: '/resource-map',
+              visible: true,
+              pinned: true,
+              order: 1,
+            },
+          ],
         },
         v5Stored.groups[1],
       ],
@@ -132,8 +132,6 @@ describe('migrateSidebarConfig', () => {
     )
     // 老分组与正常条目保持不动
     expect(config.groupOrder).toContain('sidebar-groups-workloads')
-    expect(
-      clusterGroup.items.some((item) => item.url === '/nodes')
-    ).toBe(true)
+    expect(clusterGroup.items.some((item) => item.url === '/nodes')).toBe(true)
   })
 })

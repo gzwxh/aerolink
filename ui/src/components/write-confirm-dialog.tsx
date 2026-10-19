@@ -2,6 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { IconAlertTriangle, IconShieldCheck } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
+import {
+  currentWriteConfirmRequest,
+  resolveWriteConfirm,
+  WRITE_CONFIRM_EVENT,
+  type WriteConfirmRequest,
+  type WriteOperationKind,
+  type WriteTarget,
+} from '@/lib/write-confirm'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,14 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  currentWriteConfirmRequest,
-  resolveWriteConfirm,
-  WRITE_CONFIRM_EVENT,
-  type WriteConfirmRequest,
-  type WriteOperationKind,
-  type WriteTarget,
-} from '@/lib/write-confirm'
 
 /** 操作类别 → i18n key。 */
 const KIND_LABEL_KEY: Record<WriteOperationKind, string> = {

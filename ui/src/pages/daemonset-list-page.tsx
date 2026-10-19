@@ -43,12 +43,7 @@ const daemonSetSearchFilter = createSearchFilter<DaemonSet>(
 const columnHelper = createColumnHelper<DaemonSet>()
 
 // 参考版式里没有的列保留但默认隐藏，需要时从表头「列」菜单打开。
-const HIDDEN_BY_DEFAULT_COLUMNS = [
-  'namespace',
-  'desired',
-  'current',
-  'created',
-]
+const HIDDEN_BY_DEFAULT_COLUMNS = ['namespace', 'desired', 'current', 'created']
 
 export function DaemonSetListPage() {
   const { t } = useTranslation()

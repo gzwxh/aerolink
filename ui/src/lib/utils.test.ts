@@ -7,10 +7,10 @@ import type { PodMetrics } from '@/types/api'
 import {
   debounce,
   enrichNodeConditionsWithHealth,
+  formatAge,
   formatBytes,
   formatChartXTicks,
   formatCPU,
-  formatAge,
   formatDate,
   formatMemory,
   formatPodMetrics,
@@ -105,9 +105,8 @@ describe('time formatting helpers', () => {
 
   it('formats age with i18n units', () => {
     const t = ((key: string) =>
-      ({ 'common.units.days': '天', 'common.units.hours': '小时' })[
-        key
-      ] ?? key) as unknown as TFunction
+      ({ 'common.units.days': '天', 'common.units.hours': '小时' })[key] ??
+      key) as unknown as TFunction
 
     expect(formatAge('2024-01-01T12:00:00Z', t)).toBe('2天')
     expect(formatAge('2024-01-03T09:00:00Z', t)).toBe('3小时')

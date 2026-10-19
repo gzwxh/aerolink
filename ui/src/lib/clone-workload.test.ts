@@ -109,7 +109,13 @@ describe('alignWorkloadSelector', () => {
     const cloned = { metadata: { name: 'nginx-copy' }, spec: {} }
 
     expect(() =>
-      alignWorkloadSelector(cloned, source, 'deployments', 'nginx', 'nginx-copy')
+      alignWorkloadSelector(
+        cloned,
+        source,
+        'deployments',
+        'nginx',
+        'nginx-copy'
+      )
     ).not.toThrow()
     expect(cloned.spec).toEqual({})
   })

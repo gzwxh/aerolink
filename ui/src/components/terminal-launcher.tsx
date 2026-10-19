@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useTerminal } from '@/contexts/terminal-context'
 import type {
   Container,
   EphemeralContainer,
@@ -9,7 +10,6 @@ import { useTranslation } from 'react-i18next'
 
 import { toSimpleContainer } from '@/lib/k8s'
 import { cn } from '@/lib/utils'
-import { useTerminal } from '@/contexts/terminal-context'
 import { Button } from '@/components/ui/button'
 import { ContainerSelector } from '@/components/selector/container-selector'
 import { PodSelector } from '@/components/selector/pod-selector'
@@ -50,49 +50,52 @@ export type OpenWorkspaceSessionOptions = Omit<
 export function useOpenWorkspaceSession() {
   const { openSession } = useTerminal()
 
-  return useCallback((options: OpenWorkspaceSessionOptions) => {
-    const isLogs = options.mode === 'logs'
-    const isNode = options.type === 'node'
-    const sessionType = isNode ? 'node' : isLogs ? 'logs' : 'pod'
-    const podName =
-      options.podName ??
-      (!isNode && !isLogs ? options.pods?.[0]?.metadata?.name : undefined)
-    const containerName = isNode
-      ? undefined
-      : isLogs
-        ? // 日志未点名容器时聚合全部容器；终端必须落到具体容器。
-          options.selectedContainerName
-        : (options.selectedContainerName ??
-          options.attachContainerName ??
-          toSimpleContainer(
-            options.initContainers,
-            options.containers,
-            options.ephemeralContainers
-          )[0]?.name)
+  return useCallback(
+    (options: OpenWorkspaceSessionOptions) => {
+      const isLogs = options.mode === 'logs'
+      const isNode = options.type === 'node'
+      const sessionType = isNode ? 'node' : isLogs ? 'logs' : 'pod'
+      const podName =
+        options.podName ??
+        (!isNode && !isLogs ? options.pods?.[0]?.metadata?.name : undefined)
+      const containerName = isNode
+        ? undefined
+        : isLogs
+          ? // 日志未点名容器时聚合全部容器；终端必须落到具体容器。
+            options.selectedContainerName
+          : (options.selectedContainerName ??
+            options.attachContainerName ??
+            toSimpleContainer(
+              options.initContainers,
+              options.containers,
+              options.ephemeralContainers
+            )[0]?.name)
 
-    openSession({
-      type: sessionType,
-      namespace: options.namespace,
-      podName,
-      nodeName: options.nodeName,
-      containerName,
-      pods: options.pods,
-      containers: options.containers,
-      initContainers: options.initContainers,
-      ephemeralContainers: options.ephemeralContainers,
-      attachContainerName: options.attachContainerName,
-      labelSelector: options.labelSelector,
-      source: options.source,
-      title: createLauncherTitle({
+      openSession({
         type: sessionType,
+        namespace: options.namespace,
         podName,
         nodeName: options.nodeName,
         containerName,
+        pods: options.pods,
+        containers: options.containers,
+        initContainers: options.initContainers,
+        ephemeralContainers: options.ephemeralContainers,
+        attachContainerName: options.attachContainerName,
         labelSelector: options.labelSelector,
-        namespace: options.namespace,
-      }),
-    })
-  }, [openSession])
+        source: options.source,
+        title: createLauncherTitle({
+          type: sessionType,
+          podName,
+          nodeName: options.nodeName,
+          containerName,
+          labelSelector: options.labelSelector,
+          namespace: options.namespace,
+        }),
+      })
+    },
+    [openSession]
+  )
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pod } from 'kubernetes-types/core/v1'
-import { useTranslation } from 'react-i18next'
 import { Check, ChevronsUpDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { cn, getAge } from '@/lib/utils'
 import { Button } from '@/components/ui/button'

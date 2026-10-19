@@ -348,37 +348,37 @@ export function migrateSidebarConfig(
         ...storedConfig,
         version: SIDEBAR_CONFIG_VERSION,
         groups: storedConfig.groups.map((group) => ({
-      ...group,
-      items: group.items.map((item): SidebarItem => {
-        const apiGroup = item.apiGroup || item.crdGroup
-        const baseItem = {
-          id: item.id,
-          titleKey: item.titleKey,
-          icon: item.icon,
-          visible: item.visible,
-          pinned: item.pinned,
-          order: item.order,
-        }
+          ...group,
+          items: group.items.map((item): SidebarItem => {
+            const apiGroup = item.apiGroup || item.crdGroup
+            const baseItem = {
+              id: item.id,
+              titleKey: item.titleKey,
+              icon: item.icon,
+              visible: item.visible,
+              pinned: item.pinned,
+              order: item.order,
+            }
 
-        if (apiGroup) {
-          return {
-            ...baseItem,
-            type: 'apiGroup',
-            apiGroup,
-          }
-        }
+            if (apiGroup) {
+              return {
+                ...baseItem,
+                type: 'apiGroup',
+                apiGroup,
+              }
+            }
 
-        return {
-          ...baseItem,
-          type:
-            item.type === 'customResource' ||
-            (!item.type && item.url?.startsWith('/crds/'))
-              ? 'customResource'
-              : 'link',
-          url: item.url!,
-        }
-      }),
-    })),
+            return {
+              ...baseItem,
+              type:
+                item.type === 'customResource' ||
+                (!item.type && item.url?.startsWith('/crds/'))
+                  ? 'customResource'
+                  : 'link',
+              url: item.url!,
+            }
+          }),
+        })),
       })
     )
   )

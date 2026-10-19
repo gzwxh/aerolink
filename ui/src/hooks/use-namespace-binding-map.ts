@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
+import { useAuth } from '@/contexts/auth-context'
 import { useQuery } from '@tanstack/react-query'
 
-import { useAuth } from '@/contexts/auth-context'
-import { useCluster } from '@/hooks/use-cluster'
 import { fetchBindingGroups, fetchUserBindingGroups } from '@/lib/api'
+import { useCluster } from '@/hooks/use-cluster'
 
 /**
  * 当前集群下「命名空间 → 权限绑定组名」的映射。

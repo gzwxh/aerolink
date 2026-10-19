@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import {
   IconAlertTriangle,
   IconClearAll,
@@ -14,6 +13,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { Container, EphemeralContainer, Pod } from 'kubernetes-types/core/v1'
+import { createPortal } from 'react-dom'
 
 import '@xterm/xterm/css/xterm.css'
 

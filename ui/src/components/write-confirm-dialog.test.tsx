@@ -2,12 +2,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { WriteConfirmDialog } from './write-confirm-dialog'
 import {
   requestWriteConfirm,
   resetWriteConfirmForTest,
   type WriteConfirmRequest,
 } from '@/lib/write-confirm'
+
+import { WriteConfirmDialog } from './write-confirm-dialog'
 
 // 用标记串替掉真实文案：断言不依赖语言包措辞。
 vi.mock('react-i18next', () => ({

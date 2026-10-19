@@ -22,9 +22,7 @@ afterEach(() => {
   useCluster.mockReset()
 })
 
-function mockCluster(
-  overrides: Record<string, unknown> = {}
-) {
+function mockCluster(overrides: Record<string, unknown> = {}) {
   useCluster.mockReturnValue({
     clusters: [{ name: '开发环境', ...overrides }],
     currentCluster: '开发环境',
@@ -36,12 +34,8 @@ function mockCluster(
 
 /** 固定所有元素的「内容宽 / 可见宽」，验证只在截断时挂原生 title。 */
 function stubWidths(scrollWidth: number, clientWidth: number) {
-  vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(
-    scrollWidth
-  )
-  vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(
-    clientWidth
-  )
+  vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(scrollWidth)
+  vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(clientWidth)
 }
 
 describe('ClusterSelector 收起态的原生 title', () => {
@@ -59,10 +53,7 @@ describe('ClusterSelector 收起态的原生 title', () => {
     mockCluster()
     render(<ClusterSelector />)
 
-    expect(screen.getByText('开发环境')).toHaveAttribute(
-      'title',
-      '开发环境'
-    )
+    expect(screen.getByText('开发环境')).toHaveAttribute('title', '开发环境')
   })
 
   it('描述完整可见时同样不挂 title', () => {

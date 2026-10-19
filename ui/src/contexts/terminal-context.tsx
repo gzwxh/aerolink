@@ -52,11 +52,15 @@ interface TerminalContextType {
   toggleTerminal: () => void
 }
 
-const TerminalContext = createContext<TerminalContextType | undefined>(undefined)
+const TerminalContext = createContext<TerminalContextType | undefined>(
+  undefined
+)
 
 export function TerminalProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<WorkspaceSession[]>([])
-  const [requestedActiveId, setRequestedActiveId] = useState<string | null>(null)
+  const [requestedActiveId, setRequestedActiveId] = useState<string | null>(
+    null
+  )
   const [isMinimized, setIsMinimized] = useState(false)
   const isOpen = sessions.length > 0
 
@@ -101,7 +105,9 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   }
 
   const closeSession = (sessionId: string) => {
-    setSessions((current) => current.filter((session) => session.id !== sessionId))
+    setSessions((current) =>
+      current.filter((session) => session.id !== sessionId)
+    )
   }
 
   /** 关闭全部会话并销毁其终端 / 日志连接。 */
@@ -158,9 +164,7 @@ export function useTerminal() {
   return context
 }
 
-function createWorkspaceSession(
-  spec: WorkspaceSessionSpec
-): WorkspaceSession {
+function createWorkspaceSession(spec: WorkspaceSessionSpec): WorkspaceSession {
   const clusterName = spec.clusterName ?? getCurrentCluster() ?? ''
   return {
     ...spec,

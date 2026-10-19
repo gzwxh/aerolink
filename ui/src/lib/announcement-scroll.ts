@@ -1,4 +1,7 @@
-import type { Announcement, AnnouncementScrollMode } from '@/lib/api/announcement'
+import type {
+  Announcement,
+  AnnouncementScrollMode,
+} from '@/lib/api/announcement'
 
 /**
  * 「每轮之间停留」的停顿时长（秒）。

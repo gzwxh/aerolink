@@ -1,7 +1,11 @@
 import type { Job } from 'kubernetes-types/batch/v1'
 import type { useTranslation } from 'react-i18next'
 
-import { neutralBadge, statusBadge, type StatusBadgeStyle } from './status-badge'
+import {
+  neutralBadge,
+  statusBadge,
+  type StatusBadgeStyle,
+} from './status-badge'
 
 type TranslationFn = ReturnType<typeof useTranslation>['t']
 

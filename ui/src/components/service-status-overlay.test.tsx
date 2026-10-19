@@ -2,13 +2,14 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ServiceStatusOverlay } from './service-status-overlay'
 import {
   markLoginRedirectLoop,
   reportApiFailure,
   resetServiceStatusForTest,
   retryService,
 } from '@/lib/service-status'
+
+import { ServiceStatusOverlay } from './service-status-overlay'
 
 // 用标记串替掉真实文案：断言不依赖语言包措辞。
 vi.mock('react-i18next', () => ({

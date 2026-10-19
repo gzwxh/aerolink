@@ -122,7 +122,9 @@ export function reportApiSuccess() {
 }
 
 /** 一次请求失败（5xx 或网络层）。达到阈值即标记不可用并暂停查询。 */
-export function reportApiFailure(reason: Exclude<ServiceUnavailableReason, 'redirectLoop'>) {
+export function reportApiFailure(
+  reason: Exclude<ServiceUnavailableReason, 'redirectLoop'>
+) {
   if (status.unavailable && status.reason === 'redirectLoop') {
     return
   }
@@ -131,7 +133,11 @@ export function reportApiFailure(reason: Exclude<ServiceUnavailableReason, 'redi
     publish({ unavailable: false, reason: status.reason, attempts })
     return
   }
-  if (status.unavailable && status.reason === reason && status.attempts === attempts) {
+  if (
+    status.unavailable &&
+    status.reason === reason &&
+    status.attempts === attempts
+  ) {
     return
   }
   pauseQueries()
@@ -149,7 +155,9 @@ export function consumeLoginRedirectBudget(): boolean {
   const times = (readSession(REDIRECT_TIMES_KEY) || '')
     .split(',')
     .map((value) => Number.parseInt(value, 10))
-    .filter((value) => Number.isFinite(value) && now - value < REDIRECT_WINDOW_MS)
+    .filter(
+      (value) => Number.isFinite(value) && now - value < REDIRECT_WINDOW_MS
+    )
 
   if (times.length >= REDIRECT_BUDGET) {
     writeSession(REDIRECT_TIMES_KEY, times.join(','))

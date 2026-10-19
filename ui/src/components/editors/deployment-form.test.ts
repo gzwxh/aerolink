@@ -314,9 +314,8 @@ describe('工作负载 YAML 生成', () => {
 
     const workload = docs.find((doc) => doc.kind === 'Deployment')
     const podTemplateLabels = (
-      (workload?.spec as { template?: { metadata?: { labels?: unknown } } })
-        ?.template?.metadata?.labels
-    )
+      workload?.spec as { template?: { metadata?: { labels?: unknown } } }
+    )?.template?.metadata?.labels
     expect(podTemplateLabels).toEqual({ app: 'nginx-copy' })
 
     const svc = docs.find((doc) => doc.kind === 'Service')

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import type { AnnouncementLevel } from '@/lib/announcement-markup'
+import { announcementScrollMode } from '@/lib/announcement-scroll'
 import {
   useAllAnnouncements,
   useCreateAnnouncement,
@@ -13,7 +14,6 @@ import {
   type AnnouncementPayload,
 } from '@/lib/api'
 import type { AnnouncementScrollMode } from '@/lib/api'
-import { announcementScrollMode } from '@/lib/announcement-scroll'
 import { formatDateTimeShort, fromRFC3339, toRFC3339 } from '@/lib/date-time'
 import {
   neutralBadge,
@@ -581,7 +581,10 @@ function AnnouncementDialog({
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
                 <Label htmlFor="announcement-scroll-mode">
-                  {t('notifications.announcements.fields.scrollMode', '滚动方式')}
+                  {t(
+                    'notifications.announcements.fields.scrollMode',
+                    '滚动方式'
+                  )}
                 </Label>
                 <p className="text-muted-foreground text-xs">
                   {t(

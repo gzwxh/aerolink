@@ -140,32 +140,34 @@ describe('TerminalProvider 工作区会话', () => {
     // 同一目标重复打开只激活已有会话，不新建。
     fireEvent.click(screen.getByRole('button', { name: 'open-pod' }))
     await waitFor(() => {
-      expect(screen.getByTestId('sessions').textContent?.split('|')).toHaveLength(
-        1
-      )
+      expect(
+        screen.getByTestId('sessions').textContent?.split('|')
+      ).toHaveLength(1)
     })
 
     // 不同种类（日志）可以并存。
     fireEvent.click(screen.getByRole('button', { name: 'open-logs' }))
     await waitFor(() => {
-      expect(screen.getByTestId('sessions').textContent?.split('|')).toHaveLength(
-        2
-      )
+      expect(
+        screen.getByTestId('sessions').textContent?.split('|')
+      ).toHaveLength(2)
     })
     expect(screen.getByTestId('active-title')).toHaveTextContent('web-0')
 
     // 切回第一个会话。
     fireEvent.click(screen.getByRole('button', { name: 'activate-first' }))
     await waitFor(() => {
-      expect(screen.getByTestId('active-title')).toHaveTextContent('web-0 · app')
+      expect(screen.getByTestId('active-title')).toHaveTextContent(
+        'web-0 · app'
+      )
     })
 
     // 关掉当前会话后自动落到剩余会话上。
     fireEvent.click(screen.getByRole('button', { name: 'close-active' }))
     await waitFor(() => {
-      expect(screen.getByTestId('sessions').textContent?.split('|')).toHaveLength(
-        1
-      )
+      expect(
+        screen.getByTestId('sessions').textContent?.split('|')
+      ).toHaveLength(1)
     })
     expect(screen.getByTestId('active')).not.toHaveTextContent('none')
   })

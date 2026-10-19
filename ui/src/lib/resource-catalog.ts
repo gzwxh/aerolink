@@ -3,6 +3,7 @@ import {
   IconBell,
   IconBox,
   IconBoxMultiple,
+  IconCertificate,
   IconClockHour4,
   IconCode,
   IconDatabase,
@@ -24,7 +25,6 @@ import {
   IconTopologyBus,
   IconUser,
   IconUsers,
-  IconCertificate,
 } from '@tabler/icons-react'
 
 type SidebarGroupKey =
@@ -217,7 +217,11 @@ export const resourceCatalog = [
     clusterScope: false,
     titleKey: 'nav.certificaterequests',
     icon: 'IconCertificate',
-    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 1, defaultHidden: true },
+    sidebar: {
+      groupKey: 'sidebar.groups.certmanager',
+      order: 1,
+      defaultHidden: true,
+    },
   },
   {
     type: 'issuers',
@@ -247,7 +251,11 @@ export const resourceCatalog = [
     clusterScope: false,
     titleKey: 'nav.orders',
     icon: 'IconCertificate',
-    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 4, defaultHidden: true },
+    sidebar: {
+      groupKey: 'sidebar.groups.certmanager',
+      order: 4,
+      defaultHidden: true,
+    },
   },
   {
     type: 'challenges',
@@ -257,7 +265,11 @@ export const resourceCatalog = [
     clusterScope: false,
     titleKey: 'nav.challenges',
     icon: 'IconCertificate',
-    sidebar: { groupKey: 'sidebar.groups.certmanager', order: 5, defaultHidden: true },
+    sidebar: {
+      groupKey: 'sidebar.groups.certmanager',
+      order: 5,
+      defaultHidden: true,
+    },
   },
   {
     type: 'configmaps',

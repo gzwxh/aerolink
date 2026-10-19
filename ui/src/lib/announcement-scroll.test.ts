@@ -12,9 +12,9 @@ const item = (overrides: { scroll?: boolean; scrollMode?: string }) =>
 describe('announcementScrollMode', () => {
   it('优先用三态字段', () => {
     expect(announcementScrollMode(item({ scrollMode: 'paced' }))).toBe('paced')
-    expect(announcementScrollMode(item({ scrollMode: 'none', scroll: true }))).toBe(
-      'none'
-    )
+    expect(
+      announcementScrollMode(item({ scrollMode: 'none', scroll: true }))
+    ).toBe('none')
   })
 
   // 老数据/老接口只有 scroll(bool)：false = 不滚动，true = 连续滚动（历史行为）。

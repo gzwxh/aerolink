@@ -1,7 +1,10 @@
 /// <reference types="@testing-library/jest-dom" />
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { toast } from 'sonner'
 import { describe, expect, it, vi } from 'vitest'
+
+import { WorkloadImageCell } from './workload-list-cells'
 
 // Tooltip 原语在测试里不挂 Provider，替换成透传实现，聚焦单元格自身的行为。
 vi.mock('@/components/ui/tooltip', () => ({
@@ -28,10 +31,6 @@ vi.mock('react-i18next', () => ({
     t: (key: string, fallback?: string) => fallback ?? key,
   }),
 }))
-
-import { toast } from 'sonner'
-
-import { WorkloadImageCell } from './workload-list-cells'
 
 const containers = [
   { name: 'app', image: 'registry.example.com/team/app:v1.2.3' },

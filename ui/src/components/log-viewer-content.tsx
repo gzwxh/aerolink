@@ -122,7 +122,10 @@ function splitSegmentsIntoLines(
         rawLines.push([])
       }
       if (part.length > 0) {
-        rawLines[rawLines.length - 1].push({ text: part, styles: segment.styles })
+        rawLines[rawLines.length - 1].push({
+          text: part,
+          styles: segment.styles,
+        })
       }
     })
   }
@@ -167,9 +170,7 @@ export function LogViewer({
   // 过滤命中行保留的上下文行数（0 = 只显示命中行）
   const [filterContextLines, setFilterContextLines] = useState(() => {
     const saved = localStorage.getItem('log-viewer-filter-context-lines')
-    return saved !== null
-      ? parseInt(saved, 10)
-      : DEFAULT_FILTER_CONTEXT_LINES
+    return saved !== null ? parseInt(saved, 10) : DEFAULT_FILTER_CONTEXT_LINES
   })
   const { t } = useTranslation()
   const [timestamps, setTimestamps] = useState(false)
@@ -232,7 +233,11 @@ export function LogViewer({
     const term = normalizedHighlightTermRef.current
     const highlightDecorations: editor.IModelDeltaDecoration[] = []
     if (term) {
-      for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
+      for (
+        let lineNumber = 1;
+        lineNumber <= model.getLineCount();
+        lineNumber++
+      ) {
         for (const range of findTermRanges(
           model.getLineContent(lineNumber),
           term
@@ -384,9 +389,8 @@ export function LogViewer({
   )
 
   useEffect(() => {
-    normalizedFilterTermRef.current = normalizeSearchTerm(
-      filterTerm
-    ).toLocaleLowerCase()
+    normalizedFilterTermRef.current =
+      normalizeSearchTerm(filterTerm).toLocaleLowerCase()
     if (normalizedFilterTermRef.current) {
       isFilterViewRef.current = true
       scheduleFilterRenderRef.current()
@@ -398,9 +402,8 @@ export function LogViewer({
   }, [filterTerm, renderLogView])
 
   useEffect(() => {
-    normalizedHighlightTermRef.current = normalizeSearchTerm(
-      highlightTerm
-    ).toLocaleLowerCase()
+    normalizedHighlightTermRef.current =
+      normalizeSearchTerm(highlightTerm).toLocaleLowerCase()
     applyHighlightDecorations()
   }, [highlightTerm, applyHighlightDecorations])
 

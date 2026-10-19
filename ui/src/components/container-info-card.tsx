@@ -128,7 +128,9 @@ export function ContainerInfoCard({
         </div>
         <div className="flex items-center gap-2">
           {status && !ephemeral && (
-            <Badge {...(status.ready ? statusBadge('success') : neutralBadge())}>
+            <Badge
+              {...(status.ready ? statusBadge('success') : neutralBadge())}
+            >
               {status.ready ? 'Ready' : 'Not Ready'}
             </Badge>
           )}

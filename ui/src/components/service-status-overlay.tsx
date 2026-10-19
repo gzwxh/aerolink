@@ -7,7 +7,6 @@ import {
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
 import {
   getServiceStatus,
   retryService,
@@ -15,6 +14,7 @@ import {
   type ServiceStatus,
 } from '@/lib/service-status'
 import { withSubPath } from '@/lib/subpath'
+import { Button } from '@/components/ui/button'
 
 function useServiceStatus(): ServiceStatus {
   return useSyncExternalStore(
@@ -30,8 +30,7 @@ function useServiceStatus(): ServiceStatus {
  */
 function ServiceUnavailableBanner({ status }: { status: ServiceStatus }) {
   const { t } = useTranslation()
-  const offline =
-    typeof navigator !== 'undefined' && navigator.onLine === false
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false
 
   const message = offline
     ? t('serviceStatus.offline', '网络已断开，已暂停自动刷新')
@@ -80,7 +79,10 @@ function RedirectLoopBlock() {
         <IconAlertTriangle className="text-destructive mx-auto h-10 w-10" />
         <div className="space-y-1">
           <p className="text-sm font-semibold">
-            {t('serviceStatus.redirectLoopTitle', '登录状态异常，已停止自动跳转')}
+            {t(
+              'serviceStatus.redirectLoopTitle',
+              '登录状态异常，已停止自动跳转'
+            )}
           </p>
           <p className="text-muted-foreground text-xs">
             {t(
