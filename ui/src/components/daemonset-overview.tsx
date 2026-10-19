@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import {
+  IconAlertTriangle,
   IconCircleCheckFilled,
   IconExclamationCircle,
   IconLoader,
@@ -341,6 +342,12 @@ function DaemonSetStatusIcon({
       )
     case 'Terminating':
       return <IconTrash className={`text-attention ${className || ''}`} />
+    // Pending（还没到调度的地步）与 Unknown（状态不明）不该落进 default 灰：
+    // 口径与 pod-status-icon 一致——等待/进行中归 info，状态不明归 warning。
+    case 'Pending':
+      return <IconLoader className={`text-info ${className || ''}`} />
+    case 'Unknown':
+      return <IconAlertTriangle className={`fill-warning ${className || ''}`} />
     default:
       return (
         <IconExclamationCircle
