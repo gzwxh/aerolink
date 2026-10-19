@@ -93,7 +93,7 @@
   --popover-foreground: #f4f7f6;
   --primary: #2fbfa4; /* --brand-bright */
   --primary-foreground: #12211d; /* --ink-1 */
-  --secondary: #24322e; /* --ink-2 */
+  --secondary: #384642; /* 由 --ink-2 提亮的中间档（kkRepo 无暗色契约）：原 #24322e 与卡片 #2a2f31 对比度只有 1.01，secondary 徽标/次按钮在暗色下只剩文字看不见底 */
   --secondary-foreground: #f4f7f6;
   --muted: #12211d; /* --ink-1（kkRepo 无暗色契约；取深色系里已作表面用的 --ink-1。原先用 --ink-2 #24322e 与卡片 #2a2f31 对比度只有 1.01，表头带看不出来）*/
   --muted-foreground: #b4bfba; /* --topbar-muted */

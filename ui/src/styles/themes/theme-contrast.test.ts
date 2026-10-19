@@ -341,4 +341,24 @@ describe('配色主题的 token 契约', () => {
       `${label} --input 必须比 --border 更实（表单边界要看得出来）`
     ).toBeGreaterThanOrEqual(border! + INPUT_OVER_BORDER)
   })
+
+  /**
+   * 次按钮底（Badge 的 secondary 变体、次级按钮）画在卡片上必须看得出来。
+   * 曾有主题把它配成与卡片几乎同色（emerald 暗色 #24322e 对卡片 #2a2f31
+   * 只有 1.01），secondary 徽标在暗色下只剩文字。下限只挡「同色退化」：
+   * 高对比主题（darkmatter 的次按钮本身就是主视觉）不设上限。
+   */
+  const MIN_SECONDARY_CARD_CONTRAST = 1.08
+
+  it.each(cases)(
+    '$theme / $mode 的次按钮底与卡片可见区分',
+    ({ tokens, theme, mode }) => {
+      const value = ratio(tokens, 'secondary', 'card', 'card')
+      expect(value, `${theme}/${mode} --secondary 未定义`).not.toBeNull()
+      expect(
+        value!,
+        `${theme}/${mode} --secondary 与卡片对比度 ${value?.toFixed(2)} 过低（次按钮/徽标会隐形，要求 ≥ ${MIN_SECONDARY_CARD_CONTRAST}）`
+      ).toBeGreaterThanOrEqual(MIN_SECONDARY_CARD_CONTRAST)
+    }
+  )
 })
