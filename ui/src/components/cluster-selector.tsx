@@ -1,5 +1,5 @@
-import { IconCheck, IconChevronDown } from '@tabler/icons-react'
 import { useEffect, useRef, useState } from 'react'
+import { IconCheck, IconChevronDown } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
 import { statusBadge } from '@/lib/status-badge'
@@ -139,15 +139,36 @@ export function ClusterSelector() {
                     {t('cluster.syncError', '同步异常')}
                   </Badge>
                 )}
+                {/* 数据可能过期不是错误：集群还是能切的，只是切过去看到的是旧数据。 */}
+                {!cluster.error && cluster.stale && (
+                  <Badge
+                    {...statusBadge('warning')}
+                    className="shrink-0 text-xs"
+                  >
+                    {t('cluster.dataStale', '数据可能过期')}
+                  </Badge>
+                )}
               </div>
               <span
                 className={cn(
                   'text-xs truncate',
                   cluster.error
                     ? 'text-destructive'
-                    : 'text-muted-foreground font-mono'
+                    : cluster.stale
+                      ? 'text-warning'
+                      : 'text-muted-foreground font-mono'
                 )}
-                title={cluster.error || cluster.description || cluster.version}
+                title={
+                  cluster.error ||
+                  (cluster.stale
+                    ? t(
+                        'cluster.dataStaleHint',
+                        '暂时无法访问该集群，展示的是缓存数据'
+                      )
+                    : undefined) ||
+                  cluster.description ||
+                  cluster.version
+                }
               >
                 {cluster.error || cluster.description || cluster.version}
               </span>

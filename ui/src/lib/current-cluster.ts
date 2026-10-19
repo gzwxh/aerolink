@@ -27,11 +27,19 @@ export function appendCurrentClusterParam(
   }
 }
 
-export function appendCurrentClusterHeader(headers: Record<string, string>) {
+/**
+ * 把当前集群写进请求头，并返回所用的集群名（没有当前集群时为 null）。
+ * 返回值让调用方在响应回来时还能说清「这是哪个集群的响应」——响应到达时
+ * 用户可能已经切到别的集群了。
+ */
+export function appendCurrentClusterHeader(
+  headers: Record<string, string>
+): string | null {
   const currentCluster = getCurrentCluster()
   if (currentCluster) {
     headers[CURRENT_CLUSTER_HEADER_KEY] = encodeURIComponent(currentCluster)
   }
+  return currentCluster
 }
 
 /**

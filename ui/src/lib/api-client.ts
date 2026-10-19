@@ -1,4 +1,5 @@
 // 带认证支持的 API 客户端
+import { reportClusterDataStaleness } from './cluster-data-staleness'
 import { appendCurrentClusterHeader } from './current-cluster'
 import { requestMFAVerification } from './mfa-prompt'
 import {
@@ -122,7 +123,9 @@ class ApiClient {
       headers['Content-Type'] = 'application/json'
     }
 
-    appendCurrentClusterHeader(headers)
+    // 请求发出去时用的集群名：响应到达时「当前集群」可能已经切走了，
+    // 而陈旧提示要说清是哪个集群的数据过期。
+    const requestCluster = appendCurrentClusterHeader(headers)
 
     const defaultOptions: RequestInit = {
       credentials: 'include',
@@ -148,7 +151,11 @@ class ApiClient {
     }
 
     try {
-      let response = await this.fetchReportingStatus(fullUrl, defaultOptions)
+      let response = await this.fetchReportingStatus(
+        fullUrl,
+        defaultOptions,
+        requestCluster
+      )
 
       if (response.status === 403) {
         const payload = await response
@@ -160,7 +167,11 @@ class ApiClient {
           // 后端会为这个浏览器记住这次验证。
           const verified = await requestMFAVerification()
           if (verified) {
-            response = await this.fetchReportingStatus(fullUrl, defaultOptions)
+            response = await this.fetchReportingStatus(
+              fullUrl,
+              defaultOptions,
+              requestCluster
+            )
           }
         }
       }
@@ -185,7 +196,11 @@ class ApiClient {
       if (response.status === 401 && options.retryOnUnauthorized !== false) {
         try {
           await this.refreshToken()
-          response = await this.fetchReportingStatus(fullUrl, defaultOptions)
+          response = await this.fetchReportingStatus(
+            fullUrl,
+            defaultOptions,
+            requestCluster
+          )
         } catch (refreshError) {
           console.error('Token refresh failed:', refreshError)
           redirectToLogin()
@@ -206,10 +221,15 @@ class ApiClient {
    * 网络层失败与 5xx 会计数，连续多次后界面暂停所有轮询并提示「服务不可用」；
    * 其余状态码（含 401/403）说明服务本身是活的，只清零计数——会话失效不该被
    * 报成服务故障，否则用户会看到「服务挂了」而实际只需重新登录。
+   *
+   * 顺带把响应头上的集群数据陈旧信号交给 lib/cluster-data-staleness.ts：
+   * 集群掉线时后端仍会照常返回缓存里的对象（响应体看不出异常），
+   * 只有这两个头能说明「这份数据可能已经过期」。
    */
   private async fetchReportingStatus(
     url: string,
-    options: RequestInit
+    options: RequestInit,
+    cluster: string | null = null
   ): Promise<Response> {
     let response: Response
     try {
@@ -224,6 +244,7 @@ class ApiClient {
     } else {
       reportApiSuccess()
     }
+    reportClusterDataStaleness(response.headers, cluster)
     return response
   }
 

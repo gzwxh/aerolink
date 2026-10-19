@@ -8,6 +8,7 @@ import { useRawNavigate } from '@/lib/cluster-path'
 
 import { AIChatbox, StandaloneAIChatbox } from './components/ai-chat/ai-chatbox'
 import { AppSidebar } from './components/app-sidebar'
+import { ClusterDataStaleBanner } from './components/cluster-data-stale-banner'
 import { ErrorBoundary } from './components/error-boundary'
 import { FloatingTerminal } from './components/floating-terminal'
 import { GlobalSearch } from './components/global-search'
@@ -159,6 +160,8 @@ function AppProviders({ children }: { children: ReactNode }) {
                 <SessionSupersededDialog />
                 {/* 服务异常横幅、以及登录跳转成环时的阻断页：主界面与独立 AI 页共用。 */}
                 <ServiceStatusOverlay />
+                {/* 集群掉线时数据会停在最后一刻：把「可能已过期」讲清楚。 */}
+                <ClusterDataStaleBanner />
                 {/* k8s 写操作的二次确认弹窗（按集群逐类开关，见 lib/write-confirm.ts）。 */}
                 <WriteConfirmDialog />
               </AIChatProvider>

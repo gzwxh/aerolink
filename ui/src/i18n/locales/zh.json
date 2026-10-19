@@ -1063,6 +1063,12 @@
     "retry": "重试",
     "serverUnavailable": "服务暂时不可用，已暂停自动刷新"
   },
+  "clusterStale": {
+    "message": "无法访问集群 {{cluster}}，页面数据最后更新于 {{time}}，可能已过期",
+    "messageUnknownTime": "无法访问集群 {{cluster}}，页面数据可能已过期",
+    "unknownCluster": "当前集群",
+    "retry": "重试"
+  },
   "writeConfirm": {
     "kinds": {
       "create": "新增",
@@ -1099,6 +1105,8 @@
     "switchingShort": "切换中...",
     "default": "默认",
     "syncError": "同步异常",
+    "dataStale": "数据可能过期",
+    "dataStaleHint": "暂时无法访问该集群，展示的是缓存数据",
     "slugErrorTitle": "无法访问该集群",
     "slugErrorDescription": "地址里的集群不存在，或者你没有访问权限。可以切换到你有权限的集群继续使用。",
     "slugErrorRequestAccess": "申请权限",

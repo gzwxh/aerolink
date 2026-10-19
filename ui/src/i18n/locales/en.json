@@ -1063,6 +1063,12 @@
     "retry": "Retry",
     "serverUnavailable": "Service temporarily unavailable; auto-refresh is paused"
   },
+  "clusterStale": {
+    "message": "Cannot reach cluster {{cluster}}; page data was last updated at {{time}} and may be stale",
+    "messageUnknownTime": "Cannot reach cluster {{cluster}}; page data may be stale",
+    "unknownCluster": "the current cluster",
+    "retry": "Retry"
+  },
   "writeConfirm": {
     "kinds": {
       "create": "Create",
@@ -1099,6 +1105,8 @@
     "switchingShort": "Switching...",
     "default": "Default",
     "syncError": "Sync error",
+    "dataStale": "Data may be stale",
+    "dataStaleHint": "The cluster is temporarily unreachable; showing cached data",
     "slugErrorTitle": "Cannot access this cluster",
     "slugErrorDescription": "The cluster in the URL does not exist, or you do not have access to it. You can switch to a cluster you have access to.",
     "slugErrorRequestAccess": "Request access",

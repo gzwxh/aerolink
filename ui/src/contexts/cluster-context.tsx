@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 
 import { Cluster } from '@/types/api'
 import { useCurrentClusterList } from '@/lib/api/cluster'
+import { clearClusterDataStaleness } from '@/lib/cluster-data-staleness'
 import {
   swapClusterSlug,
   useClusterLocation,
@@ -188,6 +189,9 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({
         //    而这里同步完成持久化，见方案 §4 的 I1 约束）。
         setCurrentClusterState(clusterBySlug.name)
         persistCurrentCluster(clusterBySlug.name)
+        // 横幅是全局单例，只记「最近上报陈旧的集群」：不清的话，旧集群的提示会一直
+        // 挂到新集群首个集群作用域响应到达（新页面没有这类请求时就一直挂着）。
+        clearClusterDataStaleness()
         void queryClient.invalidateQueries({
           predicate: (query) => {
             const key = query.queryKey[0] as string

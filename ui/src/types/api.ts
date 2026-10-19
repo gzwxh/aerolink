@@ -687,6 +687,13 @@ export interface Cluster {
   confirmDelete?: boolean
   confirmRestart?: boolean
   confirmNodeMaintenance?: boolean
+  // 数据陈旧信号（只有 `/clusters` 下发，见 pkg/common/types.go 的 ClusterInfo）：
+  // 平台距最后一次成功访问该集群 API 已超过阈值，或 informer 刚报过错。
+  // 只用于提示，切换集群依旧照常放行。
+  stale?: boolean
+  /** 最后一次成功访问该集群 API 的时间（RFC3339）；从未成功访问过时为空。 */
+  staleSince?: string
+  staleReason?: 'unreachable' | 'watch-error'
 }
 
 export interface OAuthProvider {
