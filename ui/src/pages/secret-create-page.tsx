@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsTrigger } from '@/components/ui/tabs'
+import { CurrentClusterBadge } from '@/components/current-cluster-badge'
 import {
   AddButton,
   readAsBase64,
@@ -642,6 +643,7 @@ export function SecretCreatePage({ clone = false }: { clone?: boolean }) {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">{pageTitle}</h1>
+        <CurrentClusterBadge />
       </div>
 
       {/* Scrollable content */}

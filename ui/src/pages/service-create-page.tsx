@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { CurrentClusterBadge } from '@/components/current-cluster-badge'
 import { LabelSelectorEditor } from '@/components/label-selector-editor'
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { ServicePortsEditor } from '@/components/service-ports-editor'
@@ -237,6 +238,7 @@ export function ServiceCreatePage({ clone = false }: { clone?: boolean }) {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">{pageTitle}</h1>
+        <CurrentClusterBadge />
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">

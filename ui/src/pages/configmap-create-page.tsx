@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsTrigger } from '@/components/ui/tabs'
+import { CurrentClusterBadge } from '@/components/current-cluster-badge'
 import {
   AddButton,
   readAsBase64,
@@ -498,6 +499,7 @@ export function ConfigMapCreatePage({ clone = false }: { clone?: boolean }) {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">{pageTitle}</h1>
+        <CurrentClusterBadge />
       </div>
 
       {/* Scrollable content */}
