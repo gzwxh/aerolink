@@ -147,8 +147,20 @@ type K8sClient struct {
 	// （见 pkg/resources 的 pod watch hub）；为 nil 时调用方应显式退回直连路径。
 	Cache cache.Cache
 
+	health *Health
+
 	ctx    context.Context
 	cancel context.CancelFunc
+}
+
+// Health 返回该客户端的 API 可用性记录，用「数据可能陈旧」的判定与提示
+// （见 pkg/kube/health.go）。
+func (c *K8sClient) Health() *Health {
+	if c.health == nil {
+		// 兜底：正常路径一定已在 NewClient 里构造，这里避免调用方拿到 nil。
+		c.health = NewHealth()
+	}
+	return c.health
 }
 
 // Done 在该客户端的缓存与客户端被停用（集群被移除或重建）后关闭。
@@ -185,6 +197,7 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cacheEnabled := os.Getenv("DISABLE_CACHE") != "true"
+	health := NewHealth()
 
 	var c client.Client
 	var informerCache cache.Cache
@@ -205,6 +218,12 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 			},
 			Cache: cache.Options{
 				DefaultWatchErrorHandler: func(ctx context.Context, r *toolscache.Reflector, err error) {
+					if !health.RecordWatchError(err) {
+						return
+					}
+					klog.Warningf("watch error on %s: %v; the informer keeps retrying, "+
+						"cached data for this cluster may be stale until the next successful probe",
+						r.TypeDescription(), err)
 				},
 			},
 		})
@@ -248,9 +267,26 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 		MetricsClient: metricsClient,
 		CacheEnabled:  cacheEnabled,
 		Cache:         informerCache,
+		health:        health,
 		ctx:           ctx,
 		cancel:        cancel,
 	}, nil
+}
+
+// ProbeServerVersion 在 ctx 的时限内访问 <api-server>/version，用于判定集群是否可达。
+//
+// 不走 Discovery().ServerVersion()：那个方法写死了 context.TODO()，探活的超时
+// （集群不可达时 TCP 可能要等到系统级超时）就落不到它身上。
+func ProbeServerVersion(ctx context.Context, clientset kubernetes.Interface) error {
+	if clientset == nil {
+		return fmt.Errorf("clientset is nil")
+	}
+	discovery := clientset.Discovery()
+	if discovery == nil || discovery.RESTClient() == nil {
+		return fmt.Errorf("discovery client is unavailable")
+	}
+	_, err := discovery.RESTClient().Get().AbsPath("/version").Do(ctx).Raw()
+	return err
 }
 
 func (c *K8sClient) Stop(name string) {

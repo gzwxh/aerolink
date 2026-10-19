@@ -58,6 +58,13 @@ type ClusterInfo struct {
 	// Slug 是集群在浏览器地址里的稳定短名（注意：与 API 路径 /_clusters/<集群名>
 	// 同形不同源，后者是编码后的集群名，见方案文档 §3.1）。
 	Slug string `json:"slug,omitempty"`
+	// Stale 表示该集群的数据可能已过期：平台距最后一次成功访问它的 API server
+	// 已超过陈旧阈值，或 informer 的 watch 刚报过错。仅供提示，不影响可用性判定。
+	Stale bool `json:"stale,omitempty"`
+	// StaleSince 是最后一次成功访问该集群 API server 的时间（RFC3339）。
+	// 语义是「此后拿到的数据可能不新」，从未成功访问过时为空。
+	StaleSince  string `json:"staleSince,omitempty"`
+	StaleReason string `json:"staleReason,omitempty"`
 	// 集群徽章（见 model.Cluster）：只有启用了徽章的集群才下发，
 	// 未启用时字段整体省略，前端据此决定是否展示。
 	BadgeEnabled     bool   `json:"badgeEnabled,omitempty"`

@@ -7,10 +7,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/zxh326/kite/pkg/common"
+	"github.com/zxh326/kite/pkg/kube"
 	"github.com/zxh326/kite/pkg/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -425,6 +427,64 @@ func TestGetClustersIncludesSlug(t *testing.T) {
 	}
 	if _, ok := byName["legacy"]["slug"]; ok {
 		t.Errorf("nil slug should be omitted, got %#v", byName["legacy"]["slug"])
+	}
+}
+
+// 建得出客户端不等于数据是新的：apiserver 掉线后缓存会一直停在最后一刻，
+// 而节点列表看起来完全正常。集群列表必须把陈旧信号带上，供切换器与横幅兜底提示。
+func TestGetClustersReportsStaleData(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fresh := &kube.K8sClient{}
+	fresh.Health().RecordProbeOK(time.Now())
+	stale := &kube.K8sClient{}
+	stale.Health().RecordProbeOK(time.Now().Add(-3 * time.Minute))
+
+	manager := &ClusterManager{
+		clusters: map[string]*ClientSet{
+			"fresh": {Name: "fresh", Version: "v1.36.0", K8sClient: fresh},
+			"stale": {Name: "stale", Version: "v1.36.0", K8sClient: stale},
+		},
+		errors: map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/clusters", nil)
+	ctx.Set("user", model.User{Username: "alice", Roles: []common.Role{{
+		Name:     "limited",
+		Clusters: []string{"fresh", "stale"},
+	}}})
+
+	manager.GetClusters(ctx)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	byName := map[string]map[string]any{}
+	for _, item := range listed {
+		name, _ := item["name"].(string)
+		byName[name] = item
+	}
+	if len(byName) != 2 {
+		t.Fatalf("clusters = %#v", listed)
+	}
+
+	for _, key := range []string{"stale", "staleSince", "staleReason"} {
+		if _, ok := byName["fresh"][key]; ok {
+			t.Errorf("fresh cluster must not report %q: %#v", key, byName["fresh"])
+		}
+	}
+	staleInfo := byName["stale"]
+	if staleInfo["stale"] != true || staleInfo["staleReason"] != kube.StaleReasonUnreachable {
+		t.Errorf("stale cluster = %#v", staleInfo)
+	}
+	if since, _ := staleInfo["staleSince"].(string); since == "" {
+		t.Errorf("stale cluster must report when its data was last fresh: %#v", staleInfo)
+	} else if _, err := time.Parse(time.RFC3339, since); err != nil {
+		t.Errorf("staleSince = %q, want RFC3339: %v", since, err)
 	}
 }
 

@@ -1,16 +1,19 @@
 package cluster
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/zxh326/kite/pkg/clusteragent"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/kube"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/prometheus"
@@ -42,7 +45,56 @@ type ClusterManager struct {
 	clusterAgentManager *clusteragent.Manager
 }
 
+// Health 返回该集群的 API 可用性记录（客户端尚未建好时返回 nil）。
+func (cs *ClientSet) Health() *kube.Health {
+	if cs == nil || cs.K8sClient == nil {
+		return nil
+	}
+	return cs.K8sClient.Health()
+}
+
+// SnapshotHealth 返回该集群在 now 时刻的健康快照；客户端尚未建好时返回「陈旧」，
+// 因为此时平台根本拿不到它的数据。
+func (cs *ClientSet) SnapshotHealth(now time.Time) kube.ClusterHealth {
+	if h := cs.Health(); h != nil {
+		return h.Snapshot(now, clusterStaleAfter())
+	}
+	return kube.ClusterHealth{Stale: true, Reason: kube.StaleReasonUnreachable}
+}
+
 const clusterStartupSyncTimeout = 10 * time.Second
+
+// 集群 API 探活默认参数：每 15 秒探一轮，距最后一次成功访问超过 45 秒即判「数据可能陈旧」
+// （3× 间隔，容忍两轮探活抖动）。分别由 AEROLINK_CLUSTER_PROBE_INTERVAL /
+// AEROLINK_CLUSTER_STALE_AFTER 覆盖，设为 0 表示关闭该判定。
+const (
+	defaultClusterProbeInterval = 15 * time.Second
+	defaultClusterStaleAfter    = 45 * time.Second
+	clusterProbeTimeout         = 3 * time.Second
+)
+
+func envSeconds(name string, fallback time.Duration) time.Duration {
+	v := common.Getenv(name)
+	if v == "" {
+		return fallback
+	}
+	secs, err := strconv.Atoi(v)
+	if err != nil || secs < 0 {
+		klog.Warningf("invalid %s%s=%q, using default %s", common.EnvPrefix, name, v, fallback)
+		return fallback
+	}
+	return time.Duration(secs) * time.Second
+}
+
+// ClusterProbeInterval 返回主动探活间隔；0 表示关闭探活。
+func ClusterProbeInterval() time.Duration {
+	return envSeconds("CLUSTER_PROBE_INTERVAL", defaultClusterProbeInterval)
+}
+
+// clusterStaleAfter 返回陈旧判定阈值；0 表示关闭基于时间的判定。
+func clusterStaleAfter() time.Duration {
+	return envSeconds("CLUSTER_STALE_AFTER", defaultClusterStaleAfter)
+}
 
 func createClientSetInCluster(name, prometheusURL string) (*ClientSet, error) {
 	config, err := rest.InClusterConfig()
@@ -111,8 +163,12 @@ func newClientSet(name string, k8sConfig *rest.Config, prometheusURL string) (*C
 	v, err := cs.K8sClient.ClientSet.Discovery().ServerVersion()
 	if err != nil {
 		klog.Warningf("Failed to get server version for cluster %s: %v", name, err)
+		cs.K8sClient.Health().RecordProbeError(err)
 	} else {
 		cs.Version = v.String()
+		// 建客户端时已经打通过 apiserver（缓存模式还通过了缓存同步），
+		// 把它记成一次成功探活，免得新建的集群在首轮探活前被误判陈旧。
+		cs.K8sClient.Health().RecordProbeOK(time.Now())
 	}
 	klog.Infof("Loaded K8s client for cluster: %s, version: %s", name, cs.Version)
 	return cs, nil
@@ -461,9 +517,15 @@ func shouldUpdateCluster(cs *ClientSet, cluster *model.Cluster) bool {
 	version, err := cs.K8sClient.ClientSet.Discovery().ServerVersion()
 	if err != nil {
 		klog.Warningf("Failed to get server version for cluster %s: %v", cluster.Name, err)
-	} else if version.String() != cs.Version {
-		klog.Infof("Server version changed for cluster %s, updating, old: %s, new: %s", cluster.Name, cs.Version, version.String())
-		return true
+		cs.K8sClient.Health().RecordProbeError(err)
+	} else {
+		// 这里对 /version 的访问既是版本比对、也是一次探活，复用它的结果，
+		// 不再为同一轮同步额外发一次请求。
+		cs.K8sClient.Health().RecordProbeOK(time.Now())
+		if version.String() != cs.Version {
+			klog.Infof("Server version changed for cluster %s, updating, old: %s, new: %s", cluster.Name, cs.Version, version.String())
+			return true
+		}
 	}
 
 	return false
@@ -546,6 +608,8 @@ func NewClusterManager() (*ClusterManager, error) {
 		}
 	}()
 
+	go cm.probeLoop()
+
 	timer := time.NewTimer(clusterStartupSyncTimeout)
 	defer timer.Stop()
 
@@ -555,4 +619,44 @@ func NewClusterManager() (*ClusterManager, error) {
 		klog.Warningf("Timed out waiting for cluster readiness after %s, continuing startup", clusterStartupSyncTimeout)
 	}
 	return cm, nil
+}
+
+// probeLoop 周期性主动探活所有已建好的集群。
+//
+// 这是唯一的「恢复」判据：informer 的 watch 错误回调只在出错时触发
+// （client-go 没有恢复回调），不主动探一次就无法把集群从「可能陈旧」拉回正常。
+func (cm *ClusterManager) probeLoop() {
+	interval := ClusterProbeInterval()
+	if interval <= 0 {
+		klog.Infof("cluster API probing is disabled (AEROLINK_CLUSTER_PROBE_INTERVAL=0)")
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		cm.probeAllClusters()
+	}
+}
+
+// probeAllClusters 并发探活一轮；单集群超时不影响其它集群。
+func (cm *ClusterManager) probeAllClusters() {
+	clusters, _, _ := cm.snapshotState()
+	var wg sync.WaitGroup
+	for _, cs := range clusters {
+		if cs == nil || cs.K8sClient == nil || cs.K8sClient.ClientSet == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(cs *ClientSet) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), clusterProbeTimeout)
+			defer cancel()
+			if err := kube.ProbeServerVersion(ctx, cs.K8sClient.ClientSet); err != nil {
+				cs.K8sClient.Health().RecordProbeError(err)
+				return
+			}
+			cs.K8sClient.Health().RecordProbeOK(time.Now())
+		}(cs)
+	}
+	wg.Wait()
 }

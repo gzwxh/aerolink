@@ -44,6 +44,9 @@ func DevCORS(allowedOrigins []string) gin.HandlerFunc {
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers",
 			"Content-Type, Authorization, X-Cluster-Name")
+		// 默认只有「简单响应头」暴露给 JS；集群数据陈旧信号要能读到，必须显式列出。
+		c.Writer.Header().Set("Access-Control-Expose-Headers",
+			ClusterDataStaleHeader+", "+ClusterDataAgeHeader)
 		c.Writer.Header().Set("Access-Control-Allow-Methods",
 			"GET, POST, PUT, DELETE, PATCH, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Max-Age", "86400")

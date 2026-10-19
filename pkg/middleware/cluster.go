@@ -3,6 +3,8 @@ package middleware
 import (
 	"net/http"
 	"net/url"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/cluster"
@@ -13,6 +15,14 @@ const (
 	ClusterNameKey    = "cluster-name"
 	K8sClientKey      = "k8s-client"
 	PromClientKey     = "prom-client"
+
+	// ClusterDataStaleHeader 表示这次响应所依据的集群数据可能已过期（陈旧时值为 "1"，
+	// 正常时不带该头）。ClusterDataAgeHeader 是距最后一次成功访问该集群 API server
+	// 的秒数，两者都不改响应体：k8s 对象仍原样透传。
+	//
+	// 跨源调试时要能读到头，需同时挂在 cors.go 的 Access-Control-Expose-Headers 上。
+	ClusterDataStaleHeader = "X-Cluster-Data-Stale"
+	ClusterDataAgeHeader   = "X-Cluster-Data-Age"
 )
 
 type clusterClientSetProvider interface {
@@ -60,6 +70,19 @@ func ClusterMiddleware(cm clusterClientSetProvider) gin.HandlerFunc {
 		}
 		c.Set("cluster", cluster)
 		c.Set(ClusterNameKey, cluster.Name)
+		writeClusterDataStalenessHeaders(c, cluster)
 		c.Next()
+	}
+}
+
+// writeClusterDataStalenessHeaders 把「本页数据可能已过期」的信号放进响应头，
+// 让前端在任何一次集群作用域请求上都能立刻发现，而不必等下一次拉集群列表。
+func writeClusterDataStalenessHeaders(c *gin.Context, cs *cluster.ClientSet) {
+	health := cs.SnapshotHealth(time.Now())
+	if health.Stale {
+		c.Writer.Header().Set(ClusterDataStaleHeader, "1")
+	}
+	if !health.LastOK.IsZero() {
+		c.Writer.Header().Set(ClusterDataAgeHeader, strconv.Itoa(int(health.Age.Seconds())))
 	}
 }

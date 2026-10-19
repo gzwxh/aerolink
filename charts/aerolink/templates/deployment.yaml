@@ -102,6 +102,16 @@ spec:
             - name: AEROLINK_MAX_WATCH_PER_USER
               value: {{ .Values.maxWatchPerUser | quote }}
             {{- end }}
+            {{- if .Values.clusterProbeInterval }}
+            # 集群 API 探活间隔（秒），留空时程序用默认 15；0 表示关闭探活。
+            - name: AEROLINK_CLUSTER_PROBE_INTERVAL
+              value: {{ .Values.clusterProbeInterval | quote }}
+            {{- end }}
+            {{- if .Values.clusterStaleAfter }}
+            # 「数据可能已过期」的判定阈值（秒），留空时程序用默认 45。
+            - name: AEROLINK_CLUSTER_STALE_AFTER
+              value: {{ .Values.clusterStaleAfter | quote }}
+            {{- end }}
           {{- with .Values.extraEnvs }}
           {{- toYaml . | nindent 12 }}
           {{- end }}

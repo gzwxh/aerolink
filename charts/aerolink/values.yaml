@@ -109,6 +109,16 @@ podMetricsInterval: ""
 # 设为 0 表示不限制（仅建议用于临时排查，多标签页会把连接数与推送量一起推高）。
 maxWatchPerUser: ""
 
+# 主动探活各集群 API server 的间隔（秒），注入 AEROLINK_CLUSTER_PROBE_INTERVAL。
+# 留空即默认 15。不建议调大：informer 的 watch 错误回调只在出错时触发，
+# 「已恢复」只能靠主动探活确认，探测越稀，陈旧提示挂得越久；设为 0 关闭探活。
+clusterProbeInterval: ""
+
+# 判「集群数据可能已过期」的阈值（秒），注入 AEROLINK_CLUSTER_STALE_AFTER。
+# 留空即默认 45（探活间隔的 3 倍，容忍两轮抖动）。调小会更容易提示，
+# 但也更容易在网络抖动时误报；设为 0 只保留「从未连上过」与 watch 报错两种判据。
+clusterStaleAfter: ""
+
 # 归档 parquet 与 klog 日志的持久化卷。
 # 这两类文件都写在容器里，不挂卷时 Pod 重建即丢——生产建议开启（PVC 或 hostPath）。
 # 挂载点默认 /home/aerolink/data（运行用户 aerolink 的家目录下）；归档目录

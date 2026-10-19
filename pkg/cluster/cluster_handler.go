@@ -69,6 +69,15 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 			Version:   cluster.Version,
 			IsDefault: name == defaultContext,
 		}
+		// 客户端建得起来不等于数据是新的（apiserver 可能刚掉线、informer 可能在
+		// 重试），所以这里额外带上陈旧信号，让切换器也能提示（见 lib/cluster-data-staleness.ts）。
+		if health := cluster.SnapshotHealth(time.Now()); health.Stale {
+			info.Stale = true
+			info.StaleReason = health.Reason
+			if !health.LastOK.IsZero() {
+				info.StaleSince = health.LastOK.Format(time.RFC3339)
+			}
+		}
 		applyStoredDisplayInfo(&info, stored[name])
 		result = append(result, info)
 	}
