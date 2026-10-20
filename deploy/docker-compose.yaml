@@ -1,5 +1,6 @@
 # 鸢联 AeroLink Docker Compose 部署清单
-# 场景：外部 MySQL 数据库 + 审计走本地 parquet 归档 + S3 远端副本
+# 场景：外部 MySQL 数据库 + 审计走本地 parquet 归档 + S3 远端副本，
+#       另可附带一套帮助文档站（VitePress 静态站，独立镜像、可选 profile）。
 #
 # 与 deploy/install-mysql.yaml 等价的单机部署方式：不需要 Kubernetes，只要一台
 # 能跑 docker compose 的机器。业务数据全部在外部 MySQL 里，容器本身无状态，
@@ -51,6 +52,11 @@
 #   访问：http://<宿主机IP>:27862
 #   日志：docker logs -f aerolink（审计与访问日志走 stdout；系统日志 klog 已落
 #         /home/aerolink/data/aerolink.log，见 AEROLINK_LOG_FILE）
+#
+#   帮助文档站（可选，见下方 docs 服务的 profile）：
+#   docker compose -f deploy/docker-compose.yaml --profile docs up -d
+#   访问：http://<宿主机IP>:27863，再把它填进「系统设置 → 通用 → 帮助文档」，
+#         登录页与顶栏就会出现入口。
 # 项目名固定为 aerolink，避免默认取目录名 deploy。
 name: aerolink
 services:
@@ -133,3 +139,26 @@ services:
     #  timeout: 3s
     #  retries: 3
     #  start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # 帮助文档站（可选）：docs/ 下的 VitePress 站，独立 nginx 静态镜像。
+  # ---------------------------------------------------------------------------
+  # 与应用无耦合：不读数据库、不挂卷、不需要环境变量，纯静态文件；应用镜像刻意
+  # 不包含 docs/（根 .dockerignore 排除），所以这里单独起一个容器。
+  # 默认不起（profiles 未激活），要它时加 --profile docs：
+  #   docker compose -f deploy/docker-compose.yaml --profile docs up -d
+  #   docker compose -f deploy/docker-compose.yaml --profile docs logs -f docs
+  # 起好后把 http://<宿主机IP>:27863 填进「系统设置 → 通用 → 帮助文档」。
+  docs:
+    profiles: ["docs"]
+    # 镜像由 `make docs-image` / `make push-docs` 构建（Makefile 的 DOCS_IMAGE，
+    # 与应用镜像分开打 tag）；直连环境可换成本地构建的 aerolink-docs:local。
+    image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2
+    container_name: aerolink-docs
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      # 容器内是 nginx 默认的 80；27863 紧挨应用的 27862，冲突时改冒号左边。
+      - "27863:80"
+    # 静态站没有可写的挂载与可调参数：站点内容随镜像发布，更新即换镜像 tag。
+    # VitePress 默认 cleanUrls=false，产物是 <path>.html，不需要 SPA 回退规则。
