@@ -16,6 +16,27 @@
 - **AEROLINK_REQUIRE_ENCRYPT_KEY**：设置为 `true` 时，即使开启 `AEROLINK_ALLOW_INSECURE_SECRETS` 也必须设置 `AEROLINK_ENCRYPT_KEY`。
 - **AEROLINK_ALLOW_INSECURE_SECRETS**：仅限本地开发的逃生开关（`true`/`false`），允许使用内置默认密钥和较短的 JWT 密钥，生产环境禁止开启。
 
+## 凭据传输加密
+
+口令、动态码、改密/重置口令、kubeconfig 与 Secret 内容这类字段在**浏览器侧**先用服务端公钥加密，
+再随请求体上行，服务端用私钥解开。目的是让明文凭据不出现在访问日志、抓包和代理日志里——**它不能
+替代 HTTPS**（中间人仍可重放合法密文、篡改响应），HTTPS 仍是部署侧必做项。
+
+- **AEROLINK_TRANSPORT_KEY_PATH**：传输密钥（RSA 私钥，PEM）的路径，默认 `data/transport-key.pem`
+  （相对进程工作目录，官方镜像为 `/home/aerolink/data/transport-key.pem`）。文件不存在时自动生成
+  （权限 `0600`）。**多副本必须让所有副本读到同一份私钥**（共享卷，或改用下面的变量从 Secret 注入），
+  否则请求落到别的副本会解不开，表现为随机出现的 `400 credential_decrypt_failed`。
+- **AEROLINK_TRANSPORT_PRIVATE_KEY**：直接以 PEM 文本注入私钥，便于从 Secret 挂载，优先于
+  `AEROLINK_TRANSPORT_KEY_PATH`。
+- **AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS**：设为 `true` 后**只接受密文凭据**：上述字段若以明文提交，
+  一律返回 `400`，响应体 `code` 为 `encrypted_credential_required`。默认 `false`（明文、密文都接受），
+  以兼容旧页面与自建脚本。
+
+开启前的确认项：浏览器里没有还开着上一版页面（前端产物随二进制发布，但标签页可能是旧的），自建脚本
+已改用密文。滚动升级期间开启会让旧页面登录失败。开启后若仍看到 `encrypted_credential_required`，
+先查客户端有没有成功取到 `/api/v1/transport-key`（多副本私钥是否一致、反向代理是否拦截），不要先去
+关开关。
+
 - **HOST**: 用户 OAuth 2.0 授权回调地址生成，默认会从请求头获取，如果您发现结果不及预期可以手动配置此环境变量。
 
 - **TRUSTED_PROXIES**：以逗号分隔的反向代理、Ingress 或负载均衡器 IP/CIDR 列表；只有这些直连鸢联 AeroLink 的上一跳才会被信任，鸢联 AeroLink 才会读取其转发的 `X-Forwarded-For` / `X-Real-IP` 来判断客户端 IP。默认信任本地和常见私网网段（`127.0.0.0/8`、`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`、`::1`、`fc00::/7`），方便常见 Ingress 部署拿到真实用户 IP。生产环境建议配置为更窄的范围，例如 `TRUSTED_PROXIES=10.42.0.0/16,192.168.1.10`；如需忽略所有客户端转发头，可设置 `TRUSTED_PROXIES=none`。

@@ -1,9 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
-  IconCopy,
-  IconEye,
-  IconEyeOff,
   IconKey,
   IconPlus,
   IconShieldCheck,
@@ -14,16 +11,15 @@ import { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { APIKey } from '@/types/api'
+import { APIKey, CreatedAPIKey } from '@/types/api'
 import { createAPIKey, deleteAPIKey, useAPIKeyList } from '@/lib/api'
-import { copyToClipboard } from '@/lib/clipboard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 
 import { Action, ActionTable } from '../action-table'
-import { APIKeyDialog } from './apikey-dialog'
+import { APIKeyDialog, APIKeySecretDialog } from './apikey-dialog'
 import UserRoleAssignment from './user-role-assignment'
 
 export function APIKeyManagement() {
@@ -37,35 +33,8 @@ export function APIKeyManagement() {
   const [showDialog, setShowDialog] = useState(false)
   const [deletingKey, setDeletingKey] = useState<APIKey | null>(null)
   const [assigningKey, setAssigningKey] = useState<APIKey | null>(null)
-  const [visibleKeys, setVisibleKeys] = useState<Set<number>>(new Set())
-
-  const toggleKeyVisibility = useCallback((id: number) => {
-    setVisibleKeys((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }, [])
-
-  const copyText = useCallback(
-    async (text: string) => {
-      if (await copyToClipboard(text)) {
-        toast.success(t('common.messages.copied', 'Copied to clipboard'))
-      } else {
-        toast.error(
-          t(
-            'common.messages.copyFailed',
-            'Failed to copy. Select the text and copy it manually.'
-          )
-        )
-      }
-    },
-    [t]
-  )
+  // 刚创建出来的完整密钥：只在创建响应里有，用来弹「仅显示一次」的弹窗。
+  const [createdKey, setCreatedKey] = useState<CreatedAPIKey | null>(null)
 
   const columns = useMemo<ColumnDef<APIKey>[]>(
     () => [
@@ -81,39 +50,15 @@ export function APIKeyManagement() {
       {
         id: 'key',
         header: t('common.fields.apiKey', 'API Key'),
-        // 密钥本身很长（几十个字符），列宽改成按占比固定后，默认宽度太小会和
-        // 右侧的「显示/隐藏」「复制」两个图标按钮挤在一起，这里单独放宽。
-        size: 320,
-        cell: ({ row: { original: apiKey } }) => {
-          const isVisible = visibleKeys.has(apiKey.id)
-          const displayKey = isVisible ? apiKey.apiKey : '•'.repeat(18)
-
-          return (
-            <div className="flex items-center gap-2">
-              <code className="text-sm bg-muted px-2 py-1 rounded">
-                {displayKey}
-              </code>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleKeyVisibility(apiKey.id)}
-              >
-                {isVisible ? (
-                  <IconEyeOff className="h-4 w-4" />
-                ) : (
-                  <IconEye className="h-4 w-4" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void copyText(apiKey.apiKey)}
-              >
-                <IconCopy className="h-4 w-4" />
-              </Button>
-            </div>
-          )
-        },
+        // 列表只回显非敏感前缀（`aerolink<id>-`），后端不再下发可用密钥，
+        // 所以这里没有「显示/隐藏」与「复制」——完整值只在创建时出现一次。
+        size: 260,
+        cell: ({ row: { original: apiKey } }) => (
+          <code className="bg-muted rounded px-2 py-1 text-sm">
+            {apiKey.apiKeyPrefix}
+            {'•'.repeat(8)}
+          </code>
+        ),
       },
       {
         id: 'lastUsedAt',
@@ -148,7 +93,7 @@ export function APIKeyManagement() {
         ),
       },
     ],
-    [t, visibleKeys, toggleKeyVisibility, copyText]
+    [t]
   )
 
   const actions = useMemo<Action<APIKey>[]>(() => {
@@ -183,7 +128,7 @@ export function APIKeyManagement() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['apikey-list'] })
       setShowDialog(false)
-      setVisibleKeys(new Set([data.apiKey.id]))
+      setCreatedKey(data.apiKey)
       toast.success(
         t('common.messages.created', {
           resource: t('common.fields.apiKey', 'API Key'),
@@ -253,6 +198,12 @@ export function APIKeyManagement() {
                   'Manage API keys for programmatic access'
                 )}
               </p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {t(
+                  'apikeyManagement.secret.shownOnce',
+                  '完整密钥仅在创建时显示一次，之后列表只保留前缀'
+                )}
+              </p>
             </div>
             {!readOnly && (
               <Button onClick={() => setShowDialog(true)}>
@@ -291,6 +242,16 @@ export function APIKeyManagement() {
         onOpenChange={setShowDialog}
         onSubmit={handleCreate}
         isLoading={createMutation.isPending}
+      />
+
+      <APIKeySecretDialog
+        apiKey={createdKey}
+        open={!!createdKey}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCreatedKey(null)
+          }
+        }}
       />
 
       <UserRoleAssignment

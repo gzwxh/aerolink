@@ -163,10 +163,7 @@ func (r *runner) run() error {
 }
 
 func (r *runner) prepare() error {
-	status, raw, err := r.client.request("POST", "/api/auth/login/password", map[string]string{
-		"username": r.opts.username,
-		"password": r.opts.password,
-	})
+	status, raw, err := r.login()
 	if err != nil {
 		return err
 	}

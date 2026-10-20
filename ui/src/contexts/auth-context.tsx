@@ -6,6 +6,8 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
+  useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -35,6 +37,14 @@ import {
   type CanAccessOptions,
 } from '@/lib/rbac-permissions'
 import { withSubPath } from '@/lib/subpath'
+import {
+  clearTabSession,
+  hasTabSession,
+  markTabSession,
+  probeLiveTabs,
+  shouldRequireLogin,
+  startTabSessionResponder,
+} from '@/lib/tab-session'
 
 export type { CanAccessOptions }
 
@@ -106,7 +116,13 @@ export function markLoginSucceeded() {
   } catch {
     // 忽略存储失败
   }
+  // 同一时刻也落下「本标签已经过认证」的票据：凭据登录、OAuth 往返之后
+  // 都会走到这里，标签页闸门（见下方 tabGate）据此直接放行。
+  markTabSession()
 }
+
+/** 标签页闸门状态：idle 未判定 / checking 正在问其它标签 / passed 已放行。 */
+type TabGate = 'idle' | 'checking' | 'passed'
 
 const defaultCapabilities: BootstrapCapabilities = {
   aiEnabled: false,
@@ -171,6 +187,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     refetch: refetchBootstrap,
   } = useBootstrap()
 
+  const [tabGate, setTabGate] = useState<TabGate>('idle')
+  const tabGateStarted = useRef(false)
+
   const checkAuth = useCallback(async () => {
     await refetchBootstrap()
   }, [refetchBootstrap])
@@ -204,6 +223,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     await logoutUser()
+    // 主动退出后本标签不再算「仍在使用」，否则别的标签会把它当成旁证。
+    clearTabSession()
+    tabGateStarted.current = false
+    setTabGate('idle')
     await refetchBootstrap()
     window.location.href = withSubPath('/login')
   }, [refetchBootstrap])
@@ -223,6 +246,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
     () => (bootstrap?.user ? normalizeUser(bootstrap.user) : null),
     [bootstrap?.user]
   )
+
+  // 标签页闸门：bootstrap 认为已登录，但本标签没有认证票据时，先确认同浏览器里
+  // 是不是还有别的标签在用。有就放行（复制链接、从别的标签继续操作都算同一次使用），
+  // 一个都没有说明所有页面都关过了，回登录页重新认证。
+  //
+  // 这里不能用 Redirect 之类的渲染期跳转：判定是异步的（要等其它标签回话），
+  // 而且必须以整页跳转的方式落到登录页，好让 bootstrap 重新读一次 Cookie。
+  //
+  // 用 ref 而不是 state 记住「已判定过」：判定开始时会改 tabGate，若把它放进依赖，
+  // 这次改动会把正在等待的 promise 判成过期，闸门就永远停在 checking。
+  useEffect(() => {
+    if (isLoading || !user || tabGateStarted.current) return
+    if (typeof window === 'undefined') {
+      setTabGate('passed')
+      return
+    }
+    // 登录页不判定：用户多半是被这里赶过来的，再判定一次就是整页跳转死循环。
+    if (hasTabSession() || window.location.pathname.endsWith('/login')) {
+      tabGateStarted.current = true
+      setTabGate('passed')
+      return
+    }
+    tabGateStarted.current = true
+    setTabGate('checking')
+    void probeLiveTabs().then((hasLivePeer) => {
+      if (shouldRequireLogin({ hasTicket: false, hasLivePeer })) {
+        // 跳转没发出去（预算用完等）时也要解除阻断，否则会一直转圈。
+        if (!redirectToLogin('session-ended')) setTabGate('passed')
+        return
+      }
+      markTabSession()
+      setTabGate('passed')
+    })
+  }, [isLoading, user])
+
+  // 已通过闸门的标签回答别的标签的 ping（见 lib/tab-session.ts）。
+  // 依赖用户 ID 而不是对象：bootstrap 每次 refetch 都会换一个新的 user 对象，
+  // 跟着它重建广播通道没有意义。
+  const userId = user?.id
+  useEffect(() => {
+    if (!userId || tabGate !== 'passed') return
+    return startTabSessionResponder()
+  }, [userId, tabGate])
 
   useEffect(() => {
     if (isLoading || !user || typeof window === 'undefined') return
@@ -260,6 +326,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => clearInterval(refreshInterval)
   }, [user, refreshToken])
 
+  // 闸门还没放行时对调用方表现为「仍在加载」：路由守卫据此转圈，
+  // 而不是先把主界面画出来再整页跳走。
+  const tabGateBlocked = !!user && tabGate !== 'passed'
+
   const globalSidebarPreference = String(
     bootstrap?.globalSidebarPreference || ''
   )
@@ -274,7 +344,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return {
       user,
-      isLoading,
+      isLoading: isLoading || tabGateBlocked,
       globalSidebarPreference,
       credentialProviders,
       oauthProviders,
@@ -291,6 +361,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [
     user,
     isLoading,
+    tabGateBlocked,
     globalSidebarPreference,
     bootstrap?.auth.credentialProviders,
     bootstrap?.auth.oauthProviders,

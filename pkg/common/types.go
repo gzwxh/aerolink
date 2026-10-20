@@ -33,8 +33,14 @@ type ResourceMetric struct {
 
 type PasswordLoginRequest struct {
 	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	MFACode  string `json:"mfa_code"`
+	// Password 只用于兼容尚未升级的客户端/工具；新版前端发送 PasswordEnc。
+	// 这里不能加 binding:"required"：只加密文时明文字段必然为空。
+	Password string `json:"password"`
+	// PasswordEnc 是口令的 RSA-OAEP 密文（见 pkg/transportkey）。
+	PasswordEnc string `json:"password_enc"`
+	MFACode     string `json:"mfa_code"`
+	// MFACodeEnc 是动态码的密文；动态码同样是 60 秒内可用的凭据。
+	MFACodeEnc string `json:"mfa_code_enc"`
 	// CaptchaToken / CaptchaCode 在安全策略启用时
 	// 携带登录验证码。
 	CaptchaToken string `json:"captcha_token"`

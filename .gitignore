@@ -9,6 +9,9 @@
 dev.db
 dev.db-journal
 
+# 请求体加密私钥（AEROLINK_TRANSPORT_KEY_PATH 的默认落盘位置，见 pkg/transportkey）
+data/transport-key.pem
+
 # Test binary, built with `go test -c`
 *.test
 

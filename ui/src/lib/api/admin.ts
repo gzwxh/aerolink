@@ -10,6 +10,7 @@ import {
   AuditSetting,
   AuditSettingResponse,
   Cluster,
+  CreatedAPIKey,
   FetchUserListResponse,
   LoginLogResponse,
   OAuthProvider,
@@ -20,6 +21,8 @@ import {
 
 import { apiClient } from '../api-client'
 import { toAuditQueryTimeRange } from '../audit-time-range'
+import { encryptSecrets } from '../credential-cipher'
+import { encryptRequestBody } from '../transport-envelope'
 import { downloadFile, fetchAPI } from './shared'
 
 export interface ClusterCreateRequest {
@@ -91,6 +94,7 @@ export const createCluster = async (
   clusterAgentPublicKey?: string
   clusterAgentManifestURL?: string
 }> => {
+  // config 是整份 kubeconfig，走信封加密（见 lib/transport-envelope.ts）。
   return await apiClient.post<{
     id: number
     message: string
@@ -98,7 +102,7 @@ export const createCluster = async (
     clusterAgentToken?: string
     clusterAgentPublicKey?: string
     clusterAgentManifestURL?: string
-  }>('/admin/clusters/', clusterData)
+  }>('/admin/clusters/', await encryptRequestBody(clusterData))
 }
 
 // 更新集群
@@ -108,7 +112,7 @@ export const updateCluster = async (
 ): Promise<{ message: string }> => {
   return await apiClient.put<{ message: string }>(
     `/admin/clusters/${id}`,
-    clusterData
+    await encryptRequestBody(clusterData)
   )
 }
 
@@ -205,7 +209,7 @@ export const createOAuthProvider = async (
 ): Promise<{ provider: OAuthProvider }> => {
   return await apiClient.post<{ provider: OAuthProvider }>(
     '/admin/oauth-providers/',
-    providerData
+    await encryptRequestBody(providerData)
   )
 }
 
@@ -216,7 +220,7 @@ export const updateOAuthProvider = async (
 ): Promise<{ provider: OAuthProvider }> => {
   return await apiClient.put<{ provider: OAuthProvider }>(
     `/admin/oauth-providers/${id}`,
-    providerData
+    await encryptRequestBody(providerData)
   )
 }
 
@@ -603,13 +607,19 @@ export const createPasswordUser = async (data: {
   // true = 该账号不受全局 MFA 策略强制。
   mfaDisabled?: boolean
 }) => {
-  return apiClient.post<{ user: UserItem }>(`/admin/users/`, data)
+  const { password, ...rest } = data
+  const encrypted = await encryptSecrets({ password })
+  return apiClient.post<{ user: UserItem }>(`/admin/users/`, {
+    ...rest,
+    ...encrypted,
+  })
 }
 
 export const resetUserPassword = async (id: number, password: string) => {
+  const encrypted = await encryptSecrets({ password })
   return apiClient.post<{ success: boolean }>(
     `/admin/users/${id}/reset_password`,
-    { password }
+    encrypted
   )
 }
 
@@ -984,7 +994,7 @@ export const updateAuditSetting = async (
 ): Promise<{ setting: AuditSetting; warnings?: string[] }> =>
   apiClient.put<{ setting: AuditSetting; warnings?: string[] }>(
     '/admin/audit-setting/',
-    setting
+    await encryptRequestBody(setting)
   )
 
 // —— 归档检索（走 Elasticsearch，见方案 §10.3 步骤 9）——
@@ -1209,7 +1219,11 @@ export const useGeneralSetting = (options?: {
 export const updateGeneralSetting = async (
   data: GeneralSettingUpdateRequest
 ): Promise<GeneralSetting> => {
-  return await apiClient.put<GeneralSetting>('/admin/general-setting/', data)
+  // aiApiKey 是第三方模型凭据，整包走信封加密。
+  return await apiClient.put<GeneralSetting>(
+    '/admin/general-setting/',
+    await encryptRequestBody(data)
+  )
 }
 
 export type MFAPolicy = 'disabled' | 'all' | 'admin'
@@ -1367,7 +1381,10 @@ export const useLDAPSetting = (options?: {
 export const updateLDAPSetting = async (
   data: LDAPSettingUpdateRequest
 ): Promise<LDAPSetting> => {
-  return await apiClient.put<LDAPSetting>('/admin/ldap-setting/', data)
+  return await apiClient.put<LDAPSetting>(
+    '/admin/ldap-setting/',
+    await encryptRequestBody(data)
+  )
 }
 
 export interface LDAPSyncResult {
@@ -1509,8 +1526,11 @@ export const useAPIKeyList = (options?: { staleTime?: number }) => {
 
 export const createAPIKey = async (
   data: APIKeyCreateRequest
-): Promise<{ apiKey: APIKey }> => {
-  return await apiClient.post<{ apiKey: APIKey }>('/admin/apikeys/', data)
+): Promise<{ apiKey: CreatedAPIKey }> => {
+  return await apiClient.post<{ apiKey: CreatedAPIKey }>(
+    '/admin/apikeys/',
+    data
+  )
 }
 
 export const deleteAPIKey = async (

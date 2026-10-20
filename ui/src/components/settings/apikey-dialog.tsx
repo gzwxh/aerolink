@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
+import { IconCopy } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import {
   useDraftDirty,
   useUnsavedChangesGuard,
 } from '@/hooks/use-unsaved-changes-guard'
+import { copyToClipboard } from '@/lib/clipboard'
+import { CreatedAPIKey } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -52,6 +56,81 @@ export function APIKeyDialog({
 
       <UnsavedChangesConfirmDialog {...guard.confirmDialogProps} />
     </>
+  )
+}
+
+/**
+ * 完整密钥只在创建响应里出现一次（列表只给前缀），所以创建成功后必须当场展示：
+ * 关掉这个弹窗就再也看不到它了。
+ */
+export function APIKeySecretDialog({
+  apiKey,
+  open,
+  onOpenChange,
+}: {
+  apiKey: CreatedAPIKey | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+
+  const handleCopy = async () => {
+    if (!apiKey) {
+      return
+    }
+    if (await copyToClipboard(apiKey.key)) {
+      toast.success(t('apikeyManagement.messages.copied', '已复制到剪贴板'))
+      return
+    }
+    toast.error(
+      t('common.messages.copyFailed', '复制失败，请手动选择文本后复制')
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {t('apikeyManagement.secret.title', 'API 密钥已创建')}
+          </DialogTitle>
+          <DialogDescription>
+            {t(
+              'apikeyManagement.secret.description',
+              '下面是完整密钥，请复制到目标系统。'
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="flex items-start gap-2">
+            <code className="bg-muted flex-1 rounded px-2 py-1.5 text-sm break-all select-all">
+              {apiKey?.key}
+            </code>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleCopy()}
+            >
+              <IconCopy className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-sm text-destructive">
+            {t(
+              'apikeyManagement.secret.warning',
+              '关闭后无法再次查看。密钥丢失只能删除该条目后重新创建。'
+            )}
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            {t('apikeyManagement.secret.done', '我已保存')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

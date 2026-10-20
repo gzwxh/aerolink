@@ -1025,6 +1025,10 @@
     "useLocalAccount": "Sign in with a local account",
     "useLdapAccount": "Sign in with LDAP",
     "success": "Login successful",
+    "sessionEnded": {
+      "title": "Please sign in again",
+      "description": "Your session ended when the page was closed. Sign in to continue."
+    },
     "tabs": {
       "ldap": "LDAP"
     },
@@ -2809,6 +2813,13 @@
       "description": "Create a new API key for programmatic access.",
       "namePlaceholder": "e.g. Production API Key",
       "nameRequired": "Name is required"
+    },
+    "secret": {
+      "title": "API Key created",
+      "description": "Copy the full key below into the target system.",
+      "warning": "It cannot be viewed again after closing. If you lose it, delete this entry and create a new one.",
+      "done": "I've saved it",
+      "shownOnce": "The full key is shown only once at creation; the list keeps the prefix only"
     }
   },
   "deleteConfirmation": {

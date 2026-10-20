@@ -8,6 +8,7 @@ import {
 } from '@playwright/test'
 
 import { e2eContextName } from '../env'
+import { credentials } from '../support/credentials'
 
 // Critical 级 proxy 路径逃逸漏洞的回归测试（CVE review C1）。
 //
@@ -118,7 +119,11 @@ test('proxy path escape via encoded .. cannot bypass RBAC to read secrets', asyn
   try {
     // --- 准备：只在 default 中有 pods:get 的低权限只读用户 -------------
     const createdUser = await request.post('/api/v1/admin/users/', {
-      data: { username, password, name: 'Proxy Escape Reader' },
+      data: await credentials(request, {
+        username,
+        password,
+        name: 'Proxy Escape Reader',
+      }),
     })
     expect(createdUser.status(), await createdUser.text()).toBe(201)
     userId = (await createdUser.json()).id as number
@@ -188,7 +193,7 @@ test('proxy path escape via encoded .. cannot bypass RBAC to read secrets', asyn
     })
     await expectStatus(
       await readerRequest.post('/api/auth/login/password', {
-        data: { username, password },
+        data: await credentials(readerRequest, { username, password }),
       }),
       204
     )

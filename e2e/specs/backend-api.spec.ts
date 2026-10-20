@@ -10,6 +10,7 @@ import {
 
 import { adminUser, e2eContextName } from '../env'
 import { deleteBindingGroup, grantRoleInNamespace } from '../support/admin-api'
+import { credentials } from '../support/credentials'
 
 interface GeneralSetting {
   aiAgentEnabled: boolean
@@ -143,10 +144,10 @@ test('backend APIs work end to end against the real test environment', async ({
     await expectStatus(await anonymousRequest.get('/api/v1/admin/users/'), 401)
     await expectJSON(
       await anonymousRequest.post('/api/auth/setup/create_super_user', {
-        data: {
+        data: await credentials(anonymousRequest, {
           username: `blocked-admin-${suffix}`,
           password,
-        },
+        }),
       }),
       403
     )
@@ -441,7 +442,7 @@ test('backend APIs work end to end against the real test environment', async ({
     expect(templates.some((item) => item.id === templateId)).toBe(true)
 
     const apiKeyResponse = await expectJSON<{
-      apiKey: { id: number; username: string; apiKey: string }
+      apiKey: { id: number; username: string; key: string }
     }>(
       await request.post('/api/v1/admin/apikeys/', {
         data: { name: apiKeyName },
@@ -450,14 +451,15 @@ test('backend APIs work end to end against the real test environment', async ({
     )
     apiKeyId = apiKeyResponse.apiKey.id
     expect(apiKeyResponse.apiKey.username).toBe(apiKeyName)
-    expect(apiKeyResponse.apiKey.apiKey).toBeTruthy()
+    // 完整密钥只在创建响应里出现一次，后续一律从响应里取。
+    expect(apiKeyResponse.apiKey.key).toMatch(/^aerolink\d+-/)
+    const apiKeyToken = apiKeyResponse.apiKey.key
     const apiKeys = await expectJSON<{
-      apiKeys: Array<{ id: number; username: string; apiKey: string }>
+      apiKeys: Array<{ id: number; username: string; apiKeyPrefix: string }>
     }>(await request.get('/api/v1/admin/apikeys/'), 200)
     const listedAPIKey = apiKeys.apiKeys.find((item) => item.id === apiKeyId)
     expect(listedAPIKey?.username).toBe(apiKeyName)
-    expect(listedAPIKey?.apiKey).toMatch(/^aerolink\d+-/)
-    const apiKeyToken = listedAPIKey!.apiKey
+    expect(listedAPIKey?.apiKeyPrefix).toBe(`aerolink${apiKeyId}-`)
 
     const createdUser = await expectJSON<{
       id: number
@@ -465,11 +467,11 @@ test('backend APIs work end to end against the real test environment', async ({
       enabled: boolean
     }>(
       await request.post('/api/v1/admin/users/', {
-        data: {
+        data: await credentials(request, {
           username,
           password,
           name: 'Backend API Reader',
-        },
+        }),
       }),
       201
     )
@@ -490,7 +492,7 @@ test('backend APIs work end to end against the real test environment', async ({
     })
     await expectForbidden(
       await readerRequest.post('/api/auth/login/password', {
-        data: { username, password },
+        data: await credentials(readerRequest, { username, password }),
       }),
       ['insufficient permissions']
     )
@@ -609,7 +611,7 @@ test('backend APIs work end to end against the real test environment', async ({
     )
     await expectForbidden(
       await readerRequest.post('/api/auth/login/password', {
-        data: { username, password },
+        data: await credentials(readerRequest, { username, password }),
       }),
       ['insufficient permissions']
     )
@@ -621,13 +623,13 @@ test('backend APIs work end to end against the real test environment', async ({
     )
     await expectStatus(
       await request.post(`/api/v1/admin/users/${userId}/reset_password`, {
-        data: { password: resetPassword },
+        data: await credentials(request, { password: resetPassword }),
       }),
       200
     )
     await expectStatus(
       await readerRequest.post('/api/auth/login/password', {
-        data: { username, password },
+        data: await credentials(readerRequest, { username, password }),
       }),
       401
     )
@@ -1002,7 +1004,7 @@ test('backend APIs work end to end against the real test environment', async ({
     await expect
       .poll(async () => {
         const response = await readerRequest!.post('/api/auth/login/password', {
-          data: { username, password: resetPassword },
+          data: await credentials(readerRequest!, { username, password: resetPassword }),
         })
         return response.status()
       })
@@ -1072,7 +1074,9 @@ test('backend APIs work end to end against the real test environment', async ({
 
     await expectForbidden(
       await readerRequest.post('/api/users/me/mfa/setup', {
-        data: { current_password: resetPassword },
+        data: await credentials(readerRequest, {
+          current_password: resetPassword,
+        }),
       }),
       ['mfa is disabled']
     )
@@ -1092,10 +1096,10 @@ test('backend APIs work end to end against the real test environment', async ({
     // 移除，因此这里已无可拒绝的内容。
     await expectStatus(
       await readerRequest.post('/api/users/me/password', {
-        data: {
+        data: await credentials(readerRequest, {
           current_password: resetPassword,
           new_password: finalPassword,
-        },
+        }),
       }),
       200
     )
@@ -1104,7 +1108,7 @@ test('backend APIs work end to end against the real test environment', async ({
     await expect
       .poll(async () => {
         const response = await readerRequest!.post('/api/auth/login/password', {
-          data: { username, password: finalPassword },
+          data: await credentials(readerRequest!, { username, password: finalPassword }),
         })
         return response.status()
       })
@@ -1385,7 +1389,10 @@ test('backend APIs work end to end against the real test environment', async ({
     await expectStatus(await readerRequest.get('/api/auth/user'), 401)
     await expectStatus(
       await readerRequest.post('/api/auth/login/password', {
-        data: { username, password: finalPassword },
+        data: await credentials(readerRequest, {
+          username,
+          password: finalPassword,
+        }),
       }),
       204
     )

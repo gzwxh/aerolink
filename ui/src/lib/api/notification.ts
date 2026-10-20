@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { apiClient } from '../api-client'
+import { encryptRequestBody } from '../transport-envelope'
 import { fetchAPI } from './shared'
 
 export type NotificationChannel = 'inapp' | 'email'
@@ -104,9 +105,10 @@ export interface UpdateNotificationSettingPayload extends Partial<NotificationSe
 export const updateNotificationSetting = async (
   data: UpdateNotificationSettingPayload
 ) => {
+  // SMTP 口令在这段请求体里，整包走信封加密。
   return apiClient.put<NotificationSettingPayload>(
     '/admin/notification-setting/',
-    data
+    await encryptRequestBody(data)
   )
 }
 

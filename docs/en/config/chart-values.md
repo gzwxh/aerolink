@@ -21,9 +21,15 @@ This document describes all available configuration options for the AeroLink Hel
 | Parameter              | Description                                                                              | Default                                              |
 | ---------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | `anonymousUserEnabled` | Enable anonymous user access with full admin privileges. Use with caution in production. | `false`                                              |
+| `requireEncryptedCredentials` | Accept encrypted credentials only (login password, one-time code, password change / reset). Plaintext submissions return `400` with `code` = `encrypted_credential_required`. Enable only once every client runs the current version; enabling during a rolling upgrade makes old pages fail to log in. | `false`                                              |
 | `jwtSecret`            | Secret key for signing JWT tokens. Auto-generated on first boot if empty.                | `""`                                                 |
 | `encryptKey`           | Secret key used for encrypting sensitive data. Auto-generated with a random value on first install if empty (preserved across upgrades). Set this explicitly only if you manage the key yourself. | `""`                                                 |
 | `host`                 | Hostname for the application                                                             | `""`                                                 |
+
+The chart does not manage the transport key (`data/transport-key.pem`). With more than one replica
+(`replicaCount > 1`) every replica must read the same key, otherwise requests landing elsewhere fail to
+decrypt. Inject `AEROLINK_TRANSPORT_PRIVATE_KEY` from a Secret through `extraEnvs`, or mount a shared
+volume at that path; see "Credential transport encryption" in [Environment Variables](./env).
 
 ## Database Configuration
 

@@ -139,6 +139,17 @@ OAuth 接入的完整步骤见 [OAuth 设置指南](./oauth-setup.md)；托管�
 
 完整配置步骤（角色、权限绑定组、章节授权）见 [RBAC 配置指南](./rbac-config.md)。
 
+## 请求体凭据加密
+
+登录口令、动态码、改密/重置口令、kubeconfig 与 Secret 内容都在浏览器侧加密后上行，服务端解包，
+因此明文凭据不会留在访问日志、抓包和代理日志里。默认明文、密文都接受；设
+`AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS=true` 后只收密文，明文凭据直接 `400`（`code` 为
+`encrypted_credential_required`），适合在确认所有客户端都是当前版本之后收口。
+
+三点取舍：它**不替代 HTTPS**（中间人仍可重放合法密文、篡改响应，TLS 仍是部署侧必做项）；私钥丢失
+或副本之间不一致会让写操作随机失败，多副本必须共享同一份私钥；开启后自建脚本要改用密文。变量与
+运维口径见[环境变量](./env.md)的「凭据传输加密」。
+
 ## API 密钥
 
 API 密钥用于自动化调用平台 API（如 CI 里下发部署）。口径：
@@ -156,5 +167,7 @@ API 密钥用于自动化调用平台 API（如 CI 里下发部署）。口径�
 | `JWT_SECRET` | 签发访问令牌的密钥，必须固定；多副本要一致 |
 | `TRUSTED_PROXIES` | 反向代理的 IP / CIDR 列表，决定真实客户端 IP 的来源，直接影响 IP 黑名单、登录来源限制与审计记录里的 IP |
 | `ANONYMOUS_USER_ENABLED` | 开启匿名访问，仅用于演示环境，生产不要打开 |
+| `AEROLINK_TRANSPORT_KEY_PATH` | 请求体凭据加密用的私钥路径，不存在时自动生成。多副本必须共享同一份 |
+| `AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS` | 设为 `true` 后只接受密文凭据，明文提交返回 `400 encrypted_credential_required` |
 
 完整清单见[环境变量](./env.md)与 [Chart 配置](./chart-values.md)。出口 HTTPS、CSP 头等由部署侧控制，见[构建并推送镜像](../guide/build-and-push-image.md)。

@@ -17,6 +17,7 @@ import (
 	"github.com/zxh326/kite/pkg/rbac"
 	"github.com/zxh326/kite/pkg/scheduler"
 	"github.com/zxh326/kite/pkg/templates"
+	"github.com/zxh326/kite/pkg/transportkey"
 	"k8s.io/klog/v2"
 )
 
@@ -124,7 +125,11 @@ func buildEngine(cm *cluster.ClusterManager) *gin.Engine {
 	// 请求关联 ID 必须排在访问日志之前：访问日志与审计事件都要带上它才能串成一条链。
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
+	// HOST=https:// 时拒绝明文访问敏感接口；排在 Logger 之后，被拒的请求也进访问日志。
+	r.Use(middleware.RequireHTTPS())
 	r.Use(middleware.DevCORS(common.CORSAllowedOrigins))
+	// 信封请求体必须在审计与业务 handler 之前还原：审计要从请求体里取对象名。
+	r.Use(transportkey.UnwrapEnvelopeBody())
 
 	base := r.Group(common.Base)
 	setupAPIRouter(base, cm)

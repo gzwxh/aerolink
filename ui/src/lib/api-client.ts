@@ -34,22 +34,25 @@ export interface ApiRequestOptions extends RequestInit {
  */
 let redirectingToLogin = false
 
-export function redirectToLogin() {
-  if (redirectingToLogin) return
-  if (window.location.pathname.endsWith('/login')) return
+export function redirectToLogin(reason?: 'session-ended'): boolean {
+  if (redirectingToLogin) return false
+  if (window.location.pathname.endsWith('/login')) return false
   // 跳转前先申请额度：整页跳转会重置本模块的所有模块级状态，只有 sessionStorage 记得
   // 「刚刚跳过」。超预算说明前端的「已登录」与后端的判定在打架，继续跳只会无限刷新
   // （历史事故见下方注释），此时停在原地显示阻断页。
   if (!consumeLoginRedirectBudget()) {
     markLoginRedirectLoop()
-    return
+    return false
   }
   redirectingToLogin = true
   // 必须带 forced=1（登录页据此忽略「已登录就跳首页」，见 pages/login.tsx 的 forcedLogin）。
   // 不带它就会形成整页跳转循环：会话已失效（被顶下线、改密前签发、来源不在允许列表…）时
   // 受保护接口 401，但如果 bootstrap 仍认为已登录，登录页会把用户弹回首页 → 首页再 401
   // → 又跳登录页……每轮一次整页加载，实测能堆出上千个 401。
-  window.location.href = withSubPath('/login?forced=1')
+  // reason 只用于在登录页解释「为什么又让我登录」，不影响跳转判定。
+  const query = reason ? `?forced=1&reason=${reason}` : '?forced=1'
+  window.location.href = withSubPath(`/login${query}`)
+  return true
 }
 
 /**

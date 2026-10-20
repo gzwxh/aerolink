@@ -16,6 +16,7 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/notification"
 	"github.com/zxh326/kite/pkg/rbac"
+	"github.com/zxh326/kite/pkg/transportkey"
 	"gorm.io/gorm"
 	"k8s.io/klog/v2"
 )
@@ -62,12 +63,20 @@ func (h *AuthHandler) PasswordLogin(c *gin.Context) {
 
 func (h *AuthHandler) CreateSuperUser(c *gin.Context) {
 	var userreq struct {
-		Username string `json:"username" binding:"required"`
-		Password string `json:"password" binding:"required"`
-		Name     string `json:"name"`
+		Username    string `json:"username" binding:"required"`
+		Password    string `json:"password"`
+		PasswordEnc string `json:"password_enc"`
+		Name        string `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&userreq); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !transportkey.ResolveCredential(c, userreq.PasswordEnc, &userreq.Password) {
+		return
+	}
+	if strings.TrimSpace(userreq.Password) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
 		return
 	}
 
@@ -209,6 +218,17 @@ func (r *fixedWindowRateLimiter) allow(ip string) bool {
 func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, authenticate credentialAuthenticator) {
 	var req common.PasswordLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		return
+	}
+	// 口令与动态码：优先取密文。明文分支保留给未升级的客户端与冒烟工具。
+	if !transportkey.ResolveCredential(c, req.PasswordEnc, &req.Password) {
+		return
+	}
+	if !transportkey.ResolveCredential(c, req.MFACodeEnc, &req.MFACode) {
+		return
+	}
+	if req.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
 		return
 	}
@@ -621,9 +641,13 @@ func (h *AuthHandler) completeThirdPartyLogin(c *gin.Context, user *model.User, 
 }
 
 // MFAPendingVerifyRequest 是第三方登录补验动态码的请求体。
+//
+// 动态码等同一次临时口令（有效期内可换到会话），所以新前端发的是 CodeEnc 密文；
+// 明文 Code 保留给未升级的客户端。
 type MFAPendingVerifyRequest struct {
-	Ticket string `json:"mfa_pending"`
-	Code   string `json:"mfa_code"`
+	Ticket  string `json:"mfa_pending"`
+	Code    string `json:"mfa_code"`
+	CodeEnc string `json:"mfa_code_enc"`
 }
 
 // VerifyPendingMFA 用回调阶段签发的票据 + 动态码换取会话。
@@ -634,6 +658,9 @@ func (h *AuthHandler) VerifyPendingMFA(c *gin.Context) {
 	var req MFAPendingVerifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	if !transportkey.ResolveCredential(c, req.CodeEnc, &req.Code) {
 		return
 	}
 

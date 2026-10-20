@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/zxh326/kite/pkg/common"
+	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
+	"github.com/zxh326/kite/pkg/transportkey"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -270,7 +273,7 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 	}
 }
 
-// mfaSetupRouter 构造一个只挂 MFA 自助绑定接口（setup + enable）的路由，
+// mfaSetupRouter 构造一个只挂 MFA 自助接口（setup / enable / disable / verify）的路由，
 // 每个请求都像鉴权中间件那样重新从数据库读取当前用户放进 context。
 func mfaSetupRouter(t *testing.T, id uint64) *gin.Engine {
 	t.Helper()
@@ -288,7 +291,56 @@ func mfaSetupRouter(t *testing.T, id uint64) *gin.Engine {
 	}
 	router.POST("/mfa/setup", withCurrentUser(SetupCurrentUserMFA))
 	router.POST("/mfa/enable", withCurrentUser(EnableCurrentUserMFA))
+	router.POST("/mfa/disable", withCurrentUser(DisableCurrentUserMFA))
+	router.POST("/mfa/verify", withCurrentUser(VerifyCurrentUserMFA))
 	return router
+}
+
+// 动态码在有效期内等于一次临时口令，所以新前端提交的是 code_enc 密文（见
+// pkg/transportkey），明文 code 只留给未升级的客户端。密文损坏时必须 400，
+// 不能退回明文分支继续校验。
+func TestCurrentUserMFAAcceptsEncryptedCode(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	t.Setenv("AEROLINK_TRANSPORT_KEY_PATH", filepath.Join(t.TempDir(), "transport-key.pem"))
+
+	secret, err := mfa.GenerateSecret()
+	if err != nil {
+		t.Fatalf("generating mfa secret: %v", err)
+	}
+	if err := model.StoreMFASecret(user.ID, secret); err != nil {
+		t.Fatalf("storing mfa secret: %v", err)
+	}
+
+	router := mfaSetupRouter(t, uint64(user.ID))
+	encryptedBody := func() string {
+		token, err := transportkey.Default().EncryptFields(map[string]string{"code": currentTOTPCode(t, secret)})
+		if err != nil {
+			t.Fatalf("encrypting mfa code: %v", err)
+		}
+		return fmt.Sprintf(`{"code_enc":%q}`, token)
+	}
+
+	enable := performUserRequest(router, http.MethodPost, "/mfa/enable", encryptedBody())
+	if enable.Code != http.StatusOK {
+		t.Fatalf("enable with encrypted code = %d, want %d: %s", enable.Code, http.StatusOK, enable.Body.String())
+	}
+	if !loadStoredUser(t, uint64(user.ID)).MFAEnabled {
+		t.Fatal("encrypted code did not enable MFA")
+	}
+
+	// 篡改密文：只能是解密失败，不能落到「动态码错误」或明文校验。
+	tampered := encryptedBody()
+	tampered = tampered[:len(tampered)-6] + `AAAAA"}`
+	rejected := performUserRequest(router, http.MethodPost, "/mfa/verify", tampered)
+	if rejected.Code != http.StatusBadRequest || !strings.Contains(rejected.Body.String(), transportkey.CodeDecryptFailed) {
+		t.Fatalf("tampered code = %d: %s, want 400 with %s",
+			rejected.Code, rejected.Body.String(), transportkey.CodeDecryptFailed)
+	}
+
+	verify := performUserRequest(router, http.MethodPost, "/mfa/verify", encryptedBody())
+	if verify.Code != http.StatusOK {
+		t.Fatalf("verify with encrypted code = %d, want %d: %s", verify.Code, http.StatusOK, verify.Body.String())
+	}
 }
 
 // addDirectoryUser 建一个目录账号（LDAP 或 OIDC），用来验证 provider 维度的门禁：

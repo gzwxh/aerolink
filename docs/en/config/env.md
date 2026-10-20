@@ -17,6 +17,32 @@ otherwise the setting counts as unset.
 - **AEROLINK_REQUIRE_ENCRYPT_KEY**: When `true`, `AEROLINK_ENCRYPT_KEY` must be set even if `AEROLINK_ALLOW_INSECURE_SECRETS=true`.
 - **AEROLINK_ALLOW_INSECURE_SECRETS**: Development-only escape hatch (`true`/`false`). Allows the built-in keys and short JWT secrets. Never enable in production.
 
+## Credential transport encryption
+
+Passwords, one-time codes, password change / reset values, kubeconfigs and Secret payloads are encrypted
+**in the browser** with the server's public key before they leave the client, and decrypted server-side.
+The point is to keep plaintext credentials out of access logs, packet captures and proxy logs. It is
+**not a replacement for HTTPS**: a man in the middle can still replay a valid ciphertext or tamper with
+responses.
+
+- **AEROLINK_TRANSPORT_KEY_PATH**: Path to the transport key (RSA private key, PEM). Defaults to
+  `data/transport-key.pem` relative to the working directory (`/home/aerolink/data/transport-key.pem`
+  in the official image) and is generated automatically (`0600`) when missing. **All replicas must read
+  the same key** (shared volume, or the variable below injected from a Secret); otherwise requests landing
+  on another replica fail with a sporadic `400 credential_decrypt_failed`.
+- **AEROLINK_TRANSPORT_PRIVATE_KEY**: Inline PEM text of the same key, convenient for mounting from a
+  Secret. Takes precedence over `AEROLINK_TRANSPORT_KEY_PATH`.
+- **AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS**: When `true`, only encrypted credentials are accepted: a
+  plaintext submission of any of the fields above returns `400` with `code` set to
+  `encrypted_credential_required`. Defaults to `false` (both forms accepted) for compatibility with older
+  pages and hand-written scripts.
+
+Before enabling it, make sure no browser still has a previous page version open (the frontend is embedded
+in the binary but a tab may be old) and that in-house scripts submit ciphertext. Turning it on during a
+rolling upgrade makes old pages fail to log in. If `encrypted_credential_required` still shows up after
+enabling, check first whether the client can reach `/api/v1/transport-key` (identical keys across
+replicas, reverse proxy not blocking it) instead of switching the flag off.
+
 - **HOST**: Used for generating OAuth 2.0 authorization callback addresses, default will be obtained from request headers. If you find the result not as expected, you can manually configure this environment variable.
 
 - **TRUSTED_PROXIES**: Comma-separated list of reverse proxy, ingress, or load balancer IPs/CIDRs that AeroLink should trust when reading `X-Forwarded-For` / `X-Real-IP` to determine the client IP. By default, AeroLink trusts local/private network ranges (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1`, `fc00::/7`) so common ingress deployments can report real client IPs. Set a narrower value such as `TRUSTED_PROXIES=10.42.0.0/16,192.168.1.10` for production, or `TRUSTED_PROXIES=none` to ignore all client-supplied forwarding headers.

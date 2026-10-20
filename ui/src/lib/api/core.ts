@@ -36,6 +36,7 @@ import {
   withCurrentClusterPath,
 } from '../current-cluster'
 import { withSubPath } from '../subpath'
+import { encryptRequestBody } from '../transport-envelope'
 import { fetchAPI } from './shared'
 
 type ResourcesItems<T extends ResourceType> = ResourcesTypeMap[T]['items']
@@ -146,7 +147,7 @@ export const upgradeHelmRelease = async (
 ): Promise<{ message?: string }> => {
   return apiClient.put<{ message?: string }>(
     `/helmrelease/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/upgrade`,
-    body || {}
+    await encryptRequestBody(body || {})
   )
 }
 
@@ -157,7 +158,7 @@ export const dryRunUpgradeHelmRelease = async (
 ): Promise<HelmReleaseDryRunResponse> => {
   return apiClient.put<HelmReleaseDryRunResponse>(
     `/helmrelease/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/upgrade/dry-run`,
-    body || {}
+    await encryptRequestBody(body || {})
   )
 }
 
@@ -209,9 +210,10 @@ export const installHelmRelease = async (
   namespace: string,
   body: HelmReleaseInstallRequest
 ): Promise<HelmRelease> => {
+  // values 可能直接写口令（数据库密码之类），整包走信封加密。
   return apiClient.post<HelmRelease>(
     `/helmrelease/${encodeURIComponent(namespace)}`,
-    body
+    await encryptRequestBody(body)
   )
 }
 
@@ -221,7 +223,7 @@ export const dryRunInstallHelmRelease = async (
 ): Promise<HelmReleaseDryRunResponse> => {
   return apiClient.post<HelmReleaseDryRunResponse>(
     `/helmrelease/${encodeURIComponent(namespace)}/dry-run`,
-    body
+    await encryptRequestBody(body)
   )
 }
 
@@ -251,13 +253,17 @@ export const fetchHelmRepositories = (): Promise<HelmRepository[]> => {
   return fetchAPI<HelmRepository[]>('/charts/repositories')
 }
 
-export const createHelmRepository = (
+export const createHelmRepository = async (
   body: Pick<HelmRepository, 'name' | 'url'> & {
     username?: string
     password?: string
   }
 ): Promise<HelmRepository> => {
-  return apiClient.post<HelmRepository>('/admin/charts/repositories', body)
+  // 带 username / password 的仓库凭据。
+  return apiClient.post<HelmRepository>(
+    '/admin/charts/repositories',
+    await encryptRequestBody(body)
+  )
 }
 
 export const deleteHelmRepository = (
@@ -537,7 +543,12 @@ export const updateResource = async <T extends ResourceType>(
   body: ResourceTypeMap[T]
 ): Promise<void> => {
   const endpoint = `/${resource}/${namespace || '_all'}/${name}`
-  await apiClient.put(`${endpoint}`, body)
+  // Secret 的 data / stringData 是敏感值，整包走信封加密；其它资源保持明文，
+  // 不给大对象凭空加一次加密开销。
+  await apiClient.put(
+    `${endpoint}`,
+    resource === 'secrets' ? await encryptRequestBody(body) : body
+  )
 }
 
 export const resizePod = async (
@@ -633,7 +644,10 @@ export const createResource = async <T extends ResourceType>(
   body: ResourceTypeMap[T]
 ): Promise<ResourceTypeMap[T]> => {
   const endpoint = `/${resource}/${namespace || '_all'}`
-  return await apiClient.post<ResourceTypeMap[T]>(`${endpoint}`, body)
+  return await apiClient.post<ResourceTypeMap[T]>(
+    `${endpoint}`,
+    resource === 'secrets' ? await encryptRequestBody(body) : body
+  )
 }
 
 export const deleteResource = async <T extends ResourceType>(
@@ -679,10 +693,11 @@ export const applyResource = async (
   yaml: string,
   namespace?: string
 ): Promise<ApplyResourceResponse> => {
-  return await apiClient.post<ApplyResourceResponse>('/resources/apply', {
-    yaml,
-    namespace,
-  })
+  // YAML 里可能直接带 Secret / 证书 / 口令，整包加密。
+  return await apiClient.post<ApplyResourceResponse>(
+    '/resources/apply',
+    await encryptRequestBody({ yaml, namespace })
+  )
 }
 
 export const useResourcesEvents = <T extends ResourceType>(

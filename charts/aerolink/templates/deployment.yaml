@@ -63,6 +63,11 @@ spec:
             - name: ANONYMOUS_USER_ENABLED
               value: "true"
             {{- end }}
+            {{- if .Values.requireEncryptedCredentials }}
+            # 只接受密文凭据；滚动升级期间开启会让旧页面登录失败
+            - name: AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS
+              value: "true"
+            {{- end }}
             {{- if eq .Values.db.type "sqlite" }}
             - name: DB_TYPE
               value: sqlite

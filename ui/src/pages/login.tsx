@@ -27,6 +27,7 @@ import {
 } from '@/lib/api'
 import { shouldLeaveLoginPage } from '@/lib/login-flow'
 import { withSubPath } from '@/lib/subpath'
+import { markTabSession } from '@/lib/tab-session'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -115,6 +116,8 @@ export function LoginPage() {
     useState<CredentialProvider>('ldap')
 
   const error = searchParams.get('error')
+  // 标签页闸门判定「所有页面都关掉了」时会带这个 reason 过来（见 contexts/auth-context.tsx）。
+  const sessionEnded = searchParams.get('reason') === 'session-ended'
   const redirectHref = searchParams.get('href') || ''
   const pendingMfaTicket = searchParams.get('mfa_pending') || ''
   // 被顶下线后从提示弹窗点「重新登录」会带 forced=1：即使浏览器里还留着其它会话的
@@ -213,6 +216,8 @@ export function LoginPage() {
       await verifyPendingMFA(pendingMfaTicket, pendingMfaCode)
       // 会话 cookie 已由这个响应写入。整页跳转，让应用以已登录状态重新启动——
       // 这里没有可复用的登录态（调用发生在登录页的守卫之外）。
+      // 票据要在这里补上：整页加载后闸门看不到「刚登录成功」的痕迹。
+      markTabSession()
       const storedHref = sessionStorage.getItem('loginRedirectHref')
       sessionStorage.removeItem('loginRedirectHref')
       window.location.href = withSubPath(storedHref || '/')
@@ -468,6 +473,20 @@ export function LoginPage() {
               ))}
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* 会话过期的说明，不是错误：用中性色，避免让人以为登录出了错。 */}
+              {sessionEnded && !error && (
+                <Alert className="border-info/25 bg-info/10">
+                  <AlertDescription className="text-info">
+                    <div className="space-y-1">
+                      <div className="font-semibold">
+                        {t('login.sessionEnded.title')}
+                      </div>
+                      <div>{t('login.sessionEnded.description')}</div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {error && (
                 <div className="space-y-3">
                   <Alert className="border-destructive/25 bg-destructive/10">

@@ -32,8 +32,12 @@ var (
 	JwtSecret = DefaultJWTSecret
 	// AllowInsecureSecrets 允许使用内置密钥；仅限开发环境。
 	AllowInsecureSecrets = false
-	Host                 = ""
-	Base                 = ""
+	// RequireEncryptedCredentials 强制凭据类字段（登录口令、动态码、改密等）以密文
+	// 提交（AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS）。开启后请求里出现明文的这类
+	// 字段会被直接拒绝，用于确认客户端已全部改用短字段加密后收口明文兼容路径。
+	RequireEncryptedCredentials = false
+	Host                        = ""
+	Base                        = ""
 
 	// 鸢联 AeroLink 在创建 pod/终端/agent 工作负载时拉取的镜像。它们
 	// 已镜像到公司仓库（SWR，组织 "gzwxh"），以便隔离网络
@@ -144,6 +148,11 @@ func loadSecretEnvs() {
 	// 不开启时内置密钥会被直接拒绝。
 	if v := Getenv("ALLOW_INSECURE_SECRETS"); v != "" {
 		AllowInsecureSecrets = strings.EqualFold(strings.TrimSpace(v), "true")
+	}
+
+	// AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS：强制凭据只走密文（默认 false）。
+	if v := Getenv("REQUIRE_ENCRYPTED_CREDENTIALS"); v != "" {
+		RequireEncryptedCredentials = strings.EqualFold(strings.TrimSpace(v), "true")
 	}
 
 	if secret := os.Getenv("JWT_SECRET"); secret != "" {

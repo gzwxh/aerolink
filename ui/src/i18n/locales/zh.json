@@ -1025,6 +1025,10 @@
     "useLocalAccount": "使用本地账号登录",
     "useLdapAccount": "使用 LDAP 账号登录",
     "success": "登录成功",
+    "sessionEnded": {
+      "title": "需要重新登录",
+      "description": "会话已结束，请重新登录后继续。"
+    },
     "tabs": {
       "ldap": "LDAP"
     },
@@ -2698,6 +2702,13 @@
       "description": "创建新的 API 密钥用于程序化访问。",
       "namePlaceholder": "例如：生产环境 API 密钥",
       "nameRequired": "名称为必填项"
+    },
+    "secret": {
+      "title": "API 密钥已创建",
+      "description": "下面是完整密钥，请复制到目标系统。",
+      "warning": "关闭后无法再次查看。密钥丢失只能删除该条目后重新创建。",
+      "done": "我已保存",
+      "shownOnce": "完整密钥仅在创建时显示一次，之后列表只保留前缀"
     }
   },
   "deleteConfirmation": {

@@ -1,4 +1,5 @@
 import { authApiClient } from '../api-client'
+import { encryptSecrets } from '../credential-cipher'
 
 export type CredentialProvider = 'password' | 'ldap'
 
@@ -82,12 +83,16 @@ export const loginWithCredentials = async (
   mfaCode?: string,
   captcha?: LoginCaptchaAnswer
 ): Promise<void> => {
+  // 口令与动态码都以密文上行；验证码是绑定 challenge 的一次性答案，保持明文。
+  const encrypted = await encryptSecrets({
+    password,
+    mfa_code: mfaCode,
+  })
   await authApiClient.post<void>(
     `/auth/login/${provider}`,
     {
       username,
-      password,
-      ...(mfaCode ? { mfa_code: mfaCode } : {}),
+      ...encrypted,
       ...(captcha
         ? { captcha_token: captcha.idKey, captcha_code: captcha.code }
         : {}),
@@ -106,9 +111,11 @@ export const verifyPendingMFA = async (
   ticket: string,
   code: string
 ): Promise<void> => {
+  // 动态码在有效期内等同一次临时口令，与登录口令走同一套加密。
+  const encrypted = await encryptSecrets({ mfa_code: code })
   await authApiClient.post<void>(
     '/auth/mfa/verify',
-    { mfa_pending: ticket, mfa_code: code },
+    { mfa_pending: ticket, ...encrypted },
     { retryOnUnauthorized: false }
   )
 }
@@ -155,10 +162,11 @@ export const changeCurrentUserPassword = async (
   currentPassword: string,
   newPassword: string
 ): Promise<void> => {
-  await authApiClient.post<void>('/users/me/password', {
+  const encrypted = await encryptSecrets({
     current_password: currentPassword,
     new_password: newPassword,
   })
+  await authApiClient.post<void>('/users/me/password', encrypted)
 }
 
 export interface MFASetupResponse {
@@ -176,21 +184,31 @@ export interface MFASetupResponse {
 export const setupCurrentUserMFA = async (
   currentPassword?: string
 ): Promise<MFASetupResponse> => {
-  return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', {
+  const encrypted = await encryptSecrets({
     current_password: currentPassword,
   })
+  return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', encrypted)
 }
 
 export const enableCurrentUserMFA = async (code: string): Promise<AuthUser> => {
-  return authApiClient.post<AuthUser>('/users/me/mfa/enable', { code })
+  return authApiClient.post<AuthUser>(
+    '/users/me/mfa/enable',
+    await encryptSecrets({ code })
+  )
 }
 
 export const verifyCurrentUserMFA = async (code: string): Promise<void> => {
-  await authApiClient.post<void>('/users/me/mfa/verify', { code })
+  await authApiClient.post<void>(
+    '/users/me/mfa/verify',
+    await encryptSecrets({ code })
+  )
 }
 
 export const disableCurrentUserMFA = async (
   code: string
 ): Promise<AuthUser> => {
-  return authApiClient.post<AuthUser>('/users/me/mfa/disable', { code })
+  return authApiClient.post<AuthUser>(
+    '/users/me/mfa/disable',
+    await encryptSecrets({ code })
+  )
 }

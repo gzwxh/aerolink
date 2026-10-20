@@ -16,5 +16,7 @@ export default defineConfig({
     css: true,
     clearMocks: true,
     restoreMocks: true,
+    // 每个 jsdom fork 约占 120~400MB，本机内存有限（曾因并发 fork 打爆内存触发 OOM 假死）
+    maxWorkers: 4,
   },
 })

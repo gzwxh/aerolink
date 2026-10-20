@@ -30,6 +30,7 @@ import (
 	"github.com/zxh326/kite/pkg/notification"
 
 	"github.com/zxh326/kite/pkg/rbac"
+	"github.com/zxh326/kite/pkg/transportkey"
 	"k8s.io/klog/v2"
 )
 
@@ -38,8 +39,11 @@ import (
 type createPasswordUser struct {
 	// Username 为登录名，在全部 Provider 范围内必须唯一。
 	Username string `json:"username" binding:"required"`
-	// Password 为明文密码（经 TLS 传输），由 model 层负责加盐哈希后入库。
-	Password string `json:"password" binding:"required"`
+	// Password 为明文密码，只用于兼容未升级的客户端；新版前端发送 PasswordEnc。
+	// 不能加 binding:"required"：只加密文时明文字段必然为空。
+	Password string `json:"password"`
+	// PasswordEnc 是口令的 RSA-OAEP 密文（见 pkg/transportkey）。
+	PasswordEnc string `json:"password_enc"`
 	// Name 为可选的展示昵称。
 	Name string `json:"name"`
 	// Email 用于接收通知，LDAP/OIDC 用户由同步逻辑自动填充。
@@ -74,6 +78,13 @@ func CreatePasswordUser(c *gin.Context) {
 	var userreq createPasswordUser
 	if err := c.ShouldBindJSON(&userreq); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !transportkey.ResolveCredential(c, userreq.PasswordEnc, &userreq.Password) {
+		return
+	}
+	if strings.TrimSpace(userreq.Password) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password is required"})
 		return
 	}
 	// 只检查管理员，或者用户数为零的情况
@@ -455,11 +466,23 @@ func ChangeCurrentUserPassword(c *gin.Context) {
 	}
 
 	var req struct {
-		CurrentPassword string `json:"current_password" binding:"required"`
-		NewPassword     string `json:"new_password" binding:"required"`
+		CurrentPassword    string `json:"current_password"`
+		CurrentPasswordEnc string `json:"current_password_enc"`
+		NewPassword        string `json:"new_password"`
+		NewPasswordEnc     string `json:"new_password_enc"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !transportkey.ResolveCredential(c, req.CurrentPasswordEnc, &req.CurrentPassword) {
+		return
+	}
+	if !transportkey.ResolveCredential(c, req.NewPasswordEnc, &req.NewPassword) {
+		return
+	}
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "current password and new password are required"})
 		return
 	}
 	if !model.CheckPassword(user.Password, req.CurrentPassword) {
@@ -539,10 +562,14 @@ func SetupCurrentUserMFA(c *gin.Context) {
 	//   - LDAP 账号：要求在窗口内重新登录过。那次登录本身就是一次完整的目录认证
 	//     （包含审计、失败限流、账号有效期检查），比在向导里另做一次 LDAP bind 更完整。
 	var req struct {
-		CurrentPassword string `json:"current_password"`
+		CurrentPassword    string `json:"current_password"`
+		CurrentPasswordEnc string `json:"current_password_enc"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !transportkey.ResolveCredential(c, req.CurrentPasswordEnc, &req.CurrentPassword) {
 		return
 	}
 	if user.Provider == model.AuthProviderLDAP {
@@ -587,6 +614,33 @@ func SetupCurrentUserMFA(c *gin.Context) {
 	})
 }
 
+// mfaCodeRequest 是「只提交一个动态码」的请求体（enable / disable / verify 三个接口共用）。
+//
+// 动态码在有效期内等于一次临时口令，所以新前端发 CodeEnc 密文（见 pkg/transportkey）；
+// 明文 Code 保留给未升级的客户端与 tools/apismoke。
+type mfaCodeRequest struct {
+	Code    string `json:"code"`
+	CodeEnc string `json:"code_enc"`
+}
+
+// bindMFACode 绑定请求体并解出明文动态码；失败时已经写好响应，调用方直接 return。
+func bindMFACode(c *gin.Context) (string, bool) {
+	var req mfaCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return "", false
+	}
+	if !transportkey.ResolveCredential(c, req.CodeEnc, &req.Code) {
+		return "", false
+	}
+	code := strings.TrimSpace(req.Code)
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa code is required"})
+		return "", false
+	}
+	return code, true
+}
+
 // EnableCurrentUserMFA 确认并正式启用 TOTP 绑定。
 //
 // 路由：POST /api/users/me/mfa/enable（需登录，本地密码账号或 LDAP 账号）。
@@ -606,18 +660,15 @@ func EnableCurrentUserMFA(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Code string `json:"code" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	code, ok := bindMFACode(c)
+	if !ok {
 		return
 	}
 	if strings.TrimSpace(string(user.MFASecret)) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa setup is not started"})
 		return
 	}
-	if !mfa.Verify(string(user.MFASecret), req.Code) {
+	if !mfa.Verify(string(user.MFASecret), code) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
 		return
 	}
@@ -645,18 +696,15 @@ func DisableCurrentUserMFA(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Code string `json:"code" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	code, ok := bindMFACode(c)
+	if !ok {
 		return
 	}
 	if !user.MFAEnabled {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is not enabled"})
 		return
 	}
-	if !mfa.Verify(string(user.MFASecret), req.Code) {
+	if !mfa.Verify(string(user.MFASecret), code) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
 		return
 	}
@@ -724,14 +772,11 @@ func VerifyCurrentUserMFA(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Code string `json:"code" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	code, ok := bindMFACode(c)
+	if !ok {
 		return
 	}
-	if !mfa.Verify(string(user.MFASecret), req.Code) {
+	if !mfa.Verify(string(user.MFASecret), code) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
 		return
 	}
@@ -851,10 +896,18 @@ func ResetPassword(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Password string `json:"password" binding:"required"`
+		Password    string `json:"password"`
+		PasswordEnc string `json:"password_enc"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !transportkey.ResolveCredential(c, req.PasswordEnc, &req.Password) {
+		return
+	}
+	if strings.TrimSpace(req.Password) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password is required"})
 		return
 	}
 	target, err := model.GetUserByID(uint64(id))

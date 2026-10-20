@@ -34,21 +34,38 @@ func TestAPIKeyLifecycleControlsAuthentication(t *testing.T) {
 		t.Fatalf("create status = %d, want %d: %s", createResponse.Code, http.StatusCreated, createResponse.Body.String())
 	}
 	var created struct {
-		APIKey model.User `json:"apiKey"`
+		APIKey struct {
+			ID       uint   `json:"id"`
+			Username string `json:"username"`
+			Key      string `json:"key"`
+		} `json:"apiKey"`
 	}
 	if err := json.Unmarshal(createResponse.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decoding create response: %v", err)
 	}
-	if created.APIKey.ID == 0 || created.APIKey.Provider != common.APIKeyProvider || len(created.APIKey.APIKey) != 32 {
+	if created.APIKey.ID == 0 || created.APIKey.Username != "ci-deploy" {
 		t.Fatalf("created API key = %#v", created.APIKey)
 	}
+	wantPrefix := fmt.Sprintf("%s%d-", model.APIKeyPrefix, created.APIKey.ID)
+	fullKey := created.APIKey.Key
+	if !strings.HasPrefix(fullKey, wantPrefix) || len(fullKey) != len(wantPrefix)+32 {
+		t.Fatalf("created key = %q, want %q followed by a 32-char secret", fullKey, wantPrefix)
+	}
+	secret := strings.TrimPrefix(fullKey, wantPrefix)
 
 	listResponse := performAPIKeyRequest(router, http.MethodGet, "/apikeys", "")
 	if listResponse.Code != http.StatusOK {
 		t.Fatalf("list status = %d, want %d: %s", listResponse.Code, http.StatusOK, listResponse.Body.String())
 	}
+	// 列表响应里不能有可用密钥：客户端拿不到 secret，抓包/代理日志留存的也只是前缀。
+	if strings.Contains(listResponse.Body.String(), secret) {
+		t.Fatalf("list response leaked the key secret: %s", listResponse.Body.String())
+	}
 	var listed struct {
-		APIKeys []model.User `json:"apiKeys"`
+		APIKeys []struct {
+			ID           uint   `json:"id"`
+			APIKeyPrefix string `json:"apiKeyPrefix"`
+		} `json:"apiKeys"`
 	}
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decoding list response: %v", err)
@@ -56,10 +73,8 @@ func TestAPIKeyLifecycleControlsAuthentication(t *testing.T) {
 	if len(listed.APIKeys) != 1 || listed.APIKeys[0].ID != created.APIKey.ID {
 		t.Fatalf("listed API keys = %#v", listed.APIKeys)
 	}
-	fullKey := string(listed.APIKeys[0].APIKey)
-	wantPrefix := fmt.Sprintf("%s%d-", model.APIKeyPrefix, created.APIKey.ID)
-	if !strings.HasPrefix(fullKey, wantPrefix) || !strings.HasSuffix(fullKey, string(created.APIKey.APIKey)) {
-		t.Fatalf("listed API key = %q, want prefix %q and created secret", fullKey, wantPrefix)
+	if listed.APIKeys[0].APIKeyPrefix != wantPrefix {
+		t.Fatalf("listed prefix = %q, want %q", listed.APIKeys[0].APIKeyPrefix, wantPrefix)
 	}
 
 	authHandler := auth.NewAuthHandler()
@@ -185,7 +200,10 @@ func TestDeleteAPIKeyRecordsAuditDetail(t *testing.T) {
 		t.Fatalf("create status = %d, want %d: %s", create.Code, http.StatusCreated, create.Body.String())
 	}
 	var created struct {
-		APIKey model.User `json:"apiKey"`
+		APIKey struct {
+			ID  uint   `json:"id"`
+			Key string `json:"key"`
+		} `json:"apiKey"`
 	}
 	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decoding create response: %v", err)
@@ -201,7 +219,8 @@ func TestDeleteAPIKeyRecordsAuditDetail(t *testing.T) {
 	if !strings.Contains(detail.PreviousYAML, "username: ") {
 		t.Fatalf("audit snapshot must describe the key, got %q", detail.PreviousYAML)
 	}
-	if secret := string(created.APIKey.APIKey); secret != "" && strings.Contains(detail.PreviousYAML, secret) {
+	secret := created.APIKey.Key[strings.LastIndex(created.APIKey.Key, "-")+1:]
+	if secret == "" || strings.Contains(detail.PreviousYAML, secret) {
 		t.Fatalf("audit snapshot must not leak the key secret: %s", detail.PreviousYAML)
 	}
 }

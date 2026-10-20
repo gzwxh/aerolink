@@ -142,6 +142,10 @@ auditPersistence:
 # 在生产环境使用该设置时请务必谨慎
 anonymousUserEnabled: false
 
+# 设为 true 后只接受密文凭据（登录口令、动态码、改密/重置口令），
+# 明文提交直接 400。只在确认客户端都已升级之后再开启。
+requireEncryptedCredentials: false
+
 # 用于签名 JWT token 的密钥。留空时自动生成。
 # 使用 existingSecret 时忽略该项
 jwtSecret: ""

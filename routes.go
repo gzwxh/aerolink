@@ -29,6 +29,7 @@ import (
 	"github.com/zxh326/kite/pkg/system"
 	"github.com/zxh326/kite/pkg/templates"
 	"github.com/zxh326/kite/pkg/terminal"
+	"github.com/zxh326/kite/pkg/transportkey"
 	"github.com/zxh326/kite/pkg/users"
 	"github.com/zxh326/kite/pkg/version"
 	"k8s.io/klog/v2"
@@ -82,6 +83,8 @@ func registerBaseRoutes(r *gin.RouterGroup) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 	r.GET("/api/v1/version", version.GetVersion)
+	// 登录表单在拿到会话之前就要用它加密口令，因此必须免认证。
+	r.GET("/api/v1/transport-key", transportkey.PublicKeyHandler)
 }
 
 func registerAuthRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler) {

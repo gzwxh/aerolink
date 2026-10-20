@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { apiClient, authApiClient } from '../api-client'
+import { encryptSecrets } from '../credential-cipher'
+import { encryptRequestBody } from '../transport-envelope'
 import { fetchBootstrap, useBootstrap } from './bootstrap'
 import { fetchAPI } from './shared'
 
@@ -53,7 +55,12 @@ export interface CreateUserRequest {
 export const createSuperUser = async (
   userData: CreateUserRequest
 ): Promise<void> => {
-  await authApiClient.post('/auth/setup/create_super_user', userData)
+  const { password, ...rest } = userData
+  const encrypted = await encryptSecrets({ password })
+  await authApiClient.post('/auth/setup/create_super_user', {
+    ...rest,
+    ...encrypted,
+  })
 }
 
 // 首次安装时的集群导入
@@ -67,5 +74,9 @@ export interface ImportClustersRequest {
 export const importClusters = async (
   request: ImportClustersRequest
 ): Promise<{ message: string; importedCount: number }> => {
-  return await apiClient.post('/admin/clusters/import', request)
+  // 一次导入多份 kubeconfig，同样走信封加密。
+  return await apiClient.post(
+    '/admin/clusters/import',
+    await encryptRequestBody(request)
+  )
 }

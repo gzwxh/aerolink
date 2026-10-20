@@ -155,8 +155,8 @@ docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2
 docker run -d --name aerolink -p 8080:8080 \
   -v aerolink-data:/app/data \
   -e DB_DSN=/app/data/aerolink.db \
-  -e AEROLINK_ENCRYPT_KEY=dev-only-key \
-  -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
+  -e AEROLINK_ENCRYPT_KEY="M4/s1z+IvG91QcrXajUpdJXv3kHxJIZEuf9TGauNc9M=" \
+  -e JWT_SECRET="M4/s1z+IvG91QcrXajUpdJXv3kHxJIZEuf9TGauNc9M=" \
   swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.2
 ```
 
@@ -187,9 +187,12 @@ docker run -d --name aerolink --restart unless-stopped \
 | `AEROLINK_ALLOW_INSECURE_SECRETS` | 否 | `false` | **仅供本地开发**：设为 `true` 才允许使用内置默认密钥（否则缺 `AEROLINK_ENCRYPT_KEY` 直接拒绝启动，`JWT_SECRET` 短于 32 字节同样拒绝）。生产环境**不要**设置 |
 | `JWT_SECRET` | **生产必填** | 启动时随机生成 | 会话 token 签名密钥，建议 ≥32 字节随机值。不设置时会自动生成临时密钥，**重启后所有人被强制登出**；设置后长度不足 32 字节会打印告警 |
 | `TRUSTED_PROXIES` | 按部署方式 | `127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16` | 只有这些直连 IP 提供的 `X-Forwarded-For` / `X-Real-IP` 会被采信。**直接影响**：登录失败锁定、IP 黑白名单、异地登录提醒、审计日志记录到的客户端 IP。**容器直连暴露（不经代理）时必须设为 `none`**，否则攻击者可伪造 `X-Forwarded-For` 绕过 IP 维度的限流与封禁；经 Nginx/SLB 时填代理网段 |
-| `HOST` | 走 HTTPS 时必填 | 空 | 站点外部访问地址（如 `https://aerolink.example.com`）。决定登录 Cookie 是否带 `Secure` 属性——**HTTPS 部署不设置此项，会话 Cookie 可能以明文经 HTTP 传输** |
+| `HOST` | 走 HTTPS 时必填 | 空 | 站点外部访问地址（如 `https://aerolink.example.com`）。决定登录 Cookie 是否带 `Secure` 属性——**HTTPS 部署不设置此项，会话 Cookie 可能以明文经 HTTP 传输**。设为 `https://` 后还会开启入口一致性闸：登录、改密、`/api/v1/admin/*` 只接受自带 TLS 或入口透传 `X-Forwarded-Proto: https` 的请求，否则返回 `400 https_required` |
 | `ANONYMOUS_USER_ENABLED` | 否 | `false` | 设为 `true` 后**未登录即可访问**（只读匿名用户），且会打印安全告警。**严禁在生产开启**，仅用于开放演示环境 |
 | `CORS_ALLOWED_ORIGINS` | 否 | 空（不开 CORS） | 允许跨域访问的源，逗号分隔。**生产保持为空**；仅本地前端开发（如 `http://localhost:5173`）才需要，设置后会打印告警 |
+| `AEROLINK_TRANSPORT_KEY_PATH` | 多副本时必填 | `data/transport-key.pem` | 口令类字段（登录口令、动态码、改密/重置口令、kubeconfig 等）的请求体加密私钥。文件不存在时自动生成（`0600`）；**多副本必须让所有副本读到同一份私钥**（共享卷或改用下面的变量），否则请求落到别的副本会解不开 |
+| `AEROLINK_TRANSPORT_PRIVATE_KEY` | 否 | 空 | 直接以 PEM 文本注入上述私钥，便于从 Secret 挂载，优先于 `AEROLINK_TRANSPORT_KEY_PATH` |
+| `AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS` | 否 | `false` | 设为 `true` 后**只接受密文凭据**：登录口令、动态码、改密/重置口令以明文提交时直接返回 `400 encrypted_credential_required`。只在确认客户端都已是当前版本后开启；滚动升级期间开启会让旧页面登录失败 |
 
 #### ⚙️ 常用运行参数
 
@@ -281,8 +284,8 @@ docker run -d --name aerolink --restart unless-stopped \
 
 ### 5. 反向代理与 TLS 要点
 
-1. **必须经 HTTPS 暴露**，并在反向代理透传 `Host`、`X-Forwarded-Proto`、`X-Forwarded-For`；
-2. 同时设置 `HOST=https://你的域名`（Cookie 才会带 `Secure`）与 `TRUSTED_PROXIES=代理所在网段`；
+1. **必须经 HTTPS 暴露**，并在反向代理透传 `Host`、`X-Forwarded-Proto`、`X-Forwarded-For`。注意：口令类字段虽然已在浏览器内用服务端公钥加密（见 `pkg/transportkey`），但那只是降低代理日志/抓包留痕，**不能替代 TLS**——会话 Cookie、接口响应、WebSocket 终端仍需要传输层保护；
+2. 同时设置 `HOST=https://你的域名`（Cookie 才会带 `Secure`，且启用入口一致性闸）与 `TRUSTED_PROXIES=代理所在网段`。**`X-Forwarded-Proto` 必须透传**：`HOST` 为 `https://` 时，登录、改密与 `/api/v1/admin/*` 会拒绝既无 TLS 又没带这个头的请求（`400 https_required`），漏透传的表现就是「首页能开、一登录就 400」；
 3. 容器直接对外暴露（无代理）时设 `TRUSTED_PROXIES=none`，防止伪造客户端 IP；
 4. WebSocket 需允许升级（终端、Pod 执行、日志跟随依赖它），且访问域名需与页面同源。
 

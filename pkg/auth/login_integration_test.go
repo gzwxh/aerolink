@@ -2,8 +2,10 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
+	"github.com/zxh326/kite/pkg/transportkey"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -252,5 +255,119 @@ func TestExpiredAccountIsRejectedAtLoginAndOnExistingSession(t *testing.T) {
 	relogin := performAuthRequest(router, http.MethodPost, "/login", `{"username":"alice","password":"correct-password"}`, nil)
 	if relogin.Code != http.StatusForbidden || !strings.Contains(relogin.Body.String(), "user_expired") {
 		t.Fatalf("expired re-login status/code = %d/%s, want 403 with user_expired", relogin.Code, relogin.Body.String())
+	}
+}
+
+// 新前端只发密码密文（pkg/transportkey）：既能登录，密文被篡改时也不能退回明文校验。
+func TestPasswordLoginAcceptsEncryptedPayload(t *testing.T) {
+	user := setupAuthIntegrationDB(t)
+	t.Setenv("AEROLINK_TRANSPORT_KEY_PATH", filepath.Join(t.TempDir(), "transport-key.pem"))
+
+	handler := NewAuthHandler()
+	router := gin.New()
+	router.POST("/login", handler.PasswordLogin)
+
+	token, err := transportkey.Default().EncryptFields(map[string]string{"password": "correct-password"})
+	if err != nil {
+		t.Fatalf("encrypting password: %v", err)
+	}
+	encrypted := fmt.Sprintf(`{"username":%q,"password_enc":%q}`, user.Username, token)
+	success := performAuthRequest(router, http.MethodPost, "/login", encrypted, nil)
+	if success.Code != http.StatusNoContent {
+		t.Fatalf("encrypted login status = %d, want %d: %s", success.Code, http.StatusNoContent, success.Body.String())
+	}
+
+	tampered := encrypted[:len(encrypted)-6] + "AAAAA\"}"
+	rejected := performAuthRequest(router, http.MethodPost, "/login", tampered, nil)
+	if rejected.Code != http.StatusBadRequest {
+		t.Fatalf("tampered payload status = %d, want %d: %s", rejected.Code, http.StatusBadRequest, rejected.Body.String())
+	}
+	if !strings.Contains(rejected.Body.String(), transportkey.CodeDecryptFailed) {
+		t.Fatalf("tampered payload body = %s, want code %s", rejected.Body.String(), transportkey.CodeDecryptFailed)
+	}
+}
+
+// 强制模式（AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS）下明文口令直接拒绝，密文照常登录。
+func TestPasswordLoginRejectsPlaintextWhenEncryptionIsRequired(t *testing.T) {
+	user := setupAuthIntegrationDB(t)
+	t.Setenv("AEROLINK_TRANSPORT_KEY_PATH", filepath.Join(t.TempDir(), "transport-key.pem"))
+	common.RequireEncryptedCredentials = true
+	t.Cleanup(func() { common.RequireEncryptedCredentials = false })
+
+	handler := NewAuthHandler()
+	router := gin.New()
+	router.POST("/login", handler.PasswordLogin)
+
+	plaintext := fmt.Sprintf(`{"username":%q,"password":"correct-password"}`, user.Username)
+	rejected := performAuthRequest(router, http.MethodPost, "/login", plaintext, nil)
+	if rejected.Code != http.StatusBadRequest {
+		t.Fatalf("plaintext login status = %d, want %d: %s", rejected.Code, http.StatusBadRequest, rejected.Body.String())
+	}
+	if !strings.Contains(rejected.Body.String(), transportkey.CodeCredentialRequired) {
+		t.Fatalf("plaintext login body = %s, want code %s", rejected.Body.String(), transportkey.CodeCredentialRequired)
+	}
+
+	token, err := transportkey.Default().EncryptFields(map[string]string{"password": "correct-password"})
+	if err != nil {
+		t.Fatalf("encrypting password: %v", err)
+	}
+	encrypted := fmt.Sprintf(`{"username":%q,"password_enc":%q}`, user.Username, token)
+	success := performAuthRequest(router, http.MethodPost, "/login", encrypted, nil)
+	if success.Code != http.StatusNoContent {
+		t.Fatalf("encrypted login status = %d, want %d: %s", success.Code, http.StatusNoContent, success.Body.String())
+	}
+}
+
+// 第三方登录补验动态码（/auth/mfa/verify）同样只走密文：动态码在票据有效期内等于一次
+// 临时口令，明文进了代理日志就等于把会话递出去。
+func TestPendingMFAVerifyAcceptsEncryptedCode(t *testing.T) {
+	user := setupAuthIntegrationDB(t)
+	t.Setenv("AEROLINK_TRANSPORT_KEY_PATH", filepath.Join(t.TempDir(), "transport-key.pem"))
+	if err := model.DB.AutoMigrate(&model.MFAPendingTicket{}); err != nil {
+		t.Fatalf("migrating pending tickets: %v", err)
+	}
+	const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+	if err := model.StoreMFASecret(user.ID, secret); err != nil {
+		t.Fatalf("storing MFA secret: %v", err)
+	}
+	if err := model.EnableUserMFA(user.ID); err != nil {
+		t.Fatalf("enabling MFA: %v", err)
+	}
+	model.InvalidateUserCache(uint64(user.ID))
+
+	handler := NewAuthHandler()
+	router := gin.New()
+	router.POST("/mfa/verify", handler.VerifyPendingMFA)
+
+	// 票据是一次性的，每个请求都得重新签一张。
+	pendingBody := func() string {
+		ticket, err := issueMFATicket(user.ID)
+		if err != nil {
+			t.Fatalf("issuing pending ticket: %v", err)
+		}
+		token, err := transportkey.Default().EncryptFields(map[string]string{"mfa_code": totpNow(secret)})
+		if err != nil {
+			t.Fatalf("encrypting mfa code: %v", err)
+		}
+		return fmt.Sprintf(`{"mfa_pending":%q,"mfa_code_enc":%q}`, ticket, token)
+	}
+
+	// 改掉密文里的一个 base64 字符，RSA-OAEP 就解不开：必须是 400，不能退回明文分支。
+	tampered := pendingBody()
+	offset := strings.Index(tampered, `"mfa_code_enc":"`) + len(`"mfa_code_enc":"`)
+	replacement := "A"
+	if tampered[offset:offset+1] == "A" {
+		replacement = "B"
+	}
+	tampered = tampered[:offset] + replacement + tampered[offset+1:]
+	rejected := performAuthRequest(router, http.MethodPost, "/mfa/verify", tampered, nil)
+	if rejected.Code != http.StatusBadRequest || !strings.Contains(rejected.Body.String(), transportkey.CodeDecryptFailed) {
+		t.Fatalf("tampered pending code = %d: %s, want 400 with %s",
+			rejected.Code, rejected.Body.String(), transportkey.CodeDecryptFailed)
+	}
+
+	success := performAuthRequest(router, http.MethodPost, "/mfa/verify", pendingBody(), nil)
+	if success.Code != http.StatusNoContent {
+		t.Fatalf("pending verify status = %d, want %d: %s", success.Code, http.StatusNoContent, success.Body.String())
 	}
 }

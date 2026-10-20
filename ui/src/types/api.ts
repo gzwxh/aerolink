@@ -803,11 +803,19 @@ export interface FetchUserListResponse {
 export interface APIKey {
   id: number
   username: string
-  apiKey: string
+  /** 只有非敏感前缀（`aerolink<id>-`）：完整密钥只在创建响应里出现一次。 */
+  apiKeyPrefix: string
   lastLoginAt?: string
   createdAt: string
   updatedAt: string
   roles?: Role[]
+}
+
+/** 创建 API 密钥的响应：完整密钥只在这里出现一次，列表不会再下发。 */
+export interface CreatedAPIKey {
+  id: number
+  username: string
+  key: string
 }
 
 // 资源历史类型

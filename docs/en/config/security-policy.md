@@ -187,6 +187,21 @@ Rules and how they are enforced:
 The full configuration walkthrough (roles, permission bindings, section grants) is in
 [RBAC Configuration](./rbac-config).
 
+## Credential transport encryption
+
+Login passwords, one-time codes, password change / reset values, kubeconfigs and Secret payloads are
+encrypted in the browser and decrypted server-side, so plaintext credentials never reach access logs,
+packet captures or proxy logs. Both forms are accepted by default; with
+`AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS=true` only ciphertext is accepted and plaintext submissions get
+`400` with `code` = `encrypted_credential_required`, which is the recommended end state once every client
+runs the current version.
+
+Three trade-offs: it is **not a replacement for HTTPS** (a man in the middle can still replay a valid
+ciphertext or tamper with responses, so TLS remains a deployment requirement); a lost or replica-specific
+key makes writes fail intermittently, so all replicas must share the same key; and in-house scripts have
+to switch to ciphertext. Variables and operational notes live in
+[Environment Variables](./env) under "Credential transport encryption".
+
 ## API keys
 
 API keys are for calling the platform API from automation (issuing deployments from CI, for example):
@@ -206,6 +221,8 @@ API keys are for calling the platform API from automation (issuing deployments f
 | `JWT_SECRET` | Signing key for access tokens; must be stable and identical across replicas |
 | `TRUSTED_PROXIES` | IP / CIDR list of reverse proxies; determines the real client IP, which drives the IP blocklist, source restrictions and recorded audit IPs |
 | `ANONYMOUS_USER_ENABLED` | Anonymous access for demo environments only; do not enable in production |
+| `AEROLINK_TRANSPORT_KEY_PATH` | Private key used for request-body credential encryption; generated when missing. All replicas must share one key |
+| `AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS` | When `true`, only encrypted credentials are accepted; plaintext submissions return `400 encrypted_credential_required` |
 
 See [Environment Variables](./env) and [Chart Values](./chart-values) for the full list. Egress HTTPS
 and CSP headers are controlled at deployment time, see
