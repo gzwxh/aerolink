@@ -2,7 +2,7 @@
 
 You can easily view the logs of your pods in AeroLink. The log view provides features like filtering, highlighting, and automatic scrolling.
 
-![Log](../../screenshots/log.png)
+![Log](../../screenshots/log.webp)
 
 ::: tip
 Ensure that the user has `pods/log` permission, otherwise the log feature will not be available.
@@ -32,4 +32,4 @@ When you are viewing the logs, auto-scrolling will be paused until you scroll to
 
 ### For more features, please refer to the following settings
 
-![Log Features](../../screenshots/log-setting.png)
+![Log Features](../../screenshots/log-setting.webp)

@@ -1,5 +1,8 @@
 ---
-layout: false
+layout: page
+sidebar: false
+footer: false
+pageClass: about-page
 title: All your clusters. One workspace.
 description: AeroLink is the lightweight, open-source Kubernetes workspace for clusters, observability, access control, and AI operations.
 head:

@@ -4,7 +4,7 @@ AeroLink provides a powerful global search feature that allows you to quickly fi
 
 You can activate the global search via the search bar at the top or by using the shortcut `Ctrl + K` (Windows/Linux) or `Cmd + K` (macOS) on any page.
 
-![Dashboard Overview](../../screenshots/global-search.png)
+![Dashboard Overview](../../screenshots/global-search.webp)
 
 ## Features
 
@@ -24,9 +24,7 @@ This will only search for Pods whose names start with `nginx`.
 
 `pod` can also be abbreviated as `po`.
 
-More supported resource types and their abbreviations can be found in the code:
-
-https://github.com/kite-org/kite/blob/b16a4701994e32e5251ee21707f940aa312a449d/pkg/utils/search.go#L12-L35
+More supported resource types and their abbreviations can be found in the code: `pkg/utils/search.go` and the alias table in `pkg/common`.
 
 ## Limitations
 

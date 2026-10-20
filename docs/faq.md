@@ -1,113 +1,208 @@
+---
+sidebar: false
+title: 常见问题
+description: 按现象查登录、权限、日志、终端、创建与部署中的常见问题。
+---
+
 # 常见问题 (FAQ)
 
-## 数据共享
+这里按**你看到的现象**组织：先在下表找到对应的一行，再跳到具体说明。每条答案末尾都指向讲得更细的页面。
 
-鸢联 AeroLink 不收集任何数据，也不会向第三方上报使用情况。上游的匿名统计（umami）已从这个
-内部分支中整体移除：没有统计开关，没有注入的脚本，服务端下发的
-`Content-Security-Policy` 也不放行任何第三方来源。
+## 常用问题速查
 
-鸢联 AeroLink 也不会查询上游发布：没有更新检查，没有任何指向 `api.github.com` 的请求。
+| 现象 | 答案 |
+| --- | --- |
+| 登录提示「用户名或密码错误」，或忘了密码 | [登录失败与密码](#登录失败与密码) |
+| 登录提示「IP 不允许」「尝试次数过多」 | [登录被拦截](#登录被拦截) |
+| 登录成功却提示「权限不足」 | [登录成功却提示权限不足](#登录成功却提示权限不足) |
+| 左侧列表是空的，看不到资源 | [看不到资源](#看不到资源) |
+| 按钮不见了 | [按钮不见了](#按钮不见了) |
+| 同事能看，我却不能 | [同事能看，我却不能](#同事能看-我却不能) |
+| 日志是空的 | [日志是空的](#日志是空的) |
+| 终端连不上 | [终端连不上](#终端连不上) |
+| 监控没有数据 | [监控没有数据](#监控没有数据) |
+| 点「创建」没反应、表单提交不了 | [点创建没反应或表单提交不了](#点创建没反应或表单提交不了) |
+| 改了镜像却没产生新版本 | [改了镜像却没产生新版本](#改了镜像却没产生新版本) |
+| 删除后能不能恢复、会连带删什么 | [删除后能恢复吗](#删除后能恢复吗) |
+| 数据存在哪、升级会不会丢 | [支持哪些数据库](#支持哪些数据库-数据怎么持久化) |
+| 想换字体、调大字号或切深色 | [怎么切换字体和主题](#怎么切换字体和主题) |
 
-## 权限问题
+## 登录与账号
 
-如果在访问资源时，遇到如下错误提示，
+### 登录失败与密码
 
-```txt
-用户 admin 没有权限在集群 in-cluster 的命名空间 aerolink 中执行 获取 configmaps
-```
+界面上的提示通常就是结论：
 
-表示用户 `admin` 没有权限访问 `aerolink` 命名空间中的 `configmaps` 资源。
+| 提示 | 含义与处理 |
+| --- | --- |
+| 用户名或密码错误 | 密码不对。系统**没有自助找回密码**，找管理员重置 |
+| 认证成功，但账号不属于 xxx 的允许群组 | 让管理员把你加进允许的群组 |
+| 账号已禁用 / 账号已过期 | 联系管理员 |
 
-你需要参考 [RBAC 配置指南](./config/rbac-config.md) 来配置用户的权限。
+忘记密码时，让管理员在[用户管理](/config/user-management)里点「重置密码」，或改用 LDAP / OAuth 登录。完整对照见[登录与账号](/usage/login#登录失败的提示对照)。
 
-## 托管 Kubernetes 集群连接问题
+### 登录被拦截
 
-如果您使用托管 Kubernetes 集群（AKS、EKS、GKE 等）并在将集群添加到鸢联 AeroLink 时遇到身份验证错误，这通常是因为默认的 kubeconfig 使用了需要 CLI 工具（如 `kubelogin`、`aws` 或 `gcloud`）的 `exec` 插件。
+- **当前 IP 不允许登录 / 来源地址不允许登录**：当前网络不在允许的登录来源里，换到受控网络（VPN / 办公网）再试。
+- **登录尝试次数过多，请稍后再试**：触发了登录尝试限制，等锁定窗口过去。
+- **账号已禁用 / 账号已过期**：联系管理员。
 
-鸢联 AeroLink 作为服务端应用运行，无法执行这些客户端身份验证工具。相反，您应该使用基于 Service Account token 的身份验证。
+登录来源、尝试次数、MFA 策略由管理员在[安全策略](/config/security-policy)里配置。
 
-请参考[托管 Kubernetes 集群配置指南](./config/managed-k8s-auth.md)，了解如何创建和使用 Service Account token 进行身份验证的详细说明。
+### 登录成功却提示权限不足
 
-## 持久化相关
+「权限不足，无法访问此应用」不是密码问题，而是账号还没分配角色。让管理员在「权限管理」里分配，见[权限不够怎么办](/usage/permissions)。
 
-鸢联 AeroLink 支持使用 SQLite、MySQL 或 PostgreSQL 作为数据库。
+### 想改密码或开 MFA
 
-你可以通过环境变量 `DB_DSN` 来配置数据库连接字符串，`DB_TYPE` 来指定数据库类型（默认为 `sqlite`）。
+头像菜单 →「用户信息」→「安全」：修改密码、绑定 MFA 都在这里。账号被要求 MFA 时，按登录弹窗扫码绑定即可。
 
-- 如果使用 SQLite，默认情况下数据将存储在容器内，这意味着如果容器被删除，数据也会丢失。为了持久化数据，你需要将一个持久化卷挂载到 `/data` 路径，并设置环境变量 `DB_DSN=/data/db.sqlite`。（注意：`/data` 并非默认路径，你可以根据需要选择其他路径，但必须确保 `DB_DSN` 中的路径与挂载路径一致。）
-- 如果使用 MySQL 或 PostgreSQL，你需要提供相应的连接字符串，例如 `DB_DSN=user:password@tcp(host:port)/dbname`。
+## 看不见资源、点不动按钮
 
-建议通过 Helm Chart 进行安装，这样你可以更方便地配置持久化存储和数据库连接。
+### 看不到资源
 
-## SQLite 使用 hostPath 存储问题
+按这个顺序怀疑，基本能定位：
 
-如果您使用 SQLite 作为数据库，并在使用 `hostPath` 进行持久化存储时遇到"out of memory"错误：
+1. **集群选错了**：看左侧栏顶部的集群切换器，多集群环境最常见。
+2. **命名空间选错了**：换成「全部命名空间」或目标命名空间再看。
+3. **资源确实不存在**：还没创建，或被删掉了。
+4. **没有读权限**：无权限的资源不会出现在列表里，也不会提示"存在但你看不到"。
+
+详细说明见[找不到资源](/usage/resources)。
+
+::: tip 列表空 ≠ 报错
+没有读权限时列表就是空的，不会有 403 弹窗——这是有意为之，避免泄露资源是否存在。
+:::
+
+### 按钮不见了
+
+界面按权限渲染，没有对应权限时按钮直接不显示。申请时把「集群 + 命名空间 + 资源类型 + 要做的动作」发给管理员，模板见[申请权限怎么说](/usage/permissions#申请权限怎么说)。
+
+### 同事能看，我却不能
+
+权限绑在账号 / 用户组上，不按部门默认继承；「上次能用现在不能」通常是角色或绑定被调整了，见[常见误解](/usage/permissions#常见误解)。
+
+## 日志、监控与终端
+
+### 日志是空的
+
+- 容器选错了：多容器 Pod 要切到出日志的那个容器；
+- Pod 不在 Running：先看状态与事件；
+- 应用没把日志打到 stdout / stderr：这种情况页面上看不到。
+
+排查顺序见[日志或终端连不上时](/usage/logs-terminal#日志或终端连不上时)。
+
+### 终端连不上
+
+- **权限**：需要 `pods/exec`，同时需要 `pods` 的 `get`（终端要先列出 Pod 与容器）；连 Node 需要 `nodes/exec`。见 [Web 终端](/features/web-terminal)。
+- **网络**：终端走 websocket，被 Ingress / 反向代理挡住时会「页面能打开、终端连不上」，找管理员核对[安装指南](/guide/installation)里的代理配置。
+- **只看某个副本**：直接进具体 Pod 的日志页签，不要用工作负载级别的聚合视图。
+
+### 监控没有数据
+
+指标来自 Prometheus。没接就没有图和用量数据，找管理员按 [Prometheus 设置](/config/prometheus-setup)接入。
+
+### 文件页签看不到、不能上传
+
+浏览容器目录、下载、上传都需要「容器文件」相关权限，并且是单独授权；只读浏览也要判定权限，看不到就找管理员开。
+
+## 创建与修改
+
+### 点创建没反应或表单提交不了
+
+- 没创建权限时「创建」按钮不显示；直接打开表单页会提示「你没有权限在命名空间 X 中创建 Y」。
+- 有权限但没填完时，底部提示条会直接列出缺哪几项（名称、副本数量、容器镜像、标签……）。
+
+入口与表单结构见[创建与常用操作](/usage/common-operations#创建资源)。
+
+### 改了镜像却没产生新版本
+
+镜像没变就提交，界面会提示没有变化、不会产生新版本；真的改了才会按升级策略滚动新 Pod。Job 的 Pod 模板不可变，没有「修改镜像版本」这个操作，要改就重建。见[修改镜像版本](/usage/common-operations#修改镜像版本)。
+
+### 编辑页很多字段改不了
+
+Pod 的大部分字段不可变；编辑页顶部会提示这个 Pod 属于哪个 Deployment——去 Deployment 改，改动会自动滚动到新 Pod。StatefulSet 的部分字段同样不可变，只能走 YAML 或重建。
+
+### 删除后能恢复吗
+
+不能。删除不提示备份，也没有回收站，删了就是下发删除到集群。另外删除 Deployment 时，如果有 Service 的选择器指向它，弹窗会提示这些 Service 也会被一起删掉；只想删负载、保留 Service 的话，先改 Service 的选择器。见[危险操作](/usage/common-operations#危险操作)。
+
+## 部署与数据
+
+### 支持哪些数据库，数据怎么持久化
+
+支持 SQLite、MySQL、PostgreSQL，用环境变量 `DB_TYPE` 指定类型（默认 `sqlite`）、`DB_DSN` 指定连接串。
+
+- **SQLite**：默认存在容器内，容器删除数据就丢。要持久化就把卷挂到 `/data`，并设 `DB_DSN=/data/db.sqlite`（路径要与挂载点一致）。
+- **MySQL / PostgreSQL**：`DB_DSN=user:password@tcp(host:port)/dbname`。
+
+生产环境建议直接用 MySQL 或 PostgreSQL；通过 Helm Chart 安装时这些都在 values 里配，见 [Chart Values](/config/chart-values)。
+
+### SQLite 用 hostPath 报 out of memory (14)
 
 ```txt
 panic: failed to connect database: unable to open database file: out of memory (14)
 ```
 
-此问题与鸢联 AeroLink 使用的纯 Go SQLite 驱动有关（为避免 CGO 依赖）。该驱动在访问某些存储后端上的数据
-库文件时存在限制。
-
-**解决方案**：添加 SQLite 连接选项以提高与 hostPath 存储的兼容性。在 Helm values 中设置：
+这是纯 Go SQLite 驱动（为避免 CGO 依赖）在部分存储后端上的限制。在 Helm values 里加上连接选项：
 
 ```yaml
 db:
   sqlite:
-    options: "_journal_mode=WAL&_busy_timeout=5000"
+    options: "_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 ```
 
-这些选项启用预写日志（WAL）模式并增加忙碌超时时间，可以解决大多数 hostPath 兼容性问题。
+写法必须是驱动认识的 `_pragma=...` 形式；mattn/go-sqlite3 风格的 `_journal_mode=WAL&_busy_timeout=5000` 会被**静默忽略**，等于没配。生产环境仍建议换 MySQL / PostgreSQL。
 
-**生产环境推荐**：对于需要持久化存储的生产环境部署，建议使用 MySQL 或 PostgreSQL 代替 SQLite。这些数据库更适合容器化环境和持久化存储场景。
+### 托管集群添加时认证失败
 
-更多详情请参见 [Issue #204](https://github.com/kite-org/kite/issues/204)。
+AKS、EKS、GKE 的默认 kubeconfig 常用 `exec` 插件（`kubelogin`、`aws`、`gcloud`），而鸢联 AeroLink 作为服务端应用无法执行这些客户端工具。改用 Service Account token 认证，步骤见[托管 Kubernetes 集群配置](/config/managed-k8s-auth)。
 
-## 如何更改字体
+### 升级、回滚、备份怎么做
 
-鸢联 AeroLink 默认提供五种字体：系统默认、`Maple Mono`、`JetBrains Mono`，以及中文优先的宋体与楷体。
+见[部署与运维](/guide/operations)：升级、回滚、备份与恢复、更换数据库都有命令级步骤。
 
-宋体与楷体随二进制分发，是 SIL OFL 1.1 字体的界面子集（来源见 `NOTICE`）：宋体派生自思源宋体 CN，楷体派生自寒蝉正楷体；两者只覆盖 GB2312 与界面文案，且只有 400 字重，粗体由浏览器合成。字体栈与生成脚本见 `ui/src/components/font-provider.tsx` 与 `scripts/build-font-subsets.sh`。
+## 界面与显示
 
-如果您想使用其他字体，则需要自己构建项目。
+### 怎么切换字体和主题
 
-用 make 构建鸢联 AeroLink，并在 `./ui/src/styles/base.css` 中更改字体
+头像菜单 →「用户信息」→「外观」：主题（浅色 / 深色）、显示缩放、字体都在这里改，只影响自己，切换后立即生效。
 
-```css
-@font-face {
-  font-family: "Maple Mono";
-  font-style: normal;
-  font-display: swap;
-  font-weight: 400;
-  src:
-    url(https://cdn.jsdelivr.net/fontsource/fonts/maple-mono@latest/latin-400-normal.woff2)
-      format("woff2"),
-    url(https://cdn.jsdelivr.net/fontsource/fonts/maple-mono@latest/latin-400-normal.woff)
-      format("woff");
-}
+字体有五种可选：系统默认、`Maple Mono`、`JetBrains Mono`，以及中文优先的宋体与楷体。想用列表之外的字体属于定制前端，需要改样式后重新构建镜像，日常使用用内置的即可。
 
-body {
-  font-family: "Maple Mono", var(--font-sans);
-}
+## 还有问题？
+
+- 先按[使用指南](/usage/)与[功能详解](/features/)的步骤逐条核对，多数问题能在对应页面找到入口；
+- 仍解决不了，到公司内部群**运维问题反馈群**里提问，按下面的格式一次说清，定位最快。
+
+### 反馈前先复制地址栏
+
+在出问题的页面上按 `Ctrl + L`（macOS 为 `⌘ + L`）选中地址栏，把整条 URL 复制下来再粘贴到群里。
+
+地址里带着**集群、命名空间、资源类型和资源名**，比口头描述准确得多。如果粘贴后显示不全，就再补一句「我在哪个页面、点的哪个按钮」。地址栏里的查询参数（如 `?namespace=...`）要一起复制，不要手动删。
+
+### 群里怎么说
+
+一条消息写清这四点：
+
+1. **在哪个页面**：粘贴地址栏 URL，并说明是列表页、详情页还是某个弹窗；
+2. **想做什么**：例如「把 Deployment 的镜像改成 v1.2.3」「看某个 Pod 的日志」「给同事开某命名空间的权限」；
+3. **实际发生了什么**：完整报错原文（能复制就别截图），不要只写「报错了」「打不开」；
+4. **谁的账号、什么时间**：登录账号名和大致时间，方便查审计与日志。
+
+样例：
+
+```txt
+页面：<粘贴地址栏 URL>
+操作：在命名空间 aerolink 里把 Deployment api 的镜像改成 v1.2.3
+现象：提示「用户 zhangsan 没有权限在集群 in-cluster 的命名空间 aerolink 中执行 更新 deployments」
+账号：zhangsan，今天 10:20 左右
 ```
 
-## 我如何为鸢联 AeroLink 做出贡献？
-
-我们欢迎贡献！您可以：
-
-- 在 [GitHub Issues](https://github.com/kite-org/kite/issues) 上报告错误和功能请求
-- 提交拉取请求
-- 改进文档
-- 分享反馈和使用案例
-
-## 我在哪里可以获得帮助？
-
-您可以通过以下方式获得支持：
-
-- [GitHub Issues](https://github.com/kite-org/kite/issues) 用于提交错误报告和功能请求
-- [Slack Community](https://join.slack.com/t/kite-dashboard/shared_invite/zt-3amy6f23n-~QZYoricIOAYtgLs_JagEw) 用于提问和社区支持
+::: tip 能自己先确认的两件事
+先看顶栏**铃铛**里有没有相关站内信、顶栏有没有公告横幅（见[通知与公告](/features/notification-and-announcements)），再打开资源详情页的「事件」页签看有没有新报错；同时确认左侧栏的集群与命名空间选对了——这两项是反馈里最常被漏掉的信息。
+:::
 
 ---
 
-**没有找到您要找的内容？** 欢迎在 GitHub 上[提交问题](https://github.com/kite-org/kite/issues/new)或开始一个[讨论](https://github.com/kite-org/kite/discussions)。
+**没有找到你要的内容？** 到**运维问题反馈群**提问（记得附上地址栏 URL 与报错原文），或从[文档地图](/)、[使用指南](/usage/)、[功能详解](/features/)重新找入口。

@@ -1,8 +1,60 @@
+/**
+ * 站点主题。
+ *
+ * 配色与首页（`.vitepress/theme/components/aerolink-home.css`）同源：纸张底色
+ * `#faf9f6` 叠 `grid-paper.png` 网格纹，正文墨色 `#17202b`，细分隔线 `#cbd1d8`，
+ * 强调色 `#1769e0`。文档页的字号与排版仍交给 VitePress，只统一颜色与背景。
+ *
+ * 亮色主题用 `html:not(.dark)` 承载：`:root` 与主题自带的 `.dark` 权重相同，
+ * 写在 `:root` 里会连带覆盖暗色主题。暗色主题沿用 VitePress 默认配色。
+ */
+
 :root {
   --vp-c-brand-1: #1769e0;
   --vp-c-brand-2: #125bc6;
   --vp-c-brand-3: #0f4fae;
   --vp-c-brand-soft: rgba(23, 105, 224, 0.14);
+}
+
+html:not(.dark) {
+  --vp-c-bg: #faf9f6;
+  --vp-c-bg-alt: #f4f1ea;
+  --vp-c-bg-elv: #fffdf8;
+  --vp-c-bg-soft: #f1eee6;
+
+  --vp-c-border: #c2c9d1;
+  --vp-c-divider: #cbd1d8;
+  --vp-c-gutter: #e2ded4;
+
+  --vp-c-text-1: #17202b;
+  --vp-c-text-2: #526071;
+  --vp-c-text-3: #7c8794;
+
+  /* 行内代码、开关等「比页面稍深一点」的底色，跟着纸张调暖。 */
+  --vp-c-default-soft: #ece8df;
+  --vp-code-block-bg: #f4f1ea;
+
+  /* 顶栏与侧边栏留一点透明度，让网格纹透出来，和首页头部的口吻一致。 */
+  --vp-nav-bg-color: #faf9f6;
+  --vp-sidebar-bg-color: rgba(247, 244, 237, 0.94);
+}
+
+html:not(.dark) body {
+  background-image: url("/assets/grid-paper.png");
+  background-size: 630px 630px;
+}
+
+html:not(.dark) .VPLocalNav {
+  background-color: rgba(250, 249, 246, 0.9);
+}
+
+/* 表格行默认用不透明底色，会切断网格纹，改成半透明叠加。 */
+html:not(.dark) .vp-doc tr {
+  background-color: transparent;
+}
+
+html:not(.dark) .vp-doc tr:nth-child(2n) {
+  background-color: rgba(23, 32, 43, 0.025);
 }
 
 .vp-doc h1,
@@ -19,4 +71,48 @@
 .vp-doc img {
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
+}
+
+/**
+ * 关于页（`layout: page` + `pageClass: about-page`）复用站点顶栏，正文是
+ * `AeroLinkHome.vue` 自带排版的产品介绍页：没有标题锚点也没有侧边栏，
+ * 主题在这种情况下会补一条空的本地导航条，这里直接去掉。
+ */
+.about-page .VPLocalNav {
+  display: none;
+}
+
+/**
+ * 关于页的配色写死在组件里（纸张底 + 墨色字），暗色主题下只让这一页的顶栏与
+ * 搜索浮层跟着纸张走，否则深色顶栏会压在浅色正文上。
+ *
+ * 搜索浮层由 Teleport 挂到 body 上，不在 `.about-page` 子树里，只能靠 `:has()`
+ * 判断当前是不是关于页；它的 `--vp-local-search-*` 在 `:root` 上就替换掉了
+ * `--vp-c-*`，所以那几个变量要单独给。
+ */
+html.dark .about-page .VPNav,
+html.dark:has(.about-page) .VPLocalSearchBox {
+  --vp-nav-bg-color: #faf9f6;
+
+  --vp-c-bg: #faf9f6;
+  --vp-c-bg-alt: #f4f1ea;
+  --vp-c-bg-elv: #fffdf8;
+  --vp-c-bg-soft: #f1eee6;
+
+  --vp-c-border: #c2c9d1;
+  --vp-c-divider: #cbd1d8;
+  --vp-c-gutter: #e2ded4;
+
+  --vp-c-text-1: #17202b;
+  --vp-c-text-2: #526071;
+  --vp-c-text-3: #7c8794;
+
+  --vp-c-default-soft: #ece8df;
+  --vp-code-block-bg: #f4f1ea;
+
+  --vp-local-search-bg: #fffdf8;
+  --vp-local-search-result-bg: #fffdf8;
+  --vp-local-search-result-border: #cbd1d8;
+  --vp-local-search-result-selected-bg: #fffdf8;
+  --vp-local-search-highlight-text: #faf9f6;
 }

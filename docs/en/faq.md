@@ -8,7 +8,7 @@ injected script, and the `Content-Security-Policy` served by the backend allows 
 origin.
 
 AeroLink does not query upstream releases either: there is no update check and no request to
-`api.github.com`.
+any external release service.
 
 ## Permission Issues
 
@@ -57,14 +57,17 @@ This issue is related to the pure Go SQLite driver used by AeroLink (to avoid CG
 ```yaml
 db:
   sqlite:
-    options: "_journal_mode=WAL&_busy_timeout=5000"
+    options: "_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 ```
+
+The value must use the `_pragma=...` form the driver understands (AeroLink uses the pure Go
+SQLite driver; see the `db.sqlite.options` comment in `charts/aerolink/values.yaml`). The
+mattn/go-sqlite3 style `_journal_mode=WAL&_busy_timeout=5000` is **silently ignored**, which is
+the same as not configuring it at all.
 
 These options enable Write-Ahead Logging (WAL) mode and increase the busy timeout, which resolves most hostPath compatibility issues.
 
 **Recommended for Production**: For production deployments requiring persistent storage, use MySQL or PostgreSQL instead of SQLite. These databases are better suited for containerized environments and persistent storage scenarios.
-
-For more details, see [Issue #204](https://github.com/kite-org/kite/issues/204).
 
 ## How to Change Font
 
@@ -74,7 +77,8 @@ Song and Kai ship with the binary as interface subsets of SIL OFL 1.1 fonts (see
 
 If you want to use a different font, you need to build the project yourself.
 
-Build AeroLink with make and change the font in `./ui/src/styles/base.css`:
+Build AeroLink with make and change the font in `./ui/src/styles/base.css`. The built-in fonts
+reference local files shipped with the binary (`ui/src/assets/fonts/`) and never fetch a CDN:
 
 ```css
 @font-face {
@@ -83,10 +87,8 @@ Build AeroLink with make and change the font in `./ui/src/styles/base.css`:
   font-display: swap;
   font-weight: 400;
   src:
-    url(https://cdn.jsdelivr.net/fontsource/fonts/maple-mono@latest/latin-400-normal.woff2)
-      format("woff2"),
-    url(https://cdn.jsdelivr.net/fontsource/fonts/maple-mono@latest/latin-400-normal.woff)
-      format("woff");
+    url("@/assets/fonts/maple-mono-latin-400-normal.woff2") format("woff2"),
+    url("@/assets/fonts/maple-mono-latin-400-normal.woff") format("woff");
 }
 
 body {
@@ -96,20 +98,20 @@ body {
 
 ## How Can I Contribute to AeroLink?
 
-We welcome contributions! You can:
+This repository is an internal fork of upstream kite: it is deployed on the corporate intranet
+only and is not distributed externally, so contributions follow the internal workflow:
 
-- Report bugs and feature requests on [GitHub Issues](https://github.com/kite-org/kite/issues)
-- Submit pull requests
-- Improve documentation
-- Share feedback and use cases
+- Bugs and feature requests: file them in the internal GitLab repository, or contact the operations R&D team directly.
+- Code or documentation changes: open a branch and a merge request in the internal GitLab; run the checks required by `AGENTS.md` at the repository root (`make pre-commit`, etc.) before submitting.
+- The documentation source lives in `docs/` in the same repository: the “Edit this page in the internal repository” link at the top right of every page opens the matching file.
 
 ## Where Can I Get Help?
 
 You can get support through:
 
-- [GitHub Issues](https://github.com/kite-org/kite/issues) for bug reports and feature requests
-- [Slack Community](https://join.slack.com/t/kite-dashboard/shared_invite/zt-3amy6f23n-~QZYoricIOAYtgLs_JagEw) for questions and community support
+- Internal channels for bug reports and feature requests
+- Internal channels for questions and community support
 
 ---
 
-**Didn't find what you're looking for?** Feel free to [open an issue](https://github.com/kite-org/kite/issues/new) on GitHub or start a [discussion](https://github.com/kite-org/kite/discussions).
+**Didn't find what you're looking for?** Reach out to us through internal channels.

@@ -66,85 +66,19 @@ a:focus-visible {
   outline-offset: 4px;
 }
 
-.skip-link {
-  position: fixed;
-  top: max(12px, env(safe-area-inset-top));
-  left: max(12px, env(safe-area-inset-left));
-  z-index: 20;
-  padding: 10px 14px;
-  color: white;
-  background: var(--blue);
-  transform: translateY(-160%);
-}
-
-.skip-link:focus {
-  transform: translateY(0);
-}
-
 .site-shell {
   width: min(1320px, calc(100% - 64px));
   margin-inline: auto;
 }
 
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  border-bottom: 1px solid rgba(203, 209, 216, 0.68);
-  background: rgba(250, 249, 246, 0.96);
-}
-
-.site-header__inner {
-  min-height: 84px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 32px;
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 11px;
-  color: var(--blue);
-  font-size: 25px;
-  font-weight: 500;
-}
-
-.brand img,
 .site-footer img {
   width: 35px;
   height: 35px;
   object-fit: contain;
 }
 
-.site-nav {
-  display: flex;
-  align-items: center;
-  gap: 34px;
-  color: #303b4b;
-  font-size: 14px;
-}
-
-.site-nav > a:not(.star-count) {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.site-nav > a:hover,
 .arrow-link:hover {
   color: var(--blue);
-}
-
-.star-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.4);
-  font-variant-numeric: tabular-nums;
 }
 
 .hero {
@@ -492,10 +426,6 @@ a:focus-visible {
     width: min(100% - 40px, 900px);
   }
 
-  .site-nav {
-    gap: 20px;
-  }
-
   .hero {
     grid-template-columns: 1fr;
     padding-top: 70px;
@@ -563,30 +493,6 @@ a:focus-visible {
 @media (max-width: 720px) {
   .site-shell {
     width: min(100% - 28px, 640px);
-  }
-
-  .site-header__inner {
-    min-height: 72px;
-  }
-
-  .brand {
-    gap: 8px;
-    font-size: 21px;
-  }
-
-  .brand img {
-    width: 30px;
-    height: 30px;
-  }
-
-  .site-nav {
-    gap: 14px;
-    font-size: 12px;
-  }
-
-  .site-nav > a.nav__optional,
-  .site-nav > a.star-count {
-    display: none;
   }
 
   .hero {

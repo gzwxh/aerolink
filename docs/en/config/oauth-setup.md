@@ -18,7 +18,7 @@ This guide explains how to configure OAuth authentication for AeroLink, supporti
 In the user interface with the **admin** role, the settings entry will be displayed in the upper right corner of the page.
 
 Follow the instructions on the page to fill in the basic information to use OAuth login.
-![OAuth](../../screenshots/oauth.png)
+![OAuth](../../screenshots/oauth.webp)
 
 ### Advanced Settings
 

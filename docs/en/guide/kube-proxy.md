@@ -11,9 +11,9 @@ AeroLink has a built-in kubectl Proxy feature that allows you to access Pods or 
 1.  Navigate to the details page of the Pod or Service you want to access.
 2.  In the `Ports` section, click to access directly.
 
-![Kube Proxy](../../screenshots/kube-proxy1.png)
+![Kube Proxy](../../screenshots/kube-proxy1.webp)
 
-![Kube Proxy](../../screenshots/kube-proxy2.png)
+![Kube Proxy](../../screenshots/kube-proxy2.webp)
 
 ## Notes
 

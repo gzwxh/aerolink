@@ -35,6 +35,10 @@
 - **AEROLINK_DB_MAX_OPEN_CONNS**：最大打开连接数，默认 `100`。
 - **AEROLINK_DB_MAX_IDLE_CONNS**：最大空闲连接数，默认 `10`。
 - **AEROLINK_DB_CONN_MAX_LIFETIME_MINUTES**：连接最大存活时间（分钟），默认 `10`。
+- **AEROLINK_DB_MIGRATE**：设为 `off` 时跳过自动迁移与结构回填，库结构改由外部流程维护（`checkSchema` 仍会核对），适用于应用账号没有 DDL 权限的场景。
+- **AEROLINK_DB_MIGRATE_STRICT**：设为 `true` 时迁移出错即 panic，仅用于开发与 CI。
+
+建库、连接池容量与库结构变更口径见[数据库准备](./database.md)。
 
 ## 审计与归档
 

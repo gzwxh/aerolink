@@ -18,32 +18,17 @@ import auditScreenshot from "../../../screenshots/audit.webp";
 import detailScreenshot from "../../../screenshots/detail.webp";
 import helmScreenshot from "../../../screenshots/helm.webp";
 import overviewScreenshot from "../../../screenshots/overview2.webp";
-import GitHubStarCount from "./GitHubStarCount.vue";
 
 const content = {
   en: {
-    homeHref: "/en/",
     docsHref: "/en/guide/",
     installHref: "/en/guide/installation",
-    languageHref: "/",
-    languageLabel: "中文",
-    languageCode: "zh-CN",
-    homeLabel: "AeroLink home",
-    navigationLabel: "Primary navigation",
-    skipLabel: "Skip to content",
-    starLabel: "View AeroLink stars on GitHub",
-    nav: {
-      docs: "Docs",
-      community: "Community",
-      github: "GitHub",
-    },
     hero: {
       firstLine: "All your clusters.",
       secondLine: "One workspace.",
       description:
         "AeroLink is the lightweight, open-source Kubernetes workspace for clusters, observability, access control, and AI operations.",
       primaryAction: "Get started",
-      secondaryAction: "View on GitHub",
     },
     strengths: [
       { icon: IconCode, label: "Single binary" },
@@ -107,8 +92,8 @@ const content = {
         image: detailScreenshot,
         imageAlt:
           "AeroLink Kubernetes resource detail page showing workload status, pods, events, related resources, labels, and configuration",
-        imageWidth: 3118,
-        imageHeight: 2250,
+        imageWidth: 3172,
+        imageHeight: 1960,
         mediaLeft: true,
       },
       {
@@ -120,8 +105,8 @@ const content = {
         image: helmScreenshot,
         imageAlt:
           "AeroLink Helm release page showing deployment status, related resources, release history, and configuration",
-        imageWidth: 3118,
-        imageHeight: 2250,
+        imageWidth: 3172,
+        imageHeight: 1960,
         mediaLeft: false,
       },
       {
@@ -133,35 +118,21 @@ const content = {
         image: auditScreenshot,
         imageAlt:
           "AeroLink audit log showing operators, Kubernetes resource changes, clusters, status, and reviewable diffs",
-        imageWidth: 3118,
-        imageHeight: 2250,
+        imageWidth: 3172,
+        imageHeight: 1960,
         mediaLeft: true,
       },
     ],
   },
   zh: {
-    homeHref: "/",
-    docsHref: "/guide/",
+    docsHref: "/",
     installHref: "/guide/installation",
-    languageHref: "/en/",
-    languageLabel: "English",
-    languageCode: "en",
-    homeLabel: "鸢联 AeroLink 首页",
-    navigationLabel: "主导航",
-    skipLabel: "跳至主要内容",
-    starLabel: "在 GitHub 上查看鸢联 AeroLink 星标数",
-    nav: {
-      docs: "文档",
-      community: "社区",
-      github: "GitHub",
-    },
     hero: {
       firstLine: "所有集群。",
       secondLine: "一个工作空间。",
       description:
         "鸢联 AeroLink 是轻量、开源的 Kubernetes 工作空间，将集群管理、可观测性、访问控制和 AI 运维整合在一起。",
       primaryAction: "快速开始",
-      secondaryAction: "查看 GitHub",
     },
     strengths: [
       { icon: IconCode, label: "单一二进制" },
@@ -186,7 +157,7 @@ const content = {
         description:
           "实时了解集群、工作负载和性能。通过仪表盘、指标与事件快速定位真正需要处理的问题。",
         link: "了解可观测性",
-        href: "/guide/monitoring",
+        href: "/features/monitoring",
       },
       {
         icon: IconTerminal2,
@@ -223,8 +194,8 @@ const content = {
           "在同一处查看状态、配置、事件、条件和相关工作负载，从异常现象直接抵达排障所需的信息。",
         image: detailScreenshot,
         imageAlt: "鸢联 AeroLink Kubernetes 资源详情页展示状态、Pod、事件、关联资源、标签和配置",
-        imageWidth: 3118,
-        imageHeight: 2250,
+        imageWidth: 3172,
+        imageHeight: 1960,
         mediaLeft: true,
       },
       {
@@ -235,8 +206,8 @@ const content = {
           "浏览 Chart、管理仓库，并在其创建的 Kubernetes 资源旁完成 Release 的安装、升级与检查。",
         image: helmScreenshot,
         imageAlt: "鸢联 AeroLink Helm Release 页面展示部署状态、关联资源、发布历史和配置",
-        imageWidth: 3118,
-        imageHeight: 2250,
+        imageWidth: 3172,
+        imageHeight: 1960,
         mediaLeft: false,
       },
       {
@@ -247,8 +218,8 @@ const content = {
           "通过基于角色的权限和清晰的审计记录，管理用户访问与跨集群资源变更。",
         image: auditScreenshot,
         imageAlt: "鸢联 AeroLink 审计日志展示操作用户、Kubernetes 资源变更、集群、状态和差异",
-        imageWidth: 3118,
-        imageHeight: 2250,
+        imageWidth: 3172,
+        imageHeight: 1960,
         mediaLeft: true,
       },
     ],
@@ -263,40 +234,6 @@ const copy = computed(() =>
 
 <template>
   <div id="top" class="aerolink-home">
-    <a class="skip-link" href="#main-content">{{ copy.skipLabel }}</a>
-
-    <header class="site-header">
-      <div class="site-shell site-header__inner">
-        <a class="brand" :href="copy.homeHref" :aria-label="copy.homeLabel">
-          <img src="/logo.svg" alt="" width="35" height="35" />
-          <span>AeroLink</span>
-        </a>
-
-        <nav class="site-nav" :aria-label="copy.navigationLabel">
-          <a :href="copy.docsHref">{{ copy.nav.docs }}</a>
-          <a
-            class="nav__optional"
-            href="https://join.slack.com/t/kite-dashboard/shared_invite/zt-3cl9mccs7-eQZ1_t6IoTPHZkxXED1ceg"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {{ copy.nav.community }}
-          </a>
-          <a
-            href="https://github.com/kite-org/kite"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {{ copy.nav.github }}
-          </a>
-          <a :href="copy.languageHref" :hreflang="copy.languageCode">
-            {{ copy.languageLabel }}
-          </a>
-          <GitHubStarCount :aria-label="copy.starLabel" />
-        </nav>
-      </div>
-    </header>
-
     <main id="main-content">
       <section class="site-shell hero" aria-labelledby="hero-heading">
         <div class="hero__copy">
@@ -308,14 +245,6 @@ const copy = computed(() =>
           <div class="hero__actions">
             <a class="button button--primary" :href="copy.installHref">
               {{ copy.hero.primaryAction }}
-            </a>
-            <a
-              class="button button--secondary"
-              href="https://github.com/kite-org/kite"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {{ copy.hero.secondaryAction }}
             </a>
           </div>
         </div>
@@ -399,7 +328,7 @@ const copy = computed(() =>
             :src="overviewScreenshot"
             :alt="copy.proof.imageAlt"
             width="3172"
-            height="2334"
+            height="1960"
           />
         </div>
       </section>
@@ -434,15 +363,6 @@ const copy = computed(() =>
           <img src="/logo.svg" alt="" width="35" height="35" />
           <strong>AeroLink</strong>
         </div>
-        <a
-          class="arrow-link"
-          href="https://github.com/kite-org/kite"
-          target="_blank"
-          rel="noreferrer"
-        >
-          GitHub
-          <IconArrowUpRight aria-hidden="true" :size="16" :stroke-width="1.6" />
-        </a>
       </div>
     </footer>
   </div>

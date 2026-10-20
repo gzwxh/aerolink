@@ -147,9 +147,9 @@ After installation, you can access the dashboard to verify that AeroLink is depl
 If you need to configure AeroLink through environment variables, please refer to [Environment Variables](../config/env).
 :::
 
-![setup](../../screenshots/setup.png)
+![setup](../../screenshots/setup.webp)
 
-![setup](../../screenshots/setup2.png)
+![setup](../../screenshots/setup2.webp)
 
 You can complete cluster setup according to the page prompts.
 
@@ -162,6 +162,48 @@ For the simplest setup, select **`in-cluster`** as the cluster type. This option
 - **Ideal for single-cluster deployments**: Perfect when AeroLink is managing the same cluster it's running in
 
 This is the recommended option for getting started quickly, especially in development or when AeroLink only needs to manage its own cluster.
+
+## Upgrading
+
+For a Helm install, use `helm upgrade` (`--reuse-values` keeps the existing configuration):
+
+```bash
+helm upgrade aerolink charts/aerolink -n aerolink-system --reuse-values
+```
+
+For a YAML manifest install, re-apply the new manifest:
+
+```bash
+kubectl apply -f deploy/install.yaml
+```
+
+### Schema changes that need to be run manually
+
+Some releases add database columns. The application account is usually **not the table owner**, so
+`AutoMigrate` cannot add the column in a production database (PostgreSQL reports
+`must be owner of table ...`). Run the SQL below with an account that has DDL privileges before
+upgrading, otherwise the features that depend on the new column will fail.
+
+**Help documentation entry** (`general_settings.help_url`) — run before upgrading:
+
+```sql
+-- PostgreSQL
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS help_url varchar(500);
+
+-- MySQL 5.7 / 8.x: no IF NOT EXISTS; error 1060 Duplicate column name means the column already exists, ignore it
+ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
+
+-- SQLite: the app owns the local file and adds the column on startup, usually nothing to do here
+ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
+```
+
+Skipping it has limited impact: reading and writing the help URL fails (saving general settings
+returns 500), everything else works.
+
+After upgrading, check the logs: `库结构与模型一致` (`schema matches the models`) means it is fine;
+`库表 general_settings 缺少列 help_url` means the SQL was not run or the pod was not restarted.
+Note that with `AEROLINK_LOG_FILE` set, `Info` level lines only go to that file and not to the
+container's stdout — `kubectl logs` then only shows errors.
 
 ## Uninstalling AeroLink
 
@@ -185,3 +227,4 @@ After AeroLink installation is complete, you can continue with:
 - [Configuring RBAC](../config/rbac-config)
 - [Configuring OAuth Authentication](../config/oauth-setup)
 - [Setting up Prometheus Monitoring](../config/prometheus-setup)
+- [Deployment and Operations (shapes, systemd, upgrade and rollback, backup and database switch)](./operations)

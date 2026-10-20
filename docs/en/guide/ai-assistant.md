@@ -2,7 +2,7 @@
 
 AeroLink includes a built-in AI assistant for Kubernetes operations. It can explain cluster state, inspect resources, read logs, query Prometheus metrics, and help with common changes without leaving the current workspace.
 
-![AI Assistant](../../screenshots/ai-chat.png)
+![AI Assistant](../../screenshots/ai-chat.webp)
 
 ## Enable AI
 
@@ -53,7 +53,7 @@ When required details are missing, the assistant can also ask for:
 
 This keeps the workflow inside the chat panel instead of requiring free-form back-and-forth for simple inputs.
 
-![AI](../../screenshots/ai-form.png)
+![AI](../../screenshots/ai-form.webp)
 
 ## Permissions And Safety
 
@@ -65,7 +65,7 @@ The AI assistant works within AeroLink's existing access model.
 - If the user cannot read logs, exec into pods, or modify a resource, the assistant cannot bypass that restriction.
 - Prometheus queries are only available when Prometheus is configured for the current cluster.
 
-![AI](../../screenshots/ai-permission.png)
+![AI](../../screenshots/ai-permission.webp)
 
 For related setup details, see:
 

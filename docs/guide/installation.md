@@ -49,7 +49,7 @@ helm install aerolink charts/aerolink -n aerolink-system --create-namespace \
 ::: warning
 此方法不适合生产环境，因为他没有配置任何持久化相关内容，你需要手动挂载持久化卷并设置环境变量 `DB_DSN=/data/db.sqlite` 来确保数据不会丢失。或者也可以使用外部数据库。
 
-参考 [持久化相关](../faq.md#持久化相关) 获取更多详情。
+参考[支持哪些数据库，数据怎么持久化](../faq.md#支持哪些数据库-数据怎么持久化)获取更多详情。
 :::
 
 ```bash
@@ -158,9 +158,9 @@ ingress:
 如需通过环境变量配置鸢联 AeroLink，请参考 [环境变量](../config/env.md)。
 :::
 
-![setup](../screenshots/setup.png)
+![setup](../screenshots/setup.webp)
 
-![setup](../screenshots/setup2.png)
+![setup](../screenshots/setup2.webp)
 
 可根据页面提示完成集群设置。
 
@@ -173,6 +173,45 @@ ingress:
 - **适合单集群部署**：当鸢联 AeroLink 管理的正是它自身所在的集群时最为合适
 
 这是快速上手最推荐的方式，尤其适用于开发环境，或鸢联 AeroLink 只需要管理自身集群的场景。
+
+## 升级
+
+Helm 安装用 `helm upgrade`（`--reuse-values` 保留既有配置）：
+
+```bash
+helm upgrade aerolink charts/aerolink -n aerolink-system --reuse-values
+```
+
+YAML 清单安装则重新应用新版清单：
+
+```bash
+kubectl apply -f deploy/install.yaml
+```
+
+### 需要手工执行的库结构变更
+
+部分版本会新增数据库列。应用账号通常**不是表 owner**，`AutoMigrate` 在生产库里加不上列
+（PostgreSQL 报 `must be owner of table ...`），所以升级前要用有 DDL 权限的账号先执行 SQL，
+否则依赖新列的功能会报错。
+
+**帮助文档入口**（`general_settings.help_url`）——升级前执行：
+
+```sql
+-- PostgreSQL
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS help_url varchar(500);
+
+-- MySQL 5.7 / 8.x：不支持 IF NOT EXISTS；若报 1060 Duplicate column name 说明列已存在，忽略
+ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
+
+-- SQLite：应用对本机库有写权限，启动时会自动加列，通常无需手工执行
+ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
+```
+
+不执行的后果有限：帮助文档地址读写会失败（保存通用设置返回 500），其余功能不受影响。
+
+升级后核对：日志里出现 `库结构与模型一致` 即正常；出现 `库表 general_settings 缺少列 help_url`
+说明 SQL 没执行或执行后没重启。注意设了 `AEROLINK_LOG_FILE` 之后，`Info` 级日志只写文件、
+不进容器标准输出，`kubectl logs` 只能看到错误行。
 
 ## 卸载鸢联 AeroLink
 
@@ -196,3 +235,4 @@ kubectl delete -f deploy/install.yaml
 - [配置 RBAC](../config/rbac-config.md)
 - [配置 OAuth 认证](../config/oauth-setup.md)
 - [设置 Prometheus 监控](../config/prometheus-setup.md)
+- [部署与运维（部署形态、systemd、升级回滚、备份与换库）](./operations.md)

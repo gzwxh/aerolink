@@ -21,7 +21,7 @@
 
 ### 选项 1：使用 kube-prometheus-stack（推荐）
 
-[kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) Helm chart 提供了完整的监控解决方案，包括 Prometheus、Alertmanager 和 Grafana。
+kube-prometheus-stack Helm chart 提供了完整的监控解决方案，包括 Prometheus、Alertmanager 和 Grafana。
 
 ```bash
 # 添加 Prometheus 社区 Helm 仓库
@@ -38,9 +38,9 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
 
 如需对安装有更多控制，您可以手动安装 Prometheus 组件：
 
-1. **[Prometheus 服务器](https://prometheus.io/docs/prometheus/latest/installation/)** - 收集并存储指标
-2. **[kube-state-metrics](https://github.com/kubernetes/kube-state-metrics)** - 提供 Kubernetes 对象指标
-3. **[metrics-server](https://github.com/kubernetes-sigs/metrics-server)** - 提供容器资源指标
+1. **Prometheus 服务器** - 收集并存储指标
+2. **kube-state-metrics** - 提供 Kubernetes 对象指标
+3. **metrics-server** - 提供容器资源指标
 4. **Node Exporter** - 收集主机系统指标
 
 按照每个组件的官方文档获取详细的安装说明。

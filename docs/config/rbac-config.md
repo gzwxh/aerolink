@@ -20,7 +20,7 @@
 - **admin**：拥有管理所有资源的全部权限
 - **viewer**：拥有查看所有资源和日志的权限
 
-![RBAC 设置](../screenshots/rbac.png)
+![RBAC 设置](../screenshots/rbac.webp)
 
 每个角色可指定以下字段：
 
@@ -44,17 +44,17 @@
 
 可为特定 OAuth 组分配角色，使组内所有用户自动继承相应权限。
 
-注意：部分 OAuth 组可能无法返回用户的组和权限信息，建议使用 [DEX](https://github.com/dexidp/dex) 项目作为中转。请确保 OAuth 的 scope 包含 `groups` 或 `roles`。
+注意：部分 OAuth 组可能无法返回用户的组和权限信息，建议使用 DEX 项目作为中转。请确保 OAuth 的 scope 包含 `groups` 或 `roles`。
 
 在 Role Actions 中可配置或取消组映射。
 
-![RBAC 组映射](../screenshots/assign-role.png)
+![RBAC 组映射](../screenshots/assign-role.webp)
 
 ### 映射角色到用户
 
 可为指定用户分配角色，使其获得相应权限。
 
-![RBAC 用户映射](../screenshots/assign-role2.png)
+![RBAC 用户映射](../screenshots/assign-role2.webp)
 
 ## 示例场景
 
@@ -89,7 +89,7 @@ verbs: *
 当你的 OAuth 供应商是可以信任的，例如公司内部 OA 系统。
 你可以选中某个角色，将 username 设置为 `*` 赋予该角色。参考示例
 
-![alt text](../screenshots/assign-role3.png)
+![alt text](../screenshots/assign-role3.webp)
 
 ## 最佳实践
 

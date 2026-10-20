@@ -18,7 +18,7 @@
 在具有 **admin** 角色用户界面中，页面右上角上角将显示设置入口。
 
 遵循页面中的指示填写基本信息即使用 OAuth 登录。
-![OAuth](../screenshots/oauth.png)
+![OAuth](../screenshots/oauth.webp)
 
 ### 高级设置
 

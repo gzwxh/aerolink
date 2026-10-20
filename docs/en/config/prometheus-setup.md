@@ -21,7 +21,7 @@ AeroLink's integration with Prometheus provides:
 
 ### Option 1: Using kube-prometheus-stack (Recommended)
 
-The [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) Helm chart provides a complete monitoring solution including Prometheus, Alertmanager, and Grafana.
+The kube-prometheus-stack Helm chart provides a complete monitoring solution including Prometheus, Alertmanager, and Grafana.
 
 ```bash
 # Add Prometheus community Helm repository
@@ -38,9 +38,9 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
 
 For more control over the installation, you can manually install Prometheus components:
 
-1. **[Prometheus Server](https://prometheus.io/docs/prometheus/latest/installation/)** - Collects and stores metrics
-2. **[kube-state-metrics](https://github.com/kubernetes/kube-state-metrics)** - Provides Kubernetes object metrics
-3. **[metrics-server](https://github.com/kubernetes-sigs/metrics-server)** - Provides container resource metrics
+1. **Prometheus Server** - Collects and stores metrics
+2. **kube-state-metrics** - Provides Kubernetes object metrics
+3. **metrics-server** - Provides container resource metrics
 4. **Node Exporter** - Collects host system metrics
 
 Follow the official documentation for each component for detailed installation instructions.

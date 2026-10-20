@@ -2,7 +2,7 @@
 
 AeroLink provides an integrated web terminal that allows you to execute commands directly within your pods and nodes through your browser, eliminating the need for local command-line tools.
 
-![Web Terminal](../../screenshots/terminal.png)
+![Web Terminal](../../screenshots/terminal.webp)
 
 ::: tip
 

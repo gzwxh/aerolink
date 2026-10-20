@@ -11,4 +11,4 @@ AeroLink supports customizing the sidebar. You can control the visibility and or
 1.  Click the avatar button in the upper right corner.
 2.  Find the `Custom Sidebar` option in the dropdown menu.
 
-![Custom Sidebar](../../screenshots/custom-sidebar.png)
+![Custom Sidebar](../../screenshots/custom-sidebar.webp)

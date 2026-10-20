@@ -296,6 +296,23 @@ The super user is created on first startup if it doesn't exist. On subsequent st
 | `users`      | string[] | Usernames (`*` for all users)   | No       |
 | `oidcGroups` | string[] | OIDC/LDAP group names           | No       |
 
+### Audit & Archive Configuration
+
+How audit records are stored is decided at **startup** and the settings page is read-only (changing
+the store requires a restart). `auditArchive` only **seeds the values on first startup**; afterwards
+they can be edited in the “Audit → Audit Settings” page.
+
+| Field          | Type   | Description                                                                                                                                          | Required |
+| -------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `auditSink`    | string | Destination: `database` (default), `parquet`, `elasticsearch`, `victorialogs`, `openobserve` (**mutually exclusive**, pick one)                        | No       |
+| `auditArchive` | object | Archive settings (local parquet / S3 / Elasticsearch / VictoriaLogs / OpenObserve). Only the entry matching `auditSink` takes effect.                  | No       |
+
+When the value is invalid, or the destination of the chosen sink is not configured (for example
+`parquet` without an archive directory, or `elasticsearch` without node URLs), AeroLink **refuses to
+start** rather than falling back silently. For a complete sample covering all five sinks see
+`config.dev.yaml` at the repository root, or the `AEROLINK_AUDIT_SINK` entry in
+[Environment Variables](./env).
+
 ## Behavior Notes
 
 - **Startup override**: Config is re-applied on every startup. Changes made to managed sections through the database will be overwritten.

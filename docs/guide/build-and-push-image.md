@@ -65,6 +65,27 @@ docker build \
 | `NPM_REGISTRY` | `https://registry.npmjs.org` | 前端依赖源（Go 依赖走仓库里的 `vendor/`，构建不下载模块，因此没有 GOPROXY 参数） |
 | `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `v1.0.0` / `unknown` / `unknown` | 注入 `pkg/version`，展示在界面上 |
 
+### 帮助文档站镜像（可选）
+
+`docs/` 下的帮助文档站（VitePress）不并入应用镜像（根 `.dockerignore` 排除 `docs`），单独出一个 nginx 静态镜像。地址已在 `Makefile` 的 `DOCS_IMAGE` 里给好，直接用：
+
+```bash
+make docs-image   # 只构建
+make push-docs    # 构建并推送（与应用镜像的 make push / make push-binary 同一形状）
+docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2   # 只推送已构建的镜像
+```
+
+等价的手工命令（注意构建上下文是 `docs/`，不是仓库根）：
+
+```bash
+docker build --provenance=false --sbom=false -f docs/Dockerfile \
+  -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2 docs/
+```
+
+构建机不在公司网络内时，另加 `--build-arg NODE_IMAGE=node:24-alpine --build-arg NGINX_IMAGE=nginx:alpine --build-arg NPM_REGISTRY=https://registry.npmmirror.com`（约束见 `docs/Dockerfile` 顶部注释）。
+
+部署后把访问地址填进控制台「通用设置 → 帮助文档地址」，登录页与顶栏会出现「帮助文档」入口。
+
 ## 二、验证镜像
 
 ```bash

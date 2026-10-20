@@ -22,7 +22,7 @@
 - 禁用或删除不再需要的账号
 - 修改用户的角色分配，实现权限调整
 
-![User Management](../screenshots/user-m.png)
+![User Management](../screenshots/user-m.webp)
 
 ## 账号安全
 

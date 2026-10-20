@@ -20,7 +20,7 @@ The system provides two default roles that cannot be edited or deleted:
 - **admin**: Has full permissions to manage all resources
 - **viewer**: Has permissions to view all resources and logs
 
-![RBAC Settings](../../screenshots/rbac.png)
+![RBAC Settings](../../screenshots/rbac.webp)
 
 Each role can specify the following fields:
 
@@ -44,17 +44,17 @@ Each role can specify the following fields:
 
 You can assign roles to specific OAuth groups, so that all users in the group automatically inherit the corresponding permissions.
 
-Note: Some OAuth groups may not be able to return user group and permission information. It is recommended to use the [DEX](https://github.com/dexidp/dex) project as a relay. Please ensure that the OAuth scope includes `groups` or `roles`.
+Note: Some OAuth groups may not be able to return user group and permission information. It is recommended to use the DEX project as a relay. Please ensure that the OAuth scope includes `groups` or `roles`.
 
 You can configure or cancel group mapping in Role Actions.
 
-![RBAC Group Mapping](../../screenshots/assign-role.png)
+![RBAC Group Mapping](../../screenshots/assign-role.webp)
 
 ### Mapping Roles to Users
 
 You can assign roles to specified users to give them corresponding permissions.
 
-![RBAC User Mapping](../../screenshots/assign-role2.png)
+![RBAC User Mapping](../../screenshots/assign-role2.webp)
 
 ## Example Scenarios
 
@@ -89,7 +89,7 @@ verbs: *
 When your OAuth provider is trustworthy, such as a company's internal OA system.
 You can select a role and set the username to `*` to assign that role. See the example:
 
-![alt text](../../screenshots/assign-role3.png)
+![alt text](../../screenshots/assign-role3.webp)
 
 ## Best Practices
 

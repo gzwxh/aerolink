@@ -22,7 +22,7 @@ In this interface, you can:
 - Disable or delete accounts that are no longer needed
 - Modify user role assignments to achieve permission adjustments
 
-![User Management](../../screenshots/user-m.png)
+![User Management](../../screenshots/user-m.webp)
 
 ## Account Security
 

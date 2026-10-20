@@ -44,8 +44,9 @@
 | `db.sqlite.persistence.hostPath.enabled`  | 是否使用 hostPath 存储                | `false`             |
 | `db.sqlite.persistence.hostPath.path`     | hostPath 路径                         | `/path/to/host/dir` |
 | `db.sqlite.persistence.hostPath.type`     | hostPath 类型                         | `DirectoryOrCreate` |
-| `db.sqlite.persistence.mountPath`         | 容器内的挂载路径                      | `/data`             |
+| `db.sqlite.persistence.mountPath`         | 容器内的挂载路径                      | `/home/aerolink/db` |
 | `db.sqlite.persistence.filename`          | 挂载路径内的 sqlite 文件名            | `aerolink.db`       |
+| `db.sqlite.options`                       | 追加到 SQLite DSN 的连接选项，只支持纯 Go 驱动的 `_pragma=...` 形式（mattn 风格的 `_journal_mode=...` 会被静默忽略） | `""` |
 
 ## 环境变量
 
@@ -56,6 +57,33 @@
 ## 外部请求
 
 鸢联 AeroLink 不向外发任何请求：没有更新检查，也没有数据上报。实例只访问所在集群的 API Server（以及你在界面上添加的其它集群）与配置的数据库；`/api/v1/version` 返回的也只是本地构建信息。
+
+## 运行与运维
+
+以下参数注入对应的环境变量，语义与[环境变量](./env.md)一致。
+
+| 参数                    | 描述                                                                                                                                                                                     | 默认值                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `logFile`               | klog（系统日志）落盘路径。设置后系统日志只写文件、不再写 stderr，便于采集工具收集；置空则输出到 stderr（`kubectl logs` 能直接看到）。目录不存在时会尝试创建，写不进去只告警并回落 stderr。 | `/home/aerolink/data/aerolink.log`     |
+| `podMetricsInterval`    | Pod 列表页实时推送里「用量（CPU / 内存数字）」的刷新间隔（秒）。留空为默认 `15`。                                                                                                         | `""`                                   |
+| `maxWatchPerUser`       | 单个用户在每个集群上允许并发持有的资源 watch（SSE）连接数。留空为默认 `8`；超限的新连接返回 `429`，前端自动降级为轮询。`0` 表示不限制（仅建议临时排查用）。                                 | `""`                                   |
+| `clusterProbeInterval`  | 主动探活各集群 API server 的间隔（秒）。留空为默认 `15`；`0` 关闭探活。                                                                                                                   | `""`                                   |
+| `clusterStaleAfter`     | 判定「集群数据可能已过期」的阈值（秒）。留空为默认 `45`（探活间隔的 3 倍）；`0` 只保留「从未连上过」与 watch 报错两种判据。                                                                 | `""`                                   |
+
+## 审计与归档
+
+审计日志的**落地方式**（`database` 默认、`parquet`、`elasticsearch`、`victorialogs`、`openobserve`，五选一互斥）由**启动时**决定——写 `config.yaml` 的 `auditSink` 或环境变量 `AEROLINK_AUDIT_SINK`，管理页面只读；多副本部署时每份副本都要写同一个值，否则记录会散到不同存储里。
+
+| 参数                                                              | 描述                                                                                                                                                                                                                                                                                                 | 默认值                        |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `auditArchiveDir`                                                 | 本地归档目录（注入 `AEROLINK_AUDIT_ARCHIVE_DIR`）。只作启动兜底：生效值在「日志审计 → 审计设置 → 归档」里配置，**数据库里保存的本地目录优先于本项**。`auditSink: parquet` 时它是唯一落点；`replicaCount > 1` 且 parquet 时必须是共享卷（RWX PVC / NFS），否则每份副本只写自己产生的记录、检索读不全。 | `/home/aerolink/data/archive` |
+| `duckdbExtensionDir`                                              | DuckDB（parquet 检索）安装扩展的目录（注入 `AEROLINK_DUCKDB_EXTENSION_DIR`）。留空时用进程可写的临时目录：DuckDB 默认装到 `~/.duckdb`，`HOME` 不可写时 `INSTALL httpfs` 会失败，导致查 S3 上的归档不可用（本地 parquet 检索不受影响）。离线环境可预置 httpfs 扩展并把本项指向它。               | `""`                          |
+| `auditPersistence.enabled`                                        | 为归档 parquet 与 klog 日志挂持久化卷（不挂则 Pod 重建即丢，生产建议开启）。                                                                                                                                                                                                                          | `false`                       |
+| `auditPersistence.mountPath`                                      | 持久化卷的挂载点。不要挂到 `/home/aerolink` 本身，否则会盖掉家目录里的二进制。                                                                                                                                                                                                                        | `/home/aerolink/data`         |
+| `auditPersistence.pvc.enabled` / `auditPersistence.pvc.existingClaim` | 新建 / 使用已有的 PVC（留空回退到 `hostPath`，再回退到 `emptyDir`）。多副本必须用 RWX 共享卷，不能用 `hostPath` / `emptyDir`。                                                                                                                                                                        | `false` / `""`                |
+| `auditPersistence.hostPath.enabled` / `.path` / `.type`           | 使用 hostPath 落盘（仅适合单副本）。                                                                                                                                                                                                                                                                  | `false` / `/home/aerolink/data` / `DirectoryOrCreate` |
+
+`auditSink` 的取值与各自的前置条件（不满足会拒绝启动）见[配置文件](./config-file.md)与[环境变量](./env.md)。
 
 ## 应用配置
 
@@ -141,6 +169,42 @@ ingress:
       paths:
         - path: /
           pathType: ImplementationSpecific
+```
+
+## Gateway API
+
+用 Gateway / HTTPRoute 代替 Ingress 对外暴露（两者可并存，按需选一种）。集群需已安装 Gateway API CRD。
+
+| 参数                 | 描述                                                                                              | 默认值                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `gateway.enabled`    | 是否创建 Gateway API 资源                                                                         | `false`                                                         |
+| `gateway.className`  | GatewayClass 名称，必须已存在于集群中（`istio`、`cilium`、`nginx`、`envoy-gateway` 等）            | `""`                                                            |
+| `gateway.create`     | `true` 创建新的 Gateway，`false` 引用已有的 Gateway                                                | `false`                                                         |
+| `gateway.name`       | Gateway 名称（创建或引用时都会用到）                                                              | `""`                                                            |
+| `gateway.namespace`  | 已有 Gateway 的命名空间，仅在 `create=false` 时使用；不填默认为 release 所在命名空间                | `""`                                                            |
+| `gateway.annotations`| Gateway 的注解，仅在 `create=true` 时使用                                                          | `{}`                                                            |
+| `gateway.listeners`  | Gateway 的 listener 配置（名称、端口、协议、hostname、TLS 等），仅在 `create=true` 时使用           | 一个 `http` / `80` 的 HTTP listener                             |
+| `gateway.httpRoutes` | HTTPRoute 列表，每条含 `name`、`annotations`、`hostnames` 与 `rules`（`matches`、`timeouts` 等）   | 一条匹配 `/` 的 `PathPrefix` 路由，`request` 超时 `120s`         |
+
+示例（引用已有 Gateway，并按主机名加一条路由）：
+
+```yaml
+gateway:
+  enabled: true
+  create: false
+  name: shared-gateway
+  className: nginx
+  httpRoutes:
+    - name: aerolink
+      hostnames:
+        - aerolink.gogdev.cn
+      rules:
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /
+          timeouts:
+            request: "120s"
 ```
 
 ## 资源限制
