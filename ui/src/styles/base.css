@@ -141,6 +141,14 @@ html {
      这条声明整条失效，首帧会先按 16px 排一遍再跳回缩放后的字号。 */
   font-size: var(--app-display-scale, 95%);
   overscroll-behavior: none;
+  /* 明暗主题只换 CSS 变量，浏览器并不知道当前是暗色：不声明 color-scheme 时，
+     原生滚动条、日期/下拉/复选控件与 Firefox 的默认输入底色会一直是亮色。
+     类名由 theme-provider 写在 <html> 上（只会是 light / dark 之一）。 */
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
