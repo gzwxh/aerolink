@@ -97,7 +97,10 @@
   --secondary-foreground: #f4f7f6;
   --muted: #12211d; /* --ink-1（kkRepo 无暗色契约；取深色系里已作表面用的 --ink-1。原先用 --ink-2 #24322e 与卡片 #2a2f31 对比度只有 1.01，表头带看不出来）*/
   --muted-foreground: #b4bfba; /* --topbar-muted */
-  --accent: #2a2f31; /* --topbar-line */
+  /* 暗色的 brand-tint（kkRepo 无暗色契约，按浅色侧 --accent=--brand-tint 的同一角色
+     派生）：原取 --topbar-line #2a2f31，与 --card 同色，卡片内的 hover / 选中填充
+     完全看不出变化。取值受 --accent-foreground(#2fbfa4) 的 4.5 约束（对卡片 1.21:1）。 */
+  --accent: #1f4038;
   --accent-foreground: #2fbfa4; /* --brand-bright */
   --destructive: #eec2b6; /* --danger-line */
   --destructive-foreground: #12211d; /* --ink-1 */

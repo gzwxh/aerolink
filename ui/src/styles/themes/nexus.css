@@ -126,7 +126,7 @@
   --chart-2: #bfd4e6; /* --info-line */
   --chart-3: #b8ddc7; /* --success-line */
   --chart-4: #ead09e; /* --warning-line */
-  --chart-5: #2f6fa7; /* --accent */
+  --chart-5: #3d7cb5;  /* 原值对卡片 2.54，提亮至 3:1 */
   --sidebar: #2b2f34; /* 与 --card 同档，暗底上的侧边栏 */
   --sidebar-foreground: #eceeef;
   --sidebar-primary: #5cb98a;
