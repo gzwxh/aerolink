@@ -39,6 +39,11 @@
 - 新增或重命名资源面时，同步 `pkg/common/resource.go`、`pkg/resources/handler.go`、
   `ui/src/lib/resource-catalog.ts`，以及相关路由/页面/组件。
 - 需要持久化的敏感值一律用 `model.SecretString` 存储；任何情况下都不要把密钥写进日志。
+  它的透明加解密**只对具名列生效**（由 GORM 走 `Value()`/`Scan()`，清单见
+  `pkg/model/encryption_key.go` 的 `encryptedColumns`）；嵌进 `JSONField`/`LongText` 等 JSON blob 的
+  `SecretString` 只会被 `json.Marshal` 成普通字符串，**库里仍是明文**（如 `audit_settings.data` 里
+  Kafka / S3 / ES / VictoriaLogs 的口令）。这类值要么拆成独立列纳入 `encryptedColumns`，
+  要么在存取两端显式加解密；读出口一律掩码，不要回显原值。
 - 改动运行时环境变量时，同时检查 `pkg/common/common.go` 与 `charts/aerolink` 下对应的
   values/模板。由 `internal/config.go` 管理的设置在界面上必须保持只读。
 - 提交信息用中文描述，但保留 Conventional Commits 的英文类型前缀（`feat` / `fix` /
