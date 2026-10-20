@@ -50,10 +50,33 @@ function escapeMarkdown(text: string): string {
 }
 
 /**
+ * 链接标记 `[文字](地址)`。
+ *
+ * 负向后顾与其它行内标记一致：`\[文字\](地址)`（用户敲的字面方括号）不算链接。
+ * 文字部分允许出现转义字符（`\\.`），否则带 `\]` 的标题会匹配不上。
+ */
+const LINK_MARKUP_RE = /(?<!\\)\[((?:\\.|[^\]\\])*)\]\(([^()\s]+)\)/g
+
+/**
+ * 只放行 http(s) 与 mailto，与 react-markdown 默认 `urlTransform` 同口径。
+ *
+ * 编辑器是把标记拼成 innerHTML 的，`javascript:` / `data:` 一律不生成 `<a>`：
+ * 这类地址在顶栏会被 react-markdown 清空，与编辑区显示不一致，不如在写入时就不认。
+ */
+const ALLOWED_LINK_URL_RE = /^(https?:|mailto:)/i
+
+export function isAllowedLinkUrl(url: string): boolean {
+  return ALLOWED_LINK_URL_RE.test(url.trim())
+}
+
+/**
  * 行内标记 → HTML。文本先转义，插入的标签都是这里自己拼的。
  *
  * 标记匹配带**负向后顾** `(?<!\\)`：`\*\*`（用户敲的字面星号）不会被当成加粗。
  * 最后一步把 `\X` 还原成字面量 X —— 此时标签已经拼好，且标签里不含这些字符，不会误伤。
+ *
+ * 链接放在最后处理：一是标签文字里的 `**`/`` ` `` 能先按行内规则铺开，二是地址部分
+ * 一旦并进 `href` 就不会再被后面的替换改形。
  */
 function inlineMarkupToHtml(text: string): string {
   return escapeHtml(text)
@@ -62,6 +85,12 @@ function inlineMarkupToHtml(text: string): string {
     .replace(/(?<!\\)~~([^~]+)~~/g, '<del>$1</del>')
     .replace(/(?<!\\)`([^`]+)`/g, '<code>$1</code>')
     .replace(/(?<!\\)\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(LINK_MARKUP_RE, (whole, label: string, url: string) =>
+      // 引号也要挡掉：地址是直接拼进属性值的。
+      isAllowedLinkUrl(url)
+        ? `<a href="${url.replace(/"/g, '%22')}">${label}</a>`
+        : whole
+    )
     .replace(MARKDOWN_ESCAPE_RE, '$1')
 }
 
@@ -90,6 +119,21 @@ export function announcementMarkupToHtml(content: string): string {
 function colorOf(element: Element): string | null {
   const value = element.getAttribute(ANNOUNCEMENT_COLOR_ATTRIBUTE)
   return value && COLOR_NAMES.has(value) ? value : null
+}
+
+/**
+ * 地址里会破坏 `[文字](地址)` 解析的字符转成百分号编码。
+ *
+ * `(`、`)` 会让配对的括号提前结束；`|` 会被 Markdown 当表格分隔（且它本身也是被转义的
+ * 元字符）；空白根本进不了标记。都是编码而不是丢弃，地址还原后仍然可用。
+ */
+function encodeLinkUrl(href: string): string {
+  return href
+    .trim()
+    .replace(/\(/g, '%28')
+    .replace(/\)/g, '%29')
+    .replace(/\|/g, '%7C')
+    .replace(/\s/g, '%20')
 }
 
 function serializeChildren(node: Node): string {
@@ -121,6 +165,13 @@ function serializeNode(node: Node): string {
       return `~~${inner()}~~`
     case 'code':
       return `\`${inner()}\``
+    case 'a': {
+      const href = element.getAttribute('href') ?? ''
+      // 不允许的协议（javascript:、空地址……）只保留文字：顶栏反正不会渲染这个链接。
+      return isAllowedLinkUrl(href)
+        ? `[${inner()}](${encodeLinkUrl(href)})`
+        : inner()
+    }
     // 回车在 contenteditable 里生成的是 div（部分浏览器是 p）：当作换行。
     case 'div':
     case 'p':

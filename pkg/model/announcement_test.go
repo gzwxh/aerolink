@@ -63,3 +63,54 @@ func TestMigrateAnnouncementScrollBackfill(t *testing.T) {
 		t.Fatalf("scroll = true, want false（列已存在时不该回填）")
 	}
 }
+
+// 三个滚动参数是加列上来的（速度/停留/显示时长），存量公告必须落到「升级前写死的常量」上
+// ——60px/s、停留 2 秒、时长自动——否则一次升级就会把所有老公告改成 0 秒一轮。
+//
+// 用「先建表、写一条、再删列、再 AutoMigrate」复现升级前的库形态，确认 GORM 的
+// default 标签在补列时真的给存量行填了默认值，而不是留下 0。
+func TestAutoMigrateAnnouncementScrollParamsDefaults(t *testing.T) {
+	originalDB := DB
+	// 共享缓存的命名内存库：与同目录其他迁移测试同一套写法。
+	db, err := gorm.Open(sqlite.Open("file:announcement-scroll-params?mode=memory&cache=shared"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("opening test database: %v", err)
+	}
+	DB = db
+	t.Cleanup(func() { DB = originalDB })
+
+	if err := DB.AutoMigrate(&Announcement{}); err != nil {
+		t.Fatalf("migrating test database: %v", err)
+	}
+	legacy := Announcement{Title: "老公告", Content: "x", Enabled: true}
+	if err := DB.Create(&legacy).Error; err != nil {
+		t.Fatalf("creating legacy announcement: %v", err)
+	}
+	// 回到「升级前」的形态：这三列还不存在。
+	for _, column := range []string{"ScrollSpeed", "PauseSeconds", "DisplaySeconds"} {
+		if err := DB.Migrator().DropColumn(&Announcement{}, column); err != nil {
+			t.Fatalf("dropping column %s: %v", column, err)
+		}
+	}
+
+	if err := DB.AutoMigrate(&Announcement{}); err != nil {
+		t.Fatalf("re-migrating test database: %v", err)
+	}
+
+	var reloaded Announcement
+	if err := DB.First(&reloaded, legacy.ID).Error; err != nil {
+		t.Fatalf("reloading announcement: %v", err)
+	}
+	if reloaded.ScrollSpeed != AnnouncementDefaultScrollSpeed {
+		t.Fatalf("scrollSpeed = %d, want %d（升级后老公告的观感不能变）",
+			reloaded.ScrollSpeed, AnnouncementDefaultScrollSpeed)
+	}
+	if reloaded.PauseSeconds != AnnouncementDefaultPauseSeconds {
+		t.Fatalf("pauseSeconds = %d, want %d", reloaded.PauseSeconds, AnnouncementDefaultPauseSeconds)
+	}
+	if reloaded.DisplaySeconds != 0 {
+		t.Fatalf("displaySeconds = %d, want 0（自动）", reloaded.DisplaySeconds)
+	}
+}

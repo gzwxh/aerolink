@@ -176,7 +176,7 @@ func TestCreateAnnouncementValidatesInput(t *testing.T) {
 		body    map[string]any
 		wantMsg string
 	}{
-		{"标题为空", map[string]any{"title": "   ", "content": "x"}, "请填写标题"},
+		{"标题与内容都空", map[string]any{"title": "  ", "content": "  "}, "标题和内容不能同时为空"},
 		{"内容为空", map[string]any{"title": "t", "content": "  "}, "请填写内容"},
 		{"标题过长", map[string]any{"title": strings.Repeat("字", 256), "content": "x"}, "标题过长"},
 		{"内容过长", map[string]any{"title": "t", "content": strings.Repeat("字", model.AnnouncementMaxContentLength+1)}, "内容过长"},
@@ -217,6 +217,38 @@ func TestCreateAnnouncementValidatesInput(t *testing.T) {
 	}
 	if created.CreatorID != 7 {
 		t.Fatalf("creatorId = %d, want 7", created.CreatorID)
+	}
+}
+
+// 标题是可选项：只写内容也要能发出去（横幅只展示内容，列表用内容片段顶上）。
+// 空白标题按「没填」处理，落库空串而不是一串空格。
+func TestCreateAnnouncementWithoutTitle(t *testing.T) {
+	setupAnnouncementTestDB(t)
+	r := newTestRouter(&model.User{Model: model.Model{ID: 7}, Username: "ops"})
+
+	for _, tc := range []struct {
+		name string
+		body map[string]any
+	}{
+		{"不带 title 字段", map[string]any{"content": "今晚停服", "enabled": true}},
+		{"title 是空白串", map[string]any{"title": "   ", "content": "今晚停服", "enabled": true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doJSON(t, r, http.MethodPost, "/items", tc.body)
+			if rec.Code != http.StatusCreated {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusCreated, rec.Body.String())
+			}
+			var created model.Announcement
+			if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+				t.Fatalf("decoding response: %v", err)
+			}
+			if created.Title != "" {
+				t.Fatalf("title = %q, want 空串", created.Title)
+			}
+			if created.Content != "今晚停服" {
+				t.Fatalf("content = %q, want 今晚停服", created.Content)
+			}
+		})
 	}
 }
 
@@ -261,6 +293,105 @@ func TestAnnouncementScrollConfigurable(t *testing.T) {
 	}
 	if stored.Scroll {
 		t.Fatalf("stored scroll = true, want false")
+	}
+}
+
+// 滚动速度 / 每轮停留 / 显示时长同样是可配置项：
+// 不带这三个字段时必须落回升级前写死的默认值（60px/s、停留 2 秒、时长自动），
+// 显式传值时要真的写进库（覆盖式 PUT 也要带上，否则一次行内改动就会把它们重置）。
+func TestAnnouncementScrollParamsConfigurable(t *testing.T) {
+	setupAnnouncementTestDB(t)
+	r := newTestRouter(&model.User{Model: model.Model{ID: 7}, Username: "ops"})
+
+	defaulted := doJSON(t, r, http.MethodPost, "/items", map[string]any{
+		"title": "默认参数", "content": "x", "enabled": true,
+	})
+	if defaulted.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body %s)", defaulted.Code, http.StatusCreated, defaulted.Body.String())
+	}
+	var first model.Announcement
+	if err := json.Unmarshal(defaulted.Body.Bytes(), &first); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if first.ScrollSpeed != model.AnnouncementDefaultScrollSpeed {
+		t.Fatalf("scrollSpeed = %d, want %d", first.ScrollSpeed, model.AnnouncementDefaultScrollSpeed)
+	}
+	if first.PauseSeconds != model.AnnouncementDefaultPauseSeconds {
+		t.Fatalf("pauseSeconds = %d, want %d", first.PauseSeconds, model.AnnouncementDefaultPauseSeconds)
+	}
+	if first.DisplaySeconds != 0 {
+		t.Fatalf("displaySeconds = %d, want 0（自动）", first.DisplaySeconds)
+	}
+
+	custom := doJSON(t, r, http.MethodPost, "/items", map[string]any{
+		"title": "自定义参数", "content": "x", "enabled": true,
+		"scrollMode": "paced", "scrollSpeed": 40, "pauseSeconds": 5, "displaySeconds": 30,
+	})
+	if custom.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body %s)", custom.Code, http.StatusCreated, custom.Body.String())
+	}
+	var second model.Announcement
+	if err := json.Unmarshal(custom.Body.Bytes(), &second); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	// 回读一遍：确认真的落库了，而不只是响应里对（GORM 的 default 标签会跳过零值）。
+	var stored model.Announcement
+	if err := model.DB.First(&stored, second.ID).Error; err != nil {
+		t.Fatalf("reloading announcement: %v", err)
+	}
+	if stored.ScrollSpeed != 40 || stored.PauseSeconds != 5 || stored.DisplaySeconds != 30 {
+		t.Fatalf("stored params = %d/%d/%d, want 40/5/30",
+			stored.ScrollSpeed, stored.PauseSeconds, stored.DisplaySeconds)
+	}
+
+	// 改成别的值：覆盖式 PUT 必须把三个参数一起写进去。
+	rec := doJSON(t, r, http.MethodPut, fmt.Sprintf("/items/%d", second.ID), map[string]any{
+		"title": "自定义参数", "content": "x", "enabled": true,
+		"scrollMode": "paced", "scrollSpeed": 120, "pauseSeconds": 1, "displaySeconds": 0,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if err := model.DB.First(&stored, second.ID).Error; err != nil {
+		t.Fatalf("reloading announcement: %v", err)
+	}
+	if stored.ScrollSpeed != 120 || stored.PauseSeconds != 1 || stored.DisplaySeconds != 0 {
+		t.Fatalf("stored params = %d/%d/%d, want 120/1/0",
+			stored.ScrollSpeed, stored.PauseSeconds, stored.DisplaySeconds)
+	}
+}
+
+// 越界一律显式报错，不做「悄悄夹到边界值」：管理员得知道自己填的值没被采纳。
+func TestAnnouncementScrollParamsValidation(t *testing.T) {
+	setupAnnouncementTestDB(t)
+	r := newTestRouter(&model.User{Model: model.Model{ID: 7}, Username: "ops"})
+
+	cases := []struct {
+		name    string
+		body    map[string]any
+		wantMsg string
+	}{
+		{"速度过慢", map[string]any{"scrollSpeed": model.AnnouncementScrollSpeedMin - 1}, "滚动速度需在"},
+		{"速度过快", map[string]any{"scrollSpeed": model.AnnouncementScrollSpeedMax + 1}, "滚动速度需在"},
+		{"停留为 0", map[string]any{"pauseSeconds": 0}, "每轮停留需在"},
+		{"停留过长", map[string]any{"pauseSeconds": model.AnnouncementPauseSecondsMax + 1}, "每轮停留需在"},
+		{"显示时长过短", map[string]any{"displaySeconds": model.AnnouncementDisplaySecondsMin - 1}, "显示时长需在"},
+		{"显示时长过长", map[string]any{"displaySeconds": model.AnnouncementDisplaySecondsMax + 1}, "显示时长需在"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := map[string]any{"title": "t", "content": "x", "enabled": true}
+			for key, value := range tc.body {
+				body[key] = value
+			}
+			rec := doJSON(t, r, http.MethodPost, "/items", body)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.wantMsg) {
+				t.Fatalf("body %s does not mention %q", rec.Body.String(), tc.wantMsg)
+			}
+		})
 	}
 }
 

@@ -67,6 +67,16 @@ describe('announcementMarkupToHtml', () => {
       '<strong>粗</strong> 与 **字面**'
     )
   })
+
+  it('链接标记铺成 a，不允许的协议保持原文', () => {
+    expect(announcementMarkupToHtml('[文档](https://example.com/a)')).toBe(
+      '<a href="https://example.com/a">文档</a>'
+    )
+    // 面板里贴进 javascript: 时不生成标签，编辑区与顶栏都不会把它当链接。
+    expect(announcementMarkupToHtml('[点我](javascript:alert)')).toBe(
+      '[点我](javascript:alert)'
+    )
+  })
 })
 
 describe('htmlToAnnouncementMarkup', () => {
@@ -102,6 +112,22 @@ describe('htmlToAnnouncementMarkup', () => {
     ).toBe('一')
   })
 
+  it('链接地址往返，括号与空格编码后仍可解析', () => {
+    expect(
+      htmlToAnnouncementMarkup(
+        parse('<a href="https://example.com/a b">文档</a>')
+      )
+    ).toBe('[文档](https://example.com/a%20b)')
+  })
+
+  // 不允许的协议只留文字：顶栏的 urlTransform 本来就会清空这类地址，
+  // 编辑器再把它写成链接标记只会「输入区是链接、线上不是」。
+  it('不允许的协议只保留文字', () => {
+    expect(
+      htmlToAnnouncementMarkup(parse('<a href="javascript:alert">点我</a>'))
+    ).toBe('点我')
+  })
+
   it('未登记的 data 颜色属性不会变成标记', () => {
     expect(
       htmlToAnnouncementMarkup(
@@ -127,11 +153,14 @@ describe('往返稳定', () => {
     '{warning}停服{/warning}\n第二行',
     '**加粗** 与 {success}绿色{/success} 混排',
     '`kubectl get pods` 会只读',
+    '[文档](https://example.com)',
     // 字面量（转义过的元字符）往返后不能变形，否则用户敲一次星号就多一个反斜杠。
     // 花括号必须**成对**转义：编辑器序列化会把 `{` 与 `}` 一起转义，`\{warning}` 这种
     // 只转义开括号的写法不是编辑器产出的形式，拿它当往返基准没有意义。
     '\\*\\*字面星号\\*\\*',
     '\\{warning\\}不是色标\\{/warning\\}',
+    // 方括号也是元字符：字面量不能被当成链接。
+    '\\[不是链接\\](https://example.com)',
   ]
   for (const markup of cases) {
     it(JSON.stringify(markup), () => {

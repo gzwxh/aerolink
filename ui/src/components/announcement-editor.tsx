@@ -7,13 +7,22 @@ import {
   type ClipboardEvent,
   type ReactNode,
 } from 'react'
-import { Bold, ChevronDown, Italic, Strikethrough } from 'lucide-react'
+import {
+  Bold,
+  ChevronDown,
+  Code,
+  Italic,
+  Link2,
+  RemoveFormatting,
+  Strikethrough,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
   ANNOUNCEMENT_COLOR_ATTRIBUTE,
   announcementMarkupToHtml,
   htmlToAnnouncementMarkup,
+  isAllowedLinkUrl,
 } from '@/lib/announcement-editor'
 import {
   ANNOUNCEMENT_COLOR_PALETTE,
@@ -22,6 +31,8 @@ import {
   type AnnouncementColor,
 } from '@/lib/announcement-markup'
 import { cn } from '@/lib/utils'
+
+import { AnnouncementContent } from './announcement-content'
 
 /**
  * 公告正文的编辑器：所见即所得。
@@ -35,7 +46,19 @@ import { cn } from '@/lib/utils'
  * 且可单测——编辑器里能出现的标签只有下面这几个。
  */
 
-type InlineFormat = 'strong' | 'em' | 'del'
+type InlineFormat = 'strong' | 'em' | 'del' | 'code'
+
+/**
+ * 编辑模式。
+ *
+ * `rich` 是所见即所得（元字符按字面量转义，敲 `**` 显示 `**`）；`markdown` 是源码模式，
+ * 直接写/粘贴 Markdown 并按最终效果预览。两者互斥而不是「边打边解释」：后者会让输入区
+ * 和展示侧对不上（见 plans/2026-09-21-顶部通知栏.md §12.13、plans/2026-10-20-…）。
+ */
+type EditorMode = 'rich' | 'markdown'
+
+/** 「清除格式」要拆掉的行内包装（含颜色段与链接，文字本身保留）。 */
+const FORMAT_SELECTOR = `strong, em, del, code, a, [${ANNOUNCEMENT_COLOR_ATTRIBUTE}]`
 
 /** 从选区起点向上找第一个满足条件的元素（不超过编辑器根节点）。 */
 function findAncestor(
@@ -88,28 +111,40 @@ export function AnnouncementEditor({
   const [activeColor, setActiveColor] = useState<AnnouncementColor | null>(null)
   const paletteRef = useRef<HTMLDivElement>(null)
   const colorTriggerRef = useRef<HTMLButtonElement>(null)
+  // 编辑模式只在本次编辑会话里有效（不落库）：打开哪条公告都用默认的所见即所得。
+  const [mode, setMode] = useState<EditorMode>('rich')
+  // 链接面板：展开那一刻把选区存下来——面板里的输入框会抢走焦点，之后再取就没了。
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkHref, setLinkHref] = useState('')
+  const linkPanelRef = useRef<HTMLDivElement>(null)
+  const linkTriggerRef = useRef<HTMLButtonElement>(null)
+  const linkRangeRef = useRef<Range | null>(null)
 
-  // 点面板外面 / 按 Esc 收起取色板。
+  // 点面板外面 / 按 Esc 收起取色板与链接面板。
   //
   // 用 pointerdown 而不是 click：click 要等到 mouseup 才触发，中间这段时间选区已经变了，
   // 会出现「面板还开着、颜色却没了」。Esc 是弹层的基本预期，一并处理。
   useEffect(() => {
-    if (!paletteOpen) {
+    if (!paletteOpen && !linkOpen) {
       return
     }
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node
       if (
         paletteRef.current?.contains(target) ||
-        colorTriggerRef.current?.contains(target)
+        colorTriggerRef.current?.contains(target) ||
+        linkPanelRef.current?.contains(target) ||
+        linkTriggerRef.current?.contains(target)
       ) {
         return
       }
       setPaletteOpen(false)
+      setLinkOpen(false)
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setPaletteOpen(false)
+        setLinkOpen(false)
       }
     }
     document.addEventListener('pointerdown', handlePointerDown)
@@ -118,17 +153,28 @@ export function AnnouncementEditor({
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [paletteOpen])
+  }, [paletteOpen, linkOpen])
 
-  // 首帧只铺一次内容，之后这棵子树由本组件自己管：不能交给 React 渲染
+  // 首帧与「切回所见即所得」时铺内容，之后这棵子树由本组件自己管：不能交给 React 渲染
   // （用 dangerouslySetInnerHTML 时，父组件每次重渲染都会把它重置回初值，
   // 表现为「点加粗没反应」）。
+  //
+  // 依赖 `mode` 而不是空数组：模式切换会重挂载输入区，但组件本身没有卸载，空数组的
+  // effect 不会再跑，输入区会是空白。这里读 `value` 而不是 `lastValueRef`——源码模式
+  // 里的改动没经过 emitChange，ref 停在切过去之前的值。
   useLayoutEffect(() => {
-    const node = editorRef.current
-    if (node) {
-      node.innerHTML = announcementMarkupToHtml(lastValueRef.current)
+    if (mode !== 'rich') {
+      return
     }
-  }, [])
+    const node = editorRef.current
+    if (!node) {
+      return
+    }
+    node.innerHTML = announcementMarkupToHtml(value)
+    lastValueRef.current = value
+    // 只在换模式时重铺；value 的后续变化交给下面那个 effect（每敲一个字重设 innerHTML 会丢光标）。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
 
   useEffect(() => {
     const node = editorRef.current
@@ -269,6 +315,91 @@ export function AnnouncementEditor({
     setPaletteOpen(false)
   }
 
+  /** 切换编辑模式，顺手收起两个浮层（它们都锚在所见即所得工具栏上）。 */
+  const switchMode = (next: EditorMode) => {
+    if (next === mode) {
+      return
+    }
+    setPaletteOpen(false)
+    setLinkOpen(false)
+    setMode(next)
+  }
+
+  /** 展开链接面板，并把当前选区存下来（面板里的输入框会抢焦点）。 */
+  const openLinkPanel = () => {
+    const node = editorRef.current
+    const selection = window.getSelection()
+    if (!node || !selection || selection.rangeCount === 0) {
+      return
+    }
+    const range = selection.getRangeAt(0)
+    const existing = findAncestor(
+      range.startContainer,
+      node,
+      (element) => element.tagName.toLowerCase() === 'a'
+    )
+    linkRangeRef.current = range.cloneRange()
+    // 光标本来就在链接里时预填地址：再点确定是改地址，而不是套一层新链接。
+    setLinkHref(existing?.getAttribute('href') ?? '')
+    setLinkOpen(true)
+  }
+
+  /** 把选区包成 `<a>`；选区为空（只点了光标）时用地址本身当文字。 */
+  const applyLink = () => {
+    const node = editorRef.current
+    const range = linkRangeRef.current
+    const href = linkHref.trim()
+    if (!node || !range || !isAllowedLinkUrl(href)) {
+      return
+    }
+    const existing = findAncestor(
+      range.startContainer,
+      node,
+      (element) => element.tagName.toLowerCase() === 'a'
+    )
+    if (existing) {
+      existing.setAttribute('href', href)
+    } else {
+      const link = document.createElement('a')
+      link.setAttribute('href', href)
+      link.setAttribute('target', '_blank')
+      link.setAttribute('rel', 'noopener noreferrer')
+      link.className = 'app-link'
+      const contents = range.extractContents()
+      if (contents.textContent?.trim()) {
+        link.appendChild(contents)
+      } else {
+        link.appendChild(document.createTextNode(href))
+      }
+      range.insertNode(link)
+    }
+    emitChange()
+    setLinkOpen(false)
+    setLinkHref('')
+    linkRangeRef.current = null
+  }
+
+  /** 摘掉选区里的所有行内格式（加粗/斜体/删除线/代码/颜色/链接），文字保留。 */
+  const clearFormat = () => {
+    const node = editorRef.current
+    const selection = window.getSelection()
+    if (!node || !selection || selection.rangeCount === 0) {
+      return
+    }
+    const range = selection.getRangeAt(0)
+    const targets = Array.from(node.querySelectorAll(FORMAT_SELECTOR)).filter(
+      (element) => range.intersectsNode(element)
+    )
+    if (targets.length === 0) {
+      return
+    }
+    // 嵌套时外层解包会把内层带到上层，`unwrap` 对已脱离文档的节点是空操作，因此无需排序。
+    for (const element of targets) {
+      unwrap(element)
+    }
+    emitChange()
+  }
+
   // 粘贴走纯文本：否则会把表格、字体、样式一并带进来（序列化时虽会丢掉，
   // 但编辑器里会先显示成一段无法解释的内容）。
   const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
@@ -312,145 +443,354 @@ export function AnnouncementEditor({
     </button>
   )
 
+  // 模式切换放在工具栏上面一行：它决定下面出现哪一套输入界面，不属于「格式」按钮。
+  const modeToggle = (
+    <div
+      role="group"
+      aria-label={t('notifications.announcements.toolbar.mode', '编辑模式')}
+      className="flex w-max items-center gap-0.5 rounded-md border border-input p-0.5"
+    >
+      {(
+        [
+          [
+            'rich',
+            t('notifications.announcements.toolbar.richText', '所见即所得'),
+          ],
+          [
+            'markdown',
+            t('notifications.announcements.toolbar.markdown', 'Markdown'),
+          ],
+        ] as const
+      ).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          disabled={disabled}
+          onClick={() => switchMode(value)}
+          aria-pressed={mode === value}
+          className={cn(
+            'rounded-sm px-2 py-0.5 text-xs transition-colors disabled:opacity-50',
+            mode === value
+              ? 'bg-accent text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+          data-editor-mode={value}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <div className="space-y-1.5">
-      <div
-        role="toolbar"
-        aria-label={t('notifications.announcements.toolbar.label', '格式')}
-        className="relative flex items-center gap-0.5 rounded-md border border-input px-1 py-0.5"
-      >
-        {toolbarButton(
-          t('notifications.announcements.toolbar.bold', '加粗'),
-          <Bold className="size-3.5" />,
-          'strong'
-        )}
-
-        {/* 颜色收进「A + 色线下拉」再弹色板，而不是把 7 个彩色 A 平铺在工具栏上：
-            平铺会把工具栏撑得很长，也看不出色相顺序；色板里还能标出当前色与「默认颜色」。 */}
-        <div className="relative">
-          <button
-            ref={colorTriggerRef}
-            type="button"
-            disabled={disabled}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              if (paletteOpen) {
-                setPaletteOpen(false)
-                return
-              }
-              // 展开的那一刻读选区：此时还没有任何操作破坏它。
-              setActiveColor(colorAtSelection())
-              setPaletteOpen(true)
-            }}
-            aria-label={t(
-              'notifications.announcements.toolbar.color',
-              '文字颜色'
-            )}
-            aria-expanded={paletteOpen}
-            title={t('notifications.announcements.toolbar.color', '文字颜色')}
-            className="flex h-7 items-center gap-0.5 rounded-sm px-1.5 transition-colors hover:bg-accent disabled:opacity-50"
-            data-color-trigger
+      {modeToggle}
+      {mode === 'rich' ? (
+        // 两套界面靠 key 区分：不加的话 React 会把「输入区 div」和「预览 div」当成同一个
+        // 节点复用，切回所见即所得时输入区里还留着预览的 DOM（或者反过来）。
+        <div key="rich" className="space-y-1.5">
+          <div
+            role="toolbar"
+            aria-label={t('notifications.announcements.toolbar.label', '格式')}
+            className="relative flex items-center gap-0.5 rounded-md border border-input px-1 py-0.5"
           >
-            {/* 常用文字处理器里的「A + 色线」：A 下面那条线就是当前颜色。 */}
-            <span className="relative text-sm leading-none font-semibold">
-              A
-              <span
-                aria-hidden
-                className={cn(
-                  'absolute inset-x-0 -bottom-1 h-[2px] rounded-full',
-                  activeColor
-                    ? ANNOUNCEMENT_COLOR_SWATCHES[activeColor]
-                    : 'bg-foreground'
-                )}
-              />
-            </span>
-            <ChevronDown className="size-3 text-muted-foreground" />
-          </button>
+            {toolbarButton(
+              t('notifications.announcements.toolbar.bold', '加粗'),
+              <Bold className="size-3.5" />,
+              'strong'
+            )}
 
-          {paletteOpen ? (
-            <div
-              ref={paletteRef}
-              role="group"
-              aria-label={t(
-                'notifications.announcements.toolbar.colorPalette',
-                '选择颜色'
-              )}
-              className="absolute top-full left-0 z-50 mt-1 w-max rounded-md border bg-popover p-2 shadow-md"
-            >
-              <div className="grid grid-cols-4 gap-1">
-                {ANNOUNCEMENT_COLOR_PALETTE.map((name) => (
+            {/* 颜色收进「A + 色线下拉」再弹色板，而不是把 7 个彩色 A 平铺在工具栏上：
+            平铺会把工具栏撑得很长，也看不出色相顺序；色板里还能标出当前色与「默认颜色」。 */}
+            <div className="relative">
+              <button
+                ref={colorTriggerRef}
+                type="button"
+                disabled={disabled}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  if (paletteOpen) {
+                    setPaletteOpen(false)
+                    return
+                  }
+                  // 展开的那一刻读选区：此时还没有任何操作破坏它。
+                  setActiveColor(colorAtSelection())
+                  setPaletteOpen(true)
+                }}
+                aria-label={t(
+                  'notifications.announcements.toolbar.color',
+                  '文字颜色'
+                )}
+                aria-expanded={paletteOpen}
+                title={t(
+                  'notifications.announcements.toolbar.color',
+                  '文字颜色'
+                )}
+                className="flex h-7 items-center gap-0.5 rounded-sm px-1.5 transition-colors hover:bg-accent disabled:opacity-50"
+                data-color-trigger
+              >
+                {/* 常用文字处理器里的「A + 色线」：A 下面那条线就是当前颜色。 */}
+                <span className="relative text-sm leading-none font-semibold">
+                  A
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'absolute inset-x-0 -bottom-1 h-[2px] rounded-full',
+                      activeColor
+                        ? ANNOUNCEMENT_COLOR_SWATCHES[activeColor]
+                        : 'bg-foreground'
+                    )}
+                  />
+                </span>
+                <ChevronDown className="size-3 text-muted-foreground" />
+              </button>
+
+              {paletteOpen ? (
+                <div
+                  ref={paletteRef}
+                  role="group"
+                  aria-label={t(
+                    'notifications.announcements.toolbar.colorPalette',
+                    '选择颜色'
+                  )}
+                  className="absolute top-full left-0 z-50 mt-1 w-max rounded-md border bg-popover p-2 shadow-md"
+                >
+                  <div className="grid grid-cols-4 gap-1">
+                    {ANNOUNCEMENT_COLOR_PALETTE.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => pickColor(name)}
+                        aria-label={t(
+                          `notifications.announcements.colors.${name}`
+                        )}
+                        aria-pressed={activeColor === name}
+                        title={t(`notifications.announcements.colors.${name}`)}
+                        className={cn(
+                          'size-5 rounded-sm ring-offset-2 ring-offset-popover transition-shadow',
+                          ANNOUNCEMENT_COLOR_SWATCHES[name],
+                          activeColor === name && 'ring-2 ring-ring'
+                        )}
+                        data-swatch={name}
+                      />
+                    ))}
+                  </div>
+                  <div className="my-1.5 h-px bg-border" />
                   <button
-                    key={name}
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => pickColor(name)}
-                    aria-label={t(`notifications.announcements.colors.${name}`)}
-                    aria-pressed={activeColor === name}
-                    title={t(`notifications.announcements.colors.${name}`)}
-                    className={cn(
-                      'size-5 rounded-sm ring-offset-2 ring-offset-popover transition-shadow',
-                      ANNOUNCEMENT_COLOR_SWATCHES[name],
-                      activeColor === name && 'ring-2 ring-ring'
+                    onClick={() => pickColor(null)}
+                    aria-pressed={activeColor === null}
+                    className="flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5 text-xs transition-colors hover:bg-accent"
+                    data-swatch="default"
+                  >
+                    {/* 黑方块 = 不额外上色（跟随正文颜色，深浅色下自动反过来）。 */}
+                    <span
+                      aria-hidden
+                      className="size-4 rounded-sm bg-foreground"
+                    />
+                    {t(
+                      'notifications.announcements.toolbar.colorDefault',
+                      '默认颜色'
                     )}
-                    data-swatch={name}
-                  />
-                ))}
-              </div>
-              <div className="my-1.5 h-px bg-border" />
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => pickColor(null)}
-                aria-pressed={activeColor === null}
-                className="flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5 text-xs transition-colors hover:bg-accent"
-                data-swatch="default"
-              >
-                {/* 黑方块 = 不额外上色（跟随正文颜色，深浅色下自动反过来）。 */}
-                <span aria-hidden className="size-4 rounded-sm bg-foreground" />
-                {t(
-                  'notifications.announcements.toolbar.colorDefault',
-                  '默认颜色'
-                )}
-              </button>
+                  </button>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+
+            {toolbarButton(
+              t('notifications.announcements.toolbar.italic', '斜体'),
+              <Italic className="size-3.5" />,
+              'em'
+            )}
+            {toolbarButton(
+              t('notifications.announcements.toolbar.strikethrough', '删除线'),
+              <Strikethrough className="size-3.5" />,
+              'del'
+            )}
+            {toolbarButton(
+              t('notifications.announcements.toolbar.code', '行内代码'),
+              <Code className="size-3.5" />,
+              'code'
+            )}
+
+            {/* 链接和「清除格式」是即时动作，不像加粗那样点第二次取消，所以不用 toolbarButton。 */}
+            <div className="relative">
+              <button
+                ref={linkTriggerRef}
+                type="button"
+                disabled={disabled}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  if (linkOpen) {
+                    setLinkOpen(false)
+                    return
+                  }
+                  openLinkPanel()
+                }}
+                aria-label={t(
+                  'notifications.announcements.toolbar.link',
+                  '链接'
+                )}
+                aria-expanded={linkOpen}
+                title={t('notifications.announcements.toolbar.link', '链接')}
+                className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                data-link-trigger
+              >
+                <Link2 className="size-3.5" />
+              </button>
+
+              {linkOpen ? (
+                <div
+                  ref={linkPanelRef}
+                  role="group"
+                  aria-label={t(
+                    'notifications.announcements.toolbar.link',
+                    '链接'
+                  )}
+                  className="absolute top-full left-0 z-50 mt-1 w-64 rounded-md border bg-popover p-2 shadow-md"
+                >
+                  <label
+                    className="text-xs text-muted-foreground"
+                    htmlFor="announcement-link-url"
+                  >
+                    {t(
+                      'notifications.announcements.toolbar.linkUrl',
+                      '链接地址'
+                    )}
+                  </label>
+                  <input
+                    id="announcement-link-url"
+                    value={linkHref}
+                    autoFocus
+                    placeholder="https://"
+                    onChange={(event) => setLinkHref(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        applyLink()
+                      }
+                    }}
+                    className="mt-1 w-full rounded-sm border border-input bg-transparent px-2 py-1 text-sm outline-none focus-visible:border-ring"
+                    data-link-url
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t(
+                      'notifications.announcements.toolbar.linkHint',
+                      '只支持 http(s):// 与 mailto: 地址；没有选中文字时会把地址本身作为链接文字。'
+                    )}
+                  </p>
+                  <div className="mt-2 flex justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setLinkOpen(false)}
+                      className="rounded-sm px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent"
+                    >
+                      {t('common.actions.cancel', '取消')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isAllowedLinkUrl(linkHref)}
+                      onClick={applyLink}
+                      className="rounded-sm bg-primary px-2 py-1 text-xs text-primary-foreground transition-opacity disabled:opacity-50"
+                    >
+                      {t('common.actions.confirm', '确定')}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              disabled={disabled}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={clearFormat}
+              aria-label={t(
+                'notifications.announcements.toolbar.clear',
+                '清除格式'
+              )}
+              title={t('notifications.announcements.toolbar.clear', '清除格式')}
+              className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+              data-clear-format
+            >
+              <RemoveFormatting className="size-3.5" />
+            </button>
+          </div>
+
+          <div
+            id={id}
+            ref={editorRef}
+            role="textbox"
+            aria-multiline="true"
+            aria-labelledby={labelledBy}
+            contentEditable={!disabled}
+            suppressContentEditableWarning
+            onInput={emitChange}
+            onPaste={handlePaste}
+            onBlur={emitChange}
+            // 编辑区里的链接点了不能跳转：一次误点就会把整页带走，链接的打开留给预览和顶栏。
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest('a')) {
+                event.preventDefault()
+              }
+            }}
+            className={cn(
+              'min-h-28 rounded-md border border-input bg-transparent px-3 py-2 text-sm break-words whitespace-pre-wrap shadow-xs transition-[color,box-shadow] outline-none',
+              'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              disabled && 'cursor-not-allowed opacity-50'
+            )}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'notifications.announcements.toolbar.hint',
+              '选中文字后点上面的按钮即可加粗、斜体、改颜色、加链接或行内代码，「清除格式」会去掉选中的全部样式；输入区里直接看到效果。'
+            )}
+          </p>
         </div>
-
-        {toolbarButton(
-          t('notifications.announcements.toolbar.italic', '斜体'),
-          <Italic className="size-3.5" />,
-          'em'
-        )}
-        {toolbarButton(
-          t('notifications.announcements.toolbar.strikethrough', '删除线'),
-          <Strikethrough className="size-3.5" />,
-          'del'
-        )}
-      </div>
-
-      <div
-        id={id}
-        ref={editorRef}
-        role="textbox"
-        aria-multiline="true"
-        aria-labelledby={labelledBy}
-        contentEditable={!disabled}
-        suppressContentEditableWarning
-        onInput={emitChange}
-        onPaste={handlePaste}
-        onBlur={emitChange}
-        className={cn(
-          'min-h-28 rounded-md border border-input bg-transparent px-3 py-2 text-sm break-words whitespace-pre-wrap shadow-xs transition-[color,box-shadow] outline-none',
-          'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          disabled && 'cursor-not-allowed opacity-50'
-        )}
-      />
-      <p className="text-xs text-muted-foreground">
-        {t(
-          'notifications.announcements.toolbar.hint',
-          '选中文字后点上面的按钮即可加粗、斜体或改颜色，输入区里直接看到效果。'
-        )}
-      </p>
+      ) : (
+        <div key="markdown" className="space-y-1.5">
+          <textarea
+            id={id}
+            aria-labelledby={labelledBy}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            disabled={disabled}
+            spellCheck={false}
+            className={cn(
+              'min-h-28 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm break-words shadow-xs transition-[color,box-shadow] outline-none',
+              'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              disabled && 'cursor-not-allowed opacity-50'
+            )}
+            data-markdown-source
+          />
+          {/* 源码模式下预览是必需的：输入区里是标记本身，不再是最终效果。 */}
+          <div className="rounded-md border border-dashed px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              {t('notifications.announcements.toolbar.preview', '预览')}
+            </p>
+            <div className="text-sm break-words whitespace-pre-wrap">
+              {value.trim() ? (
+                <AnnouncementContent content={value} />
+              ) : (
+                <span className="text-muted-foreground">
+                  {t(
+                    'notifications.announcements.toolbar.previewEmpty',
+                    '上面写点什么，这里会显示顶栏里的效果。'
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'notifications.announcements.toolbar.markdownHint',
+              '源码模式按 Markdown 渲染：**加粗**、*斜体*、~~删除~~、`代码`、[链接](https://example.com)、# 标题、- 列表、> 引用。横幅只有一行，标题与列表会被压成一行显示。'
+            )}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

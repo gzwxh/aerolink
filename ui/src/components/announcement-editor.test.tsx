@@ -165,6 +165,58 @@ describe('AnnouncementEditor', () => {
     expect(screen.getByTestId('value')).toHaveTextContent('<b>带标签的</b>')
   })
 
+  it('选中文字加链接会包成 a 并回写链接标记', () => {
+    render(<Harness />)
+
+    const box = selectAllInEditor()
+    fireEvent.click(screen.getByRole('button', { name: '链接' }))
+    fireEvent.change(screen.getByLabelText('链接地址'), {
+      target: { value: 'https://example.com/ops' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '确定' }))
+
+    const link = box.querySelector('a')
+    expect(link?.textContent).toBe('今晚停服')
+    expect(link?.getAttribute('href')).toBe('https://example.com/ops')
+    expect(screen.getByTestId('value')).toHaveTextContent(
+      '[今晚停服](https://example.com/ops)'
+    )
+  })
+
+  it('清除格式摘掉加粗与颜色，文字保留', () => {
+    render(<Harness initial="**注意**{warning}停服{/warning}" />)
+
+    const box = selectAllInEditor()
+    fireEvent.click(screen.getByRole('button', { name: '清除格式' }))
+
+    expect(box.querySelector('strong')).toBeNull()
+    expect(box.querySelector('[data-announcement-color]')).toBeNull()
+    expect(box.textContent).toBe('注意停服')
+    expect(screen.getByTestId('value')).toHaveTextContent('注意停服')
+  })
+
+  // 源码模式是显式的第二套输入界面：不转义，切回来时再按标记铺 DOM。
+  it('Markdown 模式原文照写，切回所见即所得后按标记渲染', () => {
+    render(<Harness initial="**注意**" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Markdown' }))
+    const source = screen.getByRole('textbox')
+    expect(source.tagName).toBe('TEXTAREA')
+
+    fireEvent.change(source, { target: { value: '**更粗** 与 # 不是标题' } })
+
+    expect(screen.getByTestId('value')).toHaveTextContent(
+      '**更粗** 与 # 不是标题'
+    )
+    // 预览走顶栏那套渲染：星号已经变成加粗。
+    expect(screen.getByText('更粗').tagName).toBe('STRONG')
+
+    fireEvent.click(screen.getByRole('button', { name: '所见即所得' }))
+    expect(
+      screen.getByRole('textbox').querySelector('strong')?.textContent
+    ).toBe('更粗')
+  })
+
   it('只读时不可编辑且工具栏按钮禁用', () => {
     render(
       <AnnouncementEditor

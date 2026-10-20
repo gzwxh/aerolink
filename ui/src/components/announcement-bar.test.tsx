@@ -162,6 +162,57 @@ describe('AnnouncementBar', () => {
     expect(track.style.getPropertyValue('--announcement-duration')).toBe('20s')
   })
 
+  // 速度以前写死 60px/s，现在按公告自己配的算：1200 / 30 = 40s。
+  it('滚动速度按公告配置换算', () => {
+    stubWidths(1200, 400)
+    const { container } = renderBar([announcement({ scrollSpeed: 30 })])
+
+    const track = container.querySelector('.announcement-track') as HTMLElement
+    expect(track.style.getPropertyValue('--announcement-duration')).toBe('40s')
+  })
+
+  // 显示时长直接给出一轮的秒数，优先级高于「宽度 ÷ 速度」——
+  // 而且不套 15 秒下限，因为那是管理员明确填的值。
+  it('填了显示时长就按它走，不再按速度换算', () => {
+    stubWidths(1200, 400)
+    const { container } = renderBar([
+      announcement({ scrollSpeed: 30, displaySeconds: 45 }),
+    ])
+
+    const track = container.querySelector('.announcement-track') as HTMLElement
+    expect(track.style.getPropertyValue('--announcement-duration')).toBe('45s')
+  })
+
+  // 停留时长也可配：滚动段 30s + 停留 5s = 35s，停留点 30 / 35 ≈ 85.7143%。
+  it('每轮停留的时长按公告配置', () => {
+    stubWidths(1200, 400)
+    const { container } = renderBar([
+      announcement({
+        scrollMode: 'paced',
+        pauseSeconds: 5,
+        displaySeconds: 30,
+      }),
+    ])
+
+    const track = container.querySelector('.announcement-track') as HTMLElement
+    expect(track.style.getPropertyValue('--announcement-duration')).toBe('35s')
+    expect(track.style.getPropertyValue('--announcement-animation')).toBe(
+      'announcement-scroll-paced-857143'
+    )
+  })
+
+  // 一条轨道只有一个速度，取最慢的那条：快的那条盖掉慢的，长内容就读不完了。
+  it('多条公告的速度取最慢的一条', () => {
+    stubWidths(1200, 400)
+    const { container } = renderBar([
+      announcement({ id: 1, scrollSpeed: 120 }),
+      announcement({ id: 2, scrollSpeed: 30 }),
+    ])
+
+    const track = container.querySelector('.announcement-track') as HTMLElement
+    expect(track.style.getPropertyValue('--announcement-duration')).toBe('40s')
+  })
+
   // 多条公告串成一条轨道，没法一半一种方式：取「最强」的那种。
   it('多条里有一条要求停留时整条都按停留走', () => {
     stubWidths(1200, 400)
@@ -277,6 +328,16 @@ describe('AnnouncementBar', () => {
     expect(container.querySelector('.announcement-track')).toHaveClass(
       'is-scrolling'
     )
+  })
+
+  // 标题可选：没有标题时不能挂一个空加粗块 + 孤零零的全角冒号。
+  it('没有标题时只渲染内容', () => {
+    stubWidths(1200, 400)
+    const { container } = renderBar([announcement({ title: '' })])
+
+    expect(container.textContent).not.toContain('：')
+    expect(container.querySelector('.font-semibold')).toBeNull()
+    expect(container.textContent).toContain('今晚 22:00 停服')
   })
 
   // 拖动查看与滚不滚无关：内容很长时用户来不及看完，随时都要能拖。

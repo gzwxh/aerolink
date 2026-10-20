@@ -4,16 +4,49 @@ import type {
 } from '@/lib/api/announcement'
 
 /**
- * 「每轮之间停留」的停顿时长（秒）。
+ * 滚动参数（速度 / 每轮停留 / 显示时长）的默认值与允许区间。
  *
- * 固定 2 秒，**不随内容长短变化**：滚动段仍按内容宽度算（恒定 60px/s），走完停 2 秒
- * 再开始下一轮。用固定秒数而不是固定比例，是因为公告长短差别很大——比例制下长公告要
- * 停十几秒、短公告又几乎感觉不到，两头都不符合「看完喘口气」的预期。
+ * 默认值就是升级前写死在这里的常量：速度 60px/s、停留 2 秒、时长按内容宽度换算。
+ * 因此「公告没配过这些参数」与「升级前的观感」完全一致。
  *
- * 关键帧的停留点 = 滚动秒数 /（滚动秒数 + 停留秒数），所以必须在运行时按每一条实际宽度
- * 生成（见 pacedAnimationName）：CSS 的 keyframe 选择器不接受 var()。
+ * 后端（pkg/model/announcement.go）有同一套常量与区间，两边必须一起改。
  */
-export const ANNOUNCEMENT_SCROLL_PAUSE_SECONDS = 2
+export const ANNOUNCEMENT_DEFAULT_SCROLL_SPEED = 60
+export const ANNOUNCEMENT_SCROLL_SPEED_MIN = 10
+export const ANNOUNCEMENT_SCROLL_SPEED_MAX = 300
+export const ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS = 2
+export const ANNOUNCEMENT_PAUSE_SECONDS_MAX = 60
+export const ANNOUNCEMENT_DISPLAY_SECONDS_MIN = 3
+export const ANNOUNCEMENT_DISPLAY_SECONDS_MAX = 600
+
+/**
+ * 「显示时长」留空（= 自动）时，一轮至少走这么久。
+ *
+ * 按宽度与速度算出来的时长可能只有一两秒，短内容会一闪而过；这个下限保证
+ * 每轮都够看清。手动填了显示时长就以填的为准——那是管理员明确要求的。
+ */
+export const ANNOUNCEMENT_MIN_SCROLL_SECONDS = 15
+
+/**
+ * 一条公告的滚动参数（合并成轨道之前的口径）。
+ *
+ * displaySeconds 为 0 表示自动（按宽度与速度换算），不是「0 秒」。
+ */
+export interface AnnouncementScrollParams {
+  mode: AnnouncementScrollMode
+  /** 滚动速度（像素/秒）。 */
+  speed: number
+  /** 「每轮停留」的秒数，只在 mode = paced 时生效。 */
+  pauseSeconds: number
+  /** 一轮滚完的秒数；0 表示自动。 */
+  displaySeconds: number
+}
+
+/** 参数来源：老数据可能缺字段，所以全部可选。 */
+export type AnnouncementScrollSource = Pick<
+  Partial<Announcement>,
+  'scroll' | 'scrollMode' | 'scrollSpeed' | 'pauseSeconds' | 'displaySeconds'
+>
 
 /**
  * 取一条公告的滚动方式。
@@ -30,6 +63,36 @@ export function announcementScrollMode(
   return item.scroll === false ? 'none' : 'continuous'
 }
 
+/**
+ * 取一条公告的滚动参数，缺字段/非法值一律回落到默认值。
+ *
+ * 回落到默认值而不是报错：这些都是展示侧的参数，一条脏数据不该让整条通知栏消失。
+ */
+export function announcementScrollParams(
+  item: AnnouncementScrollSource
+): AnnouncementScrollParams {
+  const speed = item.scrollSpeed
+  const pauseSeconds = item.pauseSeconds
+  const displaySeconds = item.displaySeconds
+  return {
+    mode: announcementScrollMode(
+      item as Pick<Announcement, 'scroll' | 'scrollMode'>
+    ),
+    speed:
+      typeof speed === 'number' && speed > 0
+        ? speed
+        : ANNOUNCEMENT_DEFAULT_SCROLL_SPEED,
+    pauseSeconds:
+      typeof pauseSeconds === 'number' && pauseSeconds > 0
+        ? pauseSeconds
+        : ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS,
+    displaySeconds:
+      typeof displaySeconds === 'number' && displaySeconds > 0
+        ? displaySeconds
+        : 0,
+  }
+}
+
 const SCROLL_MODE_RANK: Record<AnnouncementScrollMode, number> = {
   none: 0,
   continuous: 1,
@@ -43,7 +106,7 @@ const SCROLL_MODE_RANK: Record<AnnouncementScrollMode, number> = {
  * 取舍口径与「级别取最高」、以及原先「任一条要求滚动就滚动」保持一致。
  */
 export function combinedScrollMode(
-  items: Array<Pick<Announcement, 'scroll' | 'scrollMode'>>
+  items: ReadonlyArray<Pick<Announcement, 'scroll' | 'scrollMode'>>
 ): AnnouncementScrollMode {
   let mode: AnnouncementScrollMode = 'none'
   for (const item of items) {
@@ -53,6 +116,53 @@ export function combinedScrollMode(
     }
   }
   return mode
+}
+
+/**
+ * 合并成整条轨道的那一套参数。
+ *
+ * 一条轨道只能有一个速度、一次停留、一个循环时长，所以逐项取「最保守」的那个：
+ * - 方式取最强（paced > continuous > none）；
+ * - 速度取**最慢**：快的那条盖掉慢的，长内容就来不及读了；
+ * - 每轮停留取**最长**、显示时长取**最长**：都是为了让内容更充分地被看到。
+ *
+ * 与「级别取最高」同一套思路：任何一条公告提出的要求都不会被另一条悄悄降级。
+ * 正因为会这样合并，管理界面必须把「被谁盖过」写出来，否则就成了用户反馈里的
+ * 「滚动方式选了不生效」。
+ */
+export function combinedScrollParams(
+  items: ReadonlyArray<AnnouncementScrollSource>
+): AnnouncementScrollParams {
+  // 默认值不能当作「第一条公告」参与比较：那样 60px/s 会盖掉管理员填的 100，
+  // 2 秒会盖掉他填的 1 秒，表现就是「设了不生效」。所以先遍历真实取值再合并。
+  const combined: AnnouncementScrollParams = {
+    mode: 'none',
+    speed: Number.MAX_SAFE_INTEGER,
+    pauseSeconds: 0,
+    displaySeconds: 0,
+  }
+  for (const item of items) {
+    const next = announcementScrollParams(item)
+    if (SCROLL_MODE_RANK[next.mode] > SCROLL_MODE_RANK[combined.mode]) {
+      combined.mode = next.mode
+    }
+    if (next.speed < combined.speed) {
+      combined.speed = next.speed
+    }
+    if (next.pauseSeconds > combined.pauseSeconds) {
+      combined.pauseSeconds = next.pauseSeconds
+    }
+    if (next.displaySeconds > combined.displaySeconds) {
+      combined.displaySeconds = next.displaySeconds
+    }
+  }
+  if (combined.speed === Number.MAX_SAFE_INTEGER) {
+    combined.speed = ANNOUNCEMENT_DEFAULT_SCROLL_SPEED
+  }
+  if (combined.pauseSeconds === 0) {
+    combined.pauseSeconds = ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS
+  }
+  return combined
 }
 
 /** 已注入的关键帧名：同一个比例只插一次 <style>，不随渲染次数堆积。 */
@@ -66,11 +176,12 @@ const injectedPacedKeyframes = new Set<string>()
  * 比例相同就复用同一份。组件把它交给 `--announcement-animation`
  * （见 styles/base.css 的 .announcement-track.is-scrolling）。
  *
- * 于是「每轮滚多久」由内容宽度决定（长短不一），「每轮停多久」固定 2 秒。
+ * 于是「每轮滚多久」由公告自己的显示时长或内容宽度决定，「每轮停多久」由公告自己的
+ * 「每轮停留」决定。
  */
 export function pacedAnimationName(
   scrollSeconds: number,
-  pauseSeconds = ANNOUNCEMENT_SCROLL_PAUSE_SECONDS
+  pauseSeconds = ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS
 ): string {
   const total = scrollSeconds + pauseSeconds
   // 保留 4 位小数：足够精确，又不会让关键帧里出现一长串浮点尾巴。

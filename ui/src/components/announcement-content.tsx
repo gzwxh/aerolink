@@ -15,8 +15,13 @@ import {
  * - 不装 rehype-raw：正文里的 HTML 标签不会被当元素渲染；
  * - 不覆盖 urlTransform：react-markdown 默认只放行 https/mailto 等协议，
  *   `[x](javascript:...)` 会被清空成空链接；
- * - 元素白名单只留行内内容 + `p`（横幅是单行横幅，标题/列表/表格没有意义）；
+ * - 元素白名单只留行内内容与可退化成一行的块（见下），
  *   unwrapDisallowed 让被拒元素**保留文字**而不是整段消失。
+ *
+ * 块级元素（标题/列表/引用/分割线/表格）是「行内化」处理的，不是放行原标签：横幅是
+ * 一行动画轨道，`<h1>`、`<ul>`、`<p>` 都会强行断行、撑高顶栏。于是标题退化成加粗、
+ * 列表项加 `•` 前缀、引用变斜体、分割线变 `——`；块与块之间补一个空格，否则相邻块的
+ * 文字会粘成一个词（`# 标题\n正文` 里的换行不产生空白）。
  */
 const markdownComponents: Components = {
   // 横幅是单行滚动，段落不能产生块级换行。
@@ -42,9 +47,75 @@ const markdownComponents: Components = {
       {children}
     </code>
   ),
+  h1: ({ children }) => (
+    <>
+      <strong>{children}</strong>{' '}
+    </>
+  ),
+  h2: ({ children }) => (
+    <>
+      <strong>{children}</strong>{' '}
+    </>
+  ),
+  h3: ({ children }) => (
+    <>
+      <strong>{children}</strong>{' '}
+    </>
+  ),
+  h4: ({ children }) => (
+    <>
+      <strong>{children}</strong>{' '}
+    </>
+  ),
+  h5: ({ children }) => (
+    <>
+      <strong>{children}</strong>{' '}
+    </>
+  ),
+  h6: ({ children }) => (
+    <>
+      <strong>{children}</strong>{' '}
+    </>
+  ),
+  // 列表容器本身不能留 `ul`/`ol` 标签：块级元素会断行，这里只当前缀（项由 li 处理）。
+  ul: ({ children }) => <>{children}</>,
+  ol: ({ children }) => <>{children}</>,
+  // 有序列表也用点号：一行里连续写 `1. 2. 3.` 反而更难读，且列表可能被拆到不同位置。
+  li: ({ children }) => (
+    <>
+      {'• '}
+      {children}{' '}
+    </>
+  ),
+  blockquote: ({ children }) => <span className="italic">{children} </span>,
+  hr: () => <>—— </>,
+  // 表格的边框/表头全丢掉，只留「单元格 + 空格」，至少不会把内容糊成一团。
+  td: ({ children }) => <>{children} </>,
+  th: ({ children }) => <>{children} </>,
 }
 
-const ALLOWED_ELEMENTS = ['p', 'strong', 'em', 'del', 'code', 'a', 'br']
+const ALLOWED_ELEMENTS = [
+  'p',
+  'strong',
+  'em',
+  'del',
+  'code',
+  'a',
+  'br',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'hr',
+  'td',
+  'th',
+]
 
 /**
  * 横幅是单行输出，空行必须当作单个换行处理：

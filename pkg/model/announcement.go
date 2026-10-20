@@ -53,6 +53,30 @@ const (
 	AnnouncementScrollPaced = "paced"
 )
 
+// 滚动参数（速度 / 每轮停留 / 显示时长）的默认值与允许区间。
+//
+// 默认值取的就是升级前写死在顶栏里的常量（60px/s、停留 2 秒、时长按内容宽度换算），
+// 因此加列不需要像 scrollMode 那样回填存量数据：新建的列直接带上同样的默认值，
+// 存量公告的观感一个像素都不会变。
+const (
+	// AnnouncementDefaultScrollSpeed 是滚动速度的默认值（像素/秒）。
+	AnnouncementDefaultScrollSpeed = 60
+	// AnnouncementScrollSpeedMin/Max 限定速度区间：比下限还慢看不出在动，
+	// 比上限还快则完全读不了——两头都该拦在保存之前。
+	AnnouncementScrollSpeedMin = 10
+	AnnouncementScrollSpeedMax = 300
+	// AnnouncementDefaultPauseSeconds 是「每轮停留」的默认值（秒），与历史常量一致。
+	//
+	// 下限是 1 而不是 0：停 0 秒等于连续滚动，那是 ScrollMode 的另一个取值。
+	AnnouncementDefaultPauseSeconds = 2
+	// AnnouncementPauseSecondsMax 防止一次停留久到用户以为卡住了。
+	AnnouncementPauseSecondsMax = 60
+	// AnnouncementDisplaySecondsMin/Max 限定「显示时长」（一轮滚完的秒数）。
+	// 0 表示自动（按内容宽度与速度换算），不参与区间判断。
+	AnnouncementDisplaySecondsMin = 3
+	AnnouncementDisplaySecondsMax = 600
+)
+
 // IsAnnouncementScrollMode 报告取值是否为已知的滚动方式。
 func IsAnnouncementScrollMode(mode string) bool {
 	switch mode {
@@ -67,6 +91,7 @@ func IsAnnouncementScrollMode(mode string) bool {
 // 见 plans/2026-09-21-顶部通知栏.md §3。
 type Announcement struct {
 	Model
+	// 标题可选（空串 = 不填，横幅只显示正文）；正文必填，两者不能同时为空。
 	Title    string `json:"title" gorm:"type:varchar(255);not null"`
 	Content  string `json:"content" gorm:"type:text"`
 	Level    string `json:"level" gorm:"type:varchar(20);not null;default:info"`
@@ -91,10 +116,27 @@ type Announcement struct {
 	// 与已有数据仍读得懂；写入时以 ScrollMode 为准，并同步维护 `Scroll = (mode != none)`。
 	// 默认 continuous 与历史行为一致：加列不会改变现有公告的观感，只有显式设过
 	// scroll = false 的那些由 MigrateAnnouncementScrollModeBackfill 改成 none。
-	ScrollMode string     `json:"scrollMode" gorm:"type:varchar(16);not null;default:continuous"`
-	StartAt    *time.Time `json:"startAt,omitempty" gorm:"index"`
-	EndAt      *time.Time `json:"endAt,omitempty" gorm:"index"`
-	CreatorID  uint       `json:"creatorId" gorm:"index"`
+	ScrollMode string `json:"scrollMode" gorm:"type:varchar(16);not null;default:continuous"`
+	// ScrollSpeed 是这条公告要求的滚动速度（像素/秒），默认 60（= 升级前写死的常量）。
+	//
+	// 多条公告串成同一条轨道时由前端逐项合并（速度取最慢的一条，见
+	// ui/src/lib/announcement-scroll.ts）：一条轨道只能有一个速度。
+	//
+	// 这三列都声明了 default，会被 GORM 的「有 default 就跳过零值」规则影响；
+	// 但 0 在速度与停留上从来不是合法值（见上面常量区的校验区间），
+	// 而 DisplaySeconds 的零值含义与默认值一致（都是「自动」），所以不会踩
+	// users.enabled 那个坑。
+	ScrollSpeed int `json:"scrollSpeed" gorm:"not null;default:60"`
+	// PauseSeconds 是「每轮停留」的停顿时长（秒），只在 ScrollMode = paced 时生效，默认 2。
+	PauseSeconds int `json:"pauseSeconds" gorm:"not null;default:2"`
+	// DisplaySeconds 是一轮滚完的秒数，0 表示自动：按内容宽度与 ScrollSpeed 换算，
+	// 且不短于 15 秒（见 ui/src/lib/announcement-scroll.ts）。
+	//
+	// 它只覆盖**滚动段**，「每轮停留」的停顿另加，两者不重叠。
+	DisplaySeconds int        `json:"displaySeconds" gorm:"not null;default:0"`
+	StartAt        *time.Time `json:"startAt,omitempty" gorm:"index"`
+	EndAt          *time.Time `json:"endAt,omitempty" gorm:"index"`
+	CreatorID      uint       `json:"creatorId" gorm:"index"`
 }
 
 func (Announcement) TableName() string {

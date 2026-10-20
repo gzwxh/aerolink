@@ -4,6 +4,7 @@ package announcement
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,8 +32,13 @@ type announcementRequest struct {
 	// ScrollMode 是新的三态口径（none / continuous / paced，见 model 的常量）。
 	// 两者同时出现时以它为准，写入时会据此同步维护 Scroll。
 	ScrollMode *string `json:"scrollMode"`
-	StartAt    string  `json:"startAt"`
-	EndAt      string  `json:"endAt"`
+	// 滚动参数同样是可选项：不带这三个字段的老客户端取默认值，与升级前写死的常量一致，
+	// 不会把现有公告的观感改掉。
+	ScrollSpeed    *int   `json:"scrollSpeed"`
+	PauseSeconds   *int   `json:"pauseSeconds"`
+	DisplaySeconds *int   `json:"displaySeconds"`
+	StartAt        string `json:"startAt"`
+	EndAt          string `json:"endAt"`
 }
 
 // HandleListActiveAnnouncements 返回当前生效的公告，供所有登录用户读取。
@@ -121,6 +127,9 @@ func HandleUpdateAnnouncement(c *gin.Context) {
 	existing.Enabled = updated.Enabled
 	existing.Scroll = updated.Scroll
 	existing.ScrollMode = updated.ScrollMode
+	existing.ScrollSpeed = updated.ScrollSpeed
+	existing.PauseSeconds = updated.PauseSeconds
+	existing.DisplaySeconds = updated.DisplaySeconds
 	existing.StartAt = updated.StartAt
 	existing.EndAt = updated.EndAt
 	// CreatorID 不覆盖：它记的是「谁发的」，改内容的人由操作日志留痕。
@@ -175,14 +184,18 @@ func withinActiveLimit(c *gin.Context) bool {
 // buildAnnouncement 校验并归一化请求体。校验一律显式报错、不用默认值兜底：
 // 一条被悄悄改短的公告比一次报错难排查得多。
 func buildAnnouncement(req announcementRequest) (*model.Announcement, error) {
+	// 标题是可选项：横幅在标题缺席时只展示内容（见 ui/src/components/announcement-bar.tsx），
+	// 管理列表则用内容片段顶上，所以这里只校验长度、不要求非空。
 	title := strings.TrimSpace(req.Title)
-	if title == "" {
-		return nil, errors.New("请填写标题")
+	content := strings.TrimSpace(req.Content)
+	// 两者都空 = 一条什么都显示不出来的公告：占着生效名额，用户只看到一个空横幅。
+	// 标题可选之后这条单独兜住，文案要能让人知道「填空了」，而不是只猜哪一项不对。
+	if title == "" && content == "" {
+		return nil, errors.New("标题和内容不能同时为空")
 	}
 	if len([]rune(title)) > maxTitleLength {
 		return nil, errors.New("标题过长（最多 255 字）")
 	}
-	content := strings.TrimSpace(req.Content)
 	if content == "" {
 		return nil, errors.New("请填写内容")
 	}
@@ -225,6 +238,19 @@ func buildAnnouncement(req announcementRequest) (*model.Announcement, error) {
 		return nil, errors.New("滚动方式不合法")
 	}
 
+	scrollSpeed, err := resolveScrollSpeed(req.ScrollSpeed)
+	if err != nil {
+		return nil, err
+	}
+	pauseSeconds, err := resolvePauseSeconds(req.PauseSeconds)
+	if err != nil {
+		return nil, err
+	}
+	displaySeconds, err := resolveDisplaySeconds(req.DisplaySeconds)
+	if err != nil {
+		return nil, err
+	}
+
 	return &model.Announcement{
 		Title:    title,
 		Content:  content,
@@ -232,11 +258,51 @@ func buildAnnouncement(req announcementRequest) (*model.Announcement, error) {
 		Priority: req.Priority,
 		Enabled:  req.Enabled,
 		// Scroll 与 ScrollMode 必须一致：前者是给老客户端读的兼容口径。
-		Scroll:     scrollMode != model.AnnouncementScrollNone,
-		ScrollMode: scrollMode,
-		StartAt:    startAt,
-		EndAt:      endAt,
+		Scroll:         scrollMode != model.AnnouncementScrollNone,
+		ScrollMode:     scrollMode,
+		ScrollSpeed:    scrollSpeed,
+		PauseSeconds:   pauseSeconds,
+		DisplaySeconds: displaySeconds,
+		StartAt:        startAt,
+		EndAt:          endAt,
 	}, nil
+}
+
+// resolveScrollSpeed 归一化滚动速度：缺省取默认值，越界显式报错（不悄悄夹到边界，
+// 否则管理员会以为保存的是自己填的值）。
+func resolveScrollSpeed(value *int) (int, error) {
+	if value == nil {
+		return model.AnnouncementDefaultScrollSpeed, nil
+	}
+	if *value < model.AnnouncementScrollSpeedMin || *value > model.AnnouncementScrollSpeedMax {
+		return 0, fmt.Errorf("滚动速度需在 %d~%d 像素/秒之间",
+			model.AnnouncementScrollSpeedMin, model.AnnouncementScrollSpeedMax)
+	}
+	return *value, nil
+}
+
+// resolvePauseSeconds 归一化「每轮停留」：缺省 2 秒；0 不合法（那是「连续滚动」）。
+func resolvePauseSeconds(value *int) (int, error) {
+	if value == nil {
+		return model.AnnouncementDefaultPauseSeconds, nil
+	}
+	if *value < 1 || *value > model.AnnouncementPauseSecondsMax {
+		return 0, fmt.Errorf("每轮停留需在 1~%d 秒之间（不想停留请把滚动方式改成「连续滚动」）",
+			model.AnnouncementPauseSecondsMax)
+	}
+	return *value, nil
+}
+
+// resolveDisplaySeconds 归一化「显示时长」：0 表示自动；其余必须落在允许区间内。
+func resolveDisplaySeconds(value *int) (int, error) {
+	if value == nil || *value == 0 {
+		return 0, nil
+	}
+	if *value < model.AnnouncementDisplaySecondsMin || *value > model.AnnouncementDisplaySecondsMax {
+		return 0, fmt.Errorf("显示时长需在 %d~%d 秒之间（0 或留空表示按速度自动计算）",
+			model.AnnouncementDisplaySecondsMin, model.AnnouncementDisplaySecondsMax)
+	}
+	return *value, nil
 }
 
 // isActive 判定一条公告在给定时刻是否出现在横幅里。

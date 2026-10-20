@@ -4,7 +4,18 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import type { AnnouncementLevel } from '@/lib/announcement-markup'
-import { announcementScrollMode } from '@/lib/announcement-scroll'
+import {
+  ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS,
+  ANNOUNCEMENT_DEFAULT_SCROLL_SPEED,
+  ANNOUNCEMENT_DISPLAY_SECONDS_MAX,
+  ANNOUNCEMENT_DISPLAY_SECONDS_MIN,
+  ANNOUNCEMENT_PAUSE_SECONDS_MAX,
+  ANNOUNCEMENT_SCROLL_SPEED_MAX,
+  ANNOUNCEMENT_SCROLL_SPEED_MIN,
+  announcementScrollMode,
+  announcementScrollParams,
+  combinedScrollParams,
+} from '@/lib/announcement-scroll'
 import {
   useAllAnnouncements,
   useCreateAnnouncement,
@@ -47,6 +58,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { AnnouncementContent } from '@/components/announcement-content'
 import { AnnouncementEditor } from '@/components/announcement-editor'
+import { AnnouncementTicker } from '@/components/announcement-ticker'
 import { DateTimePicker } from '@/components/date-time-picker'
 import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
@@ -112,6 +124,14 @@ interface AnnouncementForm {
   enabled: boolean
   /** 顶栏横向滚动的方式；none 时单行显示，靠拖动或「展开全文」读剩下的内容。 */
   scrollMode: AnnouncementScrollMode
+  // 三个数值参数在草稿里存字符串：数字受控输入在删空的那一刻会被迫回落成默认值，
+  // 管理员就没法「清空再输一个」了（只能一点点加减）。空串 = 用默认值，提交时解析。
+  /** 滚动速度（像素/秒），越大越快；空串 = 默认 60。 */
+  scrollSpeed: string
+  /** 「每轮停留」的秒数，只在「每轮停留」方式下生效；空串 = 默认 2。 */
+  pauseSeconds: string
+  /** 一轮滚完的秒数；空串或 0 表示不填，按速度自动计算。 */
+  displaySeconds: string
   startAt: string
   endAt: string
 }
@@ -124,6 +144,11 @@ const emptyDraft: AnnouncementForm = {
   enabled: true,
   // 默认连续滚动，与历史行为一致（后端缺省值也是 continuous）。
   scrollMode: 'continuous',
+  // 三个滚动参数的默认值就是升级前写死的常量，所以「新建 = 老观感」。
+  scrollSpeed: String(ANNOUNCEMENT_DEFAULT_SCROLL_SPEED),
+  pauseSeconds: String(ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS),
+  // 空 = 不填，按速度自动算。
+  displaySeconds: '',
   startAt: '',
   endAt: '',
 }
@@ -132,6 +157,8 @@ function toForm(announcement: Announcement | null): AnnouncementForm {
   if (!announcement) {
     return { ...emptyDraft }
   }
+  // 老数据没有这几个字段，统一走「兜底到默认值」的解析，避免把 undefined 塞进 Input。
+  const params = announcementScrollParams(announcement)
   return {
     title: announcement.title,
     content: announcement.content,
@@ -140,9 +167,25 @@ function toForm(announcement: Announcement | null): AnnouncementForm {
     enabled: announcement.enabled,
     // 老数据没有 scrollMode 时按 scroll 推导（见 lib/announcement-scroll.ts）。
     scrollMode: announcementScrollMode(announcement),
+    scrollSpeed: String(params.speed),
+    pauseSeconds: String(params.pauseSeconds),
+    // 0（自动）在草稿里就是空串，输入框显示占位符「自动」而不是一个 0 秒。
+    displaySeconds:
+      params.displaySeconds > 0 ? String(params.displaySeconds) : '',
     startAt: fromRFC3339(announcement.startAt),
     endAt: fromRFC3339(announcement.endAt),
   }
+}
+
+/**
+ * 草稿里的数字字符串 → 数字：空串与非数字都回落到默认值。
+ *
+ * 允许空串是为了「清空再重输」，所以空值必须有确定含义——这里就是默认值，
+ * 与不填时的行为一致，不会因为手滑删空而把速度变成 0。
+ */
+function draftNumber(value: string, fallback: number): number {
+  const parsed = Number(value)
+  return value.trim() !== '' && Number.isFinite(parsed) ? parsed : fallback
 }
 
 function toPayload(form: AnnouncementForm): AnnouncementPayload {
@@ -155,6 +198,15 @@ function toPayload(form: AnnouncementForm): AnnouncementPayload {
     // 两个字段一起发且保持一致：scrollMode 是新口径，scroll 给老客户端/老后端读。
     scroll: form.scrollMode !== 'none',
     scrollMode: form.scrollMode,
+    scrollSpeed: draftNumber(
+      form.scrollSpeed,
+      ANNOUNCEMENT_DEFAULT_SCROLL_SPEED
+    ),
+    pauseSeconds: draftNumber(
+      form.pauseSeconds,
+      ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS
+    ),
+    displaySeconds: draftNumber(form.displaySeconds, 0),
     // 空串由后端当作「立即生效 / 永不过期」。
     startAt: toRFC3339(form.startAt) ?? '',
     endAt: toRFC3339(form.endAt) ?? '',
@@ -166,6 +218,7 @@ function toPayload(form: AnnouncementForm): AnnouncementPayload {
  * 服务端给的时间本来就是 RFC3339，原样带回即可（只把可空字段归一成空串）。
  */
 function announcementToPayload(item: Announcement): AnnouncementPayload {
+  const params = announcementScrollParams(item)
   return {
     title: item.title,
     content: item.content,
@@ -176,6 +229,10 @@ function announcementToPayload(item: Announcement): AnnouncementPayload {
     // 否则一次行内改动就会把设置重置掉。老数据缺字段时按 scroll 推导。
     scroll: item.scroll !== false,
     scrollMode: announcementScrollMode(item),
+    // 同理，三个滚动参数也要带上，否则行内改一下启用就把速度/停留/时长重置成默认值。
+    scrollSpeed: params.speed,
+    pauseSeconds: params.pauseSeconds,
+    displaySeconds: params.displaySeconds,
     startAt: item.startAt ?? '',
     endAt: item.endAt ?? '',
   }
@@ -195,6 +252,14 @@ export function AnnouncementManagement() {
   const [updatingId, setUpdatingId] = useState<number | null>(null)
 
   const items = data?.items ?? []
+  // 顶栏把所有生效公告串成**一条**轨道，滚动方式取最强的一种（paced > continuous > none，
+  // 见 lib/announcement-scroll.ts）。所以单条公告的「不滚动」可能被别的公告盖过——
+  // 列表与编辑弹窗都用这个合并结果来解释，否则看起来就像设置没保存。
+  const activeItems = items.filter((item) => statusOf(item) === 'active')
+  // 同理，速度取最慢、停留与显示时长取最长。整条轨道只有一套参数，所以这里拿到的是
+  // 「实际生效」的那一套，列表用它标出与单条设置不一致的地方。
+  const activeParams = combinedScrollParams(activeItems)
+  const activeScrollMode = activeParams.mode
 
   /** 行内改一个字段：其余字段原样回传（接口是整体覆盖式的 PUT）。 */
   const patchItem = (
@@ -261,6 +326,39 @@ export function AnnouncementManagement() {
         <div className="space-y-2">
           {items.map((item) => {
             const status = statusOf(item)
+            const ownMode = announcementScrollMode(item)
+            const ownParams = announcementScrollParams(item)
+            // 与整条轨道实际生效的参数对比：任一不一致就说明这条的设置被别的公告盖过了。
+            const paramsOverridden =
+              status === 'active' &&
+              ownMode !== 'none' &&
+              (ownParams.speed !== activeParams.speed ||
+                ownParams.pauseSeconds !== activeParams.pauseSeconds ||
+                ownParams.displaySeconds !== activeParams.displaySeconds)
+            // 一条轨道只有一套参数，被盖过时列表直接写出「实际」的那一套。
+            const effectiveSummary = [
+              // 填了显示时长就是按它走，速度不参与换算——别把不生效的数字写进「实际」。
+              ...(activeParams.displaySeconds > 0
+                ? []
+                : [`${activeParams.speed} px/s`]),
+              ...(activeParams.mode === 'paced'
+                ? [
+                    t('notifications.announcements.fields.pauseShort', {
+                      value: activeParams.pauseSeconds,
+                      defaultValue: '停留 {{value}} s',
+                    }),
+                  ]
+                : []),
+              activeParams.displaySeconds > 0
+                ? t('notifications.announcements.fields.displayShort', {
+                    value: activeParams.displaySeconds,
+                    defaultValue: '一轮 {{value}} s',
+                  })
+                : t(
+                    'notifications.announcements.fields.displayAuto',
+                    '一轮自动'
+                  ),
+            ].join(' · ')
             return (
               <div
                 key={item.id}
@@ -268,7 +366,14 @@ export function AnnouncementManagement() {
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-medium">{item.title}</span>
+                    {/* 标题可选：没填时给个占位，否则行首是一片空白，扫列表分不清哪条是哪条。 */}
+                    {item.title.trim() === '' ? (
+                      <span className="truncate font-medium text-muted-foreground">
+                        {t('notifications.announcements.untitled', '无标题')}
+                      </span>
+                    ) : (
+                      <span className="truncate font-medium">{item.title}</span>
+                    )}
                     <Badge {...STATUS_BADGES[status]}>
                       {t(`notifications.announcements.status.${status}`)}
                     </Badge>
@@ -302,9 +407,9 @@ export function AnnouncementManagement() {
                         : t('notifications.announcements.enabledOff', '已停用')}
                     </span>
                     <span>
-                      {announcementScrollMode(item) === 'none'
+                      {ownMode === 'none'
                         ? t('notifications.announcements.scrollOff', '不滚动')
-                        : announcementScrollMode(item) === 'paced'
+                        : ownMode === 'paced'
                           ? t(
                               'notifications.announcements.scrollPaced',
                               '横向滚动（每轮停留）'
@@ -313,7 +418,78 @@ export function AnnouncementManagement() {
                               'notifications.announcements.scrollOn',
                               '横向滚动'
                             )}
+                      {/* 自身设置被别的生效公告盖过时标出实际效果，否则看着像「保存了没生效」。 */}
+                      {status === 'active' && ownMode !== activeScrollMode ? (
+                        <span
+                          className="text-warning"
+                          data-scroll-mode-actual={activeScrollMode}
+                        >
+                          （
+                          {t(
+                            'notifications.announcements.fields.scrollModeEffective',
+                            {
+                              mode: t(SCROLL_MODE_LABELS[activeScrollMode]),
+                              defaultValue: '实际：{{mode}}',
+                            }
+                          )}
+                          ）
+                        </span>
+                      ) : null}
                     </span>
+                    {/* 速度/显示时长是这次新放出来的参数，列表里跟着标出来：
+                        不点开编辑也能看出这条滚多快、一轮多久。 */}
+                    {ownMode === 'none' ? null : (
+                      <>
+                        <span className="tabular-nums">
+                          {/* 填了「显示时长」就不按速度换算，此时再写「速度 300 px/s」
+                              只会让人以为速度该生效——那正好是「设置了不生效」的来源。 */}
+                          {ownParams.displaySeconds > 0
+                            ? t(
+                                'notifications.announcements.fields.displayShort',
+                                {
+                                  value: ownParams.displaySeconds,
+                                  defaultValue: '一轮 {{value}} s',
+                                }
+                              )
+                            : t(
+                                'notifications.announcements.fields.scrollSpeedShort',
+                                {
+                                  value: ownParams.speed,
+                                  defaultValue: '速度 {{value}} px/s',
+                                }
+                              )}
+                          {' · '}
+                          {ownParams.displaySeconds > 0
+                            ? t(
+                                'notifications.announcements.fields.pauseShort',
+                                {
+                                  value: ownParams.pauseSeconds,
+                                  defaultValue: '停留 {{value}} s',
+                                }
+                              )
+                            : t(
+                                'notifications.announcements.fields.displayAuto',
+                                '一轮自动'
+                              )}
+                        </span>
+                        {paramsOverridden ? (
+                          <span
+                            className="text-warning"
+                            data-scroll-params-actual={effectiveSummary}
+                          >
+                            （
+                            {t(
+                              'notifications.announcements.fields.scrollParamsEffective',
+                              {
+                                items: effectiveSummary,
+                                defaultValue: '实际：{{items}}',
+                              }
+                            )}
+                            ）
+                          </span>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -391,6 +567,7 @@ export function AnnouncementManagement() {
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           announcement={editing}
+          siblings={items.filter((item) => item.id !== editing?.id)}
           readOnly={readOnly}
           saving={createAnnouncement.isPending || updateAnnouncement.isPending}
           onSubmit={(payload) => {
@@ -419,6 +596,7 @@ function AnnouncementDialog({
   open,
   onOpenChange,
   announcement,
+  siblings,
   readOnly,
   saving,
   onSubmit,
@@ -426,6 +604,8 @@ function AnnouncementDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   announcement: Announcement | null
+  /** 其余公告：用来判断这次的滚动方式会不会被别的生效公告盖过。 */
+  siblings: Announcement[]
   readOnly: boolean
   saving: boolean
   onSubmit: (payload: AnnouncementPayload) => void
@@ -447,11 +627,87 @@ function AnnouncementDialog({
     next: AnnouncementForm[K]
   ) => setDraft((current) => ({ ...current, [key]: next }))
 
-  const canSubmit =
-    draft.title.trim() !== '' &&
-    draft.content.trim() !== '' &&
-    !saving &&
-    !readOnly
+  const canSubmit = draft.content.trim() !== '' && !saving && !readOnly
+
+  // 本条之外还有哪些生效公告、它们合起来按什么方式滚/多快。合并结果比本条更强时，
+  // 本条的选择不会改变观感——不写这一句，管理员只会看到「选了不生效」。
+  const draftSource = {
+    scroll: draft.scrollMode !== 'none',
+    scrollMode: draft.scrollMode,
+    scrollSpeed: draftNumber(
+      draft.scrollSpeed,
+      ANNOUNCEMENT_DEFAULT_SCROLL_SPEED
+    ),
+    pauseSeconds: draftNumber(
+      draft.pauseSeconds,
+      ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS
+    ),
+    displaySeconds: draftNumber(draft.displaySeconds, 0),
+  }
+  const ownParams = announcementScrollParams(draftSource)
+  const effectiveParams = combinedScrollParams([
+    ...siblings.filter((item) => statusOf(item) === 'active'),
+    draftSource,
+  ])
+  const scrollModeOverridden =
+    draft.enabled && effectiveParams.mode !== draft.scrollMode
+
+  // 三个数值参数同样会被别的生效公告盖过（速度取最慢、停留与显示时长取最长），
+  // 逐项列出「实际按多少算」。
+  const overriddenParams: string[] = []
+  if (draft.enabled) {
+    if (ownParams.speed !== effectiveParams.speed) {
+      overriddenParams.push(
+        t('notifications.announcements.fields.scrollSpeedShared', {
+          value: effectiveParams.speed,
+          defaultValue: '速度按 {{value}} px/s',
+        })
+      )
+    }
+    if (ownParams.pauseSeconds !== effectiveParams.pauseSeconds) {
+      overriddenParams.push(
+        t('notifications.announcements.fields.pauseSecondsShared', {
+          value: effectiveParams.pauseSeconds,
+          defaultValue: '每轮停留按 {{value}} 秒',
+        })
+      )
+    }
+    if (ownParams.displaySeconds !== effectiveParams.displaySeconds) {
+      overriddenParams.push(
+        t('notifications.announcements.fields.displaySecondsShared', {
+          value: effectiveParams.displaySeconds,
+          defaultValue: '一轮按 {{value}} 秒',
+        })
+      )
+    }
+  }
+
+  // 填了「显示时长」就不再按速度换算，速度字段置灰，免得「改了速度没反应」。
+  const speedDisabled =
+    readOnly ||
+    draft.scrollMode === 'none' ||
+    draftNumber(draft.displaySeconds, 0) > 0
+  const pauseDisabled = readOnly || draft.scrollMode !== 'paced'
+  const durationDisabled = readOnly || draft.scrollMode === 'none'
+
+  // 预览：拿当前草稿拼一条「公告」，交给顶栏同一个组件渲染。参数改了立刻能看到
+  // 滚多快、停多久，不用先保存再回顶栏猜。
+  const previewItem: Announcement = {
+    id: announcement?.id ?? 0,
+    title: draft.title,
+    content: draft.content,
+    level: draft.level,
+    priority: draft.priority,
+    enabled: draft.enabled,
+    // scroll / scrollMode / 三个数值参数都在 draftSource 里（已按草稿解析过）。
+    ...draftSource,
+    startAt: announcement?.startAt ?? '',
+    endAt: announcement?.endAt ?? '',
+    creatorId: announcement?.creatorId ?? 0,
+    createdAt: announcement?.createdAt ?? '',
+    updatedAt: announcement?.updatedAt ?? '',
+  }
+  const previewEmpty = draft.title.trim() === '' && draft.content.trim() === ''
 
   return (
     <>
@@ -471,17 +727,26 @@ function AnnouncementDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* 单列：预览区块已去掉，内容编辑器独占整宽。
-              去掉预览是因为它与输入区**必然对不上**——预览走最终渲染，输入区是受控子集的
-              所见即所得，并排放只会让人反复怀疑是不是自己写错了（见 §12.13）。 */}
-          <div className="space-y-4">
+          {/* 单列：内容编辑器独占整宽。
+              预览只放在滚动参数下面一处，且只展示**单行滚动效果**（不并排对比 Markdown），
+              避免重蹈「预览与输入区对不上」的覆辙（见 §12.13）。 */}
+          {/* min-w-0：DialogContent 是 grid，默认的 min-width:auto 会让「预览里的滚动轨道」
+              把整列撑宽（轨道宽度又取决于可视区宽度，于是越撑越宽）。 */}
+          <div className="min-w-0 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="announcement-title">
                 {t('notifications.announcements.fields.title', '标题')}
+                <span className="text-muted-foreground font-normal">
+                  {t('notifications.announcements.fields.optional', '（可选）')}
+                </span>
               </Label>
               <Input
                 id="announcement-title"
                 value={draft.title}
+                placeholder={t(
+                  'notifications.announcements.fields.titlePlaceholder',
+                  '不填则横幅只显示内容'
+                )}
                 onChange={(event) => patch('title', event.target.value)}
                 disabled={readOnly}
               />
@@ -498,6 +763,16 @@ function AnnouncementDialog({
                 disabled={readOnly}
                 labelledBy="announcement-content-label"
               />
+              {/* 只有「标题可选」之后才可能出现这种草稿：保存按钮是灰的，不说原因就成了
+                  「按钮点不动」。同时说明空公告也不能启用。 */}
+              {draft.content.trim() === '' ? (
+                <p className="text-warning text-xs">
+                  {t(
+                    'notifications.announcements.contentRequired',
+                    '内容不能为空：标题和正文都空的公告无法保存，也无法启用。'
+                  )}
+                </p>
+              ) : null}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -614,6 +889,161 @@ function AnnouncementDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {scrollModeOverridden ? (
+              <p
+                className="text-warning text-xs"
+                data-scroll-mode-conflict={effectiveParams.mode}
+              >
+                {t('notifications.announcements.fields.scrollModeShared', {
+                  mode: t(SCROLL_MODE_LABELS[effectiveParams.mode]),
+                  mine: t(SCROLL_MODE_LABELS[draft.scrollMode]),
+                  defaultValue:
+                    '另有生效中的公告选择了「{{mode}}」，整条通知栏会按它滚动，这里的「{{mine}}」暂不会改变观感。',
+                })}
+              </p>
+            ) : null}
+
+            {/* 三个数值参数：整条轨道只有一套，所以都会被别的生效公告盖过，
+                  提示放在下面同一段里，不逐字段堆 warning。 */}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="announcement-scroll-speed">
+                  {t(
+                    'notifications.announcements.fields.scrollSpeed',
+                    '滚动速度'
+                  )}
+                </Label>
+                <Input
+                  id="announcement-scroll-speed"
+                  type="number"
+                  min={ANNOUNCEMENT_SCROLL_SPEED_MIN}
+                  max={ANNOUNCEMENT_SCROLL_SPEED_MAX}
+                  step={5}
+                  // 原样存字符串：删空时不清洗成默认值，管理员可以清空后直接输新数，
+                  // 不必从 60 一点点点加减。空串在提交时按默认值算（见 draftNumber）。
+                  value={draft.scrollSpeed}
+                  placeholder={String(ANNOUNCEMENT_DEFAULT_SCROLL_SPEED)}
+                  onChange={(event) => patch('scrollSpeed', event.target.value)}
+                  disabled={speedDisabled}
+                />
+                <p className="text-muted-foreground text-xs">
+                  {t('notifications.announcements.fields.scrollSpeedHint', {
+                    min: ANNOUNCEMENT_SCROLL_SPEED_MIN,
+                    max: ANNOUNCEMENT_SCROLL_SPEED_MAX,
+                    defaultValue:
+                      '像素/秒（{{min}}~{{max}}），越大越快。填了「显示时长」后速度不再参与计算。',
+                  })}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="announcement-pause-seconds">
+                  {t(
+                    'notifications.announcements.fields.pauseSeconds',
+                    '每轮停留'
+                  )}
+                </Label>
+                <Input
+                  id="announcement-pause-seconds"
+                  type="number"
+                  min={1}
+                  max={ANNOUNCEMENT_PAUSE_SECONDS_MAX}
+                  value={draft.pauseSeconds}
+                  placeholder={String(ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS)}
+                  onChange={(event) =>
+                    patch('pauseSeconds', event.target.value)
+                  }
+                  disabled={pauseDisabled}
+                />
+                <p className="text-muted-foreground text-xs">
+                  {t('notifications.announcements.fields.pauseSecondsHint', {
+                    max: ANNOUNCEMENT_PAUSE_SECONDS_MAX,
+                    defaultValue:
+                      '走完一圈停多久（秒，1~{{max}}），只在「每轮停留」方式下生效。',
+                  })}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="announcement-display-seconds">
+                  {t(
+                    'notifications.announcements.fields.displaySeconds',
+                    '显示时长'
+                  )}
+                </Label>
+                <Input
+                  id="announcement-display-seconds"
+                  type="number"
+                  min={ANNOUNCEMENT_DISPLAY_SECONDS_MIN}
+                  max={ANNOUNCEMENT_DISPLAY_SECONDS_MAX}
+                  placeholder={t(
+                    'notifications.announcements.fields.displaySecondsAuto',
+                    '自动'
+                  )}
+                  // 空 = 不填（自动），显示占位符，而不是让人看到一个 0 秒。
+                  value={draft.displaySeconds}
+                  onChange={(event) =>
+                    patch('displaySeconds', event.target.value)
+                  }
+                  disabled={durationDisabled}
+                />
+                <p className="text-muted-foreground text-xs">
+                  {t('notifications.announcements.fields.displaySecondsHint', {
+                    min: ANNOUNCEMENT_DISPLAY_SECONDS_MIN,
+                    max: ANNOUNCEMENT_DISPLAY_SECONDS_MAX,
+                    defaultValue:
+                      '一轮滚完用多少秒（{{min}}~{{max}}），留空按内容宽度和速度自动算（不短于 15 秒）。',
+                  })}
+                </p>
+              </div>
+            </div>
+
+            {overriddenParams.length > 0 ? (
+              <p
+                className="text-warning text-xs"
+                data-scroll-params-conflict={overriddenParams.join('；')}
+              >
+                {t('notifications.announcements.fields.scrollParamsShared', {
+                  items: overriddenParams.join('；'),
+                  defaultValue:
+                    '整条通知栏共用一套滚动参数，下面这些取值会被其他生效公告盖过：{{items}}。',
+                })}
+              </p>
+            ) : null}
+
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-4">
+                <Label>
+                  {t('notifications.announcements.preview.label', '预览')}
+                </Label>
+                <span className="text-muted-foreground text-xs">
+                  {t(
+                    'notifications.announcements.preview.hint',
+                    '按本条配置实时滚动，鼠标悬停暂停'
+                  )}
+                </span>
+              </div>
+              {/* w-full 不能省：滚动轨道要根据可视区宽度决定重复几份，而一个宽度由内容
+                  决定的 flex 容器会「容器被内容撑宽 → 多重复几份 → 更宽」地正反馈下去
+                  （实测预览里 viewport 被撑到 40 万像素、轨道渲染了 7000 多份）。 */}
+              <div
+                className="flex min-h-9 w-full items-center gap-1 overflow-hidden rounded-md border bg-muted/40 px-3 py-1.5 text-sm"
+                data-announcement-preview
+              >
+                {previewEmpty ? (
+                  <span className="text-muted-foreground text-xs">
+                    {t(
+                      'notifications.announcements.preview.empty',
+                      '写上标题或内容后，这里会按顶栏的样式滚动'
+                    )}
+                  </span>
+                ) : (
+                  <AnnouncementTicker
+                    items={[previewItem]}
+                    level={draft.level}
+                  />
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-4">

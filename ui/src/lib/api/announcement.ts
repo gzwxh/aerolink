@@ -27,6 +27,17 @@ export interface Announcement {
   scroll: boolean
   /** 滚动方式：不滚动 / 连续 / 每轮之间停留（见 pkg/model/announcement.go 的常量）。 */
   scrollMode?: AnnouncementScrollMode
+  /**
+   * 滚动速度（像素/秒），旧数据缺字段时按 60 处理。
+   *
+   * 这些参数都是「每条公告各配」的，多条同时生效时由前端合并成一条轨道
+   * （取最慢/最长的那个，见 lib/announcement-scroll.ts）。
+   */
+  scrollSpeed?: number
+  /** 「每轮停留」的秒数，只在 scrollMode = paced 时生效；缺省 2。 */
+  pauseSeconds?: number
+  /** 一轮滚完的秒数，0 或缺省表示按速度自动算（不短于 15 秒）。 */
+  displaySeconds?: number
   startAt?: string
   endAt?: string
   creatorId: number
@@ -52,6 +63,12 @@ export interface AnnouncementPayload {
   scroll: boolean
   /** 滚动方式；后端以它为准，并据此同步维护上面的 scroll。 */
   scrollMode: AnnouncementScrollMode
+  /** 滚动速度（像素/秒，10~300）。 */
+  scrollSpeed: number
+  /** 「每轮停留」秒数（1~60，仅 paced 生效）。 */
+  pauseSeconds: number
+  /** 一轮滚完的秒数；0 = 自动。 */
+  displaySeconds: number
   /** 空串表示「立即生效 / 永不过期」（后端按可空时间解析）。 */
   startAt: string
   endAt: string
