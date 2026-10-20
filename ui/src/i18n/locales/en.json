@@ -3205,8 +3205,12 @@
   "deploymentOverview": {
     "endpointsTitle": "Endpoints",
     "lbPending": "External IP pending",
+    "anyNode": "Any node",
+    "headless": "Headless",
+    "serviceDns": "Internal DNS name",
     "copied": "Copied",
-    "copy": "Copy"
+    "copy": "Copy",
+    "copyDns": "Copy internal DNS name"
   },
   "templateManagement": {
     "title": "Template Management",

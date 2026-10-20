@@ -113,57 +113,97 @@ export function DeploymentOverview({
   )
 }
 
+export type ServiceEndpointEntry = {
+  key: string
+  name: string
+  namespace: string
+  protocol: string
+  port: number
+  access: string
+  /** 集群内可解析的 FQDN；NodePort 是给集群外用的，没有内网域名。 */
+  dns: string | null
+}
+
+/** 入口地址里用到的文案，由调用方从 i18n 取，避免把中文写死在逻辑里。 */
+export type ServiceEndpointLabels = {
+  lbPending: string
+  anyNode: string
+  headless: string
+}
+
+/**
+ * 网络入口条目：每个 Service 的每个端口一条。
+ *
+ * NodePort 入口保留（集群外要用），但这类服务的内网域名对使用者没意义，
+ * 因此 dns 返回 null，不展示「内网域名」那一行。
+ */
+export function serviceEndpointEntries(
+  services: Service[],
+  labels: ServiceEndpointLabels
+): ServiceEndpointEntry[] {
+  const result: ServiceEndpointEntry[] = []
+  for (const svc of services) {
+    const svcName = svc.metadata?.name || ''
+    const svcNamespace = svc.metadata?.namespace || ''
+    const type = svc.spec?.type || 'ClusterIP'
+    const clusterIP = svc.spec?.clusterIP
+    const lbIngress = svc.status?.loadBalancer?.ingress || []
+    for (const p of svc.spec?.ports || []) {
+      const port = p.port
+      if (!port) continue
+      const protocol = p.protocol || 'TCP'
+      let access: string
+      if (type === 'NodePort' && p.nodePort) {
+        access = `${labels.anyNode}:${p.nodePort}`
+      } else if (type === 'LoadBalancer') {
+        if (lbIngress.length > 0) {
+          access = lbIngress
+            .map((ing) => `${ing.ip || ing.hostname || ''}:${port}`)
+            .join(', ')
+        } else {
+          access = labels.lbPending
+        }
+      } else if (clusterIP === 'None') {
+        access = `${labels.headless} (${svcName})`
+      } else {
+        access = `${clusterIP || svcName}:${port}`
+      }
+      result.push({
+        key: `${svcName}-${protocol}-${port}-${access}`,
+        name: svcName,
+        namespace: svcNamespace,
+        protocol,
+        port,
+        access,
+        // 集群内可直接解析的 FQDN（kubelet 默认 cluster domain）。
+        // 末尾的点表示绝对域名：跳过 resolv.conf 的 search 域展开（ndots:5 时
+        // 不加点会先试 3 个搜索域再查绝对名），少几次无谓查询。
+        dns:
+          type === 'NodePort'
+            ? null
+            : `${svcName}.${svcNamespace}.svc.cluster.local.:${port}`,
+      })
+    }
+  }
+  return result
+}
+
 /** 网络入口: how to reach the workload from outside/inside the cluster. */
 function ServiceEndpointsCard({ services }: { services: Service[] }) {
   const { t } = useTranslation()
 
-  const entries = useMemo(() => {
-    const result: Array<{
-      key: string
-      name: string
-      namespace: string
-      protocol: string
-      port: number
-      access: string
-    }> = []
-    for (const svc of services) {
-      const svcName = svc.metadata?.name || ''
-      const svcNamespace = svc.metadata?.namespace || ''
-      const type = svc.spec?.type || 'ClusterIP'
-      const clusterIP = svc.spec?.clusterIP
-      const lbIngress = svc.status?.loadBalancer?.ingress || []
-      for (const p of svc.spec?.ports || []) {
-        const port = p.port
-        if (!port) continue
-        const protocol = p.protocol || 'TCP'
-        let access: string
-        if (type === 'NodePort' && p.nodePort) {
-          access = `任意节点:${p.nodePort}`
-        } else if (type === 'LoadBalancer') {
-          if (lbIngress.length > 0) {
-            access = lbIngress
-              .map((ing) => `${ing.ip || ing.hostname || ''}:${p.port}`)
-              .join(', ')
-          } else {
-            access = t('deploymentOverview.lbPending', '外部 IP 待分配')
-          }
-        } else if (clusterIP === 'None') {
-          access = `Headless (${svcName})`
-        } else {
-          access = `${clusterIP || svcName}:${port}`
-        }
-        result.push({
-          key: `${svcName}-${protocol}-${port}-${access}`,
-          name: svcName,
-          namespace: svcNamespace,
-          protocol,
-          port,
-          access,
-        })
-      }
-    }
-    return result
-  }, [services, t])
+  const lbPendingText = t('deploymentOverview.lbPending', '外部 IP 待分配')
+  const anyNodeText = t('deploymentOverview.anyNode', '任意节点')
+  const headlessText = t('deploymentOverview.headless', 'Headless')
+  const entries = useMemo(
+    () =>
+      serviceEndpointEntries(services, {
+        lbPending: lbPendingText,
+        anyNode: anyNodeText,
+        headless: headlessText,
+      }),
+    [services, lbPendingText, anyNodeText, headlessText]
+  )
 
   if (entries.length === 0) return null
 
@@ -207,6 +247,25 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
               <p className="truncate font-mono text-sm font-medium">
                 {entry.access}
               </p>
+              {entry.dns !== null && (
+                <p className="group/dns flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                  <span className="shrink-0">
+                    {t('deploymentOverview.serviceDns', '内网域名')}
+                  </span>
+                  <span className="truncate font-mono" title={entry.dns}>
+                    {entry.dns}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/dns:opacity-100"
+                    aria-label={t('deploymentOverview.copyDns', '复制内网域名')}
+                    onClick={() => void copy(entry.dns as string)}
+                  >
+                    <IconCopy className="size-3" />
+                  </Button>
+                </p>
+              )}
             </div>
             <Button
               variant="ghost"

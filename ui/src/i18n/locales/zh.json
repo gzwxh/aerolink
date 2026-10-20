@@ -3235,8 +3235,12 @@
   "deploymentOverview": {
     "endpointsTitle": "Endpoints",
     "lbPending": "外部 IP 待分配",
+    "anyNode": "任意节点",
+    "headless": "Headless",
+    "serviceDns": "内网域名",
     "copied": "已复制",
-    "copy": "复制"
+    "copy": "复制",
+    "copyDns": "复制内网域名"
   },
   "passwordPolicy": {
     "title": "密码要求",
