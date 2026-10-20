@@ -63,10 +63,7 @@ import {
 } from '@/components/pod-overview-sidebar'
 import { PodTable } from '@/components/pod-table'
 import { RefreshIntervalSelect } from '@/components/refresh-interval-select'
-import {
-  TerminalLauncher,
-  useOpenWorkspaceSession,
-} from '@/components/terminal-launcher'
+import { useOpenWorkspaceSession } from '@/components/terminal-launcher'
 import {
   WorkloadInfoBlock,
   WorkloadInfoRow,
@@ -235,22 +232,6 @@ export function NodeDetail(props: { name: string }) {
       label: t('common.tabs.monitor'),
       content: <NodeMonitoring name={name} />,
     },
-    ...(canExecNode
-      ? [
-          {
-            value: 'terminal',
-            label: t('common.tabs.terminal'),
-            content: (
-              <TerminalLauncher
-                mode="terminal"
-                type="node"
-                nodeName={name}
-                source="node"
-              />
-            ),
-          },
-        ]
-      : []),
     {
       value: 'events',
       label: t('common.tabs.events'),
