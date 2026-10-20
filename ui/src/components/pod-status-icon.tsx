@@ -101,13 +101,11 @@ export const PodStatusIcon = ({
 
     switch (statusType) {
       case 'success':
-        if (status === 'Running') {
-          return (
-            <IconCircleCheckFilled className={`fill-success ${className}`} />
-          )
-        }
-        // 已完成 / 成功状态
-        return <IconCircleCheckFilled className={`fill-info ${className}`} />
+        // Running 与「已完成」（Succeeded / Completed）都是成功态，共用 success。
+        // 曾经把已完成画成 info 蓝以便与 Running 区分，但「蓝→info」的映射是给
+        // 状态未知/进行中的，用在已完成的成功态上属语义拉伸（见 plans/
+        // 2026-09-21-语义状态色token.md §7.1），已按语义统一。
+        return <IconCircleCheckFilled className={`fill-success ${className}`} />
 
       case 'error':
         return <IconCircleXFilled className={`fill-destructive ${className}`} />
