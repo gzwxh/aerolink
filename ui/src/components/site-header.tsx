@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
+import { useBranding } from '@/contexts/branding-context'
 import { useTerminal } from '@/contexts/terminal-context'
-import { House, Plus, Settings, TerminalSquare } from 'lucide-react'
+import { CircleHelp, House, Plus, Settings, TerminalSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useClusterLocation, useClusterNavigate } from '@/lib/cluster-path'
@@ -28,6 +29,9 @@ export function SiteHeader() {
   const { pathname } = useClusterLocation()
   const { t } = useTranslation()
   const { user, capabilities } = useAuth()
+  // 帮助文档入口由管理员在「设置 → 通用 → 帮助文档」配置；没配就不渲染，
+  // 免得出现一个必然打不开的入口（与「创建资源」按钮同一取舍）。
+  const { helpUrl } = useBranding()
   const { toggleTerminal, sessions } = useTerminal()
   // 顶栏按钮只管 kubectl 会话：工作区里可能还有别的 Pod/节点/日志会话。
   const hasKubectlSession = sessions.some(
@@ -113,6 +117,18 @@ export function SiteHeader() {
                   orientation="vertical"
                   className="mx-2 data-[orientation=vertical]:h-4"
                 />
+                {helpUrl !== '' && (
+                  <a
+                    href={helpUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={t('nav.help', 'Help')}
+                    title={t('nav.help', 'Help')}
+                    className="flex items-center justify-center rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <CircleHelp className="h-5 w-5" />
+                  </a>
+                )}
                 {canViewSettings && (
                   <button
                     type="button"

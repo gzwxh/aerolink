@@ -69,7 +69,11 @@ type GeneralSetting struct {
 	LogoURL string `json:"logoUrl" gorm:"column:logo_url;type:text"`
 	// SiteName 是控制台在侧边栏、登录页与浏览器标签上展示的名称。为空时前端用默认名
 	// “鸢联 AeroLink”（与 logoUrl 一样由公开的 bootstrap 接口下发）。
-	SiteName  string       `json:"siteName" gorm:"column:site_name;type:varchar(100)"`
+	SiteName string `json:"siteName" gorm:"column:site_name;type:varchar(100)"`
+	// HelpURL 是帮助文档站的地址（通常是自建/内网的文档站，例如
+	// https://aerolink-docs.gcongo.cn/）。与 logoUrl、siteName 一样由公开的 bootstrap
+	// 接口下发，因此未登录的登录页也能打开它。空串表示未配置，界面不显示入口。
+	HelpURL   string       `json:"helpUrl" gorm:"column:help_url;type:varchar(500)"`
 	JWTSecret SecretString `json:"-" gorm:"column:jwt_secret;type:text"`
 	// EncryptKeyFingerprint 记录数据库中已有行是用哪个 AEROLINK_ENCRYPT_KEY 加密的，
 	// 这样从内置默认密钥切换出去时可以走迁移，

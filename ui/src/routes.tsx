@@ -6,6 +6,7 @@ import { InitCheckRoute } from './components/init-check-route'
 import { LegacyClusterRedirect } from './components/legacy-cluster-redirect'
 import { ProtectedRoute } from './components/protected-route'
 import { getSubPath } from './lib/subpath'
+import { AboutPage } from './pages/about-page'
 import { AccountPage } from './pages/account-page'
 import { ConfigMapCreatePage } from './pages/configmap-create-page'
 import { CRListPage } from './pages/cr-list-page'
@@ -71,6 +72,11 @@ export const router = createBrowserRouter(
           // 个人账号信息页：任何登录用户都能打开，不需要 settings 权限。
           path: 'account',
           element: <AccountPage />,
+        },
+        {
+          // 关于页：产品定位、能力清单与版本信息，入口在头像菜单。
+          path: 'about',
+          element: <AboutPage />,
         },
         {
           path: 'settings',

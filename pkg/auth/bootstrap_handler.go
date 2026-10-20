@@ -47,6 +47,8 @@ type bootstrapBranding struct {
 	LogoURL string `json:"logoUrl"`
 	// SiteName 是控制台展示名称；空串表示由前端使用默认名 “鸢联 AeroLink”。
 	SiteName string `json:"siteName"`
+	// HelpURL 是管理员配置的帮助文档站地址；空串表示未配置（界面不显示入口）。
+	HelpURL string `json:"helpUrl"`
 }
 
 type bootstrapResponse struct {
@@ -96,6 +98,7 @@ func (h *AuthHandler) Bootstrap(c *gin.Context) {
 		Branding: bootstrapBranding{
 			LogoURL:  strings.TrimSpace(setting.LogoURL),
 			SiteName: strings.TrimSpace(setting.SiteName),
+			HelpURL:  strings.TrimSpace(setting.HelpURL),
 		},
 		Session:                 session,
 		User:                    user,

@@ -16,6 +16,8 @@ export interface Branding {
   siteName: string
   /** 管理员配置过名称或 logo：此时收起版本号等 AeroLink 自身信息（见侧边栏）。 */
   isCustomBranding: boolean
+  /** 管理员配置的帮助文档站地址；空串表示未配置（不显示入口）。 */
+  helpUrl: string
 }
 
 /** 默认站点名；管理员留空时使用。 */
@@ -26,6 +28,7 @@ const BrandingContext = createContext<Branding>({
   isCustomLogo: false,
   siteName: DEFAULT_SITE_NAME,
   isCustomBranding: false,
+  helpUrl: '',
 })
 
 /**
@@ -46,6 +49,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
         // 看的是“配没配”而不是“和默认值一不一样”：管理员就是把名字填成默认名
         // 也算自定义，留空才是用默认值。
         isCustomBranding: customLogo !== '' || customName !== '',
+        helpUrl: data?.branding?.helpUrl?.trim() ?? '',
       }}
     >
       {children}

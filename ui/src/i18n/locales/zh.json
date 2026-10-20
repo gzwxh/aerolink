@@ -544,6 +544,7 @@
   "nav": {
     "rbac": "权限管理",
     "settings": "系统设置",
+    "help": "帮助文档",
     "overview": "概览",
     "workloads": "工作负载",
     "pods": "Pods",
@@ -635,6 +636,39 @@
     "failedToLoad": "加载概览数据失败",
     "unknownError": "未知错误",
     "recentEventsDescription": "集群最近发生的事件"
+  },
+  "about": {
+    "pageTitle": "关于",
+    "tagline": "轻量、开源的 Kubernetes 工作空间",
+    "description": "把集群管理、可观测性、访问控制与 AI 运维放进同一个工作空间：切换集群、查看资源、排障与审计都用同一套界面，不需要在多个控制台之间来回切。",
+    "version": "版本 {{version}}",
+    "buildDate": "构建于 {{date}}",
+    "capabilitiesTitle": "一个工作空间，覆盖日常运维的主路径",
+    "capabilities": {
+      "workspace": {
+        "title": "统一的多集群工作区",
+        "description": "在一个界面里切换集群、命名空间与资源，资源详情、相关资源与历史记录保持连贯的上下文。"
+      },
+      "insight": {
+        "title": "可观测与排障",
+        "description": "日志、监控、事件与容器终端在同一页打开，从异常现象直接进入排障所需的信息。"
+      },
+      "governance": {
+        "title": "权限与审计",
+        "description": "角色绑定、命名空间授权与操作审计相互衔接，每一次敏感操作都有据可查。"
+      },
+      "assistant": {
+        "title": "AI 与远程接入",
+        "description": "内置 AI 助手、Web 终端与 Cluster Agent，让内网集群也能被安全地接入与运维。"
+      }
+    },
+    "screenshotsTitle": "实际界面",
+    "screenshots": {
+      "overview": "集群总览：节点、工作负载、命名空间与容量一屏可见",
+      "detail": "资源详情：状态、Pod、事件与相关资源同页呈现"
+    },
+    "openSource": "本控制台基于开源项目 Kite 二次开发，遵循 Apache-2.0 许可协议。",
+    "help": "打开帮助文档"
   },
   "loginLog": {
     "copyClient": "复制客户端信息",
@@ -978,6 +1012,7 @@
   "login": {
     "title": "登录",
     "subtitle": "访问 Kubernetes 控制台",
+    "helpLink": "帮助文档",
     "signIn": "登录",
     "enterUsername": "请输入用户名",
     "enterPassword": "请输入密码",
@@ -2148,13 +2183,22 @@
       "urlPlaceholder": "https://example.com/logo.png",
       "urlHint": "支持图片地址或 data: URL；建议方形图标且小于 180 KiB（logo 会在每次打开控制台时下发），保存后生效。"
     },
+    "help": {
+      "title": "帮助文档",
+      "description": "配置帮助文档站地址后，顶部导航栏与登录页会显示「帮助文档」入口，方便用户直接打开；留空则不显示入口。仅管理员可改。",
+      "urlLabel": "文档地址",
+      "urlPlaceholder": "https://aerolink-docs.example.com/",
+      "open": "打开",
+      "urlHint": "只接受 http(s) 绝对地址，保存后生效。"
+    },
     "errors": {
       "modelRequired": "请填写模型",
       "apiKeyRequired": "启用 AI 助手时必须填写 API Key",
       "kubectlImageRequired": "启用 kubectl 时必须填写镜像",
       "nodeTerminalImageRequired": "节点终端镜像不能为空",
       "logoNotImage": "请选择图片文件",
-      "logoTooLarge": "图片不能超过 {{size}} KiB，建议改用更小的 logo 或直接填图片地址"
+      "logoTooLarge": "图片不能超过 {{size}} KiB，建议改用更小的 logo 或直接填图片地址",
+      "helpUrlInvalid": "帮助文档地址必须是 http(s) 开头的完整地址"
     },
     "messages": {
       "updated": "通用设置已更新"
@@ -3495,6 +3539,7 @@
     "font": "字体",
     "displayScale": "显示缩放",
     "logout": "退出登录",
+    "about": "关于{{name}}",
     "via": "通过",
     "role": "角色",
     "fonts": {

@@ -1132,6 +1132,8 @@ export interface GeneralSetting {
   logoUrl: string
   /** 控制台展示名称；为空表示使用默认名「鸢联 AeroLink」。 */
   siteName: string
+  /** 帮助文档站地址（http(s)）；为空表示未配置，界面不显示入口。 */
+  helpUrl: string
 }
 
 export interface GeneralSettingUpdateRequest {
@@ -1150,6 +1152,7 @@ export interface GeneralSettingUpdateRequest {
   loginPrompt?: string
   logoUrl?: string
   siteName?: string
+  helpUrl?: string
 }
 
 export interface LDAPSetting {

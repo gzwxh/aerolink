@@ -544,6 +544,7 @@
   "nav": {
     "rbac": "RBAC",
     "settings": "System Settings",
+    "help": "Help",
     "overview": "Overview",
     "pods": "Pods",
     "deployments": "Deployments",
@@ -635,6 +636,39 @@
     "failedToLoad": "Failed to load overview data",
     "unknownError": "Unknown error occurred",
     "recentEventsDescription": "Latest cluster events"
+  },
+  "about": {
+    "pageTitle": "About",
+    "tagline": "A lightweight, open-source Kubernetes workspace",
+    "description": "Cluster management, observability, access control and AI-assisted operations in one workspace, so you switch clusters, inspect resources, troubleshoot and audit without juggling consoles.",
+    "version": "Version {{version}}",
+    "buildDate": "Built on {{date}}",
+    "capabilitiesTitle": "One workspace for the everyday operational path",
+    "capabilities": {
+      "workspace": {
+        "title": "One multi-cluster workspace",
+        "description": "Switch clusters, namespaces and resources in place, with resource details, related resources and history keeping a continuous context."
+      },
+      "insight": {
+        "title": "Observability and troubleshooting",
+        "description": "Logs, metrics, events and a container terminal open on the same page, from symptom straight to the data you need."
+      },
+      "governance": {
+        "title": "Access control and audit",
+        "description": "Role bindings, namespace grants and audit records line up, so every sensitive action stays traceable."
+      },
+      "assistant": {
+        "title": "AI and remote access",
+        "description": "A built-in AI assistant, web terminal and Cluster Agent bring internal clusters in safely."
+      }
+    },
+    "screenshotsTitle": "The actual interface",
+    "screenshots": {
+      "overview": "Cluster overview: nodes, workloads, namespaces and capacity on one screen",
+      "detail": "Resource detail: status, pods, events and related resources on one page"
+    },
+    "openSource": "This console is a derivative of the open-source Kite project, licensed under Apache-2.0.",
+    "help": "Open the documentation"
   },
   "loginLog": {
     "copyClient": "Copy client info",
@@ -978,6 +1012,7 @@
   "login": {
     "title": "Sign In",
     "subtitle": "Access your Kubernetes dashboard",
+    "helpLink": "Help documentation",
     "signIn": "Sign In",
     "enterUsername": "Enter your username",
     "enterPassword": "Enter your password",
@@ -2148,13 +2183,22 @@
       "urlPlaceholder": "https://example.com/logo.png",
       "urlHint": "An image URL or a data: URL. A square icon under 180 KiB is recommended (the logo is sent on every console load); changes apply after saving."
     },
+    "help": {
+      "title": "Help documentation",
+      "description": "Set the help site URL to show a \"Help\" entry in the top bar and on the login page; leave it empty to hide the entry. Administrators only.",
+      "urlLabel": "Documentation URL",
+      "urlPlaceholder": "https://aerolink-docs.example.com/",
+      "open": "Open",
+      "urlHint": "An absolute http(s) URL; changes apply after saving."
+    },
     "errors": {
       "modelRequired": "Model is required",
       "apiKeyRequired": "API Key is required when AI Agent is enabled",
       "kubectlImageRequired": "Kubectl image is required when kubectl is enabled",
       "nodeTerminalImageRequired": "Node terminal image is required",
       "logoNotImage": "Please choose an image file",
-      "logoTooLarge": "The image must be at most {{size}} KiB. Use a smaller logo or link to an image URL instead."
+      "logoTooLarge": "The image must be at most {{size}} KiB. Use a smaller logo or link to an image URL instead.",
+      "helpUrlInvalid": "The help URL must be an absolute http(s) address"
     },
     "messages": {
       "updated": "General settings updated"
@@ -3982,7 +4026,8 @@
       "serif": "Song",
       "kai": "Kai"
     },
-    "accountInfo": "Account"
+    "accountInfo": "Account",
+    "about": "About {{name}}"
   },
   "logViewer": {
     "title": "Logs",

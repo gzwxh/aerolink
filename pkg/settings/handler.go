@@ -3,6 +3,7 @@ package settings
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"unicode/utf8"
 
@@ -34,6 +35,7 @@ func HandleGetGeneralSetting(c *gin.Context) {
 		"loginPrompt":           setting.LoginPrompt,
 		"logoUrl":               setting.LogoURL,
 		"siteName":              setting.SiteName,
+		"helpUrl":               setting.HelpURL,
 	})
 }
 
@@ -46,6 +48,31 @@ const maxLogoURLLength = 256 * 1024
 // 但侧边栏只有 16rem 宽，名字太长放不下：前端会按两行折行展示，超过 16 个字符
 // （中文按 1 个算）两行也放不下，因此在写入处就收紧到 16。
 const maxSiteNameLength = 16
+
+// maxHelpURLLength 与列宽（varchar(500)）保持一致：超长在 MySQL 严格模式下会被拒，
+// 不如在入口就给出明确错误。
+const maxHelpURLLength = 500
+
+// normalizeHelpURL 校验管理员填写的帮助文档地址。
+//
+// 只接受 http(s) 的绝对地址或空串（空串 = 清除入口）。这个值会随公开的 bootstrap 接口
+// 下发给未登录的登录页、并被渲染成外链，放行其它 scheme（javascript:、data:）等于给
+// 自己开一个注入口子，所以在这里 fail-closed。
+func normalizeHelpURL(raw string) (string, error) {
+	helpURL := strings.TrimSpace(raw)
+	if helpURL == "" {
+		return "", nil
+	}
+	if utf8.RuneCountInString(helpURL) > maxHelpURLLength {
+		return "", fmt.Errorf("helpUrl must be at most %d characters", maxHelpURLLength)
+	}
+	parsed, err := url.Parse(helpURL)
+	if err != nil || parsed.Host == "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", fmt.Errorf("helpUrl must be an absolute http(s) URL")
+	}
+	return helpURL, nil
+}
 
 type UpdateGeneralSettingRequest struct {
 	AIAgentEnabled        *bool   `json:"aiAgentEnabled"`
@@ -63,6 +90,7 @@ type UpdateGeneralSettingRequest struct {
 	LoginPrompt           *string `json:"loginPrompt"`
 	LogoURL               *string `json:"logoUrl"`
 	SiteName              *string `json:"siteName"`
+	HelpURL               *string `json:"helpUrl"`
 }
 
 func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
@@ -200,6 +228,14 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		}
 		updates["site_name"] = siteName
 	}
+	if req.HelpURL != nil {
+		helpURL, err := normalizeHelpURL(*req.HelpURL)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		updates["help_url"] = helpURL
+	}
 	if req.PasswordLoginDisabled != nil {
 		updates["password_login_disabled"] = *req.PasswordLoginDisabled
 	}
@@ -234,5 +270,6 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		"loginPrompt":           updated.LoginPrompt,
 		"logoUrl":               updated.LogoURL,
 		"siteName":              updated.SiteName,
+		"helpUrl":               updated.HelpURL,
 	})
 }

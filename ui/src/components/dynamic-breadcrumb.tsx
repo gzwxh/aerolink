@@ -42,6 +42,10 @@ export function DynamicBreadcrumb() {
         return { label: t('settings.title', 'System Settings'), href }
       }
 
+      if (label === 'about') {
+        return { label: t('about.pageTitle'), href }
+      }
+
       const resource = getResourceCatalogEntry(label)
       if (!resource) {
         return { label, href }

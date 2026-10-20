@@ -24,6 +24,8 @@ export interface BootstrapBranding {
   logoUrl: string
   /** 控制台名称；为空表示由前端使用默认名“鸢联 AeroLink”。 */
   siteName: string
+  /** 帮助文档站地址；为空表示未配置（界面不显示入口）。 */
+  helpUrl: string
 }
 
 export interface AuthProviderCatalog {

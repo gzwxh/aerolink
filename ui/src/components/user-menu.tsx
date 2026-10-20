@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
-import { LogOut, UserCog } from 'lucide-react'
+import { Info, LogOut, UserCog } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { useBranding } from '@/contexts/branding-context'
 import { resolveAvatarSrc } from '@/lib/avatar-url'
 import { useClusterNavigate } from '@/lib/cluster-path'
 import { MFA_SETUP_REQUEST_EVENT } from '@/lib/mfa-prompt'
@@ -28,6 +29,7 @@ export function UserMenu() {
   const { t } = useTranslation()
   const navigate = useClusterNavigate()
   const { user, logout } = useAuth()
+  const { siteName } = useBranding()
   const [open, setOpen] = useState(false)
 
   // 其它地方（例如概览页的超级管理员 MFA 引导）通过事件请求打开绑定流程：
@@ -108,6 +110,14 @@ export function UserMenu() {
         >
           <UserCog className="h-4 w-4" />
           <span>{t('userMenu.accountInfo', '用户信息')}</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          onSelect={() => navigate('/about')}
+          className="cursor-pointer"
+        >
+          <Info className="h-4 w-4" />
+          <span>{t('userMenu.about', { name: siteName })}</span>
         </DropdownMenuItem>
 
         {/* 侧边栏自定义入口对所有登录用户可见：个人布局优先于管理员发布的全局布局，

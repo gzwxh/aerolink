@@ -16,6 +16,8 @@
         打进镜像，要求本机 glibc **不高于**运行基座（openEuler 24.03 LTS-SP4 = glibc 2.38）。
       - `make image` + `make push`：容器内编译（golang:1.26.8 / Debian glibc 2.41），可复现、不挑本机
         工具链，但每次要把 vendor(872MB) 传进上下文并编译两遍（实测 12 分钟以上）。
+      - 文档站镜像（`docs/` 有改动时）：`make push-docs`（= `docs-image` + 推送 `DOCS_IMAGE`）。它是独立
+        镜像、不含应用代码，文档站单独更新时只跑它，不必跟着应用发版。
       两条路径都推公司 registry（`Makefile` 的 `IMAGE`，如 `swr.cn-south-1.myhuaweicloud.com/gzwxh/...`）。
       构建后先 `docker run --rm <image> /home/aerolink/aerolink -h` 确认镜像能起来。
 - [ ] **5. 打包并推送 chart**：`helm package charts/aerolink`，推送 chart（OCI 或内网/oss 仓库）。注意打包产物不得入库（见 §3）。
@@ -46,6 +48,26 @@
 
 **2026-10-16 的实例**：v1.0.2 新增 `clusters.slug`，生产账号非 owner → 列没加上 → 前端拿不到
 短名 → 整个控制台停在兜底页（详见 `plans/2026-10-15-集群信息进入浏览器地址栏.md` §4）。
+
+**2026-10-19 的实例**：通用设置新增 `general_settings.help_url`（帮助文档站地址，
+`varchar(500)`，见 `plans/2026-10-19-帮助文档入口与文档站镜像.md`）。升级前需执行：
+
+```sql
+-- PostgreSQL（需表 owner）
+ALTER TABLE general_settings ADD COLUMN IF NOT EXISTS help_url varchar(500);
+
+-- MySQL 5.7 / 8.x：不支持 ADD COLUMN IF NOT EXISTS；若报 1060 Duplicate column name 说明列已存在，忽略
+ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
+
+-- SQLite：应用对本机库有写权限，启动时 AutoMigrate 会自行加列，通常无需手工执行
+ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
+```
+
+未执行时的后果**不发散**：读路径 `DB.First` 是 `SELECT *`，缺列不报错，只是帮助文档地址恒为空
+（顶栏与登录页不显示入口）；写路径 `Updates(map{"help_url": …})` 会真的报列不存在
+（PostgreSQL `42703`、MySQL `1054`），保存通用设置返回 500。另外 `checkSchema()` 会列出
+`库表 general_settings 缺少列 help_url`。用户可见的升级步骤写在 `docs/guide/installation.md`
+的「升级」一节（中英同步）。
 
 ## 2. CI 发布（可选，默认关闭）
 

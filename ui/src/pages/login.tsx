@@ -9,6 +9,7 @@ import LoginBanner from '@/assets/login-banner.svg'
 import { useAuth } from '@/contexts/auth-context'
 import { useBranding } from '@/contexts/branding-context'
 import {
+  IconBook,
   IconEye,
   IconEyeOff,
   IconLock,
@@ -77,7 +78,8 @@ function LoginBackground({ children }: { children: ReactNode }) {
 
 export function LoginPage() {
   const { t } = useTranslation()
-  const { logoUrl, siteName } = useBranding()
+  // 帮助文档入口随 bootstrap 一起下发，所以未登录也能从这里打开。
+  const { logoUrl, siteName, helpUrl } = useBranding()
   // 登录页没有子页面标题：浏览器标签只展示控制台名称（同样受品牌配置控制）。
   usePageTitle('')
   const {
@@ -412,9 +414,17 @@ export function LoginPage() {
 
   return (
     <LoginBackground>
-      {/* Language Toggle - Top Right */}
-      {/* 右上角压在插画的太阳光晕上，给个浅底以保证图标在两种主题下都看得见 */}
-      <div className="absolute top-6 right-6 z-10 rounded-full bg-background/50 backdrop-blur-sm">
+      {/* 帮助文档入口 + 语言切换 - Top Right */}
+      {/* 右上角压在插画的太阳光晕上，给个浅底以保证按钮在两种主题下都看得见 */}
+      <div className="absolute top-6 right-6 z-10 flex items-center gap-1 rounded-full bg-background/50 p-1 backdrop-blur-sm">
+        {helpUrl !== '' && (
+          <Button variant="ghost" size="sm" className="h-9" asChild>
+            <a href={helpUrl} target="_blank" rel="noreferrer">
+              <IconBook className="h-4 w-4" />
+              {t('login.helpLink', '帮助文档')}
+            </a>
+          </Button>
+        )}
         <LanguageToggle />
       </div>
 

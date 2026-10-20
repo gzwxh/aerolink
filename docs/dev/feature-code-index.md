@@ -168,7 +168,7 @@
 
 | 功能 | 前端 | 前端 API | 后端 | 数据 |
 | --- | --- | --- | --- | --- |
-| 通用设置（品牌/JWT/各类默认值） | `ui/src/components/settings/general-management.tsx`、`ui/src/contexts/branding-context.tsx` | `ui/src/lib/api/admin.ts`、`ui/src/lib/api/bootstrap.ts` | `pkg/settings`、`internal/config.go` | `general_settings` |
+| 通用设置（品牌/JWT/各类默认值/帮助文档地址） | `ui/src/components/settings/general-management.tsx`、`ui/src/contexts/branding-context.tsx`、入口在 `ui/src/components/site-header.tsx`（顶栏）与 `ui/src/pages/login.tsx`（登录页） | `ui/src/lib/api/admin.ts`、`ui/src/lib/api/bootstrap.ts` | `pkg/settings`（`normalizeHelpURL` 只放行 http(s) 绝对地址）、`pkg/auth/bootstrap_handler.go`、`internal/config.go` | `general_settings`（帮助文档地址 `help_url`，口径见 `plans/2026-10-19-帮助文档入口与文档站镜像.md`） |
 | 外观（主题/字体/显示比例） | `ui/src/components/theme-provider.tsx`、`font-provider.tsx`、`appearance-provider.tsx`、`display-scale-provider.tsx`、`color-theme-provider.tsx`；配色取值在 `ui/src/styles/themes/*.css`（契约见 `theme-contrast.test.ts`） | —（仅 localStorage） | — | localStorage |
 | 侧边栏自定义 | `ui/src/components/sidebar-customizer.tsx`（对话框 / 设置页 `inline` 两态）、`ui/src/contexts/sidebar-config-context.tsx`、`ui/src/contexts/sidebar-config-defaults.ts`（分组目录与版本迁移，“集群”分组 v6 起独立）、`ui/src/components/settings/navigation-management.tsx`（独立设置章节，管理员入口） | `ui/src/lib/api/system.ts` | `pkg/users/handler.go`（`UpdateSidebarPreference`、`UpdateGlobalSidebarPreference`、`ClearGlobalSidebarPreference`） | `users.sidebar_preference`、`general_settings.global_sidebar_preference` |
 | 设置页框架（标签 + 权限门） | `ui/src/components/settings/settings-sections.tsx`、`ui/src/pages/settings.tsx` | — | — | — |

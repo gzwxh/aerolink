@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import DefaultLogo from '@/assets/logo.svg'
 import { useSettingsSectionAccess } from '@/contexts/settings-section-context'
 import {
+  IconBook,
+  IconExternalLink,
   IconLink,
   IconMessage,
   IconPhoto,
@@ -48,6 +50,8 @@ const DEFAULT_NODE_TERMINAL_IMAGE =
   'swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest'
 const DEFAULT_CLUSTER_AGENT_IMAGE =
   'swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest'
+// 与后端 normalizeHelpURL 同一条判定：帮助文档地址只放行 http(s) 绝对地址。
+const isHttpUrl = (value: string) => /^https?:\/\/\S+$/i.test(value)
 
 interface GeneralSettingsFormData {
   aiAgentEnabled: boolean
@@ -64,6 +68,7 @@ interface GeneralSettingsFormData {
   loginPrompt: string
   logoUrl: string
   siteName: string
+  helpUrl: string
 }
 
 export function GeneralManagement() {
@@ -87,6 +92,7 @@ export function GeneralManagement() {
     loginPrompt: '',
     logoUrl: '',
     siteName: '',
+    helpUrl: '',
   })
 
   useEffect(() => {
@@ -106,6 +112,7 @@ export function GeneralManagement() {
       loginPrompt: data.loginPrompt || '',
       logoUrl: data.logoUrl || '',
       siteName: data.siteName || '',
+      helpUrl: data.helpUrl || '',
     })
   }, [data])
 
@@ -154,7 +161,34 @@ export function GeneralManagement() {
     reader.readAsDataURL(file)
   }
 
+  // 「打开」按钮只是预览用途：同样按后端那套口径校验，避免打开一个必然打不开的地址。
+  const handleOpenHelpUrl = () => {
+    const helpUrl = formData.helpUrl.trim()
+    if (!isHttpUrl(helpUrl)) {
+      toast.error(
+        t(
+          'generalManagement.errors.helpUrlInvalid',
+          '帮助文档地址必须是 http(s) 开头的完整地址'
+        )
+      )
+      return
+    }
+    window.open(helpUrl, '_blank', 'noopener,noreferrer')
+  }
+
   const handleSave = () => {
+    // 与后端同一条判定：非 http(s) 的地址会被服务端 400 拒掉，先在这里说清楚。
+    const helpUrl = formData.helpUrl.trim()
+    if (helpUrl !== '' && !isHttpUrl(helpUrl)) {
+      toast.error(
+        t(
+          'generalManagement.errors.helpUrlInvalid',
+          '帮助文档地址必须是 http(s) 开头的完整地址'
+        )
+      )
+      return
+    }
+
     const defaultModel =
       formData.aiProvider === 'anthropic'
         ? DEFAULT_ANTHROPIC_MODEL
@@ -215,6 +249,8 @@ export function GeneralManagement() {
       logoUrl: formData.logoUrl.trim(),
       // 空串 = 用默认名。
       siteName: formData.siteName.trim(),
+      // 空串 = 不显示帮助文档入口。
+      helpUrl,
     }
     if (formData.aiApiKey.trim()) {
       payload.aiApiKey = formData.aiApiKey.trim()
@@ -644,6 +680,60 @@ export function GeneralManagement() {
               {t(
                 'generalManagement.branding.urlHint',
                 '支持图片地址或 data: URL；建议方形图标且小于 180 KiB（logo 会在每次打开控制台时下发），保存后生效。'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border p-3">
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2 text-sm font-medium">
+              <IconBook className="h-4 w-4" />
+              {t('generalManagement.help.title', '帮助文档')}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'generalManagement.help.description',
+                '配置帮助文档站地址后，顶部导航栏与登录页会显示「帮助文档」入口，方便用户直接打开；留空则不显示入口。仅管理员可改。'
+              )}
+            </p>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <Label htmlFor="general-help-url">
+              {t('generalManagement.help.urlLabel', '文档地址')}
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="general-help-url"
+                value={formData.helpUrl}
+                disabled={readOnly}
+                onChange={(event) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    helpUrl: event.target.value,
+                  }))
+                }
+                placeholder={t(
+                  'generalManagement.help.urlPlaceholder',
+                  'https://aerolink-docs.example.com/'
+                )}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                disabled={formData.helpUrl.trim() === ''}
+                onClick={handleOpenHelpUrl}
+              >
+                <IconExternalLink className="h-4 w-4" />
+                {t('generalManagement.help.open', '打开')}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'generalManagement.help.urlHint',
+                '只接受 http(s) 绝对地址，保存后生效。'
               )}
             </p>
           </div>
