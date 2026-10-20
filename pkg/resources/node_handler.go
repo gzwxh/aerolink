@@ -16,6 +16,7 @@ import (
 	"github.com/zxh326/kite/pkg/rbac"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -297,10 +298,10 @@ func (h *NodeHandler) UntaintNode(c *gin.Context) {
 
 func (h *NodeHandler) List(c *gin.Context) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
-	var nodeMetrics metricsv1.NodeMetricsList
+	labelSelector := c.Query("labelSelector")
 
 	var listOpts []client.ListOption
-	if labelSelector := c.Query("labelSelector"); labelSelector != "" {
+	if labelSelector != "" {
 		selector, err := labels.Parse(labelSelector)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid labelSelector parameter: " + err.Error()})
@@ -314,11 +315,7 @@ func (h *NodeHandler) List(c *gin.Context) {
 		return
 	}
 
-	if err := cs.K8sClient.List(c.Request.Context(), &nodeMetrics); err != nil {
-		klog.Warningf("Failed to list node metrics: %v", err)
-	}
-
-	nodeMetricsMap := buildNodeMetricsMap(nodeMetrics.Items)
+	nodeMetricsMap := buildNodeMetricsMap(listNodeMetrics(c.Request.Context(), cs, labelSelector))
 	nodeResourceRequests := listNodeResourceRequests(c.Request.Context(), cs.K8sClient, nodes.Items)
 
 	result := &common.NodeListWithMetrics{
@@ -363,6 +360,22 @@ func (h *NodeHandler) registerCustomRoutes(group *gin.RouterGroup) {
 	group.PUT("/_all/:name/uncordon", h.UncordonNode)
 	group.PUT("/_all/:name/taint", h.TaintNode)
 	group.PUT("/_all/:name/untaint", h.UntaintNode)
+}
+
+// listNodeMetrics 直连 metrics-server 读节点用量：metrics.k8s.io 不支持 watch，
+// 经客户端缓存读取会建 informer，让 ListAndWatch 每轮都以 405 失败重试。
+func listNodeMetrics(ctx context.Context, cs *cluster.ClientSet, labelSelector string) []metricsv1.NodeMetrics {
+	if cs.K8sClient.MetricsClient == nil {
+		return nil
+	}
+	metricsList, err := cs.K8sClient.MetricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		klog.Warningf("Failed to list node metrics: %v", err)
+		return nil
+	}
+	return metricsList.Items
 }
 
 func buildNodeMetricsMap(nodeMetrics []metricsv1.NodeMetrics) map[string]metricsv1.NodeMetrics {

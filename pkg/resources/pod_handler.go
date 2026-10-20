@@ -153,25 +153,28 @@ func podUsageFromMetrics(m metricsv1.PodMetrics) (int64, int64) {
 
 // listPodMetrics 读取 Pod 用量并按 ns/name 建索引。结果只取决于集群与过滤条件、
 // 与登录用户无关，因此同一个周期内可以在该集群的所有连接之间共享（见 pod watch hub）。
+//
+// 直连 metrics-server，不经 informer 缓存：metrics.k8s.io 不支持 watch（返回 405），
+// 从缓存读取会建出一条永远失败的 watch —— 既会反复整表重列用量，也会把该集群误判成
+// 「数据可能过期」（见 pkg/kube/health.go）。
 func listPodMetrics(ctx context.Context, cs *cluster.ClientSet, namespace, labelSelector string) (map[string]metricsv1.PodMetrics, error) {
-	var metricsList metricsv1.PodMetricsList
-	var listOpts []client.ListOption
-	if namespace != "" && namespace != common.AllNamespaces {
-		listOpts = append(listOpts, client.InNamespace(namespace))
-	}
 	if labelSelector != "" {
-		selector, err := metav1.ParseToLabelSelector(labelSelector)
-		if err != nil {
+		if _, err := metav1.ParseToLabelSelector(labelSelector); err != nil {
 			return nil, fmt.Errorf("invalid labelSelector parameter: %w", err)
 		}
-		labelSelectorOption, err := metav1.LabelSelectorAsSelector(selector)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert labelSelector: %w", err)
-		}
-		listOpts = append(listOpts, client.MatchingLabelsSelector{Selector: labelSelectorOption})
 	}
-	if err := cs.K8sClient.List(ctx, &metricsList, listOpts...); err != nil {
+	if cs.K8sClient.MetricsClient == nil {
+		return map[string]metricsv1.PodMetrics{}, nil
+	}
+	if namespace == common.AllNamespaces {
+		namespace = ""
+	}
+	metricsList, err := cs.K8sClient.MetricsClient.MetricsV1beta1().PodMetricses(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
 		klog.Warningf("Failed to list pod metrics: %v", err)
+		return map[string]metricsv1.PodMetrics{}, nil
 	}
 
 	return lo.KeyBy(metricsList.Items, func(item metricsv1.PodMetrics) string {

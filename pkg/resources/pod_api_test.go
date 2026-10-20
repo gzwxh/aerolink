@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	metricsv1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -48,6 +49,7 @@ type podAPITestConfig struct {
 	clusterBInterceptors interceptor.Funcs
 	clusterAClientSet    *kubernetes.Clientset
 	clusterAConfig       *rest.Config
+	clusterAMetrics      *metricsclient.Clientset
 	registerRoutes       func(*gin.RouterGroup)
 }
 
@@ -67,6 +69,45 @@ func (p podAPITestClusterProvider) GetClientSet(clusterName string) (*cluster.Cl
 		return nil, fmt.Errorf("cluster not found: %s", clusterName)
 	}
 	return clientSet, nil
+}
+
+// newPodMetricsClient 用替身 HTTP 服务提供 metrics.k8s.io 的 List 响应。
+// metrics-server 不支持 watch，生产代码直连 List，测试不必再经 informer 缓存。
+func newPodMetricsClient(t *testing.T, items ...metricsv1.PodMetrics) *metricsclient.Clientset {
+	t.Helper()
+	return newMetricsClientWith(t, func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(&metricsv1.PodMetricsList{Items: items})
+	})
+}
+
+// newBrokenPodMetricsClient 模拟 metrics-server 不可用：读不到用量时 Pod 列表仍须正常返回。
+func newBrokenPodMetricsClient(t *testing.T) *metricsclient.Clientset {
+	t.Helper()
+	return newMetricsClientWith(t, func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(&metav1.Status{
+			TypeMeta: metav1.TypeMeta{Kind: "Status", APIVersion: "v1"},
+			Status:   metav1.StatusFailure,
+			Code:     http.StatusServiceUnavailable,
+			Reason:   metav1.StatusReasonServiceUnavailable,
+			Message:  "metrics unavailable",
+		})
+	})
+}
+
+func newMetricsClientWith(t *testing.T, respond func(http.ResponseWriter)) *metricsclient.Clientset {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respond(w)
+	}))
+	t.Cleanup(server.Close)
+	clientset, err := metricsclient.NewForConfig(&rest.Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("构造 metrics 客户端失败: %v", err)
+	}
+	return clientset
 }
 
 func setupResourceAPITestDB(t *testing.T, user model.User) {
@@ -133,6 +174,7 @@ func newPodAPITestFixture(t *testing.T, config podAPITestConfig) *podAPITestFixt
 			K8sClient: &kube.K8sClient{
 				Client:        clusterAClient,
 				ClientSet:     config.clusterAClientSet,
+				MetricsClient: config.clusterAMetrics,
 				Configuration: config.clusterAConfig,
 			},
 		},
@@ -547,14 +589,14 @@ func TestPodAPIListResponseVariants(t *testing.T) {
 						}},
 					}},
 				},
-				&metricsv1.PodMetrics{
-					ObjectMeta: metav1.ObjectMeta{Name: "measured", Namespace: "default"},
-					Containers: []metricsv1.ContainerMetrics{
-						{Usage: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("20m"), corev1.ResourceMemory: resource.MustParse("10Mi")}},
-						{Usage: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("30m"), corev1.ResourceMemory: resource.MustParse("20Mi")}},
-					},
-				},
 			},
+			clusterAMetrics: newPodMetricsClient(t, metricsv1.PodMetrics{
+				ObjectMeta: metav1.ObjectMeta{Name: "measured", Namespace: "default"},
+				Containers: []metricsv1.ContainerMetrics{
+					{Usage: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("20m"), corev1.ResourceMemory: resource.MustParse("10Mi")}},
+					{Usage: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("30m"), corev1.ResourceMemory: resource.MustParse("20Mi")}},
+				},
+			}),
 		})
 
 		response := performPodAPIRequest(t, fixture, http.MethodGet, "/api/v1/pods/default", "", nil)
@@ -576,14 +618,7 @@ func TestPodAPIListResponseVariants(t *testing.T) {
 		fixture := newPodAPITestFixture(t, podAPITestConfig{
 			user:            user,
 			clusterAObjects: []client.Object{&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod-a", Namespace: "default"}}},
-			clusterAInterceptors: interceptor.Funcs{
-				List: func(ctx context.Context, underlying client.WithWatch, list client.ObjectList, options ...client.ListOption) error {
-					if _, ok := list.(*metricsv1.PodMetricsList); ok {
-						return errors.New("metrics unavailable")
-					}
-					return underlying.List(ctx, list, options...)
-				},
-			},
+			clusterAMetrics: newBrokenPodMetricsClient(t),
 		})
 
 		response := performPodAPIRequest(t, fixture, http.MethodGet, "/api/v1/pods/default", "", nil)
@@ -1584,7 +1619,7 @@ func TestPodWatchTickerPushesChangedMetricsOnly(t *testing.T) {
 	}
 	fixture := newPodAPITestFixture(t, podAPITestConfig{
 		user:              model.User{Username: "alice", Roles: roles},
-		clusterAObjects:   []client.Object{metricsPod},
+		clusterAMetrics:   newPodMetricsClient(t, *metricsPod),
 		clusterAClientSet: clientSet,
 	})
 

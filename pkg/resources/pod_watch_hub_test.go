@@ -2,8 +2,10 @@ package resources
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,14 +18,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
 	toolscache "k8s.io/client-go/tools/cache"
 	metricsv1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // stubPodCache 只实现 hub 真正用到的方法（GetInformer），
@@ -189,38 +190,32 @@ func TestPodWatchHubDropsSlowSubscriber(t *testing.T) {
 func TestPodWatchHubSharesPodMetricsPerInterval(t *testing.T) {
 	const clusterName = "hub-shared-metrics-cluster"
 
-	scheme := runtime.NewScheme()
-	if err := corev1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-	if err := metricsv1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-
-	var listCalls int
-	metricsClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(&metricsv1.PodMetrics{
+	// metrics-server 不支持 watch（405），这里用替身 HTTP 服务确认用量只走直连 List。
+	var listCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		listCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(&metricsv1.PodMetricsList{Items: []metricsv1.PodMetrics{{
 			ObjectMeta: metav1.ObjectMeta{Name: "web-a", Namespace: "default"},
 			Containers: []metricsv1.ContainerMetrics{{
 				Name:  "app",
 				Usage: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m")},
 			}},
-		}).
-		WithInterceptorFuncs(interceptor.Funcs{
-			List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
-				listCalls++
-				return c.List(ctx, list, opts...)
-			},
-		}).
-		Build()
+		}}})
+	}))
+	t.Cleanup(server.Close)
+
+	metricsClient, err := metricsclient.NewForConfig(&rest.Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("构造 metrics 客户端失败: %v", err)
+	}
 
 	informer := &stubPodInformer{}
 	cs := &cluster.ClientSet{
 		Name: clusterName,
 		K8sClient: &kube.K8sClient{
-			Client: metricsClient,
-			Cache:  &stubPodCache{informer: informer},
+			MetricsClient: metricsClient,
+			Cache:         &stubPodCache{informer: informer},
 		},
 	}
 	hub, err := acquirePodWatchHub(cs)
@@ -236,8 +231,8 @@ func TestPodWatchHubSharesPodMetricsPerInterval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("podMetricsMap returned error: %v", err)
 	}
-	if listCalls != 1 {
-		t.Fatalf("首次读取的 List 次数 = %d, want 1", listCalls)
+	if got := listCalls.Load(); got != 1 {
+		t.Fatalf("首次读取的 List 次数 = %d, want 1", got)
 	}
 	if len(first) != 1 {
 		t.Fatalf("用量条目数 = %d, want 1 (%v)", len(first), first)
@@ -250,8 +245,8 @@ func TestPodWatchHubSharesPodMetricsPerInterval(t *testing.T) {
 	if _, err := hub.podMetricsMap(ctx, cs, "default", interval); err != nil {
 		t.Fatalf("second podMetricsMap returned error: %v", err)
 	}
-	if listCalls != 1 {
-		t.Fatalf("同周期复用的 List 次数 = %d, want 1", listCalls)
+	if got := listCalls.Load(); got != 1 {
+		t.Fatalf("同周期复用的 List 次数 = %d, want 1", got)
 	}
 
 	// 全部命名空间与空 namespace 是同一份数据，与具体命名空间互不共用。
@@ -260,16 +255,16 @@ func TestPodWatchHubSharesPodMetricsPerInterval(t *testing.T) {
 			t.Fatalf("podMetricsMap(%q) returned error: %v", ns, err)
 		}
 	}
-	if listCalls != 2 {
-		t.Fatalf("全部命名空间的 List 次数 = %d, want 2", listCalls)
+	if got := listCalls.Load(); got != 2 {
+		t.Fatalf("全部命名空间的 List 次数 = %d, want 2", got)
 	}
 
 	// 跨周期（interval 为 0 表示快照立即过期）必须重新读取。
 	if _, err := hub.podMetricsMap(ctx, cs, "default", 0); err != nil {
 		t.Fatalf("refreshing podMetricsMap returned error: %v", err)
 	}
-	if listCalls != 3 {
-		t.Fatalf("跨周期刷新的 List 次数 = %d, want 3", listCalls)
+	if got := listCalls.Load(); got != 3 {
+		t.Fatalf("跨周期刷新的 List 次数 = %d, want 3", got)
 	}
 
 	// 带 labelSelector 的连接不满足共享前提：退回每连接各自读取，且不写入共享快照。
@@ -283,14 +278,14 @@ func TestPodWatchHubSharesPodMetricsPerInterval(t *testing.T) {
 	if metricsMap := handler.watchMetricsMap(ginCtx, cs, hub, "default", "app=web", interval); metricsMap == nil {
 		t.Fatal("带 labelSelector 的退回路径不应返回 nil")
 	}
-	if listCalls != 4 {
-		t.Fatalf("带 labelSelector 的 List 次数 = %d, want 4", listCalls)
+	if got := listCalls.Load(); got != 4 {
+		t.Fatalf("带 labelSelector 的 List 次数 = %d, want 4", got)
 	}
 	if _, err := hub.podMetricsMap(ctx, cs, "default", interval); err != nil {
 		t.Fatalf("podMetricsMap after selector fallback returned error: %v", err)
 	}
-	if listCalls != 4 {
-		t.Fatalf("退回路径污染了共享快照，List 次数 = %d, want 4", listCalls)
+	if got := listCalls.Load(); got != 4 {
+		t.Fatalf("退回路径污染了共享快照，List 次数 = %d, want 4", got)
 	}
 }
 

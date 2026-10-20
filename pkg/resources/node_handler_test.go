@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	metricsv1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -84,6 +85,16 @@ func newFakeClientSetUncached(t *testing.T, objs ...client.Object) *cluster.Clie
 			CacheEnabled: false,
 		},
 	}
+}
+
+// newNodeMetricsClient 用替身 HTTP 服务提供 NodeMetrics 列表
+// （生产代码直连 metrics-server，不走 informer 缓存）。
+func newNodeMetricsClient(t *testing.T, items ...metricsv1.NodeMetrics) *metricsclient.Clientset {
+	t.Helper()
+	return newMetricsClientWith(t, func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(&metricsv1.NodeMetricsList{Items: items})
+	})
 }
 
 // newTestGinContext 创建一个用于测试的 gin.Context，
@@ -189,8 +200,8 @@ func TestNodeHandlerList_PodAssignmentByFieldIndex(t *testing.T) {
 	cs := newFakeClientSet(t,
 		nodeA, nodeB,
 		podA1, podA2, podB1, unscheduled,
-		metricsA, metricsB,
 	)
+	cs.K8sClient.MetricsClient = newNodeMetricsClient(t, *metricsA, *metricsB)
 
 	ctx, rec := newTestGinContext(t, cs)
 	handler := NewNodeHandler()
@@ -397,8 +408,8 @@ func TestNodeHandlerList_Uncached_PodAssignment(t *testing.T) {
 	cs := newFakeClientSetUncached(t,
 		nodeA, nodeB,
 		podA1, podA2, podB1, unscheduled,
-		metricsA, metricsB,
 	)
+	cs.K8sClient.MetricsClient = newNodeMetricsClient(t, *metricsA, *metricsB)
 
 	ctx, rec := newTestGinContext(t, cs)
 	handler := NewNodeHandler()

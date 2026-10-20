@@ -2,8 +2,12 @@ package kube
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const testStaleAfter = 45 * time.Second
@@ -71,6 +75,33 @@ func TestHealthWatchErrorIsClearedBySuccessfulProbe(t *testing.T) {
 	h.RecordProbeOK(now)
 	if got = h.Snapshot(now, testStaleAfter); got.Stale {
 		t.Errorf("snapshot after successful probe = %#v, want healthy", got)
+	}
+}
+
+// TestHealthIgnoresUnsupportedWatchError 覆盖 metrics.k8s.io 这类不支持 watch 的资源：
+// informer 每轮都拿到 405，但集群本身是可达的，不能因此把数据标成陈旧。
+func TestHealthIgnoresUnsupportedWatchError(t *testing.T) {
+	now := time.Now()
+	h := NewHealth()
+	h.RecordProbeOK(now)
+
+	unsupported := &apierrors.StatusError{ErrStatus: metav1.Status{
+		Status:  metav1.StatusFailure,
+		Code:    http.StatusMethodNotAllowed,
+		Reason:  metav1.StatusReasonMethodNotAllowed,
+		Message: `watch is not supported on resources of kind "pods.metrics.k8s.io"`,
+	}}
+	if logged := h.RecordWatchError(unsupported); logged {
+		t.Error("不支持 watch 的错误不该按告警输出")
+	}
+	if got := h.Snapshot(now, testStaleAfter); got.Stale {
+		t.Fatalf("snapshot after unsupported-watch error = %#v, want healthy", got)
+	}
+
+	// 真正的故障仍要标记陈旧，避免把这类错误一并放过。
+	h.RecordWatchError(errors.New("connection refused"))
+	if got := h.Snapshot(now, testStaleAfter); !got.Stale || got.Reason != StaleReasonWatchError {
+		t.Fatalf("snapshot after real watch error = %#v, want stale/watch-error", got)
 	}
 }
 

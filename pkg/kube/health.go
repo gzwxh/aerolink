@@ -1,8 +1,12 @@
 package kube
 
 import (
+	"errors"
+	"net/http"
 	"sync"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // StaleReason* 说明「数据可能陈旧」的判据，随 ClusterHealth.Reason 下发。
@@ -55,12 +59,28 @@ type ClusterHealth struct {
 	Reason string
 }
 
+// watchErrorIsUnsupported 判断一次 ListAndWatch 错误是否只是「该资源类型不支持 watch」。
+// metrics.k8s.io 下的 PodMetrics/NodeMetrics 对 watch 一律返回 405：informer 会一直重试，
+// 但这是资源类型的固有属性，不是集群可达性问题，不能据此把缓存标成陈旧。
+func watchErrorIsUnsupported(err error) bool {
+	if apierrors.IsMethodNotSupported(err) {
+		return true
+	}
+	// metrics-server 的 405 用的是 StatusReason "MethodNotAllowed"（不是 builtin 的
+	// "MethodNotSupported"），apimachinery 没有对应助手，按状态码判定。
+	var status apierrors.APIStatus
+	if errors.As(err, &status) {
+		return status.Status().Code == http.StatusMethodNotAllowed
+	}
+	return false
+}
+
 // RecordWatchError 记录一次 informer 的 ListAndWatch 错误。
 //
 // 返回是否应当输出日志：首次错误与距上次输出超过 watchErrLogInterval 时为 true，
 // 由调用方决定日志内容（这里不打印，免得把探测逻辑和日志绑死）。
 func (h *Health) RecordWatchError(err error) bool {
-	if err == nil {
+	if err == nil || watchErrorIsUnsupported(err) {
 		return false
 	}
 	h.mu.Lock()
