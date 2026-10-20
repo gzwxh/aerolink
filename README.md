@@ -119,6 +119,20 @@ make push      # 构建并推送到公司 SWR
 # docker push  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.2
 ```
 
+帮助文档站（`docs/` 下的 VitePress 站）是独立镜像，不会带进应用镜像，构建上下文是 `docs/` 而不是仓库根：
+
+```bash
+make docs-image   # 构建文档站镜像（默认 tag 见 Makefile 的 DOCS_IMAGE 变量）
+make push-docs    # 构建并推送（与 make push-binary 对称，一步到位）
+# 只想单独推送已构建好的镜像：
+docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2
+# 等价于：
+# docker build --provenance=false --sbom=false -f docs/Dockerfile \
+#   -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2 docs/
+```
+
+镜像里是 nginx 托管的静态站（监听 80）；部署后把访问地址填进「通用设置 → 帮助文档地址」，登录页与顶栏会出现入口。
+
 受限网络下 `make image/push` 已内置国内镜像源参数（daocloud 基础镜像 + npmmirror + goproxy.cn），直连环境可用 `make image DOCKER_BUILD_ARGS=` 置空。
 
 ### 2. 启动容器

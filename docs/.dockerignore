@@ -1,0 +1,10 @@
+# 构建上下文是 docs/，这些内容是本地产物或依赖，不该进镜像。
+node_modules
+.vitepress/dist
+.vitepress/cache
+.gitignore
+
+# 内部工程文档：config.mts 的 srcExclude 已经把 dev/** 排除出站点，
+# 这里再挡一次，免得它进构建上下文。既有的本地备份也不进镜像。
+dev
+*.bak-*

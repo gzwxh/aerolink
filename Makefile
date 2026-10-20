@@ -1,5 +1,14 @@
 # Makefile for AeroLink project
-.PHONY: help dev build build-cli rancherrbac clean test docker-build docker-run frontend backend backend-cli install deps changelog e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-existing e2e-run-headed e2e-test e2e-test-headed
+#
+# .PHONY 一次列全（不再分散在文件各处）：所有目标都不产出同名文件，
+# 漏登记会出现「目录里刚好有个同名文件 → make 报 up to date 什么都不做」。
+.PHONY: help install deps build build-cli clean clean-frontend clean-backend \
+	cross-compile rancherrbac package-release package-binaries changelog \
+	frontend backend backend-cli run dev lint golangci-lint format pre-commit test \
+	e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app \
+	e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-existing e2e-run-headed \
+	e2e-test e2e-test-headed docs-dev docs-build \
+	image push docs-image push-docs image-binary push-binary
 
 # Variables
 BINARY_NAME=aerolink
@@ -72,9 +81,11 @@ $(LOCALBIN):
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 
 # Help target
+# 只列出带 `## ` 注释的目标：新加目标时顺手写一行描述，否则它不会出现在 `make help` 里。
+# 列宽按最长的目标名（e2e-install-browser，19 字符）留，短名不会挤掉后面的描述。
 help: ## Show this help message
 	@echo "Available targets:"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # Install dependencies
 install: deps ## Install all dependencies
@@ -88,7 +99,6 @@ deps: ## Install frontend and backend dependencies
 	go mod vendor
 
 # Build targets
-.PHONY: build
 build: ## Build both frontend and backend (always rebuilds both)
 	cd $(UI_DIR) && pnpm run build
 	@CGO_ENABLED=1 go build -trimpath $(LDFLAGS) -o $(BINARY_NAME) .
@@ -101,17 +111,17 @@ build-cli: ## Build both frontend and backend without CGO (pure-Go duckdb CLI dr
 	@echo "✅ Build completed successfully! (parquet search shells out to the duckdb binary)"
 	@echo "🚀 Run './$(BINARY_NAME)' to start the server"
 
-clean-frontend: ## Clean frontend build artifacts
+clean-frontend: ## Clean frontend build artifacts (ui/dist + embedded static/)
 	cd $(UI_DIR) && rm -rf dist node_modules/.vite
 	rm -rf static
 
-clean-backend: ## Clean backend build artifacts
+clean-backend: ## Clean backend build artifacts (binary + bin/)
 	rm -rf $(BINARY_NAME) bin/
 
 clean: clean-frontend clean-backend ## Clean all build artifacts
 	@echo "🧹 All build artifacts cleaned!"
 
-cross-compile: frontend ## Cross-compile for multiple architectures
+cross-compile: frontend ## Cross-compile all platforms into bin/ (pure-Go duckdb CLI driver)
 	@echo "🔄 Cross-compiling for multiple architectures..."
 	@echo "ℹ️  交叉编译走纯 Go 驱动（-tags duckdb_cli）：SDK 驱动的 libduckdb 是按平台分发的预编译"
 	@echo "    静态库，交叉编译要为每个目标再配一套 C 工具链；这几份产物需要目标机有 duckdb 可执行文件。"
@@ -127,7 +137,7 @@ cross-compile: frontend ## Cross-compile for multiple architectures
 rancherrbac: ## 打包授权迁移工具（参数透传给 scripts/build-rancherrbac.sh，如 -a 全平台）
 	sh scripts/build-rancherrbac.sh $(ARGS)
 
-package-release:
+package-release: ## Package everything in bin/ into a single versioned tarball
 	@echo "🔄 Packaging..."
 	tar -czvf bin/$(BINARY_NAME)-$(shell git describe --tags --match 'v*' | grep -oE 'v[0-9]+\.[0-9][0-9]*(\.[0-9]+)?').tar.gz bin/*
 
@@ -149,7 +159,6 @@ changelog: ## Generate categorized release notes into CHANGELOG.md
 	@sh scripts/changelog.sh >> CHANGELOG.md
 	@echo "✅ CHANGELOG.md updated"
 
-.PHONY: frontend
 frontend: ## Build frontend only (always rebuilds)
 	cd $(UI_DIR) && pnpm run build
 
@@ -348,7 +357,6 @@ DOCKER_BUILD_ARGS ?= --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
 #
 # 版本信息单独传，不放进 DOCKER_BUILD_ARGS：后者可能被置空以走直连环境，
 # 而镜像里的版本号（前端展示）不该跟着丢掉。
-.PHONY: image push
 image: ## Build the Docker image (IMAGE=registry/repo:tag)
 	docker build $(DOCKER_BUILD_ARGS) \
 		--build-arg VERSION=$(VERSION) \
@@ -358,6 +366,30 @@ image: ## Build the Docker image (IMAGE=registry/repo:tag)
 
 push: image ## Build and push the Docker image
 	docker push $(IMAGE)
+
+# 文档站镜像（VitePress 静态站 + nginx）。构建上下文是 docs/ 本身，不是仓库根：
+# 根 .dockerignore 里的 `docs` 会把它挡在上下文外，所以 -f 之外最后一个参数必须是 docs/。
+# 与应用镜像同一约定：地址连同 tag 直接写死（发新版时与上面的 IMAGE 一起改），
+# 换仓库或改名字再覆盖 DOCS_IMAGE。刻意不用 $(VERSION)：本机 Makefile.local 会覆盖它，
+# 那样两个镜像的 tag 会不一致。
+DOCS_IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2
+# 运行基座同样取 SWR（已推入 docker.io/library/nginx:1.31.7）；直连环境可改回 nginx:alpine。
+DOCS_NGINX_IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/nginx:1.31.7
+# 与 image 一致：文档站构建里唯一联网的就是 pnpm install，默认取国内镜像源。
+DOCS_NPM_REGISTRY ?= https://registry.npmmirror.com
+
+docs-image: ## Build the documentation site image (DOCS_IMAGE=registry/repo:tag)
+	docker build -f docs/Dockerfile \
+		--build-arg NGINX_IMAGE=$(DOCS_NGINX_IMAGE) \
+		--build-arg NPM_REGISTRY=$(DOCS_NPM_REGISTRY) \
+		$(DOCKER_PROVENANCE_ARGS) \
+		-t $(DOCS_IMAGE) docs/
+
+# 与 push / push-binary 同一形状（构建 + 推送一步到位），命令名也刻意对齐，
+# 免得文档站要单独记一条 `docker push`。文档站不需要 image-binary 那种「本机编译」路径：
+# 它本来就是容器内 pnpm + vitepress 构建，一次几十秒，没有加速的必要。
+push-docs: docs-image ## Build and push the documentation site image (DOCS_IMAGE=registry/repo:tag)
+	docker push $(DOCS_IMAGE)
 
 # image-binary 的输入目录：只放一个二进制 + CA 证书，构建上下文因此只有 ~100MB。
 BINARY_DIST_DIR ?= dist
@@ -373,7 +405,6 @@ GOARCH ?= $(shell go env GOARCH)
 
 # 注意：这里先跑 `build`（= 前端 pnpm build 到 ../static + CGO 编译），保证二进制里
 # embed 的是最新前端产物；版本号走 Makefile 的 LDFLAGS，不传 --build-arg。
-.PHONY: image-binary push-binary
 image-binary: build ## Build the image from the locally compiled binary (fast, needs a matching glibc)
 	@command -v docker >/dev/null || { echo "docker is required" >&2; exit 1; }
 	@test -n "$(CA_BUNDLE)" && test -f "$(CA_BUNDLE)" || { \

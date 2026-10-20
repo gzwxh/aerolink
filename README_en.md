@@ -87,6 +87,20 @@ make image     # build the image (default tag: see the IMAGE variable in the Mak
 make push      # build and push to the company SWR registry
 ```
 
+The help site (the VitePress site under `docs/`) is a separate image and is not part of the application image; its build context is `docs/`, not the repository root:
+
+```bash
+make docs-image   # build the docs image (default tag: see DOCS_IMAGE in the Makefile)
+make push-docs    # build and push in one step (mirrors make push-binary)
+# push an already built image only:
+docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2
+# equivalent to:
+# docker build --provenance=false --sbom=false -f docs/Dockerfile \
+#   -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2 docs/
+```
+
+The image serves the static site with nginx on port 80; after deploying it, put the URL into General Settings → Help documentation URL.
+
 Behind a restricted network the mirror build args are preconfigured; on a direct connection use `make image DOCKER_BUILD_ARGS=`.
 
 ### 2. Run the container
