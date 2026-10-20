@@ -238,6 +238,14 @@ export interface DeploymentFormData {
   containers: ContainerConfig[]
   /** Cron 表达式，仅在生成 CronJob 时使用。 */
   schedule?: string
+  /**
+   * Job 级调度参数：Job 直接放在 `spec` 下，CronJob 放在 `spec.jobTemplate.spec` 下。
+   * 用字符串是因为表单里可以留空——留空表示「不写进 manifest」：新建时由集群套默认值，
+   * 编辑时沿用线上对象当前的值（mergeEditedManifest 只在生成物带该键时才覆盖）。
+   */
+  backoffLimit?: string
+  parallelism?: string
+  completions?: string
 }
 
 export type WorkloadResourceType =
@@ -277,6 +285,40 @@ export const initialFormData: DeploymentFormData = {
     imagePullSecrets: [],
   },
   containers: [createDefaultContainer(0)],
+}
+
+/**
+ * Job 级参数的取值范围（k8s 校验：completions 至少 1，backoffLimit / parallelism 非负）。
+ * 导出给创建页渲染表单用，保证输入框的 min 与这里的解析规则一致。
+ */
+export const JOB_LEVEL_FIELDS = [
+  { key: 'backoffLimit', min: 0 },
+  { key: 'parallelism', min: 0 },
+  { key: 'completions', min: 1 },
+] as const
+
+/** 表单值是字符串：空串表示「不设置」，非整数或越界的一律当作没填。 */
+function parseJobLevelValue(
+  value: string | undefined,
+  min: number
+): number | null {
+  if (value === undefined || value.trim() === '') return null
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < min) return null
+  return parsed
+}
+
+/**
+ * Job 级参数：只在表单真的填了值时才写进 manifest，留空交由 mergeEditedManifest 的
+ * 深合并沿用线上对象当前的值（新建时则由集群套默认值）。
+ */
+function jobLevelSpec(formData: DeploymentFormData): Record<string, number> {
+  const spec: Record<string, number> = {}
+  for (const { key, min } of JOB_LEVEL_FIELDS) {
+    const parsed = parseJobLevelValue(formData[key], min)
+    if (parsed !== null) spec[key] = parsed
+  }
+  return spec
 }
 
 export function validateStep(
@@ -888,7 +930,7 @@ export function generateWorkloadYaml(
         apiVersion: 'batch/v1',
         kind: 'Job',
         metadata,
-        spec: { template: batchPodTemplate },
+        spec: { ...jobLevelSpec(formData), template: batchPodTemplate },
       }
       break
     case 'cronjobs':
@@ -898,7 +940,9 @@ export function generateWorkloadYaml(
         metadata,
         spec: {
           schedule: formData.schedule || '*/5 * * * *',
-          jobTemplate: { spec: { template: batchPodTemplate } },
+          jobTemplate: {
+            spec: { ...jobLevelSpec(formData), template: batchPodTemplate },
+          },
         },
       }
       break
@@ -1358,6 +1402,19 @@ export function parseYamlToFormData(
       base.serviceName = String(spec.serviceName)
     if (resourceType === 'cronjobs' && spec.schedule)
       base.schedule = String(spec.schedule)
+
+    // Job 级参数：Job 在 spec 下，CronJob 在 spec.jobTemplate.spec 下。回填成字符串，
+    // 让编辑表单能显示并改线上已有的值（留空则不写回，见 jobLevelSpec）。
+    const jobSpec =
+      resourceType === 'jobs'
+        ? spec
+        : (spec.jobTemplate?.spec as Record<string, any> | undefined)
+    if (jobSpec) {
+      for (const { key } of JOB_LEVEL_FIELDS) {
+        const value = jobSpec[key]
+        if (typeof value === 'number') base[key] = String(value)
+      }
+    }
 
     // 把 Service 文档映射回端口行：按 targetPort（数字或端口名）找到对应的
     // 容器端口行，记下它的 Service 类型、服务端口与 NodePort。多个 Service

@@ -487,6 +487,83 @@ spec:
 })
 
 /**
+ * Job 级参数（backoffLimit / parallelism / completions）：Job 直接放在 `spec` 下，
+ * CronJob 放在 `spec.jobTemplate.spec` 下。表单值是字符串，空串表示「不写进 manifest」——
+ * 新建时由集群套默认值，编辑时由 mergeEditedManifest 的深合并沿用线上对象当前的值。
+ */
+describe('Job 级参数', () => {
+  const form = (
+    overrides: Partial<DeploymentFormData> = {}
+  ): DeploymentFormData => ({
+    ...formWithPorts([
+      { containerPort: 8080, protocol: 'TCP', serviceType: 'none' },
+    ]),
+    name: 'batch',
+    ...overrides,
+  })
+
+  it('Job 写进 spec，CronJob 写进 spec.jobTemplate.spec', () => {
+    const data = form({ backoffLimit: '3', parallelism: '2', completions: '5' })
+
+    const job = yaml.load(generateWorkloadYaml(data, 'jobs')) as GeneratedDoc
+    expect(job.spec.backoffLimit).toBe(3)
+    expect(job.spec.parallelism).toBe(2)
+    expect(job.spec.completions).toBe(5)
+
+    const cronjob = yaml.load(
+      generateWorkloadYaml(data, 'cronjobs')
+    ) as GeneratedDoc
+    expect(cronjob.spec.jobTemplate).toMatchObject({
+      spec: { backoffLimit: 3, parallelism: 2, completions: 5 },
+    })
+    // Job 级参数不该落到 CronJob 的 spec 顶层（那里只有 schedule 等 CronJob 自己的字段）。
+    expect(cronjob.spec).not.toHaveProperty('backoffLimit')
+  })
+
+  it('留空不写进 manifest，非法或越界的值按没填处理', () => {
+    const empty = yaml.load(
+      generateWorkloadYaml(form(), 'jobs')
+    ) as GeneratedDoc
+    expect(empty.spec).not.toHaveProperty('backoffLimit')
+    expect(empty.spec).not.toHaveProperty('parallelism')
+    expect(empty.spec).not.toHaveProperty('completions')
+
+    // completions 至少 1，backoffLimit / parallelism 非负；非整数也当作没填。
+    const invalid = yaml.load(
+      generateWorkloadYaml(
+        form({ backoffLimit: 'abc', parallelism: '-1', completions: '0' }),
+        'jobs'
+      )
+    ) as GeneratedDoc
+    expect(invalid.spec).not.toHaveProperty('backoffLimit')
+    expect(invalid.spec).not.toHaveProperty('parallelism')
+    expect(invalid.spec).not.toHaveProperty('completions')
+  })
+
+  it('把 Job / CronJob 上的参数反解回表单字符串', () => {
+    const data = form({ backoffLimit: '4', parallelism: '1', completions: '6' })
+
+    const parsedJob = parseYamlToFormData(
+      generateWorkloadYaml(data, 'jobs'),
+      'jobs',
+      initialFormData
+    )
+    expect(parsedJob.backoffLimit).toBe('4')
+    expect(parsedJob.parallelism).toBe('1')
+    expect(parsedJob.completions).toBe('6')
+
+    const parsedCron = parseYamlToFormData(
+      generateWorkloadYaml(data, 'cronjobs'),
+      'cronjobs',
+      initialFormData
+    )
+    expect(parsedCron.backoffLimit).toBe('4')
+    expect(parsedCron.parallelism).toBe('1')
+    expect(parsedCron.completions).toBe('6')
+  })
+})
+
+/**
  * 编辑页的反显输入：线上工作负载是单对象，Service 是独立对象，必须由页面
  * 查回来拼成多文档才能反显「网络」区块。这里盯的是「只收 selector 匹配的
  * Service」——把别的负载的 Service 拼进来会把端口反显到错误的容器端口行。

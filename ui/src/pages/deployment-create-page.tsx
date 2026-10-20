@@ -54,6 +54,7 @@ import {
   hasInvalidPorts,
   hostPathTypeOptions,
   initialFormData,
+  JOB_LEVEL_FIELDS,
   parseYamlToFormData,
   StrategyForm,
   validateStep,
@@ -88,7 +89,7 @@ import {
 } from '@/components/workload-container-security'
 
 type MainTab = 'deployment' | 'pod' | 'yaml'
-type DeploySection = 'labels' | 'strategy'
+type DeploySection = 'labels' | 'strategy' | 'job'
 type PodSection =
   | 'labels'
   | 'scheduling'
@@ -827,6 +828,14 @@ function DeploymentFormPage({
                     key: 'labels',
                     label: t('workloadWizard.labelsAnnotations', '标签 & 注释'),
                   },
+                  ...(resourceType === 'jobs' || resourceType === 'cronjobs'
+                    ? [
+                        {
+                          key: 'job',
+                          label: t('workloadWizard.jobMenu', '任务参数'),
+                        },
+                      ]
+                    : []),
                   {
                     key: 'strategy',
                     label: t('workloadWizard.strategyMenu', '扩缩容和升级策略'),
@@ -860,6 +869,44 @@ function DeploymentFormPage({
                     />
                   </div>
                 )}
+                {deploySection === 'job' &&
+                  (resourceType === 'jobs' || resourceType === 'cronjobs') && (
+                    <div className="space-y-6">
+                      <h3 className="text-base font-medium">
+                        {t('workloadWizard.jobTitle', '任务参数')}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {t(
+                          'workloadWizard.jobHint',
+                          '留空表示不写入 manifest，由集群使用默认值；编辑时留空将沿用线上对象当前的值。'
+                        )}
+                      </p>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        {JOB_LEVEL_FIELDS.map((field) => (
+                          <div key={field.key} className="space-y-1.5">
+                            <Label
+                              className="text-xs"
+                              htmlFor={`job-${field.key}`}
+                            >
+                              {t(`workloadWizard.${field.key}`)}
+                            </Label>
+                            <Input
+                              id={`job-${field.key}`}
+                              type="number"
+                              min={field.min}
+                              value={formData[field.key] ?? ''}
+                              onChange={(e) =>
+                                update({
+                                  [field.key]: e.target.value,
+                                } as Partial<DeploymentFormData>)
+                              }
+                              className="h-9"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 {deploySection === 'strategy' &&
                   (resourceType === 'deployments' ||
                   resourceType === 'statefulsets' ? (
