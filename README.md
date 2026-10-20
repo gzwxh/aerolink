@@ -13,10 +13,13 @@
 | --- | --- | --- |
 | 中文名 | 鸢联 | |
 | 英文名 | AeroLink | |
-| 域名 | aerolink.gogdev.cn | |
+| 域名（内网） | aerolink.gogdev.cn | 实际部署域名，chart 默认的 ingress host 就是它 |
+| 域名建议（对外） | aerolink.io / aerolink.dev / aerolink.cloud | 对外候选域名，尚未启用；`aerolink.io/` 已用作资源注解前缀（如 `aerolink.io/description`） |
 | 发音 | /ˈeəroʊlɪŋk/ | 简单好读 |
 | 含义 | Aero = 天空/航空，Link = 连接 | |
 | 品牌故事 | 飞在 K8s 之上，连通每一个集群 | |
+| CLI | aero / alink（命名规划） | 尚未提供命令行工具，当前可执行文件仍叫 `aerolink` |
+| 包名 | io.aerolink（规划） | 尚未启用：Go module 是 `github.com/zxh326/kite`，前端包名是 `aerolink` |
 | 环境变量前缀 | `AEROLINK_` | 所有环境变量统一用它（如 `AEROLINK_ENCRYPT_KEY`）；改名前的 `KITE_*` 已不再生效 |
 | 构建版本号 | `v1.0.2` | 机器可读的实际版本号：git tag、镜像 tag、`/api/v1/version` 与界面侧栏显示都用它 |
 | 品牌版本串 | `AeroLink 1.0.2 (based on Kite x.y.z)` | 面向人的展示写法，只出现在文档与发布说明里，把「我们的版本」与「所基于的上游版本」一并交代 |
