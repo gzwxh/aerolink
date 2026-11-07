@@ -185,6 +185,8 @@
       "paused": "Paused",
       "persistentVolumeClaims": "PVCs",
       "phase": "Phase",
+      "platformUpdated": "Platform update",
+      "rolloutUpdated": "Last rollout",
       "podCIDR": "Pod CIDR",
       "podIP": "Pod IP",
       "podManagementPolicy": "Pod Management Policy",
@@ -363,7 +365,9 @@
       "enabled": "Enabled",
       "noResults": "No matching results",
       "searchPods": "Search pods...",
-      "noPodsFound": "No pods found."
+      "noPodsFound": "No pods found.",
+      "platformUpdatedHint": "Only writes made through AeroLink count (create, update, scale, restart, rollback); changes applied with kubectl or a pipeline are not recorded here.",
+      "rolloutUpdatedHint": "lastUpdateTime of the Deployment's Progressing condition: a rolling release advances it; plain scaling or label-only edits do not."
     },
     "tabs": {
       "containers": "Containers",
@@ -3127,7 +3131,7 @@
     "addLabel": "Add label",
     "addAnnotation": "Add annotation",
     "namespaceRequired": "Select a namespace first.",
-    "invalidName": "Name may only contain lowercase letters, numbers and dashes.",
+    "invalidName": "Name may only contain lowercase letters, numbers, dashes and dots.",
     "reservedName": "\"{{name}}\" is used by the create page URL, please pick another name.",
     "overlappingKeys": "\"{{key}}\" is already used by data; data and binaryData must not share keys.",
     "keyRequired": "Every entry needs a key.",
@@ -3168,7 +3172,7 @@
     "addLabel": "Add label",
     "addAnnotation": "Add annotation",
     "namespaceRequired": "Select a namespace first.",
-    "invalidName": "Name may only contain lowercase letters, numbers and dashes.",
+    "invalidName": "Name may only contain lowercase letters, numbers, dashes and dots.",
     "reservedName": "\"{{name}}\" is used by the create page URL, please pick another name.",
     "overlappingKeys": "\"{{key}}\" is already used by the plain-text data; data and stringData must not share keys.",
     "keyRequired": "Every entry needs a key.",

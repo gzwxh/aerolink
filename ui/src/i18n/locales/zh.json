@@ -189,6 +189,8 @@
       "persistentVolumeClaims": "PVC",
       "permissions": "权限",
       "phase": "阶段",
+      "platformUpdated": "平台操作时间",
+      "rolloutUpdated": "最近发布",
       "podCIDR": "Pod CIDR",
       "podIP": "Pod IP",
       "podManagementPolicy": "Pod 管理策略",
@@ -363,7 +365,9 @@
       "enabled": "已启用",
       "noResults": "没有匹配的结果",
       "searchPods": "搜索 Pod…",
-      "noPodsFound": "未找到 Pod"
+      "noPodsFound": "未找到 Pod",
+      "platformUpdatedHint": "只统计通过 AeroLink 的写入（创建、更新、扩缩容、重启、回滚）；kubectl 或流水线直接改集群不会留在这里。",
+      "rolloutUpdatedHint": "Deployment 状态中 Progressing 条件的最后更新时间：一次滚动发布会推进到这里；纯扩缩容、只改标签不会刷新。"
     },
     "tabs": {
       "containers": "容器",
@@ -3157,7 +3161,7 @@
     "addLabel": "添加标签",
     "addAnnotation": "添加注释",
     "namespaceRequired": "请先选择命名空间。",
-    "invalidName": "名称只能包含小写字母、数字和 '-'。",
+    "invalidName": "名称只能包含小写字母、数字、'-' 和 '.'。",
     "reservedName": "「{{name}}」与创建页地址冲突，请换一个名称。",
     "overlappingKeys": "键「{{key}}」已在数据中使用，data 与 binaryData 不能使用相同的键。",
     "keyRequired": "每一项都需要填写键名。",
@@ -3198,7 +3202,7 @@
     "addLabel": "添加标签",
     "addAnnotation": "添加注释",
     "namespaceRequired": "请先选择命名空间。",
-    "invalidName": "名称只能包含小写字母、数字和 '-'。",
+    "invalidName": "名称只能包含小写字母、数字、'-' 和 '.'。",
     "reservedName": "「{{name}}」与创建页地址冲突，请换一个名称。",
     "overlappingKeys": "键「{{key}}」已在明文数据中使用，data 与 stringData 不能使用相同的键。",
     "keyRequired": "每一项都需要填写键名。",

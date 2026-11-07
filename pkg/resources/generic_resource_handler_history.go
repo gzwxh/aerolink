@@ -12,7 +12,10 @@ import (
 	"k8s.io/kubectl/pkg/describe"
 )
 
-func (h *GenericResourceHandler[T, V]) registerCustomRoutes(group *gin.RouterGroup) {}
+func (h *GenericResourceHandler[T, V]) registerCustomRoutes(group *gin.RouterGroup) {
+	// 列表页「平台操作时间」列的批量取数：一次请求覆盖一个命名空间（`_all` 表示全部）。
+	group.GET("/:namespace/last-updates", h.ListLastUpdates)
+}
 
 // resourceHistoryUnsupportedCode 是「资源级变更历史在当前审计落地方式下不可用」的机器可读标识
 // （sink≠database）：界面据它给出说明，而不是把空列表当成「这个资源从没被改过」。

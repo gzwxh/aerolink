@@ -1482,6 +1482,71 @@ export const useResourceHistory = (
     staleTime: options?.staleTime || 30000, // 30 seconds cache
   })
 }
+
+/** 一个对象「最近一次通过 AeroLink 成功写入」的时间（来自审计记录）。 */
+export interface ResourceLastUpdate {
+  resourceName: string
+  namespace: string
+  lastUpdatedAt: string
+}
+
+export const fetchResourceLastUpdates = async (
+  resourceType: string,
+  namespace: string
+): Promise<ResourceLastUpdate[]> => {
+  const response = await fetchAPI<{ data?: ResourceLastUpdate[] }>(
+    `/${resourceType}/${encodeURIComponent(namespace)}/last-updates`
+  )
+  return response.data || []
+}
+
+/**
+ * 列表页「平台操作时间」列的取数：一次拿回当前命名空间选择下每个对象的最近写入时间，
+ * 返回 `"<namespace>/<name>" -> ISO 时间` 的映射。
+ *
+ * 两个口径上的限制要在界面上说得清（不要当成「从未被改过」）：
+ *   - 只统计通过 AeroLink 的修改，kubectl / CI 直接改集群不会留下审计记录；
+ *   - 审计 sink 不落库（parquet / ES）时后端返回 501，这里按「取不到」处理。
+ *
+ * 多选命名空间时逐个请求再合并：`_all` 子路由要显式的 `_all` 授权，限定命名空间
+ * 的角色拿不到（与 /history 同一规则），逐个请求能让每个命名空间按自己的权限判定。
+ * 单个命名空间失败（含 403）不影响其余结果。
+ */
+export const useResourceLastUpdates = (
+  resourceType: string,
+  namespaces: string[],
+  options?: { enabled?: boolean; staleTime?: number }
+) => {
+  const { currentCluster } = useCluster()
+  const namespaceKey = [...namespaces].sort().join(',')
+
+  return useQuery({
+    queryKey: [
+      'resource-last-updates',
+      resourceType,
+      namespaceKey,
+      currentCluster,
+    ],
+    queryFn: async () => {
+      const groups = await Promise.all(
+        namespaces.map((namespace) =>
+          fetchResourceLastUpdates(resourceType, namespace).catch(() => [])
+        )
+      )
+
+      const updates: Record<string, string> = {}
+      for (const group of groups) {
+        for (const item of group) {
+          updates[`${item.namespace}/${item.resourceName}`] = item.lastUpdatedAt
+        }
+      }
+      return updates
+    },
+    enabled: (options?.enabled ?? true) && namespaces.length > 0,
+    staleTime: options?.staleTime ?? 30_000,
+    placeholderData: (prev) => prev,
+  })
+}
 export const usePodFiles = (
   namespace: string,
   podName: string,

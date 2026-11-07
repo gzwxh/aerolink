@@ -607,6 +607,10 @@ func TestIsCrossNamespaceList(t *testing.T) {
 		{name: "cluster single resource _all get", path: "/api/v1/_clusters/prod/pods/_all/foo", want: false},
 		{name: "describe sub-route", path: "/api/v1/pods/_all/foo/describe", want: false},
 		{name: "history sub-route", path: "/api/v1/pods/default/foo/history", want: false},
+		// 「平台操作时间」的批量子路由：不是 LIST，所以 `_all` 形态走显式授权判定
+		// （与 /history 同一规则，见 plans/2026-10-28-deployments更新时间列.md §2.1）。
+		{name: "last-updates sub-route", path: "/api/v1/deployments/_all/last-updates", want: false},
+		{name: "namespaced last-updates sub-route", path: "/api/v1/deployments/default/last-updates", want: false},
 		{name: "watch sub-route", path: "/api/v1/pods/_all/watch", want: false},
 		{name: "specific namespace list is not cross-ns", path: "/api/v1/pods/default", want: false},
 		{name: "cluster specific namespace list is not cross-ns", path: "/api/v1/_clusters/prod/pods/default", want: false},

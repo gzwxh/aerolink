@@ -345,7 +345,7 @@ export function SecretCreatePage({ clone = false }: { clone?: boolean }) {
     if (!trimmedName || !K8S_RESOURCE_NAME_PATTERN.test(trimmedName)) {
       return t(
         'secretCreate.invalidName',
-        'Name may only contain lowercase letters, numbers and dashes.'
+        'Name may only contain lowercase letters, numbers, dashes and dots.'
       )
     }
     // "/secrets/<ns>/create" 本身就是创建路由，因此名为

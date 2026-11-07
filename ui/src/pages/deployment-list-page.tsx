@@ -6,11 +6,17 @@ import { Deployment } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 
-import { patchResource, restartWorkload, useResources } from '@/lib/api'
+import {
+  patchResource,
+  restartWorkload,
+  useResourceLastUpdates,
+  useResources,
+} from '@/lib/api'
 import { useClusterNavigate } from '@/lib/cluster-path'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 import {
   createSearchFilter,
+  getDeploymentRolloutTime,
   getDeploymentStatus,
   groupPodsByNamespace,
   resolveCreateNamespace,
@@ -55,6 +61,8 @@ const HIDDEN_BY_DEFAULT_COLUMNS = [
   'annotations',
   'resource_limits',
   'created',
+  'platform_updated',
+  'rollout_updated',
 ]
 
 // 注解值可能很长（如 last-applied-configuration），tooltip 里按长度裁剪。
@@ -109,6 +117,37 @@ function MetadataSummaryCell({
   )
 }
 
+// 更新时间两列都是「相对时间 + 悬浮看完整时间与口径」：列宽有限，
+// 而「哪种改动才算更新」的边界不适合写在单元格里。
+function LastUpdateCell({ value, hint }: { value?: string; hint: string }) {
+  const { t } = useTranslation()
+
+  if (!value) {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <EmptyValue />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">{hint}</TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger>
+        <span className="text-muted-foreground text-sm tabular-nums">
+          {formatAge(value, t)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs space-y-1 text-xs">
+        <p className="font-mono">{formatDate(value)}</p>
+        <p>{hint}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function DeploymentListPage() {
   const { namespace: namespaceParam } = useParams()
   const { t } = useTranslation()
@@ -156,6 +195,31 @@ export function DeploymentListPage() {
   })
   const podsByNamespace = useMemo(() => groupPodsByNamespace(pods), [pods])
   const podsLoaded = pods !== undefined
+
+  // 「平台操作时间」要按命名空间批量取数，但命名空间选择由表格自己的
+  // 状态持有（见 use-resource-table-state）：这里按同一口径初始化，并在
+  // onNamespaceChange 里跟进，不然列会停在旧命名空间的时点上。
+  const [namespaceSelection, setNamespaceSelection] = useState(() => {
+    if (namespaceParam) return namespaceParam
+    return (
+      sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')) ||
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace')) ||
+      'default'
+    )
+  })
+  // 多选（逗号拼接）没有单段 URL 能表达，按命名空间逐个取，每个命名空间
+  // 按自己的权限判定；其余情况（未选 / 全部）一求 `_all`。
+  const lastUpdateNamespaces = useMemo(() => {
+    if (!namespaceSelection || namespaceSelection === '_all') return ['_all']
+    return namespaceSelection.split(',').filter(Boolean)
+  }, [namespaceSelection])
+  const { data: lastUpdates } = useResourceLastUpdates(
+    'deployments',
+    lastUpdateNamespaces,
+    // 列默认隐藏，但取数在页面挂载时就会发生：平台时间不敏感，放长缓存
+    // 少几次聚合查询。
+    { staleTime: 60_000 }
+  )
 
   // 定义 Deployment 表格的列
   const columns = useMemo(
@@ -368,6 +432,32 @@ export function DeploymentListPage() {
           )
         },
       }),
+      // 两个口径的更新时间：一个看平台里最后一次写入（审计记录），
+      // 一个看对象实际发布推进的时间（K8s 状态）。
+      columnHelper.accessor(
+        (row) =>
+          lastUpdates?.[`${row.metadata?.namespace}/${row.metadata?.name}`],
+        {
+          id: 'platform_updated',
+          header: t('common.fields.platformUpdated'),
+          cell: ({ getValue }) => (
+            <LastUpdateCell
+              value={getValue()}
+              hint={t('common.messages.platformUpdatedHint')}
+            />
+          ),
+        }
+      ),
+      columnHelper.accessor((row) => getDeploymentRolloutTime(row), {
+        id: 'rollout_updated',
+        header: t('common.fields.rolloutUpdated'),
+        cell: ({ getValue }) => (
+          <LastUpdateCell
+            value={getValue()}
+            hint={t('common.messages.rolloutUpdatedHint')}
+          />
+        ),
+      }),
       columnHelper.display({
         id: 'actions',
         header: () => (
@@ -383,7 +473,7 @@ export function DeploymentListPage() {
         ),
       }),
     ],
-    [t, canUpdate, podsByNamespace, podsLoaded]
+    [t, canUpdate, podsByNamespace, podsLoaded, lastUpdates]
   )
 
   // 按命名空间分组展示（列本身就是分组依据，默认隐藏）。
@@ -490,6 +580,7 @@ export function DeploymentListPage() {
         batchActions={batchActions}
         initialNamespace={namespaceParam}
         onNamespaceChange={(ns) => {
+          setNamespaceSelection(ns || '_all')
           // 保持 URL 同步：/deployments/<ns> 或 /deployments（表示全部）。
           // 多选（逗号拼接）没有单段 URL 能表达，也写不得——URL 里的逗号值会被
           // 上面的存在性判定当成一个命名空间名，把整页变成报错页。选择本身已经
@@ -524,9 +615,13 @@ export function DeploymentListPage() {
             deployment.metadata!.namespace!
           )
         }
-        onComplete={() =>
+        onComplete={() => {
           queryClient.invalidateQueries({ queryKey: ['deployments'] })
-        }
+          // 平台操作时间来自审计记录，不随 K8s watch 刷新：写完主动重取。
+          queryClient.invalidateQueries({
+            queryKey: ['resource-last-updates'],
+          })
+        }}
         destructive={true}
       />
 
@@ -590,9 +685,13 @@ export function DeploymentListPage() {
             { spec: { replicas: batchReplicas } }
           )
         }
-        onComplete={() =>
+        onComplete={() => {
           queryClient.invalidateQueries({ queryKey: ['deployments'] })
-        }
+          // 平台操作时间来自审计记录，不随 K8s watch 刷新：写完主动重取。
+          queryClient.invalidateQueries({
+            queryKey: ['resource-last-updates'],
+          })
+        }}
       />
     </>
   )

@@ -1,3 +1,4 @@
+import type { Deployment } from 'kubernetes-types/apps/v1'
 import type { Node, Pod, Service } from 'kubernetes-types/core/v1'
 import type { ObjectMeta } from 'kubernetes-types/meta/v1'
 import { describe, expect, it } from 'vitest'
@@ -5,10 +6,12 @@ import { describe, expect, it } from 'vitest'
 import type { CustomResource } from '@/types/api'
 
 import {
+  getDeploymentRolloutTime,
   getNodeStatus,
   getOwnerInfo,
   getPrinterColumnValue,
   groupPodsByNamespace,
+  K8S_RESOURCE_NAME_PATTERN,
   servicesForWorkload,
   sumPodRestarts,
 } from './k8s'
@@ -403,5 +406,57 @@ describe('getNodeStatus', () => {
     } as Node
 
     expect(getNodeStatus(pressured, NOW).kind).toBe('DiskPressure')
+  })
+})
+
+describe('getDeploymentRolloutTime', () => {
+  // 列表与详情页共用同一个口径：只认 Progressing 条件，Available 的
+  // 副本波动不该被读成「发布过新版本」。
+  it('取 Progressing 条件的 lastUpdateTime', () => {
+    expect(
+      getDeploymentRolloutTime({
+        status: {
+          conditions: [
+            { type: 'Available', lastUpdateTime: '2026-10-01T00:00:00Z' },
+            { type: 'Progressing', lastUpdateTime: '2026-10-20T08:00:00Z' },
+          ],
+        },
+      } as Deployment)
+    ).toBe('2026-10-20T08:00:00Z')
+  })
+
+  it('没有 conditions 或缺 Progressing 条件时不给时间', () => {
+    expect(getDeploymentRolloutTime({} as Deployment)).toBeUndefined()
+    expect(
+      getDeploymentRolloutTime({
+        status: { conditions: [{ type: 'Available' }] },
+      } as Deployment)
+    ).toBeUndefined()
+  })
+})
+
+describe('K8S_RESOURCE_NAME_PATTERN', () => {
+  // k8s 对 ConfigMap / Secret 名称用的是 IsDNS1123Subdomain，点号分段是合法的
+  // （例如已存在的 ConfigMap "ilogtail2.0"），不能再按 DNS label 拦掉。
+  it('接受 subdomain 形式的名称', () => {
+    for (const name of ['app-config', 'ilogtail2.0', 'a.b.c', '0', 'x.y-1']) {
+      expect(K8S_RESOURCE_NAME_PATTERN.test(name), name).toBe(true)
+    }
+  })
+
+  it('拒绝不符合 RFC 1123 subdomain 的名称', () => {
+    for (const name of [
+      '',
+      'App',
+      'a_b',
+      '-a',
+      'a-',
+      '.a',
+      'a.',
+      'a..b',
+      'a b',
+    ]) {
+      expect(K8S_RESOURCE_NAME_PATTERN.test(name), name).toBe(false)
+    }
   })
 })

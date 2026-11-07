@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { IconCopy, IconNetwork } from '@tabler/icons-react'
+import { IconCopy, IconInfoCircle, IconNetwork } from '@tabler/icons-react'
 import { Deployment } from 'kubernetes-types/apps/v1'
 import type { Service } from 'kubernetes-types/core/v1'
 import { Event as KubernetesEvent, Pod } from 'kubernetes-types/core/v1'
@@ -7,12 +7,22 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { useRelatedResources } from '@/lib/api'
+import { useRelatedResources, useResourceLastUpdates } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
-import { getDeploymentStatus, getEventTime, getOwnerInfo } from '@/lib/k8s'
+import {
+  getDeploymentRolloutTime,
+  getDeploymentStatus,
+  getEventTime,
+  getOwnerInfo,
+} from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { ClusterLink } from '@/components/cluster-link'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import {
@@ -283,14 +293,65 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
   )
 }
 
+/**
+ * 更新时间卡：值给相对时间、detail 给完整时间，口径说明挂在标签上。
+ *
+ * 两个口径都不是「对象一定被改过」：平台时间只统计通过 AeroLink 的写入，
+ * 发布时间取 Deployment 的 Progressing 条件。拿不到时显示「无」并在
+ * tooltip 里说清原因，不能让人读成「这个部署从未更新」。
+ */
+function UpdateSummaryCard({
+  label,
+  hint,
+  value,
+}: {
+  label: string
+  hint: string
+  value?: string
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <WorkloadSummaryCard
+      label={
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex cursor-default items-center gap-1">
+              {label}
+              <IconInfoCircle className="size-3" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs text-xs">{hint}</TooltipContent>
+        </Tooltip>
+      }
+      value={
+        value
+          ? t('common.messages.timeAgo', { time: getAge(value) })
+          : t('common.values.none')
+      }
+      detail={value ? formatDate(value) : t('common.values.none')}
+    />
+  )
+}
+
 function DeploymentSummaryGrid({ deployment }: { deployment: Deployment }) {
   const { t } = useTranslation()
   const status = deployment.status
   const desiredReplicas = deployment.spec?.replicas ?? 0
   const deploymentStatus = getDeploymentStatus(deployment)
+  const namespace = deployment.metadata?.namespace
+  const name = deployment.metadata?.name
+  // 平台操作时间走列表同一个批量接口，保证详情页与列表上读到同一个时点。
+  const { data: lastUpdates } = useResourceLastUpdates(
+    'deployments',
+    namespace ? [namespace] : []
+  )
+  const platformUpdatedAt =
+    namespace && name ? lastUpdates?.[`${namespace}/${name}`] : undefined
+  const rolloutUpdatedAt = getDeploymentRolloutTime(deployment)
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 @4xl/deployment-overview:grid-cols-6">
+    <div className="grid gap-3 md:grid-cols-2 @4xl/deployment-overview:grid-cols-4">
       <WorkloadSummaryCard
         label={t('common.fields.status')}
         value={
@@ -340,6 +401,16 @@ function DeploymentSummaryGrid({ deployment }: { deployment: Deployment }) {
             ? formatDate(deployment.metadata.creationTimestamp)
             : t('common.messages.notCreated')
         }
+      />
+      <UpdateSummaryCard
+        label={t('common.fields.platformUpdated')}
+        hint={t('common.messages.platformUpdatedHint')}
+        value={platformUpdatedAt}
+      />
+      <UpdateSummaryCard
+        label={t('common.fields.rolloutUpdated')}
+        hint={t('common.messages.rolloutUpdatedHint')}
+        value={rolloutUpdatedAt}
       />
     </div>
   )

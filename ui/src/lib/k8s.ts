@@ -367,6 +367,21 @@ export function getPrinterColumnValue(
     : printableValues.join(', ')
 }
 
+/**
+ * Deployment 最近一次发布推进的时间：status 里 Progressing 条件的 lastUpdateTime。
+ *
+ * Deployment 本身没有「最后修改时间」字段（metadata 只有 creationTimestamp），
+ * 这个条件是控制器在发布状态变化时写的：一次滚动发布会推进它，纯扩缩容、
+ * 只改标签不会。调用方要把口径讲清楚，不能把它当成「这个对象从未被改过」。
+ */
+export function getDeploymentRolloutTime(
+  deployment: Deployment
+): string | undefined {
+  return deployment.status?.conditions?.find(
+    (condition) => condition.type === 'Progressing'
+  )?.lastUpdateTime
+}
+
 export function getDeploymentStatus(
   deployment: Deployment
 ): DeploymentStatusType {
@@ -768,11 +783,13 @@ export function readDescription(
 /**
  * 创建表单（ConfigMap / Secret …）共用的校验模式。
  *
- * 名称遵循 DNS 子域规则；数据键仅限
+ * 名称遵循 RFC 1123 subdomain 规则（k8s 的 IsDNS1123Subdomain），
+ * 因此允许 '.' 分段；数据键仅限
  * 字母数字以及 '-'、'_' 和 '.'；label / annotation 键允许可选的
  * DNS 子域前缀，然后是也可以包含大写字母的名称部分。
  */
-export const K8S_RESOURCE_NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/
+export const K8S_RESOURCE_NAME_PATTERN =
+  /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/
 export const K8S_DATA_KEY_PATTERN = /^[-._a-zA-Z0-9]+$/
 export const K8S_META_KEY_PATTERN =
   /^(?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?\/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$/
