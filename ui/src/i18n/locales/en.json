@@ -874,7 +874,6 @@
       "unreachable": "Unreachable",
       "unknown": "Unknown"
     },
-    "heartbeatStale": "Heartbeat stopped {{minutes}} minute(s) ago; data may be stale",
     "pressures": "Pressure conditions: {{pressures}}",
     "cordonedCount": "{{count}} node(s) cordoned",
     "uncordonedCount": "{{count}} node(s) uncordoned"

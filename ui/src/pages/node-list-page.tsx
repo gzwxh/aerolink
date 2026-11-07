@@ -407,21 +407,6 @@ export function NodeListPage() {
           return (
             <div className="flex items-center gap-1.5">
               <NodeStatusBadge status={status} />
-              {status.heartbeatStale && !status.unreachable && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <IconAlertTriangle className="text-warning size-3.5 shrink-0" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {t('nodes.heartbeatStale', {
-                      minutes: Math.max(
-                        1,
-                        Math.round((status.heartbeatAgeMs ?? 0) / 60000)
-                      ),
-                    })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
               {/* Ready=True 时压力不进 kind（徽标仍显示「就绪」），单独用警告图标提示。 */}
               {status.ready === 'True' && status.pressures.length > 0 && (
                 <Tooltip>

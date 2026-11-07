@@ -415,8 +415,14 @@ export function getDeploymentStatus(
   return 'Unknown'
 }
 
-/** kubelet 每 10s 上报一次心跳，node-monitor-grace-period 默认 40s；超过 1 分钟没更新即视为心跳已停。 */
-export const NODE_HEARTBEAT_STALE_MS = 60_000
+/**
+ * `Ready != True` 时辅助判定失联的心跳阈值。
+ *
+ * 不能拿它判 Ready=True 的节点：kubelet 状态变化时会立即上报，状态不变时 Node.status
+ * 默认每 5 分钟才补报一次（nodeStatusReportFrequency）；10 秒级的真心跳在 kube-node-lease
+ * 的 Lease 对象上，不在 Node 里。对健康节点按 60 秒判「心跳已停」会在两次补报之间长期误报。
+ */
+const NODE_HEARTBEAT_STALE_MS = 60_000
 
 /** node-controller 判定节点失联时打的污点。 */
 const UNREACHABLE_TAINT_KEYS = [
@@ -450,10 +456,6 @@ export interface NodeStatus {
   ready: 'True' | 'False' | 'Unknown'
   /** 失联：带着失联污点，或者 Ready 已不是 True 且心跳停了。 */
   unreachable: boolean
-  /** 心跳超过 NODE_HEARTBEAT_STALE_MS 未更新。 */
-  heartbeatStale: boolean
-  /** 心跳距今毫秒数；没有 lastHeartbeatTime 时为 null。 */
-  heartbeatAgeMs: number | null
   /** 已停止调度（spec.unschedulable）。 */
   cordoned: boolean
   /**
@@ -464,10 +466,12 @@ export interface NodeStatus {
 }
 
 /**
- * 汇总节点的就绪、失联与心跳新鲜度。
+ * 汇总节点的就绪与失联状态。
  *
- * 接口拿到的是 apiserver 的快照，`Ready=True` 也可能是缓存里的旧值，因此心跳陈旧
- * 与就绪状态分开表达，由调用方决定怎么提示。
+ * 心跳只参与「Ready 已不是 True」时的失联兜底判断，不单独提示：Node.status 在状态不变时
+ * 默认 5 分钟才补报一次，对 Ready=True 的节点按心跳判陈旧会让健康节点长期误报。
+ * 掉线本身由 node-controller 在 grace period 内写回 Ready=Unknown / 失联污点，
+ * 照常走 Unreachable（或 NotReady）展示。
  */
 export function getNodeStatus(
   node?: Node,
@@ -498,8 +502,6 @@ export function getNodeStatus(
     kind,
     ready,
     unreachable,
-    heartbeatStale,
-    heartbeatAgeMs,
     cordoned,
     pressures,
   })

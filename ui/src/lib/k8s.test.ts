@@ -9,7 +9,6 @@ import {
   getOwnerInfo,
   getPrinterColumnValue,
   groupPodsByNamespace,
-  NODE_HEARTBEAT_STALE_MS,
   servicesForWorkload,
   sumPodRestarts,
 } from './k8s'
@@ -307,7 +306,6 @@ describe('getNodeStatus', () => {
 
     expect(status.kind).toBe('Ready')
     expect(status.unreachable).toBe(false)
-    expect(status.heartbeatStale).toBe(false)
   })
 
   it('Ready=Unknown 且心跳停了算失联（node-controller 就是这么写的）', () => {
@@ -329,14 +327,16 @@ describe('getNodeStatus', () => {
     expect(status.kind).toBe('Unreachable')
   })
 
-  it('Ready=True 但心跳停了：状态仍是 Ready，另外标注心跳已停', () => {
-    const age = NODE_HEARTBEAT_STALE_MS + 60_000
-    const status = getNodeStatus(node('True', { heartbeatAgoMs: age }), NOW)
+  // 回归：健康节点状态不变时 kubelet 默认 5 分钟才补报一次 Node.status，
+  // 不能把这段间隔当成「心跳已停」——Ready=True 的节点只要没有失联污点就仍是就绪。
+  it('Ready=True 但 lastHeartbeatTime 超过 5 分钟未更新：不提示、不判失联', () => {
+    const status = getNodeStatus(
+      node('True', { heartbeatAgoMs: 6 * 60_000 }),
+      NOW
+    )
 
     expect(status.kind).toBe('Ready')
     expect(status.unreachable).toBe(false)
-    expect(status.heartbeatStale).toBe(true)
-    expect(status.heartbeatAgeMs).toBe(age)
   })
 
   it('Ready=True 但有压力条件：kind 仍是 Ready，压力单独输出', () => {
@@ -371,8 +371,13 @@ describe('getNodeStatus', () => {
     const status = getNodeStatus(node('Unknown'), NOW)
 
     expect(status.kind).toBe('Unknown')
-    expect(status.heartbeatAgeMs).toBeNull()
-    expect(status.heartbeatStale).toBe(false)
+    expect(status.unreachable).toBe(false)
+  })
+
+  it('Ready=False 且心跳新鲜：节点自报未就绪，提示 NotReady', () => {
+    const status = getNodeStatus(node('False', { heartbeatAgoMs: 5000 }), NOW)
+
+    expect(status.kind).toBe('NotReady')
     expect(status.unreachable).toBe(false)
   })
 

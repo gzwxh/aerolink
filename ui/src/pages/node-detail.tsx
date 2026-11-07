@@ -620,16 +620,7 @@ function NodeOverview({
     })
   }, [events])
   const status = getNodeStatus(node)
-  // 心跳停了说明这份数据本身可能已经过期，和就绪状态分开提示。
   const statusDetail = [
-    status.heartbeatStale
-      ? t('nodes.heartbeatStale', {
-          minutes: Math.max(
-            1,
-            Math.round((status.heartbeatAgeMs ?? 0) / 60000)
-          ),
-        })
-      : undefined,
     status.pressures.length > 0
       ? t('nodes.pressures', { pressures: status.pressures.join(', ') })
       : undefined,
