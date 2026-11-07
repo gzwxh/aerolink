@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { useBranding } from '@/contexts/branding-context'
 import { useSidebarConfig } from '@/contexts/sidebar-config-context'
-import { SIDEBAR_CLUSTER_GROUP_ID } from '@/contexts/sidebar-config-defaults'
 import { CollapsibleContent } from '@radix-ui/react-collapsible'
 import { IconLayoutDashboard } from '@tabler/icons-react'
 import { CustomResourceDefinition } from 'kubernetes-types/apiextensions/v1'
@@ -289,7 +288,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     )
   }
 
-  // 「收藏」（置顶项）跟在「集群」分组后面显示（见下方渲染顺序）。
+  // 置顶项整体渲染在概览下方、所有分组之前：它是「置顶到顶部」的语义，
+  // 挂在某个分组之后会随该分组的位置漂移，分组被隐藏时还会整块消失。
   const pinnedGroup =
     pinnedItems.length > 0 ? (
       <SidebarGroup>
@@ -397,37 +397,36 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         )}
 
+        {!location.pathname.startsWith('/settings') && pinnedGroup}
+
         {/* 进入系统设置后只保留设置相关入口，隐藏业务导航 */}
         {!location.pathname.startsWith('/settings') &&
           visibleGroups.map((group) => (
-            <React.Fragment key={group.id}>
-              <Collapsible
-                defaultOpen={!group.collapsed}
-                className="group/collapsible"
-              >
-                <SidebarGroup>
-                  <SidebarGroupLabel asChild>
-                    <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors group-data-[state=open]:text-sidebar-foreground">
-                      <span className="uppercase tracking-wide text-xs font-bold">
-                        {group.nameKey
-                          ? t(group.nameKey, { defaultValue: group.nameKey })
-                          : ''}
-                      </span>
-                      <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                    </CollapsibleTrigger>
-                  </SidebarGroupLabel>
-                  <CollapsibleContent>
-                    <SidebarGroupContent className="flex flex-col gap-2">
-                      <SidebarMenu>
-                        {group.items.map(renderSidebarItem)}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </CollapsibleContent>
-                </SidebarGroup>
-              </Collapsible>
-              {/* 「收藏」（置顶项）紧跟在「集群」分组之后 */}
-              {group.id === SIDEBAR_CLUSTER_GROUP_ID && pinnedGroup}
-            </React.Fragment>
+            <Collapsible
+              key={group.id}
+              defaultOpen={!group.collapsed}
+              className="group/collapsible"
+            >
+              <SidebarGroup>
+                <SidebarGroupLabel asChild>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors group-data-[state=open]:text-sidebar-foreground">
+                    <span className="uppercase tracking-wide text-xs font-bold">
+                      {group.nameKey
+                        ? t(group.nameKey, { defaultValue: group.nameKey })
+                        : ''}
+                    </span>
+                    <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                  </CollapsibleTrigger>
+                </SidebarGroupLabel>
+                <CollapsibleContent>
+                  <SidebarGroupContent className="flex flex-col gap-2">
+                    <SidebarMenu>
+                      {group.items.map(renderSidebarItem)}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </SidebarGroup>
+            </Collapsible>
           ))}
 
         {settingsSections.length > 0 &&
