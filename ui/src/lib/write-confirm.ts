@@ -230,14 +230,36 @@ export function writeConfirmFor(
 
 export const WRITE_CONFIRM_EVENT = 'aerolink:write-confirm'
 
-let pending: {
+/** 弹窗当前展示的确认项：合并后的同类请求共用一个 request。 */
+export interface WriteConfirmPrompt {
   request: WriteConfirmRequest
-  resolve: (confirmed: boolean) => void
-} | null = null
+  /** 一起等这次确认的请求数；批量操作（如一次重启多个 Deployment）会大于 1。 */
+  count: number
+}
+
+interface PendingConfirm {
+  request: WriteConfirmRequest
+  resolvers: Array<(confirmed: boolean) => void>
+}
+
+/**
+ * 待确认队列（队首即弹窗正在展示的那一项）。
+ *
+ * 批量操作会并发发起多个写请求（见 components/resource-batch-action-dialog.tsx），
+ * 而这里曾经是单槽 pending：后到的请求直接覆盖先到的，被覆盖的 Promise 永远等不到
+ * 结果，界面就卡在「处理中 (1/3)」。所以同集群同类操作合并成一次确认、异类排队，
+ * 别再退回单槽。
+ */
+const pendingQueue: PendingConfirm[] = []
+
+function emitWriteConfirm() {
+  window.dispatchEvent(new Event(WRITE_CONFIRM_EVENT))
+}
 
 /** 当前待确认的请求；弹窗未打开时为 null。 */
-export function currentWriteConfirmRequest(): WriteConfirmRequest | null {
-  return pending?.request ?? null
+export function currentWriteConfirmRequest(): WriteConfirmPrompt | null {
+  const head = pendingQueue[0]
+  return head ? { request: head.request, count: head.resolvers.length } : null
 }
 
 /** 等用户点「确认执行」或「取消」；确认返回 true。 */
@@ -245,14 +267,35 @@ export function requestWriteConfirm(
   request: WriteConfirmRequest
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    pending = { request, resolve }
-    window.dispatchEvent(new Event(WRITE_CONFIRM_EVENT))
+    // 同类（同集群 + 同操作类别）合并：批量重启只弹一次确认。
+    const tail = pendingQueue[pendingQueue.length - 1]
+    if (
+      tail &&
+      tail.request.cluster === request.cluster &&
+      tail.request.kind === request.kind
+    ) {
+      tail.resolvers.push(resolve)
+      if (pendingQueue.length === 1) {
+        // 只有展示中的那一项变了条数才需要刷新弹窗。
+        emitWriteConfirm()
+      }
+      return
+    }
+
+    pendingQueue.push({ request, resolvers: [resolve] })
+    if (pendingQueue.length === 1) {
+      emitWriteConfirm()
+    }
   })
 }
 
 export function resolveWriteConfirm(confirmed: boolean) {
-  pending?.resolve(confirmed)
-  pending = null
+  const head = pendingQueue.shift()
+  head?.resolvers.forEach((resolve) => resolve(confirmed))
+  if (pendingQueue.length > 0) {
+    // 排着下一个类别：让弹窗接着显示。
+    emitWriteConfirm()
+  }
 }
 
 /**
@@ -312,7 +355,7 @@ export function acknowledgeTerminal(cluster: string | null | undefined) {
 /** 测试用：清空缓存、待确认状态与终端知晓标记。 */
 export function resetWriteConfirmForTest() {
   policies.clear()
-  pending = null
+  pendingQueue.length = 0
   try {
     window.sessionStorage.removeItem(TERMINAL_ACK_KEY)
   } catch {

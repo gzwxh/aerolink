@@ -5,13 +5,17 @@ import type { Cluster } from '@/types/api'
 import {
   acknowledgeTerminal,
   classifyWriteOperation,
+  currentWriteConfirmRequest,
   hasAnyWriteConfirm,
   isTerminalAcknowledged,
   parseWriteTarget,
+  requestWriteConfirm,
   requiresWriteConfirm,
   resetWriteConfirmForTest,
+  resolveWriteConfirm,
   setClusterConfirmPolicies,
   writeConfirmFor,
+  type WriteConfirmRequest,
 } from './write-confirm'
 
 const cluster = (name: string, extra: Partial<Cluster> = {}): Cluster =>
@@ -166,6 +170,67 @@ describe('按集群的确认策略', () => {
       method: 'DELETE',
       target: { resource: 'deployments', namespace: 'default', name: 'nginx' },
     })
+  })
+})
+
+// 批量操作（如一次重启多个 Deployment）会并发进入确认桥。这里锁住两点：同类合并成
+// 一次确认、异类排队逐个确认，且每个 Promise 都有结果——单槽 pending 曾让先到的请求
+// 被后到的覆盖而永久挂起，界面卡在「处理中 (1/3)」。
+describe('并发写入的确认桥', () => {
+  beforeEach(() => {
+    resetWriteConfirmForTest()
+  })
+
+  const restart = (name: string): WriteConfirmRequest => ({
+    cluster: 'dev',
+    kind: 'restart',
+    method: 'PATCH',
+    target: { resource: 'deployments', namespace: 'default', name },
+  })
+
+  it('同类并发请求合并成一次确认，确认后全部放行', async () => {
+    const waiting = ['a', 'b', 'c'].map((name) =>
+      requestWriteConfirm(restart(name))
+    )
+
+    expect(currentWriteConfirmRequest()).toEqual({
+      request: restart('a'),
+      count: 3,
+    })
+
+    resolveWriteConfirm(true)
+
+    await expect(Promise.all(waiting)).resolves.toEqual([true, true, true])
+    expect(currentWriteConfirmRequest()).toBeNull()
+  })
+
+  it('取消时同类并发请求全部不放行', async () => {
+    const waiting = ['a', 'b'].map((name) =>
+      requestWriteConfirm(restart(name))
+    )
+    expect(currentWriteConfirmRequest()?.count).toBe(2)
+
+    resolveWriteConfirm(false)
+
+    await expect(Promise.all(waiting)).resolves.toEqual([false, false])
+  })
+
+  it('不同类别排队逐个确认，前一个不被后一个覆盖', async () => {
+    const first = requestWriteConfirm(restart('a'))
+    const second = requestWriteConfirm({
+      ...restart('b'),
+      kind: 'delete',
+      method: 'DELETE',
+    })
+
+    expect(currentWriteConfirmRequest()?.request.kind).toBe('restart')
+    resolveWriteConfirm(true)
+    await expect(first).resolves.toBe(true)
+
+    expect(currentWriteConfirmRequest()?.request.kind).toBe('delete')
+    resolveWriteConfirm(true)
+    await expect(second).resolves.toBe(true)
+    expect(currentWriteConfirmRequest()).toBeNull()
   })
 })
 

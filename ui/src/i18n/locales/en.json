@@ -1125,6 +1125,7 @@
       "target": "Target"
     },
     "confirm": "Confirm and run",
+    "bulkHint": "This will submit {{count}} operations of the same kind at once",
     "description": "This cluster requires confirmation, so the change is sent to Kubernetes only after you confirm.",
     "title": "Confirm this operation?"
   },

@@ -21,6 +21,7 @@ vi.mock('react-i18next', () => ({
         'writeConfirm.fields.cluster': 'FIELD_CLUSTER',
         'writeConfirm.fields.operation': 'FIELD_OPERATION',
         'writeConfirm.fields.target': 'FIELD_TARGET',
+        'writeConfirm.bulkHint': 'BULK_HINT',
         'writeConfirm.kinds.delete': 'KIND_DELETE',
         'common.actions.cancel': 'CANCEL_BUTTON',
       }
@@ -91,6 +92,40 @@ describe('WriteConfirmDialog', () => {
     fireEvent.click(screen.getByText('CONFIRM_BUTTON'))
     await pending
 
+    await waitFor(() =>
+      expect(screen.queryByText('CONFIRM_TITLE')).not.toBeInTheDocument()
+    )
+  })
+
+  it('单个请求不提示批量', async () => {
+    render(<WriteConfirmDialog />)
+
+    act(() => {
+      requestWriteConfirm(deleteRequest)
+    })
+    await screen.findByText('CONFIRM_TITLE')
+
+    expect(screen.queryByText('BULK_HINT')).not.toBeInTheDocument()
+  })
+
+  it('批量同类请求只弹一次确认，确认后全部放行', async () => {
+    render(<WriteConfirmDialog />)
+
+    let waiting!: Promise<boolean>[]
+    act(() => {
+      waiting = ['a', 'b', 'c'].map((name) =>
+        requestWriteConfirm({
+          ...deleteRequest,
+          target: { ...deleteRequest.target, name },
+        })
+      )
+    })
+    await screen.findByText('CONFIRM_TITLE')
+    expect(screen.getByText('BULK_HINT')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('CONFIRM_BUTTON'))
+
+    await expect(Promise.all(waiting)).resolves.toEqual([true, true, true])
     await waitFor(() =>
       expect(screen.queryByText('CONFIRM_TITLE')).not.toBeInTheDocument()
     )

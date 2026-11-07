@@ -1126,6 +1126,7 @@
     },
     "confirm": "确认执行",
     "description": "该集群已开启操作二次确认，确认后才会把这次变更提交给 Kubernetes。",
+    "bulkHint": "本次将同时提交 {{count}} 个同类操作",
     "title": "确认执行该操作？"
   },
   "session": {

@@ -6,7 +6,7 @@ import {
   currentWriteConfirmRequest,
   resolveWriteConfirm,
   WRITE_CONFIRM_EVENT,
-  type WriteConfirmRequest,
+  type WriteConfirmPrompt,
   type WriteOperationKind,
   type WriteTarget,
 } from '@/lib/write-confirm'
@@ -37,24 +37,26 @@ const KIND_LABEL_KEY: Record<WriteOperationKind, string> = {
  */
 export function WriteConfirmDialog() {
   const { t } = useTranslation()
-  const [request, setRequest] = useState<WriteConfirmRequest | null>(null)
+  const [prompt, setPrompt] = useState<WriteConfirmPrompt | null>(null)
 
   useEffect(() => {
-    const handleRequest = () => setRequest(currentWriteConfirmRequest())
+    const handleRequest = () => setPrompt(currentWriteConfirmRequest())
     window.addEventListener(WRITE_CONFIRM_EVENT, handleRequest)
     return () => window.removeEventListener(WRITE_CONFIRM_EVENT, handleRequest)
   }, [])
 
   const finish = useCallback((confirmed: boolean) => {
-    setRequest(null)
+    setPrompt(null)
     resolveWriteConfirm(confirmed)
   }, [])
 
+  const request = prompt?.request ?? null
+  const count = prompt?.count ?? 1
   const destructive = request?.kind === 'delete'
 
   return (
     <Dialog
-      open={request !== null}
+      open={prompt !== null}
       onOpenChange={(next) => {
         if (!next) {
           finish(false)
@@ -94,6 +96,14 @@ export function WriteConfirmDialog() {
               value={describeTarget(request.target)}
             />
           </dl>
+        ) : null}
+
+        {count > 1 ? (
+          <p className="text-muted-foreground text-xs">
+            {t('writeConfirm.bulkHint', '本次将同时提交 {{count}} 个同类操作', {
+              count,
+            })}
+          </p>
         ) : null}
 
         <DialogFooter>
