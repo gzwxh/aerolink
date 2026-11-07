@@ -53,7 +53,8 @@ func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		ctx := ws.Context
-		if _, err := cs.K8sClient.ClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{}); err != nil {
+		node, err := cs.K8sClient.ClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
 			klog.Errorf("Failed to get node %s: %v", nodeName, err)
 			ws.SendErrorMessage(fmt.Sprintf("Failed to get node %s: %v", nodeName, err))
 			return
@@ -68,6 +69,9 @@ func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 		if nodeTerminalImage == "" {
 			nodeTerminalImage = common.NodeTerminalImage
 		}
+		// Agent Pod 用 Spec.NodeName 绑在这台节点上，而镜像名只有一个全局值：arm64 节点
+		// 拿到 amd64 镜像只会 exec format error，所以按节点架构挑带 -arm64 后缀的那份。
+		nodeTerminalImage = applyNodeArchImage(nodeTerminalImage, node)
 		nodeAgentName, err := h.createNodeAgent(ctx, cs, nodeName, nodeTerminalImage)
 		if err != nil {
 			klog.Errorf("Failed to create node agent pod: %v", err)

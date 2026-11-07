@@ -2197,7 +2197,7 @@
     },
     "nodeTerminal": {
       "title": "节点终端",
-      "description": "配置 Node Terminal 使用的运行镜像。",
+      "description": "配置 Node Terminal 使用的运行镜像；目标节点是 arm64 时会自动改用带 -arm64 后缀的同名 tag。",
       "form": {
         "image": "镜像"
       }

@@ -49,7 +49,7 @@ replicas, reverse proxy not blocking it) instead of switching the flag off.
 
 - **KUBECTL_TERMINAL_IMAGE**: Docker image used for the kubectl terminal.
 
-- **NODE_TERMINAL_IMAGE**: Docker image used for generating Node Terminal Agent.
+- **NODE_TERMINAL_IMAGE**: Docker image used for generating Node Terminal Agent. The agent pod is pinned to the target node, so **on arm64 nodes the same tag suffixed with `-arm64` is used automatically** (e.g. `busybox:latest` → `busybox:latest-arm64`). Names without a tag, `@sha256:` digest references and values already ending with `-arm64` are left as they are; amd64 nodes always keep the configured value.
 
 - **CLUSTER_AGENT_IMAGE**: Docker image used when generating the Cluster Agent manifest for Cluster Agent clusters.
 

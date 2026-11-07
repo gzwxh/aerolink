@@ -43,7 +43,7 @@
 
 - **KUBECTL_TERMINAL_IMAGE**: 用于 kubectl 终端的 Docker 镜像。
 
-- **NODE_TERMINAL_IMAGE**: 用于生成 Node Terminal Agent 的 Docker 镜像。
+- **NODE_TERMINAL_IMAGE**: 用于生成 Node Terminal Agent 的 Docker 镜像。终端 Pod 直接绑在目标节点上，所以**节点是 arm64 时会自动改用带 `-arm64` 后缀的同名 tag**（如 `busybox:latest` → `busybox:latest-arm64`）；不带 tag 的镜像名、`@sha256:` digest 引用、以及已经带 `-arm64` 后缀的值都不会被改写，amd64 节点一律保持原值。
 
 - **CLUSTER_AGENT_IMAGE**: 为 Cluster Agent 类型集群生成 Cluster Agent 部署清单时使用的 Docker 镜像。
 

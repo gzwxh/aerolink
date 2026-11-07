@@ -2197,7 +2197,7 @@
     },
     "nodeTerminal": {
       "title": "Node Terminal",
-      "description": "Configure runtime image used for node terminal sessions.",
+      "description": "Configure runtime image used for node terminal sessions. On arm64 nodes the same tag suffixed with -arm64 is used automatically.",
       "form": {
         "image": "Image"
       }

@@ -169,7 +169,7 @@ The first visit walks through creating the admin account; configure the remainin
 | `NAMESPACE` | empty | namespace for AeroLink's own agent/terminal pods |
 | `DISABLE_GZIP` | `false` | `true` disables response compression (proxy troubleshooting) |
 | `KUBECONFIG` / `AEROLINK_CONFIG_FILE` | empty | external kubeconfig / config file path |
-| `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest` | node terminal image (company SWR) |
+| `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest` | node terminal image (company SWR; on arm64 nodes the same tag suffixed with `-arm64` is used automatically) |
 | `KUBECTL_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/kubectl:latest` | kubectl terminal image (company SWR) |
 | `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest` | cluster agent image, same repository as the app (company SWR) |
 | `AEROLINK_KUBE_API_QPS` / `AEROLINK_KUBE_API_BURST` | built-in | Kubernetes API rate limits |
