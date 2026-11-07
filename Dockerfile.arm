@@ -1,0 +1,86 @@
+# arm64（aarch64）镜像：纯 Go 后端 + 外置 duckdb CLI（`make build-arm` / `make push-arm`）。
+#
+# 与 Dockerfile.binary 分开的理由（各自的形状已经不一样，硬合并会把那条路径搞险）：
+#   - Dockerfile.binary 面向 **CGO + 内嵌 DuckDB SDK** 的本机产物，只能在「构建机 == 产物架构」
+#     或「构建机能模拟产物架构」时用；本文件面向**交叉编译**产物，在任何 x86 机器（含 WSL2）
+#     上都能构建，全程不需要 QEMU。
+#   - 本文件**一条 RUN 都没有**：在没有用户态模拟的机器上，任何在目标架构里执行的 RUN 都会
+#     `exec /bin/sh: exec format error`（WSL2 内核就没注册 qemu binfmt）。目录与属主一律靠
+#     COPY --chown 造出来。
+#   - 检索驱动不同：这里是 `-tags duckdb_cli`（exec 外部 duckdb），镜像必须自带目标架构的
+#     duckdb 可执行文件；Dockerfile.binary 那份是 SDK 驱动，不需要外部可执行文件。
+#
+# 需要内嵌引擎（少一次进程启动、离线可用）时别用本文件，去一台原生 ARM 机器上按
+# Dockerfile.binary 构建，见 scripts/provision-arm64-builder.sh 与
+# docs/dev/plans/2026-11-02-ARM构建机与arm64镜像产出.md。
+
+# 两个镜像选择器都必须在**第一个 FROM 之前**声明：只有全局作用域的 ARG 能被 `FROM ${...}` 消费，
+# 写在两个 FROM 之间的 ARG 会被前一个阶段结束掉作用域，展开成空值（
+# `base name (${RUNTIME_IMAGE}) should not be blank`）。
+#
+# 基座必须是 arm64：公司 SWR 里不带后缀的 openEuler tag 是单架构 amd64 manifest
+# （`--platform linux/arm64` 也只会回落成 amd64 层），所以默认带 -arm64 后缀的那份。
+# glibc 口径与 Dockerfile.binary 一致（openEuler 24.03 = glibc 2.38）；纯 Go 产物本身是静态的，
+# 但镜像里的 duckdb 可执行文件依赖 glibc/libstdc++，换 musl 基座要另备 musl 版 duckdb。
+ARG RUNTIME_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4-arm64
+# 代做目录属主的小镜像（固定跑 amd64）：默认名优先走 daemon 配的镜像器；拉不到时指个可达地址。
+ARG CHOWN_STAGING_IMAGE=busybox:latest
+
+# 建一棵属主为 65532 的家目录树（/home/aerolink 本身 + 它的 data/archive）。
+# `--platform=$BUILDPLATFORM`：这个阶段跑在**构建机自己的架构**上（与产物架构无关的一棵空目录树，
+# 谁生成都一样），从而不依赖本机能否模拟 arm64；写死 linux/amd64 会被 docker 提醒不要用常量。
+#
+# 为什么需要这一阶段：本文件零 RUN，而 Dockerfile.binary 里那句
+# `chown -R 65532:65532 /home/aerolink` 干的活必须有人接着干：
+#   - sqlite 的默认 DSN 是**相对路径** `dev.db`（pkg/common 的 DBDSN），落在 WORKDIR 里；
+#   - 只靠 WORKDIR + COPY --chown 的话，/home/aerolink 本身是 root:root 755（COPY 只会把
+#     它**创建的目标子目录**给属主，不会给中间层目录），非 root 跑起来会挂在
+#     `failed to connect database: unable to open database file: out of memory (14)`。
+# 下面的 `COPY /stage/home /home` 直接把 /home/aerolink 这层目录本身带成 65532 属主。
+FROM --platform=$BUILDPLATFORM ${CHOWN_STAGING_IMAGE} AS chown-staging
+RUN mkdir -p /stage/home/aerolink/data/archive
+
+FROM ${RUNTIME_IMAGE}
+
+# 运行用户 uid/gid 沿用 distroless/static(nonroot) 的 65532，与 Dockerfile / Dockerfile.binary 一致，
+# 已有的数据卷属主与 K8s securityContext 都不用调整。
+#
+# 用**数字形式**而不是 `USER aerolink`：后者需要 /etc/passwd 里有名字（Dockerfile.binary 靠一步 RUN
+# 追加，openEuler 基座没装 shadow-utils 所以不用 useradd），而数字 uid/gid 不需要任何 passwd 条目，
+# 这才让「零 RUN」成立。代价：容器里 `id` 看不到用户名、`docker exec -u aerolink` 按名执行不可用
+# （用 uid 即可），Go 的 os/user 按名字查会查不到（本项目只按 uid 跑）。
+WORKDIR /home/aerolink
+USER 65532:65532
+
+# 家目录与数据目录：先把 /home/aerolink 这层目录本身拷成 65532 属主（否则非 root 写不了
+# WORKDIR，sqlite 默认库文件 dev.db 就在它里面），再把 data/archive 拷成同样属主。
+# 不预建 data/archive 的话裸 docker run（不挂卷）下首次写归档会失败；K8s 挂 PVC 时由 fsGroup 接管。
+COPY --from=chown-staging --chown=65532:65532 /stage/home /home
+COPY --from=chown-staging --chown=65532:65532 /stage/home/aerolink/data ./data
+
+# 数据位置的镜像默认值（与 Dockerfile / Dockerfile.binary 保持一致）：
+#   AEROLINK_AUDIT_ARCHIVE_DIR 只是**启动兜底**，生效值仍以「审计设置 → 归档」里的本地目录为准；
+#   AEROLINK_LOG_FILE 一旦生效，klog 就不再写 stderr（见 main.go 的 applyLogFileEnv）。
+ENV AEROLINK_AUDIT_ARCHIVE_DIR=/home/aerolink/data/archive \
+    AEROLINK_LOG_FILE=/home/aerolink/data/aerolink.log
+
+# CA 证书：openEuler 精简基座**不带**可信根证书，缺了它 S3/COS、OIDC、LDAP、SMTP 等所有出站
+# HTTPS 都会以 "x509: certificate signed by unknown authority" 失败。上下文里这份由 Makefile
+# 从构建机拷贝，统一落到 Go 系统证书查找顺序的第一个候选。
+COPY ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# 后端二进制：交叉编译的纯 Go 产物（CGO_ENABLED=0 -tags duckdb_cli），已 embed 前端产物。
+# 必须与 DUCKDB_BIN 同一架构，否则运行时 exec 报 exec format error。
+ARG TARGETARCH=arm64
+COPY --chown=65532:65532 aerolink-${TARGETARCH} ./aerolink
+
+# parquet 检索用的 duckdb CLI（驱动口径见 pkg/audit/archive_query_duckdb_cli.go：
+# 默认在 PATH 里找 `duckdb`，也可用 AEROLINK_DUCKDB_PATH 指定绝对路径）。
+# 上下文里那份由 Makefile 按 DUCKDB_VERSION 取目标架构的官方发布件；文件名带架构与版本，
+# 避免换架构/换版本重跑时复用到上一轮的那份。
+ARG DUCKDB_BIN
+COPY ${DUCKDB_BIN} /usr/local/bin/duckdb
+
+EXPOSE 8080
+
+CMD ["./aerolink"]

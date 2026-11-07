@@ -254,6 +254,7 @@
 | 集群信息进浏览器地址栏（集群 slug） | 方案 `plans/2026-10-15-集群信息进入浏览器地址栏.md`；后端 slug 生成/校验 `pkg/cluster/slug.go` + 回填迁移 `pkg/model/cluster_slug.go`（`clusters.slug` 列）；前端导航包装 `ui/src/lib/cluster-path.ts` + `ui/src/components/cluster-link.tsx`（见 §3 共享骨架第 5 条）；路由前缀与旧地址兜底 `ui/src/routes.tsx` + `legacy-cluster-redirect.tsx`；管理端录入 `ui/src/components/settings/cluster-dialog.tsx`、`cluster-import-dialog.tsx` |
 | 清理改名前的遗留对象（kite → aerolink） | `scripts/cleanup-legacy-kite-objects.sh`（默认 dry-run，`-y` 才真删；旧 `service/kite` 占着 NodePort 27862，不清掉新清单 apply 会失败；也覆盖 kube-system 里的 `kite-admin` 与 `kite-cluster-agent`）；systemd 侧的迁移见 `deploy/aerolink@.service` 文件头 |
 | 从 Rancher 迁移授权 | `scripts/migrate-rancher-rbac.sh`（入口）/ `scripts/build-rancherrbac.sh`（打成单文件）→ `tools/rancherrbac`（PRTB / CRTB + 角色模板 → 权限绑定组与角色，组名用 Rancher 上的项目名、角色名用角色模板 ID，不加前缀）；支持配置文件（`-init-config` 生成模板），Rancher API 密钥拿不到时用 `-from-dir` 读导出的集合 JSON；命名空间的聚合接口只返回 `local` 集群，其余集群按 `/k8s/clusters/<集群 ID>/v1/namespaces` 补读（离线时对应 `k8s_clusters_<集群 ID>_v1_namespaces.json`）；步骤与排错见 `tools/rancherrbac/README.md`，映射口径与未验证项见 `plans/2026-09-21-Rancher授权迁移脚本.md` |
+| 出 arm64（ARM）镜像 | 两条路，入口都在 `Makefile`：**本地交叉**`make build-arm` / `make push-arm`（用 `Dockerfile.arm`，零 RUN，宿主机 `CGO_ENABLED=0 GOARCH=arm64 -tags duckdb_cli`，不需 ARM 机器也不需 QEMU；代价是 parquet 检索改为 exec 镜像自带的 `duckdb`）；或**原生 ARM 机构**`make push-binary GOARCH=arm64`（用 `Dockerfile.binary`，保留内嵌 DuckDB 引擎，构建机一键搭建走 `scripts/provision-arm64-builder.sh`）。两个架构是两个独立 tag（SWR 解析 manifest index 不可靠），不带 `-arm64` 就等于 amd64；前提、基座来源、实测计时与踩坑见 `plans/2026-11-02-ARM构建机与arm64镜像产出.md`。`make cross-compile` 出的 `bin/aerolink-arm64` 不含 DuckDB 引擎，也不能直接用来建镜像 |
 
 ---
 
@@ -271,6 +272,9 @@ pnpm --dir ui exec eslint <files>
 pnpm --dir ui run test                                     # vitest
 
 make e2e-test            # Playwright + kind（spec 见 e2e/specs/*.spec.ts）
+
+make build-arm           # 本地交叉构 arm64 镜像（纯 Go + 自带 duckdb CLI，不需 ARM 机器）
+make push-arm            # 同上并推送到 SWR
 ```
 
 后端改动的常见验证靶点：`pkg/resources`（资源与创建）、`pkg/audit`（审计与保留策略）、`pkg/model`（模型与缓存）、`pkg/rbac`（授权）。
@@ -281,6 +285,8 @@ make e2e-test            # Playwright + kind（spec 见 e2e/specs/*.spec.ts）
 
 - `static/`、`aerolink`、`bin/` 是生成物，不要手改；前端改动要生效必须 `make frontend` / `make build`
 - `vendor/` 已入库，改依赖要同时处理 `go.mod`/`go.sum` 与 `vendor/`
+- 架构不是随便换：CGO 产物依赖编译机的 glibc/libstdc++，构建机 glibc 必须**不高于**运行基座
+  （openEuler 24.03 = glibc 2.38）；SWR 里的基座与构建镜像默认只有 amd64，换架构要单独备 arm64 那份
 - `ui/src/lib/api.ts` 与 `ui/src/lib/api/` 目录同时存在（前者聚合导出），新增 API 模块别搞混
 - 根目录 `AGENTS.md` 与 `CLAUDE.md` 都是代理约定文件，改一个记得同步另一个
 - URL 里的 `_clusters/<slug>` 是**前端导航**标识；API 的 `_clusters/<集群名>` 是**后端选集群**标识，两者同形不同源，不要混用（前端导航走 `ui/src/lib/cluster-path.ts`，API 路径走 `ui/src/lib/current-cluster.ts` 的 `withCurrentClusterPath`）

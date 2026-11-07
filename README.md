@@ -122,6 +122,43 @@ make push      # 构建并推送到公司 SWR
 # docker push  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.2
 ```
 
+### 1.1 ARM（arm64）机器
+
+两条路径，按你要不要**内嵌 DuckDB 引擎**选：
+
+**A）本地（x86_64 / WSL2）直接出 arm64 镜像 —— `make push-arm`**
+
+宿主机交叉编译（`CGO_ENABLED=0 GOARCH=arm64 -tags duckdb_cli`）+ `Dockerfile.arm`（零 RUN），
+全程不需要 QEMU，也不需要 ARM 机器：
+
+```bash
+make build-arm VERSION=v1.0.2   # 只构，不推
+make push-arm  VERSION=v1.0.2   # 构 + 推到 swr.../devops/aerolink:v1.0.2-arm64
+```
+
+代价：parquet 审计检索改为 exec 外部 `duckdb`（镜像里已自带 `DUCKDB_VERSION` 指定的那份），
+每次查询多一次进程启动。可调变量：`ARMARCH` / `ARM_IMAGE` / `DUCKDB_VERSION` /
+`RUNTIME_IMAGE_ARM` / `CHOWN_STAGING_IMAGE`。
+
+**B）原生 ARM 机器上构，保留内嵌引擎（性能/离线要求高时）**
+
+`make cross-compile` 出的 `bin/aerolink-arm64` 也是纯 Go 产物、不含引擎，所以想要引擎只能
+**在 ARM 机器上跑 CGO 原生编译**：
+
+```bash
+# 构建机按 scripts/provision-arm64-builder.sh 一键搭；代码从开发机 rsync 过去
+make push-binary GOARCH=arm64 IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.2-arm64
+```
+
+基座仍要是 arm64 那一份。实测口径：ARM 机器上即使 `FROM` 解析到 SWR 里那个**单架构 amd64**
+的 openEuler tag，构建也能成（arm64 机器自带 qemu-user-static，`RUN` 步能被模拟），产物照样是
+可用的 arm64 镜像；基座层混 amd64 并不影响运行（本项目只依赖 glibc/libstdc++）。
+想要干净基座就显式指带 `-arm64` 后缀那份（先推到 SWR，见方案文档）。
+
+两个架构是两个**独立 tag**（不是同一 tag 的 manifest list，SWR 对 manifest index 的解析不可靠），
+部署 ARM 环境时需显式指带 `-arm64` 后缀的 tag。前提、踩坑与验证清单见
+`docs/dev/plans/2026-11-02-ARM构建机与arm64镜像产出.md`。
+
 帮助文档站（`docs/` 下的 VitePress 站）是独立镜像，不会带进应用镜像，构建上下文是 `docs/` 而不是仓库根：
 
 ```bash
@@ -209,7 +246,7 @@ docker run -d --name aerolink --restart unless-stopped \
 | `DISABLE_GZIP` | `false` | `true` 关闭响应压缩（排查代理兼容问题时使用） |
 | `KUBECONFIG` | 空 | 外部 kubeconfig 路径（如需预置集群，一般通过界面添加即可） |
 | `AEROLINK_CONFIG_FILE` | 空 | 外部配置文件路径 |
-| `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest` | 节点终端 Pod 镜像（公司 SWR） |
+| `NODE_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/busybox:latest` | 节点终端 Pod 镜像（公司 SWR；arm64 节点自动改用带 `-arm64` 后缀的同名 tag） |
 | `KUBECTL_TERMINAL_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/kubectl:latest` | Kubectl 终端 Pod 镜像（公司 SWR） |
 | `CLUSTER_AGENT_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:latest` | 集群 Agent 镜像，与应用镜像同一仓库（公司 SWR） |
 | `AEROLINK_KUBE_API_QPS` / `AEROLINK_KUBE_API_BURST` | 内置值 | 访问 K8s API 的限速参数，集群规模大时可上调 |
