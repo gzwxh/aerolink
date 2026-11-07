@@ -69,7 +69,7 @@ Build argument reference:
 | `GOLANG_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26.8` | Backend build base image (corporate SWR; must be the **Debian** variant, cgo needs gcc/g++) |
 | `RUNTIME_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4` | Runtime base image (corporate SWR) |
 | `NPM_REGISTRY` | `https://registry.npmjs.org` | Frontend dependency source (Go dependencies come from the checked-in `vendor/`, so there is no GOPROXY argument) |
-| `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `v1.0.0` / `unknown` / `unknown` | Injected into `pkg/version` and shown in the UI |
+| `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `v1.0.3` / `unknown` / `unknown` | Injected into `pkg/version` and shown in the UI |
 
 ### Help site image (optional)
 
@@ -78,14 +78,14 @@ The help site under `docs/` (VitePress) is not part of the application image (th
 ```bash
 make docs-image   # build only
 make push-docs    # build and push (same shape as make push / make push-binary)
-docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2   # push an already built image
+docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.3   # push an already built image
 ```
 
 Equivalent manual command (the build context is `docs/`, not the repository root):
 
 ```bash
 docker build --provenance=false --sbom=false -f docs/Dockerfile \
-  -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2 docs/
+  -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.3 docs/
 ```
 
 When the build machine is outside the corporate network, add `--build-arg NODE_IMAGE=node:24-alpine --build-arg NGINX_IMAGE=nginx:alpine --build-arg NPM_REGISTRY=https://registry.npmmirror.com` (see the comments at the top of `docs/Dockerfile`).
@@ -211,7 +211,7 @@ helm upgrade --install aerolink charts/aerolink -n aerolink-system --create-name
 
 ```bash
 helm package charts/aerolink -d dist
-helm push dist/aerolink-1.0.0.tgz oci://<registry>/<namespace>
+helm push dist/aerolink-1.0.3.tgz oci://<registry>/<namespace>
 ```
 
 :::: warning Huawei Cloud SWR personal edition does not accept Helm OCI artifacts

@@ -7,7 +7,7 @@
 **All your clusters. One workspace.**
 
 AeroLink is a lightweight, open-source Kubernetes workspace for multi-cluster operations, observability, access control, and AI-assisted troubleshooting.
-This repository is the **company-internal fork** of the upstream project, currently at `v1.0.2`.
+This repository is the **company-internal fork** of the upstream project, currently at `v1.0.3`.
 
 **English** · [中文](./README.md)
 
@@ -93,10 +93,10 @@ The help site (the VitePress site under `docs/`) is a separate image and is not 
 make docs-image   # build the docs image (default tag: see DOCS_IMAGE in the Makefile)
 make push-docs    # build and push in one step (mirrors make push-binary)
 # push an already built image only:
-docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2
+docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.3
 # equivalent to:
 # docker build --provenance=false --sbom=false -f docs/Dockerfile \
-#   -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2 docs/
+#   -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.3 docs/
 ```
 
 The image serves the static site with nginx on port 80; after deploying it, put the URL into General Settings → Help documentation URL.
@@ -122,7 +122,7 @@ docker run -d --name aerolink -p 8080:8080 \
   -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY=dev-only-key \
   -e JWT_SECRET=dev-only-jwt-secret-0123456789abcdef \
-  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.2
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.3
 ```
 
 Production (generate secrets with `openssl rand -base64 32` and store them safely):
@@ -136,7 +136,7 @@ docker run -d --name aerolink --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://aerolink.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.2
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.3
 ```
 
 The first visit walks through creating the admin account; configure the remaining policies under Settings.

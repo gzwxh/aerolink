@@ -122,7 +122,7 @@ services:
   # 鸢联 AeroLink 本体
   # -------------------------------------------------------------------------
   aerolink:
-    image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
+    image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.3
     container_name: aerolink-local
     restart: unless-stopped
     pull_policy: always

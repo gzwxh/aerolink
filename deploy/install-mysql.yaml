@@ -89,7 +89,7 @@ spec:
     spec:
       serviceAccountName: aerolink
       containers:
-        - image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
+        - image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.3
           imagePullPolicy: Always
           name: aerolink
           envFrom:

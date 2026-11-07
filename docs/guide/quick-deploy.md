@@ -6,7 +6,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| 镜像 | 仓库内 chart 默认指向公司 SWR：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`，tag 默认取 chart 的 `appVersion`（当前 `v1.0.2`）。要自己打包见[构建并推送镜像](./build-and-push-image.md) |
+| 镜像 | 仓库内 chart 默认指向公司 SWR：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink`，tag 默认取 chart 的 `appVersion`（当前 `v1.0.3`）。要自己打包见[构建并推送镜像](./build-and-push-image.md) |
 | 端口 | 服务监听 `8080`。`HOST` 变量**不参与监听**，只用于生成 OAuth 回调地址 |
 | 密钥 | `AEROLINK_ENCRYPT_KEY`（加密已保存的凭据）与 `JWT_SECRET`（**至少 32 字节**）。缺前者、或后者不足 32 字节，进程会**拒绝启动** |
 
@@ -53,7 +53,7 @@ kubectl apply -f deploy/install.yaml
 ```
 
 ::: warning apply 之前先改两处
-`deploy/install.yaml` 里镜像是 `v1.0.0`，Secret 是 `REPLACE-ME-with-openssl-rand-base64-32-output` 占位符：把镜像换成你要部署的 tag、把 `AEROLINK_ENCRYPT_KEY` 与 `JWT_SECRET` 换成真实值再 apply。
+`deploy/install.yaml` 里镜像是 `v1.0.3`，Secret 是 `REPLACE-ME-with-openssl-rand-base64-32-output` 占位符：把镜像换成你要部署的 tag、把 `AEROLINK_ENCRYPT_KEY` 与 `JWT_SECRET` 换成真实值再 apply。
 
 清单还会把 `aerolink` 的 ServiceAccount 绑到 `cluster-admin`（它要管理集群资源），确认这符合你的权限口径。
 :::
@@ -66,7 +66,7 @@ docker run -d --name aerolink -p 8080:8080 \
   -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY="$(openssl rand -base64 32)" \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
-  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.2
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.3
 ```
 
 仓库里也有 `deploy/docker-compose.yaml`：把镜像地址和密钥改好，`docker compose up -d` 即可。数据默认落在卷里，删容器不丢库。

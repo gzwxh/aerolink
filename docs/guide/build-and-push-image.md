@@ -63,7 +63,7 @@ docker build \
 | `GOLANG_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/golang:1.26.8` | 后端构建基础镜像（公司 SWR；必须是 **Debian 版**，cgo 编译需要 gcc/g++） |
 | `RUNTIME_IMAGE` | `swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4` | 运行时基础镜像（公司 SWR） |
 | `NPM_REGISTRY` | `https://registry.npmjs.org` | 前端依赖源（Go 依赖走仓库里的 `vendor/`，构建不下载模块，因此没有 GOPROXY 参数） |
-| `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `v1.0.0` / `unknown` / `unknown` | 注入 `pkg/version`，展示在界面上 |
+| `VERSION` / `BUILD_DATE` / `COMMIT_ID` | `v1.0.3` / `unknown` / `unknown` | 注入 `pkg/version`，展示在界面上 |
 
 ### 帮助文档站镜像（可选）
 
@@ -72,14 +72,14 @@ docker build \
 ```bash
 make docs-image   # 只构建
 make push-docs    # 构建并推送（与应用镜像的 make push / make push-binary 同一形状）
-docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2   # 只推送已构建的镜像
+docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.3   # 只推送已构建的镜像
 ```
 
 等价的手工命令（注意构建上下文是 `docs/`，不是仓库根）：
 
 ```bash
 docker build --provenance=false --sbom=false -f docs/Dockerfile \
-  -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2 docs/
+  -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.3 docs/
 ```
 
 构建机不在公司网络内时，另加 `--build-arg NODE_IMAGE=node:24-alpine --build-arg NGINX_IMAGE=nginx:alpine --build-arg NPM_REGISTRY=https://registry.npmmirror.com`（约束见 `docs/Dockerfile` 顶部注释）。
@@ -199,7 +199,7 @@ helm upgrade --install aerolink charts/aerolink -n aerolink-system --create-name
 
 ```bash
 helm package charts/aerolink -d dist
-helm push dist/aerolink-1.0.0.tgz oci://<registry>/<namespace>
+helm push dist/aerolink-1.0.3.tgz oci://<registry>/<namespace>
 ```
 
 ::: warning 华为云 SWR 个人版不接受 Helm OCI 制品

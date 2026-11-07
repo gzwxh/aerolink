@@ -61,7 +61,7 @@
 name: aerolink
 services:
   aerolink:
-    image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.0
+    image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.3
     container_name: aerolink
     # 对应 install-mysql.yaml 的 restartPolicy: Always
     restart: unless-stopped
@@ -153,7 +153,7 @@ services:
     profiles: ["docs"]
     # 镜像由 `make docs-image` / `make push-docs` 构建（Makefile 的 DOCS_IMAGE，
     # 与应用镜像分开打 tag）；直连环境可换成本地构建的 aerolink-docs:local。
-    image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.2
+    image: swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.3
     container_name: aerolink-docs
     restart: unless-stopped
     pull_policy: always
