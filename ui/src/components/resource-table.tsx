@@ -19,6 +19,14 @@ import { toast } from 'sonner'
 import { ResourceType } from '@/types/api'
 import { deleteResource } from '@/lib/api'
 import { getResourceMetadata } from '@/lib/resource-catalog'
+import {
+  DEFAULT_TABLE_EXPORT_FORMATS,
+  downloadCsv,
+  downloadJson,
+  downloadYaml,
+  type CsvColumnMeta,
+  type TableExportFormat,
+} from '@/lib/table-export'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { useCluster } from '@/hooks/use-cluster'
 import { useResourceTableData } from '@/hooks/use-resource-table-data'
@@ -39,10 +47,14 @@ import { ErrorMessage } from './error-message'
 import {
   ResourceTableToolbar,
   type ResourceTableBatchAction,
+  type ResourceTableExportScope,
 } from './resource-table-toolbar'
 import { ResourceTableView } from './resource-table-view'
 
-export type { ResourceTableBatchAction } from './resource-table-toolbar'
+export type {
+  ResourceTableBatchAction,
+  ResourceTableExportScope,
+} from './resource-table-toolbar'
 
 export interface ResourceTableProps<T> {
   resourceName: string
@@ -91,6 +103,14 @@ export interface ResourceTableProps<T> {
   isLoading?: boolean
   /** 外部数据模式的刷新回调（透传给工具栏的刷新按钮）。 */
   refetch?: () => void
+  /**
+   * 提供后，工具栏显示「下载」菜单：范围（当前所选 / 全部）× 格式
+   * （默认 CSV / JSON / YAML）。CSV 按当前可见列导出表格内容；JSON / YAML
+   * 导出行的原始清单（多行打进同一个文件，YAML 用多文档分隔）。行取当前
+   * 搜索 / 列过滤后的结果，不受分页限制。`fileName` 不含扩展名，默认用
+   * 资源类型名，落盘时自动补上日期。
+   */
+  exportData?: { fileName?: string; formats?: TableExportFormat[] }
 }
 
 export function ResourceTable<T>(props: ResourceTableProps<T>) {
@@ -125,6 +145,7 @@ function ResourceTableContent<T>({
   data: externalData,
   isLoading: externalIsLoading,
   refetch: externalRefetch,
+  exportData,
 }: ResourceTableProps<T>) {
   const { t } = useTranslation()
   const {
@@ -581,6 +602,58 @@ function ResourceTableContent<T>({
     setRowSelection,
     setDeleteDialogOpen,
   ])
+  // 导出范围：所选，或筛选 + 排序后的全量行（getSortedRowModel 不含分页，
+  // 翻页不会缩小导出范围）。CSV 与界面看到的一致——只用可见列（隐藏列、
+  // 勾选列、操作列都不导出），display 列需由列 meta 的 csvValue 提供取值；
+  // JSON / YAML 导出行的原始清单。
+  const handleExport = useCallback(
+    (scope: ResourceTableExportScope, format: TableExportFormat) => {
+      const sourceRows =
+        scope === 'selected'
+          ? table.getSelectedRowModel().rows
+          : table.getSortedRowModel().rows
+      // 没有可导出的行时不落一个空文件（按钮已置灰，这里兜底）。
+      if (sourceRows.length === 0) {
+        return
+      }
+
+      const now = new Date()
+      const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const baseName = `${exportData?.fileName || resolvedResourceType}-${stamp}${scope === 'selected' ? '-selected' : ''}`
+
+      if (format === 'csv') {
+        const exportColumns = table
+          .getVisibleLeafColumns()
+          .map((column) => ({
+            column,
+            meta: column.columnDef.meta as CsvColumnMeta<T> | undefined,
+          }))
+          .filter(({ column, meta }) => column.accessorFn || meta?.csvValue)
+        const headers = exportColumns.map(({ column }) => {
+          const header = column.columnDef.header
+          return typeof header === 'string' ? header : column.id
+        })
+        const rows = sourceRows.map((row) =>
+          exportColumns.map(({ column, meta }) =>
+            meta?.csvValue
+              ? meta.csvValue(row.original)
+              : row.getValue(column.id)
+          )
+        )
+        downloadCsv(baseName, headers, rows)
+        return
+      }
+
+      const objects = sourceRows.map((row) => row.original)
+      if (format === 'json') {
+        downloadJson(baseName, objects)
+        return
+      }
+      downloadYaml(baseName, objects)
+    },
+    [table, exportData?.fileName, resolvedResourceType]
+  )
+
   // 计算总行数与过滤后的行数
   const totalRowCount = useMemo(
     () => (namespaceFilteredData as T[] | undefined)?.length || 0,
@@ -710,6 +783,13 @@ function ResourceTableContent<T>({
         batchActions={batchActions}
         alwaysShowBatchActions={alwaysShowBatchActions}
         showBatchDelete={showBatchDelete && canDelete}
+        onExport={exportData ? handleExport : undefined}
+        exportFormats={
+          exportData?.formats && exportData.formats.length > 0
+            ? exportData.formats
+            : DEFAULT_TABLE_EXPORT_FORMATS
+        }
+        exportableRowCount={filteredRowCount}
       />
 
       <ResourceTableView

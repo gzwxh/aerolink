@@ -207,6 +207,12 @@ export function formatMemory(memory: string | number): string {
   return memory
 }
 
+/** 毫核 → 「0.2 核」这种习惯写法（整数不留小数）。 */
+export function formatCores(milli: number): string {
+  const cores = milli / 1000
+  return `${Number.isInteger(cores) ? cores : cores.toFixed(1)} 核`
+}
+
 export function formatPodMetrics(metric: PodMetrics): {
   cpu: number
   memory: number

@@ -1169,6 +1169,14 @@
     "toggleColumns": "显示列",
     "resetColumnLayout": "恢复默认列布局",
     "columnResizeHint": "拖动调整列宽，双击恢复默认",
+    "download": "下载",
+    "downloadSelected": "当前所选（{{count}} 行）",
+    "downloadAll": "全部（{{count}} 行）",
+    "exportFormats": {
+      "csv": "CSV",
+      "json": "JSON",
+      "yaml": "YAML"
+    },
     "delete": "删除",
     "unboundGroup": "未绑定",
     "deleteSelected": "删除 ({{count}})",

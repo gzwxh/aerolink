@@ -3,13 +3,11 @@ import {
   IconAlertTriangle,
   IconBan,
   IconCircleCheckFilled,
-  IconDownload,
   IconDroplet,
   IconTrash,
 } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
-import * as yaml from 'js-yaml'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -17,7 +15,12 @@ import { NodeWithMetrics } from '@/types/api'
 import { cordonNode, uncordonNode } from '@/lib/api'
 import { createSearchFilter, getNodeStatus, type NodeStatus } from '@/lib/k8s'
 import { statusBadge } from '@/lib/status-badge'
-import { formatDate, translateError } from '@/lib/utils'
+import {
+  formatCores,
+  formatDate,
+  formatMemory,
+  translateError,
+} from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -246,15 +249,19 @@ const nodeSearchFilter = createSearchFilter<NodeWithMetrics>(
 
 const columnHelper = createColumnHelper<NodeWithMetrics>()
 
-function downloadNodeYaml(node: NodeWithMetrics) {
-  const content = yaml.dump(node, { indent: 2, noRefs: true })
-  const blob = new Blob([content], { type: 'application/x-yaml' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${node.metadata?.name || 'node'}.yaml`
-  link.click()
-  URL.revokeObjectURL(url)
+/** CSV 里的指标文本：与表格一样是「用量 / 上限」，但不受列宽压缩影响。 */
+function nodeCpuText(node: NodeWithMetrics): string {
+  const usage = formatCores(node.metrics?.cpuUsage ?? 0)
+  return node.metrics?.cpuLimit
+    ? `${usage} / ${formatCores(node.metrics.cpuLimit)}`
+    : usage
+}
+
+function nodeMemoryText(node: NodeWithMetrics): string {
+  const usage = formatMemory(node.metrics?.memoryUsage ?? 0)
+  return node.metrics?.memoryLimit
+    ? `${usage} / ${formatMemory(node.metrics.memoryLimit)}`
+    : usage
 }
 
 export function NodeListPage() {
@@ -340,13 +347,6 @@ export function NodeListPage() {
           setDrainTargets(nodes)
           setShowDrainDialog(true)
         },
-      },
-      {
-        id: 'download',
-        label: t('common.actions.downloadYaml'),
-        icon: <IconDownload className="size-4" />,
-        disabled: !hasSelection,
-        onSelect: (nodes) => nodes.forEach(downloadNodeYaml),
       },
       {
         id: 'delete',
@@ -452,6 +452,11 @@ export function NodeListPage() {
         // 固定宽度：内容多少都不撑开表格，看全部靠悬浮。
         size: 180,
         cell: ({ row }) => <NodeTaintsCell node={row.original} />,
+        // 表格里只显示第一个 + 数量，CSV 给出全部污点。
+        meta: {
+          csvValue: (node: NodeWithMetrics) =>
+            nodeTaints(node).map(formatNodeTaint).join('; '),
+        },
       }),
       columnHelper.display({
         id: 'labels',
@@ -459,6 +464,12 @@ export function NodeListPage() {
         // 标签一般更长，给宽一点，但同样是固定宽度。
         size: 220,
         cell: ({ row }) => <NodeLabelsCell node={row.original} />,
+        meta: {
+          csvValue: (node: NodeWithMetrics) =>
+            nodeLabels(node)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('; '),
+        },
       }),
       columnHelper.accessor((row) => row.metrics?.pods || 0, {
         id: 'pods',
@@ -485,6 +496,7 @@ export function NodeListPage() {
             showPercentage={true}
           />
         ),
+        meta: { csvValue: nodeCpuText },
       }),
       columnHelper.accessor((row) => row.metrics?.memoryUsage || 0, {
         id: 'memory',
@@ -499,6 +511,7 @@ export function NodeListPage() {
             showPercentage={true}
           />
         ),
+        meta: { csvValue: nodeMemoryText },
       }),
       columnHelper.accessor((row) => getNodeIP(row), {
         id: 'ip',
@@ -596,6 +609,7 @@ export function NodeListPage() {
           'status_nodeInfo_kernelVersion',
           'status_nodeInfo_osImage',
         ]}
+        exportData={{ fileName: 'nodes' }}
       />
 
       <NodeDrainDialog

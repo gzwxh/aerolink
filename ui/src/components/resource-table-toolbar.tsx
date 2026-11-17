@@ -1,11 +1,27 @@
 import React from 'react'
 import { ColumnDef, Table } from '@tanstack/react-table'
-import { Plus, Search, Trash2, XCircle } from 'lucide-react'
+import {
+  ChevronDown,
+  Download,
+  Plus,
+  Search,
+  Trash2,
+  XCircle,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { ResourceType } from '@/types/api'
+import type { TableExportFormat } from '@/lib/table-export'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -20,6 +36,15 @@ import { RefreshButton } from './refresh-button'
 import { RefreshIntervalSelect } from './refresh-interval-select'
 import { NamespaceSelector } from './selector/namespace-selector'
 import { TableColumnToggle } from './table-column-toggle'
+
+/** 导出范围：当前勾选的行，或当前筛选后的全部行。 */
+export type ResourceTableExportScope = 'selected' | 'all'
+
+const EXPORT_FORMAT_LABEL_KEYS: Record<TableExportFormat, string> = {
+  csv: 'resourceTable.exportFormats.csv',
+  json: 'resourceTable.exportFormats.json',
+  yaml: 'resourceTable.exportFormats.yaml',
+}
 
 export interface ResourceTableBatchAction<T> {
   id: string
@@ -58,6 +83,15 @@ interface ResourceTableToolbarProps<T> {
   alwaysShowBatchActions?: boolean
   /** 渲染内置的批量删除按钮。 */
   showBatchDelete?: boolean
+  /** 下载数据；不传就不显示按钮。 */
+  onExport?: (
+    scope: ResourceTableExportScope,
+    format: TableExportFormat
+  ) => void
+  /** 菜单里提供的格式（顺序即展示顺序）。 */
+  exportFormats: TableExportFormat[]
+  /** 当前筛选后的行数（「全部」的范围），为 0 时置灰。 */
+  exportableRowCount?: number
 }
 
 export function ResourceTableToolbar<T>({
@@ -83,6 +117,9 @@ export function ResourceTableToolbar<T>({
   batchActions,
   alwaysShowBatchActions = false,
   showBatchDelete = true,
+  onExport,
+  exportFormats,
+  exportableRowCount = 0,
 }: ResourceTableToolbarProps<T>) {
   const { t } = useTranslation()
 
@@ -99,6 +136,12 @@ export function ResourceTableToolbar<T>({
   // 不得在批量按钮里重新出现。
   const visibleBatchActions = batchActions.filter((action) => !action.hidden)
   const hasBatchActions = visibleBatchActions.length > 0 || showBatchDelete
+  const selectedRangeLabel = t('resourceTable.downloadSelected', {
+    count: selectedRowCount,
+  })
+  const allRangeLabel = t('resourceTable.downloadAll', {
+    count: exportableRowCount,
+  })
 
   return (
     <div className="flex flex-col gap-3">
@@ -266,6 +309,49 @@ export function ResourceTableToolbar<T>({
                 <Plus className="h-4 w-4" />
                 {t('common.actions.create', '创建')}
               </Button>
+            )}
+
+            {onExport && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    disabled={exportableRowCount === 0}
+                    className="gap-2"
+                  >
+                    <Download className="size-4" />
+                    {t('resourceTable.download')}
+                    <ChevronDown className="size-3.5 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {/* 两个范围各一组，菜单项文字只有格式名；aria-label 补上
+                      范围，避免读屏时出现两组同名项。 */}
+                  <DropdownMenuLabel>{selectedRangeLabel}</DropdownMenuLabel>
+                  {exportFormats.map((format) => (
+                    <DropdownMenuItem
+                      key={`selected-${format}`}
+                      disabled={selectedRowCount === 0}
+                      aria-label={`${selectedRangeLabel} · ${t(EXPORT_FORMAT_LABEL_KEYS[format])}`}
+                      onSelect={() => onExport('selected', format)}
+                    >
+                      {t(EXPORT_FORMAT_LABEL_KEYS[format])}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>{allRangeLabel}</DropdownMenuLabel>
+                  {exportFormats.map((format) => (
+                    <DropdownMenuItem
+                      key={`all-${format}`}
+                      disabled={exportableRowCount === 0}
+                      aria-label={`${allRangeLabel} · ${t(EXPORT_FORMAT_LABEL_KEYS[format])}`}
+                      onSelect={() => onExport('all', format)}
+                    >
+                      {t(EXPORT_FORMAT_LABEL_KEYS[format])}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
             <TableColumnToggle table={table} />

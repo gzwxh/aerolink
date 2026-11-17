@@ -1169,6 +1169,14 @@
     "toggleColumns": "Toggle columns",
     "resetColumnLayout": "Reset column layout",
     "columnResizeHint": "Drag to resize; double-click to reset",
+    "download": "Download",
+    "downloadSelected": "Selected ({{count}} rows)",
+    "downloadAll": "All ({{count}} rows)",
+    "exportFormats": {
+      "csv": "CSV",
+      "json": "JSON",
+      "yaml": "YAML"
+    },
     "delete": "Delete",
     "unboundGroup": "Unbound",
     "deleteSelected": "Delete ({{count}})",

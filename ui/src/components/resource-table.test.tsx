@@ -51,6 +51,20 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
+const { mockDownloadCsv, mockDownloadJson, mockDownloadYaml } = vi.hoisted(
+  () => ({
+    mockDownloadCsv: vi.fn(),
+    mockDownloadJson: vi.fn(),
+    mockDownloadYaml: vi.fn(),
+  })
+)
+vi.mock('@/lib/table-export', () => ({
+  downloadCsv: (...args: unknown[]) => mockDownloadCsv(...args),
+  downloadJson: (...args: unknown[]) => mockDownloadJson(...args),
+  downloadYaml: (...args: unknown[]) => mockDownloadYaml(...args),
+  DEFAULT_TABLE_EXPORT_FORMATS: ['csv', 'json', 'yaml'],
+}))
+
 vi.mock('@/lib/current-cluster', () => ({
   getClusterScopedStorageKey: (key: string) => key,
   getCurrentCluster: () => null,
@@ -485,6 +499,82 @@ describe('ResourceTable external data mode', () => {
     })
     expect(mockDeleteResource).toHaveBeenCalledWith('pods', 'pod-1', 'aerolink')
     expect(mockDeleteResource).toHaveBeenCalledWith('pods', 'pod-2', 'aerolink')
+  })
+})
+
+describe('ResourceTable export menu', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    mockDownloadCsv.mockClear()
+    mockDownloadJson.mockClear()
+    mockDownloadYaml.mockClear()
+  })
+
+  function renderExportableTable() {
+    return render(
+      <ResourceTable<Row>
+        resourceName="services"
+        columns={columns}
+        clusterScope={true}
+        exportData={{ fileName: 'services' }}
+      />
+    )
+  }
+
+  async function clickExport(
+    user: ReturnType<typeof userEvent.setup>,
+    range: 'downloadAll' | 'downloadSelected',
+    format: 'csv' | 'json' | 'yaml'
+  ) {
+    await user.click(
+      screen.getByRole('button', { name: 'resourceTable.download' })
+    )
+    // 菜单项文字只有格式名，范围在分组标题与 aria-label 里
+    await user.click(
+      await screen.findByRole('menuitem', {
+        name: `resourceTable.${range} · resourceTable.exportFormats.${format}`,
+      })
+    )
+  }
+
+  it('exports the visible columns of every filtered row as CSV', async () => {
+    renderExportableTable()
+    const user = userEvent.setup()
+    await clickExport(user, 'downloadAll', 'csv')
+
+    expect(mockDownloadCsv).toHaveBeenCalledTimes(1)
+    const [fileName, headers, rows] = mockDownloadCsv.mock.calls[0]
+    expect(fileName).toMatch(/^services-\d{4}-\d{2}-\d{2}$/)
+    // 勾选列（select）没有取值函数，不进入导出
+    expect(headers).toEqual(['Name'])
+    expect(rows).toEqual([['svc-1'], ['svc-2'], ['svc-3']])
+  })
+
+  it('exports only the checked rows as JSON', async () => {
+    renderExportableTable()
+    const user = userEvent.setup()
+
+    await user.click(
+      screen.getAllByRole('checkbox', { name: /select row/i })[0]
+    )
+    await clickExport(user, 'downloadSelected', 'json')
+
+    expect(mockDownloadJson).toHaveBeenCalledTimes(1)
+    const [fileName, objects] = mockDownloadJson.mock.calls[0]
+    // 与「全部」区分开，避免两次下载同名文件
+    expect(fileName).toMatch(/-selected$/)
+    expect(objects).toEqual([fakeRows[0]])
+  })
+
+  it('exports every filtered row as YAML', async () => {
+    renderExportableTable()
+    const user = userEvent.setup()
+    await clickExport(user, 'downloadAll', 'yaml')
+
+    expect(mockDownloadYaml).toHaveBeenCalledTimes(1)
+    const [fileName, objects] = mockDownloadYaml.mock.calls[0]
+    expect(fileName).toMatch(/^services-\d{4}-\d{2}-\d{2}$/)
+    expect(objects).toEqual(fakeRows)
   })
 })
 

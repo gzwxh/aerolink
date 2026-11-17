@@ -2,18 +2,12 @@ import { useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { MetricsData } from '@/types/api'
-import { formatMemory } from '@/lib/utils'
+import { formatCores, formatMemory } from '@/lib/utils'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 /** 支持的指标：CPU、内存、Pod 数。三者统一为「用量 / 上限 + 百分比 + 进度条」。 */
 type MetricType = 'cpu' | 'memory' | 'pods'
-
-/** 毫核 → 「0.2 核」这种习惯写法（整数不留小数）。 */
-function formatCores(milli: number): string {
-  const cores = milli / 1000
-  return `${Number.isInteger(cores) ? cores : cores.toFixed(1)} 核`
-}
 
 /** 去掉数值尾部的单位（英文单位或中文「核」），用于「同单位时只写一次」的紧凑显示。 */
 function stripUnit(text: string): string {
