@@ -1174,8 +1174,7 @@
     "downloadAll": "全部（{{count}} 行）",
     "exportFormats": {
       "csv": "CSV",
-      "json": "JSON",
-      "yaml": "YAML"
+      "json": "JSON"
     },
     "delete": "删除",
     "unboundGroup": "未绑定",

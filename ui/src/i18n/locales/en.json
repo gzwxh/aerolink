@@ -1174,8 +1174,7 @@
     "downloadAll": "All ({{count}} rows)",
     "exportFormats": {
       "csv": "CSV",
-      "json": "JSON",
-      "yaml": "YAML"
+      "json": "JSON"
     },
     "delete": "Delete",
     "unboundGroup": "Unbound",

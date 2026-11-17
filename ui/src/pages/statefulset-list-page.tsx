@@ -21,6 +21,7 @@ import {
 } from '@/lib/k8s'
 import { formatAge, formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
+import { useNamespaceBindingMap } from '@/hooks/use-namespace-binding-map'
 import { Badge } from '@/components/ui/badge'
 import { ClusterLink } from '@/components/cluster-link'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
@@ -53,6 +54,9 @@ export function StatefulSetListPage() {
   const { namespace: namespaceParam } = useParams()
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
   const [batchStatefulSets, setBatchStatefulSets] = useState<StatefulSet[]>([])
+
+  // 命名空间 → 权限绑定组名（导出时随行带上）。
+  const bindingMap = useNamespaceBindingMap()
 
   // 重启会 patch pod 模板，因此需要 update 权限。
   const canUpdate = useCanAnyNamespace()('statefulsets', 'update')
@@ -161,6 +165,15 @@ export function StatefulSetListPage() {
               containers={row.original.spec?.template.spec?.containers ?? []}
             />
           ),
+          // 界面显示「容器名: 镜像」；导出只留镜像字符串，避免把整个容器对象
+          // 塞进一个单元格（一个容器就有 name/image/ports/volumeMounts/...）。
+          meta: {
+            csvValue: (row: StatefulSet) =>
+              (row.spec?.template.spec?.containers ?? [])
+                .map((container) => container.image)
+                .filter(Boolean)
+                .join('; '),
+          },
         }
       ),
       columnHelper.accessor((row) => row.status?.readyReplicas ?? 0, {
@@ -275,6 +288,22 @@ export function StatefulSetListPage() {
     [t]
   )
 
+  // 导出时带上命名空间（分组列会自动补进 CSV）与该命名空间所属的权限
+  // 绑定组（与 /namespaces 页的「权限绑定」同源，未绑定时为空）。
+  const exportData = useMemo(
+    () => ({
+      fileName: 'statefulsets',
+      csvColumns: [
+        {
+          header: t('common.fields.bindingGroup'),
+          value: (row: StatefulSet) =>
+            bindingMap.get(row.metadata?.namespace ?? '') ?? '',
+        },
+      ],
+    }),
+    [t, bindingMap]
+  )
+
   const handleCreateClick = () => {
     // URL 优先，其次是表格持久化的选择；多选或
     // "所有命名空间"的选择无法承载新对象。
@@ -295,6 +324,7 @@ export function StatefulSetListPage() {
         searchQueryFilter={statefulSetSearchFilter}
         defaultHiddenColumns={HIDDEN_BY_DEFAULT_COLUMNS}
         grouping={grouping}
+        exportData={exportData}
         initialSorting={[{ id: 'namespace', desc: false }]}
         initialNamespace={namespaceParam}
         onNamespaceChange={(ns) => {

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { IconNotes, IconReload, IconScale, IconTag } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
+import type { TFunction } from 'i18next'
 import { Deployment } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
@@ -24,6 +25,7 @@ import {
 } from '@/lib/k8s'
 import { formatAge, formatDate } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
+import { useNamespaceBindingMap } from '@/hooks/use-namespace-binding-map'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,6 +72,37 @@ const METADATA_VALUE_MAX_LENGTH = 60
 
 function toSortedEntries(record?: Record<string, string>): [string, string][] {
   return Object.entries(record ?? {}).sort(([a], [b]) => a.localeCompare(b))
+}
+
+// kubectl apply 留下的整份清单副本：体积大、不是注解语义，导出时跳过。
+const SKIPPED_EXPORT_ANNOTATIONS = new Set([
+  'kubectl.kubernetes.io/last-applied-configuration',
+])
+
+function exportableAnnotationEntries(row: Deployment): [string, string][] {
+  return toSortedEntries(row.metadata?.annotations).filter(
+    ([key]) => !SKIPPED_EXPORT_ANNOTATIONS.has(key)
+  )
+}
+
+/** 容器资源上限的分组文本：表格 chips 与导出共用同一口径。 */
+function resourceLimitGroups(row: Deployment, t: TFunction) {
+  return (row.spec?.template.spec?.containers ?? []).flatMap((container) => {
+    const limits = container.resources?.limits
+    const chips: string[] = []
+    if (limits?.cpu) {
+      chips.push(
+        `${t('common.fields.cpu')}: ${formatCpuLimit(
+          limits.cpu,
+          t('common.units.cores', 'cores')
+        )}`
+      )
+    }
+    if (limits?.memory) {
+      chips.push(`${t('common.fields.memory')}: ${limits.memory}`)
+    }
+    return chips.length > 0 ? [{ name: container.name, chips }] : []
+  })
 }
 
 function truncateMetadataValue(value: string) {
@@ -157,6 +190,9 @@ export function DeploymentListPage() {
   const [isScaleDialogOpen, setIsScaleDialogOpen] = useState(false)
   const [batchDeployments, setBatchDeployments] = useState<Deployment[]>([])
   const [batchReplicas, setBatchReplicas] = useState(1)
+
+  // 命名空间 → 权限绑定组名（导出时随行带上）。
+  const bindingMap = useNamespaceBindingMap()
 
   // 重启会 patch pod 模板，因此需要 update 权限。
   const canUpdate = useCanAnyNamespace()('deployments', 'update')
@@ -274,6 +310,15 @@ export function DeploymentListPage() {
               containers={row.original.spec?.template.spec?.containers ?? []}
             />
           ),
+          // 界面显示「容器名: 镜像」；导出只留镜像字符串，避免把整个容器对象
+          // 塞进一个单元格（一个容器就有 name/image/ports/volumeMounts/...）。
+          meta: {
+            csvValue: (row: Deployment) =>
+              (row.spec?.template.spec?.containers ?? [])
+                .map((container) => container.image)
+                .filter(Boolean)
+                .join('; '),
+          },
         }
       ),
       columnHelper.accessor((row) => row.status?.readyReplicas ?? 0, {
@@ -352,6 +397,13 @@ export function DeploymentListPage() {
             icon={IconTag}
           />
         ),
+        // 导出写扁平文本，别把整个 labels 对象塞进单元格。
+        meta: {
+          csvValue: (row: Deployment) =>
+            toSortedEntries(row.metadata?.labels)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('; '),
+        },
       }),
       columnHelper.accessor((row) => row.metadata?.annotations, {
         id: 'annotations',
@@ -362,6 +414,12 @@ export function DeploymentListPage() {
             icon={IconNotes}
           />
         ),
+        meta: {
+          csvValue: (row: Deployment) =>
+            exportableAnnotationEntries(row)
+              .map(([key, value]) => `${key}=${value}`)
+              .join('; '),
+        },
       }),
       columnHelper.accessor(
         (row) => row.spec?.template.spec?.containers ?? [],
@@ -372,22 +430,7 @@ export function DeploymentListPage() {
           cell: ({ row }) => {
             const containers =
               row.original.spec?.template.spec?.containers ?? []
-            const groups = containers.flatMap((container) => {
-              const limits = container.resources?.limits
-              const chips: string[] = []
-              if (limits?.cpu) {
-                chips.push(
-                  `${t('common.fields.cpu')}: ${formatCpuLimit(
-                    limits.cpu,
-                    t('common.units.cores', 'cores')
-                  )}`
-                )
-              }
-              if (limits?.memory) {
-                chips.push(`${t('common.fields.memory')}: ${limits.memory}`)
-              }
-              return chips.length > 0 ? [{ name: container.name, chips }] : []
-            })
+            const groups = resourceLimitGroups(row.original, t)
 
             if (groups.length === 0) {
               return <EmptyValue />
@@ -418,6 +461,20 @@ export function DeploymentListPage() {
                 ))}
               </div>
             )
+          },
+          // 与表格 chips 一致：单容器只写「cpu: 1 核, memory: 1Gi」，
+          // 多容器带容器名前缀，避免输出整个容器对象。
+          meta: {
+            csvValue: (row: Deployment) => {
+              const containers = row.spec?.template.spec?.containers ?? []
+              return resourceLimitGroups(row, t)
+                .map((group) =>
+                  containers.length > 1
+                    ? `${group.name}: ${group.chips.join(', ')}`
+                    : group.chips.join(', ')
+                )
+                .join('; ')
+            },
           },
         }
       ),
@@ -487,6 +544,22 @@ export function DeploymentListPage() {
       ),
     }),
     [t]
+  )
+
+  // 导出时带上命名空间（分组列会自动补进 CSV）与该命名空间所属的权限
+  // 绑定组（与 /namespaces 页的「权限绑定」同源，未绑定时为空）。
+  const exportData = useMemo(
+    () => ({
+      fileName: 'deployments',
+      csvColumns: [
+        {
+          header: t('common.fields.bindingGroup'),
+          value: (row: Deployment) =>
+            bindingMap.get(row.metadata?.namespace ?? '') ?? '',
+        },
+      ],
+    }),
+    [t, bindingMap]
   )
 
   // URL 的命名空间段只能表达一个命名空间。多选时表格自己把选择存在
@@ -574,6 +647,7 @@ export function DeploymentListPage() {
         searchQueryFilter={deploymentSearchFilter}
         defaultHiddenColumns={HIDDEN_BY_DEFAULT_COLUMNS}
         grouping={grouping}
+        exportData={exportData}
         initialSorting={[{ id: 'namespace', desc: false }]}
         showCreateButton={true}
         onCreateClick={handleCreateClick}

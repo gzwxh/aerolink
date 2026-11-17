@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { escapeCsvCell, toCsv } from './table-export'
+import { escapeCsvCell, rowsToObjects, toCsv } from './table-export'
 
 describe('escapeCsvCell', () => {
   it('quotes values containing comma, quote or line break', () => {
@@ -35,5 +35,22 @@ describe('toCsv', () => {
         ]
       )
     ).toBe('Name,Status\r\nnode-1,Ready\r\nnode-2,"NotReady, cordoned"')
+  })
+})
+
+describe('rowsToObjects', () => {
+  it('turns table rows into objects keyed by column header', () => {
+    expect(
+      rowsToObjects(
+        ['Name', 'Namespace'],
+        [
+          ['app-1', 'dev'],
+          ['app-2', 'prod'],
+        ]
+      )
+    ).toEqual([
+      { Name: 'app-1', Namespace: 'dev' },
+      { Name: 'app-2', Namespace: 'prod' },
+    ])
   })
 })

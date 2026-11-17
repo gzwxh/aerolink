@@ -23,8 +23,8 @@ import {
   DEFAULT_TABLE_EXPORT_FORMATS,
   downloadCsv,
   downloadJson,
-  downloadYaml,
   type CsvColumnMeta,
+  type CsvExportColumn,
   type TableExportFormat,
 } from '@/lib/table-export'
 import { useCanAnyNamespace } from '@/hooks/use-can'
@@ -109,8 +109,15 @@ export interface ResourceTableProps<T> {
    * 导出行的原始清单（多行打进同一个文件，YAML 用多文档分隔）。行取当前
    * 搜索 / 列过滤后的结果，不受分页限制。`fileName` 不含扩展名，默认用
    * 资源类型名，落盘时自动补上日期。
+   *
+   * CSV 额外带上分组列（即使被隐藏，否则按命名空间/项目分组的列表会缺
+   * 行的归属），`csvColumns` 再追加界面之外的联动列。
    */
-  exportData?: { fileName?: string; formats?: TableExportFormat[] }
+  exportData?: {
+    fileName?: string
+    formats?: TableExportFormat[]
+    csvColumns?: CsvExportColumn<T>[]
+  }
 }
 
 export function ResourceTable<T>(props: ResourceTableProps<T>) {
@@ -602,16 +609,22 @@ function ResourceTableContent<T>({
     setRowSelection,
     setDeleteDialogOpen,
   ])
-  // 导出范围：所选，或筛选 + 排序后的全量行（getSortedRowModel 不含分页，
-  // 翻页不会缩小导出范围）。CSV 与界面看到的一致——只用可见列（隐藏列、
-  // 勾选列、操作列都不导出），display 列需由列 meta 的 csvValue 提供取值；
-  // JSON / YAML 导出行的原始清单。
+  // 导出就是「表格展示的内容」：只用可见列（隐藏列、勾选列、操作列都不导出），
+  // display 列需由列 meta 的 csvValue 提供取值；分组列是例外——它承载行所属
+  // 的命名空间/项目，界面上由组标题展示，导出时即使被隐藏也要补在最前面。
+  // CSV 与 JSON 共用这份行列数据（JSON 以列标题为 key），范围取所选或筛选 +
+  // 排序后的全量叶子行（getPrePaginationRowModel 不含分页）。
   const handleExport = useCallback(
     (scope: ResourceTableExportScope, format: TableExportFormat) => {
+      // 分组模式下行里混着组标题行（original 指向组内第一行，展开后的叶子行
+      // 紧跟在它后面），导出只保留实际资源行。getPrePaginationRowModel 含
+      // 全部过滤 + 排序后的行，翻页不影响导出范围。
       const sourceRows =
         scope === 'selected'
           ? table.getSelectedRowModel().rows
-          : table.getSortedRowModel().rows
+          : table
+              .getPrePaginationRowModel()
+              .rows.filter((row) => !row.getIsGrouped())
       // 没有可导出的行时不落一个空文件（按钮已置灰，这里兜底）。
       if (sourceRows.length === 0) {
         return
@@ -621,37 +634,50 @@ function ResourceTableContent<T>({
       const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       const baseName = `${exportData?.fileName || resolvedResourceType}-${stamp}${scope === 'selected' ? '-selected' : ''}`
 
-      if (format === 'csv') {
-        const exportColumns = table
-          .getVisibleLeafColumns()
-          .map((column) => ({
-            column,
-            meta: column.columnDef.meta as CsvColumnMeta<T> | undefined,
-          }))
-          .filter(({ column, meta }) => column.accessorFn || meta?.csvValue)
-        const headers = exportColumns.map(({ column }) => {
+      const visibleColumns = table
+        .getVisibleLeafColumns()
+        .map((column) => ({
+          column,
+          meta: column.columnDef.meta as CsvColumnMeta<T> | undefined,
+        }))
+        .filter(({ column, meta }) => column.accessorFn || meta?.csvValue)
+      const groupingColumn = grouping
+        ? table.getColumn(grouping.columnId)
+        : undefined
+      const exportColumns =
+        groupingColumn &&
+        !visibleColumns.some(({ column }) => column.id === groupingColumn.id)
+          ? [
+              {
+                column: groupingColumn,
+                meta: groupingColumn.columnDef.meta as
+                  CsvColumnMeta<T> | undefined,
+              },
+              ...visibleColumns,
+            ]
+          : visibleColumns
+      const extraColumns = exportData?.csvColumns ?? []
+
+      const headers = [
+        ...exportColumns.map(({ column }) => {
           const header = column.columnDef.header
           return typeof header === 'string' ? header : column.id
-        })
-        const rows = sourceRows.map((row) =>
-          exportColumns.map(({ column, meta }) =>
-            meta?.csvValue
-              ? meta.csvValue(row.original)
-              : row.getValue(column.id)
-          )
-        )
-        downloadCsv(baseName, headers, rows)
-        return
-      }
-
-      const objects = sourceRows.map((row) => row.original)
+        }),
+        ...extraColumns.map((column) => column.header),
+      ]
+      const rows = sourceRows.map((row) => [
+        ...exportColumns.map(({ column, meta }) =>
+          meta?.csvValue ? meta.csvValue(row.original) : row.getValue(column.id)
+        ),
+        ...extraColumns.map((column) => column.value(row.original)),
+      ])
       if (format === 'json') {
-        downloadJson(baseName, objects)
+        downloadJson(baseName, headers, rows)
         return
       }
-      downloadYaml(baseName, objects)
+      downloadCsv(baseName, headers, rows)
     },
-    [table, exportData?.fileName, resolvedResourceType]
+    [table, exportData, resolvedResourceType, grouping]
   )
 
   // 计算总行数与过滤后的行数

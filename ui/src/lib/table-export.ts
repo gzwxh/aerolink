@@ -1,19 +1,15 @@
 /**
- * 表格数据导出：CSV / JSON / YAML 的序列化与浏览器下载。
+ * 表格数据导出：CSV / JSON 的序列化与浏览器下载。
  *
- * 导出哪些列/行由调用方（ResourceTable）决定，这里只管格式与落盘。
+ * 两种格式用的是同一份「表格数据」（列标题 + 每行取值），导出哪些列/行由
+ * 调用方（ResourceTable）决定，这里只管格式与落盘。
  */
-import * as yaml from 'js-yaml'
 
 /** 支持的导出格式。 */
-export type TableExportFormat = 'csv' | 'json' | 'yaml'
+export type TableExportFormat = 'csv' | 'json'
 
 /** 默认提供的格式（顺序即菜单顺序）。 */
-export const DEFAULT_TABLE_EXPORT_FORMATS: TableExportFormat[] = [
-  'csv',
-  'json',
-  'yaml',
-]
+export const DEFAULT_TABLE_EXPORT_FORMATS: TableExportFormat[] = ['csv', 'json']
 
 /**
  * 列定义 meta 里的 CSV 字段，`T` 为表格的数据类型。
@@ -24,6 +20,15 @@ export const DEFAULT_TABLE_EXPORT_FORMATS: TableExportFormat[] = [
  */
 export interface CsvColumnMeta<T = unknown> {
   csvValue?: (row: T) => unknown
+}
+
+/**
+ * CSV 额外列：不渲染在表格里，只在导出时追加到末尾。用于携带行数据中
+ * 没有、但需要与行联动的信息（例如命名空间对应的权限绑定组）。
+ */
+export interface CsvExportColumn<T = unknown> {
+  header: string
+  value: (row: T) => unknown
 }
 
 function toCellText(value: unknown): string {
@@ -57,6 +62,16 @@ export function toCsv(headers: string[], rows: unknown[][]): string {
     .join('\r\n')
 }
 
+/** 把表格数据转成对象数组，key 为列标题。 */
+export function rowsToObjects(
+  headers: string[],
+  rows: unknown[][]
+): Record<string, unknown>[] {
+  return rows.map((row) =>
+    Object.fromEntries(headers.map((header, index) => [header, row[index]]))
+  )
+}
+
 function withExtension(fileName: string, ext: string): string {
   return fileName.endsWith(`.${ext}`) ? fileName : `${fileName}.${ext}`
 }
@@ -82,7 +97,6 @@ function downloadText(
   URL.revokeObjectURL(url)
 }
 
-/** 表格内容（按列取值）。 */
 export function downloadCsv(
   fileName: string,
   headers: string[],
@@ -96,22 +110,15 @@ export function downloadCsv(
   )
 }
 
-/** 原始对象数组，格式化 2 空格缩进。 */
-export function downloadJson(fileName: string, objects: unknown[]) {
+/** 与 CSV 同源的表格数据，按列标题转成对象数组。 */
+export function downloadJson(
+  fileName: string,
+  headers: string[],
+  rows: unknown[][]
+) {
   downloadText(
     withExtension(fileName, 'json'),
-    JSON.stringify(objects, null, 2),
+    JSON.stringify(rowsToObjects(headers, rows), null, 2),
     'application/json'
-  )
-}
-
-/** 多文档 YAML：每个对象一个清单，可直接 `kubectl apply -f`。 */
-export function downloadYaml(fileName: string, objects: unknown[]) {
-  downloadText(
-    withExtension(fileName, 'yaml'),
-    objects
-      .map((object) => yaml.dump(object, { indent: 2, noRefs: true }))
-      .join('---\n'),
-    'application/x-yaml'
   )
 }

@@ -51,18 +51,14 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
-const { mockDownloadCsv, mockDownloadJson, mockDownloadYaml } = vi.hoisted(
-  () => ({
-    mockDownloadCsv: vi.fn(),
-    mockDownloadJson: vi.fn(),
-    mockDownloadYaml: vi.fn(),
-  })
-)
+const { mockDownloadCsv, mockDownloadJson } = vi.hoisted(() => ({
+  mockDownloadCsv: vi.fn(),
+  mockDownloadJson: vi.fn(),
+}))
 vi.mock('@/lib/table-export', () => ({
   downloadCsv: (...args: unknown[]) => mockDownloadCsv(...args),
   downloadJson: (...args: unknown[]) => mockDownloadJson(...args),
-  downloadYaml: (...args: unknown[]) => mockDownloadYaml(...args),
-  DEFAULT_TABLE_EXPORT_FORMATS: ['csv', 'json', 'yaml'],
+  DEFAULT_TABLE_EXPORT_FORMATS: ['csv', 'json'],
 }))
 
 vi.mock('@/lib/current-cluster', () => ({
@@ -507,7 +503,10 @@ describe('ResourceTable export menu', () => {
     localStorage.clear()
     mockDownloadCsv.mockClear()
     mockDownloadJson.mockClear()
-    mockDownloadYaml.mockClear()
+  })
+
+  afterEach(() => {
+    tableData.rows = fakeRows
   })
 
   function renderExportableTable() {
@@ -524,7 +523,7 @@ describe('ResourceTable export menu', () => {
   async function clickExport(
     user: ReturnType<typeof userEvent.setup>,
     range: 'downloadAll' | 'downloadSelected',
-    format: 'csv' | 'json' | 'yaml'
+    format: 'csv' | 'json'
   ) {
     await user.click(
       screen.getByRole('button', { name: 'resourceTable.download' })
@@ -560,21 +559,91 @@ describe('ResourceTable export menu', () => {
     await clickExport(user, 'downloadSelected', 'json')
 
     expect(mockDownloadJson).toHaveBeenCalledTimes(1)
-    const [fileName, objects] = mockDownloadJson.mock.calls[0]
+    const [fileName, headers, rows] = mockDownloadJson.mock.calls[0]
     // 与「全部」区分开，避免两次下载同名文件
     expect(fileName).toMatch(/-selected$/)
-    expect(objects).toEqual([fakeRows[0]])
+    // JSON 与 CSV 同源：列标题 + 该行展示值，不是对象原始清单
+    expect(headers).toEqual(['Name'])
+    expect(rows).toEqual([['svc-1']])
   })
 
-  it('exports every filtered row as YAML', async () => {
-    renderExportableTable()
-    const user = userEvent.setup()
-    await clickExport(user, 'downloadAll', 'yaml')
+  // 回归：镜像 / 标签这类列的 accessor 是对象，导出要用列 meta 的 csvValue
+  // 取扁平文本，否则单元格里会出现整个对象。
+  it('exports the column meta csvValue instead of the raw accessor value', async () => {
+    render(
+      <ResourceTable<Row>
+        resourceName="services"
+        columns={[
+          columnHelper.accessor('metadata.name', { header: 'Name' }),
+          columnHelper.accessor(
+            (row: Row) => ({ name: row.metadata.name, image: 'app:1.0' }),
+            {
+              id: 'images',
+              header: 'Images',
+              meta: { csvValue: (row: Row) => `image-of-${row.metadata.name}` },
+            }
+          ),
+        ]}
+        clusterScope={true}
+        exportData={{ fileName: 'services' }}
+      />
+    )
 
-    expect(mockDownloadYaml).toHaveBeenCalledTimes(1)
-    const [fileName, objects] = mockDownloadYaml.mock.calls[0]
-    expect(fileName).toMatch(/^services-\d{4}-\d{2}-\d{2}$/)
-    expect(objects).toEqual(fakeRows)
+    const user = userEvent.setup()
+    await clickExport(user, 'downloadAll', 'csv')
+
+    const [, headers, rows] = mockDownloadCsv.mock.calls[0]
+    expect(headers).toEqual(['Name', 'Images'])
+    expect(rows).toEqual([
+      ['svc-1', 'image-of-svc-1'],
+      ['svc-2', 'image-of-svc-2'],
+      ['svc-3', 'image-of-svc-3'],
+    ])
+  })
+
+  // 回归：workload 列表按命名空间分组，分组列在界面上是隐藏的（值由组标题
+  // 展示）。导出要补上该列，并且落到实际资源行，而不是组标题行。
+  it('includes the hidden grouping column and extra CSV columns', async () => {
+    tableData.rows = [
+      { metadata: { name: 'app-1', namespace: 'dev', uid: 'grp-1' } },
+      { metadata: { name: 'app-2', namespace: 'prod', uid: 'grp-2' } },
+    ]
+    render(
+      <ResourceTable<Row>
+        resourceName="services"
+        columns={[
+          columnHelper.accessor('metadata.name', { header: 'Name' }),
+          columnHelper.accessor((row: Row) => row.metadata.namespace ?? '', {
+            id: 'namespace',
+            header: 'Namespace',
+          }),
+        ]}
+        clusterScope={true}
+        grouping={{
+          columnId: 'namespace',
+          renderGroupHeader: (value) => value,
+        }}
+        exportData={{
+          fileName: 'services',
+          csvColumns: [
+            {
+              header: 'Binding',
+              value: (row) => `binding-of-${row.metadata.namespace}`,
+            },
+          ],
+        }}
+      />
+    )
+
+    const user = userEvent.setup()
+    await clickExport(user, 'downloadAll', 'csv')
+
+    const [, headers, rows] = mockDownloadCsv.mock.calls[0]
+    expect(headers).toEqual(['Namespace', 'Name', 'Binding'])
+    expect(rows).toEqual([
+      ['dev', 'app-1', 'binding-of-dev'],
+      ['prod', 'app-2', 'binding-of-prod'],
+    ])
   })
 })
 

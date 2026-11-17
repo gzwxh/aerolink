@@ -43,7 +43,6 @@ export type ResourceTableExportScope = 'selected' | 'all'
 const EXPORT_FORMAT_LABEL_KEYS: Record<TableExportFormat, string> = {
   csv: 'resourceTable.exportFormats.csv',
   json: 'resourceTable.exportFormats.json',
-  yaml: 'resourceTable.exportFormats.yaml',
 }
 
 export interface ResourceTableBatchAction<T> {
