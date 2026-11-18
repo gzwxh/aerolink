@@ -117,6 +117,41 @@ describe('ClusterBadge', () => {
     expect(screen.getByTitle('测试环境')).toHaveStyle({ color: '#000000' })
   })
 
+  // 字色可单独设置；留空或非法时按背景色自动取黑/白，默认配置始终可读。
+  it('说明文字颜色可单独设置，留空或非法时按背景色自动', () => {
+    render(
+      <>
+        <ClusterBadge
+          cluster={{
+            badgeEnabled: true,
+            badgeText: '自定义',
+            badgeColor: '#0011ff',
+            badgeTextColor: '#ffcc00',
+          }}
+        />
+        <ClusterBadge
+          cluster={{
+            badgeEnabled: true,
+            badgeText: '自动',
+            badgeColor: '#0011ff',
+          }}
+        />
+        <ClusterBadge
+          cluster={{
+            badgeEnabled: true,
+            badgeText: '脏值',
+            badgeColor: '#0011ff',
+            badgeTextColor: 'red',
+          }}
+        />
+      </>
+    )
+
+    expect(screen.getByTitle('自定义')).toHaveStyle({ color: '#ffcc00' })
+    expect(screen.getByTitle('自动')).toHaveStyle({ color: '#ffffff' })
+    expect(screen.getByTitle('脏值')).toHaveStyle({ color: '#ffffff' })
+  })
+
   // 说明文本上限 16 个字符，且必须整段显示：宽度就是按这个口径留的，
   // 加 max-w-* / truncate 会把末尾几个字吃掉。
   it('16 个字符的说明完整显示，不截断', () => {
@@ -131,12 +166,101 @@ describe('ClusterBadge', () => {
   })
 })
 
+describe('ClusterBadge 字号与加粗', () => {
+  it('未设置字号时按默认档渲染，且不加粗', () => {
+    render(
+      <ClusterBadge cluster={{ badgeEnabled: true, badgeText: '测试环境' }} />
+    )
+
+    const badge = screen.getByTitle('测试环境')
+    expect(badge.className).toContain('text-xs')
+    expect(badge.className).toContain('font-medium')
+  })
+
+  it('小 / 大两档换成不同字号，加粗开启后字重更粗', () => {
+    render(
+      <>
+        <ClusterBadge
+          cluster={{ badgeEnabled: true, badgeText: '小', badgeTextSize: 'sm' }}
+        />
+        <ClusterBadge
+          cluster={{
+            badgeEnabled: true,
+            badgeText: '大',
+            badgeTextSize: 'lg',
+            badgeBold: true,
+          }}
+        />
+      </>
+    )
+
+    expect(screen.getByTitle('小').className).toContain('text-[10px]')
+    const large = screen.getByTitle('大')
+    expect(large.className).toContain('text-sm')
+    expect(large.className).toContain('font-bold')
+  })
+
+  // 自定义像素字号走内联 font-size（值已由前后端限定在 10~24 的整数）。
+  it('自定义像素字号按原值渲染，越界值回落默认档', () => {
+    render(
+      <>
+        <ClusterBadge
+          cluster={{
+            badgeEnabled: true,
+            badgeText: '十六',
+            badgeColor: '#0011ff',
+            badgeTextSize: '18',
+          }}
+        />
+        <ClusterBadge
+          cluster={{
+            badgeEnabled: true,
+            badgeText: '越界',
+            badgeColor: '#0011ff',
+            badgeTextSize: '99',
+          }}
+        />
+      </>
+    )
+
+    expect(screen.getByTitle('十六').style.fontSize).toBe('18px')
+    const fallback = screen.getByTitle('越界')
+    expect(fallback.style.fontSize).toBe('')
+    expect(fallback.className).toContain('text-xs')
+  })
+
+  // 字号会进类名，未知值不能拼进样式：库里手工写脏了按默认档渲染。
+  it('未知档位回落默认档', () => {
+    render(
+      <ClusterBadge
+        cluster={{
+          badgeEnabled: true,
+          badgeText: '测试环境',
+          badgeTextSize: 'xl',
+        }}
+      />
+    )
+
+    expect(screen.getByTitle('测试环境').className).toContain('text-xs')
+  })
+})
+
 describe('ClusterBadgeIcon', () => {
-  it('没自定义图标时用默认集群图标', () => {
+  // 自定义图标默认关闭，关掉时连默认图标都不占位：顶栏、切换器、管理列表都不该
+  // 凭空多出一个集群图标。
+  it('图标开关关闭时不渲染任何图标', () => {
     const { container } = render(
       <ClusterBadgeIcon
         cluster={{ badgeEnabled: true, badgeText: '测试环境' }}
       />
+    )
+
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('图标开关开启但还没选图标时，用默认图标占位', () => {
+    const { container } = render(
+      <ClusterBadgeIcon cluster={{ badgeIconEnabled: true }} />
     )
 
     expect(container.querySelector('svg')).not.toBeNull()
@@ -192,15 +316,98 @@ describe('ClusterBadgeIcon', () => {
     expect(screen.queryByTitle('测试')).toBeNull()
   })
 
-  it('图标开关关闭时即使有地址也回默认图标', () => {
+  it('图标开关关闭时即使有地址也不渲染图标', () => {
     const { container } = render(
       <ClusterBadgeIcon
         cluster={{ badgeIconUrl: '/api/v1/clusters/1/badge-icon?v=abc' }}
       />
     )
 
-    expect(container.querySelector('img')).toBeNull()
-    expect(container.querySelector('svg')).not.toBeNull()
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  // 图标文本有自己的字号 / 加粗 / 底色 / 字色，直接读 badgeIcon* 字段。
+  it('图标文本使用自己的字号、加粗、底色与字色', () => {
+    render(
+      <ClusterBadgeIcon
+        cluster={{
+          badgeIconEnabled: true,
+          badgeIconText: '生产',
+          badgeColor: '#0011ff',
+          badgeIconTextSize: 'lg',
+          badgeIconBold: true,
+          badgeIconTextColor: '#ffcc00',
+          badgeIconTextBackground: '#112233',
+        }}
+      />
+    )
+
+    const icon = screen.getByTitle('生产')
+    expect(icon.className).toContain('text-sm')
+    expect(icon.className).toContain('font-bold')
+    expect(icon).toHaveStyle({ color: '#ffcc00' })
+    expect(icon).toHaveStyle({ backgroundColor: '#112233' })
+  })
+
+  // 底色留空才用徽章背景色；字色留空 / 非法时按**实际**底色自动取黑/白。
+  it('图标文本底色与字色留空时分别回落徽章底色与自动黑白', () => {
+    render(
+      <>
+        <ClusterBadgeIcon
+          cluster={{
+            badgeIconEnabled: true,
+            badgeIconText: 'A',
+            badgeColor: '#0011ff',
+          }}
+        />
+        <ClusterBadgeIcon
+          cluster={{
+            badgeIconEnabled: true,
+            badgeIconText: 'B',
+            badgeColor: '#0011ff',
+            badgeIconTextColor: 'red',
+          }}
+        />
+        {/* 浅色底要自动选黑字，否则浅底白字什么都看不见。 */}
+        <ClusterBadgeIcon
+          cluster={{
+            badgeIconEnabled: true,
+            badgeIconText: 'C',
+            badgeColor: '#0011ff',
+            badgeIconTextBackground: '#ffffff',
+          }}
+        />
+      </>
+    )
+
+    expect(screen.getByTitle('A')).toHaveStyle({
+      color: '#ffffff',
+      backgroundColor: '#0011ff',
+    })
+    expect(screen.getByTitle('B')).toHaveStyle({ color: '#ffffff' })
+    expect(screen.getByTitle('C')).toHaveStyle({
+      color: '#000000',
+      backgroundColor: '#ffffff',
+    })
+  })
+
+  // 图标文本与「自定义说明」是两处独立设置：说明选了大字号 + 加粗，图标文本不跟着变。
+  it('图标文本不跟随说明的字号与加粗', () => {
+    render(
+      <ClusterBadgeIcon
+        cluster={{
+          badgeIconEnabled: true,
+          badgeIconText: '生产',
+          badgeTextSize: 'lg',
+          badgeBold: true,
+        }}
+      />
+    )
+
+    const icon = screen.getByTitle('生产')
+    expect(icon.className).toContain('text-[9px]')
+    expect(icon.className).toContain('font-medium')
+    expect(icon.className).not.toContain('font-bold')
   })
 
   // 图标文本上限 6 个汉字，且必须整段显示：宽度按最长文本留白，

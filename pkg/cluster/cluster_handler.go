@@ -113,23 +113,30 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 			clusterSlug = *cluster.Slug
 		}
 		clusterInfo := gin.H{
-			"id":               cluster.ID,
-			"name":             cluster.Name,
-			"description":      cluster.Description,
-			"slug":             clusterSlug,
-			"enabled":          cluster.Enable,
-			"inCluster":        cluster.InCluster,
-			"clusterAgent":     cluster.ClusterAgent,
-			"connected":        cluster.ClusterAgent && cm.clusterAgentManager.Connected(cluster.ID),
-			"isDefault":        cluster.IsDefault,
-			"prometheusURL":    cluster.PrometheusURL,
-			"config":           "",
-			"badgeEnabled":     cluster.BadgeEnabled,
-			"badgeText":        cluster.BadgeText,
-			"badgeColor":       cluster.BadgeColor,
-			"badgeIconEnabled": cluster.BadgeIconEnabled,
-			"badgeIconText":    cluster.BadgeIconText,
-			"badgeIconUrl":     cluster.BadgeIconURL,
+			"id":                      cluster.ID,
+			"name":                    cluster.Name,
+			"description":             cluster.Description,
+			"slug":                    clusterSlug,
+			"enabled":                 cluster.Enable,
+			"inCluster":               cluster.InCluster,
+			"clusterAgent":            cluster.ClusterAgent,
+			"connected":               cluster.ClusterAgent && cm.clusterAgentManager.Connected(cluster.ID),
+			"isDefault":               cluster.IsDefault,
+			"prometheusURL":           cluster.PrometheusURL,
+			"config":                  "",
+			"badgeEnabled":            cluster.BadgeEnabled,
+			"badgeText":               cluster.BadgeText,
+			"badgeTextSize":           cluster.BadgeTextSize,
+			"badgeBold":               cluster.BadgeBold,
+			"badgeColor":              cluster.BadgeColor,
+			"badgeTextColor":          cluster.BadgeTextColor,
+			"badgeIconEnabled":        cluster.BadgeIconEnabled,
+			"badgeIconText":           cluster.BadgeIconText,
+			"badgeIconTextSize":       cluster.BadgeIconTextSize,
+			"badgeIconTextColor":      cluster.BadgeIconTextColor,
+			"badgeIconTextBackground": cluster.BadgeIconTextBackground,
+			"badgeIconBold":           cluster.BadgeIconBold,
+			"badgeIconUrl":            cluster.BadgeIconURL,
 			// 写操作二次确认（见 model.Cluster 的 Confirm* 注释）：管理界面用它回填弹窗。
 			"confirmCreate":          cluster.ConfirmCreate,
 			"confirmUpdate":          cluster.ConfirmUpdate,
@@ -338,11 +345,18 @@ func applyStoredDisplayInfo(info *common.ClusterInfo, stored *model.Cluster) {
 	if stored.BadgeEnabled {
 		info.BadgeEnabled = true
 		info.BadgeText = stored.BadgeText
+		info.BadgeTextSize = stored.BadgeTextSize
+		info.BadgeBold = stored.BadgeBold
 		info.BadgeColor = stored.BadgeColor
+		info.BadgeTextColor = stored.BadgeTextColor
 	}
 	if stored.BadgeIconEnabled {
 		info.BadgeIconEnabled = true
 		info.BadgeIconText = stored.BadgeIconText
+		info.BadgeIconTextSize = stored.BadgeIconTextSize
+		info.BadgeIconTextColor = stored.BadgeIconTextColor
+		info.BadgeIconTextBackground = stored.BadgeIconTextBackground
+		info.BadgeIconBold = stored.BadgeIconBold
 		info.BadgeIconURL = stored.BadgeIconURL
 	}
 	// 写操作二次确认开关：前端提交 k8s 写请求前要据此决定是否弹确认框，
@@ -368,6 +382,27 @@ const (
 	maxBadgeIconTextRunes = 6
 )
 
+// badgeTextSizes 是徽章说明允许的预设字号档位。空值表示「没设置过」，
+// 渲染时按默认档（md）处理，老数据因此不需要回填。
+var badgeTextSizes = map[string]bool{"": true, "sm": true, "md": true, "lg": true}
+
+// 说明的字号除了预设档位，还接受 10~24 的像素值（自定义字号）。上限按「16 个字
+// 不把旁边的集群名挤变形」估算，下限保证 10px 仍可读；界面与图形刻度一致。
+const (
+	badgeTextSizeMinPx = 10
+	badgeTextSizeMaxPx = 24
+)
+
+// validBadgeTextSize 只放行预设档位与范围内的十进制像素值：值会进前端内联
+// font-size，不能接受任意字符串。
+func validBadgeTextSize(size string) bool {
+	if badgeTextSizes[size] {
+		return true
+	}
+	px, err := strconv.Atoi(size)
+	return err == nil && px >= badgeTextSizeMinPx && px <= badgeTextSizeMaxPx
+}
+
 // validateClusterBadge 校验徽章字段，超限一律报错而不是静默截断。
 // 启用徽章时说明文案必填——只有颜色没有文本，渲染出来就是一个空色块。
 func validateClusterBadge(badge model.Cluster) error {
@@ -377,11 +412,27 @@ func validateClusterBadge(badge model.Cluster) error {
 	if utf8.RuneCountInString(badge.BadgeText) > maxBadgeTextRunes {
 		return fmt.Errorf("badgeText must be at most %d characters", maxBadgeTextRunes)
 	}
+	if !validBadgeTextSize(badge.BadgeTextSize) {
+		return fmt.Errorf("badgeTextSize must be sm, md, lg or a pixel size between %d and %d",
+			badgeTextSizeMinPx, badgeTextSizeMaxPx)
+	}
 	if badge.BadgeColor != "" && !badgeColorPattern.MatchString(badge.BadgeColor) {
 		return errors.New("badgeColor must be a hex color such as #0011ff")
 	}
+	if badge.BadgeTextColor != "" && !badgeColorPattern.MatchString(badge.BadgeTextColor) {
+		return errors.New("badgeTextColor must be a hex color such as #0011ff")
+	}
 	if utf8.RuneCountInString(badge.BadgeIconText) > maxBadgeIconTextRunes {
 		return fmt.Errorf("badgeIconText must be at most %d characters", maxBadgeIconTextRunes)
+	}
+	if !badgeTextSizes[badge.BadgeIconTextSize] {
+		return errors.New("badgeIconTextSize must be one of sm, md, lg")
+	}
+	if badge.BadgeIconTextColor != "" && !badgeColorPattern.MatchString(badge.BadgeIconTextColor) {
+		return errors.New("badgeIconTextColor must be a hex color such as #0011ff")
+	}
+	if badge.BadgeIconTextBackground != "" && !badgeColorPattern.MatchString(badge.BadgeIconTextBackground) {
+		return errors.New("badgeIconTextBackground must be a hex color such as #0011ff")
 	}
 	return nil
 }
@@ -419,11 +470,18 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		IsDefault     *bool   `json:"isDefault"`
 		Enabled       *bool   `json:"enabled"`
 		// 集群徽章，见 validateClusterBadge。
-		BadgeEnabled     *bool   `json:"badgeEnabled"`
-		BadgeText        *string `json:"badgeText"`
-		BadgeColor       *string `json:"badgeColor"`
-		BadgeIconEnabled *bool   `json:"badgeIconEnabled"`
-		BadgeIconText    *string `json:"badgeIconText"`
+		BadgeEnabled            *bool   `json:"badgeEnabled"`
+		BadgeText               *string `json:"badgeText"`
+		BadgeTextSize           *string `json:"badgeTextSize"`
+		BadgeBold               *bool   `json:"badgeBold"`
+		BadgeColor              *string `json:"badgeColor"`
+		BadgeTextColor          *string `json:"badgeTextColor"`
+		BadgeIconEnabled        *bool   `json:"badgeIconEnabled"`
+		BadgeIconText           *string `json:"badgeIconText"`
+		BadgeIconTextSize       *string `json:"badgeIconTextSize"`
+		BadgeIconTextColor      *string `json:"badgeIconTextColor"`
+		BadgeIconTextBackground *string `json:"badgeIconTextBackground"`
+		BadgeIconBold           *bool   `json:"badgeIconBold"`
 		// 写操作二次确认开关，见 model.Cluster 的 Confirm* 注释。
 		ConfirmCreate          *bool `json:"confirmCreate"`
 		ConfirmUpdate          *bool `json:"confirmUpdate"`
@@ -456,11 +514,18 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	// 徽章按「本次请求之后的最终状态」校验：只改颜色或只打开开关的请求，
 	// 也要拿库里的旧值补齐后再判断文本是否为空。
 	nextBadge := model.Cluster{
-		BadgeEnabled:     cluster.BadgeEnabled,
-		BadgeText:        cluster.BadgeText,
-		BadgeColor:       cluster.BadgeColor,
-		BadgeIconEnabled: cluster.BadgeIconEnabled,
-		BadgeIconText:    cluster.BadgeIconText,
+		BadgeEnabled:            cluster.BadgeEnabled,
+		BadgeText:               cluster.BadgeText,
+		BadgeTextSize:           cluster.BadgeTextSize,
+		BadgeBold:               cluster.BadgeBold,
+		BadgeColor:              cluster.BadgeColor,
+		BadgeTextColor:          cluster.BadgeTextColor,
+		BadgeIconEnabled:        cluster.BadgeIconEnabled,
+		BadgeIconText:           cluster.BadgeIconText,
+		BadgeIconTextSize:       cluster.BadgeIconTextSize,
+		BadgeIconTextColor:      cluster.BadgeIconTextColor,
+		BadgeIconTextBackground: cluster.BadgeIconTextBackground,
+		BadgeIconBold:           cluster.BadgeIconBold,
 	}
 	if req.BadgeEnabled != nil {
 		nextBadge.BadgeEnabled = *req.BadgeEnabled
@@ -468,14 +533,35 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	if req.BadgeText != nil {
 		nextBadge.BadgeText = strings.TrimSpace(*req.BadgeText)
 	}
+	if req.BadgeTextSize != nil {
+		nextBadge.BadgeTextSize = strings.TrimSpace(*req.BadgeTextSize)
+	}
+	if req.BadgeBold != nil {
+		nextBadge.BadgeBold = *req.BadgeBold
+	}
 	if req.BadgeColor != nil {
 		nextBadge.BadgeColor = strings.TrimSpace(*req.BadgeColor)
+	}
+	if req.BadgeTextColor != nil {
+		nextBadge.BadgeTextColor = strings.TrimSpace(*req.BadgeTextColor)
 	}
 	if req.BadgeIconEnabled != nil {
 		nextBadge.BadgeIconEnabled = *req.BadgeIconEnabled
 	}
 	if req.BadgeIconText != nil {
 		nextBadge.BadgeIconText = strings.TrimSpace(*req.BadgeIconText)
+	}
+	if req.BadgeIconTextSize != nil {
+		nextBadge.BadgeIconTextSize = strings.TrimSpace(*req.BadgeIconTextSize)
+	}
+	if req.BadgeIconTextColor != nil {
+		nextBadge.BadgeIconTextColor = strings.TrimSpace(*req.BadgeIconTextColor)
+	}
+	if req.BadgeIconTextBackground != nil {
+		nextBadge.BadgeIconTextBackground = strings.TrimSpace(*req.BadgeIconTextBackground)
+	}
+	if req.BadgeIconBold != nil {
+		nextBadge.BadgeIconBold = *req.BadgeIconBold
 	}
 	if err := validateClusterBadge(nextBadge); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -492,14 +578,35 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	if req.BadgeText != nil {
 		updates["badge_text"] = nextBadge.BadgeText
 	}
+	if req.BadgeTextSize != nil {
+		updates["badge_text_size"] = nextBadge.BadgeTextSize
+	}
+	if req.BadgeBold != nil {
+		updates["badge_bold"] = nextBadge.BadgeBold
+	}
 	if req.BadgeColor != nil {
 		updates["badge_color"] = nextBadge.BadgeColor
+	}
+	if req.BadgeTextColor != nil {
+		updates["badge_text_color"] = nextBadge.BadgeTextColor
 	}
 	if req.BadgeIconEnabled != nil {
 		updates["badge_icon_enabled"] = nextBadge.BadgeIconEnabled
 	}
 	if req.BadgeIconText != nil {
 		updates["badge_icon_text"] = nextBadge.BadgeIconText
+	}
+	if req.BadgeIconTextSize != nil {
+		updates["badge_icon_text_size"] = nextBadge.BadgeIconTextSize
+	}
+	if req.BadgeIconTextColor != nil {
+		updates["badge_icon_text_color"] = nextBadge.BadgeIconTextColor
+	}
+	if req.BadgeIconTextBackground != nil {
+		updates["badge_icon_text_background"] = nextBadge.BadgeIconTextBackground
+	}
+	if req.BadgeIconBold != nil {
+		updates["badge_icon_bold"] = nextBadge.BadgeIconBold
 	}
 	if req.PrometheusURL != nil {
 		updates["prometheus_url"] = *req.PrometheusURL

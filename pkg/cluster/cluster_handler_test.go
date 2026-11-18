@@ -222,7 +222,9 @@ func TestUpdateClusterBadgePartialUpdateAndValidation(t *testing.T) {
 	path := fmt.Sprintf("/clusters/%d", cluster.ID)
 
 	response := performClusterRequest(router, http.MethodPut, path,
-		`{"badgeEnabled":true,"badgeText":"  测试环境  ","badgeColor":"#0011ff","badgeIconEnabled":true,"badgeIconText":" 测试 "}`)
+		`{"badgeEnabled":true,"badgeText":"  测试环境  ","badgeTextSize":"lg","badgeBold":true,"badgeColor":"#0011ff",`+
+			`"badgeIconEnabled":true,"badgeIconText":" 测试 ","badgeIconTextSize":"sm","badgeIconTextColor":"#ff0000",`+
+			`"badgeTextColor":"#00ffff","badgeIconTextBackground":"#00ff00","badgeIconBold":true}`)
 	if response.Code != http.StatusOK {
 		t.Fatalf("badge update status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
 	}
@@ -231,7 +233,11 @@ func TestUpdateClusterBadgePartialUpdateAndValidation(t *testing.T) {
 		t.Fatalf("reloading cluster: %v", err)
 	}
 	if !after.BadgeEnabled || after.BadgeText != "测试环境" || after.BadgeColor != "#0011ff" ||
-		!after.BadgeIconEnabled || after.BadgeIconText != "测试" {
+		after.BadgeTextColor != "#00ffff" ||
+		after.BadgeTextSize != "lg" || !after.BadgeBold ||
+		!after.BadgeIconEnabled || after.BadgeIconText != "测试" ||
+		after.BadgeIconTextSize != "sm" || after.BadgeIconTextColor != "#ff0000" ||
+		after.BadgeIconTextBackground != "#00ff00" || !after.BadgeIconBold {
 		t.Fatalf("badge fields = %#v", after)
 	}
 	if !after.Enable || after.Description != "main" || string(after.Config) != "secret-kubeconfig" {
@@ -247,7 +253,11 @@ func TestUpdateClusterBadgePartialUpdateAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reloading cluster: %v", err)
 	}
-	if after.BadgeText != "生产环境" || !after.BadgeEnabled || after.BadgeColor != "#0011ff" || after.BadgeIconText != "测试" {
+	if after.BadgeText != "生产环境" || !after.BadgeEnabled || after.BadgeColor != "#0011ff" ||
+		after.BadgeTextColor != "#00ffff" ||
+		after.BadgeTextSize != "lg" || !after.BadgeBold || after.BadgeIconText != "测试" ||
+		after.BadgeIconTextSize != "sm" || after.BadgeIconTextColor != "#ff0000" ||
+		after.BadgeIconTextBackground != "#00ff00" || !after.BadgeIconBold {
 		t.Errorf("partial badge update lost values: %#v", after)
 	}
 
@@ -260,15 +270,26 @@ func TestUpdateClusterBadgePartialUpdateAndValidation(t *testing.T) {
 	if err := json.Unmarshal(list.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decoding list response: %v", err)
 	}
-	if len(listed) != 1 || listed[0]["badgeText"] != "生产环境" || listed[0]["badgeColor"] != "#0011ff" {
+	if len(listed) != 1 || listed[0]["badgeText"] != "生产环境" || listed[0]["badgeColor"] != "#0011ff" ||
+		listed[0]["badgeTextColor"] != "#00ffff" ||
+		listed[0]["badgeTextSize"] != "lg" || listed[0]["badgeBold"] != true {
 		t.Fatalf("listed cluster badge = %#v", listed)
 	}
 
 	for name, body := range map[string]string{
-		"启用徽章但没写说明": `{"badgeEnabled":true,"badgeText":""}`,
-		"颜色不是十六进制":  `{"badgeColor":"red"}`,
-		"颜色带样式注入":   `{"badgeColor":"#fff;background:url(x)"}`,
-		"说明超长":      fmt.Sprintf(`{"badgeText":%q}`, strings.Repeat("测", 17)),
+		"启用徽章但没写说明":  `{"badgeEnabled":true,"badgeText":""}`,
+		"颜色不是十六进制":   `{"badgeColor":"red"}`,
+		"颜色带样式注入":    `{"badgeColor":"#fff;background:url(x)"}`,
+		"说明字色不是十六进制": `{"badgeTextColor":"red"}`,
+		"说明超长":       fmt.Sprintf(`{"badgeText":%q}`, strings.Repeat("测", 17)),
+		// 字号只认三档，别的值不能静默落库（前端会按默认档渲染，用户以为设置生效了）。
+		"字号不在档位内": `{"badgeTextSize":"xl"}`,
+		"字号大小写不同": `{"badgeTextSize":"LG"}`,
+		// 图标文本的排版字段同样 fail-closed。
+		"图标字号不在档位内":  `{"badgeIconTextSize":"xl"}`,
+		"图标字色不是十六进制": `{"badgeIconTextColor":"red"}`,
+		"图标字色带样式注入":  `{"badgeIconTextColor":"#fff;background:url(x)"}`,
+		"图标底色不是十六进制": `{"badgeIconTextBackground":"red"}`,
 		// 图标文本按「最多 6 个汉字」收，7 个就要拒。
 		"图标文本超长": fmt.Sprintf(`{"badgeIconText":%q}`, strings.Repeat("测", 7)),
 	} {
@@ -276,6 +297,28 @@ func TestUpdateClusterBadgePartialUpdateAndValidation(t *testing.T) {
 		if response.Code != http.StatusBadRequest {
 			t.Errorf("%s: status = %d, want %d: %s", name, response.Code, http.StatusBadRequest, response.Body.String())
 		}
+	}
+
+	// 自定义像素字号落在范围内要能存下，并按原值回传。
+	response = performClusterRequest(router, http.MethodPut, path, `{"badgeTextSize":"16"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("custom badge text size status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if after, err = model.GetClusterByID(cluster.ID); err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	} else if after.BadgeTextSize != "16" {
+		t.Errorf("custom badge text size = %q, want 16", after.BadgeTextSize)
+	}
+
+	// 清空字号是合法的：空值等同默认档，老数据与「改回默认」都走这条路。
+	response = performClusterRequest(router, http.MethodPut, path, `{"badgeTextSize":""}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("clearing badge text size status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if after, err = model.GetClusterByID(cluster.ID); err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	} else if after.BadgeTextSize != "" || !after.BadgeBold {
+		t.Errorf("badge style after clearing size = %#v", after)
 	}
 
 	// 正好 16 个字符要能存下：徽章按整段展示、不截断，界面宽度就是按这个长度留的。
@@ -310,7 +353,7 @@ func TestUpdateClusterBadgePartialUpdateAndValidation(t *testing.T) {
 func TestGetClustersIncludesBadgeOnlyWhenEnabled(t *testing.T) {
 	setupClusterHandlerTestDB(t)
 	for _, cluster := range []*model.Cluster{
-		{Name: "tagged", Enable: true, BadgeEnabled: true, BadgeText: "测试环境", BadgeColor: "#0011ff", BadgeIconEnabled: true, BadgeIconText: "测试"},
+		{Name: "tagged", Enable: true, BadgeEnabled: true, BadgeText: "测试环境", BadgeTextSize: "lg", BadgeBold: true, BadgeColor: "#0011ff", BadgeTextColor: "#00ffff", BadgeIconEnabled: true, BadgeIconText: "测试", BadgeIconTextSize: "sm", BadgeIconTextColor: "#ff0000", BadgeIconTextBackground: "#00ff00", BadgeIconBold: true},
 		{Name: "icononly", Enable: true, BadgeIconEnabled: true, BadgeIconText: "独立图标", BadgeIconURL: "/api/v1/clusters/3/badge-icon?v=abc"},
 		{Name: "plain", Enable: true, BadgeText: "不该下发", BadgeColor: "#ff0000"},
 	} {
@@ -355,7 +398,11 @@ func TestGetClustersIncludesBadgeOnlyWhenEnabled(t *testing.T) {
 
 	tagged := byName["tagged"]
 	if tagged["badgeEnabled"] != true || tagged["badgeText"] != "测试环境" ||
-		tagged["badgeColor"] != "#0011ff" || tagged["badgeIconEnabled"] != true || tagged["badgeIconText"] != "测试" {
+		tagged["badgeTextSize"] != "lg" || tagged["badgeBold"] != true ||
+		tagged["badgeColor"] != "#0011ff" || tagged["badgeTextColor"] != "#00ffff" ||
+		tagged["badgeIconEnabled"] != true || tagged["badgeIconText"] != "测试" ||
+		tagged["badgeIconTextSize"] != "sm" || tagged["badgeIconTextColor"] != "#ff0000" ||
+		tagged["badgeIconTextBackground"] != "#00ff00" || tagged["badgeIconBold"] != true {
 		t.Errorf("enabled badge = %#v", tagged)
 	}
 
@@ -364,14 +411,14 @@ func TestGetClustersIncludesBadgeOnlyWhenEnabled(t *testing.T) {
 		iconOnly["badgeIconUrl"] != "/api/v1/clusters/3/badge-icon?v=abc" {
 		t.Errorf("icon-only cluster = %#v", iconOnly)
 	}
-	// 图标下发不等于徽章下发：徽章字段仍按自己的开关走。
-	for _, key := range []string{"badgeEnabled", "badgeText", "badgeColor"} {
+	// 图标下发不等于徽章下发：徽章字段（含字号与加粗）仍按自己的开关走。
+	for _, key := range []string{"badgeEnabled", "badgeText", "badgeTextSize", "badgeBold", "badgeColor", "badgeTextColor"} {
 		if _, ok := iconOnly[key]; ok {
 			t.Errorf("icon-only cluster leaked badge %q: %#v", key, iconOnly)
 		}
 	}
 
-	for _, key := range []string{"badgeEnabled", "badgeText", "badgeColor", "badgeIconEnabled", "badgeIconText", "badgeIconUrl"} {
+	for _, key := range []string{"badgeEnabled", "badgeText", "badgeTextSize", "badgeBold", "badgeColor", "badgeTextColor", "badgeIconEnabled", "badgeIconText", "badgeIconTextSize", "badgeIconTextColor", "badgeIconTextBackground", "badgeIconBold", "badgeIconUrl"} {
 		if _, ok := byName["plain"][key]; ok {
 			t.Errorf("disabled badge leaked %q into the cluster list: %#v", key, byName["plain"])
 		}

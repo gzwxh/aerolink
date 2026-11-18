@@ -34,20 +34,30 @@ Response example:
     "version": "v1.31.0",
     "badgeEnabled": true,
     "badgeText": "Staging",
+    "badgeTextSize": "lg",
+    "badgeBold": true,
     "badgeColor": "#0011ff",
+    "badgeTextColor": "#ffffff",
     "badgeIconEnabled": true,
     "badgeIconText": "Staging",
+    "badgeIconTextSize": "md",
+    "badgeIconTextColor": "#ffcc00",
+    "badgeIconTextBackground": "#ffffff",
+    "badgeIconBold": true,
     "badgeIconUrl": "/api/v1/clusters/1/badge-icon?v=8f14e45fceea167a"
   }
 ]
 ```
 
-Note: the badge fields (`badgeEnabled`, `badgeText`, `badgeColor`, `badgeIconEnabled`,
-`badgeIconText`, `badgeIconUrl`) are always returned verbatim by this endpoint so the
-admin UI can edit them. `GET /api/v1/clusters`, which feeds the cluster switcher and the
-header, only includes `badgeEnabled` / `badgeText` / `badgeColor` when `badgeEnabled` is
-true; the icon fields (`badgeIconEnabled` / `badgeIconText` / `badgeIconUrl`) follow
-`badgeIconEnabled` instead and are independent of the badge switch.
+Note: the badge fields (`badgeEnabled`, `badgeText`, `badgeTextSize`, `badgeBold`,
+`badgeColor`, `badgeTextColor`, `badgeIconEnabled`, `badgeIconText`, `badgeIconTextSize`,
+`badgeIconTextColor`, `badgeIconTextBackground`, `badgeIconBold`, `badgeIconUrl`) are always
+returned verbatim by this endpoint so the admin UI can edit them. `GET /api/v1/clusters`,
+which feeds the cluster switcher and the header, only includes the label fields
+(`badgeEnabled` / `badgeText` / `badgeTextSize` / `badgeBold` / `badgeColor` / `badgeTextColor`) when
+`badgeEnabled` is true; the icon fields (`badgeIconEnabled` / `badgeIconText` /
+`badgeIconTextSize` / `badgeIconTextColor` / `badgeIconTextBackground` / `badgeIconBold` /
+`badgeIconUrl`) follow `badgeIconEnabled` instead and are independent of the badge switch.
 
 ## Create a cluster
 
@@ -113,9 +123,16 @@ Request body:
   "enabled": true,
   "badgeEnabled": true,
   "badgeText": "Staging",
+  "badgeTextSize": "lg",
+  "badgeBold": true,
   "badgeColor": "#0011ff",
+  "badgeTextColor": "#ffffff",
   "badgeIconEnabled": true,
-  "badgeIconText": "Staging"
+  "badgeIconText": "Staging",
+  "badgeIconTextSize": "md",
+  "badgeIconTextColor": "#ffcc00",
+  "badgeIconTextBackground": "#ffffff",
+  "badgeIconBold": true
 }
 ```
 
@@ -150,6 +167,19 @@ Notes:
   `#RRGGBB`; `badgeText` is capped at 16 characters (the UI shows it in full, never
   truncated) and `badgeIconText` at 6, and
   anything longer returns 400 (never silently truncated).
+- `badgeTextSize` accepts `sm` / `md` / `lg` (presets for 10 / 12 / 14px), an **integer
+  between 10 and 24** as a string (custom pixel size, e.g. `"18"`), or an empty string for
+  the default `md`; anything else returns 400. `badgeBold` is a boolean that bolds the
+  label text. Both only affect the typography of the badge label.
+- `badgeColor` is the label background (and the default background of the icon text);
+  `badgeTextColor` is the label text color — empty means black/white is picked
+  automatically from that background, and a non-empty value must be `#RRGGBB`.
+- The icon text has its own typography fields, independent of the label: `badgeIconTextSize`
+  works like `badgeTextSize` (empty = size follows the display position);
+  `badgeIconTextBackground` empty means it reuses the badge background;
+  `badgeIconTextColor` empty means black/white is picked automatically from the actual
+  background; both must be `#RRGGBB` when set (400 otherwise); `badgeIconBold` bolds the
+  icon text.
 - Icon images do not go through this endpoint: `badgeIconUrl` is maintained only by the
   upload/delete endpoints below, and passing it here has no effect. That keeps the
   "icon bytes exist ⇔ the URL points at them" invariant intact.

@@ -81,8 +81,9 @@ export function SiteHeader() {
           <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
             {/* 公告在集群徽章之前（两者同属顶栏的右侧信息区）。 */}
             <AnnouncementBar />
-            {/* 集群名不在这里重复：左侧栏的集群选择器已经显示了当前集群。 */}
-            <CurrentClusterBadge showName={false} />
+            {/* 集群名与图标都不在这里重复：左侧栏的集群选择器已经显示了当前集群，
+                这里只保留自定义说明徽章。 */}
+            <CurrentClusterBadge showName={false} showIcon={false} />
             <Search />
             {canCreateAnyResource && (
               <Plus

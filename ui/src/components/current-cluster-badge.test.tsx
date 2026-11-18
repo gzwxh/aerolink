@@ -20,6 +20,8 @@ vi.mock('@/hooks/use-cluster', () => ({
         badgeEnabled: true,
         badgeText: '生产环境',
         badgeColor: '#0011ff',
+        badgeIconEnabled: true,
+        badgeIconText: '生产',
       },
     ],
   }),
@@ -53,6 +55,21 @@ describe('CurrentClusterBadge', () => {
 
     expect(screen.queryByText('devops-wxh')).toBeNull()
     expect(screen.queryByTitle('当前集群')).toBeNull()
+    expect(screen.getByTitle('生产')).toHaveTextContent('生产')
     expect(screen.getByTitle('生产环境')).toHaveTextContent('生产环境')
+  })
+
+  // 顶栏的切换器就在旁边，图标在那里已经显示过；再画一遍只是一块重复的色块。
+  it('showIcon=false 时不渲染集群图标，自定义说明仍在', () => {
+    render(<CurrentClusterBadge showName={false} showIcon={false} />)
+
+    expect(screen.queryByTitle('生产')).toBeNull()
+    expect(screen.getByTitle('生产环境')).toHaveTextContent('生产环境')
+  })
+
+  it('默认渲染集群图标', () => {
+    render(<CurrentClusterBadge />)
+
+    expect(screen.getByTitle('生产')).toHaveTextContent('生产')
   })
 })

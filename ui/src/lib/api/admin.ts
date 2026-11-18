@@ -61,9 +61,21 @@ export interface ClusterUpdateRequest extends Omit<
 export interface ClusterBadgeUpdateRequest {
   badgeEnabled?: boolean
   badgeText?: string
+  /** 字号档位 sm / md / lg，空值等同 md。 */
+  badgeTextSize?: string
+  badgeBold?: boolean
   badgeColor?: string
+  /** 说明文字颜色 `#RRGGBB`，空值 = 按徽章背景色自动。 */
+  badgeTextColor?: string
   badgeIconEnabled?: boolean
   badgeIconText?: string
+  /** 图标文本字号 sm / md / lg，空值 = 按展示位置自适应。 */
+  badgeIconTextSize?: string
+  /** 图标文本颜色 `#RRGGBB`，空值 = 按底色自动。 */
+  badgeIconTextColor?: string
+  /** 图标文本底色 `#RRGGBB`，空值 = 用徽章底色。 */
+  badgeIconTextBackground?: string
+  badgeIconBold?: boolean
 }
 
 // 获取用于管理的集群列表

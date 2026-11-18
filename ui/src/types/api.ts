@@ -674,10 +674,22 @@ export interface Cluster {
   // 集群徽章：`/clusters` 只在启用时下发，`/admin/clusters/` 始终回传原值。
   badgeEnabled?: boolean
   badgeText?: string
+  /** 说明文本的字号档位：sm / md / lg；空值等同 md（见 components/cluster-badge.tsx）。 */
+  badgeTextSize?: string
+  badgeBold?: boolean
   badgeColor?: string
+  /** 说明文字颜色（`#RRGGBB`）；空值 = 按徽章背景色自动取黑/白字。 */
+  badgeTextColor?: string
   // 图标与徽章开关互相独立：只换图标、不显示说明的集群也会下发这几个字段。
   badgeIconEnabled?: boolean
   badgeIconText?: string
+  /** 图标文本字号档位：sm / md / lg；空值 = 按展示位置自适应（见 components/cluster-badge.tsx）。 */
+  badgeIconTextSize?: string
+  /** 图标文本颜色（`#RRGGBB`）；空值 = 按图标底色自动取黑/白字。 */
+  badgeIconTextColor?: string
+  /** 图标文本底色（`#RRGGBB`）；空值 = 用徽章底色。 */
+  badgeIconTextBackground?: string
+  badgeIconBold?: boolean
   /** 上传的图标地址（`/api/v1/clusters/<id>/badge-icon?v=<哈希>`），未上传时为空。 */
   badgeIconUrl?: string
   // 写操作二次确认开关（见 model.Cluster 的 Confirm* 字段与 lib/write-confirm.ts）：

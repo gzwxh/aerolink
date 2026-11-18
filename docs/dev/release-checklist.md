@@ -69,6 +69,44 @@ ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
 `库表 general_settings 缺少列 help_url`。用户可见的升级步骤写在 `docs/guide/installation.md`
 的「升级」一节（中英同步）。
 
+**2026-11-18 的实例**：集群徽章新增说明与图标文本的排版列（`plans/2026-11-18-徽章字号与加粗.md`），
+`clusters` 表七列都要人工补：
+
+```sql
+-- PostgreSQL（需表 owner）
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_bold boolean NOT NULL DEFAULT false;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_background varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_bold boolean NOT NULL DEFAULT false;
+
+-- MySQL 5.7 / 8.x：不支持 ADD COLUMN IF NOT EXISTS；报 1060 Duplicate column name 说明列已存在，忽略
+ALTER TABLE clusters ADD COLUMN badge_text_size VARCHAR(8) NULL;
+ALTER TABLE clusters ADD COLUMN badge_bold TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE clusters ADD COLUMN badge_text_color VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_size VARCHAR(8) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_color VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_background VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_bold TINYINT(1) NOT NULL DEFAULT 0;
+
+-- SQLite：应用对本机库有写权限，启动时 AutoMigrate 会自行加列，通常无需手工执行
+ALTER TABLE clusters ADD COLUMN badge_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN badge_bold numeric NOT NULL DEFAULT false;
+ALTER TABLE clusters ADD COLUMN badge_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_background varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_bold numeric NOT NULL DEFAULT false;
+```
+
+不执行的后果比「功能不可用」更硬：这些新列都没有 default 声明，GORM 的 INSERT 会带上它们，
+所以**新建 / 导入集群**（`clusters` 整行插入）也会报列不存在（PostgreSQL `42703`、
+MySQL `1054`），保存徽章同理；只有读取路径不受影响（`SELECT *` 缺列不报错，排版按默认档渲染）。
+`checkSchema()` 会逐条列出缺列（如 `库表 clusters 缺少列 badge_text_size`）。
+用户可见的升级步骤写在 `docs/guide/installation.md` 的「升级」一节（中英同步）。
+
 ## 2. CI 发布（可选，默认关闭）
 
 `release.yaml` 已改成本仓库可用：推送 `v*.*.*` tag 触发，但**必须显式打开开关**，否则作业整体跳过（原来写死 `github.repository_owner == 'kite-org'`，本仓库恒不执行）。

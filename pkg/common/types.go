@@ -73,11 +73,18 @@ type ClusterInfo struct {
 	StaleReason string `json:"staleReason,omitempty"`
 	// 集群徽章（见 model.Cluster）：只有启用了徽章的集群才下发，
 	// 未启用时字段整体省略，前端据此决定是否展示。
-	BadgeEnabled     bool   `json:"badgeEnabled,omitempty"`
-	BadgeText        string `json:"badgeText,omitempty"`
-	BadgeColor       string `json:"badgeColor,omitempty"`
-	BadgeIconEnabled bool   `json:"badgeIconEnabled,omitempty"`
-	BadgeIconText    string `json:"badgeIconText,omitempty"`
+	BadgeEnabled            bool   `json:"badgeEnabled,omitempty"`
+	BadgeText               string `json:"badgeText,omitempty"`
+	BadgeTextSize           string `json:"badgeTextSize,omitempty"`
+	BadgeBold               bool   `json:"badgeBold,omitempty"`
+	BadgeColor              string `json:"badgeColor,omitempty"`
+	BadgeTextColor          string `json:"badgeTextColor,omitempty"`
+	BadgeIconEnabled        bool   `json:"badgeIconEnabled,omitempty"`
+	BadgeIconText           string `json:"badgeIconText,omitempty"`
+	BadgeIconTextSize       string `json:"badgeIconTextSize,omitempty"`
+	BadgeIconTextColor      string `json:"badgeIconTextColor,omitempty"`
+	BadgeIconTextBackground string `json:"badgeIconTextBackground,omitempty"`
+	BadgeIconBold           bool   `json:"badgeIconBold,omitempty"`
 	// BadgeIconURL 只有上传过图标的集群才有；有它时前端优先显示图片，
 	// 其次才是 BadgeIconText。
 	BadgeIconURL string `json:"badgeIconUrl,omitempty"`

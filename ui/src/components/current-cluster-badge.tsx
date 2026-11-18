@@ -15,12 +15,16 @@ import { ClusterBadge, ClusterBadgeIcon } from '@/components/cluster-badge'
  * 一眼，真正要认的只有名字本身。
  *
  * `showName=false` 供顶栏使用：顶栏旁边就是侧边栏的集群选择器，集群名在那里已经写着，
- * 再标一遍只是重复；图标与自定义说明保留，切错集群时仍能一眼看出来。
+ * 再标一遍只是重复；自定义说明保留，切错集群时仍能一眼看出来。
+ * `showIcon=false` 同样只给顶栏：切换器就在旁边，图标（图片或图标文本）在那里已经显示过，
+ * 顶栏再画一遍只是一块重复的色块。
  */
 export function CurrentClusterBadge({
   showName = true,
+  showIcon = true,
 }: {
   showName?: boolean
+  showIcon?: boolean
 }) {
   const { t } = useTranslation()
   const { currentCluster, clusters } = useCluster()
@@ -33,7 +37,9 @@ export function CurrentClusterBadge({
 
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
-      <ClusterBadgeIcon cluster={currentClusterData} size="sm" />
+      {showIcon && (
+        <ClusterBadgeIcon cluster={currentClusterData} size="sm" />
+      )}
       <ClusterBadge cluster={currentClusterData} />
       {showName && (
         <Badge

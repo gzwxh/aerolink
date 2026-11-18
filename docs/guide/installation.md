@@ -209,9 +209,44 @@ ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
 
 不执行的后果有限：帮助文档地址读写会失败（保存通用设置返回 500），其余功能不受影响。
 
+**集群徽章的字号、加粗与图标文本颜色**（`clusters.badge_text_size` / `badge_bold` /
+`badge_icon_text_size` / `badge_icon_text_color` / `badge_icon_bold`）——升级前执行：
+
+```sql
+-- PostgreSQL
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_bold boolean NOT NULL DEFAULT false;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_background varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_bold boolean NOT NULL DEFAULT false;
+
+-- MySQL 5.7 / 8.x：不支持 IF NOT EXISTS；若报 1060 Duplicate column name 说明列已存在，忽略
+ALTER TABLE clusters ADD COLUMN badge_text_size VARCHAR(8) NULL;
+ALTER TABLE clusters ADD COLUMN badge_bold TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE clusters ADD COLUMN badge_text_color VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_size VARCHAR(8) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_color VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_background VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_bold TINYINT(1) NOT NULL DEFAULT 0;
+
+-- SQLite：应用对本机库有写权限，启动时会自动加列，通常无需手工执行
+ALTER TABLE clusters ADD COLUMN badge_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN badge_bold numeric NOT NULL DEFAULT false;
+ALTER TABLE clusters ADD COLUMN badge_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_background varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_bold numeric NOT NULL DEFAULT false;
+```
+
+不执行的后果比前一条更明显：**新建 / 导入集群与保存徽章都会失败**（写库语句带上了新列，
+报列不存在），已有集群的读取与展示不受影响，排版按默认档渲染。
+
 升级后核对：日志里出现 `库结构与模型一致` 即正常；出现 `库表 general_settings 缺少列 help_url`
-说明 SQL 没执行或执行后没重启。注意设了 `AEROLINK_LOG_FILE` 之后，`Info` 级日志只写文件、
-不进容器标准输出，`kubectl logs` 只能看到错误行。
+或 `库表 clusters 缺少列 badge_text_size` 说明 SQL 没执行或执行后没重启。注意设了
+`AEROLINK_LOG_FILE` 之后，`Info` 级日志只写文件、不进容器标准输出，`kubectl logs` 只能看到错误行。
 
 ## 卸载鸢联 AeroLink
 

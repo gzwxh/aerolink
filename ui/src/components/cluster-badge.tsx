@@ -9,9 +9,22 @@ import { cn } from '@/lib/utils'
 export interface ClusterBadgeSource {
   badgeEnabled?: boolean
   badgeText?: string
+  /** 说明文本的字号档位，空值等同 `md`（历史数据没有这个字段）。 */
+  badgeTextSize?: string
+  /** 说明文本是否加粗。 */
+  badgeBold?: boolean
   badgeColor?: string
+  /** 说明文本颜色（`#RRGGBB`），空值 = 按背景色自动取黑/白字。 */
+  badgeTextColor?: string
   badgeIconEnabled?: boolean
   badgeIconText?: string
+  /** 图标文本字号档位，空值 = 按展示位置自适应。 */
+  badgeIconTextSize?: string
+  /** 图标文本颜色（`#RRGGBB`），空值 = 按底色自动取黑/白字。 */
+  badgeIconTextColor?: string
+  /** 图标文本底色（`#RRGGBB`），空值 = 用徽章背景色。 */
+  badgeIconTextBackground?: string
+  badgeIconBold?: boolean
   /** 管理员上传的图标地址，由服务端写入（见 `pkg/cluster/cluster_badge_icon.go`）。 */
   badgeIconUrl?: string
 }
@@ -38,6 +51,68 @@ export function resolveClusterBadgeColor(color?: string): string {
   return color && isValidClusterBadgeColor(color)
     ? color.trim()
     : DEFAULT_CLUSTER_BADGE_COLOR
+}
+
+/**
+ * 「自定义说明」的预设字号档位。默认 `md`（与历史数据的空值等价）。
+ * 除了这三个档位，`badgeTextSize` 还可以存 10~24 的像素值（自定义字号），
+ * 取值同样由服务端 validateClusterBadge 收口（见 pkg/cluster/cluster_handler.go）。
+ */
+export type ClusterBadgeTextSize = 'sm' | 'md' | 'lg'
+
+/** 字号档位按「小 → 大」排列，配置弹窗直接照这个顺序渲染。 */
+export const CLUSTER_BADGE_TEXT_SIZES: readonly ClusterBadgeTextSize[] = [
+  'sm',
+  'md',
+  'lg',
+]
+
+// 内边距与行高跟着字号一起调：徽章按整段展示、不截断，只放大字号会让文字
+// 顶出圆角边缘（py-0.5 容纳不下 text-sm 的行高）。
+const CLUSTER_BADGE_TEXT_SIZE_CLASS: Record<ClusterBadgeTextSize, string> = {
+  sm: 'px-1.5 py-px text-[10px] leading-3',
+  md: 'px-2 py-0.5 text-xs leading-4',
+  lg: 'px-2.5 py-1 text-sm leading-5',
+}
+
+/** 空值或库里的历史未知值一律按默认档渲染，不让脏数据影响排版。 */
+export function resolveClusterBadgeTextSize(
+  size?: string
+): ClusterBadgeTextSize {
+  return size === 'sm' || size === 'lg' ? size : 'md'
+}
+
+/** 说明字号的自定义像素范围，与服务端的校验口径一致。 */
+export const CLUSTER_BADGE_TEXT_SIZE_MIN_PX = 10
+export const CLUSTER_BADGE_TEXT_SIZE_MAX_PX = 24
+
+const BADGE_TEXT_SIZE_PX: Record<ClusterBadgeTextSize, number> = {
+  sm: 10,
+  md: 12,
+  lg: 14,
+}
+
+/** 自定义字号（十进制像素、落在范围内）才返回数字；其余情况返回 null 表示走预设档。 */
+export function resolveCustomClusterBadgeTextSize(
+  size?: string
+): number | null {
+  const value = (size || '').trim()
+  if (!/^[0-9]+$/.test(value)) {
+    return null
+  }
+  const px = Number(value)
+  return px >= CLUSTER_BADGE_TEXT_SIZE_MIN_PX &&
+    px <= CLUSTER_BADGE_TEXT_SIZE_MAX_PX
+    ? px
+    : null
+}
+
+/** 换算成像素值，供配置弹窗回填输入框。 */
+export function resolveClusterBadgeTextPx(size?: string): number {
+  return (
+    resolveCustomClusterBadgeTextSize(size) ??
+    BADGE_TEXT_SIZE_PX[resolveClusterBadgeTextSize(size)]
+  )
 }
 
 /** 底色上更清晰的前景字色，及其对底色的 WCAG 对比度（1~21）。 */
@@ -96,6 +171,10 @@ export function resolveClusterBadgeIconSrc(url?: string): string | undefined {
  * 文案上限是 `CLUSTER_BADGE_TEXT_MAX_LENGTH`（16 个字符），所以整段展示、不截断：
  * 徽章位就是按这个长度留的宽度，加 `truncate` 只会把末尾几个字吃掉。
  * 完整文案另外放在 title 上，鼠标悬停可见。
+ *
+ * 字号、加粗与字色是管理员在配置弹窗里选的展示偏好：字号走三档固定值而不是内联
+ * font-size，避免把任意数值带进样式；未知档位回落默认档。字色留空时按背景色
+ * 自动取黑/白（见 resolveClusterBadgeForeground），保证默认配置一定可读。
  */
 export function ClusterBadge({
   cluster,
@@ -109,16 +188,37 @@ export function ClusterBadge({
   }
   const text = cluster.badgeText.trim()
   const foreground = resolveClusterBadgeForeground(cluster.badgeColor)
+  // 管理员填的字色直接进内联样式：非法值（历史数据 / 手工写库）回落自动黑白。
+  const customTextColor = cluster.badgeTextColor?.trim()
+  const textColor =
+    customTextColor && isValidClusterBadgeColor(customTextColor)
+      ? customTextColor
+      : foreground.color
+  const customPx = resolveCustomClusterBadgeTextSize(cluster.badgeTextSize)
+  const sizeClass = customPx
+    ? 'px-2 py-0.5'
+    : CLUSTER_BADGE_TEXT_SIZE_CLASS[
+        resolveClusterBadgeTextSize(cluster.badgeTextSize)
+      ]
 
   return (
     <span
       title={text}
       style={{
         backgroundColor: resolveClusterBadgeColor(cluster.badgeColor),
-        color: foreground.color,
+        color: textColor,
+        // 自定义字号才走内联样式：值已被限定在 10~24 的整数，不会把任意字符串带进样式。
+        ...(customPx
+          ? {
+              fontSize: `${customPx}px`,
+              lineHeight: `${Math.round(customPx * 1.25)}px`,
+            }
+          : {}),
       }}
       className={cn(
-        'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium leading-4 whitespace-nowrap',
+        'inline-flex shrink-0 items-center rounded-full whitespace-nowrap',
+        sizeClass,
+        cluster.badgeBold ? 'font-bold' : 'font-medium',
         className
       )}
     >
@@ -142,11 +242,35 @@ const ICON_SIZE_CLASS: Record<
 }
 
 /**
+ * 图标文本显式选定的字号档位。空值表示「自动」——沿用上面按位置自适应的
+ * 8/9/11px，这样老集群不选档位时外观不变。
+ */
+const ICON_TEXT_SIZE_CLASS: Record<ClusterBadgeTextSize, string> = {
+  sm: 'h-4 min-w-4 px-1 text-[10px]',
+  md: 'h-5 min-w-5 px-1.5 text-xs',
+  lg: 'h-6 min-w-6 px-2 text-sm',
+}
+
+/** 空值 / 未知值都按「自动」处理。 */
+export function resolveClusterBadgeIconTextSize(
+  size?: string
+): ClusterBadgeTextSize | '' {
+  return size === 'sm' || size === 'md' || size === 'lg' ? size : ''
+}
+
+/**
  * 集群图标：启用了自定义图标时显示上传的图片，其次是图标文本（带徽章底色的短标签，
- * 最多 6 个汉字，整段显示不截断），否则沿用默认的集群图标。
+ * 最多 6 个汉字，整段显示不截断），都没有时用默认的集群图标。
  *
  * 只认 `badgeIconEnabled`，不要求集群徽章也启用：图标是集群自己的标识，
  * 只换图标不显示说明的集群同样要能看到它（否则上传完界面上毫无变化）。
+ * 反过来，开关关着时整块不渲染——默认图标只在开启后才作为「还没选图标」的占位出现。
+ *
+ * 图标文本的排版与「自定义说明」相互独立：字号不读 `badgeTextSize`，而是自己的
+ * `badgeIconTextSize`（空值 = 按传入的 `size` 位置档位自适应）；字重看
+ * `badgeIconBold`，底色看 `badgeIconTextBackground`（空值 = 徽章背景色），
+ * 字色看 `badgeIconTextColor`（空值/非法值 = 按实际底色自动取黑/白）。
+ * 两处都是管理员各自单独设置的。
  */
 export function ClusterBadgeIcon({
   cluster,
@@ -158,17 +282,18 @@ export function ClusterBadgeIcon({
   className?: string
 }) {
   const classes = ICON_SIZE_CLASS[size]
-  const iconSrc = resolveClusterBadgeIconSrc(cluster?.badgeIconUrl)
   // 记住加载失败的地址而不是一个布尔值：地址变了（重新上传过）就重试一次，
   // 不会因为上一次 404 而一直显示默认图标。
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
-  const iconText = cluster?.badgeIconText?.trim()
-  const showCustom = Boolean(cluster?.badgeIconEnabled)
-  const showImage = showCustom && iconSrc && iconSrc !== failedSrc
-  const showText = showCustom && !showImage && Boolean(iconText)
+  if (!cluster?.badgeIconEnabled) {
+    return null
+  }
 
-  if (showImage) {
+  const iconSrc = resolveClusterBadgeIconSrc(cluster.badgeIconUrl)
+  const iconText = cluster.badgeIconText?.trim()
+
+  if (iconSrc && iconSrc !== failedSrc) {
     return (
       <img
         src={iconSrc}
@@ -184,25 +309,41 @@ export function ClusterBadgeIcon({
     )
   }
 
-  if (!showText) {
+  if (!iconText) {
     return <IconServer className={cn(classes.square, 'shrink-0', className)} />
   }
+
+  const iconTextSize = resolveClusterBadgeIconTextSize(
+    cluster.badgeIconTextSize
+  )
+  // 管理员填写的颜色会直接进内联样式，非法值（历史数据 / 手工写库）回落自动配色。
+  const customBackground = cluster.badgeIconTextBackground?.trim()
+  // 底色留空时沿用徽章背景色；自动字色要按**实际**底色算，否则换了底色后自动黑白会选错。
+  const backgroundColor =
+    customBackground && isValidClusterBadgeColor(customBackground)
+      ? customBackground
+      : resolveClusterBadgeColor(cluster.badgeColor)
+  const customTextColor = cluster.badgeIconTextColor?.trim()
+  const textColor =
+    customTextColor && isValidClusterBadgeColor(customTextColor)
+      ? customTextColor
+      : resolveClusterBadgeForeground(backgroundColor).color
 
   return (
     <span
       title={iconText}
       style={{
-        backgroundColor: resolveClusterBadgeColor(cluster?.badgeColor),
-        color: resolveClusterBadgeForeground(cluster?.badgeColor).color,
+        backgroundColor,
+        color: textColor,
       }}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center overflow-hidden rounded font-medium leading-none',
-        classes.text,
+        'inline-flex shrink-0 items-center justify-center overflow-hidden rounded leading-none whitespace-nowrap',
+        iconTextSize ? ICON_TEXT_SIZE_CLASS[iconTextSize] : classes.text,
+        cluster.badgeIconBold ? 'font-bold' : 'font-medium',
         className
       )}
     >
-      {/* 不截断：图标文本最多 6 个字，宽度就是按这个长度留的。 */}
-      <span className="whitespace-nowrap">{iconText}</span>
+      {iconText}
     </span>
   )
 }

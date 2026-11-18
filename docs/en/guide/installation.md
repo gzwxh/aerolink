@@ -200,10 +200,46 @@ ALTER TABLE general_settings ADD COLUMN help_url varchar(500);
 Skipping it has limited impact: reading and writing the help URL fails (saving general settings
 returns 500), everything else works.
 
+**Cluster badge font size, bold and icon text color** (`clusters.badge_text_size` / `badge_bold` /
+`badge_icon_text_size` / `badge_icon_text_color` / `badge_icon_bold`) — run before upgrading:
+
+```sql
+-- PostgreSQL
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_bold boolean NOT NULL DEFAULT false;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_text_background varchar(16);
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS badge_icon_bold boolean NOT NULL DEFAULT false;
+
+-- MySQL 5.7 / 8.x: no IF NOT EXISTS; error 1060 Duplicate column name means the column already exists, ignore it
+ALTER TABLE clusters ADD COLUMN badge_text_size VARCHAR(8) NULL;
+ALTER TABLE clusters ADD COLUMN badge_bold TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE clusters ADD COLUMN badge_text_color VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_size VARCHAR(8) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_color VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_text_background VARCHAR(16) NULL;
+ALTER TABLE clusters ADD COLUMN badge_icon_bold TINYINT(1) NOT NULL DEFAULT 0;
+
+-- SQLite: the app owns the local file and adds the columns on startup, usually nothing to do here
+ALTER TABLE clusters ADD COLUMN badge_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN badge_bold numeric NOT NULL DEFAULT false;
+ALTER TABLE clusters ADD COLUMN badge_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_size varchar(8);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_color varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_text_background varchar(16);
+ALTER TABLE clusters ADD COLUMN badge_icon_bold numeric NOT NULL DEFAULT false;
+```
+
+Skipping this one hurts more: **creating / importing clusters and saving badge settings fail**
+(the write statements include the new columns, so they report a missing column). Reading and
+rendering existing clusters still works, falling back to the default typography.
+
 After upgrading, check the logs: `库结构与模型一致` (`schema matches the models`) means it is fine;
-`库表 general_settings 缺少列 help_url` means the SQL was not run or the pod was not restarted.
-Note that with `AEROLINK_LOG_FILE` set, `Info` level lines only go to that file and not to the
-container's stdout — `kubectl logs` then only shows errors.
+`库表 general_settings 缺少列 help_url` or `库表 clusters 缺少列 badge_text_size` means the SQL was
+not run or the pod was not restarted. Note that with `AEROLINK_LOG_FILE` set, `Info` level lines
+only go to that file and not to the container's stdout — `kubectl logs` then only shows errors.
 
 ## Uninstalling AeroLink
 

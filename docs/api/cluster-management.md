@@ -34,19 +34,29 @@ curl \
     "version": "v1.31.0",
     "badgeEnabled": true,
     "badgeText": "测试环境",
+    "badgeTextSize": "lg",
+    "badgeBold": true,
     "badgeColor": "#0011ff",
+    "badgeTextColor": "#ffffff",
     "badgeIconEnabled": true,
     "badgeIconText": "测试环境",
+    "badgeIconTextSize": "md",
+    "badgeIconTextColor": "#ffcc00",
+    "badgeIconTextBackground": "#ffffff",
+    "badgeIconBold": true,
     "badgeIconUrl": "/api/v1/clusters/1/badge-icon?v=8f14e45fceea167a"
   }
 ]
 ```
 
-说明：徽章字段（`badgeEnabled`、`badgeText`、`badgeColor`、`badgeIconEnabled`、
-`badgeIconText`、`badgeIconUrl`）在这个接口里始终返回原值，供管理界面编辑。给集群
-切换器与顶栏取展示数据的 `GET /api/v1/clusters` 只在 `badgeEnabled` 为真时才带上
-`badgeEnabled` / `badgeText` / `badgeColor`；图标字段（`badgeIconEnabled` /
-`badgeIconText` / `badgeIconUrl`）由 `badgeIconEnabled` 单独控制，与徽章开关无关。
+说明：徽章字段（`badgeEnabled`、`badgeText`、`badgeTextSize`、`badgeBold`、
+`badgeColor`、`badgeTextColor`、`badgeIconEnabled`、`badgeIconText`、`badgeIconTextSize`、
+`badgeIconTextColor`、`badgeIconTextBackground`、`badgeIconBold`、`badgeIconUrl`）在这个
+接口里始终返回原值，供管理界面编辑。给集群切换器与顶栏取展示数据的
+`GET /api/v1/clusters` 只在 `badgeEnabled` 为真时才带上说明字段（`badgeEnabled` /
+`badgeText` / `badgeTextSize` / `badgeBold` / `badgeColor` / `badgeTextColor`）；图标字段（`badgeIconEnabled` /
+`badgeIconText` / `badgeIconTextSize` / `badgeIconTextColor` / `badgeIconTextBackground` /
+`badgeIconBold` / `badgeIconUrl`）由 `badgeIconEnabled` 单独控制，与徽章开关无关。
 
 ## 创建集群
 
@@ -112,9 +122,16 @@ Content-Type: application/json
   "enabled": true,
   "badgeEnabled": true,
   "badgeText": "测试环境",
+  "badgeTextSize": "lg",
+  "badgeBold": true,
   "badgeColor": "#0011ff",
+  "badgeTextColor": "#ffffff",
   "badgeIconEnabled": true,
-  "badgeIconText": "测试环境"
+  "badgeIconText": "测试环境",
+  "badgeIconTextSize": "md",
+  "badgeIconTextColor": "#ffcc00",
+  "badgeIconTextBackground": "#ffffff",
+  "badgeIconBold": true
 }
 ```
 
@@ -147,6 +164,15 @@ curl \
 - 徽章字段也是可选的，只改其中几个不会影响其它字段。`badgeEnabled` 为真时
   `badgeText` 不能为空；`badgeColor` 只接受 `#RRGGBB`；`badgeText` 最长 16 个字符
   （界面按整段展示，不截断），`badgeIconText` 最长 6 个字符，超限返回 400（不静默截断）。
+- `badgeTextSize` 接受 `sm` / `md` / `lg`（预设档位，对应 10 / 12 / 14px）、**10~24 的
+  整数字符串**（自定义像素字号，如 `"18"`）或空串（默认档 `md`），其它值返回 400；
+  `badgeBold` 为布尔值，控制说明文本是否加粗。两者只影响徽章说明的排版。
+- `badgeColor` 是说明的背景色（也是图标文本未单独设底色时的默认底色）；
+  `badgeTextColor` 是说明的字色，留空表示按该背景色自动取黑/白字，非空只接受 `#RRGGBB`。
+- 图标文本有自己的一套排版字段，与说明互不影响：`badgeIconTextSize` 同上（空串表示
+  按展示位置自动取尺寸）；`badgeIconTextBackground` 为空表示沿用徽章背景色；
+  `badgeIconTextColor` 为空表示按实际底色自动取黑/白字；两者非空时都只接受 `#RRGGBB`
+  （否则 400）；`badgeIconBold` 控制图标文本是否加粗。
 - 图标图片不走这个接口：`badgeIconUrl` 只由下面的上传/删除图标接口维护，请求体里
   带它也不会生效，避免破坏「有图标字节 ⇔ URL 指向它」的约定。
 

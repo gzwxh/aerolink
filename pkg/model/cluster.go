@@ -19,11 +19,29 @@ type Cluster struct {
 	// BadgeText 的列宽留余量只是容量考虑：口径由 pkg/cluster 的 validateClusterBadge
 	// 收到 16 个字符（界面按整段展示，不截断），收窄列宽反而会让老数据在 AutoMigrate
 	// 时出错。
-	BadgeEnabled     bool   `json:"badge_enabled" gorm:"type:boolean;default:false"`
-	BadgeText        string `json:"badge_text" gorm:"type:varchar(32)"`
-	BadgeColor       string `json:"badge_color" gorm:"type:varchar(16)"`
+	BadgeEnabled bool   `json:"badge_enabled" gorm:"type:boolean;default:false"`
+	BadgeText    string `json:"badge_text" gorm:"type:varchar(32)"`
+	// BadgeTextSize 是徽章说明的字号档位（sm / md / lg）。空值等同 md——列不设
+	// default，老行的零值就直接按默认档渲染，升级时不需要回填。
+	// 取值由 validateClusterBadge 收口，不认识的档位直接 400。
+	BadgeTextSize string `json:"badge_text_size" gorm:"type:varchar(8)"`
+	// BadgeBold 控制徽章说明是否加粗。
+	BadgeBold bool `json:"badge_bold" gorm:"type:boolean;default:false"`
+	// BadgeColor 是徽章说明的背景色，也是图标文本在未单独设底色时的默认底色。
+	BadgeColor string `json:"badge_color" gorm:"type:varchar(16)"`
+	// BadgeTextColor 是说明文本的字色；空值 = 按 BadgeColor 自动取黑/白字。
+	BadgeTextColor   string `json:"badge_text_color" gorm:"type:varchar(16)"`
 	BadgeIconEnabled bool   `json:"badge_icon_enabled" gorm:"type:boolean;default:false"`
 	BadgeIconText    string `json:"badge_icon_text" gorm:"type:varchar(8)"`
+	// 图标文本自己的排版（与徽章说明的 BadgeTextSize / BadgeBold 互不影响）：
+	// BadgeIconTextSize 空值 = 按所在位置自动取尺寸（历史行为），否则 sm/md/lg；
+	// BadgeIconTextColor 空值 = 按底色自动取黑/白字；
+	// BadgeIconTextBackground 空值 = 用徽章背景色（BadgeColor）；
+	// BadgeIconBold 控制是否加粗。
+	BadgeIconTextSize       string `json:"badge_icon_text_size" gorm:"type:varchar(8)"`
+	BadgeIconTextColor      string `json:"badge_icon_text_color" gorm:"type:varchar(16)"`
+	BadgeIconTextBackground string `json:"badge_icon_text_background" gorm:"type:varchar(16)"`
+	BadgeIconBold           bool   `json:"badge_icon_bold" gorm:"type:boolean;default:false"`
 	// BadgeIconURL 指向管理员上传的图标（见 ClusterBadgeIcon）。空 = 没有上传过，
 	// 图标位回落到 BadgeIconText。
 	//
