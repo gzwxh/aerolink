@@ -464,13 +464,26 @@ export function ClusterManagement() {
       updateCluster(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      // 改名会把权限绑定组一起迁到新集群名下（见 model.RenameCluster），而权限绑定页、
+      // 命名空间绑定映射与顶栏都按集群名取数；['clusters'] 有 5 分钟缓存，不失效要等
+      // 下次列表刷新才看得见新名字。
+      queryClient.invalidateQueries({ queryKey: ['clusters'] })
+      queryClient.invalidateQueries({ queryKey: ['binding-groups'] })
       toast.success(
         t('clusterManagement.messages.updated', 'Cluster updated successfully')
       )
       setShowClusterDialog(false)
       setEditingCluster(null)
     },
-    onError: () => {},
+    onError: (error) => {
+      // 改名撞上已有集群（或同名集群保留下来的权限绑定组）时后端回 409，
+      // 静默吞掉的话弹窗原地不动，用户不知道为什么不生效。
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t('clusterManagement.messages.updateError', '更新集群失败')
+      )
+    },
   })
 
   // 徽章同时出现在集群切换器与顶栏，改完要把 ['clusters'] 一起失效——

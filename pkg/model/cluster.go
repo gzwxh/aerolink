@@ -1,5 +1,15 @@
 package model
 
+import (
+	"errors"
+
+	"gorm.io/gorm"
+)
+
+// ErrClusterNameTaken 表示目标集群名已被占用：可能是另一个集群，也可能是同名集群
+// 删除后保留下来的权限绑定组（它们仍以该集群名挂在库里）。
+var ErrClusterNameTaken = errors.New("cluster name is already in use")
+
 type Cluster struct {
 	Model
 	Name                   string       `json:"name" gorm:"type:varchar(100);uniqueIndex;not null"`
@@ -114,6 +124,59 @@ func GetClusterByClusterAgentTokenHash(hash string) (*Cluster, error) {
 
 func UpdateCluster(cluster *Cluster, updates map[string]interface{}) error {
 	return DB.Model(cluster).Updates(updates).Error
+}
+
+// RenameCluster 改集群名，并在同一个事务里把按集群名引用的授权数据迁到新名字。
+//
+// binding_groups / binding_group_namespaces 没有 cluster_id，只存集群名：改名时若不
+// 迁移，这些行就指向一个不存在的集群——组自身的 Detached 仍是 false，授权判定却拿
+// 「当前集群名」去匹配（见 rbac.canAccessViaBindingGroup），成员会静默失去全部授权；
+// 界面上只有保留（detached）的组提供重新绑定入口，这种情况没有恢复手段。
+//
+// 目标名字上若已有集群或保留中的权限绑定组，唯一索引 (cluster, name) 挡不住「先改半个
+// 集群名」的风险，所以先显式报 ErrClusterNameTaken；其余错误一律回滚，不留半套数据。
+func RenameCluster(cluster *Cluster, newName string, updates map[string]interface{}) error {
+	oldName := cluster.Name
+	if newName == oldName {
+		return UpdateCluster(cluster, updates)
+	}
+
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var taken int64
+		if err := tx.Model(&Cluster{}).
+			Where("name = ? AND id <> ?", newName, cluster.ID).Count(&taken).Error; err != nil {
+			return err
+		}
+		if taken == 0 {
+			if err := tx.Model(&BindingGroup{}).
+				Where("cluster = ?", newName).Count(&taken).Error; err != nil {
+				return err
+			}
+		}
+		if taken > 0 {
+			return ErrClusterNameTaken
+		}
+
+		if err := tx.Model(&BindingGroup{}).Where("cluster = ?", oldName).
+			Update("cluster", newName).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&BindingGroupNamespace{}).Where("cluster = ?", oldName).
+			Update("cluster", newName).Error; err != nil {
+			return err
+		}
+		if len(updates) > 0 {
+			if err := tx.Model(cluster).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Model(cluster).Update("name", newName).Error
+	})
+	if err != nil {
+		return err
+	}
+	cluster.Name = newName
+	return nil
 }
 
 func DeleteCluster(cluster *Cluster) error {

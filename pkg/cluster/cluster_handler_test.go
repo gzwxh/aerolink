@@ -91,6 +91,76 @@ func TestClusterConfigurationLifecyclePreservesSecretsAndDefault(t *testing.T) {
 	}
 }
 
+// 改名要把按集群名引用的授权数据一起迁走。权限绑定组没有 cluster_id，只存集群名；
+// 不迁移的话组仍挂在旧名字上，授权判定按当前集群名匹配不到，成员静默失去整个集群的权限。
+func TestUpdateClusterRenameCarriesBindingGroups(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}
+	router := gin.New()
+	router.PUT("/clusters/:id", manager.UpdateCluster)
+
+	cluster := &model.Cluster{Name: "test", Description: "main", Enable: true}
+	if err := model.AddCluster(cluster); err != nil {
+		t.Fatalf("creating cluster: %v", err)
+	}
+	group := model.BindingGroup{Cluster: "test", Name: "team-a"}
+	if err := model.DB.Create(&group).Error; err != nil {
+		t.Fatalf("creating binding group: %v", err)
+	}
+	if err := model.DB.Create(&model.BindingGroupNamespace{
+		ProjectID: group.ID, Cluster: "test", Namespace: "dev",
+	}).Error; err != nil {
+		t.Fatalf("creating binding group namespace: %v", err)
+	}
+	if err := model.AddCluster(&model.Cluster{Name: "taken", Enable: true}); err != nil {
+		t.Fatalf("creating occupying cluster: %v", err)
+	}
+	// 同名集群被删除后保留的权限绑定组也占着这个名字：无法自动合并，必须整体拒绝。
+	if err := model.DB.Create(&model.BindingGroup{
+		Cluster: "retained", Name: "old-team", Detached: true,
+	}).Error; err != nil {
+		t.Fatalf("creating retained binding group: %v", err)
+	}
+	path := fmt.Sprintf("/clusters/%d", cluster.ID)
+
+	for _, name := range []string{"taken", "retained"} {
+		response := performClusterRequest(router, http.MethodPut, path, fmt.Sprintf(`{"name":%q}`, name))
+		if response.Code != http.StatusConflict {
+			t.Fatalf("rename to %q status = %d, want %d: %s", name, response.Code, http.StatusConflict, response.Body.String())
+		}
+		if after, err := model.GetClusterByID(cluster.ID); err != nil || after.Name != "test" {
+			t.Fatalf("rejected rename changed the cluster: %#v err=%v", after, err)
+		}
+	}
+
+	response := performClusterRequest(router, http.MethodPut, path, `{"name":"renamed","description":"updated"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("rename status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	after, err := model.GetClusterByID(cluster.ID)
+	if err != nil {
+		t.Fatalf("reloading cluster: %v", err)
+	}
+	if after.Name != "renamed" || after.Description != "updated" {
+		t.Fatalf("renamed cluster = %#v", after)
+	}
+
+	var groups []model.BindingGroup
+	if err := model.DB.Where("name = ?", "team-a").Find(&groups).Error; err != nil {
+		t.Fatalf("loading binding groups: %v", err)
+	}
+	if len(groups) != 1 || groups[0].Cluster != "renamed" {
+		t.Fatalf("binding group after rename = %#v, want it moved to the new cluster name", groups)
+	}
+	var namespaces []model.BindingGroupNamespace
+	if err := model.DB.Where("project_id = ?", group.ID).Find(&namespaces).Error; err != nil {
+		t.Fatalf("loading binding group namespaces: %v", err)
+	}
+	if len(namespaces) != 1 || namespaces[0].Cluster != "renamed" || namespaces[0].Namespace != "dev" {
+		t.Fatalf("binding group namespaces after rename = %#v", namespaces)
+	}
+}
+
 // 只改部分字段的请求不能把没给的字段按零值写回：以前 in_cluster / is_default /
 // enabled 是非指针 bool，一个只改描述的请求会静默停用集群、清掉默认集群标记。
 func TestUpdateClusterKeepsFieldsOmittedFromRequest(t *testing.T) {

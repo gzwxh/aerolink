@@ -636,8 +636,11 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		updates["confirm_node_maintenance"] = *req.ConfirmNodeMaintenance
 	}
 
+	// 改名不是一次普通的列更新：权限绑定组按集群名挂在库里（见 model.RenameCluster），
+	// 必须与其它字段在同一事务里迁移，否则成员会静默失去本集群的全部授权。
+	newName := cluster.Name
 	if req.Name != nil && *req.Name != "" && *req.Name != cluster.Name {
-		updates["name"] = *req.Name
+		newName = *req.Name
 	}
 
 	if req.Config != nil && *req.Config != "" {
@@ -655,9 +658,25 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		delete(updates, "config")
 	}
 
-	if err := model.UpdateCluster(cluster, updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	renamed := newName != cluster.Name
+	var updateErr error
+	if renamed {
+		updateErr = model.RenameCluster(cluster, newName, updates)
+	} else {
+		updateErr = model.UpdateCluster(cluster, updates)
+	}
+	if updateErr != nil {
+		if errors.Is(updateErr, model.ErrClusterNameTaken) {
+			c.JSON(http.StatusConflict, gin.H{"error": updateErr.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": updateErr.Error()})
 		return
+	}
+	if renamed {
+		// 授权缓存里存的是「集群名 → 权限绑定组」，改名后要立刻重建：
+		// 后台一分钟一次的同步兜不住这段时间里的请求（它们会按旧名判定而 403）。
+		rbac.TriggerSync()
 	}
 
 	TriggerClusterSync()
