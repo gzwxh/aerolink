@@ -243,6 +243,29 @@ describe('ClusterBadge 字号与加粗', () => {
 
     expect(screen.getByTitle('测试环境').className).toContain('text-xs')
   })
+
+  // 列表这类行高固定的位置用 textSize 固定默认档：只覆盖字号，
+  // 颜色 / 背景 / 加粗仍跟随集群配置，管理员改的配色在列表里照样看得到。
+  it('textSize 覆盖集群字号，配色与加粗仍跟随配置', () => {
+    render(
+      <ClusterBadge
+        cluster={{
+          badgeEnabled: true,
+          badgeText: '固定字号',
+          badgeTextSize: '18',
+          badgeBold: true,
+          badgeColor: '#0011ff',
+        }}
+        textSize="md"
+      />
+    )
+
+    const badge = screen.getByTitle('固定字号')
+    expect(badge.className).toContain('text-xs')
+    expect(badge.className).toContain('font-bold')
+    expect(badge).toHaveStyle({ backgroundColor: '#0011ff', color: '#ffffff' })
+    expect(badge.style.fontSize).toBe('')
+  })
 })
 
 describe('ClusterBadgeIcon', () => {

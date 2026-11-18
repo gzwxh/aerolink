@@ -197,7 +197,8 @@ export function ClusterManagement() {
               />
               <div className="min-w-0 space-y-0.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <ClusterBadge cluster={cluster} />
+                  {/* 列表行高固定：字号固定用默认档，颜色 / 背景 / 加粗仍跟随集群配置。 */}
+                  <ClusterBadge cluster={cluster} textSize="md" />
                   {/* 名称是这张表里最自然的入口：点一下直接开「编辑集群」，
                       不必先展开右侧的操作菜单。只读角色保持纯文本，不做假入口。 */}
                   {readOnly ? (

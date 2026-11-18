@@ -175,12 +175,18 @@ export function resolveClusterBadgeIconSrc(url?: string): string | undefined {
  * 字号、加粗与字色是管理员在配置弹窗里选的展示偏好：字号走三档固定值而不是内联
  * font-size，避免把任意数值带进样式；未知档位回落默认档。字色留空时按背景色
  * 自动取黑/白（见 resolveClusterBadgeForeground），保证默认配置一定可读。
+ *
+ * `textSize` 供行高受限的位置（如集群管理列表）强制用默认档：只覆盖字号与内边距，
+ * 颜色、背景与加粗仍跟随集群配置。
  */
 export function ClusterBadge({
   cluster,
+  textSize,
   className,
 }: {
   cluster?: ClusterBadgeSource | null
+  /** 覆盖说明字号（只影响字号与内边距），不传则跟随集群配置。 */
+  textSize?: ClusterBadgeTextSize
   className?: string
 }) {
   if (!hasClusterBadge(cluster)) {
@@ -194,11 +200,13 @@ export function ClusterBadge({
     customTextColor && isValidClusterBadgeColor(customTextColor)
       ? customTextColor
       : foreground.color
-  const customPx = resolveCustomClusterBadgeTextSize(cluster.badgeTextSize)
+  const customPx = textSize
+    ? null
+    : resolveCustomClusterBadgeTextSize(cluster.badgeTextSize)
   const sizeClass = customPx
     ? 'px-2 py-0.5'
     : CLUSTER_BADGE_TEXT_SIZE_CLASS[
-        resolveClusterBadgeTextSize(cluster.badgeTextSize)
+        textSize ?? resolveClusterBadgeTextSize(cluster.badgeTextSize)
       ]
 
   return (
