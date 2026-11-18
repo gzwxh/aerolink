@@ -594,6 +594,9 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
             <Button
               variant="outline"
               size="sm"
+              // 会话只在打开那一刻取一次 Pod/选择器快照：Deployment 还没加载完就打开，
+              // 日志面板会因为既没有可选 Pod 也没有 labelSelector 而永远空白。
+              disabled={!labelSelector}
               onClick={() =>
                 openWorkspaceSession({
                   mode: 'logs',

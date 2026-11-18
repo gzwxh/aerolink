@@ -29,6 +29,7 @@ import {
   normalizeLineTextForSearch,
   normalizeSearchTerm,
 } from '@/lib/log-search'
+import { resolveLogStreamPod } from '@/lib/log-stream'
 import { MonacoEditor } from '@/lib/monaco-loader'
 import { defineMonacoLogThemes } from '@/lib/monaco-theme'
 import { suppressMonacoFindWidgetHovers } from '@/lib/suppress-monaco-find-widget-hovers'
@@ -678,13 +679,17 @@ export function LogViewer({
     }
   }, [])
 
+  // 还没解析到具体 Pod 时按 labelSelector 聚合：否则这里会一直 disabled，
+  // 面板空白且没有恢复路径（见 lib/log-stream.ts）。
+  const streamPodName = resolveLogStreamPod(selectPodName, labelSelector)
+
   const logsOptions = useMemo(
     () => ({
       container: selectedContainer,
       tailLines,
       timestamps,
       previous: previous && !selectedContainerIsEphemeral,
-      enabled: !!selectPodName,
+      enabled: !!streamPodName,
       labelSelector,
       onNewLog: appendLog,
       onClear: cleanLog,
@@ -695,7 +700,7 @@ export function LogViewer({
       timestamps,
       previous,
       selectedContainerIsEphemeral,
-      selectPodName,
+      streamPodName,
       labelSelector,
       appendLog,
       cleanLog,
@@ -710,7 +715,7 @@ export function LogViewer({
     refetch,
     stopStreaming,
     clearLogs,
-  } = useLogsWebSocket(namespace, selectPodName || '', logsOptions)
+  } = useLogsWebSocket(namespace, streamPodName, logsOptions)
 
   const stopStreamingRef = useRef<() => void>(stopStreaming)
   stopStreamingRef.current = stopStreaming
