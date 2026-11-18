@@ -335,7 +335,8 @@ function ClusterBadgeDialogContent({
 
             <div className="space-y-2">
               <Label htmlFor="cluster-badge-text">
-                {t('clusterBadge.text', '自定义说明')} *
+                {t('clusterBadge.text', '自定义说明')}
+                {formData.badgeEnabled ? ' *' : ''}
               </Label>
               <Input
                 id="cluster-badge-text"
@@ -343,7 +344,9 @@ function ClusterBadgeDialogContent({
                 onChange={(e) => handleChange('badgeText', e.target.value)}
                 placeholder={t('clusterBadge.textPlaceholder', '如：测试环境')}
                 maxLength={CLUSTER_BADGE_TEXT_MAX_LENGTH}
-                required
+                // 只在启用徽章时必填：后端同样只在 badgeEnabled 时校验文本非空，
+                // 硬编码 required 会让「关掉徽章」这个动作被原生校验拦住。
+                required={formData.badgeEnabled}
               />
               <p className="text-xs text-muted-foreground">
                 {t(

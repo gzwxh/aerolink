@@ -31,7 +31,11 @@ const cluster = {
   badgeIconText: 'PROD',
 } as Cluster
 
-function renderDialog(onSubmit: (data: unknown) => void) {
+function renderDialog(
+  onSubmit: (data: unknown) => void,
+  clusterOverrides: Partial<Cluster> = {}
+) {
+  const target = { ...cluster, ...clusterOverrides }
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -40,7 +44,7 @@ function renderDialog(onSubmit: (data: unknown) => void) {
       <ClusterBadgeDialog
         open
         onOpenChange={() => {}}
-        cluster={cluster}
+        cluster={target}
         onSubmit={onSubmit}
       />
     </QueryClientProvider>
@@ -58,6 +62,31 @@ function setTextSize(value: string) {
   // number 输入框在 jsdom 下没有 user-event 依赖的 value setter，直接派发 input 事件。
   fireEvent.input(screen.getByLabelText('字号'), { target: { value } })
 }
+
+describe('ClusterBadgeDialog 徽章开关', () => {
+  // 关掉徽章后说明不该再拦提交：后端也只在启用时校验文本非空，
+  // 前端硬编码 required 会让「关掉徽章」这个动作过不去。
+  it('关闭徽章时说明不必填，清空后也能提交', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    renderDialog(onSubmit, { badgeEnabled: false, badgeText: '' })
+
+    const textInput = screen.getByRole('textbox', { name: /自定义说明/ })
+    expect(textInput).not.toBeRequired()
+
+    await user.click(screen.getByRole('button', { name: '应用' }))
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ badgeEnabled: false, badgeText: '' })
+    )
+  })
+
+  it('启用徽章时说明必填', () => {
+    renderDialog(() => {}, { badgeEnabled: true })
+
+    expect(screen.getByRole('textbox', { name: /自定义说明/ })).toBeRequired()
+  })
+})
 
 describe('ClusterBadgeDialog 字号与加粗', () => {
   // 字号/加粗是草稿态字段：必须随「应用」一起提交，否则用户选完保存后
@@ -108,7 +137,6 @@ describe('ClusterBadgeDialog 字号与加粗', () => {
 
   // 自定义字号限定 10–24：越界时按钮禁用，不让明显超出范围的值提交上去。
   it('字号超出范围时不允许提交', async () => {
-    const user = userEvent.setup()
     const onSubmit = vi.fn()
     renderDialog(onSubmit)
 
