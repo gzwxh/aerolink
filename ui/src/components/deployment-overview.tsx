@@ -129,8 +129,11 @@ export type ServiceEndpointEntry = {
   namespace: string
   protocol: string
   port: number
+  /** 主要入口：NodePort / LoadBalancer 是集群外地址，其余是集群内地址。 */
   access: string
-  /** 集群内可解析的 FQDN；NodePort 是给集群外用的，没有内网域名。 */
+  /** 集群内 `clusterIP:port`；与 access 是同一个地址时省略，避免重复展示。 */
+  clusterAddress: string | null
+  /** 集群内可解析的 FQDN；名字或命名空间缺失时无法拼出。 */
   dns: string | null
 }
 
@@ -144,8 +147,9 @@ export type ServiceEndpointLabels = {
 /**
  * 网络入口条目：每个 Service 的每个端口一条。
  *
- * NodePort 入口保留（集群外要用），但这类服务的内网域名对使用者没意义，
- * 因此 dns 返回 null，不展示「内网域名」那一行。
+ * NodePort / LoadBalancer 的 access 是集群外地址，但这类 Service 同样有
+ * clusterIP 和 DNS —— NodePort 只是在集群内可达的基础上多开了节点端口，
+ * 不是「没有集群内地址」。所以额外给出集群内的 IP 与域名，内部服务照着连。
  */
 export function serviceEndpointEntries(
   services: Service[],
@@ -157,11 +161,13 @@ export function serviceEndpointEntries(
     const svcNamespace = svc.metadata?.namespace || ''
     const type = svc.spec?.type || 'ClusterIP'
     const clusterIP = svc.spec?.clusterIP
+    const hasClusterIP = !!clusterIP && clusterIP !== 'None'
     const lbIngress = svc.status?.loadBalancer?.ingress || []
     for (const p of svc.spec?.ports || []) {
       const port = p.port
       if (!port) continue
       const protocol = p.protocol || 'TCP'
+      const clusterAddress = hasClusterIP ? `${clusterIP}:${port}` : null
       let access: string
       if (type === 'NodePort' && p.nodePort) {
         access = `${labels.anyNode}:${p.nodePort}`
@@ -185,17 +191,50 @@ export function serviceEndpointEntries(
         protocol,
         port,
         access,
+        clusterAddress: clusterAddress === access ? null : clusterAddress,
         // 集群内可直接解析的 FQDN（kubelet 默认 cluster domain）。
         // 末尾的点表示绝对域名：跳过 resolv.conf 的 search 域展开（ndots:5 时
         // 不加点会先试 3 个搜索域再查绝对名），少几次无谓查询。
+        // Headless 与 NodePort / LoadBalancer 也都有这条记录。
         dns:
-          type === 'NodePort'
-            ? null
-            : `${svcName}.${svcNamespace}.svc.cluster.local.:${port}`,
+          svcName && svcNamespace
+            ? `${svcName}.${svcNamespace}.svc.cluster.local.:${port}`
+            : null,
       })
     }
   }
   return result
+}
+
+/** 入口条目下的次要地址行（集群内 IP / 内网域名），悬停出现复制按钮。 */
+function EndpointDetailRow({
+  label,
+  value,
+  copyLabel,
+  onCopy,
+}: {
+  label: string
+  value: string
+  copyLabel: string
+  onCopy: () => void
+}) {
+  return (
+    <p className="group/dns flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+      <span className="shrink-0">{label}</span>
+      <span className="truncate font-mono" title={value}>
+        {value}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/dns:opacity-100"
+        aria-label={copyLabel}
+        onClick={onCopy}
+      >
+        <IconCopy className="size-3" />
+      </Button>
+    </p>
+  )
 }
 
 /** 网络入口: how to reach the workload from outside/inside the cluster. */
@@ -257,24 +296,24 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
               <p className="truncate font-mono text-sm font-medium">
                 {entry.access}
               </p>
+              {entry.clusterAddress !== null && (
+                <EndpointDetailRow
+                  label={t('deploymentOverview.clusterAddress', '集群内')}
+                  value={entry.clusterAddress}
+                  copyLabel={t(
+                    'deploymentOverview.copyClusterAddress',
+                    '复制集群内地址'
+                  )}
+                  onCopy={() => void copy(entry.clusterAddress as string)}
+                />
+              )}
               {entry.dns !== null && (
-                <p className="group/dns flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                  <span className="shrink-0">
-                    {t('deploymentOverview.serviceDns', '内网域名')}
-                  </span>
-                  <span className="truncate font-mono" title={entry.dns}>
-                    {entry.dns}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/dns:opacity-100"
-                    aria-label={t('deploymentOverview.copyDns', '复制内网域名')}
-                    onClick={() => void copy(entry.dns as string)}
-                  >
-                    <IconCopy className="size-3" />
-                  </Button>
-                </p>
+                <EndpointDetailRow
+                  label={t('deploymentOverview.serviceDns', '内网域名')}
+                  value={entry.dns}
+                  copyLabel={t('deploymentOverview.copyDns', '复制内网域名')}
+                  onCopy={() => void copy(entry.dns as string)}
+                />
               )}
             </div>
             <Button

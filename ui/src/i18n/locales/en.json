@@ -3283,9 +3283,11 @@
     "anyNode": "Any node",
     "headless": "Headless",
     "serviceDns": "Internal DNS name",
+    "clusterAddress": "In-cluster",
     "copied": "Copied",
     "copy": "Copy",
-    "copyDns": "Copy internal DNS name"
+    "copyDns": "Copy internal DNS name",
+    "copyClusterAddress": "Copy in-cluster address"
   },
   "templateManagement": {
     "title": "Template Management",

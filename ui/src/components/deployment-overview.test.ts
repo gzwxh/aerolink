@@ -36,12 +36,14 @@ describe('serviceEndpointEntries', () => {
     expect(entries).toHaveLength(1)
     expect(entries[0]).toMatchObject({
       access: '10.112.59.5:4002',
+      // 与 access 是同一个地址，不重复展示。
+      clusterAddress: null,
       dns: 'greptimedb.devops.svc.cluster.local.:4002',
     })
   })
 
-  // NodePort 入口是给集群外用的，行要保留，但内网域名对它没意义。
-  it('NodePort 入口保留，但不带内网域名', () => {
+  // NodePort 只是多开了节点端口，集群内依然能通过 clusterIP 与 DNS 访问。
+  it('NodePort 入口同时给出集群外地址、集群内 IP 与内网域名', () => {
     const entries = serviceEndpointEntries(
       [
         service('greptimedb', {
@@ -62,9 +64,13 @@ describe('serviceEndpointEntries', () => {
       '10.112.59.5:4002',
       '任意节点:30402',
     ])
+    expect(entries.map((entry) => entry.clusterAddress)).toEqual([
+      null,
+      '10.112.173.213:4002',
+    ])
     expect(entries.map((entry) => entry.dns)).toEqual([
       'greptimedb.devops.svc.cluster.local.:4002',
-      null,
+      'greptimedb-nodeport.devops.svc.cluster.local.:4002',
     ])
   })
 })

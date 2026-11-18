@@ -3313,9 +3313,11 @@
     "anyNode": "任意节点",
     "headless": "Headless",
     "serviceDns": "内网域名",
+    "clusterAddress": "集群内",
     "copied": "已复制",
     "copy": "复制",
-    "copyDns": "复制内网域名"
+    "copyDns": "复制内网域名",
+    "copyClusterAddress": "复制集群内地址"
   },
   "passwordPolicy": {
     "title": "密码要求",
