@@ -104,9 +104,14 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({
   // 剥掉集群前缀的业务路径：fallback 判定与切集群换段都以它为准。
   const { pathname } = useClusterLocation()
   const queryClient = useQueryClient()
-  const { refetch: refetchClusters } = useCurrentClusterList({
-    enabled: false,
-  })
+  // ['clusters'] 是集群列表的唯一数据源：设置页改完集群信息或徽章后会失效这份缓存，
+  // 顶栏徽章、侧边栏选择器与写操作确认策略读的都是下面同步出来的 state，
+  // 必须跟着同一份缓存走（enabled: false 的查询不会被 invalidate 重新取数）。
+  const {
+    data: clusterList,
+    error: clusterListError,
+    isPending: isClusterListPending,
+  } = useCurrentClusterList({ enabled: true })
 
   const clusterBySlug = useMemo(
     () =>
@@ -124,32 +129,22 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({
     clearCurrentCluster()
   }, [currentCluster])
 
+  // 首次取数与失效后的重取共用这一条同步路径：数据到位才放开加载态，
+  // 保证子组件挂载时（ClusterGate）URL 里的集群已经固化好。
   useEffect(() => {
-    let cancelled = false
-
-    const bootstrap = async () => {
-      setIsLoading(true)
-      const result = await refetchClusters()
-      if (cancelled) {
-        return
-      }
-
-      if (result.data) {
-        setClusters(result.data)
-        setError(null)
-      } else {
-        setClusters([])
-        setError(result.error instanceof Error ? result.error : null)
-      }
-      setIsLoading(false)
+    if (isClusterListPending) {
+      return
     }
 
-    void bootstrap()
-
-    return () => {
-      cancelled = true
+    if (clusterList) {
+      setClusters(clusterList)
+      setError(null)
+    } else {
+      setClusters([])
+      setError(clusterListError instanceof Error ? clusterListError : null)
     }
-  }, [refetchClusters])
+    setIsLoading(false)
+  }, [clusterList, clusterListError, isClusterListPending])
 
   // 上一轮 invalidate/导航期间的切换标记收尾。
   const resolvingRef = useRef(false)

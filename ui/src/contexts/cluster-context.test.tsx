@@ -5,7 +5,7 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,11 +14,22 @@ import { useClusterLocation } from '@/lib/cluster-path'
 import { getCurrentCluster, setCurrentCluster } from '@/lib/current-cluster'
 import { useCluster } from '@/hooks/use-cluster'
 
-const { refetchClusters } = vi.hoisted(() => ({ refetchClusters: vi.fn() }))
+const { fetchClusters } = vi.hoisted(() => ({ fetchClusters: vi.fn() }))
 
-vi.mock('@/lib/api/cluster', () => ({
-  useCurrentClusterList: () => ({ refetch: refetchClusters }),
-}))
+// 用真实的 useQuery 承载 ['clusters']：Provider 与设置页读的是同一份缓存，
+// 只有真实查询才能验证「失效后重新取数」这条路径（见文末的回归用例）。
+vi.mock('@/lib/api/cluster', async () => {
+  const { useQuery } = await import('@tanstack/react-query')
+  return {
+    useCurrentClusterList: (options?: { enabled?: boolean }) =>
+      useQuery({
+        queryKey: ['clusters'],
+        queryFn: fetchClusters,
+        enabled: options?.enabled ?? false,
+        retry: false,
+      }),
+  }
+})
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -36,7 +47,7 @@ const CLUSTERS = [
 
 /** 只读的诊断面板：不进 Gate，任何状态下都能读到当前集群上下文。 */
 function Diagnostics() {
-  const { currentCluster, isLoading, slugError } = useCluster()
+  const { currentCluster, isLoading, slugError, clusters } = useCluster()
   const location = useClusterLocation()
   return (
     <div>
@@ -44,6 +55,10 @@ function Diagnostics() {
       <span data-testid="loading">{String(isLoading)}</span>
       <span data-testid="slug-error">{String(slugError)}</span>
       <span data-testid="pathname">{location.pathname}</span>
+      {/* 顶栏徽章 / 侧边栏选择器读的就是这份上下文里的集群数据。 */}
+      <span data-testid="badges">
+        {clusters.map((cluster) => cluster.badgeText ?? '-').join(',')}
+      </span>
     </div>
   )
 }
@@ -90,6 +105,8 @@ function Gate({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+let activeQueryClient: QueryClient | null = null
+
 function renderClusterApp(
   initialPath: string,
   options: {
@@ -97,7 +114,12 @@ function renderClusterApp(
     onScopedResult?: (cluster: string | null) => void
   } = {}
 ) {
-  refetchClusters.mockResolvedValue({ data: options.clusters ?? CLUSTERS })
+  fetchClusters.mockResolvedValue(options.clusters ?? CLUSTERS)
+
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  activeQueryClient = queryClient
 
   const router = createMemoryRouter(
     [
@@ -118,11 +140,7 @@ function renderClusterApp(
   )
 
   render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>
   )
@@ -262,6 +280,44 @@ describe('useClusterLocation', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('pathname')).toHaveTextContent('/')
+    )
+  })
+})
+
+describe('集群列表缓存失效', () => {
+  // 设置页保存徽章 / 编辑集群后只做 invalidateQueries(['clusters'])。
+  // 顶栏徽章与侧边栏选择器读的是 Provider 里的集群数据，必须跟着更新，
+  // 否则用户要整页刷新才能看到新样式（enabled: false 的查询不会被重新取数）。
+  it('失效后重新取数并同步到上下文', async () => {
+    renderClusterApp('/_clusters/alpha/deployments')
+    await waitFor(() =>
+      expect(screen.getByTestId('current')).toHaveTextContent('alpha')
+    )
+    expect(screen.getByTestId('badges')).toHaveTextContent('-,-')
+
+    fetchClusters.mockResolvedValue([
+      {
+        id: 1,
+        name: 'alpha',
+        slug: 'alpha',
+        isDefault: true,
+        badgeText: '测试环境',
+      },
+      {
+        id: 2,
+        name: 'beta',
+        slug: 'beta',
+        isDefault: false,
+        badgeText: '预发',
+      },
+    ])
+
+    await act(async () => {
+      await activeQueryClient!.invalidateQueries({ queryKey: ['clusters'] })
+    })
+
+    await waitFor(() =>
+      expect(screen.getByTestId('badges')).toHaveTextContent('测试环境,预发')
     )
   })
 })
