@@ -30,8 +30,7 @@ export interface Announcement {
   /**
    * 滚动速度（像素/秒），旧数据缺字段时按 60 处理。
    *
-   * 这些参数都是「每条公告各配」的，多条同时生效时由前端合并成一条轨道
-   * （取最慢/最长的那个，见 lib/announcement-scroll.ts）。
+   * 参数「每条公告各配」；顶栏同一时间只展示启用的那一条，所以写的就是实际生效的值。
    */
   scrollSpeed?: number
   /** 「每轮停留」的秒数，只在 scrollMode = paced 时生效；缺省 2。 */

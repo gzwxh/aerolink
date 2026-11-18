@@ -3,6 +3,8 @@ package model
 import (
 	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // 公告级别：只决定横幅整体的强调方式（左侧色条 + 图标 + 淡底），
@@ -16,10 +18,6 @@ const (
 // AnnouncementMaxContentLength 是正文长度上限。超限时报错而不是截断：
 // 截断会让管理员以为自己写的后半段发出去了。
 const AnnouncementMaxContentLength = 8192
-
-// AnnouncementMaxActive 是同时生效的公告条数上限。横幅只有一条滚动轨道，
-// 没有这个闸门时一次插入上百条会把所有用户的顶栏撑爆。
-const AnnouncementMaxActive = 20
 
 // AnnouncementLevels 返回受支持的级别，供接口校验与界面下拉使用。
 func AnnouncementLevels() []string {
@@ -119,8 +117,8 @@ type Announcement struct {
 	ScrollMode string `json:"scrollMode" gorm:"type:varchar(16);not null;default:continuous"`
 	// ScrollSpeed 是这条公告要求的滚动速度（像素/秒），默认 60（= 升级前写死的常量）。
 	//
-	// 多条公告串成同一条轨道时由前端逐项合并（速度取最慢的一条，见
-	// ui/src/lib/announcement-scroll.ts）：一条轨道只能有一个速度。
+	// 顶栏同一时间只展示一条公告（见 DisableOtherAnnouncements），所以这里的取值
+	// 就是实际生效的速度。
 	//
 	// 这三列都声明了 default，会被 GORM 的「有 default 就跳过零值」规则影响；
 	// 但 0 在速度与停留上从来不是合法值（见上面常量区的校验区间），
@@ -143,10 +141,14 @@ func (Announcement) TableName() string {
 	return "announcements"
 }
 
-// ListActiveAnnouncements 返回当前生效的公告：已启用、已到生效时间、尚未过期。
+// ListActiveAnnouncements 返回当前展示在顶栏的公告：已启用、已到生效时间、尚未过期。
 //
 // 过滤放在 SQL 里而不是取回来再挑：横幅是每个人打开页面都要读的，
 // 过期与未开始的公告不该被读出来。
+//
+// 只取一条：通知栏同一时间只展示一条公告（写入侧由 DisableOtherAnnouncements 保证
+// 只有一条启用）。这里仍然 LIMIT 1，是为了兜住旧版本留下的多条同时启用的数据——
+// 取法与管理列表一致（优先级降序、同优先级取后建的）。
 func ListActiveAnnouncements(now time.Time) ([]Announcement, error) {
 	var items []Announcement
 	err := DB.
@@ -154,6 +156,7 @@ func ListActiveAnnouncements(now time.Time) ([]Announcement, error) {
 		Where("start_at IS NULL OR start_at <= ?", now).
 		Where("end_at IS NULL OR end_at > ?", now).
 		Order("priority DESC, id DESC").
+		Limit(1).
 		Find(&items).Error
 	return items, err
 }
@@ -165,16 +168,35 @@ func ListAnnouncements() ([]Announcement, error) {
 	return items, err
 }
 
-// CountActiveAnnouncements 统计当前生效的公告条数，用于执行 AnnouncementMaxActive 上限。
-// 只数生效中的：停用与过期的公告不占用横幅，不必让它们卡住新增。
-func CountActiveAnnouncements(now time.Time) (int64, error) {
-	var count int64
-	err := DB.Model(&Announcement{}).
+// DisableOtherAnnouncements 停用除 keepID 之外的所有启用公告。
+//
+// 「同一时间有且只有一条公告启用」是写入侧的硬约束：允许存多条（备用、排期），
+// 但任何一次启用都必须把其余公告停掉，不能只靠界面自觉或读取时挑一条。
+func DisableOtherAnnouncements(tx *gorm.DB, keepID uint) error {
+	return tx.Model(&Announcement{}).
+		Where("id <> ?", keepID).
 		Where("enabled = ?", true).
-		Where("start_at IS NULL OR start_at <= ?", now).
-		Where("end_at IS NULL OR end_at > ?", now).
-		Count(&count).Error
-	return count, err
+		Update("enabled", false).Error
+}
+
+// MigrateAnnouncementSingleEnabled 把「多条同时启用」的旧数据归一成只剩一条。
+//
+// 旧版本允许多条公告同时生效并串成一条轨道，现在同一时间只展示一条。保留顶栏本来
+// 就会展示的那条（priority DESC, id DESC），其余改为停用——只动 enabled 标记，
+// 不删除任何公告。幂等，可以每次启动都跑，顺带兜住手工改库留下的多启用状态。
+func MigrateAnnouncementSingleEnabled() error {
+	var keep Announcement
+	if err := DB.
+		Where("enabled = ?", true).
+		Order("priority DESC, id DESC").
+		Limit(1).
+		Find(&keep).Error; err != nil {
+		return err
+	}
+	if keep.ID == 0 {
+		return nil
+	}
+	return DisableOtherAnnouncements(DB, keep.ID)
 }
 
 // GetAnnouncement 按 ID 取公告。

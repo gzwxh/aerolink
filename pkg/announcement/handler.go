@@ -72,15 +72,19 @@ func HandleCreateAnnouncement(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// 上限只挡「这条现在就会出现在横幅里」的情况：排一条将来才生效的公告
-	// 不该被当前的条数卡住。
-	if isActive(*item, time.Now()) {
-		if !withinActiveLimit(c) {
-			return
-		}
-	}
 	item.CreatorID = currentUserID(c)
-	if err := model.DB.Create(item).Error; err != nil {
+	// 同一时间只允许一条公告启用：新公告一启用，原来那条自动停用。
+	// 两步放在同一个事务里，否则中间失败会留下「两条都启用」或「一条都不启用」的状态。
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(item).Error; err != nil {
+			return err
+		}
+		if !item.Enabled {
+			return nil
+		}
+		return model.DisableOtherAnnouncements(tx, item.ID)
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create announcement"})
 		return
 	}
@@ -113,13 +117,6 @@ func HandleUpdateAnnouncement(c *gin.Context) {
 		return
 	}
 
-	// 它本来就在生效列表里时不必校验上限，否则第 20 条公告永远改不动。
-	if isActive(*updated, time.Now()) && !isActive(*existing, time.Now()) {
-		if !withinActiveLimit(c) {
-			return
-		}
-	}
-
 	existing.Title = updated.Title
 	existing.Content = updated.Content
 	existing.Level = updated.Level
@@ -133,7 +130,17 @@ func HandleUpdateAnnouncement(c *gin.Context) {
 	existing.StartAt = updated.StartAt
 	existing.EndAt = updated.EndAt
 	// CreatorID 不覆盖：它记的是「谁发的」，改内容的人由操作日志留痕。
-	if err := model.DB.Save(existing).Error; err != nil {
+	// 同新建：这条一旦是启用状态，就把它之外的公告停用（含编辑前就已启用的旧数据）。
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(existing).Error; err != nil {
+			return err
+		}
+		if !existing.Enabled {
+			return nil
+		}
+		return model.DisableOtherAnnouncements(tx, existing.ID)
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save announcement"})
 		return
 	}
@@ -163,22 +170,6 @@ func HandleDeleteAnnouncement(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "公告已删除"})
-}
-
-// withinActiveLimit 校验生效中的公告条数上限；超限时写好响应并返回 false。
-func withinActiveLimit(c *gin.Context) bool {
-	count, err := model.CountActiveAnnouncements(time.Now())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count announcements"})
-		return false
-	}
-	if count >= model.AnnouncementMaxActive {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "生效中的公告已达上限（" + strconv.Itoa(model.AnnouncementMaxActive) + " 条），请先停用或删除",
-		})
-		return false
-	}
-	return true
 }
 
 // buildAnnouncement 校验并归一化请求体。校验一律显式报错、不用默认值兜底：
@@ -303,21 +294,6 @@ func resolveDisplaySeconds(value *int) (int, error) {
 			model.AnnouncementDisplaySecondsMin, model.AnnouncementDisplaySecondsMax)
 	}
 	return *value, nil
-}
-
-// isActive 判定一条公告在给定时刻是否出现在横幅里。
-// 口径必须与 model.ListActiveAnnouncements 的 SQL 条件一致。
-func isActive(item model.Announcement, now time.Time) bool {
-	if !item.Enabled {
-		return false
-	}
-	if item.StartAt != nil && item.StartAt.After(now) {
-		return false
-	}
-	if item.EndAt != nil && !item.EndAt.After(now) {
-		return false
-	}
-	return true
 }
 
 // parseOptionalTime 解析可空时间；空串表示「立即生效 / 永不过期」。

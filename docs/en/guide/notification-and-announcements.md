@@ -114,17 +114,18 @@ the prod cluster” cannot be expressed.
 | Title | Up to 255 characters |
 | Body | Up to 8192 characters, supports a Markdown subset and named colour spans (e.g. `{warning}Maintenance tonight{/warning}`); raw HTML is **not** accepted |
 | Level | Info / warning / danger |
-| Priority | Ordering when several announcements are active |
+| Priority | Sort order in the admin list when several announcements exist; only one is enabled at a time |
 | Start / end time | Empty means immediate / never expires; the end time must be after the start time |
 | Scrolling | None / continuous / fixed-speed |
-| Enabled | Disabling removes it from the banner immediately |
+| Enabled | Disabling removes it from the banner immediately. **Only one announcement can be enabled at a time**; enabling one automatically disables the others |
 
 Display rules:
 
-- Only announcements that are **enabled, started and not expired** are shown; several active ones are
-  merged into a single track, keeping the highest level.
-- The banner can be paused on hover, dragged, and expanded to read the full text.
-- At most **20** announcements can be active at once.
+- Only the **enabled** announcement is shown (and only once it has started and before it ends). You can
+  keep several announcements (spares, scheduled ones), but exactly one is enabled and shown.
+- If legacy data still has several enabled announcements, the banner shows the one with the highest
+  priority (newest first on ties); the rest are disabled on the next start — no data is deleted.
+- The banner can be paused on hover and dragged left and right to read the rest.
 - Announcements are **global**: there is no audience or target-user field and no read state, and users
   cannot dismiss or silence them — only the end time or an administrator can.
 

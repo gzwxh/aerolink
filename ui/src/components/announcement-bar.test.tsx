@@ -58,18 +58,16 @@ describe('AnnouncementBar', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('标题与正文一起输出，图标颜色取最高级别', () => {
+  it('标题与正文一起输出，图标用公告自己的级别', () => {
     const { container } = renderBar([
-      announcement({ id: 1, level: 'info', title: '低优先级' }),
-      announcement({ id: 2, level: 'warning', title: '高优先级' }),
+      announcement({ level: 'warning', title: '维护通知' }),
     ])
 
     const bar = container.firstElementChild as HTMLElement
     expect(bar).toHaveAttribute('role', 'region')
     // 内容会为循环重复多份，所以按文本内容断言，不按「唯一元素」断言。
-    expect(bar.textContent).toContain('低优先级')
-    expect(bar.textContent).toContain('高优先级')
-    // 级别取最高：info + warning → warning 的图标色（通知栏本身不套色框）。
+    expect(bar.textContent).toContain('维护通知')
+    // 通知栏同一时间只有一条公告：图标就是这条的级别色（通知栏本身不套色框）。
     expect(bar.querySelector('svg.text-warning')).not.toBeNull()
     expect(bar.className).not.toMatch(/\b(border|rounded)/)
   })
@@ -274,25 +272,8 @@ describe('AnnouncementBar', () => {
     expect(scrollLeft).toBe(0)
   })
 
-  it('展开全文会给出可换行的完整内容', () => {
-    const { container } = renderBar([
-      announcement({ title: '维护通知', content: '今晚 22:00 停服' }),
-    ])
-    const before = container.textContent ?? ''
-
-    fireEvent.click(
-      // 展开按钮在通知栏里（顶栏的其它按钮不在这个测试的渲染范围）。
-      container.querySelector('[aria-label="展开全文"]') as HTMLElement
-    )
-
-    // 弹层里每一个字段各一份，因此出现次数比展开前多。
-    const after = document.body.textContent ?? ''
-    expect(after.length).toBeGreaterThan(before.length)
-    expect(after).toContain('今晚 22:00 停服')
-  })
-
   // 公告可以配置成不滚动：此时只渲染一份内容，不再铺重复副本做循环；
-  // 按住拖动与右侧的「展开全文」都还在。
+  // 按住拖动仍然可用。
   it('公告关闭横向滚动时静止显示', () => {
     stubWidths(1200, 400)
     const { container } = renderBar([announcement({ scroll: false })])
@@ -359,8 +340,5 @@ describe('AnnouncementBar', () => {
     fireEvent.pointerDown(viewport, { button: 0, clientX: 300 })
     fireEvent.pointerMove(viewport, { clientX: 260 })
     expect(scrollLeft).toBe(240)
-
-    // 展开全文与滚动无关，任何时候都在。
-    expect(container.querySelector('[aria-label="展开全文"]')).not.toBeNull()
   })
 })

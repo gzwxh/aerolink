@@ -14,7 +14,6 @@ import {
   ANNOUNCEMENT_SCROLL_SPEED_MIN,
   announcementScrollMode,
   announcementScrollParams,
-  combinedScrollParams,
 } from '@/lib/announcement-scroll'
 import {
   useAllAnnouncements,
@@ -122,7 +121,7 @@ interface AnnouncementForm {
   level: AnnouncementLevel
   priority: number
   enabled: boolean
-  /** 顶栏横向滚动的方式；none 时单行显示，靠拖动或「展开全文」读剩下的内容。 */
+  /** 顶栏横向滚动的方式；none 时单行显示，靠左右拖动看剩下的内容。 */
   scrollMode: AnnouncementScrollMode
   // 三个数值参数在草稿里存字符串：数字受控输入在删空的那一刻会被迫回落成默认值，
   // 管理员就没法「清空再输一个」了（只能一点点加减）。空串 = 用默认值，提交时解析。
@@ -252,14 +251,6 @@ export function AnnouncementManagement() {
   const [updatingId, setUpdatingId] = useState<number | null>(null)
 
   const items = data?.items ?? []
-  // 顶栏把所有生效公告串成**一条**轨道，滚动方式取最强的一种（paced > continuous > none，
-  // 见 lib/announcement-scroll.ts）。所以单条公告的「不滚动」可能被别的公告盖过——
-  // 列表与编辑弹窗都用这个合并结果来解释，否则看起来就像设置没保存。
-  const activeItems = items.filter((item) => statusOf(item) === 'active')
-  // 同理，速度取最慢、停留与显示时长取最长。整条轨道只有一套参数，所以这里拿到的是
-  // 「实际生效」的那一套，列表用它标出与单条设置不一致的地方。
-  const activeParams = combinedScrollParams(activeItems)
-  const activeScrollMode = activeParams.mode
 
   /** 行内改一个字段：其余字段原样回传（接口是整体覆盖式的 PUT）。 */
   const patchItem = (
@@ -306,7 +297,7 @@ export function AnnouncementManagement() {
         <p className="text-sm text-muted-foreground">
           {t(
             'notifications.announcements.description',
-            '公告显示在所有用户页面顶端的通知栏里，按优先级顺序滚动输出；按生效时间自动出现与消失。'
+            '公告显示在所有用户页面顶端的通知栏里；同一时间只展示一条（启用的那条），按生效时间自动出现与消失。'
           )}
         </p>
         <Button size="sm" disabled={readOnly} onClick={openCreate}>
@@ -328,37 +319,6 @@ export function AnnouncementManagement() {
             const status = statusOf(item)
             const ownMode = announcementScrollMode(item)
             const ownParams = announcementScrollParams(item)
-            // 与整条轨道实际生效的参数对比：任一不一致就说明这条的设置被别的公告盖过了。
-            const paramsOverridden =
-              status === 'active' &&
-              ownMode !== 'none' &&
-              (ownParams.speed !== activeParams.speed ||
-                ownParams.pauseSeconds !== activeParams.pauseSeconds ||
-                ownParams.displaySeconds !== activeParams.displaySeconds)
-            // 一条轨道只有一套参数，被盖过时列表直接写出「实际」的那一套。
-            const effectiveSummary = [
-              // 填了显示时长就是按它走，速度不参与换算——别把不生效的数字写进「实际」。
-              ...(activeParams.displaySeconds > 0
-                ? []
-                : [`${activeParams.speed} px/s`]),
-              ...(activeParams.mode === 'paced'
-                ? [
-                    t('notifications.announcements.fields.pauseShort', {
-                      value: activeParams.pauseSeconds,
-                      defaultValue: '停留 {{value}} s',
-                    }),
-                  ]
-                : []),
-              activeParams.displaySeconds > 0
-                ? t('notifications.announcements.fields.displayShort', {
-                    value: activeParams.displaySeconds,
-                    defaultValue: '一轮 {{value}} s',
-                  })
-                : t(
-                    'notifications.announcements.fields.displayAuto',
-                    '一轮自动'
-                  ),
-            ].join(' · ')
             return (
               <div
                 key={item.id}
@@ -418,23 +378,6 @@ export function AnnouncementManagement() {
                               'notifications.announcements.scrollOn',
                               '横向滚动'
                             )}
-                      {/* 自身设置被别的生效公告盖过时标出实际效果，否则看着像「保存了没生效」。 */}
-                      {status === 'active' && ownMode !== activeScrollMode ? (
-                        <span
-                          className="text-warning"
-                          data-scroll-mode-actual={activeScrollMode}
-                        >
-                          （
-                          {t(
-                            'notifications.announcements.fields.scrollModeEffective',
-                            {
-                              mode: t(SCROLL_MODE_LABELS[activeScrollMode]),
-                              defaultValue: '实际：{{mode}}',
-                            }
-                          )}
-                          ）
-                        </span>
-                      ) : null}
                     </span>
                     {/* 速度/显示时长是这次新放出来的参数，列表里跟着标出来：
                         不点开编辑也能看出这条滚多快、一轮多久。 */}
@@ -472,22 +415,6 @@ export function AnnouncementManagement() {
                                 '一轮自动'
                               )}
                         </span>
-                        {paramsOverridden ? (
-                          <span
-                            className="text-warning"
-                            data-scroll-params-actual={effectiveSummary}
-                          >
-                            （
-                            {t(
-                              'notifications.announcements.fields.scrollParamsEffective',
-                              {
-                                items: effectiveSummary,
-                                defaultValue: '实际：{{items}}',
-                              }
-                            )}
-                            ）
-                          </span>
-                        ) : null}
                       </>
                     )}
                   </div>
@@ -567,7 +494,6 @@ export function AnnouncementManagement() {
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           announcement={editing}
-          siblings={items.filter((item) => item.id !== editing?.id)}
           readOnly={readOnly}
           saving={createAnnouncement.isPending || updateAnnouncement.isPending}
           onSubmit={(payload) => {
@@ -596,7 +522,6 @@ function AnnouncementDialog({
   open,
   onOpenChange,
   announcement,
-  siblings,
   readOnly,
   saving,
   onSubmit,
@@ -604,8 +529,6 @@ function AnnouncementDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   announcement: Announcement | null
-  /** 其余公告：用来判断这次的滚动方式会不会被别的生效公告盖过。 */
-  siblings: Announcement[]
   readOnly: boolean
   saving: boolean
   onSubmit: (payload: AnnouncementPayload) => void
@@ -629,8 +552,7 @@ function AnnouncementDialog({
 
   const canSubmit = draft.content.trim() !== '' && !saving && !readOnly
 
-  // 本条之外还有哪些生效公告、它们合起来按什么方式滚/多快。合并结果比本条更强时，
-  // 本条的选择不会改变观感——不写这一句，管理员只会看到「选了不生效」。
+  // 草稿解析成公告的滚动字段：预览要用，所以和表单分开算。
   const draftSource = {
     scroll: draft.scrollMode !== 'none',
     scrollMode: draft.scrollMode,
@@ -643,43 +565,6 @@ function AnnouncementDialog({
       ANNOUNCEMENT_DEFAULT_PAUSE_SECONDS
     ),
     displaySeconds: draftNumber(draft.displaySeconds, 0),
-  }
-  const ownParams = announcementScrollParams(draftSource)
-  const effectiveParams = combinedScrollParams([
-    ...siblings.filter((item) => statusOf(item) === 'active'),
-    draftSource,
-  ])
-  const scrollModeOverridden =
-    draft.enabled && effectiveParams.mode !== draft.scrollMode
-
-  // 三个数值参数同样会被别的生效公告盖过（速度取最慢、停留与显示时长取最长），
-  // 逐项列出「实际按多少算」。
-  const overriddenParams: string[] = []
-  if (draft.enabled) {
-    if (ownParams.speed !== effectiveParams.speed) {
-      overriddenParams.push(
-        t('notifications.announcements.fields.scrollSpeedShared', {
-          value: effectiveParams.speed,
-          defaultValue: '速度按 {{value}} px/s',
-        })
-      )
-    }
-    if (ownParams.pauseSeconds !== effectiveParams.pauseSeconds) {
-      overriddenParams.push(
-        t('notifications.announcements.fields.pauseSecondsShared', {
-          value: effectiveParams.pauseSeconds,
-          defaultValue: '每轮停留按 {{value}} 秒',
-        })
-      )
-    }
-    if (ownParams.displaySeconds !== effectiveParams.displaySeconds) {
-      overriddenParams.push(
-        t('notifications.announcements.fields.displaySecondsShared', {
-          value: effectiveParams.displaySeconds,
-          defaultValue: '一轮按 {{value}} 秒',
-        })
-      )
-    }
   }
 
   // 填了「显示时长」就不再按速度换算，速度字段置灰，免得「改了速度没反应」。
@@ -864,7 +749,7 @@ function AnnouncementDialog({
                 <p className="text-muted-foreground text-xs">
                   {t(
                     'notifications.announcements.fields.scrollModeHint',
-                    '「连续滚动」一轮接一轮；「每轮停留」走完一圈会停一下再开始，长内容更容易读完；「不滚动」则单行显示，靠拖动或右侧箭头展开读全文。'
+                    '「连续滚动」一轮接一轮；「每轮停留」走完一圈会停一下再开始，长内容更容易读完；「不滚动」则单行显示，靠左右拖动看前后文。'
                   )}
                 </p>
               </div>
@@ -891,22 +776,7 @@ function AnnouncementDialog({
               </Select>
             </div>
 
-            {scrollModeOverridden ? (
-              <p
-                className="text-warning text-xs"
-                data-scroll-mode-conflict={effectiveParams.mode}
-              >
-                {t('notifications.announcements.fields.scrollModeShared', {
-                  mode: t(SCROLL_MODE_LABELS[effectiveParams.mode]),
-                  mine: t(SCROLL_MODE_LABELS[draft.scrollMode]),
-                  defaultValue:
-                    '另有生效中的公告选择了「{{mode}}」，整条通知栏会按它滚动，这里的「{{mine}}」暂不会改变观感。',
-                })}
-              </p>
-            ) : null}
-
-            {/* 三个数值参数：整条轨道只有一套，所以都会被别的生效公告盖过，
-                  提示放在下面同一段里，不逐字段堆 warning。 */}
+            {/* 三个数值参数：顶栏只展示启用的这一条，所以填什么就按什么走。 */}
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="announcement-scroll-speed">
@@ -998,19 +868,6 @@ function AnnouncementDialog({
               </div>
             </div>
 
-            {overriddenParams.length > 0 ? (
-              <p
-                className="text-warning text-xs"
-                data-scroll-params-conflict={overriddenParams.join('；')}
-              >
-                {t('notifications.announcements.fields.scrollParamsShared', {
-                  items: overriddenParams.join('；'),
-                  defaultValue:
-                    '整条通知栏共用一套滚动参数，下面这些取值会被其他生效公告盖过：{{items}}。',
-                })}
-              </p>
-            ) : null}
-
             <div className="space-y-2">
               <div className="flex items-baseline justify-between gap-4">
                 <Label>
@@ -1056,7 +913,7 @@ function AnnouncementDialog({
                 <p className="text-muted-foreground text-xs">
                   {t(
                     'notifications.announcements.fields.enabledHint',
-                    '关闭后不会展示在顶栏，公告内容仍会保留。'
+                    '关闭后不会展示在顶栏，公告内容仍会保留；启用这条会自动停用其他公告（同一时间只能启用一条）。'
                   )}
                 </p>
               </div>

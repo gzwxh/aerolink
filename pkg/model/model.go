@@ -120,6 +120,8 @@ func InitDB() {
 		current := model
 		runMigration("表结构自动迁移", func() error { return DB.AutoMigrate(current) })
 	}
+	// 公告只保留一条启用（旧数据可能有多条同时启用），纯 DML，放在建表之后。
+	runMigration("公告单条启用归一", MigrateAnnouncementSingleEnabled)
 	runMigration("绑定组成员命名空间索引", MigrateBindingGroupMemberNamespace)
 	runMigration("清理 users.wechat 旧列", MigrateDropUserWechatColumn)
 	runMigration("集群 slug 回填", MigrateClusterSlugBackfill)

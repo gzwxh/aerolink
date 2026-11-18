@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AnnouncementManagement } from './announcement-management'
 
 const mutate = vi.hoisted(() => vi.fn())
-// 列表数据放在可变的 store 里：有的用例需要「两条同时生效的公告」。
+// 列表数据放在可变的 store 里：每个用例可以自己准备要展示的公告。
 const store = vi.hoisted(() => ({ items: [] as unknown[] }))
 
 const BASE_ITEM = {
@@ -123,73 +123,8 @@ describe('AnnouncementManagement 行内操作', () => {
   })
 })
 
-// 顶栏把生效公告串成一条轨道、滚动方式取最强的一种：如果界面不说这一句，
-// 管理员看到的就是「选了不滚动却还在滚」，像设置没保存。
-describe('AnnouncementManagement 滚动方式合并提示', () => {
-  const twoActive = () => [
-    {
-      ...BASE_ITEM,
-      id: 1,
-      title: '甲',
-      startAt: '',
-      endAt: '',
-      scroll: false,
-      scrollMode: 'none',
-    },
-    {
-      ...BASE_ITEM,
-      id: 2,
-      title: '乙',
-      startAt: '',
-      endAt: '',
-      scroll: true,
-      scrollMode: 'paced',
-    },
-  ]
-
-  it('行内标出被别的生效公告盖过后的实际效果', () => {
-    store.items = twoActive()
-
-    const { container } = render(<AnnouncementManagement />)
-
-    const hint = container.querySelector('[data-scroll-mode-actual]')
-    expect(hint).toHaveAttribute('data-scroll-mode-actual', 'paced')
-    // 自身设置仍照实显示，只是在后面补了「实际：…」。
-    expect(container.textContent).toContain('不滚动')
-  })
-
-  it('编辑弹窗里提示本条设置会被别的公告盖过', () => {
-    store.items = twoActive()
-
-    render(<AnnouncementManagement />)
-    fireEvent.click(screen.getAllByRole('button', { name: '编辑' })[0])
-
-    expect(
-      document.querySelector('[data-scroll-mode-conflict]')
-    ).toHaveAttribute('data-scroll-mode-conflict', 'paced')
-  })
-
-  it('只有一条生效公告时不提示（设置就是最终效果）', () => {
-    store.items = [
-      {
-        ...BASE_ITEM,
-        id: 3,
-        title: '丙',
-        startAt: '',
-        endAt: '',
-        scroll: false,
-        scrollMode: 'none',
-      },
-    ]
-
-    const { container } = render(<AnnouncementManagement />)
-
-    expect(container.querySelector('[data-scroll-mode-actual]')).toBeNull()
-  })
-})
-
-// 速度 / 每轮停留 / 显示时长也是「每条各配、整条合并」，合并规则同滚动方式：
-// 速度取最慢、停留与显示时长取最长。界面必须把结果写出来，否则又是「改了没生效」。
+// 速度 / 每轮停留 / 显示时长是每条公告各配的；通知栏同一时间只展示启用的一条，
+// 所以列表里写的就是实际生效的那套参数。
 describe('AnnouncementManagement 滚动参数', () => {
   const paramsOf = (mutateFn: typeof mutate) =>
     mutateFn.mock.calls[0][0].data as Record<string, unknown>
@@ -318,68 +253,5 @@ describe('AnnouncementManagement 滚动参数', () => {
     })
 
     expect(speed).toBeDisabled()
-  })
-
-  // 速度取最慢的那条：自己填 90、另一条生效公告填 30，整条轨道按 30 走。
-  it('列表标出被更慢公告盖过后的实际速度', () => {
-    store.items = [
-      {
-        ...BASE_ITEM,
-        id: 1,
-        title: '快',
-        startAt: '',
-        endAt: '',
-        scroll: true,
-        scrollMode: 'continuous',
-        scrollSpeed: 90,
-      },
-      {
-        ...BASE_ITEM,
-        id: 2,
-        title: '慢',
-        startAt: '',
-        endAt: '',
-        scroll: true,
-        scrollMode: 'continuous',
-        scrollSpeed: 30,
-      },
-    ]
-
-    const { container } = render(<AnnouncementManagement />)
-
-    const actual = container.querySelector('[data-scroll-params-actual]')
-    expect(actual).not.toBeNull()
-    expect(actual?.getAttribute('data-scroll-params-actual')).toContain(
-      '30 px/s'
-    )
-  })
-
-  it('每条参数一致时不提示', () => {
-    store.items = [
-      {
-        ...BASE_ITEM,
-        id: 1,
-        title: '甲',
-        startAt: '',
-        endAt: '',
-        scroll: true,
-        scrollMode: 'continuous',
-        scrollSpeed: 40,
-      },
-      {
-        ...BASE_ITEM,
-        id: 2,
-        title: '乙',
-        startAt: '',
-        endAt: '',
-        scroll: true,
-        scrollMode: 'continuous',
-        scrollSpeed: 40,
-      },
-    ]
-
-    const { container } = render(<AnnouncementManagement />)
-
-    expect(container.querySelector('[data-scroll-params-actual]')).toBeNull()
   })
 })

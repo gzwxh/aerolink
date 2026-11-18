@@ -35,7 +35,7 @@ export function AnnouncementTicker({
   level,
 }: {
   items: Announcement[]
-  /** 多条同时生效时取最高的级别，由调用侧算好（预览就是草稿自己的级别）。 */
+  /** 整条通知栏的级别，由调用侧算好（预览就是草稿自己的级别）。 */
   level: AnnouncementLevel
 }) {
   const {
@@ -108,7 +108,7 @@ export function AnnouncementTicker({
     return () => observer.disconnect()
   }, [contentKey, scrollMode, scrollSpeed, pauseSeconds, displaySeconds])
 
-  // 供读屏与「展开全文」按钮复述的纯文本：标题可选，没填时不要留一个开头的冒号。
+  // 供读屏复述的纯文本：标题可选，没填时不要留一个开头的冒号。
   const plainText = useMemo(
     () =>
       items

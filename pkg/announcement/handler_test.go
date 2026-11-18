@@ -126,8 +126,8 @@ func TestActiveAnnouncementsFilterWindow(t *testing.T) {
 	mustCreate(t, model.Announcement{Title: "已停用", Content: "x", Enabled: false})
 
 	got := activeAnnouncementTitles(t, r)
-	// 优先级同为 0，按 id 降序 → 后创建的「已在窗口内」在前。
-	want := []string{"已在窗口内", "立即生效"}
+	// 同一时间只展示一条：优先级同为 0 时按 id 降序，取后创建的「已在窗口内」。
+	want := []string{"已在窗口内"}
 	if !equalTitles(got, want) {
 		t.Fatalf("active titles = %v, want %v", got, want)
 	}
@@ -151,7 +151,9 @@ func TestActiveAnnouncementsWindowBoundaries(t *testing.T) {
 	}
 }
 
-func TestActiveAnnouncementsSortByPriorityThenID(t *testing.T) {
+// 历史数据可能留有多条启用（旧版本允许多条同时生效）：顶栏只展示优先级最高的那条，
+// 同优先级取后创建的一条，不能把顶栏撑成多条内容。
+func TestActiveAnnouncementsPicksOneByPriorityThenID(t *testing.T) {
 	setupAnnouncementTestDB(t)
 	r := newTestRouter(nil)
 
@@ -160,8 +162,8 @@ func TestActiveAnnouncementsSortByPriorityThenID(t *testing.T) {
 	mustCreate(t, model.Announcement{Title: "高B", Content: "x", Enabled: true, Priority: 10})
 
 	got := activeAnnouncementTitles(t, r)
-	if !equalTitles(got, []string{"高B", "高A", "低"}) {
-		t.Fatalf("active titles = %v, want priority desc then id desc", got)
+	if !equalTitles(got, []string{"高B"}) {
+		t.Fatalf("active titles = %v, want only priority desc then id desc top one", got)
 	}
 }
 
@@ -395,58 +397,73 @@ func TestAnnouncementScrollParamsValidation(t *testing.T) {
 	}
 }
 
-// 上限只挡「现在就会出现在横幅里」的公告：排期到将来的、或者先存成停用状态的，
-// 都不该被当前的生效条数卡住。
-func TestCreateAnnouncementActiveLimit(t *testing.T) {
+// 允许存多条公告，但同一时间只能有一条启用：新建时设成启用，必须把原来那条停掉，
+// 而不是让两条都「启用」、只在读取时挑一条。
+func TestCreateEnabledAnnouncementDisablesOthers(t *testing.T) {
 	setupAnnouncementTestDB(t)
 	r := newTestRouter(nil)
-	for i := 0; i < model.AnnouncementMaxActive; i++ {
-		mustCreate(t, model.Announcement{Title: fmt.Sprintf("生效中-%d", i), Content: "x", Enabled: true})
-	}
+	previous := mustCreate(t, model.Announcement{Title: "旧公告", Content: "x", Enabled: true})
+	backup := mustCreate(t, model.Announcement{Title: "备用", Content: "x", Enabled: false})
 
-	rec := doJSON(t, r, http.MethodPost, "/items", map[string]any{"title": "第 21 条", "content": "x", "enabled": true})
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "上限") {
-		t.Fatalf("status = %d body = %s, want 400 with the limit message", rec.Code, rec.Body.String())
-	}
-
-	future := time.Now().Add(time.Hour).Format("2006-01-02T15:04:05")
-	rec = doJSON(t, r, http.MethodPost, "/items", map[string]any{
-		"title": "稍后生效", "content": "x", "enabled": true, "startAt": future,
+	rec := doJSON(t, r, http.MethodPost, "/items", map[string]any{
+		"title": "新公告", "content": "x", "enabled": true,
 	})
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("scheduled announcement rejected at the limit: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	if got := activeAnnouncementTitles(t, r); !equalTitles(got, []string{"新公告"}) {
+		t.Fatalf("active titles = %v, want only the new one", got)
 	}
 
-	rec = doJSON(t, r, http.MethodPost, "/items", map[string]any{"title": "停用的", "content": "x", "enabled": false})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("disabled announcement rejected at the limit: %d %s", rec.Code, rec.Body.String())
+	var stored model.Announcement
+	if err := model.DB.First(&stored, previous.ID).Error; err != nil {
+		t.Fatalf("reloading the previous announcement: %v", err)
+	}
+	if stored.Enabled {
+		t.Fatalf("previous announcement is still enabled, want disabled")
+	}
+	// 原本就停用的公告不受影响：新建一条启用公告只需要顶掉当前那条。
+	var backupStored model.Announcement
+	if err := model.DB.First(&backupStored, backup.ID).Error; err != nil {
+		t.Fatalf("reloading the backup announcement: %v", err)
+	}
+	if backupStored.Enabled {
+		t.Fatalf("a disabled announcement must stay disabled")
 	}
 }
 
-// 上限不能把已在生效列表里的公告锁死：否则一旦到达上限，第 20 条就再也改不动了。
-func TestUpdateAnnouncementActiveLimitOnlyAppliesWhenBecomingActive(t *testing.T) {
+// 把一条公告改成启用时同样只能留下这一条；全部停用是允许的（通知栏空着）。
+func TestUpdateEnabledAnnouncementDisablesOthers(t *testing.T) {
 	setupAnnouncementTestDB(t)
 	r := newTestRouter(nil)
-	first := mustCreate(t, model.Announcement{Title: "生效中-0", Content: "x", Enabled: true})
-	for i := 1; i < model.AnnouncementMaxActive; i++ {
-		mustCreate(t, model.Announcement{Title: fmt.Sprintf("生效中-%d", i), Content: "x", Enabled: true})
-	}
-	scheduled := mustCreate(t, model.Announcement{Title: "稍后生效", Content: "x", Enabled: true, StartAt: ptrTime(time.Now().Add(time.Hour))})
+	current := mustCreate(t, model.Announcement{Title: "当前", Content: "x", Enabled: true})
+	next := mustCreate(t, model.Announcement{Title: "下一条", Content: "x", Enabled: false})
 
-	// 已在生效列表里：允许继续编辑。
-	rec := doJSON(t, r, http.MethodPut, fmt.Sprintf("/items/%d", first.ID), map[string]any{
-		"title": "生效中-0（改过）", "content": "x", "enabled": true,
+	rec := doJSON(t, r, http.MethodPut, fmt.Sprintf("/items/%d", next.ID), map[string]any{
+		"title": "下一条", "content": "x", "enabled": true,
 	})
 	if rec.Code != http.StatusOK {
-		t.Fatalf("editing an already-active announcement was rejected: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	if got := activeAnnouncementTitles(t, r); !equalTitles(got, []string{"下一条"}) {
+		t.Fatalf("active titles = %v, want only the edited one", got)
+	}
+	var stored model.Announcement
+	if err := model.DB.First(&stored, current.ID).Error; err != nil {
+		t.Fatalf("reloading the previous announcement: %v", err)
+	}
+	if stored.Enabled {
+		t.Fatalf("previous announcement is still enabled, want disabled")
 	}
 
-	// 由「未生效」变成「生效」：会顶破上限，拒绝。
-	rec = doJSON(t, r, http.MethodPut, fmt.Sprintf("/items/%d", scheduled.ID), map[string]any{
-		"title": "稍后生效（改成立即）", "content": "x", "enabled": true,
+	rec = doJSON(t, r, http.MethodPut, fmt.Sprintf("/items/%d", next.ID), map[string]any{
+		"title": "下一条", "content": "x", "enabled": false,
 	})
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "上限") {
-		t.Fatalf("status = %d body = %s, want 400 with the limit message", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	if got := activeAnnouncementTitles(t, r); len(got) != 0 {
+		t.Fatalf("active titles = %v, want empty", got)
 	}
 }
 

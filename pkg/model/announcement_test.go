@@ -114,3 +114,61 @@ func TestAutoMigrateAnnouncementScrollParamsDefaults(t *testing.T) {
 		t.Fatalf("displaySeconds = %d, want 0（自动）", reloaded.DisplaySeconds)
 	}
 }
+
+// 旧版本允许多条公告同时启用：升级后只保留顶栏本来就会展示的那条（优先级最高、
+// 同优先级取后建的），其余改成停用。只动 enabled，不删除任何公告。
+func TestMigrateAnnouncementSingleEnabled(t *testing.T) {
+	originalDB := DB
+	db, err := gorm.Open(sqlite.Open("file:announcement-single-enabled?mode=memory&cache=shared"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("opening test database: %v", err)
+	}
+	DB = db
+	t.Cleanup(func() { DB = originalDB })
+
+	if err := DB.AutoMigrate(&Announcement{}); err != nil {
+		t.Fatalf("migrating test database: %v", err)
+	}
+	low := Announcement{Title: "低", Content: "x", Enabled: true}
+	highA := Announcement{Title: "高A", Content: "x", Enabled: true, Priority: 10}
+	highB := Announcement{Title: "高B", Content: "x", Enabled: true, Priority: 10}
+	disabled := Announcement{Title: "停用的", Content: "x", Enabled: false}
+	for _, item := range []*Announcement{&low, &highA, &highB, &disabled} {
+		if err := DB.Create(item).Error; err != nil {
+			t.Fatalf("seeding announcement: %v", err)
+		}
+	}
+
+	if err := MigrateAnnouncementSingleEnabled(); err != nil {
+		t.Fatalf("normalizing: %v", err)
+	}
+
+	var enabled []Announcement
+	if err := DB.Where("enabled = ?", true).Find(&enabled).Error; err != nil {
+		t.Fatalf("listing enabled announcements: %v", err)
+	}
+	if len(enabled) != 1 || enabled[0].ID != highB.ID {
+		t.Fatalf("enabled = %+v, want only the highest-priority, newest one", enabled)
+	}
+
+	// 再跑一次是幂等的；也不该动本来就停用的那条。
+	if err := MigrateAnnouncementSingleEnabled(); err != nil {
+		t.Fatalf("normalizing again: %v", err)
+	}
+	var stillDisabled Announcement
+	if err := DB.First(&stillDisabled, disabled.ID).Error; err != nil {
+		t.Fatalf("reloading the disabled announcement: %v", err)
+	}
+	if stillDisabled.Enabled {
+		t.Fatalf("disabled announcement became enabled")
+	}
+	var stillLow Announcement
+	if err := DB.First(&stillLow, low.ID).Error; err != nil {
+		t.Fatalf("reloading the low-priority announcement: %v", err)
+	}
+	if stillLow.Enabled {
+		t.Fatalf("low-priority announcement is still enabled")
+	}
+}
