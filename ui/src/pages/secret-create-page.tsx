@@ -643,7 +643,7 @@ export function SecretCreatePage({ clone = false }: { clone?: boolean }) {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">{pageTitle}</h1>
-        <CurrentClusterBadge />
+        {!isEdit && <CurrentClusterBadge />}
       </div>
 
       {/* Scrollable content */}

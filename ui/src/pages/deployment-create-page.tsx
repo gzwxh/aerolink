@@ -649,7 +649,7 @@ function DeploymentFormPage({
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">{pageTitle}</h1>
-        <CurrentClusterBadge />
+        {!isEdit && <CurrentClusterBadge />}
       </div>
 
       {/* Pod 的 spec 创建后大多不可变（K8s 仅允许改镜像等少量字段）：

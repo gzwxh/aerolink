@@ -253,7 +253,7 @@ export function PVCreatePage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">{pageTitle}</h1>
-        <CurrentClusterBadge />
+        {!isEdit && <CurrentClusterBadge />}
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">

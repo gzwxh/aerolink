@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -93,6 +93,25 @@ const renderPage = () => {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <PVCreatePage />
+      </MemoryRouter>
+    </QueryClientProvider>
+  )
+}
+
+/** 编辑路由：页头不该再标一遍目标集群（对象已落在当前集群里）。 */
+const renderEditPage = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/persistentvolumes/pv-data-01/edit']}>
+        <Routes>
+          <Route
+            path="persistentvolumes/:name/edit"
+            element={<PVCreatePage />}
+          />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   )
@@ -211,6 +230,13 @@ describe('PVCreatePage', () => {
     await waitFor(() => expect(applyResource).toHaveBeenCalledTimes(1))
     expect(yamlOf()).toContain('mountOptions:')
     expect(yamlOf()).toContain('- nfsvers=4.1')
+  })
+
+  it('编辑页不再重复标注当前集群', () => {
+    renderEditPage()
+
+    expect(screen.getByText('pvCreate.editPageTitle')).toBeInTheDocument()
+    expect(screen.queryByText('test-cluster')).not.toBeInTheDocument()
   })
 
   it('blocks a half-filled claim binding', async () => {
