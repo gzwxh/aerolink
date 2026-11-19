@@ -162,7 +162,8 @@ func probeArchiveTargets(setting *model.AuditSettingData) []string {
 	defer cancel()
 
 	// 只探测**当前 sink 会用到**的通道：互斥下另外几条开关不生效，探测它们只会给出误导性的告警。
-	if model.AuditSinkUsesParquet() && setting.Archive.S3.Enabled {
+	// S3 在 sink=parquet（主存储）与 sink=database（冷归档副本）两种情况下都会被用到。
+	if (model.AuditSinkUsesParquet() || model.AuditSinkUsesDatabase()) && setting.Archive.S3.Enabled {
 		if sink, err := NewS3Sink(setting.Archive.S3); err != nil {
 			warnings = append(warnings, "s3: "+err.Error())
 		} else if _, err := sink.ListKeys(ctx, ""); err != nil {
@@ -327,6 +328,7 @@ func auditSettingDiff(before, after model.AuditSettingData) string {
 	changedBool("s3.pathStyle", before.Archive.S3.PathStyle, after.Archive.S3.PathStyle)
 	changedBool("s3.useTLS", before.Archive.S3.UseTLS, after.Archive.S3.UseTLS)
 	changedBool("s3.deleteLocalAfterUpload", before.Archive.S3.DeleteLocalAfterUpload, after.Archive.S3.DeleteLocalAfterUpload)
+	changedBool("s3.directUpload", before.Archive.S3.DirectUpload, after.Archive.S3.DirectUpload)
 	if before.Archive.S3.SecretKey != after.Archive.S3.SecretKey {
 		lines = append(lines, "s3.secretKey: changed")
 	}

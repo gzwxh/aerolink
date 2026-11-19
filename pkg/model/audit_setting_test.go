@@ -94,13 +94,23 @@ func TestApplySinkExclusivity(t *testing.T) {
 		}
 	}
 
-	t.Run("database 只落库", func(t *testing.T) {
+	t.Run("database 保留冷归档开关、关闭外部主存储", func(t *testing.T) {
 		AuditSink = AuditSinkDatabase
 		data := openAll()
 		if err := data.Normalize(); err != nil {
 			t.Fatalf("Normalize() error = %v", err)
 		}
-		assertOnlyChannel(t, data, "")
+		// 冷归档开关（parquet + S3）由管理员显式控制，database 下不强制关。
+		if !data.Archive.Enabled {
+			t.Error("database 下 Archive.Enabled 应保留管理员意图（冷归档开关）")
+		}
+		if !data.Archive.S3.Enabled {
+			t.Error("database 下 S3.Enabled 应保留管理员意图（冷归档远端副本）")
+		}
+		// 但 ES / VictoriaLogs / OpenObserve 是「替代 database 的主存储」，必须关掉。
+		if data.Archive.Elasticsearch.Enabled || data.Archive.VictoriaLogs.Enabled || data.Archive.OpenObserve.Enabled {
+			t.Error("database 下外部日志主存储（ES/VL/OO）必须关闭")
+		}
 	})
 
 	t.Run("parquet 只开本地与 S3", func(t *testing.T) {

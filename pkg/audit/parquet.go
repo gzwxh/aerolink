@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"hash/fnv"
@@ -201,6 +202,10 @@ func accessLogRowFromMessage(m model.AuditMessage) accessLogRow {
 // 返回错误只记日志：归档失败绝不回压写入路径。
 type FlushHook func(path string) error
 
+// memoryUploadHook 在「内存直传」模式下被调用：参数是相对 object key 与编码好的 parquet 字节，
+// 不再经过本地文件。返回错误只记日志（没有本地副本可补传，见 S3Archive.DirectUpload 的注释）。
+type memoryUploadHook func(name string, data []byte) error
+
 // ParquetWriter 是一个攒批写 parquet 的后台 writer。
 //
 // 生命周期：NewParquetWriter → go Run(ctx) → Close()。Append 只做内存投递；
@@ -215,6 +220,11 @@ type ParquetWriter[T parquetRow] struct {
 
 	hooksMu sync.RWMutex
 	hooks   []FlushHook
+
+	// memoryUpload 非 nil 时走「内存直传」：攒批编码进内存后直接交给它上传，不落本地文件。
+	// 与文件模式（AddFlushHook + 本地文件）互斥——内存模式下没有本地文件，也就没有基于
+	// 文件路径的 flush hook 可触发。
+	memoryUpload memoryUploadHook
 
 	// diskPool / uploadPool 见 archive_dispatcher.go：把「写盘」与「落盘后上传」从 Run 协程
 	// 里摘出去。为空表示在 Run 协程里同步执行——单测直接构造 writer 时走这条路。
@@ -255,6 +265,15 @@ func (w *ParquetWriter[T]) AddFlushHook(hook FlushHook) {
 	w.hooksMu.Lock()
 	defer w.hooksMu.Unlock()
 	w.hooks = append(w.hooks, hook)
+}
+
+// SetMemoryUpload 打开「内存直传」模式：落盘动作改为在内存编码 parquet 后回调 memoryUpload。
+// 与文件模式（AddFlushHook + 本地文件）互斥，只在不需要本地中转的部署里使用。
+func (w *ParquetWriter[T]) SetMemoryUpload(hook memoryUploadHook) {
+	if w == nil || hook == nil {
+		return
+	}
+	w.memoryUpload = hook
 }
 
 // SetDispatchers 注入写盘池与上传池（必须在 Run 之前调用）。
@@ -419,12 +438,19 @@ func archiveFileName(kind ParquetKind, at time.Time, seq uint64, token string) s
 // 先写 .tmp 再原子 rename：收集工具只识别终态文件，绝不会读到半写内容。
 func (w *ParquetWriter[T]) writeFile(rows []T) error {
 	now := time.Now()
+	name := archiveFileName(w.kind, now, w.seq.Add(1), archiveInstanceToken)
+
+	// 内存直传：不落本地文件，object key 用相对名 `<kind>/<年>/<月>/<日>/<file>.parquet`。
+	if w.memoryUpload != nil {
+		relName := filepath.ToSlash(filepath.Join(string(w.kind), now.Format("2006"), now.Format("01"), now.Format("02"), name))
+		return w.writeMemory(relName, rows)
+	}
+
 	dir := filepath.Join(w.dir, now.Format("2006"), now.Format("01"), now.Format("02"))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create archive directory %s: %w", dir, err)
 	}
 
-	name := archiveFileName(w.kind, now, w.seq.Add(1), archiveInstanceToken)
 	finalPath := filepath.Join(dir, name)
 	tmpPath := finalPath + ".tmp"
 
@@ -457,6 +483,19 @@ func (w *ParquetWriter[T]) writeFile(rows []T) error {
 	return nil
 }
 
+// writeMemory 把一批行编码成 parquet 字节，交给内存直传回调上传（不落本地文件）。
+func (w *ParquetWriter[T]) writeMemory(relName string, rows []T) error {
+	var buf bytes.Buffer
+	writer := parquet.NewGenericWriter[T](&buf)
+	if _, err := writer.Write(rows); err != nil {
+		return fmt.Errorf("failed to encode parquet data: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("failed to finalize parquet data: %w", err)
+	}
+	return w.memoryUpload(relName, buf.Bytes())
+}
+
 // submitWrite 把一批行交给写盘池（未注入池时同步写）。写盘结果只计数与告警，绝不回压写入路径。
 func (w *ParquetWriter[T]) submitWrite(rows []T) {
 	write := func() {
@@ -466,6 +505,16 @@ func (w *ParquetWriter[T]) submitWrite(rows []T) {
 			return
 		}
 		w.written.Add(int64(len(rows)))
+	}
+
+	// 内存直传：编码 + 上传都以网络 IO 为主，走上传池而不是写盘池（本地 IO）。
+	if w.memoryUpload != nil {
+		if w.uploadPool == nil {
+			write()
+			return
+		}
+		w.uploadPool.Submit(write)
+		return
 	}
 
 	if w.diskPool == nil {

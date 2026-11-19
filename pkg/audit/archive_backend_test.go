@@ -115,6 +115,55 @@ func TestCurrentArchiveSearcherRejectsForeignBackend(t *testing.T) {
 	}
 }
 
+// database 开启冷归档后，审计记录额外落 parquet（+ 可选 S3），归档检索应放行 DuckDB 后端；
+// 未开启冷归档时仍无归档可查、任何后端都拒绝。
+func TestArchiveBackendDatabaseColdArchive(t *testing.T) {
+	setupRetentionTestDB(t)
+
+	originalSink := model.AuditSink
+	t.Cleanup(func() { model.AuditSink = originalSink })
+	model.AuditSink = model.AuditSinkDatabase
+
+	setting := model.DefaultAuditSettingData()
+	setting.Archive.Enabled = true
+	setting.Archive.LocalDir = t.TempDir()
+	setting.Archive.S3.Enabled = true
+	setting.Archive.S3.Endpoint = "http://minio:9000"
+	setting.Archive.S3.Bucket = "aerolink-audit"
+	if _, err := model.UpdateAuditSetting(setting); err != nil {
+		t.Fatalf("saving audit setting: %v", err)
+	}
+
+	if !DuckDBAvailable() {
+		t.Skip("duckdb CLI 未安装，跳过")
+	}
+
+	statuses, defaultBackend, err := describeArchiveBackends()
+	if err != nil {
+		t.Fatalf("describeArchiveBackends() error = %v", err)
+	}
+	if defaultBackend != backendDuckDB {
+		t.Errorf("database 冷归档时默认后端应 = duckdb, got %q", defaultBackend)
+	}
+	available := make([]archiveBackendName, 0, len(statuses))
+	for _, status := range statuses {
+		if status.Available {
+			available = append(available, status.Name)
+		}
+	}
+	if !containsBackend(available, backendDuckDB) {
+		t.Errorf("database 冷归档时 duckdb 应可用, got %v", available)
+	}
+
+	searcher, backend, err := currentArchiveSearcher(backendAuto)
+	if err != nil {
+		t.Fatalf("currentArchiveSearcher(auto) error = %v", err)
+	}
+	if backend != backendDuckDB || searcher == nil {
+		t.Errorf("database 冷归档时 auto 应选 duckdb, got %q / %v", backend, searcher)
+	}
+}
+
 // `?backend=` 只认已知取值，未知/缺省一律按 auto（不报错刷接口，交给 auto 去挑）。
 func TestParseArchiveBackend(t *testing.T) {
 	cases := map[string]archiveBackendName{

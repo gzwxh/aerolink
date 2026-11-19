@@ -167,6 +167,10 @@ type S3Archive struct {
 	// DeleteLocalAfterUpload 为真时上传成功即删本地文件（本地只作中转）；默认 false：
 	// 本地按 RetentionDays 留几天、S3 作为长期归档，两边都能查（本地优先、缺失回落 S3）。
 	DeleteLocalAfterUpload bool `json:"deleteLocalAfterUpload" yaml:"deleteLocalAfterUpload"`
+	// DirectUpload 为真时不落本地 parquet 中转文件：攒批在内存里编码成 parquet 后直接上传
+	// （本地不落盘）。用于无本地磁盘 / 省掉本地中转的部署；上传失败时这一批只计数丢弃
+	// （没有本地副本可补传）——数据库仍是权威、冷归档是尽力而为副本，丢的只是副本。
+	DirectUpload bool `json:"directUpload" yaml:"directUpload"`
 }
 
 // ESArchive 是 Elasticsearch 检索面的设置（按天索引 `<indexPrefix>-YYYY.MM.DD`）。
@@ -433,18 +437,28 @@ func (d *AuditSettingData) Normalize() error {
 	return nil
 }
 
-// ApplySinkExclusivity 按当前 sink 落定各通道开关（**五者互斥**）。
+// ApplySinkExclusivity 按当前 sink 落定各通道开关。
 //
-// 为什么由 sink 说了算：sink 是启动期由配置文件指定、界面只读的唯一权威，而各通道开关是
-// 「要不要再写一份到别处」的意向。允许共存就会出现「库里有、parquet 有、ES 也有一份」——
-// 三处都不全，而哪一份是权威取决于看的人，审计场景里这正是要避免的。
+// 非 database 的四种 sink 仍**互斥**：sink 是启动期由配置文件指定、界面只读的唯一权威，
+// 各通道开关是「要不要再写一份到别处」的意向，允许共存就会出现「库里有、parquet 有、ES 也
+// 有一份」——三处都不全，哪一份是权威取决于看的人，审计场景里这正是要避免的。
+//
+// database 是唯一例外：它始终落库（权威），归档开关改由管理员显式控制，表示「在落库之外
+// 再异步冷归档一份到 parquet / S3(COS)」的**异介质副本**，所以这里不覆盖这两个开关。但
+// ES / VictoriaLogs / OpenObserve 是「替代 database 的主存储」，database 下仍必须关掉。
 //
 // 调用点：Normalize（保存时落定，库里存的就是生效值）与 GET 响应（展示真实生效值）。
 func (d *AuditSettingData) ApplySinkExclusivity() {
-	d.Archive.Enabled = AuditSinkUsesParquet()
+	// 三种外部日志主存储与 sink 永远互斥：无论哪种 sink，都只允许 sink 对应的那一条生效。
 	d.Archive.Elasticsearch.Enabled = AuditSinkUsesElasticsearch()
 	d.Archive.VictoriaLogs.Enabled = AuditSinkUsesVictoriaLogs()
 	d.Archive.OpenObserve.Enabled = AuditSinkUsesOpenObserve()
+
+	if AuditSinkUsesDatabase() {
+		// 冷归档开关（Archive.Enabled / S3.Enabled）由管理员显式控制，不在这里覆盖。
+		return
+	}
+	d.Archive.Enabled = AuditSinkUsesParquet()
 	if !d.Archive.Enabled {
 		// S3 是 parquet 的远端副本：没有 parquet 通道就没有可同步的文件。
 		d.Archive.S3.Enabled = false

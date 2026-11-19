@@ -65,10 +65,20 @@ func localArchiveDir(setting *model.AuditSettingData) string {
 	return archiveDefaultDir
 }
 
+// usesParquetArchive 报告「当前是否会写 parquet 归档文件」：sink=parquet（主存储），或
+// sink=database 且管理员显式开启冷归档（异介质副本）。DuckDB 检索后端据此判断有没有文件可查。
+func usesParquetArchive(setting *model.AuditSettingData) bool {
+	if model.AuditSinkUsesParquet() {
+		return true
+	}
+	return model.AuditSinkUsesDatabase() && setting.Archive.Enabled
+}
+
 // describeArchiveBackends 汇总各后端的可用性并给出默认选择。
 //
-// 每个后端都**只在自己那条通道被 sink 选中时**可用（五者互斥，见方案 §12.13）：
-// parquet 目录里没有新数据、ES 里也没有新数据时，让它们出现在界面上只会误导。
+// 每个后端都**只在自己那条通道被选中时**可用：非 database 的四种 sink 互斥（见方案 §12.13）；
+// database 只有在开启冷归档（Archive.Enabled）时才写 parquet 文件、DuckDB 才可查。让一个
+// 根本没写数据的后端出现在界面上只会误导。
 func describeArchiveBackends() ([]archiveBackendStatus, archiveBackendName, error) {
 	setting, err := model.GetAuditSetting()
 	if err != nil {
@@ -87,8 +97,8 @@ func describeArchiveBackends() ([]archiveBackendStatus, archiveBackendName, erro
 
 	duckdb := archiveBackendStatus{Name: backendDuckDB}
 	switch {
-	case !model.AuditSinkUsesParquet():
-		duckdb.Reason = fmt.Sprintf("audit sink is %q: records are not written to parquet files", model.AuditSink)
+	case !usesParquetArchive(setting):
+		duckdb.Reason = fmt.Sprintf("audit sink is %q and no parquet archive is configured: records are not written to parquet files", model.AuditSink)
 	case !DuckDBAvailable():
 		duckdb.Reason = "duckdb CLI is not installed on the server"
 	case localArchiveDir(setting) == "" && !setting.Archive.S3.Enabled:
@@ -168,11 +178,11 @@ func currentArchiveSearcher(preferred archiveBackendName) (archiveSearcher, arch
 		return nil, backendAuto, fmt.Errorf("failed to load audit setting: %w", err)
 	}
 
-	// sink=database：记录在库里，归档通道按互斥整体关闭（见方案 §12.13）。明确告知不是
-	// 「故障」而是「这个部署没有归档」——界面据「unavailable」给出配置引导而不是报错。
-	if model.AuditSinkUsesDatabase() {
+	// sink=database 且未开启冷归档：记录在库里、没有归档可查。明确告知不是「故障」而是
+	// 「这个部署没开冷归档」——界面据「unavailable」给出配置引导而不是报错。
+	if model.AuditSinkUsesDatabase() && !setting.Archive.Enabled {
 		return nil, backendAuto, fmt.Errorf(
-			"archive search is unavailable: audit sink is %q, audit records are stored in the database",
+			"archive search is unavailable: audit sink is %q and cold archiving is not enabled",
 			model.AuditSink)
 	}
 
@@ -215,7 +225,7 @@ func explicitArchiveSearcher(preferred archiveBackendName, setting *model.AuditS
 		}
 		return sink, backendElasticsearch, nil
 	case backendDuckDB:
-		if !model.AuditSinkUsesParquet() {
+		if !usesParquetArchive(setting) {
 			return nil, backendAuto, fmt.Errorf("archive search is unavailable: audit sink is %q, records are not written to parquet files", model.AuditSink)
 		}
 		backend, err := NewDuckDBBackend(localArchiveDir(setting), setting.Archive.S3)

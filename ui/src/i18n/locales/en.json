@@ -3689,7 +3689,7 @@
         "title": "Archive (parquet + external storage)",
         "description": "Archive audit and access logs as parquet files, optionally upload them to S3-compatible object storage, or write them to Elasticsearch / VictoriaLogs / OpenObserve. Archiving is best-effort: failures never affect local persistence or slow down requests.",
         "enabled": "Enable archiving",
-        "enabledHint": "Decided by the storage mode: parquet files are written only when sink=parquet, and this cannot be turned on otherwise.",
+        "enabledHint": "With sink=parquet this follows the storage mode (always on); with sink=database it can be explicitly enabled as a cold-archive copy — asynchronously archiving a second copy to parquet / S3 alongside the database. It cannot be enabled under other sinks.",
         "localDir": "Local directory",
         "localDirHint": "Leave empty to use the directory from AEROLINK_AUDIT_ARCHIVE_DIR.",
         "retentionDays": "Local retention (days)",
@@ -3704,6 +3704,7 @@
         "includeResourceYAML": "Archive resource manifests (YAML)",
         "includeResourceYAMLHint": "Off by default: the before/after YAML can be large and would bloat the archive files. Enable only when you need the exact manifests.",
         "includeResourceYAMLValue": "Write YAML into the operation log archive",
+        "includeResourceYAMLHintDatabase": "Database cold archiving always includes the before/after resource manifests (required for compliance tracing) and cannot be turned off.",
         "accessLog": {
           "title": "Access log archive",
           "description": "Access logs are much larger, so they keep a shorter default retention and are configured separately.",
@@ -3717,7 +3718,7 @@
           "flushRows": "Max rows per batch",
           "flushBytes": "Max bytes per batch",
           "flushBytesHint": "0 means no byte-based trigger.",
-          "enabledHint": "With parquet this decides whether access logs are archived; with sink=database there is no archive channel and access logs go to stdout only."
+          "enabledHint": "With parquet this decides whether access logs are archived; with sink=database and cold archiving off, access logs go to stdout only."
         },
         "s3": {
           "title": "S3 archive (object storage)",
@@ -3740,7 +3741,9 @@
           "useTLS": "Use TLS (https)",
           "deleteLocal": "Delete local file after upload",
           "deleteLocalHint": "Off by default: local files are kept for the retention days while every file is also synced to S3; when enabled, local disk becomes staging only (S3 is the sole long-term copy). Files are kept on failure for retry.",
-          "enabledHint": "S3 is the remote copy of parquet: there is nothing to sync unless sink=parquet."
+          "directUpload": "Direct upload (no local file)",
+          "directUploadHint": "When enabled, no local staging file is written: each batch is encoded to parquet in memory and uploaded directly to object storage. Suitable for deployments without local disk. A failed upload drops only that batch (counted); the database remains the authority and cold archiving is best-effort.",
+          "enabledHint": "S3 is the remote copy of parquet: it follows archiving under sink=parquet, and can also be enabled for database cold archiving; there is nothing to sync under other sinks."
         },
         "es": {
           "title": "Elasticsearch (search)",
@@ -3759,7 +3762,7 @@
           "skipVerifyHint": "Enable when the server uses a self-signed certificate."
         },
         "sinkNotice": {
-          "database": "The storage mode is \"database\": audit records are stored in the database only, so none of the archive channels below (parquet / S3 / Elasticsearch / VictoriaLogs / OpenObserve) take effect. Their switches follow the storage mode and cannot be changed here.",
+          "database": "The storage mode is \"database\": audit records are stored in the database as the authoritative store (resource change history, platform operation times, etc. all work). You may additionally enable \"archive + S3\" to cold-archive records to object storage (e.g. COS, ideally with object lock for long-term immutability); Elasticsearch / VictoriaLogs / OpenObserve are mutually exclusive with database and do not take effect.",
           "parquet": "The storage mode is \"parquet\": audit records are written to local parquet files only (S3 is an optional remote copy); the Elasticsearch / VictoriaLogs / OpenObserve channels do not take effect.",
           "elasticsearch": "The storage mode is \"Elasticsearch\": audit records are written to ES only; the parquet / S3 / VictoriaLogs / OpenObserve channels do not take effect.",
           "victorialogs": "The storage mode is \"VictoriaLogs\": audit records are written to VictoriaLogs only (single stream; expiry is handled by the server retention period); the parquet / S3 / Elasticsearch / OpenObserve channels do not take effect.",
@@ -3829,7 +3832,7 @@
         "login": "Login logs",
         "access": "Access logs"
       },
-      "disabledSinkHint": "The storage mode is \"database\" (auditSink=database, the default): records live in the database, so there is no archive to search, and the archive channel switches are forced off. To use archive search, set auditSink to parquet / elasticsearch / victorialogs / openobserve in the config file and restart."
+      "disabledSinkHint": "The storage mode is \"database\" (auditSink=database, the default): records live in the database, and archive search only searches the archived copy. There is nothing to search until you enable the \"archive + S3\" cold archive (Audit Settings → Archive). Elasticsearch / VictoriaLogs / OpenObserve are mutually exclusive with database."
     },
     "fileOperations": {
       "title": "File Operation Logs",

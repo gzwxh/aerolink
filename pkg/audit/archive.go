@@ -116,9 +116,10 @@ func reloadArchiveConfig() {
 		archiveCurrent.stop()
 		archiveCurrent = nil
 	}
-	// sink=database：审计只落库，归档通道**整体不建**（五者互斥，见方案 §12.13）。
-	// 这也是为什么这里不再看 archive.enabled：那是「要不要再写一份」的意向，而 sink 是唯一权威。
-	if model.AuditSinkUsesDatabase() {
+	// sink=database：审计仍落库（权威），归档是**可选冷归档副本**——仅当管理员显式开启
+	// Archive.Enabled 时才建 parquet(+S3/COS) 运行时；否则维持现状（不建）。非 database 的
+	// 四种 sink 仍互斥，由 newArchiveRuntime 按 sink 建各自的主存储通道。
+	if model.AuditSinkUsesDatabase() && !setting.Archive.Enabled {
 		return
 	}
 	if !archiveStarted {
@@ -178,11 +179,15 @@ func newArchiveRuntime(parent context.Context, archive model.ArchiveSetting, def
 	if dir == "" {
 		dir = defaultDir
 	}
-	if dir == "" {
+	// 内存直传（本地不落盘）不需要本地目录；其余路径必须要有落点，否则 fail-closed 拒绝启动。
+	directUpload := archive.S3.Enabled && archive.S3.DirectUpload
+	if dir == "" && !directUpload {
 		return nil, errors.New("archive directory is not configured (set localDir or AEROLINK_AUDIT_ARCHIVE_DIR)")
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("failed to create archive directory %s: %w", dir, err)
+	if dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("failed to create archive directory %s: %w", dir, err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(parent)
@@ -197,8 +202,10 @@ func newArchiveRuntime(parent context.Context, archive model.ArchiveSetting, def
 		accessRetain:  archive.AccessLog.RetentionDays,
 		accessMaxByte: archive.AccessLog.MaxBytes,
 		flushInterval: flushInterval,
-		includeYAML:   archive.IncludeResourceYAML,
-		cancel:        cancel,
+		// database 冷归档强制带上资源 YAML：等保溯源要留变更前后清单（主存储里已有，冷归档
+		// 副本同样保留）；非 database 仍由 archive.IncludeResourceYAML 决定。
+		includeYAML: archive.IncludeResourceYAML || model.AuditSinkUsesDatabase(),
+		cancel:      cancel,
 	}
 
 	// 通道由 sink **唯一**决定（五选一互斥，见方案 §12.13 与 plans/2026-09-21-新增审计落地方式.md）：
@@ -211,6 +218,9 @@ func newArchiveRuntime(parent context.Context, archive model.ArchiveSetting, def
 	var newDocSink func() (documentSink, error)
 	switch model.AuditSink {
 	case model.AuditSinkParquet:
+		useParquet = true
+	case model.AuditSinkDatabase:
+		// 冷归档：database 是主存储（已落库），这里只做 parquet 冷副本 + 可选 S3/COS，不建 docSink。
 		useParquet = true
 	case model.AuditSinkElasticsearch:
 		// ES 通道由 sink 决定：不依赖那个由 sink 推导的开关，升级前存下的 enabled=false 也照样生效。
@@ -255,9 +265,17 @@ func newArchiveRuntime(parent context.Context, archive model.ArchiveSetting, def
 			return nil, err
 		}
 		runtime.s3 = sink
-		hook := s3FlushHook(dir, sink)
-		for _, writer := range runtime.writers() {
-			writer.AddFlushHook(hook)
+		if archive.S3.DirectUpload {
+			// 内存直传：本地不落盘，攒批在内存里编码后直接上传对象存储。
+			hook := s3MemoryUploadHook(sink)
+			for _, writer := range runtime.writers() {
+				writer.SetMemoryUpload(hook)
+			}
+		} else {
+			hook := s3FlushHook(dir, sink)
+			for _, writer := range runtime.writers() {
+				writer.AddFlushHook(hook)
+			}
 		}
 	}
 
@@ -332,6 +350,7 @@ func (r *archiveRuntime) runs() []func(context.Context) {
 // 避免在泛型 writer 上写类型分支。
 type flushHookTarget interface {
 	AddFlushHook(FlushHook)
+	SetMemoryUpload(memoryUploadHook)
 	SetDispatchers(disk, upload *archiveDispatcher)
 }
 
@@ -455,6 +474,16 @@ func (r *archiveRuntime) runDocWriter(ctx context.Context) {
 				flush()
 			}
 		}
+	}
+}
+
+// s3MemoryUploadHook 返回「内存直传」的上传回调：把内存里的 parquet 字节直接上传对象存储，
+// 不经过本地文件。object key 用相对名（`<kind>/<年>/<月>/<日>/<file>.parquet`）。
+func s3MemoryUploadHook(sink *S3Sink) memoryUploadHook {
+	return func(name string, data []byte) error {
+		uploadCtx, cancel := context.WithTimeout(context.Background(), archiveWriteTimeout)
+		defer cancel()
+		return sink.UploadBytes(uploadCtx, name, data)
 	}
 }
 

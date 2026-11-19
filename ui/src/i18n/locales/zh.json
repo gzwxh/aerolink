@@ -446,7 +446,10 @@
     "pagination": {
       "previous": "上一页",
       "next": "下一页",
-      "page": "第 {{current}} / {{total}} 页"
+      "page": "第 {{current}} / {{total}} 页",
+      "jumpTo": "跳至",
+      "pageUnit": "页",
+      "jumpToLabel": "跳转到指定页"
     },
     "namespaceSelector": {
       "all": "所有 Namespace",
@@ -1229,6 +1232,9 @@
     "selectRow": "选择该行",
     "selectGroupRows": "选择本组全部行",
     "rowsTotal": "共 {{count}} 行",
+    "rowsLoaded": "已加载 {{count}} 行（还有更多）",
+    "loadMore": "加载更多",
+    "loadingMore": "加载中…",
     "rowsFiltered": "显示 {{shown}} / {{total}} 行",
     "filteredBy": "（筛选：“{{query}}”）",
     "rowsPerPage": "每页行数",
@@ -3795,7 +3801,7 @@
         "title": "归档（parquet + 外部存储）",
         "description": "把审计与访问日志归档成 parquet 文件，可选上传到 S3 兼容对象存储，或写入 Elasticsearch / VictoriaLogs / OpenObserve。归档是尽力而为：失败不会影响本地落库，也不会拖慢请求。",
         "enabled": "启用归档",
-        "enabledHint": "由存储方式决定：只有 sink=parquet 时才写 parquet 文件，其它存储方式下不可开启。",
+        "enabledHint": "sink=parquet 时由存储方式决定（必开）；sink=database 时可作为冷归档副本显式开启——在落库之外再异步归档一份到 parquet / S3。其它存储方式下不可开启。",
         "localDir": "本地目录",
         "localDirHint": "留空使用环境变量 AEROLINK_AUDIT_ARCHIVE_DIR 指定的默认目录。",
         "retentionDays": "本地保留天数",
@@ -3810,6 +3816,7 @@
         "includeResourceYAML": "归档资源清单（YAML）",
         "includeResourceYAMLHint": "默认关闭：变更前后的 YAML 可能很大，会把归档文件撑大。仅在需要溯源时开启。",
         "includeResourceYAMLValue": "在操作日志归档中写入 YAML",
+        "includeResourceYAMLHintDatabase": "数据库冷归档会强制带上变更前后的资源清单（等保溯源需要），不可关闭。",
         "accessLog": {
           "title": "访问日志归档",
           "description": "访问日志量级大，默认保留期更短，与审计日志分开配置。",
@@ -3823,7 +3830,7 @@
           "flushRows": "单批最大条数",
           "flushBytes": "单批最大字节数",
           "flushBytesHint": "0 表示不按字节触发。",
-          "enabledHint": "parquet 下由这里决定是否写访问日志；sink=database 时没有归档通道，访问日志只走标准输出。"
+          "enabledHint": "parquet 下由这里决定是否写访问日志；sink=database 未开启冷归档时，访问日志只走标准输出。"
         },
         "s3": {
           "title": "S3 归档（对象存储）",
@@ -3846,7 +3853,9 @@
           "useTLS": "使用 TLS（https）",
           "deleteLocal": "上传成功后删除本地文件",
           "deleteLocalHint": "默认关闭：本地按「本地保留天数」留几天，同时把全部文件同步到 S3；开启后本地仅作中转（S3 成为唯一长期副本）。失败时保留本地、等待补传。",
-          "enabledHint": "S3 是 parquet 的远端副本：只有 sink=parquet 时才有可同步的文件。"
+          "directUpload": "内存直传（不落本地）",
+          "directUploadHint": "开启后不再在本地落中转文件，攒批在内存里编码成 parquet 后直接上传对象存储。适合无本地磁盘的部署；上传失败的那一批只计数丢弃（数据库仍是权威、冷归档是尽力而为副本）。",
+          "enabledHint": "S3 是 parquet 的远端副本：sink=parquet 随归档开启，sink=database 冷归档时也可开启；其它存储方式下没有可同步的文件。"
         },
         "es": {
           "title": "Elasticsearch（检索）",
@@ -3865,7 +3874,7 @@
           "skipVerifyHint": "服务端使用自签证书时开启。"
         },
         "sinkNotice": {
-          "database": "当前存储方式为「数据库」：审计记录只落库，下面的归档通道（parquet / S3 / Elasticsearch / VictoriaLogs / OpenObserve）都不生效，开关由存储方式决定、不可修改。",
+          "database": "当前存储方式为「数据库」：审计记录落库为主存储（资源变更历史、平台操作时间等能力都可用）。可额外开启「归档 + S3」把记录冷归档到对象存储（如 COS，建议开对象锁定做长期不可变留存）；Elasticsearch / VictoriaLogs / OpenObserve 与数据库互斥、不生效。",
           "parquet": "当前存储方式为「parquet」：审计记录只落本地 parquet 文件（S3 是可选远端副本）；Elasticsearch / VictoriaLogs / OpenObserve 通道不生效。",
           "elasticsearch": "当前存储方式为「Elasticsearch」：审计记录只写 ES；parquet / S3 / VictoriaLogs / OpenObserve 通道不生效。",
           "victorialogs": "当前存储方式为「VictoriaLogs」：审计记录只写 VictoriaLogs（单 stream，过期由服务端保留策略负责）；parquet / S3 / Elasticsearch / OpenObserve 通道不生效。",
@@ -3935,7 +3944,7 @@
         "login": "登录日志",
         "access": "访问日志"
       },
-      "disabledSinkHint": "当前审计落地方式是「数据库」（auditSink=database，默认）：记录都在库里，没有归档可查，归档通道的开关也已按互斥关闭。要用归档检索，请在配置文件里把 auditSink 改成 parquet / elasticsearch / victorialogs / openobserve 后重启。"
+      "disabledSinkHint": "当前审计落地方式是「数据库」（auditSink=database，默认）：记录都在库里，归档检索只查归档出去的副本。未开启「归档 + S3」冷归档时没有归档可查；开启后（审计设置 → 归档）即可检索。Elasticsearch / VictoriaLogs / OpenObserve 与数据库互斥。"
     },
     "fileOperations": {
       "title": "文件操作日志",

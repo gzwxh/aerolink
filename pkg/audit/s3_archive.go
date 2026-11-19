@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -134,6 +135,19 @@ func (s *S3Sink) Upload(ctx context.Context, name, localPath string) error {
 
 	key := s.ObjectKey(name)
 	if _, err := s.client.PutObject(ctx, s.config.Bucket, key, file, info.Size(), minio.PutObjectOptions{
+		ContentType: "application/octet-stream",
+	}); err != nil {
+		return fmt.Errorf("failed to upload %s: %w", key, err)
+	}
+	return nil
+}
+
+// UploadBytes 上传一段内存里的对象数据（用于「本地不落盘」的内存直传）。
+//
+// 与 Upload 的区别：不读本地文件，直接从内存字节流上传。object key 的拼法与 Upload 一致。
+func (s *S3Sink) UploadBytes(ctx context.Context, name string, data []byte) error {
+	key := s.ObjectKey(name)
+	if _, err := s.client.PutObject(ctx, s.config.Bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: "application/octet-stream",
 	}); err != nil {
 		return fmt.Errorf("failed to upload %s: %w", key, err)

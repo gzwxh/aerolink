@@ -23,8 +23,9 @@ func archiveSettingOpenAll() model.ArchiveSetting {
 	return archive
 }
 
-// 通道由 sink **唯一**决定（五者互斥）：parquet 只建本地 writer（+ S3 远端副本），
-// elasticsearch / victorialogs / openobserve 各只建自己的外部日志存储，database 连归档运行时都不建。
+// 通道由 sink 决定：非 database 的四种 sink 仍互斥（parquet 只建本地 writer + S3 远端副本，
+// elasticsearch / victorialogs / openobserve 各只建自己的外部日志存储）；database 是主存储，
+// 仅在开启冷归档（Archive.Enabled）时额外建 parquet + S3 副本，不建外部日志存储。
 func TestNewArchiveRuntimeFollowsSink(t *testing.T) {
 	originalSink := model.AuditSink
 	t.Cleanup(func() { model.AuditSink = originalSink })
@@ -32,12 +33,45 @@ func TestNewArchiveRuntimeFollowsSink(t *testing.T) {
 	dir := t.TempDir()
 	archive := archiveSettingOpenAll()
 
-	t.Run("database 不建任何归档通道", func(t *testing.T) {
+	t.Run("database 冷归档只建 parquet + S3", func(t *testing.T) {
 		model.AuditSink = model.AuditSinkDatabase
 		runtime, err := newArchiveRuntime(context.Background(), archive, dir)
-		if err == nil {
-			runtime.stop()
-			t.Fatal("sink=database 时不该建出归档运行时（记录只在库里）")
+		if err != nil {
+			t.Fatalf("newArchiveRuntime() error = %v", err)
+		}
+		t.Cleanup(runtime.stop)
+
+		for name, writer := range map[string]any{
+			"operation": runtime.operation, "login": runtime.login, "password": runtime.password,
+		} {
+			if writer == nil {
+				t.Errorf("database 冷归档时应建好 %s writer", name)
+			}
+		}
+		if runtime.docSink != nil {
+			t.Error("database 冷归档时不该建外部日志存储（ES/VL/OO 与 database 互斥）")
+		}
+		if runtime.s3 == nil {
+			t.Error("database 冷归档 + S3 开启时应建 S3 sink")
+		}
+	})
+
+	t.Run("database 冷归档 + DirectUpload 走内存直传", func(t *testing.T) {
+		model.AuditSink = model.AuditSinkDatabase
+		direct := archiveSettingOpenAll()
+		direct.S3.DirectUpload = true
+		direct.LocalDir = "" // 内存直传不需要本地目录
+		runtime, err := newArchiveRuntime(context.Background(), direct, "")
+		if err != nil {
+			t.Fatalf("newArchiveRuntime() error = %v", err)
+		}
+		t.Cleanup(runtime.stop)
+
+		if runtime.operation == nil || runtime.operation.memoryUpload == nil {
+			t.Error("DirectUpload 时应给 parquet writer 挂内存直传回调")
+		}
+		if runtime.s3 == nil {
+			t.Error("DirectUpload 仍需 S3 sink")
 		}
 	})
 

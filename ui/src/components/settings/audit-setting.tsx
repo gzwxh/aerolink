@@ -78,6 +78,7 @@ const DEFAULT_FORM: AuditSettingData = {
       prefix: '',
       // 默认与后端一致（false = 本地留几天 + 全量同步 S3）；仅在首次响应到达前作为占位。
       deleteLocalAfterUpload: false,
+      directUpload: false,
     },
     elasticsearch: {
       enabled: false,
@@ -197,6 +198,7 @@ export function AuditSetting() {
   const sink = data?.sink ?? 'database'
   // 五条通道互斥（见 docs/dev/plans/2026-09-20-审计日志parquet归档.md §12.13）：
   // 通道开关由存储方式决定（配置文件指定、界面只读），不是管理员可改的意向。
+  const databaseSink = sink === 'database'
   const parquetSink = sink === 'parquet'
   const elasticsearchSink = sink === 'elasticsearch'
   const victoriaLogsSink = sink === 'victorialogs'
@@ -927,7 +929,7 @@ export function AuditSetting() {
           >
             <Switch
               checked={archive.enabled}
-              disabled={readOnly || !parquetSink}
+              disabled={readOnly || (!parquetSink && !databaseSink)}
               onCheckedChange={(checked) => patchArchive({ enabled: checked })}
             />
           </SettingRow>
@@ -1064,14 +1066,18 @@ export function AuditSetting() {
               '归档资源清单（YAML）'
             )}
             hint={t(
-              'audit.setting.archive.includeResourceYAMLHint',
-              '默认关闭：变更前后的 YAML 可能很大，会把归档文件撑大。仅在需要溯源时开启。'
+              databaseSink
+                ? 'audit.setting.archive.includeResourceYAMLHintDatabase'
+                : 'audit.setting.archive.includeResourceYAMLHint',
+              databaseSink
+                ? '数据库冷归档会强制带上变更前后的资源清单（等保溯源需要），不可关闭。'
+                : '默认关闭：变更前后的 YAML 可能很大，会把归档文件撑大。仅在需要溯源时开启。'
             )}
           >
             <div className="flex items-center gap-2">
               <Switch
-                checked={archive.includeResourceYAML}
-                disabled={readOnly}
+                checked={databaseSink || archive.includeResourceYAML}
+                disabled={readOnly || databaseSink}
                 onCheckedChange={(checked) =>
                   patchArchive({ includeResourceYAML: checked })
                 }
@@ -1102,7 +1108,7 @@ export function AuditSetting() {
           >
             <Switch
               checked={archive.s3.enabled}
-              disabled={readOnly || !parquetSink}
+              disabled={readOnly || (!parquetSink && !databaseSink)}
               onCheckedChange={(checked) => patchS3({ enabled: checked })}
             />
           </SettingRow>
@@ -1250,6 +1256,23 @@ export function AuditSetting() {
               onCheckedChange={(checked) =>
                 patchS3({ deleteLocalAfterUpload: checked })
               }
+            />
+          </SettingRow>
+
+          <SettingRow
+            label={t(
+              'audit.setting.archive.s3.directUpload',
+              '内存直传（不落本地）'
+            )}
+            hint={t(
+              'audit.setting.archive.s3.directUploadHint',
+              '开启后不再在本地落中转文件，攒批在内存里编码成 parquet 后直接上传对象存储。适合无本地磁盘的部署；上传失败的那一批只计数丢弃（数据库仍是权威、冷归档是尽力而为副本）。'
+            )}
+          >
+            <Switch
+              checked={archive.s3.directUpload}
+              disabled={readOnly}
+              onCheckedChange={(checked) => patchS3({ directUpload: checked })}
             />
           </SettingRow>
         </SettingGroup>
