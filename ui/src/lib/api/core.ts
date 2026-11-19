@@ -47,6 +47,8 @@ export const fetchResources = <T>(
   opts?: {
     limit?: number
     continueToken?: string
+    /** 真分页（配合 limit / continue）：服务端会绕过 informer 缓存。 */
+    paginate?: boolean
     labelSelector?: string
     fieldSelector?: string
     reduce?: boolean
@@ -60,6 +62,9 @@ export const fetchResources = <T>(
   }
   if (opts?.continueToken) {
     params.append('continue', opts.continueToken)
+  }
+  if (opts?.paginate) {
+    params.append('paginate', 'true')
   }
   if (opts?.labelSelector) {
     params.append('labelSelector', opts.labelSelector)

@@ -235,6 +235,44 @@ describe('ResourceTable batch delete progress', () => {
   })
 })
 
+describe('ResourceTable page jump', () => {
+  // 45 行 / 每页 20 行 = 3 页，够验证跳转与越界夹取。
+  const manyRows = Array.from({ length: 45 }, (_, index) => ({
+    metadata: { name: `svc-${index + 1}`, uid: `uid-${index + 1}` },
+  }))
+
+  beforeEach(() => {
+    tableData.rows = manyRows
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    tableData.rows = fakeRows
+    localStorage.clear()
+  })
+
+  it('jumps to the page typed in the footer input and clamps out-of-range values', async () => {
+    renderTable()
+    const user = userEvent.setup()
+
+    expect(screen.getByText('svc-1')).toBeInTheDocument()
+    expect(screen.queryByText('svc-21')).not.toBeInTheDocument()
+
+    const input = screen.getByLabelText('common.pagination.jumpToLabel')
+    await user.type(input, '2{Enter}')
+    await waitFor(() => {
+      expect(screen.getByText('svc-21')).toBeInTheDocument()
+    })
+
+    // 超出总页数时落到最后一页
+    await user.type(input, '99{Enter}')
+    await waitFor(() => {
+      expect(screen.getByText('svc-41')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('svc-21')).not.toBeInTheDocument()
+  })
+})
+
 describe('ResourceTable grouping', () => {
   const groupedRows = [
     { metadata: { name: 'ns-apisix', uid: 'g-1' } },

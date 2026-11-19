@@ -137,6 +137,11 @@ func (l controllerRuntimeLogSink) WithCallDepth(depth int) logr.LogSink {
 // K8sClient 保存 Kubernetes 客户端实例
 type K8sClient struct {
 	client.Client
+	// DirectClient 直连 apiserver（不经过 informer 缓存）。缓存不支持
+	// continue 分页：controller-runtime 的 cache reader 对带 continue 的
+	// List 直接报错，`limit` 也只是本地截断后塞一个假 token。需要真分页的
+	// 列表请求（limit / continue）必须走它。
+	DirectClient  client.Client
 	ClientSet     kubernetes.Interface
 	Configuration *rest.Config
 	MetricsClient *metricsclient.Clientset
@@ -199,16 +204,19 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 	cacheEnabled := os.Getenv("DISABLE_CACHE") != "true"
 	health := NewHealth()
 
+	// 直连客户端：供分页列表（limit / continue）使用，见 DirectClient 的说明。
+	directClient, err := client.New(config, client.Options{
+		Scheme: runtimeScheme,
+	})
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create direct client: %w", err)
+	}
+
 	var c client.Client
 	var informerCache cache.Cache
 	if !cacheEnabled {
-		c, err = client.New(config, client.Options{
-			Scheme: runtimeScheme,
-		})
-		if err != nil {
-			cancel()
-			return nil, fmt.Errorf("failed to create client: %w", err)
-		}
+		c = directClient
 	} else {
 		mgr, err := manager.New(config, manager.Options{
 			Scheme:         runtimeScheme,
@@ -262,6 +270,7 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 
 	return &K8sClient{
 		Client:        c,
+		DirectClient:  directClient,
 		ClientSet:     clientset,
 		Configuration: config,
 		MetricsClient: metricsClient,

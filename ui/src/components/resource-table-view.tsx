@@ -1,14 +1,16 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   flexRender,
   PaginationState,
   Table as TableInstance,
 } from '@tanstack/react-table'
+import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -65,6 +67,10 @@ interface ResourceTableViewProps<T> {
     columnId: string
     renderGroupHeader: (value: string, rowCount: number) => React.ReactNode
   }
+  /** 分批加载（「全部命名空间」）：还有未取回的条目时在表尾给出入口。 */
+  hasMore?: boolean
+  isLoadingMore?: boolean
+  onLoadMore?: () => void
 }
 
 export function ResourceTableView<T>({
@@ -89,8 +95,31 @@ export function ResourceTableView<T>({
   pageSizeOptions = [10, 20, 50, 100],
   renderRowDetails,
   grouping,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
 }: ResourceTableViewProps<T>) {
   const { t } = useTranslation()
+  const totalPages = Math.max(table.getPageCount(), 1)
+  // 页码跳转：输入框只是草稿，回车或失焦时提交并夹到 [1, totalPages]。
+  // 翻页、改每页行数后清空，占位符始终提示当前页。
+  const [pageInput, setPageInput] = useState('')
+
+  useEffect(() => {
+    setPageInput('')
+  }, [pagination.pageIndex, pagination.pageSize])
+
+  const commitPageJump = () => {
+    const requested = Number.parseInt(pageInput, 10)
+    setPageInput('')
+    if (!Number.isFinite(requested)) {
+      return
+    }
+    const pageIndex = Math.min(Math.max(requested, 1), totalPages) - 1
+    if (pageIndex !== pagination.pageIndex) {
+      setPagination((prev) => ({ ...prev, pageIndex }))
+    }
+  }
   // 可见列 size 之和：下面把每列宽度换算成它的占比（总宽恒为 100%）。
   // 这样列数再多、内容再长，表格都待在容器里，不会出现横向滚动。
   const totalColumnSize = table.getTotalSize() || 1
@@ -404,7 +433,8 @@ export function ResourceTableView<T>({
         </div>
       </div>
 
-      {dataLength > 0 && (
+      {/* 分批加载时即使当前批次被权限过滤成空，也要留住「加载更多」入口。 */}
+      {(dataLength > 0 || hasMore) && (
         <div
           ref={footerRef}
           className="flex flex-col gap-3 px-2 py-1 sm:flex-row sm:items-center sm:justify-between"
@@ -425,6 +455,11 @@ export function ResourceTableView<T>({
                   </span>
                 )}
               </>
+            ) : hasMore ? (
+              // 分批加载时没有「共 N 行」可报：总数要翻完才知道，只报已加载量。
+              t('resourceTable.rowsLoaded', '已加载 {{count}} 行（还有更多）', {
+                count: totalRowCount,
+              })
             ) : (
               t('resourceTable.rowsTotal', '共 {{count}} 行', {
                 count: totalRowCount,
@@ -432,6 +467,22 @@ export function ResourceTableView<T>({
             )}
           </div>
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 lg:w-fit">
+            {hasMore && onLoadMore && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {isLoadingMore
+                  ? t('resourceTable.loadingMore', '加载中…')
+                  : t('resourceTable.loadMore', '加载更多')}
+              </Button>
+            )}
             <div className="flex items-center justify-between gap-2 sm:justify-start">
               <span className="text-sm text-muted-foreground">
                 {t('resourceTable.rowsPerPage', '每页行数')}:
@@ -466,7 +517,7 @@ export function ResourceTableView<T>({
             <div className="flex items-center justify-center text-sm font-medium">
               {t('common.pagination.page', 'Page {{current}} of {{total}}', {
                 current: pagination.pageIndex + 1,
-                total: table.getPageCount() || 1,
+                total: totalPages,
               })}
             </div>
             <div className="flex items-center justify-end gap-2 sm:justify-start lg:ml-0">
@@ -495,6 +546,44 @@ export function ResourceTableView<T>({
                 →
               </Button>
             </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-end gap-2 sm:justify-start">
+                <span className="text-sm text-muted-foreground">
+                  {t('common.pagination.jumpTo', '跳至')}
+                </span>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  className="h-8 w-14 px-2 text-center text-sm"
+                  value={pageInput}
+                  maxLength={5}
+                  placeholder={`${pagination.pageIndex + 1}`}
+                  aria-label={t(
+                    'common.pagination.jumpToLabel',
+                    '跳转到指定页'
+                  )}
+                  onChange={(event) =>
+                    setPageInput(event.target.value.replace(/\D/g, ''))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitPageJump()
+                    } else if (event.key === 'Escape') {
+                      setPageInput('')
+                    }
+                  }}
+                  onBlur={() => {
+                    if (pageInput) {
+                      commitPageJump()
+                    }
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">
+                  {t('common.pagination.pageUnit', '页')}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}

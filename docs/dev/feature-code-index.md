@@ -46,7 +46,7 @@
 | 挂载与应用外壳 | `ui/src/main.tsx`、`ui/src/App.tsx` |
 | 路由表 | `ui/src/routes.tsx` |
 | 资源列表总分发 | `ui/src/pages/resource-list.tsx` |
-| 列表页的命名空间筛选 | `ui/src/components/resource-table-toolbar.tsx`（挂 `ui/src/components/selector/namespace-selector.tsx`）+ `ui/src/hooks/use-resource-table-state.ts`（`selectedNamespace` 可选多值「a,b」，多值时按 `_all` 拉取再前端过滤）。**约定：URL 的单段路径只能表达一个命名空间，多选值不写进 URL**；`/deployments` 另有「URL 里的命名空间是否存在」的守卫，判定时只认单值（见 `docs/dev/plans/2026-09-20-存储创建页加固.md` §7） |
+| 列表页的命名空间筛选 | `ui/src/components/resource-table-toolbar.tsx`（挂 `ui/src/components/selector/namespace-selector.tsx`）+ `ui/src/hooks/use-resource-table-state.ts`（`selectedNamespace` 可选多值「a,b」，多值时按 `_all` 拉取再前端过滤；默认值由 `/namespaces` 列表按 RBAC 解析，不再写死 `default`，解析完成前不发资源请求，见 `plans/2026-11-19-命名空间默认值与全命名空间分页加载.md`）。**约定：URL 的单段路径只能表达一个命名空间，多选值不写进 URL**；`/deployments` 另有「URL 里的命名空间是否存在」的守卫，判定时只认单值（见 `docs/dev/plans/2026-09-20-存储创建页加固.md` §7） |
 | 资源详情总分发 | `ui/src/pages/resource-detail.tsx` + `ui/src/pages/resource-definitions.tsx`（类型 → 专用页面映射） |
 | 资源目录（前端） | `ui/src/lib/resource-catalog.ts`（须与 `pkg/common/resource.go` 同步） |
 | 侧边栏菜单来源 | `ui/src/components/app-sidebar.tsx` + `ui/src/contexts/sidebar-config-context.tsx` + `ui/src/contexts/sidebar-config-defaults.ts` |
@@ -187,7 +187,7 @@
 
 1. **原子件**：`ui/src/components/ui/*`（shadcn 托管，只在需要改原语本身时动它）
 2. **表格三层**：
-   - `ui/src/components/resource-table.tsx`：列表状态、筛选、选择、工具栏、分页
+   - `ui/src/components/resource-table.tsx`：列表状态、筛选、选择、工具栏、分页；`_all` / 集群级资源（未选命名空间）由 `ui/src/hooks/use-paged-resources.ts` 分批加载（`limit` + `continue`，表尾「加载更多」），单命名空间仍是全量请求
    - `ui/src/components/resource-table-view.tsx`：行渲染入口（多数列表页走它）
    - `ui/src/components/action-table.tsx`：设置类表格
    - 列宽自定义（口径见 `plans/2026-10-15-表格列宽列序自定义.md`，其中列顺序拖拽已于 2026-10-16 取消）：列宽拖拽手柄 `ui/src/components/column-resize-handle.tsx`（ResourceTableView / ActionTable / SimpleTable 共用，视觉只走语义 token）；列宽偏好 hook——资源列表在 `use-resource-table-state.ts`（集群隔离 key），设置页表格用 `use-table-column-preferences.ts` 的 `useTableColumnSizing`（`useTableColumnOrder` 已删除）；列顺序固定为列定义顺序，表头不可拖；非 TanStack 的 `simple-table.tsx` 传 `storageKey` 即启用列宽拖拽（按列下标持久化）；齿轮菜单的「恢复默认列布局」（重置列宽）在 `table-column-toggle.tsx`

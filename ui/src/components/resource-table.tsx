@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ColumnDef,
   getCoreRowModel,
@@ -177,6 +177,7 @@ function ResourceTableContent<T>({
     setRefreshInterval,
     selectedNamespace,
     effectiveNamespace,
+    namespaceReady,
     useSSE,
     handleNamespaceChange,
     handleUseSSEChange,
@@ -190,9 +191,14 @@ function ResourceTableContent<T>({
     initialSorting,
   })
 
+  // 已经通知过父组件的命名空间：初始值由权限解析得出，不是用户点击，
+  // 但父组件同样需要知道（同步 URL、按同一个命名空间取辅助数据）。
+  const notifiedNamespaceRef = useRef<string | undefined>(undefined)
+
   // 在内置处理器执行后通知父组件（例如同步 URL）。
   const handleNamespaceChangeWrapper = useCallback(
     (value: string) => {
+      notifiedNamespaceRef.current = value
       handleNamespaceChange(value)
       onNamespaceChange?.(value)
     },
@@ -231,6 +237,9 @@ function ResourceTableContent<T>({
     error: fetchedError,
     refetch: fetchedRefetch,
     isConnected: fetchedIsConnected,
+    hasMore: fetchedHasMore,
+    isLoadingMore: fetchedIsLoadingMore,
+    loadMore: fetchedLoadMore,
   } = useResourceTableData<T>({
     resourceName,
     resourceType,
@@ -238,7 +247,7 @@ function ResourceTableContent<T>({
     useSSE,
     refreshInterval,
     labelSelector: effectiveLabelSelector,
-    disabled: external,
+    disabled: external || !namespaceReady,
   })
   const resolvedResourceType = (
     external
@@ -246,11 +255,33 @@ function ResourceTableContent<T>({
       : fetchedResourceType
   ) as ResourceType
   const data = external ? externalData : fetchedData
-  const isLoading = external ? !!externalIsLoading : fetchedIsLoading
+  // 默认命名空间还没解析出来时不要先空转成「无资源」：按加载态展示，
+  // 等 /namespaces 回来后直接用有权限的命名空间发请求。
+  const isLoading = external
+    ? !!externalIsLoading
+    : fetchedIsLoading || !namespaceReady
   const isError = external ? false : fetchedIsError
   const error = external ? null : fetchedError
   const refetch = external ? externalRefetch : fetchedRefetch
   const isConnected = external ? false : fetchedIsConnected
+
+  // 初始命名空间是按权限解析出来的，不是用户点击：仍要通知父组件，
+  // 列表页据此同步 URL，并按同一个命名空间取辅助数据（如重启次数）。
+  useEffect(() => {
+    if (clusterScope || external || !namespaceReady || !selectedNamespace) {
+      return
+    }
+    if (!onNamespaceChange) return
+    if (notifiedNamespaceRef.current === selectedNamespace) return
+    notifiedNamespaceRef.current = selectedNamespace
+    onNamespaceChange(selectedNamespace)
+  }, [
+    clusterScope,
+    external,
+    namespaceReady,
+    onNamespaceChange,
+    selectedNamespace,
+  ])
   // 创建按钮与批量删除不绑定单个命名空间，因此
   // 遵循"某处已授权"规则。AeroLink 没有其元数据的资源
   // （页面传入了展示名，例如 "Helm Releases"）不做处理。
@@ -833,6 +864,10 @@ function ResourceTableContent<T>({
         setPagination={setPagination}
         grouping={grouping}
         renderRowDetails={renderRowDetails}
+        // 「全部命名空间」分批加载：还有未取回的条目时，表尾给出「加载更多」。
+        hasMore={external ? false : fetchedHasMore}
+        isLoadingMore={fetchedIsLoadingMore}
+        onLoadMore={external ? undefined : fetchedLoadMore}
       />
 
       {/* Delete Confirmation Dialog */}

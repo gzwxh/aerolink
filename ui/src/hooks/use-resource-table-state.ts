@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ColumnFiltersState,
   ColumnSizingState,
@@ -7,6 +7,7 @@ import {
   SortingState,
 } from '@tanstack/react-table'
 
+import { useResources } from '@/lib/api'
 import { getClusterScopedStorageKey } from '@/lib/current-cluster'
 
 interface UseResourceTableStateOptions {
@@ -35,6 +36,36 @@ function readStoredJSON<T>(storage: Storage, key: string, fallback: T): T {
   } catch {
     return fallback
   }
+}
+
+/**
+ * 把「用户存下的选择」收敛到「当前用户能访问的命名空间」上。
+ *
+ * `available` 来自 `/namespaces` 列表，后端已按 RBAC 过滤。没有选择（或原来选的
+ * 命名空间已被回收权限）时优先落到 `default`，否则取列表第一个——不能写死
+ * `default`，受限账号会一进页面就 403。`_all` 是显式选择，原样保留。
+ */
+export function resolveNamespaceSelection(
+  current: string | undefined,
+  available: string[]
+): string | undefined {
+  const fallback = available.includes('default') ? 'default' : available[0]
+  if (!current) {
+    return fallback
+  }
+  if (current === '_all') {
+    return current
+  }
+
+  const wanted = current
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+  const accessible = wanted.filter((name) => available.includes(name))
+  if (accessible.length === 0) {
+    return fallback
+  }
+  return accessible.length === wanted.length ? current : accessible.join(',')
 }
 
 export function useResourceTableState({
@@ -108,25 +139,57 @@ export function useResourceTableState({
     ) as ColumnSizingState
   })
   const [refreshInterval, setRefreshInterval] = useState(5000)
-  const [selectedNamespace, setSelectedNamespace] = useState<
+  // 命名空间列表在后端已按 RBAC 过滤（见 generic_resource_handler_list.go），
+  // 就是「当前用户能看的命名空间」。与命名空间选择器共用一个 query key，不会重复请求。
+  const namespacesQuery = useResources('namespaces', undefined, {
+    disable: clusterScope,
+    staleTime: 30_000,
+  })
+  const availableNamespaces = useMemo(() => {
+    if (!namespacesQuery.data) return undefined
+    return (
+      namespacesQuery.data
+        .map((ns) => ns.metadata?.name)
+        .filter((name): name is string => Boolean(name))
+        // 后端列表按创建时间倒序，取「第一个」时要可预期：按名字升序。
+        .sort((left, right) => left.localeCompare(right))
+    )
+  }, [namespacesQuery.data])
+
+  const [namespacePreference, setNamespacePreference] = useState<
     string | undefined
   >(() => {
-    if (initialNamespace && !clusterScope) {
-      return initialNamespace
-    }
+    if (clusterScope) return undefined
+    if (initialNamespace) return initialNamespace
     // 优先使用按标签页隔离的 sessionStorage，以隔离各标签页的命名空间选择
     const tabNamespace = sessionStorage.getItem(
       getClusterScopedStorageKey('selectedNamespace')
     )
-    if (tabNamespace) {
-      return clusterScope ? undefined : tabNamespace
-    }
+    if (tabNamespace) return tabNamespace
     // 回退到 localStorage 作为全局偏好（新标签页继承上次选择）
-    const globalNamespace = localStorage.getItem(
-      getClusterScopedStorageKey('selectedNamespace')
+    return (
+      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace')) ||
+      undefined
     )
-    return clusterScope ? undefined : globalNamespace || 'default'
   })
+
+  // 在渲染期就按可访问列表校正选择，而不是等 effect：否则会先按无权限的
+  // 命名空间打一次必然 403 的请求。
+  const selectedNamespace = useMemo(() => {
+    if (clusterScope) return undefined
+    if (!availableNamespaces || availableNamespaces.length === 0) {
+      return namespacePreference
+    }
+    return resolveNamespaceSelection(namespacePreference, availableNamespaces)
+  }, [availableNamespaces, clusterScope, namespacePreference])
+
+  // 命名空间列表回来之前不发资源请求；列表请求失败时不再拦截（回落到旧行为）。
+  const namespaceReady =
+    clusterScope ||
+    Boolean(initialNamespace) ||
+    namespacesQuery.isError ||
+    availableNamespaces !== undefined
+
   const [useSSE, setUseSSE] = useState(false)
 
   const effectiveNamespace = clusterScope
@@ -135,18 +198,17 @@ export function useResourceTableState({
       ? '_all'
       : selectedNamespace
 
+  // 解析出来的默认命名空间也要写回偏好，否则每个新标签页都会先读到
+  // 已无权限的旧值、再校正一次（多一次不必要的命名空间列表等待）。
   useEffect(() => {
-    if (clusterScope || selectedNamespace !== undefined) {
-      return
+    if (clusterScope || !selectedNamespace) return
+    const storageKey = getClusterScopedStorageKey('selectedNamespace')
+    if (sessionStorage.getItem(storageKey) !== selectedNamespace) {
+      sessionStorage.setItem(storageKey, selectedNamespace)
     }
-
-    const tabNamespace = sessionStorage.getItem(
-      getClusterScopedStorageKey('selectedNamespace')
-    )
-    const storedNamespace =
-      tabNamespace ||
-      localStorage.getItem(getClusterScopedStorageKey('selectedNamespace'))
-    setSelectedNamespace(storedNamespace || 'default')
+    if (localStorage.getItem(storageKey) !== selectedNamespace) {
+      localStorage.setItem(storageKey, selectedNamespace)
+    }
   }, [clusterScope, selectedNamespace])
 
   useEffect(() => {
@@ -216,7 +278,7 @@ export function useResourceTableState({
     )
     // 同时更新 localStorage，作为新标签页的全局偏好
     localStorage.setItem(getClusterScopedStorageKey('selectedNamespace'), value)
-    setSelectedNamespace(value)
+    setNamespacePreference(value)
     setPagination((prev) => ({ ...prev, pageIndex: 0 }))
     setSearchQuery('')
   }, [])
@@ -263,6 +325,7 @@ export function useResourceTableState({
     setRefreshInterval,
     selectedNamespace,
     effectiveNamespace,
+    namespaceReady,
     useSSE,
     handleNamespaceChange,
     handleUseSSEChange,

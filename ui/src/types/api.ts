@@ -1156,6 +1156,8 @@ export interface S3ArchiveSetting {
   prefix: string
   /** 上传成功后删除本地文件（S3 作为最终存储）。 */
   deleteLocalAfterUpload: boolean
+  /** 内存直传：不在本地落中转文件，攒批在内存里编码成 parquet 后直接上传。 */
+  directUpload: boolean
 }
 
 /** Elasticsearch 检索面设置：按天索引 `<indexPrefix>-YYYY.MM.DD`。 */

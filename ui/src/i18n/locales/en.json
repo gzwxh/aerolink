@@ -446,7 +446,10 @@
     "pagination": {
       "previous": "Previous",
       "next": "Next",
-      "page": "Page {{current}} of {{total}}"
+      "page": "Page {{current}} of {{total}}",
+      "jumpTo": "Go to",
+      "pageUnit": "page",
+      "jumpToLabel": "Jump to page"
     },
     "namespaceSelector": {
       "all": "All Namespaces",
@@ -1229,6 +1232,9 @@
     "selectRow": "Select row",
     "selectGroupRows": "Select all rows in this group",
     "rowsTotal": "{{count}} row(s) total.",
+    "rowsLoaded": "{{count}} row(s) loaded (more available)",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
     "rowsFiltered": "Showing {{shown}} of {{total}} row(s)",
     "filteredBy": "(filtered by \"{{query}}\")",
     "rowsPerPage": "Rows per page",

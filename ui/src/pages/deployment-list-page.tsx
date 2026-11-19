@@ -224,29 +224,42 @@ export function DeploymentListPage() {
     [t, canUpdate]
   )
 
-  // 重启次数要按 selector 在 Pod 上汇总（Deployment 自身没有这个字段）。
-  // URL 带单个命名空间时只拉这个命名空间，其余情况（全部 / 多选）退化为全量。
-  const { data: pods } = useResources('pods', namespaceParam, {
-    staleTime: 30_000,
-  })
-  const podsByNamespace = useMemo(() => groupPodsByNamespace(pods), [pods])
-  const podsLoaded = pods !== undefined
-
   // 「平台操作时间」要按命名空间批量取数，但命名空间选择由表格自己的
   // 状态持有（见 use-resource-table-state）：这里按同一口径初始化，并在
   // onNamespaceChange 里跟进，不然列会停在旧命名空间的时点上。
-  const [namespaceSelection, setNamespaceSelection] = useState(() => {
+  const [namespaceSelection, setNamespaceSelection] = useState<
+    string | undefined
+  >(() => {
     if (namespaceParam) return namespaceParam
+    // 不写死 default：默认命名空间由表格按可访问列表解析，解析结果通过
+    // onNamespaceChange 回传过来，在那之前不发「平台操作时间」的请求。
     return (
       sessionStorage.getItem(getClusterScopedStorageKey('selectedNamespace')) ||
       localStorage.getItem(getClusterScopedStorageKey('selectedNamespace')) ||
-      'default'
+      undefined
     )
   })
+
+  // 重启次数要按 selector 在 Pod 上汇总（Deployment 自身没有这个字段）。
+  // 只在选中单个命名空间时取数：「全部 / 多选」下必须拉全集群 Pod，既慢又
+  // 拖垮首屏，这一列在那种视图里留空（表格已加载的 Deployment 不受影响）。
+  const podNamespace =
+    namespaceSelection &&
+    namespaceSelection !== '_all' &&
+    !namespaceSelection.includes(',')
+      ? namespaceSelection
+      : undefined
+  const { data: pods } = useResources('pods', podNamespace, {
+    staleTime: 30_000,
+    disable: !podNamespace,
+  })
+  const podsByNamespace = useMemo(() => groupPodsByNamespace(pods), [pods])
+  const podsLoaded = pods !== undefined
   // 多选（逗号拼接）没有单段 URL 能表达，按命名空间逐个取，每个命名空间
-  // 按自己的权限判定；其余情况（未选 / 全部）一求 `_all`。
+  // 按自己的权限判定；「未选」时等表格解析出默认命名空间再取。
   const lastUpdateNamespaces = useMemo(() => {
-    if (!namespaceSelection || namespaceSelection === '_all') return ['_all']
+    if (!namespaceSelection) return []
+    if (namespaceSelection === '_all') return ['_all']
     return namespaceSelection.split(',').filter(Boolean)
   }, [namespaceSelection])
   const { data: lastUpdates } = useResourceLastUpdates(
@@ -254,7 +267,7 @@ export function DeploymentListPage() {
     lastUpdateNamespaces,
     // 列默认隐藏，但取数在页面挂载时就会发生：平台时间不敏感，放长缓存
     // 少几次聚合查询。
-    { staleTime: 60_000 }
+    { enabled: lastUpdateNamespaces.length > 0, staleTime: 60_000 }
   )
 
   // 定义 Deployment 表格的列

@@ -20,6 +20,32 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// informer 缓存的 List 会在响应里塞这个假 continue token（见
+// controller-runtime 的 cache reader）。拿它再请求必然失败，对外要抹掉。
+const cacheContinueToken = "continue-not-supported"
+
+// paginationClient 选择本次 LIST 使用的客户端。
+//
+// informer 缓存不支持真分页：带 continue 的 List 直接返回
+// "continue list option is not supported by the cache"，带 limit 时只在本地
+// 截断并塞一个假 token。所以「分页模式」（前端传 paginate=true）与翻页
+// （continue 非空）的请求必须走直连 apiserver。
+//
+// 其它只带 limit 的既有调用方（命名空间详情、最近事件等）继续走缓存：
+// limit 在缓存里是本地截断，结果可用，也不额外增加 apiserver 压力。
+func paginationClient(c *gin.Context, cs *cluster.ClientSet) client.Client {
+	if cs.K8sClient == nil {
+		return nil
+	}
+	if c.Query("paginate") != "true" && c.Query("continue") == "" {
+		return cs.K8sClient
+	}
+	if cs.K8sClient.DirectClient == nil {
+		return cs.K8sClient
+	}
+	return cs.K8sClient.DirectClient
+}
+
 func (h *GenericResourceHandler[T, V]) list(c *gin.Context) (V, error) {
 	var zero V
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
@@ -74,7 +100,7 @@ func (h *GenericResourceHandler[T, V]) list(c *gin.Context) (V, error) {
 		listOpts = append(listOpts, client.MatchingFieldsSelector{Selector: fieldSelectorOption})
 	}
 
-	if err := cs.K8sClient.List(ctx, objectList, listOpts...); err != nil {
+	if err := paginationClient(c, cs).List(ctx, objectList, listOpts...); err != nil {
 		if h.Name() == string(common.EndpointSlices) && meta.IsNoMatchError(err) {
 			_ = meta.SetList(objectList, []runtime.Object{})
 			return objectList, nil
@@ -127,6 +153,11 @@ func (h *GenericResourceHandler[T, V]) list(c *gin.Context) (V, error) {
 		filterItems = append(filterItems, items[i])
 	}
 	_ = meta.SetList(objectList, filterItems)
+
+	// 缓存路径（非分页）会带一个假 continue token，抹掉它，免得调用方拿它翻页。
+	if listMeta, err := meta.ListAccessor(objectList); err == nil && listMeta.GetContinue() == cacheContinueToken {
+		listMeta.SetContinue("")
+	}
 
 	return objectList, nil
 }
