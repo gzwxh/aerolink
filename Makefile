@@ -462,8 +462,9 @@ ARM_IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:$(ARM_TAG)
 ARM_DIST_DIR ?= dist-arm
 # arm64 基座（SWR 里带 -arm64 后缀那份；不带后缀的是单架构 amd64）
 RUNTIME_IMAGE_ARM ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/openeuler/openeuler:24.03-lts-sp4-arm64
-# Dockerfile.arm 用来代做目录属主的小镜像（跟构建机架构，靠 $BUILDPLATFORM）；拉不到 docker hub 时换可达地址。
-CHOWN_STAGING_IMAGE ?= busybox:latest
+# Dockerfile.arm 用来代做目录属主的小镜像（跟构建机架构，靠 $BUILDPLATFORM）。
+# 构建机连不上 docker.io，与上面基座一样走 SWR 镜像源（该 tag 是 linux/amd64）。
+CHOWN_STAGING_IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/busybox:latest
 # 取目标架构的 duckdb CLI（构建机自身是 amd64 时也能交叉准备 arm64 产物）。
 # 落地文件名带架构与版本：否则换 ARMARCH / DUCKDB_VERSION 重跑会复用上一个架构那份。
 # 架构校验用 readelf 的 Machine 而不是 `file`：后者把 amd64 写成 x86-64、arm64 写成 aarch64，
