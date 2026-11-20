@@ -13,9 +13,16 @@ export const PAGED_RESOURCE_PAGE_SIZE = 200
 
 /**
  * 服务端 RBAC 逐项过滤发生在 `limit` 之后，一页可能被滤空。这里继续往后翻，
- * 直到凑够这一批或翻到末尾；上限防止权限极小时无限翻页。
+ * 直到凑够这一批或翻到末尾；上限防止权限极小时无限翻页。分片模式下上限还会
+ * 与分片数联动（见 fetchBatch）。
  */
 const MAX_PAGE_FETCHES = 10
+
+/**
+ * 单次请求最多携带的命名空间数，与后端 maxNamespaceFilterCount 对齐。选择超过
+ * 这个数量时由前端分片轮转拉取（见 fetchBatch），任何数量都不会被静默截断。
+ */
+const NAMESPACE_FILTER_CHUNK_SIZE = 200
 
 interface UsePagedResourcesOptions {
   namespace?: string
@@ -63,6 +70,47 @@ function sortByCreationDesc<T>(items: T[]): T[] {
   })
 }
 
+/** 把命名空间集合切成 ≤size 的互不相交分片。 */
+function splitNamespaceChunks(namespaces: string[], size: number): string[][] {
+  const chunks: string[][] = []
+  for (let start = 0; start < namespaces.length; start += size) {
+    chunks.push(namespaces.slice(start, start + size))
+  }
+  return chunks
+}
+
+/**
+ * 分片游标的打包与解包：每个分片一条独立游标，null 表示该分片已耗尽。
+ * 打包结果仍是一个不透明字符串，调用方的 continueToken 状态不感知内部分片。
+ */
+function packChunkCursors(cursors: (string | null)[]): string | undefined {
+  return cursors.some((cursor) => cursor !== null)
+    ? JSON.stringify(cursors)
+    : undefined
+}
+
+function unpackChunkCursors(
+  raw: string | undefined,
+  count: number
+): (string | null)[] {
+  if (raw) {
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      if (
+        Array.isArray(parsed) &&
+        parsed.length === count &&
+        parsed.every((item) => typeof item === 'string' || item === null)
+      ) {
+        return parsed as (string | null)[]
+      }
+    } catch {
+      // 落到下面的兜底
+    }
+  }
+  // 无法识别的游标：所有分片从头拉，批内与跨批的 itemKey 去重兜住重复。
+  return new Array<string | null>(count).fill('')
+}
+
 /**
  * 「全部命名空间」/ 集群级资源的增量加载。
  *
@@ -102,24 +150,7 @@ export function usePagedResources<T extends ResourceType>(
     async (target: number, startToken?: string) => {
       const collected: unknown[] = []
       const seen = new Set<string>()
-      let token = startToken
-      for (let attempt = 0; attempt < MAX_PAGE_FETCHES; attempt++) {
-        const remaining = Math.max(target - collected.length, 1)
-        const page = await fetchResources<ResourcesTypeMap[T]>(
-          resource,
-          namespace,
-          {
-            limit: Math.min(pageSize, remaining),
-            continueToken: token,
-            // 告诉后端这是真分页请求：informer 缓存不支持 continue，
-            // 首次带 limit 也要走直连，否则拿回的是假 token。
-            paginate: true,
-            labelSelector,
-            fieldSelector,
-            reduce,
-            namespaces: namespacesKey ? namespacesKey.split(',') : undefined,
-          }
-        )
+      const collect = (page: ResourcesTypeMap[T]) => {
         // 批内按 itemKey 去重：后端若有 List 接口漏抹假 continue token，会反复返回
         // 同一份全量数据；这里兜住，避免同一行在单次批量拉取里叠加。
         for (const item of (page.items ?? []) as unknown[]) {
@@ -128,14 +159,83 @@ export function usePagedResources<T extends ResourceType>(
           if (key) seen.add(key)
           collected.push(item)
         }
-        token = page.metadata?.continue || undefined
-        if (!token || collected.length >= target) {
+      }
+      const request = (limit: number, token?: string, chunk?: string[]) =>
+        fetchResources<ResourcesTypeMap[T]>(resource, namespace, {
+          limit,
+          continueToken: token,
+          // 告诉后端这是真分页请求：informer 缓存不支持 continue，
+          // 首次带 limit 也要走直连，否则拿回的是假 token。
+          paginate: true,
+          labelSelector,
+          fieldSelector,
+          reduce,
+          namespaces:
+            chunk ?? (namespacesKey ? namespacesKey.split(',') : undefined),
+        })
+
+      const namespaces =
+        namespacesKey && namespacesKey.length > 0
+          ? namespacesKey.split(',')
+          : undefined
+      const chunks =
+        namespaces && namespaces.length > NAMESPACE_FILTER_CHUNK_SIZE
+          ? splitNamespaceChunks(namespaces, NAMESPACE_FILTER_CHUNK_SIZE)
+          : null
+
+      if (!chunks) {
+        let token = startToken
+        for (let attempt = 0; attempt < MAX_PAGE_FETCHES; attempt++) {
+          const remaining = Math.max(target - collected.length, 1)
+          const page = await request(Math.min(pageSize, remaining), token)
+          collect(page)
+          token = page.metadata?.continue || undefined
+          if (!token || collected.length >= target) {
+            break
+          }
+        }
+        return {
+          items: collected as ResourceItems<T>,
+          continueToken: token,
+        }
+      }
+
+      // 多分片轮转：每个分片是互不相交的命名空间集合，各自维护独立游标；分片
+      // 耗尽（null）后跳过，凑满一批或全部耗尽为止。分片互不重叠，不会因此
+      // 漏数据；游标打包进 continueToken，跨批续拉时解包继续。
+      const cursors = unpackChunkCursors(startToken, chunks.length)
+      const maxAttempts = Math.max(MAX_PAGE_FETCHES, chunks.length * 2)
+      let lastPicked = 0
+      for (
+        let attempt = 0;
+        attempt < maxAttempts && collected.length < target;
+        attempt++
+      ) {
+        let picked = -1
+        for (let i = 0; i < chunks.length; i++) {
+          const index = (lastPicked + i) % chunks.length
+          if (cursors[index] !== null) {
+            picked = index
+            break
+          }
+        }
+        if (picked === -1) {
           break
         }
+        lastPicked = (picked + 1) % chunks.length
+
+        const remaining = Math.max(target - collected.length, 1)
+        const page = await request(
+          Math.min(pageSize, remaining),
+          cursors[picked] || undefined,
+          chunks[picked]
+        )
+        collect(page)
+        cursors[picked] = page.metadata?.continue || null
       }
       return {
         items: collected as ResourceItems<T>,
-        continueToken: token,
+        continueToken: packChunkCursors(cursors),
       }
     },
     [

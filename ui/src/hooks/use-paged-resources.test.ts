@@ -153,6 +153,90 @@ describe('usePagedResources', () => {
     })
   })
 
+  // 回归：后端单请求最多收 200 个命名空间，超过时前端分片轮转拉取，任何数量
+  // 都不会被静默截断；分片游标打包进 continueToken，跨批续拉只发生在未耗尽的
+  // 分片上。
+  it('超过 200 个命名空间时分片轮转拉取并合并', async () => {
+    const namespaces = Array.from(
+      { length: 201 },
+      (_, i) => `ns-${String(i).padStart(3, '0')}`
+    )
+    mockFetchResources.mockImplementation(
+      (
+        _resource: unknown,
+        _namespace: unknown,
+        opts: { namespaces?: string[]; continueToken?: string }
+      ) => {
+        if ((opts.namespaces ?? []).length === 200) {
+          if (opts.continueToken) {
+            return {
+              items: [row('c', '3', '2026-01-03T00:00:00Z')],
+              metadata: {},
+            }
+          }
+          return {
+            items: [row('a', '1', '2026-01-01T00:00:00Z')],
+            metadata: { continue: 'chunk1-t2' },
+          }
+        }
+        // 分片 2（1 个命名空间）：一次取完即耗尽。
+        return {
+          items: [row('b', '2', '2026-01-02T00:00:00Z')],
+          metadata: {},
+        }
+      }
+    )
+
+    const { result } = renderHook(() =>
+      usePagedResources('deployments', {
+        namespace: '_all',
+        pageSize: 2,
+        namespaces,
+      })
+    )
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    // 首批：两个分片各请求一次，单请求命名空间数都不超 200。
+    expect(mockFetchResources).toHaveBeenCalledTimes(2)
+    expect(mockFetchResources.mock.calls[0][2]).toMatchObject({
+      namespaces: expect.arrayContaining(['ns-000', 'ns-199']),
+    })
+    expect(
+      (mockFetchResources.mock.calls[0][2] as { namespaces: string[] })
+        .namespaces
+    ).toHaveLength(200)
+    expect(mockFetchResources.mock.calls[1][2]).toMatchObject({
+      namespaces: ['ns-200'],
+    })
+    // 两批合并且按创建时间倒序。
+    expect(result.current.data?.map((item) => item.metadata.name)).toEqual([
+      'b',
+      'a',
+    ])
+    expect(result.current.hasMore).toBe(true)
+
+    await act(async () => {
+      await result.current.loadMore()
+    })
+
+    // 续拉只发生在未耗尽的分片 1 并带上它的游标；分片 2 已耗尽不再发请求。
+    expect(mockFetchResources).toHaveBeenCalledTimes(3)
+    expect(mockFetchResources.mock.calls[2][2]).toMatchObject({
+      continueToken: 'chunk1-t2',
+    })
+    expect(
+      (mockFetchResources.mock.calls[2][2] as { namespaces: string[] })
+        .namespaces
+    ).toHaveLength(200)
+    expect(result.current.hasMore).toBe(false)
+    expect(result.current.data?.map((item) => item.metadata.name)).toEqual([
+      'c',
+      'b',
+      'a',
+    ])
+  })
+
   // 回归：refresh 与「加载更多」竞争时，被作废的请求不清理；最后一次请求必须
   // 把两个加载状态一起收尾，否则「加载更多」按钮会永久停在「加载中」。
   it('加载更多被刷新作废后，两个加载状态都会被收尾', async () => {
