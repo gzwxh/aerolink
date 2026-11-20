@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"fmt"
 	"net/http"
 	"reflect"
 	"sort"
@@ -96,8 +97,6 @@ func (h *GenericResourceHandler[T, V]) list(c *gin.Context) (V, error) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	objectList := reflect.New(h.listType).Interface().(V)
 
-	ctx := c.Request.Context()
-
 	namespace := c.Param("namespace")
 	allNamespaces := namespace == "" || namespace == common.AllNamespaces
 
@@ -108,39 +107,10 @@ func (h *GenericResourceHandler[T, V]) list(c *gin.Context) (V, error) {
 		}
 	}
 
-	if c.Query("labelSelector") != "" {
-		labelSelector := c.Query("labelSelector")
-		selector, err := metav1.ParseToLabelSelector(labelSelector)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid labelSelector parameter: " + err.Error()})
-			return zero, err
-		}
-		labelSelectorOption, err := metav1.LabelSelectorAsSelector(selector)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to convert labelSelector: " + err.Error()})
-			return zero, err
-		}
-		baseOpts = append(baseOpts, client.MatchingLabelsSelector{Selector: labelSelectorOption})
-	}
-
-	if c.Query("fieldSelector") != "" {
-		fieldSelector := c.Query("fieldSelector")
-		fieldSelectorOption, err := fields.ParseSelector(fieldSelector)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid fieldSelector parameter: " + err.Error()})
-			return zero, err
-		}
-		baseOpts = append(baseOpts, client.MatchingFieldsSelector{Selector: fieldSelectorOption})
-	}
-
-	var limit int64
-	if c.Query("limit") != "" {
-		parsed, err := strconv.ParseInt(c.Query("limit"), 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit parameter"})
-			return zero, err
-		}
-		limit = parsed
+	baseOpts, limit, err := parseListQueryOptions(c, baseOpts)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return zero, err
 	}
 
 	// 多命名空间集合：仅对跨命名空间的命名空间级资源生效，集群级资源忽略。
@@ -167,50 +137,16 @@ func (h *GenericResourceHandler[T, V]) list(c *gin.Context) (V, error) {
 			pageList = reflect.New(h.listType).Interface().(V)
 		}
 
-		opts := append([]client.ListOption{}, baseOpts...)
-		if limit > 0 {
-			opts = append(opts, client.Limit(limit))
-		}
-		if continueToken != "" {
-			opts = append(opts, client.Continue(continueToken))
-		}
-
-		if err := listClient.List(ctx, pageList, opts...); err != nil {
-			if h.Name() == string(common.EndpointSlices) && meta.IsNoMatchError(err) {
-				_ = meta.SetList(objectList, []runtime.Object{})
-				return objectList, nil
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return zero, err
-		}
-
-		pageItems, err := meta.ExtractList(pageList)
+		// 合并翻页时每轮只请求「还差多少条」：若每轮都按完整 limit 请求，凑够后
+		// 当前页可能只消费了一半，而页尾的 continue 已越过整页，剩余条目会被
+		// 永久跳过。按剩余量请求保证凑满时整页都已消费完，游标才不丢数据。
+		accepted, nextToken, err := h.fetchFilteredPage(c, user, cs, listClient, pageList, baseOpts,
+			allNamespaces, namespaceFilter, limit-int64(len(collected)), continueToken)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to extract items from list"})
 			return zero, err
 		}
-
-		// 过滤必须发生在「是否凑够 limit」的判定之前：整页被集合 / 权限过滤掉时
-		// 不能误判为已凑够而提前停止，否则多选命名空间仍会拿到空表。
-		for _, item := range pageItems {
-			accepted, err := h.filterListItem(c, user, cs, allNamespaces, namespaceFilter, item)
-			if err != nil {
-				return zero, err
-			}
-			if accepted == nil {
-				continue
-			}
-			collected = append(collected, accepted)
-			if limit > 0 && int64(len(collected)) >= limit {
-				break
-			}
-		}
-
-		if listMeta, err := meta.ListAccessor(pageList); err == nil {
-			continueToken = listMeta.GetContinue()
-		} else {
-			continueToken = ""
-		}
+		collected = append(collected, accepted...)
+		continueToken = nextToken
 
 		if !canMergePages || continueToken == "" {
 			break
@@ -255,6 +191,105 @@ func (h *GenericResourceHandler[T, V]) list(c *gin.Context) (V, error) {
 	}
 
 	return objectList, nil
+}
+
+// parseListQueryOptions 解析 labelSelector / fieldSelector / limit 三个通用查询
+// 参数，解析成功的选项追加进 baseOpts。解析失败返回带原因的 error，由调用方
+// 统一回 400。
+func parseListQueryOptions(c *gin.Context, baseOpts []client.ListOption) ([]client.ListOption, int64, error) {
+	if labelSelector := c.Query("labelSelector"); labelSelector != "" {
+		selector, err := metav1.ParseToLabelSelector(labelSelector)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid labelSelector parameter: %w", err)
+		}
+		labelSelectorOption, err := metav1.LabelSelectorAsSelector(selector)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to convert labelSelector: %w", err)
+		}
+		baseOpts = append(baseOpts, client.MatchingLabelsSelector{Selector: labelSelectorOption})
+	}
+
+	if fieldSelector := c.Query("fieldSelector"); fieldSelector != "" {
+		fieldSelectorOption, err := fields.ParseSelector(fieldSelector)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid fieldSelector parameter: %w", err)
+		}
+		baseOpts = append(baseOpts, client.MatchingFieldsSelector{Selector: fieldSelectorOption})
+	}
+
+	var limit int64
+	if c.Query("limit") != "" {
+		parsed, err := strconv.ParseInt(c.Query("limit"), 10, 64)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid limit parameter")
+		}
+		limit = parsed
+	}
+	return baseOpts, limit, nil
+}
+
+// fetchFilteredPage 请求一页并对每条做集合 / 权限过滤，返回本页接受的条目与页尾
+// continue 游标。remaining 是本轮允许新增的条数（limit - 已收集数）：服务端按
+// remaining 截断本页，凑满时整页恰好消费完，游标不会越过未处理条目。
+func (h *GenericResourceHandler[T, V]) fetchFilteredPage(
+	c *gin.Context,
+	user model.User,
+	cs *cluster.ClientSet,
+	listClient client.Client,
+	pageList V,
+	baseOpts []client.ListOption,
+	allNamespaces bool,
+	namespaceFilter []string,
+	remaining int64,
+	continueToken string,
+) ([]runtime.Object, string, error) {
+	ctx := c.Request.Context()
+	opts := append([]client.ListOption{}, baseOpts...)
+	if remaining > 0 {
+		opts = append(opts, client.Limit(remaining))
+	}
+	if continueToken != "" {
+		opts = append(opts, client.Continue(continueToken))
+	}
+
+	if err := listClient.List(ctx, pageList, opts...); err != nil {
+		if h.Name() == string(common.EndpointSlices) && meta.IsNoMatchError(err) {
+			// EndpointSlices 偶发 NoMatch：按「无数据」收尾，不让整次列表失败。
+			_ = meta.SetList(pageList, []runtime.Object{})
+			return nil, "", nil
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return nil, "", err
+	}
+
+	pageItems, err := meta.ExtractList(pageList)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to extract items from list"})
+		return nil, "", err
+	}
+
+	// 过滤必须发生在「是否凑够 limit」的判定之前：整页被集合 / 权限过滤掉时
+	// 不能误判为已凑够而提前停止，否则多选命名空间仍会拿到空表。
+	accepted := make([]runtime.Object, 0, len(pageItems))
+	for _, item := range pageItems {
+		filtered, err := h.filterListItem(c, user, cs, allNamespaces, namespaceFilter, item)
+		if err != nil {
+			return nil, "", err
+		}
+		if filtered == nil {
+			continue
+		}
+		accepted = append(accepted, filtered)
+		if remaining > 0 && int64(len(accepted)) >= remaining {
+			break
+		}
+	}
+
+	nextToken := ""
+	if listMeta, err := meta.ListAccessor(pageList); err == nil {
+		nextToken = listMeta.GetContinue()
+	}
+	return accepted, nextToken, nil
 }
 
 // filterListItem 做逐条过滤（清理字段 / 命名空间集合 / RBAC），返回 nil 表示丢弃。

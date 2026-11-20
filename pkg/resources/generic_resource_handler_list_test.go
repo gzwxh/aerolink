@@ -295,6 +295,60 @@ func TestDeploymentListNamespaceFilterMergesPages(t *testing.T) {
 	}
 }
 
+// 回归：合并分页在页中间凑满 limit 时，不能返回越过当前页剩余条目的游标。
+// 旧实现每轮都按完整 limit 请求：第二页接受 1 条后提前 break，a-2 既不在本批、
+// 游标又已越过整页，后续「加载更多」永远拿不到它。按「剩余条数」请求后，
+// 凑满时整页都已消费完，游标才不丢数据。
+func TestDeploymentListNamespaceFilterDoesNotSkipRestOfPage(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := appsv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add appsv1 to scheme: %v", err)
+	}
+
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	objs := []client.Object{
+		deployment("other", "other-0", base),
+		deployment("ns-a", "a-0", base.Add(time.Minute)),
+		deployment("ns-a", "a-1", base.Add(2*time.Minute)),
+		deployment("ns-a", "a-2", base.Add(3*time.Minute)),
+	}
+
+	paging := &pagingFakeClient{
+		Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
+		objs:   objs,
+	}
+	cs := newPaginationTestClientSet(paging, paging)
+	handler := NewGenericResourceHandler[*appsv1.Deployment, *appsv1.DeploymentList](common.Deployments)
+
+	first, err := handler.list(newDeploymentListContext(t, cs, "limit=2&paginate=true&namespaces=ns-a"))
+	if err != nil {
+		t.Fatalf("list first batch: %v", err)
+	}
+	if len(first.Items) != 2 {
+		t.Fatalf("first batch returned %d items, want 2", len(first.Items))
+	}
+	for _, item := range first.Items {
+		if item.Namespace != "ns-a" {
+			t.Fatalf("first batch item %s/%s is outside the selected namespaces", item.Namespace, item.Name)
+		}
+	}
+	if first.Continue == "" {
+		t.Fatal("凑满 limit 后必须保留 continue token，否则当前页剩余条目会被游标跳过")
+	}
+
+	second, err := handler.list(newDeploymentListContext(t, cs,
+		"limit=2&paginate=true&continue="+first.Continue+"&namespaces=ns-a"))
+	if err != nil {
+		t.Fatalf("list second batch: %v", err)
+	}
+	if len(second.Items) != 1 || second.Items[0].Name != "a-2" {
+		t.Fatalf("second batch returned %#v, want [a-2]（页中间凑满 limit 不能跳过剩余条目）", second.Items)
+	}
+	if second.Continue != "" {
+		t.Fatalf("second batch leaked continue token %q, want empty", second.Continue)
+	}
+}
+
 // 不传 namespaces 时行为与之前一致：只取一页，不做集合过滤。
 func TestDeploymentListWithoutNamespaceFilterKeepsSinglePage(t *testing.T) {
 	scheme := runtime.NewScheme()

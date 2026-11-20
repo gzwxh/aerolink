@@ -185,7 +185,26 @@ func (h *CRHandler) List(c *gin.Context) {
 		return
 	}
 
-	listCRsSinglePage(c, cs, crd, crdName, user, crList, opts, allNamespaces, paginationClient(c, cs))
+	// 多选命名空间集合：与通用资源一致，仅在跨命名空间的命名空间级请求上生效，
+	// 由服务端收窄并合并翻页；否则分页窗口可能被未选中的命名空间占满，选中
+	// 集合的数据整体落在窗口之外。
+	var namespaceFilter []string
+	if crd.Spec.Scope == apiextensionsv1.NamespaceScoped && allNamespaces {
+		namespaceFilter = parseNamespaceFilter(c)
+	}
+	// 集合过滤依赖真分页：informer 缓存的假 token 无法继续翻页，因此有直连
+	// 客户端时改用它；没有直连能力时退化回单页路径。
+	listClient := paginationClient(c, cs)
+	canMergePages := len(namespaceFilter) > 0 && cs.K8sClient != nil && cs.K8sClient.DirectClient != nil
+	if canMergePages {
+		listClient = cs.K8sClient.DirectClient
+	}
+
+	if canMergePages {
+		listCRsMerged(c, cs, crdName, user, crList, opts, namespaceFilter, listClient)
+		return
+	}
+	listCRsSinglePage(c, cs, crd, crdName, user, crList, opts, allNamespaces, listClient)
 }
 
 // parseCRListQuery 解析 labelSelector / limit / continue 三个通用查询参数。
@@ -241,6 +260,77 @@ func listCRsSinglePage(
 			}
 		}
 		crList.Items = items
+	}
+
+	c.JSON(http.StatusOK, crList)
+}
+
+// listCRsMerged 多选命名空间的合并分页路径：集合过滤依赖真分页（informer 缓存
+// 不支持 continue），因此固定走直连客户端。与 generic_resource_handler_list.go
+// 同一套规则：每轮只请求「还差多少条」，凑满时整页都已消费完，页尾游标不会
+// 跳过未处理条目；集合与 RBAC 过滤都在 limit 之前完成。
+func listCRsMerged(
+	c *gin.Context,
+	cs *cluster.ClientSet,
+	crdName string,
+	user model.User,
+	crList *unstructured.UnstructuredList,
+	opts *client.ListOptions,
+	namespaceFilter []string,
+	listClient client.Client,
+) {
+	gvk := crList.GroupVersionKind()
+	collected := make([]unstructured.Unstructured, 0, 64)
+	continueToken := opts.Continue
+	for page := 0; ; page++ {
+		pageList := &unstructured.UnstructuredList{}
+		pageList.SetGroupVersionKind(gvk)
+		pageOpts := &client.ListOptions{LabelSelector: opts.LabelSelector}
+		if opts.Limit > 0 {
+			pageOpts.Limit = opts.Limit - int64(len(collected))
+		}
+		if continueToken != "" {
+			pageOpts.Continue = continueToken
+		}
+
+		if err := listClient.List(c.Request.Context(), pageList, pageOpts); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		for i := range pageList.Items {
+			item := &pageList.Items[i]
+			if !namespaceFilterCovers(namespaceFilter, item.GetNamespace()) {
+				continue
+			}
+			if !rbac.CanAccess(user, crdName, string(common.VerbGet), cs.Name, item.GetNamespace()) {
+				continue
+			}
+			collected = append(collected, *item)
+			if opts.Limit > 0 && int64(len(collected)) >= opts.Limit {
+				break
+			}
+		}
+		if listMeta, err := meta.ListAccessor(pageList); err == nil {
+			continueToken = listMeta.GetContinue()
+		} else {
+			continueToken = ""
+		}
+
+		if continueToken == "" {
+			break
+		}
+		if opts.Limit > 0 && int64(len(collected)) >= opts.Limit {
+			break
+		}
+		if page+1 >= maxNamespaceFilterPages {
+			break
+		}
+	}
+
+	crList.Items = collected
+	// 跨多页合并后，最后一次 List 的 continue 才是正确的续翻位置。
+	if listMeta, err := meta.ListAccessor(crList); err == nil {
+		listMeta.SetContinue(continueToken)
 	}
 
 	c.JSON(http.StatusOK, crList)

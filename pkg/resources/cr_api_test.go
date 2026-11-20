@@ -1159,6 +1159,96 @@ func TestCRListStripsInformerCacheContinueToken(t *testing.T) {
 	}
 }
 
+// 回归：命名空间级 CR 的多选命名空间必须由服务端收窄并合并翻页。此前
+// CRHandler.List 完全忽略 namespaces 参数，分页窗口可能被未选中的命名空间占满，
+// 选中集合的数据整体落在窗口之外；集合过滤也不能放宽 RBAC 判定。
+func TestCRListNamespaceFilterMergesPages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	scheme := runtime.NewScheme()
+	if err := apiextensionsv1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	// 直连客户端按顺序分页；CRD 放在缓存客户端里，列表对象只放 CR 实例，
+	// 避免 pagingFakeClient 把 CRD 当成一条记录参与分页。
+	cached := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(newWidgetCRD(apiextensionsv1.NamespaceScoped)).
+		Build()
+	objs := []client.Object{
+		newWidget("other-0", "other", nil),
+		newWidget("other-1", "other", nil),
+		newWidget("a-0", "ns-a", nil),
+		newWidget("a-1", "ns-a", nil),
+		newWidget("b-0", "ns-b", nil),
+		newWidget("a-2", "ns-a", nil),
+	}
+	paging := &pagingFakeClient{
+		Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
+		objs:   objs,
+	}
+	cs := newPaginationTestClientSet(cached, paging)
+
+	runList := func(user model.User, query string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(rec)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/api/v1/widgets.example.com/_all"+query, nil)
+		ctx.Params = gin.Params{
+			{Key: "crd", Value: widgetCRDName},
+			{Key: "namespace", Value: common.AllNamespaces},
+		}
+		ctx.Set("cluster", cs)
+		ctx.Set("user", user)
+		NewCRHandler().List(ctx)
+		return rec
+	}
+	itemKeys := func(list *unstructured.UnstructuredList) []string {
+		keys := make([]string, 0, len(list.Items))
+		for i := range list.Items {
+			keys = append(keys, list.Items[i].GetNamespace()+"/"+list.Items[i].GetName())
+		}
+		return keys
+	}
+
+	fullAccess := newWidgetUser([]string{"cluster-a"}, []string{"*"}, []string{string(common.VerbGet)})
+
+	rec := runList(fullAccess, "?paginate=true&limit=2&namespaces=ns-a")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first batch returned %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	first := decodeCRAPIResponse[unstructured.UnstructuredList](t, rec)
+	got := itemKeys(&first)
+	if !reflect.DeepEqual(got, []string{"ns-a/a-0", "ns-a/a-1"}) {
+		t.Fatalf("first batch = %v, want ns-a items only", got)
+	}
+	if first.GetContinue() == "" {
+		t.Fatal("first batch must keep a continue token")
+	}
+
+	rec = runList(fullAccess, "?paginate=true&limit=2&continue="+first.GetContinue()+"&namespaces=ns-a")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second batch returned %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	second := decodeCRAPIResponse[unstructured.UnstructuredList](t, rec)
+	if got := itemKeys(&second); !reflect.DeepEqual(got, []string{"ns-a/a-2"}) {
+		t.Fatalf("second batch = %v, want [ns-a/a-2]（未选中的 ns-b 不能挡住后续页的选中数据）", got)
+	}
+	if second.GetContinue() != "" {
+		t.Fatalf("second batch leaked continue token %q, want empty", second.GetContinue())
+	}
+
+	// 集合过滤是收窄而不是放宽：请求集合里的 ns-b 仍受 RBAC 约束。
+	restricted := newWidgetUser([]string{"cluster-a"}, []string{"ns-a"}, []string{string(common.VerbGet)})
+	rec = runList(restricted, "?paginate=true&limit=5&namespaces=ns-a,ns-b")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restricted list returned %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	list := decodeCRAPIResponse[unstructured.UnstructuredList](t, rec)
+	if got := itemKeys(&list); !reflect.DeepEqual(got, []string{"ns-a/a-0", "ns-a/a-1", "ns-a/a-2"}) {
+		t.Fatalf("restricted list = %v, want only the ns-a items (RBAC must still apply)", got)
+	}
+}
+
 func TestCRAPIClusterSelection(t *testing.T) {
 	fixture := newCRAPITestFixture(t, crAPITestConfig{
 		user: newWidgetUser(
