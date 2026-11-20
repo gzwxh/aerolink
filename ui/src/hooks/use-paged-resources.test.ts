@@ -152,4 +152,50 @@ describe('usePagedResources', () => {
       namespaces: ['swy-base', 'swy-congo'],
     })
   })
+
+  // 回归：refresh 与「加载更多」竞争时，被作废的请求不清理；最后一次请求必须
+  // 把两个加载状态一起收尾，否则「加载更多」按钮会永久停在「加载中」。
+  it('加载更多被刷新作废后，两个加载状态都会被收尾', async () => {
+    mockFetchResources.mockResolvedValueOnce({
+      items: [row('b', '2', '2026-01-02T00:00:00Z')],
+      metadata: { continue: 'next' },
+    })
+
+    const { result } = renderHook(() =>
+      usePagedResources('deployments', { namespace: '_all', pageSize: 1 })
+    )
+    await waitFor(() => expect(result.current.hasMore).toBe(true))
+
+    // loadMore 的请求挂起在闸门上。
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    mockFetchResources.mockImplementationOnce(async () => {
+      await gate
+      return { items: [row('a', '1', '2026-01-01T00:00:00Z')], metadata: {} }
+    })
+
+    let loadMorePromise!: Promise<void>
+    act(() => {
+      loadMorePromise = result.current.loadMore()
+    })
+    await waitFor(() => expect(result.current.isLoadingMore).toBe(true))
+
+    // 刷新作废 loadMore 的请求并完成；随后再放行旧请求。
+    mockFetchResources.mockResolvedValueOnce({
+      items: [row('b', '2', '2026-01-02T00:00:00Z')],
+      metadata: { continue: 'next' },
+    })
+    await act(async () => {
+      await result.current.refetch()
+    })
+    release()
+    await act(async () => {
+      await loadMorePromise
+    })
+
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.isLoadingMore).toBe(false)
+  })
 })

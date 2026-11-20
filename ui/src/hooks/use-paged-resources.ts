@@ -165,8 +165,11 @@ export function usePagedResources<T extends ResourceType>(
       if (requestId !== requestIdRef.current) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
+      // 只有最后一次请求才收尾：refresh 与 loadMore 竞争时，被作废的一方不清理，
+      // 两个加载状态统一交给最后一次请求收尾，避免任何一方被永久卡住。
       if (requestId === requestIdRef.current) {
         setIsLoading(false)
+        setIsLoadingMore(false)
       }
     }
   }, [fetchBatch, pageSize])
@@ -198,7 +201,9 @@ export function usePagedResources<T extends ResourceType>(
       if (requestId !== requestIdRef.current) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
+      // 同 reload：由最后一次请求统一收尾两个加载状态。
       if (requestId === requestIdRef.current) {
+        setIsLoading(false)
         setIsLoadingMore(false)
       }
     }
