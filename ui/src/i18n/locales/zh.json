@@ -1225,6 +1225,7 @@
     "emptyTitle": "未找到{{resource}}",
     "emptyLabelSelector": "没有{{resource}}匹配标签：'{{query}}'",
     "emptySearch": "没有结果匹配搜索条件：\"{{query}}\"",
+    "partialDataError": "数据刷新失败，已加载的内容仍可查看",
     "emptyCluster": "没有找到{{resource}}",
     "emptyNamespace": "{{namespace}}中没有{{resource}}",
     "clearSearch": "清除搜索",

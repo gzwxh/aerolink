@@ -19,6 +19,8 @@ vi.mock('react-i18next', () => ({
         'resourceTable.deleteFailed': `Failed to delete ${opts?.name}`,
         'common.actions.cancel': 'Cancel',
         'common.actions.delete': 'Delete',
+        'common.actions.retry': 'Retry',
+        'resourceTable.partialDataError': 'Data refresh failed',
         'resourceTable.namespace': 'Namespace',
         'resourceTable.selectAllRows': 'Select all',
         'resourceTable.selectRow': 'Select row',
@@ -79,7 +81,7 @@ vi.mock('@/hooks/use-can', () => ({
 
 // fakeRows 通过 vi.hoisted 定义在工厂内部，这样当 vi.mock 被提升到
 // 变量声明之前时它仍然可用
-const { fakeRows, tableData } = vi.hoisted(() => {
+const { fakeRows, tableData, tableFlags } = vi.hoisted(() => {
   type Row = { metadata: { name: string; namespace?: string; uid?: string } }
   const fakeRows: Row[] = [
     { metadata: { name: 'svc-1', namespace: 'default', uid: 'uid-1' } },
@@ -90,6 +92,8 @@ const { fakeRows, tableData } = vi.hoisted(() => {
     fakeRows,
     // 可变的数据源：分组测试会替换成自己的行
     tableData: { rows: fakeRows as Row[] },
+    // 错误路径测试用：isError 打开后已加载的行仍应可见，并出现可重试的横幅。
+    tableFlags: { isError: false, refetch: vi.fn() },
   }
 })
 
@@ -99,9 +103,9 @@ vi.mock('@/hooks/use-resource-table-data', () => ({
       resourceType: 'services',
       data: tableData.rows,
       isLoading: false,
-      isError: false,
-      error: null,
-      refetch: vi.fn(),
+      isError: tableFlags.isError,
+      error: tableFlags.isError ? new Error('boom') : null,
+      refetch: tableFlags.refetch,
       isConnected: false,
     }
   },
@@ -125,6 +129,27 @@ function renderTable() {
 }
 
 // --- 测试 ---
+
+describe('ResourceTable partial data error', () => {
+  afterEach(() => {
+    tableFlags.isError = false
+    tableFlags.refetch.mockClear()
+  })
+
+  // 回归：追加 / 刷新失败时，已加载的数据不能被整页错误替换——
+  // 行保持可见，表格上方出现可重试的横幅。
+  it('keeps loaded rows visible with a retry banner when refresh fails', async () => {
+    tableFlags.isError = true
+    renderTable()
+
+    expect(await screen.findByText('svc-1')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Data refresh failed')
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(tableFlags.refetch).toHaveBeenCalled()
+  })
+})
 
 describe('ResourceTable batch delete progress', () => {
   it('shows Deleting... (0/N) immediately when delete starts and promises are pending', async () => {

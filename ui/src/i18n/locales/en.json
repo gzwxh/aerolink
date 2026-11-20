@@ -1225,6 +1225,7 @@
     "emptyTitle": "No {{resource}} found",
     "emptyLabelSelector": "No {{resource}} match labels: \"{{query}}\"",
     "emptySearch": "No results match your search query: \"{{query}}\"",
+    "partialDataError": "Failed to refresh data; loaded rows are still shown",
     "emptyCluster": "There are no {{resource}} found",
     "emptyNamespace": "There are no {{resource}} in {{namespace}}",
     "clearSearch": "Clear Search",

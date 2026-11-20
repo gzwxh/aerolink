@@ -12,7 +12,7 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table'
-import { Box, Database } from 'lucide-react'
+import { AlertCircle, Box, Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -31,6 +31,7 @@ import { useCanAnyNamespace } from '@/hooks/use-can'
 import { useCluster } from '@/hooks/use-cluster'
 import { useResourceTableData } from '@/hooks/use-resource-table-data'
 import { useResourceTableState } from '@/hooks/use-resource-table-state'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -761,7 +762,12 @@ function ResourceTableContent<T>({
       )
     }
 
-    if (isError) {
+    // 追加 / 刷新失败时已加载的数据仍在：错误改用表格上方的横幅提示，
+    // 不整页替换——一次网络抖动不该把能用的列表变成错误页。
+    if (
+      isError &&
+      (!namespaceFilteredData || (namespaceFilteredData as T[]).length === 0)
+    ) {
       return (
         <ErrorMessage
           resourceName={displayResourceName}
@@ -851,6 +857,21 @@ function ResourceTableContent<T>({
         }
         exportableRowCount={filteredRowCount}
       />
+
+      {isError && totalRowCount > 0 ? (
+        <Alert
+          variant="destructive"
+          className="flex items-center justify-between gap-3 py-2.5"
+        >
+          <AlertDescription className="flex items-center gap-2">
+            <AlertCircle className="size-4 shrink-0" />
+            {t('resourceTable.partialDataError')}
+          </AlertDescription>
+          <Button variant="outline" size="sm" onClick={() => refetch?.()}>
+            {t('common.actions.retry')}
+          </Button>
+        </Alert>
+      ) : null}
 
       <ResourceTableView
         table={table}

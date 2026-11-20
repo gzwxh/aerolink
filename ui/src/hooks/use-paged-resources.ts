@@ -278,6 +278,8 @@ export function usePagedResources<T extends ResourceType>(
     if (!continueToken || isLoadingMore) return
     const requestId = ++requestIdRef.current
     setIsLoadingMore(true)
+    // 重试追加时清掉上一次的失败标记：成功后错误横幅随数据一起消失。
+    setError(null)
     try {
       const batch = await fetchBatch(pageSize, continueToken)
       if (requestId !== requestIdRef.current) return
