@@ -158,6 +158,54 @@ func TestDuckDBSDKBackendPaginates(t *testing.T) {
 	}
 }
 
+// 去重 SQL 必须能被真实引擎执行：本地与「远端」互有独占时两边都扫，同一个
+// 文件（文件名相同）按 (文件名, 行号) 去重。这里用第二个本地目录模拟远端路径，
+// SQL 层面只关心路径字符串，与真实 S3 布局同构。
+func TestDuckDBSDKBackendDedupsSharedCopies(t *testing.T) {
+	day := time.Date(2026, 9, 21, 0, 0, 0, 0, time.Local)
+	localDir := t.TempDir()
+	writeOperationParquet(t, localDir, day, sampleOperationRows(day))
+
+	remoteDir := t.TempDir()
+	writeOperationParquet(t, remoteDir, day, sampleOperationRows(day))
+
+	backend, err := NewDuckDBBackend(localDir, model.S3Archive{})
+	if err != nil {
+		t.Fatalf("NewDuckDBBackend() error = %v", err)
+	}
+
+	dayDir := filepath.Join(localDir, string(KindAuditHistory), "2026", "09", "21")
+	remoteDayDir := filepath.Join(remoteDir, string(KindAuditHistory), "2026", "09", "21")
+	statement, err := buildDuckDBSQL(archiveQuery{
+		kind:      ESKindAuditHistory,
+		timeField: esFieldCreatedAt,
+	}, archiveColumnsFor(ESKindAuditHistory), []string{
+		filepath.Join(dayDir, "*.parquet"),
+		filepath.Join(remoteDayDir, "*.parquet"),
+	}, true, day, day.Add(24*time.Hour), 1, 20)
+	if err != nil {
+		t.Fatalf("buildDuckDBSQL() error = %v", err)
+	}
+
+	rows, err := backend.runner.Query(context.Background(), nil, statement)
+	if err != nil {
+		t.Fatalf("dedup query failed: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows = %d, want 3（同一份文件的两个副本必须去重）", len(rows))
+	}
+	if total := toInt64(rows[0]["__total"]); total != 3 {
+		t.Errorf("__total = %d, want 3（count 必须在去重后的行集上算）", total)
+	}
+	ids := map[int64]bool{}
+	for _, row := range rows {
+		ids[toInt64(row["id"])] = true
+	}
+	if len(ids) != 3 {
+		t.Errorf("ids = %v, want the three distinct rows", ids)
+	}
+}
+
 // 该时间段没有任何归档文件时返回空结果，而不是抛引擎错误。
 func TestDuckDBSDKBackendEmptyRange(t *testing.T) {
 	backend, err := NewDuckDBBackend(t.TempDir(), model.S3Archive{})

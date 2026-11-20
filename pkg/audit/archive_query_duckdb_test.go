@@ -41,7 +41,7 @@ func readSQLLog(t *testing.T, path string) string {
 	return string(raw)
 }
 
-// 本地有当天的目录就用本地路径，不该再去碰 S3；同时必须做列裁剪（不带大字段）。
+// S3 上没有当天的文件时就只查本地路径；同时必须做列裁剪（不带大字段）。
 func TestDuckDBBackendPrefersLocalParquet(t *testing.T) {
 	sqlLog := newFakeDuckDB(t, `[{"__total": 42, "id": 7, "created_at": 1758396000000, "cluster_name": "prod"}]`)
 
@@ -61,6 +61,9 @@ func TestDuckDBBackendPrefersLocalParquet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDuckDBBackend() error = %v", err)
 	}
+	// 路径规划按文件名与 S3 比对覆盖关系；空 lister 表示 S3 上没有这一天，
+	// 本地覆盖完整，保持只查本地。
+	backend.s3Sink = fakeS3Lister{}
 
 	from := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)
 	to := from.Add(24 * time.Hour)
@@ -111,19 +114,6 @@ func TestDuckDBBackendPrefersLocalParquet(t *testing.T) {
 	if !strings.Contains(sql, "count(*) OVER ()") {
 		t.Errorf("应一次查询同时拿到总数与当前页:\n%s", sql)
 	}
-}
-
-// fakeS3Lister 只回答「这个前缀下有哪些键」，用来在单测里替掉真实对象存储。
-type fakeS3Lister struct {
-	keys map[string][]string
-	err  error
-}
-
-func (f fakeS3Lister) ListKeys(_ context.Context, prefix string) ([]string, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.keys[prefix], nil
 }
 
 // 本地没有的日期回落到 S3（且只把 S3 上确实有文件的日期写进查询），并带上 httpfs 配置。

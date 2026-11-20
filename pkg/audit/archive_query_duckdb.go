@@ -63,7 +63,9 @@ type duckdbRunner interface {
 
 // DuckDBBackend 用 DuckDB 直接查 parquet，作为「没有 Elasticsearch」时的检索后端。
 //
-// 检索分层：**同一天的数据，本地有就查本地，本地没有才查 S3**（本地是热层、S3 是冷层）。
+// 检索分层：本地是热层、S3 是冷层。同一个文件在两边各有一份时（上传保持文件名不变）
+// 只扫一份，按覆盖关系选边；本地与 S3 互有独占文件的天两边都要扫，并在 SQL 里按
+// (文件名, 行号) 去重合并（见 parquetGlobs）。
 // 归档配置了 deleteLocalAfterUpload=false 时，本地保留期内的数据不必绕网络。
 type DuckDBBackend struct {
 	// runner 是实际执行 SQL 的驱动（CLI 或 SDK，由构建 tag 决定，见 newDuckDBRunner）。
@@ -125,22 +127,22 @@ func (b *DuckDBBackend) Search(ctx context.Context, query archiveQuery, from, to
 		return nil, err
 	}
 
-	globs, useS3 := b.parquetGlobs(ctx, parquetKind, from, to)
-	if len(globs) == 0 {
+	plan := b.parquetGlobs(ctx, parquetKind, from, to)
+	if len(plan.globs) == 0 {
 		// 该时间段没有任何归档文件：返回空结果，而不是走进引擎报错。
 		// Hits 必须是**非 nil 空切片**：它会直接进响应 JSON，nil 会序列化成 `null`，
 		// 而界面把 data 当数组用（`data.length`），null 会让整个归档页崩掉。
 		return &archiveSearchResult{Hits: []json.RawMessage{}}, nil
 	}
 
-	statement, err := buildDuckDBSQL(query, columns, globs, from, to, page, size)
+	statement, err := buildDuckDBSQL(query, columns, plan.globs, plan.dedupCopies, from, to, page, size)
 	if err != nil {
 		return nil, err
 	}
 
 	// 只有 CLI 驱动真的会用到 setup；SDK 驱动已在连接初始化里设好了。
 	var setup []string
-	if useS3 {
+	if plan.useS3 {
 		setup = duckdbS3Statements(b.s3)
 	}
 
@@ -169,40 +171,68 @@ func normalizeDuckDBRange(from, to time.Time) (time.Time, time.Time, error) {
 	return from, to, nil
 }
 
-// parquetGlobs 返回需要扫描的 parquet glob 列表，以及是否用到了 S3。
+// parquetScanPlan 描述一次检索要扫描哪些 parquet 文件。
+type parquetScanPlan struct {
+	// globs 是交给 read_parquet 的路径列表，本地 glob 与 s3:// 路径可混用。
+	globs []string
+	// useS3 表示列表里含 s3:// 路径，调用方需要先执行 S3 会话设置（httpfs 等）。
+	useS3 bool
+	// dedupCopies 表示本地与 S3 对某一天互有独占文件、两边都在列表里；同一个
+	// 文件在两边各有一份（上传保持文件名不变），SQL 必须按 (文件名, 行号) 去重。
+	dedupCopies bool
+}
+
+// parquetGlobs 计算需要扫描的文件路径。
 //
-// 分层规则：**同一天的数据本地有文件就查本地，本地没有才查 S3**（两者互斥，不会一天查两遍）。
+// 分层按「文件」而不是按「天」：同一个文件在本地与 S3 各有一份时（上传保持相对名
+// 不变，文件名即同一份数据的身份）只扫一份——S3 覆盖更全就整条查 S3，反之查本地；
+// 两边互有独占文件的天（容量清理删过当天一部分、多副本各写各的本地目录）两边都要扫，
+// 靠 SQL 去重合并。旧实现「本地有一个文件就整条跳过 S3」会静默漏掉 S3 独有的数据。
 //
 // 两侧都必须保证路径真的有文件：DuckDB 的 read_parquet 在 glob 匹配不到文件时**直接报错**，
 // 所以本地用 filepath.Glob 预检、S3 按月做一次 ListObjects 探测。
-func (b *DuckDBBackend) parquetGlobs(ctx context.Context, kind ParquetKind, from, to time.Time) ([]string, bool) {
-	localGlobs := make([]string, 0, 32)
-	// 本地没有文件的日期，按「年/月」分组，稍后一次性向 S3 探测（避免逐日一次请求）。
-	missingByMonth := make(map[string][]string)
-	monthOrder := make([]string, 0, 4)
+func (b *DuckDBBackend) parquetGlobs(ctx context.Context, kind ParquetKind, from, to time.Time) parquetScanPlan {
+	days := archiveDays(from, to)
+	basePrefix := strings.Trim(b.s3.Prefix, "/")
 
-	for _, day := range archiveDays(from, to) {
+	type dayPlan struct {
+		monthKey  string
+		date      string
+		localGlob string
+		// localNames 是本地当天文件的文件名集合，用于与 S3 按文件比对覆盖关系。
+		localNames map[string]struct{}
+	}
+	plans := make([]*dayPlan, 0, len(days))
+	months := make([]string, 0, 4)
+	monthSeen := make(map[string]bool, 4)
+
+	for _, day := range days {
 		year, month, date := day.Format("2006"), day.Format("01"), day.Format("02")
-
+		plan := &dayPlan{
+			monthKey:   year + "/" + month,
+			date:       date,
+			localNames: map[string]struct{}{},
+		}
 		if b.localDir != "" {
 			glob := filepath.Join(b.localDir, string(kind), year, month, date, "*.parquet")
 			if matches, err := filepath.Glob(glob); err == nil && len(matches) > 0 {
-				localGlobs = append(localGlobs, glob)
-				continue
+				plan.localGlob = glob
+				for _, match := range matches {
+					plan.localNames[filepath.Base(match)] = struct{}{}
+				}
 			}
 		}
-		if b.s3Sink != nil {
-			monthKey := year + "/" + month
-			if _, seen := missingByMonth[monthKey]; !seen {
-				monthOrder = append(monthOrder, monthKey)
-			}
-			missingByMonth[monthKey] = append(missingByMonth[monthKey], date)
+		if b.s3Sink != nil && !monthSeen[plan.monthKey] {
+			monthSeen[plan.monthKey] = true
+			months = append(months, plan.monthKey)
 		}
+		plans = append(plans, plan)
 	}
 
-	s3Globs := make([]string, 0, len(missingByMonth))
-	basePrefix := strings.Trim(b.s3.Prefix, "/")
-	for _, monthKey := range monthOrder {
+	// S3 按月列一次，键按「日 → 文件名集合」分组：与本地按文件名比对（而不是只比对
+	// 「这一天有没有文件」），才能发现同一天里本地缺的那部分。
+	s3ByDay := make(map[string]map[string]map[string]struct{}, len(months))
+	for _, monthKey := range months {
 		s3Prefix := string(kind) + "/" + monthKey + "/"
 		if basePrefix != "" {
 			s3Prefix = basePrefix + "/" + s3Prefix
@@ -210,34 +240,85 @@ func (b *DuckDBBackend) parquetGlobs(ctx context.Context, kind ParquetKind, from
 
 		keys, err := b.s3Sink.ListKeys(ctx, s3Prefix)
 		if err != nil {
-			// 探测失败只影响「更早那部分数据」的可见性，不能让整次查询失败：
+			// 探测失败只影响「S3 侧数据」的可见性，不能让整次查询失败：
 			// 本地结果照常返回并留下告警，而不是把一次 S3 抖动放大成检索不可用。
 			klog.Warningf("failed to probe s3 archive prefix %s: %v", s3Prefix, err)
 			continue
 		}
 
-		datesOnS3 := make(map[string]bool, len(keys))
+		byDay := make(map[string]map[string]struct{}, 32)
 		for _, key := range keys {
 			// key 形如 <前缀>/<类型>/<年>/<月>/<日>/<文件名>，倒数第二段就是日期。
 			parts := strings.Split(strings.Trim(key, "/"), "/")
-			if len(parts) >= 2 {
-				datesOnS3[parts[len(parts)-2]] = true
-			}
-		}
-		for _, date := range missingByMonth[monthKey] {
-			if !datesOnS3[date] {
+			if len(parts) < 2 {
 				continue
 			}
-			s3Globs = append(s3Globs, fmt.Sprintf("s3://%s/%s%s/*.parquet", b.s3.Bucket, s3Prefix, date))
+			date, name := parts[len(parts)-2], parts[len(parts)-1]
+			day, ok := byDay[date]
+			if !ok {
+				day = make(map[string]struct{}, 8)
+				byDay[date] = day
+			}
+			day[name] = struct{}{}
 		}
+		s3ByDay[monthKey] = byDay
 	}
 
-	// 拼成一个新切片而不是 `append(localGlobs, ...)`：后者可能在 localGlobs 的底层数组里就地追加，
-	// 改写调用方仍会读到的数据（且容易被误以为是同一份列表）。
-	globs := make([]string, 0, len(localGlobs)+len(s3Globs))
-	globs = append(globs, localGlobs...)
-	globs = append(globs, s3Globs...)
-	return globs, len(s3Globs) > 0
+	s3DayGlob := func(p *dayPlan) string {
+		s3Prefix := string(kind) + "/" + p.monthKey + "/"
+		if basePrefix != "" {
+			s3Prefix = basePrefix + "/" + s3Prefix
+		}
+		return fmt.Sprintf("s3://%s/%s%s/*.parquet", b.s3.Bucket, s3Prefix, p.date)
+	}
+
+	plan := parquetScanPlan{globs: make([]string, 0, len(days))}
+	for _, p := range plans {
+		var s3Names map[string]struct{}
+		if byDay, ok := s3ByDay[p.monthKey]; ok {
+			s3Names = byDay[p.date]
+		}
+
+		switch {
+		case len(s3Names) == 0 && p.localGlob != "":
+			// S3 上没有（或探测不到）这一天的文件：本地有就只查本地。
+			plan.globs = append(plan.globs, p.localGlob)
+		case len(s3Names) == 0:
+			// 当天本地与 S3 都没有文件：read_parquet 对空 glob 直接报错，跳过。
+		case p.localGlob == "":
+			g := s3DayGlob(p)
+			plan.globs = append(plan.globs, g)
+			plan.useS3 = true
+		default:
+			// 同一天两边都有文件，按文件名比对覆盖关系：
+			//  - S3 ⊆ 本地：本地 glob 已覆盖全部数据，且优先走本地热层。
+			//  - 本地 ⊆ S3：S3 glob 已覆盖全部数据，只扫一份，不重复读共享文件。
+			//  - 互有独占：两边都要扫，靠 (文件名, 行号) 在 SQL 里去重。
+			switch {
+			case namesSubset(s3Names, p.localNames):
+				plan.globs = append(plan.globs, p.localGlob)
+			case namesSubset(p.localNames, s3Names):
+				g := s3DayGlob(p)
+				plan.globs = append(plan.globs, g)
+				plan.useS3 = true
+			default:
+				plan.globs = append(plan.globs, p.localGlob, s3DayGlob(p))
+				plan.useS3 = true
+				plan.dedupCopies = true
+			}
+		}
+	}
+	return plan
+}
+
+// namesSubset 报告 a 里的每个名字都在 b 里。
+func namesSubset(a, b map[string]struct{}) bool {
+	for name := range a {
+		if _, ok := b[name]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // archiveDays 返回 [from, to) 覆盖的每一天（按本地时区、对齐到当天零点）。
@@ -311,6 +392,7 @@ func buildDuckDBSQL(
 	query archiveQuery,
 	columns []string,
 	globs []string,
+	dedupCopies bool,
 	from, to time.Time,
 	page, size int,
 ) (string, error) {
@@ -350,14 +432,21 @@ func buildDuckDBSQL(
 	}
 	offset := (page - 1) * size
 
+	columnList := strings.Join(selectColumns, ", ")
+	globList := strings.Join(quotedGlobs, ", ")
+	if dedupCopies {
+		// 本地与 S3 互有独占文件的天两个来源都要扫；同一个文件在两边各有一份，
+		// 按 (文件名, 行号) 去重，否则命中总数与结果行都会翻倍。filename 与
+		// file_row_number 由 read_parquet 的参数提供，不进 SELECT 列表；WHERE 在
+		// 去重之前执行，谓词下推不受影响；count 在去重后的行集上算，外层只排序分页。
+		return fmt.Sprintf(
+			"SELECT count(*) OVER () AS __total, %s FROM (SELECT %s FROM read_parquet([%s], filename=true, file_row_number=true) WHERE %s QUALIFY row_number() OVER (PARTITION BY regexp_replace(filename, '^.*[/\\\\]', ''), file_row_number) = 1) ORDER BY %s DESC LIMIT %d OFFSET %d",
+			columnList, columnList, globList, where, timeColumn, size, offset,
+		), nil
+	}
 	return fmt.Sprintf(
 		"SELECT count(*) OVER () AS __total, %s FROM read_parquet([%s]) WHERE %s ORDER BY %s DESC LIMIT %d OFFSET %d",
-		strings.Join(selectColumns, ", "),
-		strings.Join(quotedGlobs, ", "),
-		where,
-		timeColumn,
-		size,
-		offset,
+		columnList, globList, where, timeColumn, size, offset,
 	), nil
 }
 
