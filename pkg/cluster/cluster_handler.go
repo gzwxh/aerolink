@@ -68,6 +68,9 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 			Name:      name,
 			Version:   cluster.Version,
 			IsDefault: name == defaultContext,
+			// 集群 DNS 域供工作负载详情拼内网域名；ClientSet 内部按 TTL 缓存，
+			// 不会给列表接口增加常态 apiserver 压力。
+			DNSDomain: cluster.DNSDomain(c.Request.Context()),
 		}
 		// 客户端建得起来不等于数据是新的（apiserver 可能刚掉线、informer 可能在
 		// 重试），所以这里额外带上陈旧信号，让切换器也能提示（见 lib/cluster-data-staleness.ts）。

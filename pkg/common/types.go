@@ -61,6 +61,10 @@ type ClusterInfo struct {
 	Version     string `json:"version"`
 	IsDefault   bool   `json:"isDefault"`
 	Error       string `json:"error,omitempty"`
+	// DNSDomain 是集群的 DNS 服务域（从 coredns Corefile 解析，见 cluster.ClientSet
+	// 的 DNSDomain）：工作负载详情用它拼集群内可解析的域名。解析失败时省略，
+	// 前端回落 cluster.local。
+	DNSDomain string `json:"dnsDomain,omitempty"`
 	// Slug 是集群在浏览器地址里的稳定短名（注意：与 API 路径 /_clusters/<集群名>
 	// 同形不同源，后者是编码后的集群名，见方案文档 §3.1）。
 	Slug string `json:"slug,omitempty"`
