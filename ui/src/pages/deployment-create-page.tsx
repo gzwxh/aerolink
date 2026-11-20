@@ -695,7 +695,11 @@ function DeploymentFormPage({
               handleNamespaceChange={(ns) => {
                 const next = ns || 'default'
                 update({ namespace: next })
-                navigate(namespaceCreatePath(next), { replace: true })
+                // 克隆页的 URL 指向源对象（…/clone），没有承载目标命名空间的位置；
+                // 这里跳转到 /create 会丢掉克隆模式、把已反显的表单重置成空白。
+                if (!cloneSourceName) {
+                  navigate(namespaceCreatePath(next), { replace: true })
+                }
               }}
               triggerClassName="w-full sm:w-full sm:max-w-none"
               disabled={isEdit}
