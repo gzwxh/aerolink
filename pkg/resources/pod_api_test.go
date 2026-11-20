@@ -1801,6 +1801,38 @@ func TestPodWatchSnapshotEndsWithSyncedMarker(t *testing.T) {
 	}
 }
 
+// TestPodWatchSnapshotReturnsErrorOnListFailure 覆盖「快照读不出来时显式返回错误」。
+// Watch 依赖这个 error 分支给客户端发 error 事件并结束连接；若这里静默吞掉，
+// 前端收不到任何事件、会永远停在「加载中」。
+func TestPodWatchSnapshotReturnsErrorOnListFailure(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			List: func(_ context.Context, _ client.WithWatch, _ client.ObjectList, _ ...client.ListOption) error {
+				return errors.New("pod list failed")
+			},
+		}).
+		Build()
+
+	clientSet := &cluster.ClientSet{
+		Name:      "cluster-a",
+		K8sClient: &kube.K8sClient{Client: k8sClient},
+	}
+	user := model.User{Username: "alice"}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/pods/default/watch", nil)
+
+	if err := NewPodHandler().sendPodWatchSnapshot(c, clientSet, user, "default", "", "", true, nil); err == nil {
+		t.Fatal("快照读不出来时应返回错误，让 Watch 走 error 分支")
+	}
+}
+
 // TestPodWatchEndsWithCloseOnShutdown 覆盖退出时的干净收尾：进程收到退出信号后，
 // 在途的 watch 流要写一个 `close` 事件再正常结束响应。硬切断（进程直接退出）会让浏览器
 // 报 net::ERR_INCOMPLETE_CHUNKED_ENCODING —— 客户端照样会重连，但那条报错会让人误以为

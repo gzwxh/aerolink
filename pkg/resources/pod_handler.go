@@ -1052,6 +1052,11 @@ func (h *PodHandler) Watch(c *gin.Context) {
 			// hub 路径没有这一步，这里用缓存快照补上（不产生 apiserver 请求）。
 			if err := h.sendPodWatchSnapshot(c, cs, user, ns, labelSelector, fieldSelector, reduce, metricsMap); err != nil {
 				klog.Warningf("failed to send pod watch snapshot for cluster %s: %v", cs.Name, err)
+				// 快照读不出来时明确告知客户端并结束连接，否则前端收不到任何事件、
+				// 会永远停在「加载中」。结束连接后前端会按 retry 重连或降级轮询。
+				_ = writeSSE(c, cs.Name, "error", gin.H{"error": fmt.Sprintf("failed to load pod snapshot: %v", err)})
+				stopSource()
+				return
 			}
 		}
 	}

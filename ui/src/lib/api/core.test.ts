@@ -317,6 +317,23 @@ describe('useResourcesWatch', () => {
     expect(names(result.current.data)).toEqual(['p1'])
   })
 
+  // 空快照（RBAC 过滤后为 0 条、或快照被跳过）不会带来任何 added：
+  // 收到 synced 就要收起加载态，否则详情页的 Pods 永远停在「加载中」。
+  it('空快照收到 synced 后收起加载态', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('EventSource', FakeEventSource)
+
+    const { result } = renderHook(() => useResourcesWatch('pods', 'default'))
+    expect(result.current.isLoading).toBe(true)
+
+    act(() => {
+      FakeEventSource.instances[0].emit('synced', '')
+    })
+
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.data).toBeUndefined()
+  })
+
   // 显式刷新不吃指数退避：默认 refetch 要等 1s（连续重连更久），immediate 立刻重连。
   it('immediate 重连不等退避', async () => {
     vi.stubGlobal('EventSource', FakeEventSource)
