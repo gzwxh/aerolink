@@ -670,6 +670,8 @@ export interface Cluster {
   createdAt: string
   updatedAt: string
   prometheusURL?: string
+  /** 集群 DNS 服务域（后端从 coredns Corefile 解析；未连接或解析失败时回落 cluster.local）。 */
+  dnsDomain?: string
   error?: string
   // 集群徽章：`/clusters` 只在启用时下发，`/admin/clusters/` 始终回传原值。
   badgeEnabled?: boolean

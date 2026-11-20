@@ -16,6 +16,7 @@ import {
   getOwnerInfo,
 } from '@/lib/k8s'
 import { formatDate, getAge } from '@/lib/utils'
+import { useCluster } from '@/hooks/use-cluster'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -62,6 +63,11 @@ export function DeploymentOverview({
   services?: Service[]
 }) {
   const { t } = useTranslation()
+  const { clusters, currentCluster } = useCluster()
+  // 集群 DNS 域由后端从 coredns Corefile 解析；未连接或未下发时回落默认域。
+  const dnsDomain =
+    clusters.find((cluster) => cluster.name === currentCluster)?.dnsDomain ||
+    'cluster.local'
   const sortedEvents = useMemo(() => {
     return (events || []).slice().sort((a, b) => {
       const timeDiff = getEventTime(b).getTime() - getEventTime(a).getTime()
@@ -106,7 +112,7 @@ export function DeploymentOverview({
             isLoading={isRelatedLoading}
           />
           {(services || []).length > 0 ? (
-            <ServiceEndpointsCard services={services!} />
+            <ServiceEndpointsCard services={services!} dnsDomain={dnsDomain} />
           ) : null}
           {Object.keys(labels).length > 0 ? (
             <MetadataListCard title="common.fields.labels" entries={labels} />
@@ -153,7 +159,8 @@ export type ServiceEndpointLabels = {
  */
 export function serviceEndpointEntries(
   services: Service[],
-  labels: ServiceEndpointLabels
+  labels: ServiceEndpointLabels,
+  dnsDomain = 'cluster.local'
 ): ServiceEndpointEntry[] {
   const result: ServiceEndpointEntry[] = []
   for (const svc of services) {
@@ -192,13 +199,14 @@ export function serviceEndpointEntries(
         port,
         access,
         clusterAddress: clusterAddress === access ? null : clusterAddress,
-        // 集群内可直接解析的 FQDN（kubelet 默认 cluster domain）。
+        // 集群内可直接解析的 FQDN：域来自后端从 coredns Corefile 解析出的集群域，
+        // 自定义 clusterDomain 的集群不再拼出无法解析的 cluster.local。
         // 末尾的点表示绝对域名：跳过 resolv.conf 的 search 域展开（ndots:5 时
         // 不加点会先试 3 个搜索域再查绝对名），少几次无谓查询。
         // Headless 与 NodePort / LoadBalancer 也都有这条记录。
         dns:
           svcName && svcNamespace
-            ? `${svcName}.${svcNamespace}.svc.cluster.local.:${port}`
+            ? `${svcName}.${svcNamespace}.svc.${dnsDomain}.:${port}`
             : null,
       })
     }
@@ -238,7 +246,13 @@ function EndpointDetailRow({
 }
 
 /** 网络入口: how to reach the workload from outside/inside the cluster. */
-function ServiceEndpointsCard({ services }: { services: Service[] }) {
+function ServiceEndpointsCard({
+  services,
+  dnsDomain,
+}: {
+  services: Service[]
+  dnsDomain: string
+}) {
   const { t } = useTranslation()
 
   const lbPendingText = t('deploymentOverview.lbPending', '外部 IP 待分配')
@@ -246,12 +260,16 @@ function ServiceEndpointsCard({ services }: { services: Service[] }) {
   const headlessText = t('deploymentOverview.headless', 'Headless')
   const entries = useMemo(
     () =>
-      serviceEndpointEntries(services, {
-        lbPending: lbPendingText,
-        anyNode: anyNodeText,
-        headless: headlessText,
-      }),
-    [services, lbPendingText, anyNodeText, headlessText]
+      serviceEndpointEntries(
+        services,
+        {
+          lbPending: lbPendingText,
+          anyNode: anyNodeText,
+          headless: headlessText,
+        },
+        dnsDomain
+      ),
+    [services, lbPendingText, anyNodeText, headlessText, dnsDomain]
   )
 
   if (entries.length === 0) return null

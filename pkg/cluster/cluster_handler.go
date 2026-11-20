@@ -150,6 +150,9 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 
 		if clientSet, exists := clusterState[cluster.Name]; exists {
 			clusterInfo["version"] = clientSet.Version
+			// 集群 DNS 域供工作负载详情拼内网域名；ClientSet 内部按 TTL 缓存，
+			// 不会给列表接口增加常态 apiserver 压力。
+			clusterInfo["dnsDomain"] = clientSet.DNSDomain(c.Request.Context())
 		}
 		if errMsg, exists := errorState[cluster.Name]; exists {
 			clusterInfo["error"] = errMsg

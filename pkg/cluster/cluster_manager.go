@@ -18,6 +18,8 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/prometheus"
 	"gorm.io/gorm"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -34,6 +36,89 @@ type ClientSet struct {
 	config                  string
 	prometheusURL           string
 	clusterAgentGeneration  uint64
+
+	// 集群 DNS 域缓存（见 DNSDomain）：coredns 配置极少变动，按 TTL 缓存，
+	// 不给 /clusters 列表接口增加常态 apiserver 压力。
+	dnsMu       sync.Mutex
+	dnsDomain   string
+	dnsDomainAt time.Time
+}
+
+// DefaultClusterDNSDomain 是 kubelet 的默认集群 DNS 服务域。
+const DefaultClusterDNSDomain = "cluster.local"
+
+// dnsDomainCacheTTL 是集群 DNS 域的缓存时长：coredns 配置极少变动。
+const dnsDomainCacheTTL = 10 * time.Minute
+
+// dnsDomainConfigMapCandidates 是 coredns 配置可能所在的 ConfigMap
+// （kubeadm / k3s 用 coredns，RKE2 用 rke2-coredns）。
+var dnsDomainConfigMapCandidates = []types.NamespacedName{
+	{Namespace: "kube-system", Name: "coredns"},
+	{Namespace: "kube-system", Name: "rke2-coredns"},
+}
+
+// DNSDomain 返回该集群的 DNS 服务域。
+//
+// 域名从 coredns 的 Corefile 解析（kubernetes 插件的第一个正向 zone）；读不到
+// 配置（非标准发行版、coredns 未装）时回落 cluster.local，与旧行为一致。
+// 结果按 TTL 缓存：/clusters 列表每次都带这个字段，不能每次都访问 apiserver。
+func (cs *ClientSet) DNSDomain(ctx context.Context) string {
+	if cs == nil {
+		return DefaultClusterDNSDomain
+	}
+	cs.dnsMu.Lock()
+	defer cs.dnsMu.Unlock()
+	if cs.dnsDomain != "" && time.Since(cs.dnsDomainAt) < dnsDomainCacheTTL {
+		return cs.dnsDomain
+	}
+
+	domain := cs.readDNSDomain(ctx)
+	cs.dnsDomain = domain
+	cs.dnsDomainAt = time.Now()
+	return domain
+}
+
+// readDNSDomain 逐个尝试候选 ConfigMap；读不到或解析不出时回落默认域。
+func (cs *ClientSet) readDNSDomain(ctx context.Context) string {
+	if cs.K8sClient == nil {
+		return DefaultClusterDNSDomain
+	}
+	// 直连客户端：informer 缓存会按需启动 informer，为读一次配置而 watch 全量
+	// ConfigMap 得不偿失；直连一次 Get 即可。
+	readClient := cs.K8sClient.DirectClient
+	if readClient == nil {
+		readClient = cs.K8sClient.Client
+	}
+	for _, key := range dnsDomainConfigMapCandidates {
+		var configMap corev1.ConfigMap
+		if err := readClient.Get(ctx, key, &configMap); err != nil {
+			continue
+		}
+		if domain := dnsDomainFromCorefile(configMap.Data["Corefile"]); domain != "" {
+			return domain
+		}
+	}
+	return DefaultClusterDNSDomain
+}
+
+// dnsDomainFromCorefile 从 Corefile 解析 kubernetes 插件的第一个正向 zone。
+//
+// 典型插件行：`    kubernetes cluster.local in-addr.arpa ip6.arpa {` —— 取插件名
+// 后第一个非反向域参数。解析不出返回空串，由调用方回落默认值。
+func dnsDomainFromCorefile(corefile string) string {
+	for _, line := range strings.Split(corefile, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] != "kubernetes" {
+			continue
+		}
+		for _, token := range fields[1:] {
+			if token == "{" || strings.HasSuffix(token, ".arpa") {
+				continue
+			}
+			return strings.TrimSuffix(token, ".")
+		}
+	}
+	return ""
 }
 
 type ClusterManager struct {

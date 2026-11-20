@@ -73,4 +73,25 @@ describe('serviceEndpointEntries', () => {
       'greptimedb-nodeport.devops.svc.cluster.local.:4002',
     ])
   })
+
+  // 回归：自定义集群域的集群按后端下发的 dnsDomain 拼内网域名，
+  // 不再硬编码 cluster.local 拼出无法解析的域名。
+  it('自定义集群域时按 dnsDomain 拼内网域名', () => {
+    const entries = serviceEndpointEntries(
+      [
+        service('greptimedb', {
+          type: 'NodePort',
+          clusterIP: '10.112.173.213',
+          ports: [{ port: 4002, protocol: 'TCP', nodePort: 30402 }],
+        }),
+      ],
+      labels,
+      'k8s.example.internal'
+    )
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0].dns).toBe(
+      'greptimedb.devops.svc.k8s.example.internal.:4002'
+    )
+  })
 })
