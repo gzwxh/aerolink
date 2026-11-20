@@ -139,6 +139,33 @@ func TestParquetGlobsFallsBackToS3WhenLocalDayMissing(t *testing.T) {
 	}
 }
 
+// 回归：endpoint 带协议头时 TLS 与上传端同口径——https:// 强制开启 TLS。
+// 此前这里仍按原始 UseTLS 生成明文连接，出现「上传走 TLS、冷层查询走明文」
+// 的协议不匹配。
+func TestDuckDBS3StatementsAlignTLSWithEndpoint(t *testing.T) {
+	statements := duckdbS3Statements(model.S3Archive{
+		Enabled:  true,
+		Endpoint: "https://cos.ap-guangzhou.myqcloud.com",
+		Bucket:   "bucket",
+		UseTLS:   false,
+	})
+	joined := strings.Join(statements, "; ")
+	if !strings.Contains(joined, "SET s3_use_ssl=true") {
+		t.Errorf("https:// endpoint 应强制开启 TLS（与上传端一致）:\n%s", joined)
+	}
+	if !strings.Contains(joined, "SET s3_endpoint='cos.ap-guangzhou.myqcloud.com'") {
+		t.Errorf("endpoint 应去掉协议头:\n%s", joined)
+	}
+
+	// 无协议头时仍按 UseTLS 配置。
+	plain := strings.Join(duckdbS3Statements(model.S3Archive{
+		Enabled: true, Endpoint: "cos.example.com", Bucket: "bucket", UseTLS: true,
+	}), "; ")
+	if !strings.Contains(plain, "SET s3_use_ssl=true") {
+		t.Errorf("无协议头的 endpoint 应沿用 UseTLS 配置:\n%s", plain)
+	}
+}
+
 // 去重路径的 SQL 形态：read_parquet 带上 filename/file_row_number，并按
 // (文件名, 行号) 窗口去重；单来源查询保持原 SQL 形状不变。
 func TestBuildDuckDBSQLDedupShape(t *testing.T) {

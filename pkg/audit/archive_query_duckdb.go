@@ -465,13 +465,12 @@ func duckdbExtensionDir() string {
 
 // duckdbS3Statements 返回访问 S3 需要的 DuckDB 语句（CLI 驱动前置执行；SDK 驱动在连接初始化执行）。
 //
-// endpoint 要去掉协议头（DuckDB 的 s3_endpoint 只接受 host）；寻址方式与 minio-go 的
-// PathStyle 保持同一语义——腾讯 COS 这类强制 virtual-hosted 的厂商必须 vhost。
+// endpoint 与 TLS 走 normalizeS3Endpoint 的同一份口径（与上传端一致）：endpoint 带
+// 协议头时以协议头为准——填 https:// 却没开 UseTLS 的配置，上传走 TLS，这里若仍按
+// UseTLS 生成明文连接，冷层检索会协议不匹配。寻址方式与 minio-go 的 PathStyle 保持
+// 同一语义——腾讯 COS 这类强制 virtual-hosted 的厂商必须 vhost。
 func duckdbS3Statements(s3 model.S3Archive) []string {
-	endpoint := s3.Endpoint
-	endpoint = strings.TrimPrefix(endpoint, "https://")
-	endpoint = strings.TrimPrefix(endpoint, "http://")
-	endpoint = strings.TrimSuffix(endpoint, "/")
+	endpoint, useTLS := normalizeS3Endpoint(s3.Endpoint, s3.UseTLS)
 
 	urlStyle := "vhost"
 	if s3.PathStyle {
@@ -496,7 +495,7 @@ func duckdbS3Statements(s3 model.S3Archive) []string {
 		set("s3_region", s3.Region),
 		set("s3_access_key_id", s3.AccessKey),
 		set("s3_secret_access_key", string(s3.SecretKey)),
-		"SET s3_use_ssl=" + fmt.Sprintf("%t", s3.UseTLS),
+		"SET s3_use_ssl=" + fmt.Sprintf("%t", useTLS),
 		set("s3_url_style", urlStyle),
 	}
 }
