@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -179,18 +180,57 @@ func (h *CRHandler) List(c *gin.Context) {
 			opts.Namespace = namespace
 		}
 	}
+	if err := parseCRListQuery(c, opts); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	listCRsSinglePage(c, cs, crd, crdName, user, crList, opts, allNamespaces, paginationClient(c, cs))
+}
+
+// parseCRListQuery 解析 labelSelector / limit / continue 三个通用查询参数。
+// 解析失败返回带原因的 error，由调用方统一回 400。
+func parseCRListQuery(c *gin.Context, opts *client.ListOptions) error {
 	if labelSelector := c.Query("labelSelector"); labelSelector != "" {
 		selector, err := labels.Parse(labelSelector)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid labelSelector parameter: " + err.Error()})
-			return
+			return fmt.Errorf("invalid labelSelector parameter: %w", err)
 		}
 		opts.LabelSelector = selector
 	}
+	if c.Query("limit") != "" {
+		limit, err := strconv.ParseInt(c.Query("limit"), 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid limit parameter")
+		}
+		opts.Limit = limit
+	}
+	if c.Query("continue") != "" {
+		opts.Continue = c.Query("continue")
+	}
+	return nil
+}
 
-	if err := cs.K8sClient.List(ctx, crList, opts); err != nil {
+// listCRsSinglePage 单页路径：非分页请求继续走（可能来自 informer 缓存的）客户端，
+// 返回前抹掉缓存塞的假 continue token，并对跨命名空间结果做 RBAC 过滤。
+func listCRsSinglePage(
+	c *gin.Context,
+	cs *cluster.ClientSet,
+	crd *apiextensionsv1.CustomResourceDefinition,
+	crdName string,
+	user model.User,
+	crList *unstructured.UnstructuredList,
+	opts *client.ListOptions,
+	allNamespaces bool,
+	listClient client.Client,
+) {
+	if err := listClient.List(c.Request.Context(), crList, opts); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	// 缓存路径会带一个假 continue token，抹掉它，免得前端拿它反复翻页。
+	if listMeta, err := meta.ListAccessor(crList); err == nil && listMeta.GetContinue() == cacheContinueToken {
+		listMeta.SetContinue("")
 	}
 
 	if crd.Spec.Scope == apiextensionsv1.NamespaceScoped && allNamespaces {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +17,7 @@ import (
 	"github.com/zxh326/kite/pkg/rbac"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -309,10 +311,25 @@ func (h *NodeHandler) List(c *gin.Context) {
 		}
 		listOpts = append(listOpts, client.MatchingLabelsSelector{Selector: selector})
 	}
+	if c.Query("limit") != "" {
+		limit, err := strconv.ParseInt(c.Query("limit"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit parameter"})
+			return
+		}
+		listOpts = append(listOpts, client.Limit(limit))
+	}
+	if c.Query("continue") != "" {
+		listOpts = append(listOpts, client.Continue(c.Query("continue")))
+	}
 	var nodes corev1.NodeList
-	if err := cs.K8sClient.List(c.Request.Context(), &nodes, listOpts...); err != nil {
+	if err := paginationClient(c, cs).List(c.Request.Context(), &nodes, listOpts...); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list nodes: " + err.Error()})
 		return
+	}
+	// 缓存路径会带一个假 continue token，抹掉它，免得前端拿它反复翻页。
+	if listMeta, err := meta.ListAccessor(&nodes); err == nil && listMeta.GetContinue() == cacheContinueToken {
+		listMeta.SetContinue("")
 	}
 
 	nodeMetricsMap := buildNodeMetricsMap(listNodeMetrics(c.Request.Context(), cs, labelSelector))

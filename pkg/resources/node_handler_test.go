@@ -519,3 +519,46 @@ func TestNodeHandlerList_Uncached_MultipleContainersPerPod(t *testing.T) {
 	assert.Equal(t, int64(500), m.CPURequest, "200+300=500m (uncached)")
 	assert.Equal(t, int64((128+256)*1024*1024), m.MemoryRequest, "128+256=384Mi (uncached)")
 }
+
+// 回归：Nodes 列表之前覆写了 List，却没抹掉缓存路径的假 continue token，
+// 前端分页 hook 拿着它反复翻页，把全量节点叠加成了几十倍重复行。
+func TestNodeListStripsInformerCacheContinueToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	node := makeNode("node-a", 4000, 8*1024*1024*1024, 110)
+	direct := fake.NewClientBuilder().
+		WithScheme(buildTestScheme(t)).
+		WithObjects(node).
+		Build()
+
+	// 缓存路径（不带 paginate）：informer 缓存会塞假 continue token，必须被抹掉。
+	cs := newPaginationTestClientSet(cacheLikeClient{Client: direct}, direct)
+	response := performListRequest(cs, NewNodeHandler(), "?limit=200&reduce=true")
+	if response.Code != http.StatusOK {
+		t.Fatalf("cached node list returned %d, want %d; body=%s",
+			response.Code, http.StatusOK, response.Body.String())
+	}
+	var list corev1.NodeList
+	if err := json.Unmarshal(response.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode node list: %v", err)
+	}
+	if list.Continue != "" {
+		t.Fatalf("cached node list leaked continue token %q, want empty", list.Continue)
+	}
+	if len(list.Items) != 1 || list.Items[0].Name != "node-a" {
+		t.Fatalf("cached node list returned %#v, want the node-a node", list.Items)
+	}
+
+	// 分页路径（paginate=true）：必须走直连客户端，绕开缓存的分页限制。
+	response = performListRequest(cs, NewNodeHandler(), "?paginate=true&limit=200&reduce=true")
+	if response.Code != http.StatusOK {
+		t.Fatalf("paginated node list returned %d, want %d; body=%s",
+			response.Code, http.StatusOK, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode paginated node list: %v", err)
+	}
+	if len(list.Items) != 1 || list.Items[0].Name != "node-a" {
+		t.Fatalf("paginated node list returned %#v, want the node-a node", list.Items)
+	}
+}

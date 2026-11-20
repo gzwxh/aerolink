@@ -1102,6 +1102,63 @@ func TestCRRBACDimensions(t *testing.T) {
 	})
 }
 
+// 回归：CRHandler.List 之前与 NodeHandler 一样，直接走缓存 List、不解析分页参数、
+// 也不抹掉假 continue token，前端分页 hook 会把同一份自定义资源叠加成几十倍重复行。
+func TestCRListStripsInformerCacheContinueToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	user := newWidgetUser([]string{"cluster-a"}, []string{"*"}, []string{string(common.VerbGet)})
+
+	scheme := runtime.NewScheme()
+	if err := apiextensionsv1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	direct := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(
+			newWidgetCRD(apiextensionsv1.NamespaceScoped),
+			newWidget("w", "default", nil),
+		).
+		Build()
+	cs := newPaginationTestClientSet(cacheLikeClient{Client: direct}, direct)
+
+	runList := func(query string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(rec)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/api/v1/widgets.example.com/_all"+query, nil)
+		ctx.Params = gin.Params{
+			{Key: "crd", Value: widgetCRDName},
+			{Key: "namespace", Value: common.AllNamespaces},
+		}
+		ctx.Set("cluster", cs)
+		ctx.Set("user", user)
+		NewCRHandler().List(ctx)
+		return rec
+	}
+
+	// 缓存路径（不带 paginate）：informer 缓存会塞假 continue token，必须被抹掉。
+	rec := runList("?limit=200&reduce=true")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cached cr list returned %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	list := decodeCRAPIResponse[unstructured.UnstructuredList](t, rec)
+	if list.GetContinue() != "" {
+		t.Fatalf("cached cr list leaked continue token %q, want empty", list.GetContinue())
+	}
+	if len(list.Items) != 1 || list.Items[0].GetName() != "w" {
+		t.Fatalf("cached cr list returned %#v, want the w widget", list.Items)
+	}
+
+	// 分页路径（paginate=true）：必须走直连客户端，绕开缓存的分页限制。
+	rec = runList("?paginate=true&limit=200&reduce=true")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("paginated cr list returned %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	list = decodeCRAPIResponse[unstructured.UnstructuredList](t, rec)
+	if len(list.Items) != 1 || list.Items[0].GetName() != "w" {
+		t.Fatalf("paginated cr list returned %#v, want the w widget", list.Items)
+	}
+}
+
 func TestCRAPIClusterSelection(t *testing.T) {
 	fixture := newCRAPITestFixture(t, crAPITestConfig{
 		user: newWidgetUser(
