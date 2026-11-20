@@ -26,6 +26,8 @@ interface UsePagedResourcesOptions {
   refreshInterval?: number
   enabled?: boolean
   reduce?: boolean
+  /** 多选命名空间集合：交给服务端收窄，避免分页窗口与客户端过滤错位。 */
+  namespaces?: string[]
 }
 
 interface ItemIdentity {
@@ -79,7 +81,12 @@ export function usePagedResources<T extends ResourceType>(
     refreshInterval = 0,
     enabled = true,
     reduce,
+    namespaces,
   } = options
+
+  // 数组引用每次渲染可能不同，用拼接结果做依赖，避免无谓重取。
+  const namespacesKey =
+    namespaces && namespaces.length > 0 ? namespaces.join(',') : undefined
 
   const [items, setItems] = useState<ResourceItems<T>>()
   const [continueToken, setContinueToken] = useState<string>()
@@ -94,6 +101,7 @@ export function usePagedResources<T extends ResourceType>(
   const fetchBatch = useCallback(
     async (target: number, startToken?: string) => {
       const collected: unknown[] = []
+      const seen = new Set<string>()
       let token = startToken
       for (let attempt = 0; attempt < MAX_PAGE_FETCHES; attempt++) {
         const remaining = Math.max(target - collected.length, 1)
@@ -109,9 +117,17 @@ export function usePagedResources<T extends ResourceType>(
             labelSelector,
             fieldSelector,
             reduce,
+            namespaces: namespacesKey ? namespacesKey.split(',') : undefined,
           }
         )
-        collected.push(...((page.items ?? []) as unknown[]))
+        // 批内按 itemKey 去重：后端若有 List 接口漏抹假 continue token，会反复返回
+        // 同一份全量数据；这里兜住，避免同一行在单次批量拉取里叠加。
+        for (const item of (page.items ?? []) as unknown[]) {
+          const key = itemKey(item)
+          if (key && seen.has(key)) continue
+          if (key) seen.add(key)
+          collected.push(item)
+        }
         token = page.metadata?.continue || undefined
         if (!token || collected.length >= target) {
           break
@@ -122,7 +138,15 @@ export function usePagedResources<T extends ResourceType>(
         continueToken: token,
       }
     },
-    [fieldSelector, labelSelector, namespace, pageSize, reduce, resource]
+    [
+      fieldSelector,
+      labelSelector,
+      namespace,
+      namespacesKey,
+      pageSize,
+      reduce,
+      resource,
+    ]
   )
 
   const reload = useCallback(async () => {

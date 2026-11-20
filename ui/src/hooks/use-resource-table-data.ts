@@ -13,6 +13,11 @@ interface UseResourceTableDataOptions {
   labelSelector?: string
   /** 外部数据模式：不发起请求，数据由调用方提供（例如详情页内嵌表格）。 */
   disabled?: boolean
+  /**
+   * 多选命名空间集合。请求仍折叠成 `_all`，但把集合交给服务端收窄，
+   * 分页与逐条鉴权都作用在选中范围内（见 usePagedResources / 后端 namespaces 参数）。
+   */
+  namespaces?: string[]
 }
 
 export function useResourceTableData<T>({
@@ -23,6 +28,7 @@ export function useResourceTableData<T>({
   refreshInterval,
   labelSelector,
   disabled,
+  namespaces,
 }: UseResourceTableDataOptions) {
   const resolvedResourceType = (resourceType ??
     (resourceName.toLowerCase() as ResourceType)) as ResourceType
@@ -38,6 +44,7 @@ export function useResourceTableData<T>({
     enabled: pagedMode,
     refreshInterval,
     labelSelector,
+    namespaces,
     reduce: true,
   })
 
@@ -46,6 +53,7 @@ export function useResourceTableData<T>({
     reduce: true,
     disable: useSSE || disabled || pagedMode,
     labelSelector,
+    namespaces,
   })
 
   const watch = useResourcesWatch(resolvedResourceType, namespace, {

@@ -52,6 +52,8 @@ export const fetchResources = <T>(
     labelSelector?: string
     fieldSelector?: string
     reduce?: boolean
+    /** 多选命名空间：仅在跨命名空间（`_all`）请求上生效，由服务端收窄范围。 */
+    namespaces?: string[]
   }
 ): Promise<T> => {
   let endpoint = namespace ? `/${resource}/${namespace}` : `/${resource}`
@@ -74,6 +76,11 @@ export const fetchResources = <T>(
   }
   if (opts?.reduce) {
     params.append('reduce', 'true')
+  }
+  // 多选命名空间由服务端收窄：否则 `_all` 只返回全集群的一页，选中集合可能
+  // 全在分页窗口之外（见 docs/dev/plans/2026-11-20-多命名空间列表分页.md）。
+  if (opts?.namespaces && opts.namespaces.length > 0) {
+    params.append('namespaces', opts.namespaces.join(','))
   }
 
   if (params.toString()) {
@@ -741,8 +748,10 @@ export const useResources = <T extends ResourceType>(
     refreshInterval?: number
     disable?: boolean
     reduce?: boolean
+    namespaces?: string[]
   }
 ) => {
+  const namespacesKey = options?.namespaces?.join(',')
   return useQuery({
     queryKey: [
       resource,
@@ -750,6 +759,7 @@ export const useResources = <T extends ResourceType>(
       options?.limit,
       options?.labelSelector,
       options?.fieldSelector,
+      namespacesKey,
     ],
     queryFn: () => {
       return fetchResources<ResourcesTypeMap[T]>(resource, namespace, {
@@ -758,6 +768,7 @@ export const useResources = <T extends ResourceType>(
         labelSelector: options?.labelSelector,
         fieldSelector: options?.fieldSelector,
         reduce: options?.reduce,
+        namespaces: options?.namespaces,
       })
     },
     enabled: !options?.disable,
@@ -1092,7 +1103,11 @@ export function useResourcesWatch<T extends ResourceType>(
       })
 
       // 服务端若显式给出「快照发完」的标记，就不用等窗口到期了。
+      // 空快照（无匹配对象或 RBAC 过滤后为 0）不会带来任何 added：
+      // 快照完成即收起加载态，否则界面会永远停在「加载中」。
       es.addEventListener('synced', () => {
+        hasDataRef.current = true
+        setIsLoading(false)
         endResync()
       })
 

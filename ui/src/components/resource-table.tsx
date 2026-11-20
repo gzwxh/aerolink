@@ -247,6 +247,9 @@ function ResourceTableContent<T>({
     useSSE,
     refreshInterval,
     labelSelector: effectiveLabelSelector,
+    // 多选命名空间折叠成 `_all` 时把集合交给服务端收窄：分页与逐条鉴权都要
+    // 作用在选中范围内，否则靠后的命名空间永远落在分页窗口之外。
+    namespaces: selectedNamespaces.length > 1 ? selectedNamespaces : undefined,
     disabled: external || !namespaceReady,
   })
   const resolvedResourceType = (
