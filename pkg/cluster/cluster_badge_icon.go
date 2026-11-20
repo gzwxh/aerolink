@@ -157,7 +157,7 @@ func UploadClusterBadgeIcon(c *gin.Context) {
 		"badge_icon_url":     iconPath,
 		"badge_icon_enabled": true,
 	}
-	if err := model.UpdateCluster(cluster, updates); err != nil {
+	if err := model.UpdateCluster(cluster, updates, false); err != nil {
 		// 字节已经写进去了，但 clusters.badge_icon_url 没指向它：按不变式清理掉，
 		// 免得留下取不到的孤儿行。
 		if cleanupErr := model.DeleteClusterBadgeIcon(cluster.ID); cleanupErr != nil {
@@ -200,7 +200,7 @@ func DeleteClusterBadgeIcon(c *gin.Context) {
 		return
 	}
 	if cluster.BadgeIconURL != "" {
-		if err := model.UpdateCluster(cluster, map[string]interface{}{"badge_icon_url": ""}); err != nil {
+		if err := model.UpdateCluster(cluster, map[string]interface{}{"badge_icon_url": ""}, false); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update cluster"})
 			return
 		}

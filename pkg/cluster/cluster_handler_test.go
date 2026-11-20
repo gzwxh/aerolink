@@ -163,6 +163,50 @@ func TestUpdateClusterRenameCarriesBindingGroups(t *testing.T) {
 
 // 只改部分字段的请求不能把没给的字段按零值写回：以前 in_cluster / is_default /
 // enabled 是非指针 bool，一个只改描述的请求会静默停用集群、清掉默认集群标记。
+// 回归：改名撞名返回 409 时，默认集群的切换必须随事务回滚——不能把原默认集群的
+// 默认标记提前清掉，留下「没有任何默认集群」的状态（此前先 ClearDefaultCluster
+// 再改名，冲突后默认标记就丢了）。
+func TestUpdateClusterRenameConflictKeepsDefault(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}
+	router := gin.New()
+	router.PUT("/clusters/:id", manager.UpdateCluster)
+
+	challenger := &model.Cluster{Name: "challenger", Description: "main", Enable: true}
+	if err := model.AddCluster(challenger); err != nil {
+		t.Fatalf("creating challenger cluster: %v", err)
+	}
+	def := &model.Cluster{Name: "current-default", Enable: true, IsDefault: true}
+	if err := model.AddCluster(def); err != nil {
+		t.Fatalf("creating default cluster: %v", err)
+	}
+	if err := model.AddCluster(&model.Cluster{Name: "taken", Enable: true}); err != nil {
+		t.Fatalf("creating the name-squatting cluster: %v", err)
+	}
+
+	response := performClusterRequest(router, http.MethodPut,
+		fmt.Sprintf("/clusters/%d", challenger.ID), `{"name":"taken","isDefault":true}`)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("rename conflict status = %d, want %d: %s",
+			response.Code, http.StatusConflict, response.Body.String())
+	}
+
+	var still model.Cluster
+	if err := model.DB.Where("name = ?", "current-default").First(&still).Error; err != nil {
+		t.Fatalf("loading the default cluster: %v", err)
+	}
+	if !still.IsDefault {
+		t.Fatal("default cluster lost its is_default flag after a failed rename")
+	}
+	var unchanged model.Cluster
+	if err := model.DB.Where("name = ?", "challenger").First(&unchanged).Error; err != nil {
+		t.Fatalf("loading the challenger cluster: %v", err)
+	}
+	if unchanged.IsDefault {
+		t.Fatal("the failed rename must not grant is_default to the challenger")
+	}
+}
+
 func TestUpdateClusterKeepsFieldsOmittedFromRequest(t *testing.T) {
 	setupClusterHandlerTestDB(t)
 	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}

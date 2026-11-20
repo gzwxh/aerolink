@@ -508,12 +508,10 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 		return
 	}
 
-	if req.IsDefault != nil && *req.IsDefault && !cluster.IsDefault {
-		if err := model.ClearDefaultCluster(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-	}
+	// 默认集群的切换不再单独执行：与字段更新 / 改名放进同一个事务
+	// （见 model.RenameCluster / model.UpdateCluster），改名撞名 409 或更新
+	// 失败时一并回滚，不会留下「没有任何默认集群」的中间态。
+	setDefault := req.IsDefault != nil && *req.IsDefault && !cluster.IsDefault
 	// 徽章按「本次请求之后的最终状态」校验：只改颜色或只打开开关的请求，
 	// 也要拿库里的旧值补齐后再判断文本是否为空。
 	nextBadge := model.Cluster{
@@ -664,9 +662,9 @@ func (cm *ClusterManager) UpdateCluster(c *gin.Context) {
 	renamed := newName != cluster.Name
 	var updateErr error
 	if renamed {
-		updateErr = model.RenameCluster(cluster, newName, updates)
+		updateErr = model.RenameCluster(cluster, newName, updates, setDefault)
 	} else {
-		updateErr = model.UpdateCluster(cluster, updates)
+		updateErr = model.UpdateCluster(cluster, updates, setDefault)
 	}
 	if updateErr != nil {
 		if errors.Is(updateErr, model.ErrClusterNameTaken) {

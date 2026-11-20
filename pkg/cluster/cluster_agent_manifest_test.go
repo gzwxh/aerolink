@@ -118,7 +118,7 @@ func TestGetClusterAgentManifestDisabledCluster(t *testing.T) {
 	if err := model.AddCluster(cluster); err != nil {
 		t.Fatalf("adding cluster: %v", err)
 	}
-	if err := model.UpdateCluster(cluster, map[string]interface{}{"enable": false}); err != nil {
+	if err := model.UpdateCluster(cluster, map[string]interface{}{"enable": false}, false); err != nil {
 		t.Fatalf("disabling cluster: %v", err)
 	}
 

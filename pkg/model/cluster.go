@@ -122,11 +122,22 @@ func GetClusterByClusterAgentTokenHash(hash string) (*Cluster, error) {
 	return &cluster, nil
 }
 
-func UpdateCluster(cluster *Cluster, updates map[string]interface{}) error {
-	return DB.Model(cluster).Updates(updates).Error
+// UpdateCluster 更新集群字段。setDefault 时在同一个事务里清除其它集群的默认标记：
+// 更新失败一并回滚，不留「没有任何默认集群」的中间态（见 RenameCluster 的说明）。
+func UpdateCluster(cluster *Cluster, updates map[string]interface{}, setDefault bool) error {
+	if !setDefault {
+		return DB.Model(cluster).Updates(updates).Error
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := ClearDefaultClusterTx(tx); err != nil {
+			return err
+		}
+		return tx.Model(cluster).Updates(updates).Error
+	})
 }
 
-// RenameCluster 改集群名，并在同一个事务里把按集群名引用的授权数据迁到新名字。
+// RenameCluster 改集群名，并在同一个事务里把按集群名引用的授权数据迁到新名字、
+// 按需切换默认集群。
 //
 // binding_groups / binding_group_namespaces 没有 cluster_id，只存集群名：改名时若不
 // 迁移，这些行就指向一个不存在的集群——组自身的 Detached 仍是 false，授权判定却拿
@@ -135,10 +146,12 @@ func UpdateCluster(cluster *Cluster, updates map[string]interface{}) error {
 //
 // 目标名字上若已有集群或保留中的权限绑定组，唯一索引 (cluster, name) 挡不住「先改半个
 // 集群名」的风险，所以先显式报 ErrClusterNameTaken；其余错误一律回滚，不留半套数据。
-func RenameCluster(cluster *Cluster, newName string, updates map[string]interface{}) error {
+// setDefault 的切换也在同一事务里：撞名 409 时一并回滚——此前默认标记先被单独清掉，
+// 改名冲突后会留下「没有任何默认集群」的状态。
+func RenameCluster(cluster *Cluster, newName string, updates map[string]interface{}, setDefault bool) error {
 	oldName := cluster.Name
 	if newName == oldName {
-		return UpdateCluster(cluster, updates)
+		return UpdateCluster(cluster, updates, setDefault)
 	}
 
 	err := DB.Transaction(func(tx *gorm.DB) error {
@@ -157,6 +170,11 @@ func RenameCluster(cluster *Cluster, newName string, updates map[string]interfac
 			return ErrClusterNameTaken
 		}
 
+		if setDefault {
+			if err := ClearDefaultClusterTx(tx); err != nil {
+				return err
+			}
+		}
 		if err := tx.Model(&BindingGroup{}).Where("cluster = ?", oldName).
 			Update("cluster", newName).Error; err != nil {
 			return err
@@ -191,8 +209,13 @@ func DeleteCluster(cluster *Cluster) error {
 	return nil
 }
 
+// ClearDefaultClusterTx 在调用方事务里清除其它集群的默认标记。
+func ClearDefaultClusterTx(tx *gorm.DB) error {
+	return tx.Model(&Cluster{}).Where("is_default = ?", true).Update("is_default", false).Error
+}
+
 func ClearDefaultCluster() error {
-	return DB.Model(&Cluster{}).Where("is_default = ?", true).Update("is_default", false).Error
+	return ClearDefaultClusterTx(DB)
 }
 
 func DisableCluster(cluster *Cluster) error {
