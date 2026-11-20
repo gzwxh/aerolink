@@ -172,3 +172,41 @@ func TestMigrateAnnouncementSingleEnabled(t *testing.T) {
 		t.Fatalf("low-priority announcement is still enabled")
 	}
 }
+
+// SQLite 不支持 FOR UPDATE：锁定读必须按方言跳过子句（整库写锁已保证串行），
+// 且保持只读行为——不出错、不改动任何行。漏掉方言守卫的话，SQLite 上会直接报
+// 语法错误，启动归一化与启用路径全部失败。
+func TestLockEnabledAnnouncementsOnSQLite(t *testing.T) {
+	originalDB := DB
+	db, err := gorm.Open(sqlite.Open("file:announcement-lock-sqlite?mode=memory&cache=shared"), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("opening test database: %v", err)
+	}
+	DB = db
+	t.Cleanup(func() { DB = originalDB })
+
+	if err := DB.AutoMigrate(&Announcement{}); err != nil {
+		t.Fatalf("migrating test database: %v", err)
+	}
+	first := Announcement{Title: "第一条", Content: "x", Enabled: true}
+	second := Announcement{Title: "第二条", Content: "x", Enabled: true, Priority: 5}
+	for _, item := range []*Announcement{&first, &second} {
+		if err := DB.Create(item).Error; err != nil {
+			t.Fatalf("seeding announcement: %v", err)
+		}
+	}
+
+	if err := LockEnabledAnnouncements(DB); err != nil {
+		t.Fatalf("locking enabled announcements: %v", err)
+	}
+
+	var enabled []Announcement
+	if err := DB.Where("enabled = ?", true).Order("priority DESC, id DESC").Find(&enabled).Error; err != nil {
+		t.Fatalf("listing enabled announcements: %v", err)
+	}
+	if len(enabled) != 2 || enabled[0].ID != second.ID {
+		t.Fatalf("enabled = %+v, want both rows untouched in priority-then-id order", enabled)
+	}
+}

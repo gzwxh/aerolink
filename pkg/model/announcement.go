@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // 公告级别：只决定横幅整体的强调方式（左侧色条 + 图标 + 淡底），
@@ -179,24 +180,52 @@ func DisableOtherAnnouncements(tx *gorm.DB, keepID uint) error {
 		Update("enabled", false).Error
 }
 
+// lockEnabledAnnouncementRows 以锁定读取当前启用的公告（排序口径与顶栏一致）。
+//
+// 启用路径（create / update）与启动归一化（MigrateAnnouncementSingleEnabled）都必须
+// 「先锁定读启用集、再做写入」：两边在启用行的行锁上互斥，任何交错都不会把对方刚
+// 启用的公告又停掉——此前归一化先读后停且无事务，多副本滚动重启时可把另一副本刚
+// 启用的公告停掉，最后一条都不剩。SQLite 不支持 FOR UPDATE（整库写锁已保证串行），
+// 按方言跳过。
+func lockEnabledAnnouncementRows(tx *gorm.DB) ([]Announcement, error) {
+	query := tx.
+		Where("enabled = ?", true).
+		Order("priority DESC, id DESC")
+	if supportsRowLock() {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var items []Announcement
+	if err := query.Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// LockEnabledAnnouncements 供启用路径在事务开头调用：锁定当前启用的公告，
+// 与启动归一化互斥（见 lockEnabledAnnouncementRows）。
+func LockEnabledAnnouncements(tx *gorm.DB) error {
+	_, err := lockEnabledAnnouncementRows(tx)
+	return err
+}
+
 // MigrateAnnouncementSingleEnabled 把「多条同时启用」的旧数据归一成只剩一条。
 //
 // 旧版本允许多条公告同时生效并串成一条轨道，现在同一时间只展示一条。保留顶栏本来
 // 就会展示的那条（priority DESC, id DESC），其余改为停用——只动 enabled 标记，
 // 不删除任何公告。幂等，可以每次启动都跑，顺带兜住手工改库留下的多启用状态。
+// 读与停放在同一事务、且先锁定启用集：与另一副本的启用操作并发时不会互相踩踏
+// （见 lockEnabledAnnouncementRows）。
 func MigrateAnnouncementSingleEnabled() error {
-	var keep Announcement
-	if err := DB.
-		Where("enabled = ?", true).
-		Order("priority DESC, id DESC").
-		Limit(1).
-		Find(&keep).Error; err != nil {
-		return err
-	}
-	if keep.ID == 0 {
-		return nil
-	}
-	return DisableOtherAnnouncements(DB, keep.ID)
+	return DB.Transaction(func(tx *gorm.DB) error {
+		items, err := lockEnabledAnnouncementRows(tx)
+		if err != nil {
+			return err
+		}
+		if len(items) == 0 {
+			return nil
+		}
+		return DisableOtherAnnouncements(tx, items[0].ID)
+	})
 }
 
 // GetAnnouncement 按 ID 取公告。

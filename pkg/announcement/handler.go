@@ -75,7 +75,12 @@ func HandleCreateAnnouncement(c *gin.Context) {
 	item.CreatorID = currentUserID(c)
 	// 同一时间只允许一条公告启用：新公告一启用，原来那条自动停用。
 	// 两步放在同一个事务里，否则中间失败会留下「两条都启用」或「一条都不启用」的状态。
+	// 事务开头先锁定启用集：与启动归一化（MigrateAnnouncementSingleEnabled）互斥，
+	// 避免交错后一条启用公告都不剩（见 model.lockEnabledAnnouncementRows）。
 	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		if err := model.LockEnabledAnnouncements(tx); err != nil {
+			return err
+		}
 		if err := tx.Create(item).Error; err != nil {
 			return err
 		}
@@ -131,7 +136,11 @@ func HandleUpdateAnnouncement(c *gin.Context) {
 	existing.EndAt = updated.EndAt
 	// CreatorID 不覆盖：它记的是「谁发的」，改内容的人由操作日志留痕。
 	// 同新建：这条一旦是启用状态，就把它之外的公告停用（含编辑前就已启用的旧数据）。
+	// 事务开头先锁定启用集：与启动归一化互斥，避免交错后一条启用公告都不剩。
 	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		if err := model.LockEnabledAnnouncements(tx); err != nil {
+			return err
+		}
 		if err := tx.Save(existing).Error; err != nil {
 			return err
 		}

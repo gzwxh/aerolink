@@ -41,3 +41,11 @@ func PatternLike(column clause.Column, pattern string) clause.Expression {
 		WithoutParentheses: true,
 	}
 }
+
+// supportsRowLock 报告当前方言是否支持 SELECT ... FOR UPDATE。
+//
+// SQLite 不支持该子句，但它也没有并发写——整库写锁本身已保证串行，需要互斥的
+// 读改写（如公告的启用路径与启动归一化）在 SQLite 上按方言跳过锁定子句即可。
+func supportsRowLock() bool {
+	return common.DBType != "sqlite"
+}
