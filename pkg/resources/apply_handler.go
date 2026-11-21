@@ -259,18 +259,16 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 
 // applyErrorStatus / applyErrorCode / applyErrorMessage 把单个文档的失败映射成对外语义。
 // 冲突不是服务端失败：客户端拿的已经是过期版本，回 409 才能让它知道要刷新。
+// applyErrorStatus / applyErrorCode 共用 writeFailure：apply 的失败也要按
+// apiserver 语义上报，而不是把非法值、不可变、已不存在一律说成 500（D-91）。
 func applyErrorStatus(err error) int {
-	if apierrors.IsConflict(err) {
-		return http.StatusConflict
-	}
-	return http.StatusInternalServerError
+	status, _ := writeFailure(err)
+	return status
 }
 
 func applyErrorCode(err error) string {
-	if apierrors.IsConflict(err) {
-		return resourceVersionConflictCode
-	}
-	return ""
+	_, code := writeFailure(err)
+	return code
 }
 
 func applyErrorMessage(operation string, err error) string {

@@ -10,7 +10,6 @@ import (
 	"github.com/zxh326/kite/pkg/cluster"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/kube"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -44,7 +43,8 @@ func (h *GenericResourceHandler[T, V]) Create(c *gin.Context) {
 
 	if err := cs.K8sClient.Create(ctx, resource); err != nil {
 		success, errMsg = false, err.Error()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// 状态码按 apiserver 的语义上报（422/403/404/409），不再一律 500（缺陷 D-91）。
+		respondWriteFailure(c, err)
 		return
 	}
 
@@ -89,16 +89,9 @@ func (h *GenericResourceHandler[T, V]) Update(c *gin.Context) {
 	ctx := c.Request.Context()
 	if err := cs.K8sClient.Update(ctx, resource); err != nil {
 		errMsg = err.Error()
-		// K8s 的乐观并发冲突不是服务端故障：客户端拿的对象已经过期，必须回 409，
-		// 否则界面只能把 `the object has been modified…` 这句英文原文当未知错误弹出来。
-		if apierrors.IsConflict(err) {
-			c.JSON(http.StatusConflict, gin.H{
-				"code":  resourceVersionConflictCode,
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// 冲突回 409 + 机器可读码，界面才能说「刷新后重试」；其余非法/不可变/已不存在
+		// 也按各自语义上报，不再一律扮成 500（缺陷 D-29 / D-91）。
+		respondWriteFailure(c, err)
 		return
 	}
 
@@ -152,17 +145,9 @@ func (h *GenericResourceHandler[T, V]) Patch(c *gin.Context) {
 	patch := client.RawPatch(patchType, patchBytes)
 	if err := cs.K8sClient.Patch(ctx, oldObj, patch); err != nil {
 		errMsg = err.Error()
-		// patch 体内带 metadata.resourceVersion 时 API server 会按乐观锁拒收。
-		// 冲突不是服务端失败：回 409 + 机器可读码，界面才能说「刷新后重试」（缺陷 D-58，
-		// 与 apply / PUT 路径同一口径）。
-		if apierrors.IsConflict(err) {
-			c.JSON(http.StatusConflict, gin.H{
-				"code":  resourceVersionConflictCode,
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// patch 体内带 metadata.resourceVersion 时 API server 会按乐观锁拒收；
+		// 其余校验类失败也按语义上报（缺陷 D-58 / D-91，与 apply / PUT 同一口径）。
+		respondWriteFailure(c, err)
 		return
 	}
 
