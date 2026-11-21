@@ -81,6 +81,9 @@
       "openInNewTab": "在新标签页打开"
     },
     "fields": {
+      "apiGroup": "API 组",
+      "versions": "版本",
+      "scope": "作用域",
       "accessModes": "访问模式",
       "actions": "操作",
       "active": "活跃",
@@ -215,7 +218,7 @@
       "restart": "重启",
       "restartCount": "重启次数",
       "restarts": "重启次数",
-      "revision": "版本",
+      "revision": "修订",
       "role": "角色",
       "roles": "角色",
       "selector": "选择器",
@@ -1261,7 +1264,8 @@
   "errors": {
     "crdNotInstalledTitle": "资源类型不可用",
     "crdNotInstalled": "此集群未安装 {{kind}} ({{version}})。请先安装对应的 CRD。",
-    "resourceVersionConflict": "对象已被他人修改，请刷新后重试"
+    "resourceVersionConflict": "对象已被他人修改，请刷新后重试",
+    "invalidTemplateYAML": "模板里每个文档都需要是带 apiVersion 与 kind 的资源清单。{{detail}}"
   },
   "nsActions": {
     "moreActions": "更多操作",

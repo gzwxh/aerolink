@@ -81,6 +81,9 @@
       "openInNewTab": "Open in new tab"
     },
     "fields": {
+      "apiGroup": "API Group",
+      "versions": "Versions",
+      "scope": "Scope",
       "accessModes": "Access Modes",
       "actions": "Actions",
       "active": "Active",
@@ -1261,7 +1264,8 @@
   "errors": {
     "crdNotInstalledTitle": "Resource Type Not Available",
     "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature.",
-    "resourceVersionConflict": "This object was changed by someone else. Reload it and try again."
+    "resourceVersionConflict": "This object was changed by someone else. Reload it and try again.",
+    "invalidTemplateYAML": "Every document in a template must be a resource manifest with apiVersion and kind. {{detail}}"
   },
   "nsActions": {
     "moreActions": "More actions",

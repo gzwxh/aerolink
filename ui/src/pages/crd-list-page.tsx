@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { CustomResourceDefinition } from 'kubernetes-types/apiextensions/v1'
+import { useTranslation } from 'react-i18next'
 
 import { createSearchFilter } from '@/lib/k8s'
 import { getAge } from '@/lib/utils'
@@ -18,11 +19,12 @@ const searchQueryFilter = createSearchFilter<CustomResourceDefinition>(
 const columnHelper = createColumnHelper<CustomResourceDefinition>()
 
 export function CRDListPage() {
+  const { t } = useTranslation()
   // 定义 CRD 表格的列
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
-        header: 'Name',
+        header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <ClusterLink to={`/crds/${row.original.metadata!.name}`}>
@@ -32,7 +34,7 @@ export function CRDListPage() {
         ),
       }),
       columnHelper.accessor('spec.group', {
-        header: 'Group',
+        header: t('common.fields.apiGroup'),
         enableColumnFilter: true,
         cell: ({ getValue }) => (
           <span
@@ -47,7 +49,7 @@ export function CRDListPage() {
         (row) => row.spec?.versions?.map((version) => version.name).join(', '),
         {
           id: 'spec_versions',
-          header: 'Versions',
+          header: t('common.fields.versions'),
           cell: ({ row }) => {
             const versions = row.original.spec?.versions || []
             return (
@@ -76,7 +78,7 @@ export function CRDListPage() {
         }
       ),
       columnHelper.accessor('spec.scope', {
-        header: 'Scope',
+        header: t('common.fields.scope'),
         cell: ({ getValue }) => (
           <Badge
             variant={getValue() === 'Namespaced' ? 'default' : 'outline'}
@@ -97,7 +99,7 @@ export function CRDListPage() {
         },
         {
           id: 'status_conditions',
-          header: 'Status',
+          header: t('common.fields.status'),
           cell: ({ getValue }) => {
             const status = getValue()
             const isEstablished = status === 'Established'
@@ -114,13 +116,13 @@ export function CRDListPage() {
         }
       ),
       columnHelper.accessor('metadata.creationTimestamp', {
-        header: 'Age',
+        header: t('common.fields.age'),
         cell: ({ getValue }) => {
           return getAge(getValue() as string)
         },
       }),
     ],
-    []
+    [t]
   )
 
   return (
