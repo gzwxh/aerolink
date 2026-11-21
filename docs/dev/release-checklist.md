@@ -107,6 +107,36 @@ MySQL `1054`），保存徽章同理；只有读取路径不受影响（`SELECT 
 `checkSchema()` 会逐条列出缺列（如 `库表 clusters 缺少列 badge_text_size`）。
 用户可见的升级步骤写在 `docs/guide/installation.md` 的「升级」一节（中英同步）。
 
+**2026-11-21 的实例（D-54，只需 DML）**：品牌改名（Kite → 鸢联 AeroLink）只改了代码里的默认文案，
+而 `EnsureNotificationTemplates` 只补种缺失事件、从不回改已有行，所以改名前建的库
+至今仍在用 `[Kite] …` 发通知。新增 `pkg/model/brand_migration.go` 的
+`MigrateLegacyBrandNames()`（启动时 `runMigration("品牌改名遗留文案回填", …)`）修正
+`notification_templates.subject/body` 与 `security_settings` 里仍是旧默认值的
+`otpIssuerName`。**已发出的历史通知（`notifications`）不回填** —— 那是事实记录。
+
+该回填只需要 DML 权限（不碰表结构），所以生产应用账号能直接跑，不需要表 owner；
+设了 `DB_MIGRATE=off` 或想交给 DBA 手工执行时，用下面的等价 SQL（幂等，重复执行无副作用；
+MySQL / SQLite 的 `LIKE` 对 ASCII 不区分大小写，可能多匹配几行小写 `kite`，但 `REPLACE()`
+区分大小写，改不出错内容）：
+
+```sql
+-- PostgreSQL / MySQL / SQLite 三库同形（REPLACE 与 LIKE 都是标准写法）
+UPDATE notification_templates
+   SET subject = REPLACE(subject, '[Kite] ', '[鸢联] '),
+       body    = REPLACE(body, 'Kite', '鸢联')
+ WHERE subject LIKE '%Kite%' OR body LIKE '%Kite%';
+
+-- TOTP 签发者存在 JSON blob 里，只匹配旧的默认值，管理员自定义过的不动
+UPDATE security_settings
+   SET data = REPLACE(data, '"otpIssuerName":"Kite"', '"otpIssuerName":"鸢联 AeroLink"')
+ WHERE data LIKE '%"otpIssuerName":"Kite"%';
+```
+
+升级后核对：启动日志里应有 `品牌改名回填：更新通知模板 N 条`；界面「设置 → 通知管理 → 模板」
+的标题应全部以 `[鸢联]` 开头（本机实测：14 条模板 + `otpIssuerName` 均已改）。
+注意：只替换品牌词本身，用户自己改过的措辞原样保留；像 `KitePaaS` 这种更长的标识符不会被误改
+（Go 侧用边界正则；手工 SQL 没有这个保护，执行前先 `SELECT` 看一遍）。
+
 ## 2. CI 发布（可选，默认关闭）
 
 `release.yaml` 已改成本仓库可用：推送 `v*.*.*` tag 触发，但**必须显式打开开关**，否则作业整体跳过（原来写死 `github.repository_owner == 'kite-org'`，本仓库恒不执行）。
