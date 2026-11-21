@@ -28,6 +28,7 @@ import {
   servicesForWorkload,
   toSimpleContainer,
 } from '@/lib/k8s'
+import { checkScaleDraft, scaleBlockedForSubmission } from '@/lib/scale-guard'
 import {
   generateServiceYaml,
   initialData,
@@ -45,6 +46,7 @@ import {
 } from '@/hooks/use-unsaved-changes-guard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -87,7 +89,10 @@ import {
 
 export function DeploymentDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
-  const [scaleReplicas, setScaleReplicas] = useState(1)
+  // 扩缩容草稿保留**输入文本**：只有文本才能区分「空」与「0」（缺陷 D-70）。
+  const [scaleInput, setScaleInput] = useState('1')
+  // 缩到 0 或一次建上百个副本，必须勾选确认才放行。
+  const [scaleConfirmed, setScaleConfirmed] = useState(false)
   const [isExposing, setIsExposing] = useState(false)
   const [isExposeDialogOpen, setIsExposeDialogOpen] = useState(false)
   // 「暴露」弹窗就是建一个 Service，表单与「服务」创建页同源（见 lib/service-yaml.ts）。
@@ -183,10 +188,12 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   )
 
   useEffect(() => {
-    if (deployment) {
-      setScaleReplicas(deployment.spec?.replicas || 1)
+    // 弹窗没开着时跟随线上值；开着期间不打断输入（也避免轮询把草稿冲掉）。
+    if (deployment && !isScalePopoverOpen) {
+      setScaleInput(String(deployment.spec?.replicas ?? 1))
+      setScaleConfirmed(false)
     }
-  }, [deployment])
+  }, [deployment, isScalePopoverOpen])
 
   /**
    * 「暴露」弹窗的初值：名称取工作负载名，选择器取它的 Pod 标签（即
@@ -272,14 +279,20 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   const handleRestart = useCallback(async () => {
     if (!deployment) return
     try {
-      const updated = { ...deployment } as Deployment
-      if (!updated.spec!.template?.metadata?.annotations) {
-        updated.spec!.template!.metadata!.annotations = {}
-      }
-      updated.spec!.template!.metadata!.annotations![
-        'aerolink.kubernetes.io/restartedAt'
-      ] = new Date().toISOString()
-      await updateResource('deployments', name, namespace, updated)
+      // 用 PATCH 只写重启注解，不再整对象 PUT：原先带的是列表/详情缓存下来的
+      // resourceVersion，rollout 期间对象必然被改过，连着两次重启第二次一定撞 409
+      // （缺陷 D-72）。
+      await patchResource('deployments', name, namespace, {
+        spec: {
+          template: {
+            metadata: {
+              annotations: {
+                'aerolink.kubernetes.io/restartedAt': new Date().toISOString(),
+              },
+            },
+          },
+        },
+      })
       toast.success(
         t('detail.status.restartInitiated', { resource: 'Deployment' })
       )
@@ -290,24 +303,36 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
     }
   }, [t, deployment, name, namespace])
 
+  const scaleCheck = checkScaleDraft({
+    input: scaleInput,
+    current: deployment?.spec?.replicas ?? 1,
+  })
+  // 「+/-」在草稿非法（空、小数、非数字）时退回到线上值，不能让 NaN 参与运算。
+  const scaleDraftBase = /^\d+$/.test(scaleInput.trim())
+    ? Number(scaleInput)
+    : (deployment?.spec?.replicas ?? 1)
+  const scaleBlocked = scaleBlockedForSubmission(scaleCheck, scaleConfirmed)
+
   const handleScale = useCallback(async () => {
-    if (!deployment) return
+    // 与按钮的 disabled 走同一个判据（scaleBlocked），避免出现「按钮能点、
+    // handler 却静默 return」。invalid 这一项同时给下面做类型收窄。
+    if (!deployment || scaleCheck.kind === 'invalid' || scaleBlocked) {
+      return
+    }
+    const replicas = scaleCheck.replicas
     try {
       await patchResource('deployments', name, namespace, {
-        spec: { replicas: scaleReplicas },
+        spec: { replicas },
       })
       toast.success(
-        t('detail.status.scaledTo', {
-          resource: 'Deployment',
-          replicas: scaleReplicas,
-        })
+        t('detail.status.scaledTo', { resource: 'Deployment', replicas })
       )
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
     } catch (error) {
       toast.error(translateError(error, t))
     }
-  }, [t, deployment, name, namespace, scaleReplicas])
+  }, [t, deployment, name, namespace, scaleCheck, scaleBlocked])
 
   const handleExpose = useCallback(async () => {
     if (!deployment) return
@@ -672,10 +697,11 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
                         variant="outline"
                         size="sm"
                         className="size-9 p-0"
+                        aria-label={t('detail.scale.decrease', '减少一个副本')}
                         onClick={() =>
-                          setScaleReplicas(Math.max(0, scaleReplicas - 1))
+                          setScaleInput(String(Math.max(0, scaleDraftBase - 1)))
                         }
-                        disabled={scaleReplicas <= 0}
+                        disabled={scaleDraftBase <= 0}
                       >
                         -
                       </Button>
@@ -683,23 +709,70 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
                         id="replicas"
                         type="number"
                         min="0"
-                        value={scaleReplicas}
-                        onChange={(e) =>
-                          setScaleReplicas(parseInt(e.target.value) || 0)
-                        }
+                        step="1"
+                        value={scaleInput}
+                        onChange={(e) => {
+                          setScaleInput(e.target.value)
+                          setScaleConfirmed(false)
+                        }}
                         className="text-center"
                       />
                       <Button
                         variant="outline"
                         size="sm"
                         className="size-9 p-0"
-                        onClick={() => setScaleReplicas(scaleReplicas + 1)}
+                        aria-label={t('detail.scale.increase', '增加一个副本')}
+                        onClick={() =>
+                          setScaleInput(String(scaleDraftBase + 1))
+                        }
                       >
                         +
                       </Button>
                     </div>
+                    {/* 非法值拦住；危险值（缩到 0 / 一次建很多）要勾选确认（D-70） */}
+                    {scaleCheck.kind === 'invalid' && (
+                      <p className="text-xs text-destructive">
+                        {t(
+                          scaleCheck.messageKey,
+                          scaleCheck.messageKey === 'detail.scale.empty'
+                            ? '请输入副本数。'
+                            : '副本数必须是不小于 0 的整数。'
+                        )}
+                      </p>
+                    )}
+                    {scaleCheck.kind === 'needsConfirm' && (
+                      <label className="flex items-start gap-2 text-xs text-destructive">
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={scaleConfirmed}
+                          onCheckedChange={(value) =>
+                            setScaleConfirmed(value === true)
+                          }
+                        />
+                        <span>
+                          {scaleCheck.messageKey === 'detail.scale.confirmZero'
+                            ? t(
+                                'detail.scale.confirmZero',
+                                '缩容到 0 个副本：这个服务不会有任何运行中的 Pod，流量会全部中断。'
+                              )
+                            : t('detail.scale.confirmLarge', {
+                                replicas: scaleCheck.replicas,
+                                defaultValue: `将创建 ${scaleCheck.replicas} 个副本，请确认集群资源足够。`,
+                              })}
+                        </span>
+                      </label>
+                    )}
                   </div>
-                  <Button onClick={handleScale} className="w-full">
+                  <Button
+                    onClick={handleScale}
+                    disabled={scaleBlocked}
+                    variant={
+                      scaleCheck.kind === 'needsConfirm'
+                        ? 'destructive'
+                        : 'default'
+                    }
+                    className="w-full"
+                  >
                     <IconScale className="w-4 h-4 mr-2" />
                     {t('common.actions.scale')}
                   </Button>

@@ -2885,6 +2885,14 @@
     }
   },
   "detail": {
+    "scale": {
+      "empty": "请输入副本数。",
+      "notInteger": "副本数必须是不小于 0 的整数。",
+      "confirmZero": "缩容到 0 个副本：这个服务不会有任何运行中的 Pod，流量会全部中断。",
+      "confirmLarge": "将创建 {{replicas}} 个副本，请确认集群资源足够。",
+      "decrease": "减少一个副本",
+      "increase": "增加一个副本"
+    },
     "status": {
       "loading": "加载 {{resource}} 详情...",
       "restartInitiated": "{{resource}} 重启已触发",

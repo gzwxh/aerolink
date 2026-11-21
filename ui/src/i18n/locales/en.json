@@ -2760,6 +2760,14 @@
     }
   },
   "detail": {
+    "scale": {
+      "empty": "Enter a replica count.",
+      "notInteger": "Replicas must be a whole number of 0 or more.",
+      "confirmZero": "Scaling to 0 leaves this service with no running pods and cuts off all traffic.",
+      "confirmLarge": "This creates {{replicas}} replicas - make sure the cluster has enough capacity.",
+      "decrease": "Decrease replicas by one",
+      "increase": "Increase replicas by one"
+    },
     "status": {
       "loading": "Loading {{resource}} details...",
       "restartInitiated": "{{resource}} restart initiated",
