@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { UsageDataPoint } from '@/types/api'
 
@@ -12,7 +13,12 @@ export function formatBytes(bytes: number) {
   if (bytes === 0) return '0'
   const k = 1024
   const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  // 两个边界都得夹住：0<bytes<1 时 log 为负，不夹会拿到 sizes[-1]（undefined），
+  // Y 轴刻度就会直接出现字面量 NaN；超过 GB 同理会越界。
+  const i = Math.min(
+    Math.max(0, Math.floor(Math.log(bytes) / Math.log(k))),
+    sizes.length - 1
+  )
   const value = bytes / Math.pow(k, i)
   return value >= 10
     ? Math.round(value) + sizes[i]
@@ -96,6 +102,8 @@ export function ChartStateWrapper({
   emptyMessage,
   children,
 }: ChartStateWrapperProps) {
+  const { t } = useTranslation()
+
   if (isLoading) {
     return (
       <Card className={cardClassName}>
@@ -138,7 +146,7 @@ export function ChartStateWrapper({
         </CardHeader>
         <CardContent className={contentClassName}>
           <div className="flex h-[250px] w-full items-center justify-center text-muted-foreground">
-            <p>{emptyMessage || `No ${title.toLowerCase()} data available`}</p>
+            <p>{emptyMessage || t('monitoring.noData')}</p>
           </div>
         </CardContent>
       </Card>

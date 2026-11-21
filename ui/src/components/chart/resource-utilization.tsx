@@ -111,8 +111,10 @@ const ResourceUtilizationChart = React.memo(
       )
     }
 
-    // 展示空状态
-    if (!cpu || !memory || (cpu.length === 0 && memory.length === 0)) {
+    // 展示空状态：面积图至少要两个点才能连线，只取到 1 个点时不能当「有数据」渲染，
+    // 否则页面上只剩一根单刻度坐标轴，既没曲线也没提示（选 24h 而数据源刚接入时就会出现）。
+    const pointCount = (cpu?.length ?? 0) + (memory?.length ?? 0)
+    if (!cpu || !memory || pointCount < 2) {
       return (
         <Card className="@container/card">
           <CardHeader>
@@ -120,7 +122,11 @@ const ResourceUtilizationChart = React.memo(
           </CardHeader>
           <CardContent className="px-2 sm:px-6">
             <div className="flex h-[250px] w-full items-center justify-center text-muted-foreground">
-              <p>{t('monitoring.noResourceUtilizationData')}</p>
+              <p>
+                {pointCount > 0
+                  ? t('monitoring.insufficientDataPoints')
+                  : t('monitoring.noResourceUtilizationData')}
+              </p>
             </div>
           </CardContent>
         </Card>

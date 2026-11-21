@@ -162,8 +162,12 @@ func (c *Client) GetResourceUsageHistory(ctx context.Context, instance string, d
 		Memory:     normalizeUsageDataPoints(memoryData),
 		NetworkIn:  normalizeUsageDataPoints(networkInData),
 		NetworkOut: normalizeUsageDataPoints(networkOutData),
-		DiskRead:   []UsageDataPoint{},
-		DiskWrite:  []UsageDataPoint{},
+		// 集群/节点级磁盘 I/O 没有查询：cadvisor 的 container_fs_* 在多数集群里没开，
+		// 而且当前也没有任何页面消费这两个字段（磁盘图只出现在 Pod / 工作负载监控，
+		// 走 GetPodMetrics）。这里保留空数组是为了响应结构不变；要补节点磁盘面板，
+		// 得先确认数据源确实提供该指标，不要凭空空出一片 0。
+		DiskRead:  []UsageDataPoint{},
+		DiskWrite: []UsageDataPoint{},
 	}, nil
 }
 
@@ -330,28 +334,6 @@ func (c *Client) GetDiskWriteUsage(ctx context.Context, namespace, podNamePrefix
 	return c.queryRange(ctx, query, start, end, step)
 }
 
-func FillMissingDataPoints(startTime time.Time, step time.Duration, existing []UsageDataPoint) []UsageDataPoint {
-	if len(existing) == 0 {
-		return existing
-	}
-
-	firstTime := existing[0].Timestamp
-
-	if firstTime.Sub(startTime) <= step {
-		return existing
-	}
-
-	result := []UsageDataPoint{}
-	for t := startTime.Add(step); t.Before(firstTime); t = t.Add(step) {
-		result = append(result, UsageDataPoint{
-			Timestamp: t,
-			Value:     0.0,
-		})
-	}
-
-	return append(result, existing...)
-}
-
 // GetPodMetrics 获取某个 pod 的指标
 func (c *Client) GetPodMetrics(ctx context.Context, namespace, podName, container string, duration string) (*PodMetrics, error) {
 	var step time.Duration
@@ -404,13 +386,15 @@ func (c *Client) GetPodMetrics(ctx context.Context, namespace, podName, containe
 		return nil, fmt.Errorf("error querying pod Disk write usage: %w", err)
 	}
 
+	// 不再向窗口开头补 0：数据源只有后半段采样时，补出来的 0 会被画成
+	// 「有流量、就是没跑」，直接误导容量判断（没数据就该是空的）。
 	return &PodMetrics{
-		CPU:        normalizeUsageDataPoints(FillMissingDataPoints(start, step, cpuData)),
-		Memory:     normalizeUsageDataPoints(FillMissingDataPoints(start, step, memoryData)),
-		NetworkIn:  normalizeUsageDataPoints(FillMissingDataPoints(start, step, networkInData)),
-		NetworkOut: normalizeUsageDataPoints(FillMissingDataPoints(start, step, networkOutData)),
-		DiskRead:   normalizeUsageDataPoints(FillMissingDataPoints(start, step, diskReadData)),
-		DiskWrite:  normalizeUsageDataPoints(FillMissingDataPoints(start, step, diskWriteData)),
+		CPU:        normalizeUsageDataPoints(cpuData),
+		Memory:     normalizeUsageDataPoints(memoryData),
+		NetworkIn:  normalizeUsageDataPoints(networkInData),
+		NetworkOut: normalizeUsageDataPoints(networkOutData),
+		DiskRead:   normalizeUsageDataPoints(diskReadData),
+		DiskWrite:  normalizeUsageDataPoints(diskWriteData),
 		Fallback:   false,
 	}, nil
 }

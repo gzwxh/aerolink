@@ -15,6 +15,8 @@ type fakePromAPI struct {
 	queryRangeResponses map[string]model.Value
 	queryRangeCalls     []v1.Range
 	queryRangeQueries   []string
+	// anyResponse 给不在 Responses 里的查询兜底，用于「每个指标都返回同一份数据」的用例。
+	anyResponse model.Value
 }
 
 func (f *fakePromAPI) Config(context.Context) (v1.ConfigResult, error) {
@@ -30,6 +32,9 @@ func (f *fakePromAPI) QueryRange(_ context.Context, query string, r v1.Range, _ 
 	f.queryRangeQueries = append(f.queryRangeQueries, query)
 	if value, ok := f.queryRangeResponses[query]; ok {
 		return value, nil, nil
+	}
+	if f.anyResponse != nil {
+		return f.anyResponse, nil, nil
 	}
 	return nil, nil, fmt.Errorf("unexpected query: %s", query)
 }
@@ -76,30 +81,32 @@ func TestQueryRange(t *testing.T) {
 	}
 }
 
-func TestFillMissingDataPoints(t *testing.T) {
-	if got := FillMissingDataPoints(time.Now().Add(-time.Minute), time.Second, nil); got != nil {
-		t.Fatalf("FillMissingDataPoints() nil = %#v, want nil", got)
+// 回归（缺陷 D-38）：数据源只在窗口后半段有采样时，不能再在开头补一串 0。
+// 补 0 会把「没有数据」画成「有流量、就是没跑」的假平线，直接误导容量判断。
+func TestGetPodMetricsKeepsSparseSeriesSparse(t *testing.T) {
+	sample := time.Now().Add(-2 * time.Minute)
+	client := &Client{client: &fakePromAPI{anyResponse: matrixValue(sample, 7)}}
+
+	got, err := client.GetPodMetrics(context.Background(), "ns-a", "web-1", "main", "30m")
+	if err != nil {
+		t.Fatalf("GetPodMetrics() error = %v", err)
 	}
 
-	now := time.Now()
-	step := time.Minute
-	timeRange := 10 * time.Minute
-	existing := []UsageDataPoint{
-		{
-			Timestamp: now.Add(-timeRange + 3*step),
-			Value:     42,
-		},
-	}
-
-	got := FillMissingDataPoints(now.Add(-timeRange), step, existing)
-	if len(got) != 3 {
-		t.Fatalf("FillMissingDataPoints() len = %d, want 3", len(got))
-	}
-	if got[0].Value != 0 || got[1].Value != 0 || got[2].Value != 42 {
-		t.Fatalf("FillMissingDataPoints() values = %#v, want two zeros then original point", got)
-	}
-	if !got[2].Timestamp.Equal(existing[0].Timestamp) {
-		t.Fatalf("FillMissingDataPoints() last timestamp = %v, want %v", got[2].Timestamp, existing[0].Timestamp)
+	for name, series := range map[string][]UsageDataPoint{
+		"CPU":        got.CPU,
+		"Memory":     got.Memory,
+		"NetworkIn":  got.NetworkIn,
+		"NetworkOut": got.NetworkOut,
+		"DiskRead":   got.DiskRead,
+		"DiskWrite":  got.DiskWrite,
+	} {
+		if len(series) != 1 {
+			t.Fatalf("%s len = %d, want 1 real point (no zero padding)", name, len(series))
+		}
+		if !series[0].Timestamp.Equal(sample.Truncate(time.Millisecond)) || series[0].Value != 7 {
+			// PromQL 的时间戳只到毫秒，比对到毫秒即可。
+			t.Fatalf("%s = %#v, want the single sample at %v", name, series[0], sample)
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Area,
   AreaChart,
@@ -48,6 +49,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 const DiskIOUsageChart = React.memo((prop: DiskIOUsageChartProps) => {
+  const { t } = useTranslation()
   const { diskRead, diskWrite, isLoading, error, syncId } = prop
 
   const chartData = React.useMemo(() => {
@@ -69,6 +71,8 @@ const DiskIOUsageChart = React.memo((prop: DiskIOUsageChartProps) => {
         !diskWrite ||
         (diskRead.length === 0 && diskWrite.length === 0)
       }
+      // 空磁盘图绝大多数是数据源没开 container_fs_*，说清原因比「没数据」有用。
+      emptyMessage={t('monitoring.noDiskUsageData')}
       contentClassName="px-2 sm:px-6"
     >
       <ChartContainer
