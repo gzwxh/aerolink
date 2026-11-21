@@ -135,3 +135,103 @@ describe('migrateSidebarConfig', () => {
     expect(clusterGroup.items.some((item) => item.url === '/nodes')).toBe(true)
   })
 })
+// 回归（缺陷 D-63）：NetworkPolicies 在菜单里出现两处。
+// 存量配置把它放在「安全」分组，而目录默认在「网络/流量」；补录只按**本分组**判断
+// 是否已存在，于是又往「网络/流量」补了一份 —— 同一个菜单两个入口。
+describe('migrateSidebarConfig 不重复补录已归属别处的条目', () => {
+  const storedWithItemElsewhere = {
+    version: 6,
+    lastUpdated: 1,
+    hiddenItems: [] as string[],
+    pinnedItems: [] as string[],
+    groupOrder: ['sidebar-groups-traffic', 'sidebar-groups-security'],
+    groups: [
+      {
+        id: 'sidebar-groups-traffic',
+        nameKey: 'sidebar.groups.traffic',
+        visible: true,
+        collapsed: false,
+        order: 0,
+        items: [
+          {
+            id: 'sidebar-groups-traffic--ingresses',
+            titleKey: 'nav.ingresses',
+            icon: 'IconRouter',
+            url: '/ingresses',
+            visible: true,
+            pinned: false,
+            order: 0,
+          },
+        ],
+      },
+      {
+        id: 'sidebar-groups-security',
+        nameKey: 'sidebar.groups.security',
+        visible: true,
+        collapsed: false,
+        order: 1,
+        items: [
+          {
+            // id 前缀来自创建时的默认分组，条目本身被放在「安全」里
+            id: 'sidebar-groups-traffic--networkpolicies',
+            titleKey: 'nav.networkpolicies',
+            icon: 'IconShield',
+            url: '/networkpolicies',
+            visible: true,
+            pinned: false,
+            order: 0,
+          },
+        ],
+      },
+    ],
+  }
+
+  const countByURL = (
+    config: { groups: { items: { url?: string }[] }[] },
+    url: string
+  ) =>
+    config.groups.reduce(
+      (total, group) =>
+        total + group.items.filter((item) => item.url === url).length,
+      0
+    )
+
+  it('同一个 URL 全局只出现一次，并保持原有归属', () => {
+    const config = migrateSidebarConfig(storedWithItemElsewhere)
+
+    expect(countByURL(config, '/networkpolicies')).toBe(1)
+    const security = config.groups.find(
+      (group) => group.id === 'sidebar-groups-security'
+    )!
+    expect(security.items.some((item) => item.url === '/networkpolicies')).toBe(
+      true
+    )
+    const traffic = config.groups.find(
+      (group) => group.id === 'sidebar-groups-traffic'
+    )!
+    expect(traffic.items.some((item) => item.url === '/networkpolicies')).toBe(
+      false
+    )
+    // 同一分组内的其它默认条目照常补齐，去重不能把整组补录一起关掉
+    expect(traffic.items.some((item) => item.url === '/services')).toBe(true)
+  })
+
+  it('重复迁移仍然只有一处', () => {
+    const once = migrateSidebarConfig(storedWithItemElsewhere)
+    const twice = migrateSidebarConfig(once)
+
+    expect(countByURL(twice, '/networkpolicies')).toBe(1)
+  })
+
+  it('默认分组整组缺失时也不补第二份', () => {
+    const withoutTraffic = {
+      ...storedWithItemElsewhere,
+      groupOrder: ['sidebar-groups-security'],
+      groups: [storedWithItemElsewhere.groups[1]],
+    }
+
+    const config = migrateSidebarConfig(withoutTraffic)
+
+    expect(countByURL(config, '/networkpolicies')).toBe(1)
+  })
+})

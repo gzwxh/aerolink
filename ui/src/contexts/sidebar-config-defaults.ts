@@ -278,22 +278,33 @@ function ensureDefaultEntries(config: SidebarConfig): SidebarConfig {
     const index = groups.findIndex((group) => group.id === groupId)
 
     if (index === -1) {
-      const sidebarItems: SidebarItem[] = items.map((item, order) => {
-        const id = `${groupId}-${item.url?.replace(/[^a-zA-Z0-9]/g, '-')}`
-        if (item.defaultHidden) {
-          hiddenItems = [...hiddenItems, id]
-        }
-        return {
-          id,
-          type: 'link',
-          titleKey: item.titleKey,
-          url: item.url!,
-          icon: getIconName(item.icon),
-          visible: true,
-          pinned: false,
-          order,
-        }
-      })
+      // 整个默认分组在存量配置里不存在：已有归属的条目不重建，只补真正新增的。
+      const sidebarItems: SidebarItem[] = items
+        .filter(
+          (item) =>
+            !item.url ||
+            !groups.some((group) =>
+              group.items.some(
+                (entry) => entry.type === 'link' && entry.url === item.url
+              )
+            )
+        )
+        .map((item, order) => {
+          const id = `${groupId}-${item.url?.replace(/[^a-zA-Z0-9]/g, '-')}`
+          if (item.defaultHidden) {
+            hiddenItems = [...hiddenItems, id]
+          }
+          return {
+            id,
+            type: 'link',
+            titleKey: item.titleKey,
+            url: item.url!,
+            icon: getIconName(item.icon),
+            visible: true,
+            pinned: false,
+            order,
+          }
+        })
       groups.push({
         id: groupId,
         nameKey: groupKey,
@@ -310,8 +321,13 @@ function ensureDefaultEntries(config: SidebarConfig): SidebarConfig {
     const added = items
       .filter(
         (menu) =>
-          !group.items.some(
-            (item) => item.type === 'link' && item.url === menu.url
+          // 只要这个 URL 已经在**任一分组**里就不再补录。原来只看本分组，于是
+          // 存量配置里归属与默认不一致的条目会被补成两处（缺陷 D-63）。
+          !menu.url ||
+          !groups.some((other) =>
+            other.items.some(
+              (item) => item.type === 'link' && item.url === menu.url
+            )
           )
       )
       .map((menu, offset) => {
