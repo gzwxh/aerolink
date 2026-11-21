@@ -216,6 +216,14 @@ export function ConfigMapCreatePage({ clone = false }: { clone?: boolean }) {
       metadata: {
         name: name.trim(),
         namespace,
+        // 编辑态必须带上线上对象的 resourceVersion：不带的 apply 是**无条件覆盖**，
+        // 「A 打开 → B 先存 → A 再存」会把 B 的改动无声抹掉（缺陷 D-57）。
+        // 带上之后服务端按乐观锁判冲突，回 409 + 「对象已被他人修改，请刷新后重试」
+        // （见 D-28 / D-29）。工作负载与 Service / PV / StorageClass 表单早就
+        // 从线上对象展开，本来就有这个值。
+        ...(isEdit && existing?.metadata?.resourceVersion
+          ? { resourceVersion: existing.metadata.resourceVersion }
+          : {}),
         ...(Object.keys(labelRecord).length > 0 && { labels: labelRecord }),
         ...(Object.keys(annotationRecord).length > 0 && {
           annotations: annotationRecord,

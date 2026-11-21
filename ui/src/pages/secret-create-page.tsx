@@ -316,6 +316,11 @@ export function SecretCreatePage({ clone = false }: { clone?: boolean }) {
       metadata: {
         name: name.trim(),
         namespace,
+        // 同 ConfigMap：编辑态带上线上对象的 resourceVersion，不带的 apply 等于无条件
+        // 覆盖，会抹掉他人在此期间的修改（缺陷 D-57）。
+        ...(isEdit && existing?.metadata?.resourceVersion
+          ? { resourceVersion: existing.metadata.resourceVersion }
+          : {}),
         ...(Object.keys(labelRecord).length > 0 && { labels: labelRecord }),
         ...(Object.keys(annotationRecord).length > 0 && {
           annotations: annotationRecord,
