@@ -1,12 +1,56 @@
 package templates
 
 import (
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
+	"gopkg.in/yaml.v3"
 )
+
+// invalidTemplateYAMLCode 是模板内容不合格时的机器可读标识，前端按码而不是
+// 按 yaml.v3 的英文报错原文给提示（与 resource_version_conflict 同一口径）。
+const invalidTemplateYAMLCode = "invalid_template_yaml"
+
+// templateYAMLError 校验整段模板。
+//
+// 光「能解析」不够：`this is :: not valid yaml [[[ ` 在 YAML 语法上就是一个合法纯量，
+// 存进去照样用不了。模板唯一的消费方是「创建资源」的 apply，它要求每个文档
+// 都是带 apiVersion/kind 的资源清单，所以按这个下游契约校验。
+// 模板也可以包含多个文档（一次下发多个资源），逐个校到 EOF；空文档（尾随 `---`）跳过。
+func templateYAMLError(text string) error {
+	decoder := yaml.NewDecoder(strings.NewReader(text))
+	for index := 1; ; index++ {
+		var document map[string]any
+		err := decoder.Decode(&document)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("第 %d 个文档不是资源清单（需要是一个映射）：%w", index, err)
+		}
+		if document == nil {
+			continue
+		}
+		for _, field := range []string{"apiVersion", "kind"} {
+			if value, ok := document[field].(string); !ok || value == "" {
+				return fmt.Errorf("第 %d 个文档缺少必填字段 %s", index, field)
+			}
+		}
+	}
+}
+
+// respondInvalidTemplateYAML 统一两处写入的失败上报。
+func respondInvalidTemplateYAML(c *gin.Context, err error) {
+	c.JSON(http.StatusUnprocessableEntity, gin.H{
+		"code":  invalidTemplateYAMLCode,
+		"error": err.Error(),
+	})
+}
 
 type CreateTemplateRequest struct {
 	Name        string `json:"name" binding:"required"`
@@ -32,6 +76,10 @@ func CreateTemplate(c *gin.Context) {
 	var req CreateTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := templateYAMLError(req.YAML); err != nil {
+		respondInvalidTemplateYAML(c, err)
 		return
 	}
 
@@ -60,6 +108,10 @@ func UpdateTemplate(c *gin.Context) {
 	var req UpdateTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := templateYAMLError(req.YAML); err != nil {
+		respondInvalidTemplateYAML(c, err)
 		return
 	}
 

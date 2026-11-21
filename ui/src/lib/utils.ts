@@ -349,6 +349,14 @@ export function translateError(error: Error | unknown, t: TFunction): string {
     })
   }
 
+  // 模板 YAML 解析失败（服务端 pkg/templates 写入时拦住）：yaml.v3 的原文又长又是英文，
+  // 按码换成能说清「哪一段读不懂」的提示，细节留给用户定位行列。
+  if (policyError.code === 'invalid_template_yaml') {
+    return t('errors.invalidTemplateYAML', {
+      detail: error.message,
+    })
+  }
+
   const crdMatch = CRD_NOT_INSTALLED_RE.exec(error.message)
   if (crdMatch) {
     return t('errors.crdNotInstalled', {
