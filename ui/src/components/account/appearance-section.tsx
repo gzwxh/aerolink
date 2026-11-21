@@ -150,7 +150,7 @@ export function AppearanceSection() {
         </Label>
         <div className="flex items-center gap-2">
           <Button
-            aria-label="Decrease display scale"
+            aria-label={t('userMenu.decreaseDisplayScale', '减小显示缩放')}
             className="size-9"
             disabled={displayScale <= DISPLAY_SCALE_MIN}
             size="icon"
@@ -164,7 +164,7 @@ export function AppearanceSection() {
           </Button>
           <Input
             id="appearance-display-scale"
-            aria-label="Display scale percent"
+            aria-label={t('userMenu.displayScalePercent', '显示缩放百分比')}
             className="h-9 w-24 text-center tabular-nums"
             type="number"
             min={DISPLAY_SCALE_MIN}
@@ -181,7 +181,7 @@ export function AppearanceSection() {
             }}
           />
           <Button
-            aria-label="Increase display scale"
+            aria-label={t('userMenu.increaseDisplayScale', '增大显示缩放')}
             className="size-9"
             disabled={displayScale >= DISPLAY_SCALE_MAX}
             size="icon"

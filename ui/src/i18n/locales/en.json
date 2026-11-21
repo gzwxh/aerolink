@@ -1,5 +1,7 @@
 {
   "common": {
+    "yes": "Yes",
+    "no": "No",
     "actions": {
       "add": "Add",
       "apply": "Apply",
@@ -4136,6 +4138,9 @@
     },
     "font": "Font",
     "displayScale": "Display Scale",
+    "displayScalePercent": "Display scale percent",
+    "decreaseDisplayScale": "Decrease display scale",
+    "increaseDisplayScale": "Increase display scale",
     "logout": "Log out",
     "via": "via",
     "role": "Role",

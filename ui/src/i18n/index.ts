@@ -34,4 +34,14 @@ i18n
     },
   })
 
+// `ui/index.html` 里的 `<html lang="en">` 是写死的，代码之前也从没改过它，
+// 于是中文界面下文档语言依旧是 en：读屏软件的发音、字体选择与断行规则都依赖
+// 这个属性。跟随实际语言，初始化和切换时都刷一次。
+const applyDocumentLanguage = () => {
+  document.documentElement.lang = i18n.resolvedLanguage ?? i18n.language ?? 'zh'
+}
+
+i18n.on('languageChanged', applyDocumentLanguage)
+applyDocumentLanguage()
+
 export default i18n

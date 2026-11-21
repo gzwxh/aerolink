@@ -1,5 +1,7 @@
 {
   "common": {
+    "yes": "是",
+    "no": "否",
     "actions": {
       "add": "添加",
       "apply": "应用",
@@ -3655,6 +3657,9 @@
     },
     "font": "字体",
     "displayScale": "显示缩放",
+    "displayScalePercent": "显示缩放百分比",
+    "decreaseDisplayScale": "减小显示缩放",
+    "increaseDisplayScale": "增大显示缩放",
     "logout": "退出登录",
     "about": "关于{{name}}",
     "via": "通过",

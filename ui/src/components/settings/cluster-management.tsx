@@ -290,7 +290,7 @@ export function ClusterManagement() {
         header: t('common.fields.prometheus', 'Prometheus'),
         cell: ({ row: { original: cluster } }) => (
           <div className="text-sm text-muted-foreground">
-            {cluster.prometheusURL ? 'Yes' : 'No'}
+            {cluster.prometheusURL ? t('common.yes') : t('common.no')}
           </div>
         ),
       },
