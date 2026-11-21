@@ -82,6 +82,21 @@ describe('ResourceDeleteConfirmationDialog 的失败反馈', () => {
     })
     expect(toastError).not.toHaveBeenCalled()
   })
+
+  // 回归（缺陷 D-85）：成功提示原先拼的是模板串 `${label} deleted successfully`，
+  // 没走 i18n；同一个删除动作列表页弹中文、详情页弹英文。现在必须用
+  // common.messages.deleted（带 {{resource}} 插值）。
+  it('删除成功的提示走 i18n，不再拼英文句子', async () => {
+    deleteResource.mockResolvedValue(undefined)
+    renderDialog()
+
+    await confirmDelete()
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled())
+    const message = toastSuccess.mock.calls[0][0] as string
+    expect(message).toContain('common.messages.deleted')
+    expect(message).not.toContain('deleted successfully')
+  })
 })
 
 describe('ResourceDeleteConfirmationDialog 的关联 Service 联动删除', () => {

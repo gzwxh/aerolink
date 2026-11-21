@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { ResourceType, ResourceTypeMap } from '@/types/api'
 import { updateResource, useResource } from '@/lib/api'
@@ -34,6 +35,9 @@ export function SimpleResourceDetail<T extends ResourceType>(props: {
   const handleSaveYaml = async (content: ResourceTypeMap[T]) => {
     await updateResource(resourceType, name, namespace, content)
     await refetch()
+    // 成功反馈不能只有专用详情页有：Ingress / PDB / HPA / CRD 实例这类
+    // 只有通用详情页的资源，保存后原先什么都不提，用户无法判断是否落库（D-86）。
+    toast.success(t('common.messages.yamlSaved'))
   }
 
   const tabs = useMemo<ResourceDetailShellTab<ResourceTypeMap[T]>[]>(

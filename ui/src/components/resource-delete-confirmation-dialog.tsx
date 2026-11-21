@@ -54,7 +54,11 @@ export function ResourceDeleteConfirmationDialog({
           ? await deleteRelatedServices(relatedServices, namespace)
           : []
       toast.success(
-        `${getResourceSingularLabel(resourceType) || resourceType} deleted successfully`
+        // 这里原先拼的是模板串 `${label} deleted successfully`，
+        // 于是同一个删除动作：列表页弹「已删除 xx」、详情页弹英文（第 13 轮 D-85）。
+        t('common.messages.deleted', {
+          resource: getResourceSingularLabel(resourceType) || resourceType,
+        })
       )
       if (failedServices.length) {
         toast.warning(
