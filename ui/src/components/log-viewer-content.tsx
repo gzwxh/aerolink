@@ -25,6 +25,14 @@ import {
 import { useLogsWebSocket } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
 import {
+  filterMissedEverything,
+  isLogUnavailableLine,
+  MAX_LOG_LINES,
+  modelOverflowLines,
+  normalizeLogEol,
+  trimLogBuffer,
+} from '@/lib/log-buffer'
+import {
   findTermRanges,
   normalizeLineTextForSearch,
   normalizeSearchTerm,
@@ -184,6 +192,12 @@ export function LogViewer({
   })
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [isReconnecting, setIsReconnecting] = useState(false)
+  // 缓冲区行数：过滤一条都没命中时要区分「缓冲区里没有」与「本来就没日志」（缺陷 D-26）。
+  const [bufferedCount, setBufferedCount] = useState(0)
+  // 日志里出现 kubelet 的错误文本等需要显式告警的情况（缺陷 D-18）。
+  const [logNotice, setLogNotice] = useState<string | null>(null)
+  // 缓冲触顶、最早的行已被丢弃（缺陷 D-16）。
+  const [bufferTrimmed, setBufferTrimmed] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [wordWrap, setWordWrap] = useState<boolean>(() => {
     const saved = localStorage.getItem('log-viewer-word-wrap')
@@ -358,6 +372,7 @@ export function LogViewer({
 
     // 过滤视图显示命中行数；还原全量时恢复流式累计的条数。
     setLogCount(term ? matchSet.size : streamLogCountRef.current)
+    setBufferedCount(logLinesRef.current.length)
   }, [applyHighlightDecorations, filterContextLines])
 
   // 同一批到达的多条日志只触发一次重建。
@@ -506,6 +521,14 @@ export function LogViewer({
     // 所有行都先进缓冲（含被过滤掉的），过滤视图以它为数据源整体重建。
     const lines = splitSegmentsIntoLines(segments)
     logLinesRef.current.push(...lines)
+    // 实时流不会停，缓冲必须有上限；丢弃最早的行并明确提示，不能静默越积越多。
+    if (trimLogBuffer(logLinesRef.current) > 0) {
+      setBufferTrimmed(true)
+    }
+    // kubelet 取不到上一次容器日志时，错误是以普通日志行送过来的（缺陷 D-18）。
+    if (lines.some((line) => isLogUnavailableLine(line.text))) {
+      setLogNotice('unavailable')
+    }
 
     const term = normalizedFilterTermRef.current
     if (term) {
@@ -540,6 +563,23 @@ export function LogViewer({
         forceMoveMarkers: false,
       },
     ])
+
+    // 编辑器模型与缓冲同步压回上限，否则长时间会话照样把内存吃光（缺陷 D-16）。
+    const overflow = modelOverflowLines(model.getLineCount())
+    if (overflow > 0) {
+      model.applyEdits([
+        {
+          range: {
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: overflow + 1,
+            endColumn: 1,
+          },
+          text: '',
+          forceMoveMarkers: true,
+        },
+      ])
+    }
 
     const newDecorations: editor.IModelDeltaDecoration[] = []
 
@@ -667,6 +707,9 @@ export function LogViewer({
     decorationIdsRef.current = []
     pendingLogsRef.current = []
     logLinesRef.current = []
+    setBufferedCount(0)
+    setLogNotice(null)
+    setBufferTrimmed(false)
     if (filterRenderTimerRef.current !== null) {
       clearTimeout(filterRenderTimerRef.current)
       filterRenderTimerRef.current = null
@@ -763,7 +806,8 @@ export function LogViewer({
   const downloadLogs = () => {
     const model = editorRef?.current?.getModel()
     if (model) {
-      const content = model.getValue()
+      // Windows 下 Monaco 默认行尾是 \r\n，不统一一下下载到的文件每行都带 CR（缺陷 D-17）。
+      const content = normalizeLogEol(model.getValue())
       const blob = new Blob([content], { type: 'text/plain' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -918,7 +962,10 @@ export function LogViewer({
               variant="outline"
               size="sm"
               onClick={cycleTheme}
-              title={`Current theme: ${currentTheme.name}`}
+              title={t('logViewer.currentTheme', {
+                name: currentTheme.name,
+                defaultValue: '当前主题：{{name}}（Ctrl+T 切换）',
+              })}
               className="relative"
             >
               <IconPalette className="h-4 w-4" />
@@ -1219,6 +1266,37 @@ export function LogViewer({
       </CardHeader>
 
       <CardContent className="min-h-0 flex-1 p-0 relative">
+        {(logNotice ||
+          bufferTrimmed ||
+          filterMissedEverything(filterTerm, logCount, bufferedCount)) && (
+          <div className="absolute inset-x-0 top-0 z-10 space-y-1 bg-attention/10 px-3 py-2 text-xs text-attention-foreground">
+            {logNotice === 'unavailable' && (
+              <p>
+                {t(
+                  'logViewer.previousLogUnavailable',
+                  '数据源未能返回该容器的上一次日志（已被回收或超出保留期），下行内容是 kubelet 的错误而不是容器输出。'
+                )}
+              </p>
+            )}
+            {bufferTrimmed && (
+              <p>
+                {t('logViewer.bufferTrimmed', {
+                  max: MAX_LOG_LINES,
+                  defaultValue: `会话缓冲已达上限 {{max}} 行，最早的行已丢弃；需要完整历史请关闭实时流后用「末尾行数 = 全部」重新拉取。`,
+                })}
+              </p>
+            )}
+            {filterMissedEverything(filterTerm, logCount, bufferedCount) && (
+              <p>
+                {t('logViewer.filterMissedEverything', {
+                  buffered: bufferedCount,
+                  defaultValue:
+                    '当前已加载的 {{buffered}} 行里没有匹配行：可能是它落在末尾行数之外，试着调大末尾行数或选「全部」。',
+                })}
+              </p>
+            )}
+          </div>
+        )}
         <MonacoEditor
           height="100%"
           theme={`log-theme-${logTheme}`}
