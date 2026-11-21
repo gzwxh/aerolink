@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -52,6 +53,127 @@ func discoverServices(ctx context.Context, k8sClient *kube.K8sClient, namespace 
 	}
 
 	return relatedServices, nil
+}
+
+// discoverHorizontalPodAutoscalersByTarget 反向找出**正在扩缩这个工作负载**的 HPA。
+// 正向（HPA → 目标）早就有，工作负载这一侧之前是空白，所以上面配了 HPA、
+// 下面的「相关资源」却看不到（验收台账 D-71）。
+func discoverHorizontalPodAutoscalersByTarget(
+	ctx context.Context,
+	k8sClient *kube.K8sClient,
+	kind, name, namespace string,
+) []common.RelatedResource {
+	var list autoscalingv2.HorizontalPodAutoscalerList
+	if err := k8sClient.List(ctx, &list, client.InNamespace(namespace)); err != nil {
+		// 关联发现是尽力而为：无 list 权限、或集群没有这个 API 版本时，
+		// 少列一类关联比整个详情页 500 好。
+		klog.V(4).Infof("Failed to list HPAs in namespace %s: %v", namespace, err)
+		return nil
+	}
+
+	var related []common.RelatedResource
+	for _, hpa := range list.Items {
+		target := hpa.Spec.ScaleTargetRef
+		// scaleTargetRef.kind 缺省按 Deployment 理解（K8s 自身的默认值）。
+		targetKind := target.Kind
+		if targetKind == "" {
+			targetKind = "Deployment"
+		}
+		if targetKind != kind || target.Name != name {
+			continue
+		}
+		related = append(related, common.RelatedResource{
+			Type:      string(common.HorizontalPodAutoscalers),
+			Namespace: hpa.Namespace,
+			Name:      hpa.Name,
+		})
+	}
+	return related
+}
+
+// discoverPodDisruptionBudgetsByWorkload 用工作负载的 selector 去比 PDB。
+// PDB 选的是 Pod，所以把 `selector.matchLabels` 当作 Pod 标签，与 discoverServices 同一口径。
+// 已知局限：工作负载的 selector 只写 matchExpressions（没有 matchLabels）时比不出来，
+// 宁缺勿滥，不拿一个错的关联去误导排障。
+func discoverPodDisruptionBudgetsByWorkload(
+	ctx context.Context,
+	k8sClient *kube.K8sClient,
+	namespace string,
+	selector *metav1.LabelSelector,
+) []common.RelatedResource {
+	if selector == nil {
+		return nil
+	}
+
+	var list policyv1.PodDisruptionBudgetList
+	if err := k8sClient.List(ctx, &list, client.InNamespace(namespace)); err != nil {
+		klog.V(4).Infof("Failed to list PodDisruptionBudgets in namespace %s: %v", namespace, err)
+		return nil
+	}
+
+	var related []common.RelatedResource
+	for _, pdb := range list.Items {
+		related = appendMatchingPodDisruptionBudget(
+			related, pdb.Namespace, pdb.Name, pdb.Spec.Selector, selector.MatchLabels, false)
+	}
+	return related
+}
+
+// discoverIngressesByServices 反向找出**后端指向这些 Service** 的 Ingress。
+// 工作负载不直接挂在 Ingress 上，要经一跳：工作负载 → Service → Ingress
+// （discoverIngressServices 是反方向）。
+func discoverIngressesByServices(
+	ctx context.Context,
+	k8sClient *kube.K8sClient,
+	namespace string,
+	relatedServices []common.RelatedResource,
+) []common.RelatedResource {
+	wanted := make(map[string]bool, len(relatedServices))
+	for _, service := range relatedServices {
+		if service.Type == string(common.Services) && service.Namespace == namespace {
+			wanted[service.Name] = true
+		}
+	}
+	if len(wanted) == 0 {
+		return nil
+	}
+
+	var list v1.IngressList
+	if err := k8sClient.List(ctx, &list, client.InNamespace(namespace)); err != nil {
+		klog.V(4).Infof("Failed to list Ingresses in namespace %s: %v", namespace, err)
+		return nil
+	}
+
+	var related []common.RelatedResource
+	for _, ingress := range list.Items {
+		if !ingressUsesServices(&ingress, wanted) {
+			continue
+		}
+		related = append(related, common.RelatedResource{
+			Type:      string(common.Ingresses),
+			Namespace: ingress.Namespace,
+			Name:      ingress.Name,
+		})
+	}
+	return related
+}
+
+func ingressUsesServices(ingress *v1.Ingress, wanted map[string]bool) bool {
+	if backend := ingress.Spec.DefaultBackend; backend != nil &&
+		backend.Service != nil && wanted[backend.Service.Name] {
+		return true
+	}
+	for _, rule := range ingress.Spec.Rules {
+		if rule.HTTP == nil {
+			continue
+		}
+		for _, path := range rule.HTTP.Paths {
+			if path.Backend.Service != nil && wanted[path.Backend.Service.Name] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func discoverIngressServices(namespace string, ingress *v1.Ingress) []common.RelatedResource {
@@ -459,6 +581,10 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // 各资源的关�
 	ctx := c.Request.Context()
 	var podSpec *corev1.PodTemplateSpec
 	var selector *metav1.LabelSelector
+	// workloadKind 只在「能被 HPA 扩缩、能被 PDB 约束」的工作负载上设置。
+	// 不拿 resourceType 反推 Kind，是为了不把 Pod 也拖进来：Pod 那一支已经单独
+	// 查过 PDB，再走一遍会列出重复条目。
+	var workloadKind string
 	result := make([]common.RelatedResource, 0)
 
 	switch res := resource.(type) {
@@ -478,12 +604,15 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // 各资源的关�
 	case *appsv1.Deployment:
 		podSpec = &res.Spec.Template
 		selector = res.Spec.Selector
+		workloadKind = "Deployment"
 	case *appsv1.StatefulSet:
 		podSpec = &res.Spec.Template
 		selector = res.Spec.Selector
+		workloadKind = "StatefulSet"
 	case *appsv1.DaemonSet:
 		podSpec = &res.Spec.Template
 		selector = res.Spec.Selector
+		workloadKind = "DaemonSet"
 	case *corev1.Service:
 		relatedPods := discoverPodsByService(ctx, cs.K8sClient, res)
 		result = append(result, relatedPods...)
@@ -535,6 +664,22 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // 各资源的关�
 			return nil
 		})
 
+		// D-71：工作负载这一侧的反向发现。HPA 与 PDB 不依赖上面的结果，
+		// 所以并进同一个 errgroup；三类都是「列不到就少列」，不吃 errgroup 的错。
+		var relatedHPAs, relatedPDBs []common.RelatedResource
+		if workloadKind != "" {
+			g.Go(func() error {
+				relatedHPAs = discoverHorizontalPodAutoscalersByTarget(
+					gctx, cs.K8sClient, workloadKind, name, namespace)
+				return nil
+			})
+			g.Go(func() error {
+				relatedPDBs = discoverPodDisruptionBudgetsByWorkload(
+					gctx, cs.K8sClient, namespace, selector)
+				return nil
+			})
+		}
+
 		if err := g.Wait(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to discover services: " + err.Error()})
 			return
@@ -542,6 +687,15 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // 各资源的关�
 
 		result = append(result, relatedServices...)
 		result = append(result, related...)
+		result = append(result, relatedHPAs...)
+		result = append(result, relatedPDBs...)
+
+		if workloadKind != "" {
+			// Ingress 不直接指向工作负载，要拿刚发到的 Service 名单去反查，
+			// 所以必须排在 discoverServices 之后。
+			result = append(result,
+				discoverIngressesByServices(ctx, cs.K8sClient, namespace, relatedServices)...)
+		}
 	}
 
 	if v, ok := resource.(client.Object); ok {
