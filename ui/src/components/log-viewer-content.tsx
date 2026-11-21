@@ -25,6 +25,7 @@ import {
 import { useLogsWebSocket } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
 import {
+  classifyLogStreamError,
   filterMissedEverything,
   isLogUnavailableLine,
   MAX_LOG_LINES,
@@ -195,7 +196,15 @@ export function LogViewer({
   // 缓冲区行数：过滤一条都没命中时要区分「缓冲区里没有」与「本来就没日志」（缺陷 D-26）。
   const [bufferedCount, setBufferedCount] = useState(0)
   // 日志里出现 kubelet 的错误文本等需要显式告警的情况（缺陷 D-18）。
-  const [logNotice, setLogNotice] = useState<string | null>(null)
+  // 需要显式告警的日志流情况（缺陷 D-18 / D-53）：previous 日志取不到、
+  // 并发超限、其他服务端的 error 帧。detail 只在兼容未知错误时用。
+  const [logNotice, setLogNotice] = useState<{
+    kind: 'previousUnavailable' | 'limit' | 'previousNotFound' | 'streamError'
+    detail?: string
+  } | null>(null)
+  // WS 回调里拿不到最新的 state，用 ref 同步一份；后续日志到达时据此自动收起提示。
+  const logNoticeRef = useRef(logNotice)
+  logNoticeRef.current = logNotice
   // 缓冲触顶、最早的行已被丢弃（缺陷 D-16）。
   const [bufferTrimmed, setBufferTrimmed] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -527,7 +536,13 @@ export function LogViewer({
     }
     // kubelet 取不到上一次容器日志时，错误是以普通日志行送过来的（缺陷 D-18）。
     if (lines.some((line) => isLogUnavailableLine(line.text))) {
-      setLogNotice('unavailable')
+      setLogNotice({ kind: 'previousUnavailable' })
+    } else if (
+      lines.length > 0 &&
+      logNoticeRef.current?.kind !== 'previousUnavailable'
+    ) {
+      // 限流/建立失败后又能收到日志，说明已经恢复，提示该自己消失。
+      setLogNotice(null)
     }
 
     const term = normalizedFilterTermRef.current
@@ -726,6 +741,14 @@ export function LogViewer({
   // 面板空白且没有恢复路径（见 lib/log-stream.ts）。
   const streamPodName = resolveLogStreamPod(selectPodName, labelSelector)
 
+  // 服务端 error 帧必须上屏（缺陷 D-53）：以前只进 console，用户只看到空白面板。
+  const handleStreamError = useCallback((message: string, code?: string) => {
+    setLogNotice({
+      kind: classifyLogStreamError(message, code),
+      detail: message,
+    })
+  }, [])
+
   const logsOptions = useMemo(
     () => ({
       container: selectedContainer,
@@ -735,6 +758,7 @@ export function LogViewer({
       enabled: !!streamPodName,
       labelSelector,
       onNewLog: appendLog,
+      onStreamError: handleStreamError,
       onClear: cleanLog,
     }),
     [
@@ -746,6 +770,7 @@ export function LogViewer({
       streamPodName,
       labelSelector,
       appendLog,
+      handleStreamError,
       cleanLog,
     ]
   )
@@ -1270,12 +1295,37 @@ export function LogViewer({
           bufferTrimmed ||
           filterMissedEverything(filterTerm, logCount, bufferedCount)) && (
           <div className="absolute inset-x-0 top-0 z-10 space-y-1 bg-attention/10 px-3 py-2 text-xs text-attention-foreground">
-            {logNotice === 'unavailable' && (
+            {logNotice?.kind === 'previousUnavailable' && (
               <p>
                 {t(
                   'logViewer.previousLogUnavailable',
                   '数据源未能返回该容器的上一次日志（已被回收或超出保留期），下行内容是 kubelet 的错误而不是容器输出。'
                 )}
+              </p>
+            )}
+            {logNotice?.kind === 'previousNotFound' && (
+              <p>
+                {t(
+                  'logViewer.previousNotFound',
+                  '这个容器没有「上一次运行」可查（从未重启过）。取消勾选「上一个容器」即可看当前日志。'
+                )}
+              </p>
+            )}
+            {logNotice?.kind === 'limit' && (
+              <p>
+                {logNotice.detail ||
+                  t(
+                    'logViewer.streamLimitExceeded',
+                    '已达单用户日志/终端会话并发上限，请先关闭其它标签页或已有会话。'
+                  )}
+              </p>
+            )}
+            {logNotice?.kind === 'streamError' && (
+              <p>
+                {t('logViewer.streamFailed', {
+                  detail: logNotice.detail || '',
+                  defaultValue: '日志流未能建立：{{detail}',
+                })}
               </p>
             )}
             {bufferTrimmed && (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  classifyLogStreamError,
   filterMissedEverything,
   isLogUnavailableLine,
   MAX_LOG_LINES,
@@ -38,7 +39,9 @@ describe('modelOverflowLines', () => {
   it('keeps a margin so not every incoming line triggers a delete', () => {
     expect(modelOverflowLines(MAX_LOG_LINES, MAX_LOG_LINES, 1000)).toBe(0)
     expect(modelOverflowLines(MAX_LOG_LINES + 999, MAX_LOG_LINES, 1000)).toBe(0)
-    expect(modelOverflowLines(MAX_LOG_LINES + 1000, MAX_LOG_LINES, 1000)).toBe(0)
+    expect(modelOverflowLines(MAX_LOG_LINES + 1000, MAX_LOG_LINES, 1000)).toBe(
+      0
+    )
     expect(modelOverflowLines(MAX_LOG_LINES + 1001, MAX_LOG_LINES, 1000)).toBe(
       1
     )
@@ -81,5 +84,29 @@ describe('filterMissedEverything', () => {
     expect(filterMissedEverything('seq=42', 3, 50)).toBe(false)
     expect(filterMissedEverything('seq=42', 0, 0)).toBe(false)
     expect(filterMissedEverything('   ', 0, 50)).toBe(false)
+  })
+})
+
+// 回归（缺陷 D-53）：服务端的 error 帧以前只进 console，界面就是一个没说明的空白面板。
+describe('classifyLogStreamError', () => {
+  it('maps the limit code to its own notice', () => {
+    expect(
+      classifyLogStreamError('已达单用户并发上限', 'stream_limit_exceeded')
+    ).toBe('limit')
+  })
+
+  it('explains "no previous container" separately', () => {
+    expect(
+      classifyLogStreamError(
+        'Failed to get pod logs for web-1: previous terminated container "main" in pod "web-1" not found'
+      )
+    ).toBe('previousNotFound')
+  })
+
+  it('falls back to a generic failure notice carrying the reason', () => {
+    expect(classifyLogStreamError('connection reset by peer')).toBe(
+      'streamError'
+    )
+    expect(classifyLogStreamError('')).toBe('streamError')
   })
 })

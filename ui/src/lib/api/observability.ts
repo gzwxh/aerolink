@@ -455,6 +455,11 @@ export const useLogsWebSocket = (
     enabled?: boolean
     labelSelector?: string
     onNewLog?: (log: string) => void
+    /**
+     * 服务端 error 帧的回调。日志流失败时不能只进 console，
+     * 面板需要把它显示出来（缺陷 D-53）。
+     */
+    onStreamError?: (message: string, code?: string) => void
     onClear?: () => void
   }
 ) => {
@@ -513,7 +518,13 @@ export const useLogsWebSocket = (
           }
           break
         case 'error':
+          // 不能只写 console：限流、「没有上一次容器」这类情况界面必须说清原因，
+          // 否则用户只看到一个空白面板（缺陷 D-53）。
           console.error('Log streaming error:', message.data)
+          options?.onStreamError?.(
+            message.data || '',
+            (message as { code?: string }).code
+          )
           break
         case 'close':
           console.log('Log stream closed:', message.data)

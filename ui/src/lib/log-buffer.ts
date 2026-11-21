@@ -58,3 +58,21 @@ export function filterMissedEverything(
 ): boolean {
   return filterTerm.trim().length > 0 && matches === 0 && bufferedLines > 0
 }
+
+// 日志流 error 帧的分类（缺陷 D-53）：以前这些消息只进 console，
+// 界面就是一个没任何说明的空白面板。
+export type LogStreamNoticeKind = 'limit' | 'previousNotFound' | 'streamError'
+
+export function classifyLogStreamError(
+  message: string,
+  code?: string
+): LogStreamNoticeKind {
+  if (code === 'stream_limit_exceeded') {
+    return 'limit'
+  }
+  // 容器从未重启过时勾「上一个容器」，kubelet 会回这句（它不走日志正文那条路）。
+  if (/previous terminated container/i.test(message)) {
+    return 'previousNotFound'
+  }
+  return 'streamError'
+}
