@@ -31,6 +31,12 @@ const BORDER_CONTRAST_RANGE = [1.1, 2.6] as const
 const INPUT_CONTRAST_RANGE = [1.3, 3.2] as const
 const INPUT_OVER_BORDER = 0.05
 
+/**
+ * 描边压在「沉底填充」（--muted，表头带与斑马行都画它）上的下限。
+ * 只挡同色退化：半透明白描边在更浅的表面上余量本就小，套不住上面那套区间。
+ */
+const MIN_BORDER_ON_MUTED = 1.08
+
 type Tokens = Record<string, string>
 type Modes = { light: Tokens; dark: Tokens }
 
@@ -340,6 +346,26 @@ describe('配色主题的 token 契约', () => {
       input!,
       `${label} --input 必须比 --border 更实（表单边界要看得出来）`
     ).toBeGreaterThanOrEqual(border! + INPUT_OVER_BORDER)
+
+    // 同一支描边还要在「沉底填充」上看得见：表头带、斑马行、工具条都画 --muted
+    // （`bg-muted` / `bg-muted/50`），只比 --card 的话，把 --border 配成 --muted 同值
+    // 也能通过（暗物质主题就是这样整张表格没有行线）。比卡片更浅的表面上留给
+    // 半透明白描边的余量更小，所以这里只挡「同色退化」，不复制上面的区间。
+    const muted = colorOf(tokens, 'muted')
+    const borderOnMuted = colorOf(tokens, 'border', 'muted')
+    const inputOnMuted = colorOf(tokens, 'input', 'muted')
+    expect(muted, `${label} --muted 未定义`).not.toBeNull()
+    for (const [name, line] of [
+      ['--border', borderOnMuted],
+      ['--input', inputOnMuted],
+    ] as const) {
+      expect(line, `${label} ${name} 未定义`).not.toBeNull()
+      const value = contrast(line!, muted!)
+      expect(
+        value,
+        `${label} ${name} 压在沉底填充（--muted，表头带与斑马行就是它）上只有 ${value.toFixed(2)}，看不出分隔线`
+      ).toBeGreaterThanOrEqual(MIN_BORDER_ON_MUTED)
+    }
   })
 
   /**
