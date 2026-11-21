@@ -91,6 +91,13 @@ var (
 	// 超限的新连接会被拒绝（429），前端据此降级为轮询。
 	MaxWatchPerUser = 8
 
+	// MaxStreamsPerUser 是单个用户在本进程内允许同时持有的流式会话总数（Pod 日志、
+	// Pod 终端、节点终端、kubectl 终端共用一个名额池），注入
+	// AEROLINK_MAX_STREAMS_PER_USER，默认 12；<=0 表示不限制。
+	// 每条会话都常驻占用一条到 apiserver 的日志流 / exec 流，不设上限会让人多开
+	// 几个标签页就把连接数与内存无界拉高（验收台账 D-55）。
+	MaxStreamsPerUser = 12
+
 	// ConfigFilePath 是外部配置文件的路径（通过 AEROLINK_CONFIG_FILE 环境变量设置）
 	ConfigFilePath = ""
 
@@ -335,6 +342,16 @@ func loadRuntimeEnvs() {
 			}
 		} else {
 			klog.Warningf("Invalid AEROLINK_MAX_WATCH_PER_USER %q, keeping %d", v, MaxWatchPerUser)
+		}
+	}
+	if v := Getenv("MAX_STREAMS_PER_USER"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			MaxStreamsPerUser = n
+			if n <= 0 {
+				klog.Warningf("AEROLINK_MAX_STREAMS_PER_USER=%d disables the per-user log/terminal stream limit", n)
+			}
+		} else {
+			klog.Warningf("Invalid AEROLINK_MAX_STREAMS_PER_USER %q, keeping %d", v, MaxStreamsPerUser)
 		}
 	}
 	if v := Getenv("CONFIG_FILE"); v != "" {

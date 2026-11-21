@@ -107,6 +107,11 @@ spec:
             - name: AEROLINK_MAX_WATCH_PER_USER
               value: {{ .Values.maxWatchPerUser | quote }}
             {{- end }}
+            {{- if .Values.maxStreamsPerUser }}
+            # 单用户可并发持有的日志/终端会话上限，留空时程序用默认 12。
+            - name: AEROLINK_MAX_STREAMS_PER_USER
+              value: {{ .Values.maxStreamsPerUser | quote }}
+            {{- end }}
             {{- if .Values.clusterProbeInterval }}
             # 集群 API 探活间隔（秒），留空时程序用默认 15；0 表示关闭探活。
             - name: AEROLINK_CLUSTER_PROBE_INTERVAL

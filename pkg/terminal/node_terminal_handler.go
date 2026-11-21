@@ -53,6 +53,13 @@ func (h *NodeTerminalHandler) HandleNodeTerminalWebSocket(c *gin.Context) {
 
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		ctx := ws.Context
+
+		// 节点终端与日志/Pod 终端共用同一个每用户名额池（缺陷 D-55）。
+		releaseStream, allowed := wsutil.LimitStream(ws, user.Username)
+		if !allowed {
+			return
+		}
+		defer releaseStream()
 		node, err := cs.K8sClient.ClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
 			klog.Errorf("Failed to get node %s: %v", nodeName, err)

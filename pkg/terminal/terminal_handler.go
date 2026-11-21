@@ -53,6 +53,13 @@ func (h *TerminalHandler) HandleTerminalWebSocket(c *gin.Context) {
 	}
 
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
+		// exec 会话与日志流共用同一个每用户名额池（缺陷 D-55）。
+		releaseStream, allowed := wsutil.LimitStream(ws, user.Username)
+		if !allowed {
+			return
+		}
+		defer releaseStream()
+
 		session := kube.NewTerminalSession(cs.K8sClient, ws.Conn, namespace, podName, container)
 		defer session.Close()
 

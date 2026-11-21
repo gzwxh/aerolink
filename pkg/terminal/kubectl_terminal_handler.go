@@ -62,6 +62,14 @@ func (h *KubectlTerminalHandler) HandleKubectlTerminalWebSocket(c *gin.Context) 
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		ctx := ws.Context
 
+		// kubectl 终端背后也是一个常驻 exec 会话，共用每用户名额池（缺陷 D-55）。
+		// 注意占不到名额时不能去建 agent Pod，否则会留下没人用的残留。
+		releaseStream, allowed := wsutil.LimitStream(ws, user.Username)
+		if !allowed {
+			return
+		}
+		defer releaseStream()
+
 		// 确保共享的管理员 ServiceAccount 与 ClusterRoleBinding 已存在
 		if err := h.ensureAdminServiceAccount(ctx, cs); err != nil {
 			klog.Errorf("Failed to ensure kubectl admin SA: %v", err)

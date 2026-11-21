@@ -49,6 +49,13 @@ func (h *LogsHandler) HandleLogsWebSocket(c *gin.Context) {
 	wsutil.Serve(c.Writer, c.Request, func(ws *wsutil.Session) {
 		ctx := ws.Context
 
+		// 一条日志流就是一条常驻的 apiserver 日志流，按用户限并发（缺陷 D-55）。
+		releaseStream, ok := wsutil.LimitStream(ws, user.Username)
+		if !ok {
+			return
+		}
+		defer releaseStream()
+
 		container := c.Query("container")
 		tailLines := c.DefaultQuery("tailLines", "100")
 		timestamps := c.DefaultQuery("timestamps", "true")

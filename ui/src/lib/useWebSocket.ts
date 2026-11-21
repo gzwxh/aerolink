@@ -12,6 +12,8 @@ export interface WebSocketOptions {
 export interface WebSocketMessage {
   type: string
   data?: string
+  // 可选的机器可读码（如 stream_limit_exceeded），服务端与前端按它而不是按文案分支。
+  code?: string
   [key: string]: unknown
 }
 

@@ -72,6 +72,7 @@
 | `logFile`               | klog（系统日志）落盘路径。设置后系统日志只写文件、不再写 stderr，便于采集工具收集；置空则输出到 stderr（`kubectl logs` 能直接看到）。目录不存在时会尝试创建，写不进去只告警并回落 stderr。 | `/home/aerolink/data/aerolink.log`     |
 | `podMetricsInterval`    | Pod 列表页实时推送里「用量（CPU / 内存数字）」的刷新间隔（秒）。留空为默认 `15`。                                                                                                         | `""`                                   |
 | `maxWatchPerUser`       | 单个用户在每个集群上允许并发持有的资源 watch（SSE）连接数。留空为默认 `8`；超限的新连接返回 `429`，前端自动降级为轮询。`0` 表示不限制（仅建议临时排查用）。                                 | `""`                                   |
+| `maxStreamsPerUser`     | 单个用户可并发持有的流式会话总数（Pod 日志与 Pod / 节点 / kubectl 终端共用一个名额池）。留空为默认 `12`；超限的新会话会收到带原因（`stream_limit_exceeded`）的错误并关闭。`0` 表示不限制。                                | `""`                                   |
 | `clusterProbeInterval`  | 主动探活各集群 API server 的间隔（秒）。留空为默认 `15`；`0` 关闭探活。                                                                                                                   | `""`                                   |
 | `clusterStaleAfter`     | 判定「集群数据可能已过期」的阈值（秒）。留空为默认 `45`（探活间隔的 3 倍）；`0` 只保留「从未连上过」与 watch 报错两种判据。                                                                 | `""`                                   |
 

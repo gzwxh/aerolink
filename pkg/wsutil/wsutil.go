@@ -22,6 +22,9 @@ const (
 type Message struct {
 	Type string `json:"type"`
 	Data string `json:"data"`
+	// Code 是可选的机器可读标识（如 stream_limit_exceeded），让前端按码而不是
+	// 按提示文案分支；省略时不会出现在 JSON 里。
+	Code string `json:"code,omitempty"`
 }
 
 type Conn struct {
@@ -137,6 +140,12 @@ func SendMessage(conn *Conn, msgType, data string) error {
 
 func SendError(conn *Conn, message string) error {
 	return SendMessage(conn, "error", message)
+}
+
+// SendErrorCode 发一条带机器可读码的错误帧：超限这类情需要能被前端准确识别，
+// 而不是去匹配提示文案。
+func SendErrorCode(conn *Conn, code, message string) error {
+	return conn.WriteJSON(Message{Type: "error", Data: message, Code: code})
 }
 
 func SendErrorMessage(conn *Conn, message string) {
