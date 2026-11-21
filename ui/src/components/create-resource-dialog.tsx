@@ -237,7 +237,22 @@ function CreateResourceDialogContent({
       onClose()
     } catch (err) {
       console.error('Failed to apply resource', err)
-      toast.error(translateError(err, t))
+      // 多文档是一份一份下发的，失败不会回滚前面的对象（缺陷 D-12）。
+      // 只说「失败」会让人以为什么都没发生而重复提交，所以把已落地数量带上。
+      const appliedCount = (err as { params?: { count?: unknown } }).params
+        ?.count
+      if (typeof appliedCount === 'number' && appliedCount > 0) {
+        toast.error(
+          t('dialog.applyPartialFailure', {
+            appliedCount,
+            detail: translateError(err, t),
+            defaultValue: `已下发 {{appliedCount}} 个对象，其余失败：{{detail}}`,
+          })
+        )
+      } else {
+        toast.error(translateError(err, t))
+      }
+      // 不关闭弹窗：留在原地才能只修失败的那几份文档。
     } finally {
       setIsLoading(false)
     }

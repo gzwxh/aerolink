@@ -614,6 +614,8 @@ const (
 	fileCodePathRequired  = "pod_files_path_required"
 	fileCodePathInvalid   = "pod_files_path_invalid"
 	fileCodePathTraversal = "pod_files_path_traversal"
+	// 目标路径已有同名文件，需要调用方显式要求覆盖（见 UploadFile）。
+	fileCodeAlreadyExists = "pod_files_already_exists"
 )
 
 // containerCommandMissing 报告一次 exec 失败是不是因为容器里没有这个命令
@@ -673,6 +675,13 @@ func respondFileProbeFailure(c *gin.Context, probe containerPathProbe, container
 		return true
 	}
 	return false
+}
+
+// uploadOverwriteBlocked 判断这次上传是否应因为同名文件被挡下。
+// overwrite=true 是调用方（界面确认后）显式要求的覆盖；探不出存在性
+// （probe.Unsupported，容器里没有 test）时不拦，避免把可用的功能弄坏。
+func uploadOverwriteBlocked(overwrite string, probe containerPathProbe) bool {
+	return overwrite != "true" && probe.Exists && !probe.Unsupported
 }
 
 // respondFileError 写入带错误码的 JSON，params 供前端拼装本地化文案里的变量。
@@ -741,6 +750,22 @@ func (h *PodHandler) UploadFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid destination path"})
 		return
 	}
+
+	// 同名文件不能静默覆盖（缺陷 D-14）：tee 会直接截断重写，上传完只会说「已上传」，
+	// 原内容去哪了没有任何提示。这里先探一次目标路径，已存在则要求显式 overwrite=true，
+	// 由界面弹应用内确认后再重试。
+	// 探不出来（精简镜像里没有 test）时不拦：这是数据保护的最佳努力，不是准入控制，
+	// 一刀切会让原本可用的上传直接坏掉。
+	if uploadOverwriteBlocked(c.Query("overwrite"),
+		probeContainerPath(c.Request.Context(), cs, namespace, podName, container, destPath)) {
+		errExists := fmt.Errorf("destination file already exists")
+		respondFileError(c, http.StatusConflict, fileCodeAlreadyExists,
+			fmt.Sprintf("%s already exists in the %s container", destPath, container),
+			gin.H{"path": destPath, "container": container})
+		h.recordFileAudit(c, cs, namespace, podName, "upload-file", destPath, container, false, errExists)
+		return
+	}
+
 	cmd := []string{"tee", destPath}
 
 	err = cs.K8sClient.ExecCommand(c.Request.Context(), kube.ExecOptions{

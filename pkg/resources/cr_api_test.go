@@ -508,7 +508,7 @@ func TestCRAPIUpdate(t *testing.T) {
 		body := `{
 			"apiVersion":"other.example.com/v9",
 			"kind":"Other",
-			"metadata":{"name":"body-name","namespace":"team-a","resourceVersion":"99","uid":"body-uid"},
+			"metadata":{"name":"body-name","namespace":"team-a","resourceVersion":"7","uid":"body-uid"},
 			"spec":{"size":"large"}
 		}`
 		response := performCRAPIRequest(t, fixture, http.MethodPut, "/api/v1/widgets.example.com/default/target", body, nil)
@@ -528,6 +528,8 @@ func TestCRAPIUpdate(t *testing.T) {
 		if sentToClient.GetName() != "target" || sentToClient.GetNamespace() != "default" || sentToClient.GroupVersionKind() != widgetGVK {
 			t.Fatalf("client received %s %s/%s, want %s default/target", sentToClient.GroupVersionKind(), sentToClient.GetNamespace(), sentToClient.GetName(), widgetGVK)
 		}
+		// UID 以库里为准；resourceVersion 则**尊重客户端**（缺陷 D-28 的同类修正）：
+		// 这里提交的 "7" 与库里一致，所以既能更新成功，又不会把并发检测抹掉。
 		if sentToClient.GetResourceVersion() != "7" || sentToClient.GetUID() != types.UID("stored-uid") {
 			t.Fatalf("client received resourceVersion/UID = %q/%q, want 7/stored-uid", sentToClient.GetResourceVersion(), sentToClient.GetUID())
 		}
@@ -594,6 +596,42 @@ func TestCRAPIUpdate(t *testing.T) {
 		response := performCRAPIRequest(t, fixture, http.MethodPut, "/api/v1/widgets.example.com/default/target", `{"apiVersion":"example.com/v1","kind":"Widget","spec":{"size":"large"}}`, nil)
 		if response.Code != http.StatusInternalServerError {
 			t.Fatalf("update error returned %d, want %d; body=%s", response.Code, http.StatusInternalServerError, response.Body.String())
+		}
+	})
+
+	// 回归（缺陷 D-28 在自定义资源上的同类问题）：客户端带了过期的
+	// resourceVersion 时必须原样提交给 K8s，并把冲突当成 409 而不是 500。
+	t.Run("stale resourceVersion surfaces as conflict", func(t *testing.T) {
+		widget := newWidget("target", "default", nil)
+		widget.SetResourceVersion("7")
+		var sentToClient *unstructured.Unstructured
+		fixture := newCRAPITestFixture(t, crAPITestConfig{
+			user:  user,
+			write: true,
+			clusterAObjects: []client.Object{
+				newWidgetCRD(apiextensionsv1.NamespaceScoped),
+				widget,
+			},
+			clusterAInterceptors: interceptor.Funcs{
+				Update: func(_ context.Context, _ client.WithWatch, object client.Object, _ ...client.UpdateOption) error {
+					if cr, ok := object.(*unstructured.Unstructured); ok {
+						sentToClient = cr.DeepCopy()
+					}
+					return k8serrors.NewConflict(schema.GroupResource{Group: "example.com", Resource: "widgets"}, "target",
+						errors.New("the object has been modified; please apply your changes to the latest version and try again"))
+				},
+			},
+		})
+		response := performCRAPIRequest(t, fixture, http.MethodPut, "/api/v1/widgets.example.com/default/target",
+			`{"apiVersion":"example.com/v1","kind":"Widget","metadata":{"name":"target","namespace":"default","resourceVersion":"3"},"spec":{"size":"large"}}`, nil)
+		if response.Code != http.StatusConflict {
+			t.Fatalf("stale update returned %d, want %d; body=%s", response.Code, http.StatusConflict, response.Body.String())
+		}
+		if sentToClient == nil || sentToClient.GetResourceVersion() != "3" {
+			t.Fatalf("client RV was rewritten: %#v", sentToClient)
+		}
+		if !strings.Contains(response.Body.String(), resourceVersionConflictCode) {
+			t.Fatalf("conflict response has no machine readable code: %s", response.Body.String())
 		}
 	})
 

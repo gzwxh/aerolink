@@ -66,7 +66,8 @@ func (h *GenericResourceHandler[T, V]) getGroupKind() schema.GroupKind {
 func (h *GenericResourceHandler[T, V]) recordHistory(c *gin.Context, opType string, prev, curr T, success bool, errMsg string) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	user := c.MustGet("user").(model.User)
-	resourceYAML := h.ToYAML(curr)
+	// Secret 的 data/stringData 不整份进审计（缺陷 D-33），只留键名。
+	resourceYAML := redactSecretYAML(h.name, h.ToYAML(curr))
 	if opType == "delete" {
 		resourceYAML = ""
 	}
@@ -78,7 +79,7 @@ func (h *GenericResourceHandler[T, V]) recordHistory(c *gin.Context, opType stri
 		Namespace:     curr.GetNamespace(),
 		OperationType: opType,
 		ResourceYAML:  model.LongText(resourceYAML),
-		PreviousYAML:  model.LongText(h.ToYAML(prev)),
+		PreviousYAML:  model.LongText(redactSecretYAML(h.name, h.ToYAML(prev))),
 		Success:       success,
 		ErrorMessage:  errMsg,
 		OperatorID:    model.OperatorRef(user.ID),

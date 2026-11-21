@@ -1089,6 +1089,30 @@ export type CatalogResourceType = (typeof resourceCatalog)[number]['type']
 
 export type ResourceType = CatalogResourceType
 
+// 后端只为标了 `Related: true` 的资源类型注册了 `/related` 路由，源文件是
+// `pkg/common/resource.go` 的 Registry（经 `common.RelatedResourceTypes()` 给
+// `pkg/resources/handler.go` 用）。这份列表与它同源（本文件本来就是 Registry 的前端镜像）：
+// 多写一个会被后端 404，少写一个只是少一块关联卡片。
+// 不加这个门，节点等详情页会每分钟对一个根本不存在的路径发一次请求（缺陷 D-41）。
+const relatedResourceTypes = [
+  'pods',
+  'services',
+  'configmaps',
+  'secrets',
+  'persistentvolumeclaims',
+  'deployments',
+  'statefulsets',
+  'daemonsets',
+  'poddisruptionbudgets',
+  'ingresses',
+  'storageclasses',
+  'httproutes',
+  'horizontalpodautoscalers',
+] as const satisfies readonly ResourceType[]
+
+export const supportsRelatedResources = (resource: string): boolean =>
+  (relatedResourceTypes as readonly string[]).includes(resource)
+
 export type ResourceMetadata = Omit<ResourceCatalogEntryBase, 'type'> & {
   type: ResourceType
 }

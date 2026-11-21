@@ -247,6 +247,22 @@ describe('RBAC helpers', () => {
       )
     ).toBe('crd:Gateway:gateway.networking.k8s.io/v1')
   })
+
+  // 回归（缺陷 D-29）：K8s 乐观并发冲突要按码本地化，不能把
+  // `the object has been modified…` 这句原文当未知错误弹给用户。
+  it('translates resource version conflicts', () => {
+    const t = vi.fn((key: string) =>
+      key === 'errors.resourceVersionConflict' ? 'conflict' : key
+    )
+    const error = Object.assign(
+      new Error(
+        'Operation cannot be fulfilled on deployments.apps "web": the object has been modified; please apply your changes to the latest version and try again'
+      ),
+      { code: 'resource_version_conflict' }
+    )
+
+    expect(translateError(error, t as unknown as TFunction)).toBe('conflict')
+  })
 })
 
 describe('isCRDNotInstalledError', () => {

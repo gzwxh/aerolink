@@ -24,6 +24,13 @@ import { toSimpleContainer } from '@/lib/k8s'
 import { translateError } from '@/lib/utils'
 import { useCanAnyNamespace } from '@/hooks/use-can'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -114,7 +121,16 @@ export function PodFileBrowser({
       return
     }
     const file = e.target.files?.[0]
+    // 先复位 input：同一个文件再选一次也要能触发 change。
+    e.target.value = ''
     if (!file) return
+    await doUpload(file, false)
+  }
+
+  // 待确认覆盖的文件：不为 null 就弹应用内确认框（不用原生 confirm）。
+  const [pendingOverwrite, setPendingOverwrite] = useState<File | null>(null)
+
+  const doUpload = async (file: File, overwrite: boolean) => {
     setIsUploading(true)
     try {
       await podUploadFile(
@@ -122,7 +138,8 @@ export function PodFileBrowser({
         podName,
         selectedContainer,
         currentPath,
-        file
+        file,
+        overwrite
       )
       refetch()
       toast.success(
@@ -132,10 +149,22 @@ export function PodFileBrowser({
         })
       )
     } catch (error) {
-      toast.error(translateError(error, t))
+      // 后端不再静默覆盖同名文件（缺陷 D-14）：409 时让用户确认后再盖。
+      if ((error as { code?: string }).code === 'pod_files_already_exists') {
+        setPendingOverwrite(file)
+      } else {
+        toast.error(translateError(error, t))
+      }
     } finally {
       setIsUploading(false)
-      e.target.value = ''
+    }
+  }
+
+  const confirmOverwrite = async () => {
+    const file = pendingOverwrite
+    setPendingOverwrite(null)
+    if (file) {
+      await doUpload(file, true)
     }
   }
 
@@ -358,6 +387,40 @@ export function PodFileBrowser({
           </Table>
         </div>
       )}
+
+      <Dialog
+        open={pendingOverwrite !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingOverwrite(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {t('podFiles.overwriteTitle', '覆盖已存在的同名文件？')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('podFiles.overwriteDescription', {
+                name: pendingOverwrite?.name ?? '',
+                path: currentPath,
+                defaultValue:
+                  '容器内 {{path}} 下已有同名文件 {{name}}，继续上传会直接覆盖原内容且无法恢复。',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setPendingOverwrite(null)}
+            >
+              {t('common.actions.cancel', '取消')}
+            </Button>
+            <Button onClick={confirmOverwrite} disabled={isUploading}>
+              {t('podFiles.overwriteConfirm', '覆盖并上传')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

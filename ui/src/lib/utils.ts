@@ -341,6 +341,14 @@ export function translateError(error: Error | unknown, t: TFunction): string {
     })
   }
 
+  // K8s 乐观并发冲突（两个人先后提交同一个对象）：服务端只给那句又长又英文的
+  // `the object has been modified…`，用户看不出自己该做什么，按码换成可执行的提示。
+  if (policyError.code === 'resource_version_conflict') {
+    return t('errors.resourceVersionConflict', {
+      defaultValue: '对象已被他人修改，请刷新后重试',
+    })
+  }
+
   const crdMatch = CRD_NOT_INSTALLED_RE.exec(error.message)
   if (crdMatch) {
     return t('errors.crdNotInstalled', {

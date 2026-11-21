@@ -28,6 +28,7 @@ import {
 } from '@/types/api'
 import type { CustomResource } from '@/types/api'
 import { getResourceQueryKey } from '@/lib/resource-metadata'
+import { supportsRelatedResources } from '@/lib/resource-catalog'
 import { useCluster } from '@/hooks/use-cluster'
 
 import { API_BASE_URL, apiClient } from '../api-client'
@@ -1347,7 +1348,9 @@ export const podUploadFile = async (
   podName: string,
   container: string,
   path: string,
-  file: File
+  file: File,
+  // 默认 false：后端碰到同名文件会回 409，由界面确认后带 true 重试（缺陷 D-14）。
+  overwrite = false
 ): Promise<void> => {
   const formData = new FormData()
   formData.append('file', file)
@@ -1355,6 +1358,9 @@ export const podUploadFile = async (
     container,
     path,
   })
+  if (overwrite) {
+    params.set('overwrite', 'true')
+  }
 
   await apiClient.put(
     `${withCurrentClusterPath(`/pods/${namespace}/${podName}/files/upload`)}?${params.toString()}`,
@@ -1427,6 +1433,9 @@ export function useRelatedResources(
   return useQuery({
     queryKey: ['related-resources', resource, name, namespace],
     queryFn: () => getRelatedResources(resource, name, namespace),
+    // 后端只为部分资源类型注册了 /related（如 nodes 就没有），对不存在的路径发请求
+    // 只会得到 404 + 一个误导向的「暂无相关资源」（缺陷 D-41）。
+    enabled: supportsRelatedResources(resource),
     staleTime: 60 * 1000, // 1 min
     placeholderData: (prev) => prev,
   })

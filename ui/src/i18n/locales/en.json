@@ -686,6 +686,9 @@
     "upload": "Upload",
     "uploadSuccess": "Uploaded {{name}}",
     "uploadDenied": "No permission to upload container files",
+    "overwriteTitle": "Overwrite the existing file?",
+    "overwriteDescription": "{{name}} already exists at {{path}} in the container. Continuing will replace it with no way to recover.",
+    "overwriteConfirm": "Overwrite and upload",
     "loading": "Loading files...",
     "empty": "No files found",
     "goToParent": "Go to parent directory",
@@ -710,6 +713,7 @@
       "pod_files_is_directory": "{{path}} is a directory and cannot be previewed",
       "pod_files_path_required": "File path is required",
       "pod_files_path_invalid": "Invalid file path",
+      "pod_files_already_exists": "{{path}} already exists. Overwrite it?",
       "pod_files_path_traversal": "Path must not contain '..'"
     }
   },
@@ -919,6 +923,7 @@
   },
   "dialog": {
     "createResource": "Create Resource",
+    "applyPartialFailure": "{{appliedCount}} object(s) were applied; the rest failed: {{detail}}",
     "createResourceDescription": "Paste one or more Kubernetes resource YAML documents and apply them to the cluster",
     "editResource": "Edit Resource",
     "deleteConfirmation": "Delete Confirmation",
@@ -976,6 +981,9 @@
     "last24Hours": "Last 24 hours",
     "noResourceUtilizationData": "No resource utilization data available",
     "noNetworkUsageData": "No network usage data available",
+    "noData": "No data available",
+    "noDiskUsageData": "The metrics source does not expose disk I/O (container_fs_*); this panel stays empty until it is collected.",
+    "insufficientDataPoints": "Not enough data points in the selected range to draw the chart (the metrics source may have just been added, or its retention is shorter than the range).",
     "requests": "Requests",
     "limits": "Limits",
     "total": "Total"
@@ -1244,7 +1252,8 @@
   },
   "errors": {
     "crdNotInstalledTitle": "Resource Type Not Available",
-    "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature."
+    "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature.",
+    "resourceVersionConflict": "This object was changed by someone else. Reload it and try again."
   },
   "nsActions": {
     "moreActions": "More actions",
@@ -4142,6 +4151,10 @@
     "allLines": "All",
     "showTimestamps": "Show Timestamps",
     "previousContainer": "Previous Container",
+    "currentTheme": "Current theme: {{name}} (Ctrl+T to cycle)",
+    "previousLogUnavailable": "The runtime could not return this container's previous logs (collected away or beyond retention). The line below is a kubelet error, not container output.",
+    "bufferTrimmed": "The live buffer hit its {{max}}-line limit and dropped the oldest lines. For the full history, turn off streaming and reload with \"tail lines = all\".",
+    "filterMissedEverything": "No match in the {{buffered}} lines currently loaded — it may fall outside the tail window. Try a larger tail length or \"all\".",
     "wordWrap": "Word Wrap",
     "showLineNumbers": "Show Line Numbers",
     "logTheme": "Log Theme",

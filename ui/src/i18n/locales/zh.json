@@ -686,6 +686,9 @@
     "upload": "上传",
     "uploadSuccess": "已上传 {{name}}",
     "uploadDenied": "无容器文件上传权限",
+    "overwriteTitle": "覆盖已存在的同名文件？",
+    "overwriteDescription": "容器内 {{path}} 下已有同名文件 {{name}}，继续上传会直接覆盖原内容且无法恢复。",
+    "overwriteConfirm": "覆盖并上传",
     "loading": "正在加载文件...",
     "empty": "未找到文件",
     "goToParent": "返回上级目录",
@@ -710,6 +713,7 @@
       "pod_files_is_directory": "{{path}} 是目录，不能预览",
       "pod_files_path_required": "请填写文件路径",
       "pod_files_path_invalid": "文件路径无效",
+      "pod_files_already_exists": "{{path}} 已存在，是否覆盖？",
       "pod_files_path_traversal": "路径不能包含 \"..\""
     }
   },
@@ -919,6 +923,7 @@
   },
   "dialog": {
     "createResource": "创建资源",
+    "applyPartialFailure": "已下发 {{appliedCount}} 个对象，其余失败：{{detail}}",
     "createResourceDescription": "粘贴一个或多个 Kubernetes 资源的 YAML，直接下发到集群",
     "editResource": "编辑资源",
     "deleteConfirmation": "删除确认",
@@ -976,6 +981,9 @@
     "last24Hours": "最近 24 小时",
     "noResourceUtilizationData": "暂无资源利用率数据",
     "noNetworkUsageData": "暂无网络使用量数据",
+    "noData": "暂无数据",
+    "noDiskUsageData": "数据源未提供磁盘 I/O 指标（container_fs_*），未开启采集时该项为空",
+    "insufficientDataPoints": "所选时间范围内的数据点不足，图表无法绘制（可能是数据源刚接入，或保留期短于该范围）",
     "requests": "Requests",
     "limits": "Limits",
     "total": "总计"
@@ -1244,7 +1252,8 @@
   },
   "errors": {
     "crdNotInstalledTitle": "资源类型不可用",
-    "crdNotInstalled": "此集群未安装 {{kind}} ({{version}})。请先安装对应的 CRD。"
+    "crdNotInstalled": "此集群未安装 {{kind}} ({{version}})。请先安装对应的 CRD。",
+    "resourceVersionConflict": "对象已被他人修改，请刷新后重试"
   },
   "nsActions": {
     "moreActions": "更多操作",
@@ -4142,6 +4151,10 @@
     "allLines": "全部",
     "showTimestamps": "显示时间戳",
     "previousContainer": "上一个容器",
+    "currentTheme": "当前主题：{{name}}（Ctrl+T 切换）",
+    "previousLogUnavailable": "数据源未能返回该容器的上一次日志（已被回收或超出保留期），下行内容是 kubelet 的错误而不是容器输出。",
+    "bufferTrimmed": "会话缓冲已达上限 {{max}} 行，最早的行已丢弃；需要完整历史请关闭实时流后用「末尾行数 = 全部」重新拉取。",
+    "filterMissedEverything": "当前已加载的 {{buffered}} 行里没有匹配行：可能是它落在末尾行数之外，试着调大末尾行数或选「全部」。",
     "wordWrap": "自动换行",
     "showLineNumbers": "显示行号",
     "logTheme": "日志主题",

@@ -7,6 +7,7 @@ import {
   getResourceFormEditPath,
   hasResourceFormEdit,
   isClusterScopedResource,
+  supportsRelatedResources,
 } from './resource-catalog'
 
 describe('getResourceFormEditPath', () => {
@@ -59,6 +60,24 @@ describe('表单编辑页的路由覆盖', () => {
         ? `${resource}/:name/edit`
         : `${resource}/:namespace/:name/edit`
       expect(routePaths, `${resource} 缺少编辑路由`).toContain(expected)
+    }
+  })
+})
+
+// 回归（缺陷 D-41）：后端只为标了 Related 的资源类型注册 /related 路由，
+// 节点不在其中。之前详情页无条件发请求，拿到 404 后还显示「暂无相关资源」，
+// 把「这个页面没有这个功能」伪装成「这个对象没有关联资源」。
+// 后端列表本身在 pkg/common/resource_test.go 里钉住，两边必须同步。
+describe('supportsRelatedResources', () => {
+  it('允许后端确实注册了路由的类型', () => {
+    for (const resource of ['pods', 'deployments', 'configmaps', 'storageclasses']) {
+      expect(supportsRelatedResources(resource)).toBe(true)
+    }
+  })
+
+  it('挡掉没有 /related 路由的类型', () => {
+    for (const resource of ['nodes', 'namespaces', 'crds', 'serviceaccounts']) {
+      expect(supportsRelatedResources(resource)).toBe(false)
     }
   })
 })

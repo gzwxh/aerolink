@@ -10,6 +10,7 @@ import (
 	"github.com/zxh326/kite/pkg/cluster"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/kube"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -88,6 +89,15 @@ func (h *GenericResourceHandler[T, V]) Update(c *gin.Context) {
 	ctx := c.Request.Context()
 	if err := cs.K8sClient.Update(ctx, resource); err != nil {
 		errMsg = err.Error()
+		// K8s 的乐观并发冲突不是服务端故障：客户端拿的对象已经过期，必须回 409，
+		// 否则界面只能把 `the object has been modified…` 这句英文原文当未知错误弹出来。
+		if apierrors.IsConflict(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":  resourceVersionConflictCode,
+				"error": err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

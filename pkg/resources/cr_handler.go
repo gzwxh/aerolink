@@ -551,7 +551,13 @@ func (h *CRHandler) Update(c *gin.Context) {
 	// 保留重要的元数据
 	updatedCR.SetGroupVersionKind(existingCR.GroupVersionKind())
 	updatedCR.SetName(name)
-	updatedCR.SetResourceVersion(existingCR.GetResourceVersion())
+	// 与内置资源的 apply 保持同一口径（缺陷 D-28 的同类问题）：客户端写了
+	// resourceVersion 就按它提交，让 K8s 有机会把并发编辑判成冲突；
+	// 没写才拿服务端当前值补齐。以前无条件覆盖，两个用户先后编辑同一个 CR 时
+	// 后提交者静默获胜。
+	if updatedCR.GetResourceVersion() == "" {
+		updatedCR.SetResourceVersion(existingCR.GetResourceVersion())
+	}
 	updatedCR.SetUID(existingCR.GetUID())
 
 	if crd.Spec.Scope == apiextensionsv1.NamespaceScoped {
@@ -567,6 +573,14 @@ func (h *CRHandler) Update(c *gin.Context) {
 
 	if err := cs.K8sClient.Update(ctx, &updatedCR); err != nil {
 		errMsg = err.Error()
+		// 冲突不是服务端失败：回 409 + 机器可读码，界面才能说「刷新后重试」。
+		if errors.IsConflict(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":  resourceVersionConflictCode,
+				"error": err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
