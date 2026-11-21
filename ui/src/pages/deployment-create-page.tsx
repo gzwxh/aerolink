@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import {
   applyResource,
   deleteResource,
+  fetchResources,
   useResource,
   useResources,
 } from '@/lib/api'
@@ -1678,17 +1679,37 @@ function DeploymentEditPage({
   const { data, isError, error } = useResource(resourceType, name, namespace)
   // 创建时随工作负载一并落地的 Service 是独立对象：编辑时把它们查回来，
   // 与工作负载拼成多文档 YAML 一起反解析，否则「网络」区块永远显示「不创建服务」。
-  const { data: services, error: servicesError } = useResources(
-    'services',
-    namespace,
-    { disable: !data }
-  )
+  //
+  // 这份数据只在进入编辑页时要用一次，所以直接取而不挂 react-query：查询被 RBAC
+  // 拒绝时 error 会在每一轮重新发起时被清空，靠它放行的门永远关不上，无 services
+  // 权限的角色根本进不了编辑器，还会以每秒几十次的频率把同一个 403 打出去。
+  // null = 还在取；[] = 该命名空间没有 Service 或没权限看（降级为「无 Service」）。
+  const [serviceDocs, setServiceDocs] = useState<Array<
+    Record<string, unknown>
+  > | null>(null)
+  useEffect(() => {
+    if (!data || serviceDocs !== null) return
+    let settled = false
+    fetchResources<{ items?: Array<Record<string, unknown>> }>(
+      'services',
+      namespace
+    )
+      .then((result) => {
+        if (!settled) setServiceDocs(result.items ?? [])
+      })
+      .catch(() => {
+        if (!settled) setServiceDocs([])
+      })
+    return () => {
+      settled = true
+    }
+  }, [data, namespace, serviceDocs])
 
   const initialData = useMemo(() => {
-    if (!data) return null
+    if (!data || serviceDocs === null) return null
     const docs = workloadWithServiceDocs(
       data as Record<string, unknown>,
-      (services || []) as Array<Record<string, unknown>>
+      serviceDocs
     )
     return parseYamlToFormData(
       docs.map((doc) => YAML.dump(doc)).join('---\n'),
@@ -1699,7 +1720,7 @@ function DeploymentEditPage({
         namespace,
       }
     )
-  }, [data, services, resourceType, name, namespace])
+  }, [data, serviceDocs, resourceType, name, namespace])
 
   // Pod 由 ReplicaSet → Deployment 两级控制器拥有：顺着 ownerReferences
   // 找到所属 Deployment，提示条据此给出直达的编辑入口。
@@ -1742,10 +1763,10 @@ function DeploymentEditPage({
     )
   }
 
-  // initialData 只在表单挂载时初始化一次：Service 列表还没取回就挂载的话，
+  // initialData 只在表单挂载时初始化一次：Service 列表还没落地就挂载的话，
   // 「网络」区块会永远停在「不创建服务」，晚到的反显不会再被应用。
-  // 列表查询失败（如 RBAC 拒绝）时降级为「无 Service」，不卡住编辑页。
-  if (!initialData || (services === undefined && !servicesError)) {
+  // serviceDocs 无论成败都会落到一个确定值（[] 或拉到的列表），所以这里不会死等。
+  if (!initialData) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

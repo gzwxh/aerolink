@@ -11,6 +11,7 @@ import { DeploymentCreatePage } from './deployment-create-page'
 const navigate = vi.hoisted(() => vi.fn())
 const useResource = vi.hoisted(() => vi.fn())
 const useResources = vi.hoisted(() => vi.fn())
+const fetchResources = vi.hoisted(() => vi.fn())
 
 // 页面及其渲染的编辑组件里只用 useClusterNavigate 这一个导出。
 vi.mock('@/lib/cluster-path', () => ({
@@ -20,6 +21,7 @@ vi.mock('@/lib/cluster-path', () => ({
 vi.mock('@/lib/api', () => ({
   applyResource: vi.fn(),
   deleteResource: vi.fn(),
+  fetchResources,
   useResource,
   useResources,
 }))
@@ -109,6 +111,7 @@ useResources.mockImplementation((resource: string) => {
   if (resource === 'namespaces') return { data: namespaces, isLoading: false }
   return { data: [], isLoading: false }
 })
+fetchResources.mockResolvedValue({ items: [] })
 
 const renderClonePage = () => {
   const queryClient = new QueryClient({
@@ -121,6 +124,24 @@ const renderClonePage = () => {
           <Route
             path="deployments/:namespace/:name/clone"
             element={<DeploymentCreatePage clone />}
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
+  )
+}
+
+const renderEditPage = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/deployments/ns-a/web/edit']}>
+        <Routes>
+          <Route
+            path="deployments/:namespace/:name/edit"
+            element={<DeploymentCreatePage />}
           />
         </Routes>
       </MemoryRouter>
@@ -153,5 +174,27 @@ describe('DeploymentCreatePage 克隆', () => {
       expect(screen.getByRole('combobox')).toHaveTextContent('ns-b')
     })
     expect(screen.getByDisplayValue('web-copy')).toBeInTheDocument()
+  })
+})
+
+// 回归（缺陷 D-30）：编辑页只要拉不到同命名空间的 Service（典型如只给了
+// deployments/pods 权限、没给 services:get 的角色），就会永远停在加载态，
+// 并把同一个 403 每秒重发几十次。Service 列表只是「网络」区块的反显素材，
+// 它失败必须降级为「无 Service」继续渲染，而且只该请求一次。
+describe('DeploymentCreatePage 编辑', () => {
+  it('Service 列表被 RBAC 拒绝时仍能进入编辑表单，且只请求一次', async () => {
+    fetchResources.mockRejectedValueOnce(
+      new Error(
+        'user alice does not have permission to get services in namespace ns-a on cluster prod'
+      )
+    )
+
+    const { container } = renderEditPage()
+
+    // 卡在加载态时页面只有一个转圈，连标签栏都不会挂载（实测 role=tab = 0）。
+    await waitFor(() => {
+      expect(container.querySelectorAll('[role=tab]').length).toBeGreaterThan(0)
+    })
+    expect(fetchResources).toHaveBeenCalledTimes(1)
   })
 })
