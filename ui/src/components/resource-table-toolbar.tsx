@@ -215,15 +215,27 @@ export function ResourceTableToolbar<T>({
               >
                 <SelectTrigger className="w-full sm:w-auto sm:min-w-[8.5rem] sm:max-w-[12rem]">
                   <SelectValue
-                    placeholder={`Filter ${typeof columnDef.header === 'string' ? columnDef.header : 'Column'}`}
+                    placeholder={t('common.placeholders.filterColumn', {
+                      column:
+                        typeof columnDef.header === 'string'
+                          ? columnDef.header
+                          : t('common.placeholders.filterColumnFallback', '列'),
+                      defaultValue: '筛选：{{column}}',
+                    })}
                   />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">
-                    All{' '}
-                    {typeof columnDef.header === 'string'
-                      ? columnDef.header
-                      : 'Values'}
+                    {t('common.placeholders.allColumnValues', {
+                      column:
+                        typeof columnDef.header === 'string'
+                          ? columnDef.header
+                          : t(
+                              'common.placeholders.allValuesFallback',
+                              '全部值'
+                            ),
+                      defaultValue: '全部 {{column}}',
+                    })}
                   </SelectItem>
                   {optionValues
                     .sort((a, b) => String(a).localeCompare(String(b)))
@@ -243,7 +255,11 @@ export function ResourceTableToolbar<T>({
             <div className="relative min-w-0 flex-1 sm:w-[280px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder={`Search ${resourceName} or app=nginx...`}
+                placeholder={t('common.placeholders.searchResource', {
+                  resource: resourceName,
+                  defaultValue:
+                    '搜索 {{resource}}，也可用标签选择器（如 app=nginx）...',
+                })}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4"

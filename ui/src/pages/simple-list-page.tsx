@@ -42,7 +42,7 @@ export function SimpleListPage<T extends keyof ResourceTypeMap>({
   const columns = useMemo(
     () => [
       columnHelper.accessor((row) => row.metadata?.name, {
-        header: 'Name',
+        header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <ClusterLink
@@ -54,7 +54,7 @@ export function SimpleListPage<T extends keyof ResourceTypeMap>({
         ),
       }),
       columnHelper.accessor((row) => row.metadata?.creationTimestamp, {
-        header: 'Created',
+        header: t('common.fields.created'),
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
 
@@ -64,7 +64,7 @@ export function SimpleListPage<T extends keyof ResourceTypeMap>({
         },
       }),
     ],
-    [columnHelper, isClusterScope, resourceType]
+    [columnHelper, isClusterScope, resourceType, t]
   )
 
   const filter = useCallback((resource: ResourceTypeMap[T], query: string) => {
