@@ -674,6 +674,14 @@ func (h *CRHandler) Patch(c *gin.Context) {
 
 	if err := cs.K8sClient.Patch(ctx, existingCR, client.RawPatch(patchType, patchBytes)); err != nil {
 		errMsg = err.Error()
+		// 与类型化资源同一口径：冲突回 409 + 机器可读码，不扮成 500（缺陷 D-58）。
+		if errors.IsConflict(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":  resourceVersionConflictCode,
+				"error": err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

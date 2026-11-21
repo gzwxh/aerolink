@@ -233,3 +233,67 @@ func TestGenericUpdateReturnsConflictStatus(t *testing.T) {
 		t.Fatalf("conflict response has no machine readable code: %v", payload)
 	}
 }
+
+// 回归（缺陷 D-58）：类型化 PATCH 是第三条写路径，冲突不能再扮成 500。
+// 界面的扩缩容 / 滚动重启 / 标签与注释编辑都走这里，patch 体里带 metadata.resourceVersion
+// 时 API server 会按乐观锁拒收，必须像 apply / PUT 那样回 409 + 机器可读码。
+func TestGenericPatchReturnsConflictStatus(t *testing.T) {
+	lastUpdatesTestDB(t)
+	gin.SetMode(gin.TestMode)
+
+	conflicting := fake.NewClientBuilder().WithObjects(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "default", ResourceVersion: "9"},
+	}).WithInterceptorFuncs(interceptor.Funcs{
+		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			return apierrors.NewConflict(schema.GroupResource{Resource: "configmaps"}, "cm",
+				errors.New("the object has been modified; please apply your changes to the latest version and try again"))
+		},
+	}).Build()
+
+	cs := &cluster.ClientSet{Name: "cluster-a", K8sClient: &kube.K8sClient{Client: conflicting}}
+	handler := newConfigMapHandler()
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPatch, "/api/v1/configmaps/default/cm",
+		strings.NewReader(`{"metadata":{"resourceVersion":"6","labels":{"stage":"stale"}}}`))
+	ctx.Request.Header.Set("Content-Type", "application/strategic-merge-patch+json")
+	ctx.Params = gin.Params{{Key: "namespace", Value: "default"}, {Key: "name", Value: "cm"}}
+	ctx.Set("cluster", cs)
+	ctx.Set("user", model.User{Username: "alice"})
+
+	handler.Patch(ctx)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("conflicting patch returned %d, want %d; body=%s",
+			recorder.Code, http.StatusConflict, recorder.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode conflict body: %v", err)
+	}
+	if payload["code"] != resourceVersionConflictCode {
+		t.Fatalf("conflict response has no machine readable code: %v", payload)
+	}
+
+	// 冲突不是把 patch 路径整个挡死：没有冲突时仍然 200。
+	smooth := fake.NewClientBuilder().WithObjects(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "default", ResourceVersion: "9"},
+	}).Build()
+	patched := &cluster.ClientSet{Name: "cluster-a", K8sClient: &kube.K8sClient{Client: smooth}}
+
+	recorder = httptest.NewRecorder()
+	ctx, _ = gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPatch, "/api/v1/configmaps/default/cm",
+		strings.NewReader(`{"metadata":{"labels":{"stage":"ok"}}}`))
+	ctx.Request.Header.Set("Content-Type", "application/strategic-merge-patch+json")
+	ctx.Params = gin.Params{{Key: "namespace", Value: "default"}, {Key: "name", Value: "cm"}}
+	ctx.Set("cluster", patched)
+	ctx.Set("user", model.User{Username: "alice"})
+
+	newConfigMapHandler().Patch(ctx)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("non-conflicting patch returned %d, want %d; body=%s",
+			recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+}

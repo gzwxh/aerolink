@@ -152,6 +152,16 @@ func (h *GenericResourceHandler[T, V]) Patch(c *gin.Context) {
 	patch := client.RawPatch(patchType, patchBytes)
 	if err := cs.K8sClient.Patch(ctx, oldObj, patch); err != nil {
 		errMsg = err.Error()
+		// patch 体内带 metadata.resourceVersion 时 API server 会按乐观锁拒收。
+		// 冲突不是服务端失败：回 409 + 机器可读码，界面才能说「刷新后重试」（缺陷 D-58，
+		// 与 apply / PUT 路径同一口径）。
+		if apierrors.IsConflict(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"code":  resourceVersionConflictCode,
+				"error": err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
