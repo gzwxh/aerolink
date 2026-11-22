@@ -93,6 +93,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { TransferBox, type TransferItem } from '@/components/transfer-box'
 import { UnsavedChangesConfirmDialog } from '@/components/unsaved-changes-confirm-dialog'
 
@@ -436,6 +437,9 @@ export function BindingGroupManagement() {
     useState(false)
   const [promptSaving, setPromptSaving] = useState(false)
   const [bindingGroup, setBindingGroup] = useState<BindingGroup | null>(null)
+  // 待删除的权限绑定：以前用原生 window.confirm，一次回车就能抹掉一个命名空间的
+  // 全部授权（第 18 轮 D-149），现改成像其它删除那样输名字确认。
+  const [deleteTarget, setDeleteTarget] = useState<BindingGroup | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   // 列表 / 新增页 / 详情页由 URL 决定：刷新页面、浏览器后退都能回到同一处。
   const detailName = searchParams.get(BINDING_GROUP_PARAM)
@@ -535,12 +539,16 @@ export function BindingGroupManagement() {
     mutationFn: (id: number) => deleteBindingGroup(id),
     onSuccess: () => {
       toast.success(t('bindingGroup.deleted', '权限绑定已删除'))
+      setDeleteTarget(null)
       invalidate()
     },
-    onError: (err: unknown) =>
+    onError: (err: unknown) => {
       toast.error(
         describeError(t, err, t('bindingGroup.deleteFailed', '删除失败'))
-      ),
+      )
+      // 失败时也要收弹窗：错误原因已经在 toast 里，留着只会让人反复确认。
+      setDeleteTarget(null)
+    },
   })
 
   const bindMutation = useMutation({
@@ -897,18 +905,7 @@ export function BindingGroupManagement() {
                             {!g.protected && (
                               <DropdownMenuItem
                                 className="text-destructive"
-                                onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      t(
-                                        'bindingGroup.deleteConfirm',
-                                        '确定删除该权限绑定？命名空间不会被删除。'
-                                      )
-                                    )
-                                  ) {
-                                    deleteMutation.mutate(g.id)
-                                  }
-                                }}
+                                onClick={() => setDeleteTarget(g)}
                               >
                                 <IconTrash className="h-4 w-4" />
                                 {t('common.actions.delete', '删除')}
@@ -925,6 +922,22 @@ export function BindingGroupManagement() {
           </TableBody>
         </Table>
       </div>
+
+      {deleteTarget && (
+        <DeleteConfirmationDialog
+          open
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          resourceName={deleteTarget.name}
+          resourceType={t('bindingGroup.title', '权限绑定')}
+          isDeleting={deleteMutation.isPending}
+          // 只解绑不删数据：命名空间与用户/角色都在，说清影响面再让人输入名字。
+          additionalNote={t(
+            'bindingGroup.deleteConfirm',
+            '确定删除该权限绑定？命名空间不会被删除。'
+          )}
+          onConfirm={() => deleteMutation.mutate(deleteTarget.id)}
+        />
+      )}
 
       {!readOnly && (
         <Dialog
