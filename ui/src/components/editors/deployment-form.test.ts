@@ -232,6 +232,50 @@ describe('工作负载 YAML 生成', () => {
     }
   })
 
+  // 回归（第 17 轮 D-138）：selector 一度用的是「标签」栏（metadata.labels），
+  // 而 Pod 模板用的是「Pod 标签」栏。只要用户在工作负载的标签里加了自定义键，
+  // selector 就包含模板里没有的标签，apiserver 以
+  // `selector does not match template labels` 直接拒收（实测 StatefulSet 新建就 422）。
+  it('只填工作负载标签时，selector 仍是 Pod 模板标签的子集', () => {
+    const labeled: DeploymentFormData = {
+      ...formWithPorts([
+        {
+          name: 'http',
+          containerPort: 80,
+          protocol: 'TCP' as const,
+          serviceType: 'none' as const,
+        },
+      ]),
+      labels: [
+        { key: 'app', value: 'web' },
+        { key: 'tier', value: 'front' },
+      ],
+    }
+
+    for (const resourceType of [
+      'deployments',
+      'statefulsets',
+      'daemonsets',
+    ] as const) {
+      const doc = yaml.load(
+        generateWorkloadYaml(labeled, resourceType)
+      ) as GeneratedDoc & {
+        spec: {
+          selector: { matchLabels: Record<string, string> }
+          template: { metadata: { labels: Record<string, string> } }
+        }
+      }
+      const selector = doc.spec.selector.matchLabels
+      const templateLabels = doc.spec.template.metadata.labels
+      // selector 的每一个键都必须在模板标签里存在且同值
+      for (const [key, value] of Object.entries(selector)) {
+        expect(templateLabels[key], `${resourceType} 的 ${key}`).toEqual(value)
+      }
+      // 并且不能把 metadata 独有的标签带进 selector
+      expect(selector, resourceType).toEqual(templateLabels)
+    }
+  })
+
   it('ClusterIP 端口生成选择器指向工作负载标签的 Service', () => {
     const docs = yaml.loadAll(
       generateWorkloadYaml(

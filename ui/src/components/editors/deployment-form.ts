@@ -762,6 +762,14 @@ export function generateWorkloadYaml(
   resourceType: WorkloadResourceType
 ): string {
   const labelsObj = workloadLabels(formData)
+  // selector 必须用 Pod 模板标签，不能用 metadata.labels：两者在面板里是分开的两栏，
+  // 只要用户在「标签」里加了自定义键，`selector: metadata 标签` 就会包含模板里
+  // 没有的标签，apiserver 直接以 `selector does not match template labels` 拒收
+  // （第 17 轮 D-138：StatefulSet 新建表单填两个标签就 422，Deployment / DaemonSet 同病）。
+  // 与 buildServiceDocuments 同一口径（见 podTemplateLabels 的注释）；
+  // 编辑反显时 podLabels 取自线上 template.metadata.labels（见 line ~1278），
+  // 生成的 selector 与线上一致，不会撞上 selector immutable。
+  const selectorLabels = podTemplateLabels(formData)
 
   const annotations = pairsToRecord(formData.annotations || [])
   if (formData.description.trim()) {
@@ -893,7 +901,7 @@ export function generateWorkloadYaml(
         kind: 'DaemonSet',
         metadata,
         spec: {
-          selector: { matchLabels: labelsObj },
+          selector: { matchLabels: selectorLabels },
           template: podTemplate,
         },
       }
@@ -911,7 +919,7 @@ export function generateWorkloadYaml(
         spec: {
           serviceName: formData.serviceName?.trim() || formData.name,
           replicas: formData.replicas,
-          selector: { matchLabels: labelsObj },
+          selector: { matchLabels: selectorLabels },
           template: podTemplate,
           updateStrategy: {
             type: updateType,
@@ -950,7 +958,7 @@ export function generateWorkloadYaml(
       const strategy = formData.strategy
       const spec: Record<string, unknown> = {
         replicas: formData.replicas,
-        selector: { matchLabels: labelsObj },
+        selector: { matchLabels: selectorLabels },
         template: podTemplate,
       }
       if (strategy) {
