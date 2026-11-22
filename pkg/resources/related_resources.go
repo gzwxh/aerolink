@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -575,6 +576,15 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // 各资源的关�
 
 	resource, err := GetResource(c, resourceType, namespace, name)
 	if err != nil {
+		// 对象不存在是客户端错误（404），不是服务端故障：关联发现常在被删对象的
+		// 残留意面上发起，一律回 500 会把「已经不在了」说成「服务坏了」（同 D-91 口径）。
+		if apierrors.IsNotFound(err) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":  "resource_not_found",
+				"error": err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get resource: " + err.Error()})
 		return
 	}
