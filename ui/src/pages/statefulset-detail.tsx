@@ -12,16 +12,19 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import {
+  patchResource,
   updateResource,
   useResource,
   useResourcesEvents,
   useResourcesWatch,
 } from '@/lib/api'
 import { useClusterNavigate } from '@/lib/cluster-path'
+import { checkScaleDraft, scaleBlockedForSubmission } from '@/lib/scale-guard'
 import { translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -48,7 +51,9 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
   const { namespace, name } = props
   const [isRestartPopoverOpen, setIsRestartPopoverOpen] = useState(false)
   const [isScalePopoverOpen, setIsScalePopoverOpen] = useState(false)
-  const [scaleReplicas, setScaleReplicas] = useState(0)
+  // 草稿保留**输入文本**（才能区分「空」与「0」），与 Deployment 详情同一个把关（D-70/D-139）。
+  const [scaleInput, setScaleInput] = useState('1')
+  const [scaleConfirmed, setScaleConfirmed] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(0)
   const { t } = useTranslation()
   const navigate = useClusterNavigate()
@@ -86,10 +91,12 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
     useResourcesEvents('statefulsets', name, namespace)
 
   useEffect(() => {
-    if (statefulset) {
-      setScaleReplicas(statefulset.spec?.replicas || 0)
+    // 弹窗没开着时跟随线上值；开着期间不打断输入。
+    if (statefulset && !isScalePopoverOpen) {
+      setScaleInput(String(statefulset.spec?.replicas ?? 0))
+      setScaleConfirmed(false)
     }
-  }, [statefulset])
+  }, [statefulset, isScalePopoverOpen])
 
   useEffect(() => {
     if (statefulset && refreshInterval > 0) {
@@ -105,24 +112,35 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
 
   const handleSaveYaml = async (content: StatefulSet) => {
     await updateResource('statefulsets', name, namespace, content)
-    toast.success('StatefulSet YAML saved successfully')
+    toast.success(t('common.messages.yamlSaved'))
     setRefreshInterval(1000)
   }
 
+  const scaleCheck = checkScaleDraft({
+    input: scaleInput,
+    current: statefulset?.spec?.replicas ?? 1,
+  })
+  // 「+/-」在草稿非法时退回线上值，不让 NaN 参与运算。
+  const scaleDraftBase = /^\d+$/.test(scaleInput.trim())
+    ? Number(scaleInput)
+    : (statefulset?.spec?.replicas ?? 1)
+  const scaleBlocked = scaleBlockedForSubmission(scaleCheck, scaleConfirmed)
+
   const handleScale = async () => {
-    if (!statefulset) return
+    // 与按钮的 disabled 共用 scaleBlocked（D-70 的教训：两处各写一套判据会做出死按钮）。
+    if (!statefulset || scaleCheck.kind === 'invalid' || scaleBlocked) {
+      return
+    }
     try {
-      const updated = { ...statefulset } as StatefulSet
-      if (!updated.spec) {
-        updated.spec = {
-          selector: { matchLabels: {} },
-          template: { spec: { containers: [] } },
-          serviceName: '',
-        }
-      }
-      updated.spec.replicas = scaleReplicas
-      await updateResource('statefulsets', name, namespace, updated)
-      toast.success(`StatefulSet scaled to ${scaleReplicas} replicas`)
+      await patchResource('statefulsets', name, namespace, {
+        spec: { replicas: scaleCheck.replicas },
+      })
+      toast.success(
+        t('detail.status.scaledTo', {
+          resource: 'StatefulSet',
+          replicas: scaleCheck.replicas,
+        })
+      )
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
     } catch (error) {
@@ -154,7 +172,9 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
         'aerolink.kubernetes.io/restartedAt'
       ] = new Date().toISOString()
       await updateResource('statefulsets', name, namespace, updated)
-      toast.success('StatefulSet restart initiated')
+      toast.success(
+        t('detail.status.restartInitiated', { resource: 'StatefulSet' })
+      )
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
     } catch (error) {
@@ -439,28 +459,38 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm">
                     <IconScale className="w-4 h-4" />
-                    Scale
+                    {t('common.actions.scale')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80" align="end">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <h4 className="font-medium">Scale StatefulSet</h4>
+                      <h4 className="font-medium">
+                        {t('detail.dialogs.scaleStatefulSet.title')}
+                      </h4>
                       <p className="text-sm text-muted-foreground">
-                        Adjust the number of replicas for this StatefulSet.
+                        {t('detail.dialogs.scaleStatefulSet.description')}
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="replicas">Replicas</Label>
+                      <Label htmlFor="replicas">
+                        {t('common.fields.replicas')}
+                      </Label>
                       <div className="flex items-center gap-1">
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-9 w-9 p-0"
+                          className="size-9 p-0"
+                          aria-label={t(
+                            'detail.scale.decrease',
+                            '减少一个副本'
+                          )}
                           onClick={() =>
-                            setScaleReplicas(Math.max(0, scaleReplicas - 1))
+                            setScaleInput(
+                              String(Math.max(0, scaleDraftBase - 1))
+                            )
                           }
-                          disabled={scaleReplicas <= 0}
+                          disabled={scaleDraftBase <= 0}
                         >
                           -
                         </Button>
@@ -468,24 +498,76 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
                           id="replicas"
                           type="number"
                           min="0"
-                          value={scaleReplicas}
-                          onChange={(e) =>
-                            setScaleReplicas(parseInt(e.target.value) || 0)
-                          }
+                          step="1"
+                          value={scaleInput}
+                          onChange={(e) => {
+                            setScaleInput(e.target.value)
+                            setScaleConfirmed(false)
+                          }}
                           className="text-center"
                         />
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-9 w-9 p-0"
-                          onClick={() => setScaleReplicas(scaleReplicas + 1)}
+                          className="size-9 p-0"
+                          aria-label={t(
+                            'detail.scale.increase',
+                            '增加一个副本'
+                          )}
+                          onClick={() =>
+                            setScaleInput(String(scaleDraftBase + 1))
+                          }
                         >
                           +
                         </Button>
                       </div>
+                      {/* 非法值拦住；缩到 0 / 一次建很多要勾选确认（与 Deployment 同一口径） */}
+                      {scaleCheck.kind === 'invalid' && (
+                        <p className="text-xs text-destructive">
+                          {t(
+                            scaleCheck.messageKey,
+                            scaleCheck.messageKey === 'detail.scale.empty'
+                              ? '请输入副本数。'
+                              : '副本数必须是不小于 0 的整数。'
+                          )}
+                        </p>
+                      )}
+                      {scaleCheck.kind === 'needsConfirm' && (
+                        <label className="flex items-start gap-2 text-xs text-destructive">
+                          <Checkbox
+                            className="mt-0.5"
+                            checked={scaleConfirmed}
+                            onCheckedChange={(value) =>
+                              setScaleConfirmed(value === true)
+                            }
+                          />
+                          <span>
+                            {scaleCheck.messageKey ===
+                            'detail.scale.confirmZero'
+                              ? t(
+                                  'detail.scale.confirmZero',
+                                  '缩容到 0 个副本：这个服务不会有任何运行中的 Pod，流量会全部中断。'
+                                )
+                              : t('detail.scale.confirmLarge', {
+                                  replicas: scaleCheck.replicas,
+                                  defaultValue: `将创建 ${scaleCheck.replicas} 个副本，请确认集群资源足够。`,
+                                })}
+                          </span>
+                        </label>
+                      )}
                     </div>
-                    <Button onClick={handleScale} className="w-full">
-                      Scale StatefulSet
+                    <Button
+                      onClick={handleScale}
+                      disabled={scaleBlocked}
+                      variant={
+                        scaleCheck.kind === 'needsConfirm'
+                          ? 'destructive'
+                          : 'default'
+                      }
+                      className="w-full"
+                    >
+                      <IconScale className="w-4 h-4 mr-2" />
+                      {t('common.actions.scale')}
                     </Button>
                   </div>
                 </PopoverContent>
@@ -497,21 +579,35 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm">
                     <IconReload className="w-4 h-4" />
-                    Restart
+                    {t('common.actions.restart')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80">
                   <div className="space-y-2">
-                    <p className="text-sm">
-                      This will restart all pods managed by this StatefulSet.
+                    <h4 className="font-medium">
+                      {t('detail.dialogs.restartStatefulSet.title')}
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      {t('detail.dialogs.restartStatefulSet.description')}
                     </p>
-                    <Button
-                      onClick={handleRestart}
-                      className="w-full"
-                      variant="outline"
-                    >
-                      Confirm Restart
-                    </Button>
+                    {/* 原先只有一个「重启」按钮，没有退出口（DaemonSet 同名弹窗有）：
+                        Popover 内无取消按钮时，用户只能靠点空白处关掉。 */}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setIsRestartPopoverOpen(false)}
+                      >
+                        {t('common.actions.cancel')}
+                      </Button>
+                      <Button
+                        onClick={handleRestart}
+                        className="flex-1"
+                        variant="outline"
+                      >
+                        {t('common.actions.restart')}
+                      </Button>
+                    </div>
                   </div>
                 </PopoverContent>
               </Popover>

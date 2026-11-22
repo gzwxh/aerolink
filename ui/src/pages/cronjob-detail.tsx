@@ -179,7 +179,11 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       updated.spec!.suspend = !(cronjob.spec?.suspend ?? false)
       await updateResource('cronjobs', name, namespace, updated)
       toast.success(
-        updated.spec?.suspend ? 'CronJob suspended' : 'CronJob resumed'
+        // 这三个动作的按钮与提示原先是硬编码英文（Run Now / Resume / Suspend /
+        // 「CronJob resumed」/「Job created successfully」），中文界面整排英文（D-137）。
+        updated.spec?.suspend
+          ? t('cronjobs.suspendedToast')
+          : t('cronjobs.resumedToast')
       )
       await Promise.all([refetchCronJob(), refetchJobs()])
     } catch (error) {
@@ -231,7 +235,9 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       }
 
       await createResource('jobs', namespace, manualJob)
-      toast.success('Job created successfully')
+      toast.success(
+        t('common.messages.created', { resource: t('common.fields.job') })
+      )
       await refetchJobs()
     } catch (error) {
       toast.error(translateError(error, t))
@@ -431,7 +437,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
               disabled={isRunningNow}
             >
               <IconPlayerPlayFilled className="w-4 h-4" />
-              Run Now
+              {t('cronjobs.runNow')}
             </Button>
           ) : null}
           {canUpdateCronJob ? (
@@ -446,7 +452,9 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
               ) : (
                 <IconPlayerPause className="w-4 h-4" />
               )}
-              {cronjob?.spec?.suspend ? 'Resume' : 'Suspend'}
+              {cronjob?.spec?.suspend
+                ? t('cronjobs.resumeAction')
+                : t('cronjobs.suspendAction')}
             </Button>
           ) : null}
         </>

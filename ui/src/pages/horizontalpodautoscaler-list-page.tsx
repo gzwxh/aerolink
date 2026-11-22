@@ -63,7 +63,7 @@ export function HorizontalPodAutoscalerListPage() {
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
-        header: 'Name',
+        header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <ClusterLink
@@ -77,33 +77,33 @@ export function HorizontalPodAutoscalerListPage() {
         ),
       }),
       columnHelper.accessor((row) => getHpaTargetInfo(row), {
-        header: 'Target',
+        header: t('common.fields.target'),
         cell: ({ getValue }) => getValue(),
       }),
       columnHelper.accessor((row) => row.spec?.minReplicas, {
         id: 'minReplicas',
-        header: 'Min Pods',
+        header: t('common.fields.minReplicas'),
         cell: ({ getValue }) => getValue() || '-',
       }),
       columnHelper.accessor((row) => row.spec?.maxReplicas, {
         id: 'maxReplicas',
-        header: 'Max Pods',
+        header: t('common.fields.maxReplicas'),
         cell: ({ getValue }) => getValue() || '-',
       }),
       columnHelper.accessor((row) => getCurrentReplicas(row), {
         id: 'currentReplicas',
-        header: 'Current Pods',
+        header: t('common.fields.currentReplicas'),
         cell: ({ getValue }) => getValue(),
       }),
       columnHelper.accessor((row) => getMetricUtilization(row), {
         id: 'metrics',
-        header: 'Metrics',
+        header: t('common.fields.metrics'),
         cell: ({ getValue }) => (
           <span className="text-muted-foreground text-sm">{getValue()}</span>
         ),
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
-        header: 'Created',
+        header: t('common.fields.created'),
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
 
@@ -113,7 +113,7 @@ export function HorizontalPodAutoscalerListPage() {
         },
       }),
     ],
-    []
+    [t]
   )
 
   return (

@@ -81,6 +81,11 @@
       "openInNewTab": "在新标签页打开"
     },
     "fields": {
+      "target": "目标",
+      "metrics": "指标",
+      "minReplicas": "最小副本",
+      "maxReplicas": "最大副本",
+      "currentReplicas": "当前副本",
       "apiGroup": "API 组",
       "versions": "版本",
       "scope": "作用域",
@@ -847,6 +852,11 @@
     "ttlAfterFinished": "完成后 TTL"
   },
   "cronjobs": {
+    "runNow": "立即运行",
+    "resumeAction": "恢复",
+    "suspendAction": "暂停",
+    "resumedToast": "CronJob 已恢复调度",
+    "suspendedToast": "CronJob 已暂停调度",
     "title": "CronJobs",
     "schedule": "调度",
     "clusterDefault": "集群默认",
@@ -1234,7 +1244,7 @@
     "refreshWatch": "重新连接并拉取",
     "refreshInterval": "自动刷新间隔",
     "refreshOff": "关闭",
-    "namespace": "Namespace",
+    "namespace": "命名空间",
     "allNamespaces": "全部命名空间",
     "namespaceCount": "{{count}} 个命名空间",
     "namespaceScoped": "命名空间 {{name}}",
@@ -2945,6 +2955,14 @@
       "restartDeployment": {
         "title": "重启 Deployment",
         "description": "通过更新 Pod 模板的重启注解来重启所有 Pod。此操作不可撤销。"
+      },
+      "scaleStatefulSet": {
+        "title": "扩缩容 StatefulSet",
+        "description": "调整此 StatefulSet 的副本数。"
+      },
+      "restartStatefulSet": {
+        "title": "重启 StatefulSet",
+        "description": "重启此 StatefulSet 管理的所有 Pod。此操作不可撤销。"
       },
       "restartDaemonSet": {
         "title": "重启 DaemonSet",

@@ -78,7 +78,13 @@ export function JobListPage() {
 
             return (
               <Badge variant={badge.variant} className={badge.className}>
-                {status}
+                {/* 取值过 `status.*`（详情页概览已经是「完成/失败」），
+                    列表再直接贴 `Complete`/`Failed` 就是同一对象两种说法（第 17 轮 D-137）。 */}
+                {status === 'Complete'
+                  ? t('status.complete')
+                  : status === 'Failed'
+                    ? t('status.failed')
+                    : t('status.running')}
               </Badge>
             )
           },

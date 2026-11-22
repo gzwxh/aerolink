@@ -17,7 +17,9 @@ import { ResourceTable } from '@/components/resource-table'
 function getSuspendBadge(cronjob: CronJob) {
   const isSuspended = cronjob.spec?.suspend ?? false
   return {
-    label: isSuspended ? 'Suspended' : 'Active',
+    // 文案走 status.* 命名空间（与 CronJob 详情概览同一口径）：这里曾直接写英文，
+    // 于是列表是 `Suspended`、详情页是「已暂停」（第 17 轮 D-137）。
+    statusKey: (isSuspended ? 'suspended' : 'active') as 'suspended' | 'active',
     // Active = 正在按计划运行（进行中），Suspended 是中性状态。
     ...(isSuspended ? neutralBadge() : statusBadge('info')),
   }
@@ -67,7 +69,9 @@ export function CronJobListPage() {
           const badge = getSuspendBadge(row.original)
           return (
             <Badge variant={badge.variant} className={badge.className}>
-              {badge.label}
+              {badge.statusKey === 'suspended'
+                ? t('status.suspended')
+                : t('status.active')}
             </Badge>
           )
         },

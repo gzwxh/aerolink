@@ -81,6 +81,11 @@
       "openInNewTab": "Open in new tab"
     },
     "fields": {
+      "target": "Target",
+      "metrics": "Metrics",
+      "minReplicas": "Min Replicas",
+      "maxReplicas": "Max Replicas",
+      "currentReplicas": "Current Replicas",
       "apiGroup": "API Group",
       "versions": "Versions",
       "scope": "Scope",
@@ -847,6 +852,11 @@
     "ttlAfterFinished": "TTL After Finished"
   },
   "cronjobs": {
+    "runNow": "Run Now",
+    "resumeAction": "Resume",
+    "suspendAction": "Suspend",
+    "resumedToast": "CronJob resumed",
+    "suspendedToast": "CronJob suspended",
     "title": "CronJobs",
     "schedule": "Schedule",
     "clusterDefault": "Cluster default",
@@ -2821,7 +2831,15 @@
         "title": "Restart Deployment",
         "description": "This will restart all pods in the deployment by updating the deployment's template with a new restart annotation. This action cannot be undone."
       },
-      "restartDaemonSet": {
+      "scaleStatefulSet": {
+      "title": "Scale StatefulSet",
+      "description": "Adjust the number of replicas for this StatefulSet."
+    },
+    "restartStatefulSet": {
+      "title": "Restart StatefulSet",
+      "description": "This will restart all pods managed by this StatefulSet. This action cannot be undone."
+    },
+    "restartDaemonSet": {
         "title": "Restart DaemonSet",
         "description": "This will restart all pods managed by this DaemonSet. This action cannot be undone."
       }
