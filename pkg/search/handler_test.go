@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -479,5 +480,38 @@ func TestSearchEmptyResourceFuncs(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("expected 0 results with no search funcs, got %d", len(results))
+	}
+}
+
+// 回归（第 18 轮 D-146）：拒绝搜索时必须带机器可读码与完整语义。
+// 原先只回 {"error":"Access denied"}，中文界面要么贴这句英文原话，要么什么都说不清
+// （实测受限账号看到的是被伪装成「没有找到结果」的假象）。
+// 同时钉住「门槛没有被取消」：对集群完全没有可见范围的用户仍然必须 403。
+func TestGlobalSearchDeniedReturnsMachineReadableCode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/search?q=ui", nil)
+	ctx.Set(middleware.ClusterNameKey, "cluster-a")
+	ctx.Set("user", model.User{Username: "nobody"})
+
+	NewSearchHandler(map[string]resources.SearchFunc{}).GlobalSearch(ctx)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("无权账号应 403, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body: %v (%s)", err, rec.Body.String())
+	}
+	if body.Code != "access_denied" {
+		t.Fatalf("响应应带 code=access_denied, got %q; body=%s", body.Code, rec.Body.String())
+	}
+	// 原句 "Access denied" 没有主语与对象，前端无法据此说清是谁在哪个集群被拒了什么。
+	if !strings.Contains(body.Error, "nobody") || !strings.Contains(body.Error, "cluster-a") {
+		t.Fatalf("error 应说清谁在哪个集群被拒, got %q", body.Error)
 	}
 }

@@ -144,7 +144,12 @@ func (h *SearchHandler) Search(c *gin.Context, query string, limit int) ([]commo
 func (h *SearchHandler) GlobalSearch(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	clusterName := getSearchClusterName(c)
-	if !rbac.CanAccessCluster(user, clusterName) {
+	// CanSeeNamespacesInCluster 已含 CanAccessCluster，额外承认「只靠命名空间级权限绑定组
+	// 进入该集群」的账号（第 18 轮 D-148：只看 GetUserRoles 时，这类账号连自己有 get 权限
+	// 的对象都搜不到，整块功能对它们禁用）。口径与集群概览 GetOverview 一致。
+	// 不会因此多给数据：结果每条都过 filterSearchResultsByAccess（按命名空间的 CanAccess），
+	// 缓存键也按用户隔离。
+	if !rbac.CanSeeNamespacesInCluster(user, clusterName) {
 		// 带上机器可读码与完整语义：光回 `Access denied` 会让前端只能贴英文原句（第 18 轮 D-146）。
 		c.JSON(http.StatusForbidden, gin.H{
 			"code":  "access_denied",
