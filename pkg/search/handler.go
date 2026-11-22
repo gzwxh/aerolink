@@ -145,7 +145,11 @@ func (h *SearchHandler) GlobalSearch(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	clusterName := getSearchClusterName(c)
 	if !rbac.CanAccessCluster(user, clusterName) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		// 带上机器可读码与完整语义：光回 `Access denied` 会让前端只能贴英文原句（第 18 轮 D-146）。
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":  "access_denied",
+			"error": fmt.Sprintf("user %s does not have access to search on cluster %s", user.Username, clusterName),
+		})
 		return
 	}
 

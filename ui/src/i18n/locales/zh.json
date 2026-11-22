@@ -1275,7 +1275,8 @@
     "crdNotInstalledTitle": "资源类型不可用",
     "crdNotInstalled": "此集群未安装 {{kind}} ({{version}})。请先安装对应的 CRD。",
     "resourceVersionConflict": "对象已被他人修改，请刷新后重试",
-    "invalidTemplateYAML": "模板里每个文档都需要是带 apiVersion 与 kind 的资源清单。{{detail}}"
+    "invalidTemplateYAML": "模板里每个文档都需要是带 apiVersion 与 kind 的资源清单。{{detail}}",
+    "accessDenied": "没有权限执行该操作，请联系管理员为账号授予集群级权限。"
   },
   "nsActions": {
     "moreActions": "更多操作",

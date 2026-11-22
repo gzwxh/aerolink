@@ -357,6 +357,12 @@ export function translateError(error: Error | unknown, t: TFunction): string {
     })
   }
 
+  // 权限拒绝（全局搜索等接口）：服务端原先只回一句英文 `Access denied`，
+  // 中文界面直接贴上去让人不知道下一步找谁（第 18 轮 D-146）。
+  if (policyError.code === 'access_denied') {
+    return t('errors.accessDenied')
+  }
+
   const crdMatch = CRD_NOT_INSTALLED_RE.exec(error.message)
   if (crdMatch) {
     return t('errors.crdNotInstalled', {

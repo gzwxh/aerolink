@@ -1275,7 +1275,8 @@
     "crdNotInstalledTitle": "Resource Type Not Available",
     "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature.",
     "resourceVersionConflict": "This object was changed by someone else. Reload it and try again.",
-    "invalidTemplateYAML": "Every document in a template must be a resource manifest with apiVersion and kind. {{detail}}"
+    "invalidTemplateYAML": "Every document in a template must be a resource manifest with apiVersion and kind. {{detail}}",
+    "accessDenied": "You are not allowed to do this. Ask an administrator to grant cluster-level access to your account."
   },
   "nsActions": {
     "moreActions": "More actions",
@@ -2832,14 +2833,14 @@
         "description": "This will restart all pods in the deployment by updating the deployment's template with a new restart annotation. This action cannot be undone."
       },
       "scaleStatefulSet": {
-      "title": "Scale StatefulSet",
-      "description": "Adjust the number of replicas for this StatefulSet."
-    },
-    "restartStatefulSet": {
-      "title": "Restart StatefulSet",
-      "description": "This will restart all pods managed by this StatefulSet. This action cannot be undone."
-    },
-    "restartDaemonSet": {
+        "title": "Scale StatefulSet",
+        "description": "Adjust the number of replicas for this StatefulSet."
+      },
+      "restartStatefulSet": {
+        "title": "Restart StatefulSet",
+        "description": "This will restart all pods managed by this StatefulSet. This action cannot be undone."
+      },
+      "restartDaemonSet": {
         "title": "Restart DaemonSet",
         "description": "This will restart all pods managed by this DaemonSet. This action cannot be undone."
       }
