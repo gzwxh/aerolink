@@ -25,6 +25,7 @@ import {
   getResourceCatalogEntry,
   getResourceIconComponent,
 } from '@/lib/resource-catalog'
+import { translateError } from '@/lib/utils'
 import { useCluster } from '@/hooks/use-cluster'
 import { useFavorites } from '@/hooks/use-favorites'
 import { Badge } from '@/components/ui/badge'
@@ -117,6 +118,9 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     () => cachedSearchResults || []
   )
   const [isLoading, setIsLoading] = useState(false)
+  // 搜索**失败**与**没有结果**是两件事：原先失败只进 console，面板永远显示
+  // 「没有找到结果」（第 18 轮 D-146：受限账号拿 403 也只看得到「没结果」）。
+  const [searchError, setSearchError] = useState<string | null>(null)
   const searchRequestIdRef = useRef(0)
   const mountedRef = useRef(true)
   const navigate = useClusterNavigate()
@@ -411,9 +415,11 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
         cacheSearchResults(searchQuery, nextResults)
         setLastSearchResults(nextResults)
         setResults(nextResults)
+        setSearchError(null)
       } catch (error) {
         if (mountedRef.current && searchRequestIdRef.current === requestId) {
           console.error('Search failed:', error)
+          setSearchError(translateError(error, t))
         }
       } finally {
         if (mountedRef.current && searchRequestIdRef.current === requestId) {
@@ -421,7 +427,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
         }
       }
     },
-    []
+    [t]
   )
 
   useEffect(() => {
@@ -429,12 +435,14 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
     if (!searchQuery) {
       searchRequestIdRef.current += 1
       setIsLoading(false)
+      setSearchError(null)
       return
     }
 
     const requestId = searchRequestIdRef.current + 1
     searchRequestIdRef.current = requestId
     setIsLoading(true)
+    setSearchError(null)
 
     const timeoutId = setTimeout(() => {
       performSearch(searchQuery, requestId)
@@ -504,6 +512,10 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                 </div>
               ) : !query.trim() ? (
                 t('globalSearch.emptyHint')
+              ) : searchError ? (
+                <p className="px-2 py-3 text-sm text-destructive">
+                  {searchError}
+                </p>
               ) : (
                 t('globalSearch.noResults')
               )}

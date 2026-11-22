@@ -60,6 +60,9 @@ export function YamlEditor<T extends ResourceType>({
   const [validationError, setValidationError] = useState<string>('')
   const { actualTheme, colorTheme } = useAppearance()
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null)
+  // 进入编辑时的快照。不能只依赖 `value` prop：调用方常把 onChange 的草稿
+  // 回灌成 value（resource-detail-shell 就如此），那样取消时已无原始值可恢复（D-125）。
+  const baselineRef = useRef(value)
   const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
@@ -117,6 +120,7 @@ export function YamlEditor<T extends ResourceType>({
   }
 
   const handleEdit = () => {
+    baselineRef.current = editorValue
     setIsEditing(true)
     // 设置编辑模式后聚焦编辑器
     setTimeout(() => {
@@ -136,6 +140,12 @@ export function YamlEditor<T extends ResourceType>({
   }
 
   const handleCancel = () => {
+    // 取消 = 回到进入编辑时的那一份：不显式回滚的话，脏文本会留在只读视图上，
+    // 下一次点「编辑」看到的就是被污染的内容，且校验失败提示也会残留
+    // （第 18 轮实测：重复键报错「duplicated mapping key」取消后不消失）。
+    // onChange 同步告知调用方，否则它自己那份草稿 state 还是脏的。
+    setEditorValue(baselineRef.current)
+    onChange?.(baselineRef.current)
     setIsEditing(false)
     onCancel?.()
   }
