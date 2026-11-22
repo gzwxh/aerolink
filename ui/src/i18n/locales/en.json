@@ -1928,6 +1928,7 @@
       "subscriptions": "Subscriptions"
     },
     "announcements": {
+      "item": "Announcement",
       "description": "Announcements appear in the bar at the top of every page. Only one is shown at a time (the enabled one), appearing and disappearing automatically according to its schedule.",
       "empty": "No announcements",
       "createTitle": "New announcement",

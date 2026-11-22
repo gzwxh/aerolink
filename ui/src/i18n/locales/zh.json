@@ -1928,6 +1928,7 @@
       "subscriptions": "消息订阅"
     },
     "announcements": {
+      "item": "公告",
       "description": "公告显示在所有用户页面顶端的通知栏里；同一时间只展示一条（启用的那条），按生效时间自动出现与消失。",
       "empty": "暂无公告",
       "createTitle": "新增公告",

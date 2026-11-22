@@ -286,7 +286,14 @@ export function AnnouncementManagement() {
     }
     setConfirmingDelete(null)
     deleteAnnouncement.mutate(id, {
-      onSuccess: () => toast.success(t('common.messages.deleted', '已删除')),
+      // `common.messages.deleted` 的模板是 `{{resource}}删除成功`：不传 resource 就会把
+      // 占位符原样贴到界面上（第 16 轮实测）。与 API 密钥等管理页同一口径传资源名。
+      onSuccess: () =>
+        toast.success(
+          t('common.messages.deleted', {
+            resource: t('notifications.announcements.item', '公告'),
+          })
+        ),
       onError: (error) => toast.error(translateError(error, t)),
     })
   }
