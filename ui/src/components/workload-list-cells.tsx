@@ -118,8 +118,12 @@ export function WorkloadHealthBar({
 
   const canScale = Boolean(resourceType) && canUpdate
   const summary = t('common.messages.healthSummary', { ready, desired })
+  // 说清是哪种资源：这里曾对所有类型硬用 scaleDeployment 的说明，
+  // 于是 StatefulSet 列表的行内提示写着「调整此 Deployment 的副本数。」（第 19 轮 D-155）。
+  const scaleDialogKey =
+    resourceType === 'statefulsets' ? 'scaleStatefulSet' : 'scaleDeployment'
   const title = canScale
-    ? `${summary}，${t('detail.dialogs.scaleDeployment.description')}`
+    ? `${summary}，${t(`detail.dialogs.${scaleDialogKey}.description`)}`
     : summary
 
   const bar = (

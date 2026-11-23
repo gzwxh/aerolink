@@ -1,10 +1,11 @@
 /// <reference types="@testing-library/jest-dom" />
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { describe, expect, it, vi } from 'vitest'
 
-import { WorkloadImageCell } from './workload-list-cells'
+import { WorkloadHealthBar, WorkloadImageCell } from './workload-list-cells'
 
 // Tooltip 原语在测试里不挂 Provider，替换成透传实现，聚焦单元格自身的行为。
 vi.mock('@/components/ui/tooltip', () => ({
@@ -36,6 +37,50 @@ const containers = [
   { name: 'app', image: 'registry.example.com/team/app:v1.2.3' },
   { name: 'sidecar', image: 'registry.example.com/team/proxy:v0.1.0' },
 ]
+
+describe('健康列（行内伸缩）', () => {
+  // 回归（第 19 轮 D-155）：这里曾对所有类型硬用 scaleDeployment 的说明，
+  // 于是 StatefulSet 列表的行内提示写着「调整此 Deployment 的副本数。」。
+  // t() 在本测试的 mock 里回退成键名本身，正好能断言取的是哪个键。
+  it('StatefulSet 与 Deployment 各拿自己类型的伸缩文案', () => {
+    // 伸缩单元格自己会拿 QueryClient（完成后要重取列表），测试里给它一个。
+    const wrap = (ui: React.ReactElement) =>
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          {ui}
+        </QueryClientProvider>
+      )
+
+    const { unmount } = wrap(
+      <WorkloadHealthBar
+        ready={2}
+        desired={2}
+        name="sfs"
+        namespace="default"
+        resourceType="statefulsets"
+        canUpdate
+      />
+    )
+    const sfsTitle = screen.getByRole('button').getAttribute('title') ?? ''
+    expect(sfsTitle).toContain('scaleStatefulSet')
+    expect(sfsTitle).not.toContain('scaleDeployment')
+    unmount()
+
+    wrap(
+      <WorkloadHealthBar
+        ready={1}
+        desired={1}
+        name="dpl"
+        namespace="default"
+        resourceType="deployments"
+        canUpdate
+      />
+    )
+    expect(screen.getByRole('button').getAttribute('title')).toContain(
+      'scaleDeployment'
+    )
+  })
+})
 
 describe('镜像列', () => {
   it('无容器时显示空值占位', () => {
