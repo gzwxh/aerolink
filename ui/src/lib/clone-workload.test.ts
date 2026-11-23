@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { alignWorkloadSelector } from './clone-workload'
+import { alignWorkloadSelector, findSelectorCollision } from './clone-workload'
 
 interface WorkloadOptions {
   name?: string
@@ -118,5 +118,80 @@ describe('alignWorkloadSelector', () => {
       )
     ).not.toThrow()
     expect(cloned.spec).toEqual({})
+  })
+})
+
+describe('findSelectorCollision（克隆体的 selector 撞车检查）', () => {
+  // 回归（验收台账 D-153）：alignWorkloadSelector 只在生成草稿那一刻跑一次，
+  // 用户在草稿里改名不会重算 Pod 标签，于是能造出与现存负载 selector 完全相同的
+  // 克隆体 —— 两边控制器争抢同一批 Pod，关联 Service 的端点也会跳负载混在一起。
+  it('与现存负载逐项相同时报出对方名字', () => {
+    const candidate = workload({
+      name: 'my-app',
+      selectorLabels: { app: 'nginx-copy' },
+    })
+    const existing = [
+      workload({ name: 'nginx' }),
+      workload({
+        name: 'nginx-copy',
+        selectorLabels: { app: 'nginx-copy' },
+        templateLabels: { app: 'nginx-copy' },
+      }),
+    ]
+    expect(findSelectorCollision(candidate, existing)).toBe('nginx-copy')
+  })
+
+  it('撞的是源对象自己也照样报出来（改名完全没传导的情形）', () => {
+    const candidate = workload({
+      name: 'nginx-copy',
+      selectorLabels: { app: 'nginx' },
+    })
+    expect(
+      findSelectorCollision(candidate, [workload({ name: 'nginx' })])
+    ).toBe('nginx')
+  })
+
+  it('selector 不同就放行', () => {
+    const candidate = workload({
+      name: 'my-app',
+      selectorLabels: { app: 'my-app' },
+    })
+    expect(
+      findSelectorCollision(candidate, [workload({ name: 'nginx' })])
+    ).toBeNull()
+  })
+
+  it('只有一半键相同（互为子集）不算撞车', () => {
+    const candidate = workload({
+      name: 'my-app',
+      selectorLabels: { app: 'nginx-copy', tier: 'web' },
+    })
+    expect(
+      findSelectorCollision(candidate, [
+        workload({ name: 'other', selectorLabels: { app: 'nginx-copy' } }),
+      ])
+    ).toBeNull()
+  })
+
+  it('带 matchExpressions 时不判定，避免误拦合法克隆', () => {
+    const existing = workload({ name: 'nginx' })
+    const withExpressions = workload({
+      name: 'my-app',
+      selectorLabels: { app: 'nginx' },
+      matchExpressions: [{ key: 'tier', operator: 'In', values: ['web'] }],
+    })
+    expect(findSelectorCollision(withExpressions, [existing])).toBeNull()
+    expect(findSelectorCollision(existing, [withExpressions])).toBeNull()
+  })
+
+  it('不与同名对象比较，也不被残缺数据带崩', () => {
+    const candidate = workload({ name: 'nginx' })
+    expect(findSelectorCollision(candidate, [candidate])).toBeNull()
+    expect(
+      findSelectorCollision(candidate, [null, {}, { metadata: {} }])
+    ).toBeNull()
+    expect(
+      findSelectorCollision({ metadata: { name: 'no-selector' } }, [candidate])
+    ).toBeNull()
   })
 })

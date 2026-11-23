@@ -21,7 +21,10 @@ import {
   serviceCloneName,
   serviceSelectsPodLabels,
 } from '@/lib/clone-service'
-import { isWorkloadSelectorType } from '@/lib/clone-workload'
+import {
+  findSelectorCollision,
+  isWorkloadSelectorType,
+} from '@/lib/clone-workload'
 import { useClusterNavigate } from '@/lib/cluster-path'
 import {
   getResourceCatalogEntry,
@@ -108,11 +111,33 @@ export function CloneResourceDialog({
     namespace,
     { disable: !open || !attachServices }
   )
+  // 现存工作负载：提交前要拿它们比 selector（见 lib/clone-workload.ts 的
+  // findSelectorCollision）。克隆体只能落在当前命名空间，所以只取这一份。
+  const notReady = !open || !attachServices
+  const { data: existingDeployments, isLoading: isLoadingDeployments } =
+    useResources('deployments', namespace, { disable: notReady })
+  const { data: existingStatefulSets, isLoading: isLoadingStatefulSets } =
+    useResources('statefulsets', namespace, { disable: notReady })
+  const { data: existingDaemonSets, isLoading: isLoadingDaemonSets } =
+    useResources('daemonsets', namespace, { disable: notReady })
+  const isLoadingRelated =
+    isLoadingServices ||
+    isLoadingDeployments ||
+    isLoadingStatefulSets ||
+    isLoadingDaemonSets
+  const existingWorkloads = useMemo(
+    () => [
+      ...(existingDeployments ?? []),
+      ...(existingStatefulSets ?? []),
+      ...(existingDaemonSets ?? []),
+    ],
+    [existingDeployments, existingStatefulSets, existingDaemonSets]
+  )
 
   return (
     <>
       <Dialog open={open} onOpenChange={guard.handleOpenChange}>
-        {open && isLoadingServices ? (
+        {open && isLoadingRelated ? (
           <DialogContent className="sm:max-w-md">
             <div className="text-muted-foreground py-6 text-center text-sm">
               {t(
@@ -122,7 +147,7 @@ export function CloneResourceDialog({
             </div>
           </DialogContent>
         ) : null}
-        {open && !isLoadingServices ? (
+        {open && !isLoadingRelated ? (
           <CloneResourceDialogContent
             resourceType={resourceType}
             resourceLabel={resourceLabel}
@@ -130,6 +155,7 @@ export function CloneResourceDialog({
             namespace={namespace}
             resource={resource}
             relatedServices={attachServices ? relatedServices : undefined}
+            existingWorkloads={attachServices ? existingWorkloads : []}
             onCloned={onCloned}
             onDraftChange={setIsDraftDirty}
             onRequestClose={() => guard.handleOpenChange(false)}
@@ -150,6 +176,7 @@ function CloneResourceDialogContent({
   namespace,
   resource,
   relatedServices,
+  existingWorkloads,
   onCloned,
   onDraftChange,
   onRequestClose,
@@ -157,6 +184,8 @@ function CloneResourceDialogContent({
 }: Omit<CloneResourceDialogProps, 'open' | 'onOpenChange'> & {
   /** selector 选中该工作负载的 Service：克隆时一并带走并改名（见 lib/clone-service.ts）。 */
   relatedServices?: unknown[]
+  /** 同命名空间里的现存工作负载：提交前用于 selector 撞车检查。 */
+  existingWorkloads: unknown[]
   /** 上报是否有草稿，父级据此决定关闭时是否先弹确认。 */
   onDraftChange: (hasDraft: boolean) => void
   /** 需要用户确认的关闭请求（取消按钮）。 */
@@ -252,6 +281,26 @@ function CloneResourceDialogContent({
     if (targetName === sourceName && targetNamespace === namespace) {
       setError(t('cloneResource.targetMustChange'))
       return
+    }
+
+    // selector 撞车检查。草稿是固化的一次性 YAML，用户改了名字不会重算 Pod 标签，
+    // 于是可能造出与现存负载 selector 逐项相同的克隆体：两边控制器会争抢同一批 Pod，
+    // 关联 Service 的端点也会跳负载混在一起（验收台账 D-153）。k8s 本身不拦这种重叠，
+    // 只能在这里把关。selector 只在同命名空间内匹配 Pod，改了目标命名空间则不必比。
+    if (targetNamespace === namespace && (existingWorkloads?.length ?? 0) > 0) {
+      for (const document of documents) {
+        const collidedWith = findSelectorCollision(document, existingWorkloads)
+        if (collidedWith) {
+          setError(
+            t('cloneResource.selectorConflict', {
+              name: collidedWith,
+              defaultValue:
+                '选择器与已存在的工作负载「{{name}}」完全相同，两个负载会争抢同一批 Pod。请改一个名字，或在 YAML 里调整 labels 后重试。',
+            })
+          )
+          return
+        }
+      }
     }
 
     setIsCreating(true)

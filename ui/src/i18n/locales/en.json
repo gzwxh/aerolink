@@ -152,6 +152,7 @@
       "health": "Health",
       "hostIP": "Host IP",
       "hostname": "Hostname",
+      "gatewayClass": "Gateway Class",
       "image": "Image",
       "images": "Images",
       "information": "Information",
@@ -3013,6 +3014,7 @@
     "namespaceRequired": "metadata.namespace is required.",
     "targetExists": "A resource with this name already exists in the target namespace.",
     "targetMustChange": "Change metadata.name or metadata.namespace before creating the clone.",
+    "selectorConflict": "This selector is identical to the existing workload \"{{name}}\"; the two would fight over the same pods. Pick another name, or adjust labels in the YAML.",
     "loadingRelatedServices": "Checking for related Services…",
     "attachedServices": "Included {{count}} related Service(s) ({{names}}): their names and selectors are already updated for the clone, and you can keep editing them in the YAML below."
   },

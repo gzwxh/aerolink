@@ -122,3 +122,54 @@ export function alignWorkloadSelector(
     }
   }
 }
+
+/**
+ * 工作负载的 `spec.selector.matchLabels`。
+ * 带 matchExpressions 时返回 undefined：那种 selector 的集合关系在这里算不准，
+ * 宁可放过也不误拦合法的克隆。
+ */
+function selectorMatchLabels(
+  resource: unknown
+): Record<string, unknown> | undefined {
+  const selector = asRecord(asRecord(asRecord(resource)?.spec)?.selector)
+  if (!selector || selector.matchExpressions !== undefined) {
+    return undefined
+  }
+  const matchLabels = asRecord(selector.matchLabels)
+  return matchLabels && Object.keys(matchLabels).length > 0
+    ? matchLabels
+    : undefined
+}
+
+/**
+ * 克隆体的 selector 是否与命名空间里某个现存工作负载完全相同（验收台账 D-153）。
+ *
+ * `alignWorkloadSelector` 只在**生成草稿那一刻**跑一次，而草稿是一份用户可以自由改的
+ * YAML 文本：用户把名字从 `x-copy` 改成 `y` 之后，Pod 标签仍是 `app: x-copy`。于是从同
+ * 一个源连克两次会得到 selector 完全相同的两个负载 —— k8s 不拦（它不检查跨对象重叠），
+ * 但两边控制器会争抢同一批 Pod，关联 Service 的端点也跨负载混在一起。
+ *
+ * 让标签跟随名称重算会覆盖用户已经手改过的草稿内容，不能那么做；所以把关放在提交前：
+ * 谁的 selector 与现存某个负载逐项相同，就不让提交，并把撞上的对象名报出来。
+ * 返回被撞对象的 name，没有冲突返回 null。
+ */
+export function findSelectorCollision(
+  candidate: unknown,
+  existing: unknown[]
+): string | null {
+  const selector = selectorMatchLabels(candidate)
+  if (!selector) {
+    return null
+  }
+  const candidateName = asRecord(asRecord(candidate)?.metadata)?.name
+  for (const item of existing) {
+    const name = asRecord(asRecord(item)?.metadata)?.name
+    if (typeof name !== 'string' || !name || name === candidateName) {
+      continue
+    }
+    if (sameLabels(selectorMatchLabels(item), selector)) {
+      return name
+    }
+  }
+  return null
+}

@@ -150,6 +150,7 @@
       "health": "健康",
       "hostIP": "主机 IP",
       "hostname": "主机名",
+      "gatewayClass": "网关类",
       "image": "镜像",
       "images": "镜像",
       "information": "信息",
@@ -3043,6 +3044,7 @@
     "namespaceRequired": "metadata.namespace 为必填项。",
     "targetExists": "目标 Namespace 中已存在同名资源。",
     "targetMustChange": "创建副本前，请修改 metadata.name 或 metadata.namespace。",
+    "selectorConflict": "选择器与已存在的工作负载「{{name}}」完全相同，两个负载会争抢同一批 Pod。请改一个名字，或在 YAML 里调整 labels 后重试。",
     "loadingRelatedServices": "正在检查关联的 Service…",
     "attachedServices": "已附带 {{count}} 个关联的 Service（{{names}}）：名称与 selector 已按新名字改好，可在下面的 YAML 里继续调整。"
   },
