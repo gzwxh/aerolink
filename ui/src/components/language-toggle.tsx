@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
@@ -31,15 +32,19 @@ export function LanguageToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {languages.map((language) => (
-          <DropdownMenuItem
-            key={language.code}
-            onClick={() => handleLanguageChange(language.code)}
-            className={i18n.language === language.code ? 'bg-accent' : ''}
-          >
-            {language.name}
-          </DropdownMenuItem>
-        ))}
+        {/* 以前只靠 bg-accent 高亮，键盘与读屏用者得不出「当前是哪个语言」
+            （无 aria-checked / 对勾），与模式切换一起收口，见 D-105。
+            i18n.language 可能是 zh-CN 这类带区域后缀的值，取主语言段才能与选项值对上。 */}
+        <DropdownMenuRadioGroup
+          value={(i18n.language ?? 'zh').split('-')[0]}
+          onValueChange={handleLanguageChange}
+        >
+          {languages.map((language) => (
+            <DropdownMenuRadioItem key={language.code} value={language.code}>
+              {language.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )
