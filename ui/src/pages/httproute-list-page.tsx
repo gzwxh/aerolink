@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
+import { useTranslation } from 'react-i18next'
 
 import { HTTPRoute } from '@/types/gateway'
 import { createSearchFilter } from '@/lib/k8s'
@@ -12,10 +13,11 @@ const filter = createSearchFilter<HTTPRoute>((hr) => hr.metadata?.name)
 const columnHelper = createColumnHelper<HTTPRoute>()
 
 export function HTTPRouteListPage() {
+  const { t } = useTranslation()
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
-        header: 'Name',
+        header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <ClusterLink
@@ -28,11 +30,11 @@ export function HTTPRouteListPage() {
       }),
       columnHelper.accessor((row) => row.spec?.hostnames?.join(', ') || '', {
         id: 'spec_hostnames',
-        header: 'Hostnames',
+        header: t('common.fields.hostname'),
         cell: ({ getValue }) => getValue() || 'N/A',
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
-        header: 'Created',
+        header: t('common.fields.created'),
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
 
@@ -42,7 +44,7 @@ export function HTTPRouteListPage() {
         },
       }),
     ],
-    []
+    [t]
   )
 
   return (

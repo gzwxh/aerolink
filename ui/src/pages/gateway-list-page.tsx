@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
+import { useTranslation } from 'react-i18next'
 
 import { Gateway } from '@/types/gateway'
 import { createSearchFilter } from '@/lib/k8s'
@@ -12,10 +13,11 @@ const filter = createSearchFilter<Gateway>((gw) => gw.metadata?.name)
 const columnHelper = createColumnHelper<Gateway>()
 
 export function GatewayListPage() {
+  const { t } = useTranslation()
   const columns = useMemo(
     () => [
       columnHelper.accessor('metadata.name', {
-        header: 'Name',
+        header: t('common.fields.name'),
         cell: ({ row }) => (
           <div className="font-medium app-link">
             <ClusterLink
@@ -27,11 +29,11 @@ export function GatewayListPage() {
         ),
       }),
       columnHelper.accessor('spec.gatewayClassName', {
-        header: 'Gateway Class',
+        header: t('common.fields.gatewayClass'),
         cell: ({ row }) => row.original.spec?.gatewayClassName || 'N/A',
       }),
       columnHelper.accessor('metadata.creationTimestamp', {
-        header: 'Created',
+        header: t('common.fields.created'),
         cell: ({ getValue }) => {
           const dateStr = formatDate(getValue() || '')
 
@@ -41,7 +43,7 @@ export function GatewayListPage() {
         },
       }),
     ],
-    []
+    [t]
   )
 
   return (
