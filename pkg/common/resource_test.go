@@ -16,6 +16,8 @@ func TestRelatedResourceTypesArePinned(t *testing.T) {
 	sort.Strings(got)
 
 	want := []string{
+		"clusterrolebindings",
+		"clusterroles",
 		"configmaps",
 		"daemonsets",
 		"deployments",
@@ -25,7 +27,10 @@ func TestRelatedResourceTypesArePinned(t *testing.T) {
 		"persistentvolumeclaims",
 		"poddisruptionbudgets",
 		"pods",
+		"rolebindings",
+		"roles",
 		"secrets",
+		"serviceaccounts",
 		"services",
 		"statefulsets",
 		"storageclasses",

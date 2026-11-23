@@ -70,13 +70,22 @@ describe('表单编辑页的路由覆盖', () => {
 // 后端列表本身在 pkg/common/resource_test.go 里钉住，两边必须同步。
 describe('supportsRelatedResources', () => {
   it('允许后端确实注册了路由的类型', () => {
-    for (const resource of ['pods', 'deployments', 'configmaps', 'storageclasses']) {
+    // serviceaccounts 从“挡掉”那一例移到这里的：第 22 轮给 RBAC 五面补了
+    // 关联发现（D-123），后端已为它们注册 /related。
+    for (const resource of [
+      'pods',
+      'deployments',
+      'configmaps',
+      'storageclasses',
+      'serviceaccounts',
+      'clusterroles',
+    ]) {
       expect(supportsRelatedResources(resource)).toBe(true)
     }
   })
 
   it('挡掉没有 /related 路由的类型', () => {
-    for (const resource of ['nodes', 'namespaces', 'crds', 'serviceaccounts']) {
+    for (const resource of ['nodes', 'namespaces', 'crds']) {
       expect(supportsRelatedResources(resource)).toBe(false)
     }
   })

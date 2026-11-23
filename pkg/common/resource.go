@@ -123,7 +123,7 @@ var Registry = []ResourceMeta{
 	{Kind: "Secret", Singular: "secret", Plural: Secrets, Version: "v1", Searchable: true, Related: true},
 	{Kind: "PersistentVolume", Singular: "persistentvolume", Plural: PersistentVolumes, Short: []string{"pv"}, Version: "v1", ClusterScoped: true, Searchable: true},
 	{Kind: "PersistentVolumeClaim", Singular: "persistentvolumeclaim", Plural: PersistentVolumeClaims, Short: []string{"pvc"}, Version: "v1", Searchable: true, Related: true},
-	{Kind: "ServiceAccount", Singular: "serviceaccount", Plural: ServiceAccounts, Short: []string{"sa"}, Version: "v1"},
+	{Kind: "ServiceAccount", Singular: "serviceaccount", Plural: ServiceAccounts, Short: []string{"sa"}, Version: "v1", Related: true},
 	{Kind: "Event", Singular: "event", Plural: Events, Short: []string{"ev"}, Version: "v1"},
 
 	// apps/v1（应用工作负载）
@@ -156,10 +156,10 @@ var Registry = []ResourceMeta{
 	{Kind: "VolumeAttributesClass", Singular: "volumeattributesclass", Plural: VolumeAttributesClasses, Group: "storage.k8s.io", Version: "v1", ClusterScoped: true},
 
 	// rbac.authorization.k8s.io/v1（RBAC 授权）
-	{Kind: "Role", Singular: "role", Plural: Roles, Group: "rbac.authorization.k8s.io", Version: "v1"},
-	{Kind: "RoleBinding", Singular: "rolebinding", Plural: RoleBindings, Group: "rbac.authorization.k8s.io", Version: "v1"},
-	{Kind: "ClusterRole", Singular: "clusterrole", Plural: ClusterRoles, Group: "rbac.authorization.k8s.io", Version: "v1", ClusterScoped: true},
-	{Kind: "ClusterRoleBinding", Singular: "clusterrolebinding", Plural: ClusterRoleBindings, Group: "rbac.authorization.k8s.io", Version: "v1", ClusterScoped: true},
+	{Kind: "Role", Singular: "role", Plural: Roles, Group: "rbac.authorization.k8s.io", Version: "v1", Related: true},
+	{Kind: "RoleBinding", Singular: "rolebinding", Plural: RoleBindings, Group: "rbac.authorization.k8s.io", Version: "v1", Related: true},
+	{Kind: "ClusterRole", Singular: "clusterrole", Plural: ClusterRoles, Group: "rbac.authorization.k8s.io", Version: "v1", ClusterScoped: true, Related: true},
+	{Kind: "ClusterRoleBinding", Singular: "clusterrolebinding", Plural: ClusterRoleBindings, Group: "rbac.authorization.k8s.io", Version: "v1", ClusterScoped: true, Related: true},
 
 	// certificates.k8s.io（证书）
 	{Kind: "CertificateSigningRequest", Singular: "certificatesigningrequest", Plural: CertificateSigningRequests, Short: []string{"csr"}, Group: "certificates.k8s.io", Version: "v1", ClusterScoped: true},

@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -568,6 +569,188 @@ func getPersistentVolumeClaimRelatedResources(pvc *corev1.PersistentVolumeClaim)
 	})
 }
 
+// RBAC 面的关联发现。这些类型此前一个分支都没有，于是 ServiceAccount / Role /
+// RoleBinding / ClusterRole / ClusterRoleBinding 的「相关资源」页签永远返回空列表
+// （验收台账 D-123）—— 而「这个角色 / 身份到底被用在哪里」恰恰是排查权限时最需要
+// 的答案。与其余分支一致：列不到东西（客户端没有相应权限）时静默跳过，
+// 不拖垮已经找到的结果。
+
+// roleRef.kind 的两个取值。rbac 包只为 subject 侧提供了常量（ServiceAccountKind 等），
+// 角色引用这边没有，按 apiserver 的取值在这里具名一次，避开散落各处的裸字符串。
+const (
+	roleRefKindRole        = "Role"
+	roleRefKindClusterRole = "ClusterRole"
+)
+
+// subjectRefersToServiceAccount 判断一个 subject 是否指向指定命名空间下的 ServiceAccount。
+// 不比对 APIGroup：手写对象常省略它（apiserver 会默认填 rbac 组），比对会把合法绑定漏掉。
+func subjectRefersToServiceAccount(subject rbacv1.Subject, namespace, name string) bool {
+	return subject.Kind == rbacv1.ServiceAccountKind &&
+		subject.Namespace == namespace &&
+		subject.Name == name
+}
+
+func roleBindingRelatedResource(binding *rbacv1.RoleBinding) common.RelatedResource {
+	return common.RelatedResource{
+		Type:      string(common.RoleBindings),
+		Namespace: binding.Namespace,
+		Name:      binding.Name,
+	}
+}
+
+func clusterRoleBindingRelatedResource(binding *rbacv1.ClusterRoleBinding) common.RelatedResource {
+	return common.RelatedResource{
+		Type: string(common.ClusterRoleBindings),
+		Name: binding.Name,
+	}
+}
+
+// subjectRelatedResource 把 subject 翻成可跳转的对象：只有 ServiceAccount 在集群里有实体，
+// User / Group 只是标识符（平台没有对应资源面），列出来只会得到点不动的死链。
+func subjectRelatedResource(subject rbacv1.Subject) (common.RelatedResource, bool) {
+	if subject.Kind != rbacv1.ServiceAccountKind {
+		return common.RelatedResource{}, false
+	}
+	return common.RelatedResource{
+		Type:      string(common.ServiceAccounts),
+		Namespace: subject.Namespace,
+		Name:      subject.Name,
+	}, true
+}
+
+func discoverPodsByServiceAccount(ctx context.Context, k8sClient *kube.K8sClient, namespace, name string) []common.RelatedResource {
+	var podList corev1.PodList
+	if err := k8sClient.List(ctx, &podList, client.InNamespace(namespace)); err != nil {
+		return nil
+	}
+	var related []common.RelatedResource
+	for i := range podList.Items {
+		if podList.Items[i].Spec.ServiceAccountName == name {
+			related = append(related, common.RelatedResource{
+				Type:      string(common.Pods),
+				Namespace: podList.Items[i].Namespace,
+				Name:      podList.Items[i].Name,
+			})
+		}
+	}
+	return related
+}
+
+func discoverRoleBindingsForServiceAccount(ctx context.Context, k8sClient *kube.K8sClient, namespace, name string) []common.RelatedResource {
+	var list rbacv1.RoleBindingList
+	// RoleBinding 只能引用它自己命名空间里的 ServiceAccount。
+	if err := k8sClient.List(ctx, &list, client.InNamespace(namespace)); err != nil {
+		return nil
+	}
+	var related []common.RelatedResource
+	for i := range list.Items {
+		for _, subject := range list.Items[i].Subjects {
+			if subjectRefersToServiceAccount(subject, namespace, name) {
+				related = append(related, roleBindingRelatedResource(&list.Items[i]))
+				break
+			}
+		}
+	}
+	return related
+}
+
+func discoverClusterRoleBindingsForServiceAccount(ctx context.Context, k8sClient *kube.K8sClient, namespace, name string) []common.RelatedResource {
+	var list rbacv1.ClusterRoleBindingList
+	if err := k8sClient.List(ctx, &list); err != nil {
+		return nil
+	}
+	var related []common.RelatedResource
+	for i := range list.Items {
+		for _, subject := range list.Items[i].Subjects {
+			if subjectRefersToServiceAccount(subject, namespace, name) {
+				related = append(related, clusterRoleBindingRelatedResource(&list.Items[i]))
+				break
+			}
+		}
+	}
+	return related
+}
+
+func discoverRoleBindingsForRole(ctx context.Context, k8sClient *kube.K8sClient, namespace, name string) []common.RelatedResource {
+	var list rbacv1.RoleBindingList
+	if err := k8sClient.List(ctx, &list, client.InNamespace(namespace)); err != nil {
+		return nil
+	}
+	var related []common.RelatedResource
+	for i := range list.Items {
+		ref := list.Items[i].RoleRef
+		if ref.Kind == roleRefKindRole && ref.Name == name {
+			related = append(related, roleBindingRelatedResource(&list.Items[i]))
+		}
+	}
+	return related
+}
+
+func discoverRoleBindingsForClusterRole(ctx context.Context, k8sClient *kube.K8sClient, name string) []common.RelatedResource {
+	var list rbacv1.RoleBindingList
+	// 不带 InNamespace：把 ClusterRole 降级绑到单个命名空间是常见做法，
+	// 只看当前命名空间会漏掉「这个角色还在别处被用着」。
+	if err := k8sClient.List(ctx, &list); err != nil {
+		return nil
+	}
+	var related []common.RelatedResource
+	for i := range list.Items {
+		ref := list.Items[i].RoleRef
+		if ref.Kind == roleRefKindClusterRole && ref.Name == name {
+			related = append(related, roleBindingRelatedResource(&list.Items[i]))
+		}
+	}
+	return related
+}
+
+func discoverClusterRoleBindingsForClusterRole(ctx context.Context, k8sClient *kube.K8sClient, name string) []common.RelatedResource {
+	var list rbacv1.ClusterRoleBindingList
+	if err := k8sClient.List(ctx, &list); err != nil {
+		return nil
+	}
+	var related []common.RelatedResource
+	for i := range list.Items {
+		ref := list.Items[i].RoleRef
+		if ref.Kind == roleRefKindClusterRole && ref.Name == name {
+			related = append(related, clusterRoleBindingRelatedResource(&list.Items[i]))
+		}
+	}
+	return related
+}
+
+// getBindingRelatedResources 从一份绑定对象里抽出它能跳转的两端：roleRef 指向的角色，
+// 以及 subjects 里的 ServiceAccount。roleRef 的命名空间取绑定自己的（Kind=Role 时只能同命名空间）。
+func getBindingRelatedResources(roleRef rbacv1.RoleRef, subjects []rbacv1.Subject, bindingNamespace string) []common.RelatedResource {
+	var related []common.RelatedResource
+	switch roleRef.Kind {
+	case roleRefKindRole:
+		related = append(related, common.RelatedResource{
+			Type:      string(common.Roles),
+			Namespace: bindingNamespace,
+			Name:      roleRef.Name,
+		})
+	case roleRefKindClusterRole:
+		related = append(related, common.RelatedResource{
+			Type: string(common.ClusterRoles),
+			Name: roleRef.Name,
+		})
+	}
+	for _, subject := range subjects {
+		if resource, ok := subjectRelatedResource(subject); ok {
+			related = append(related, resource)
+		}
+	}
+	return related
+}
+
+func getRoleBindingRelatedResources(binding *rbacv1.RoleBinding) []common.RelatedResource {
+	return getBindingRelatedResources(binding.RoleRef, binding.Subjects, binding.Namespace)
+}
+
+func getClusterRoleBindingRelatedResources(binding *rbacv1.ClusterRoleBinding) []common.RelatedResource {
+	return getBindingRelatedResources(binding.RoleRef, binding.Subjects, "")
+}
+
 func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // 各资源的关联发现集中在这里，是有意为之
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	namespace := c.Param("namespace")
@@ -654,6 +837,19 @@ func GetRelatedResources(c *gin.Context) { //nolint:gocyclo // 各资源的关�
 		if relatedPods, err := discoverPodsByPodDisruptionBudgetV1Beta1(ctx, cs.K8sClient, namespace, res.Spec.Selector); err == nil {
 			result = append(result, relatedPods...)
 		}
+	case *corev1.ServiceAccount:
+		result = append(result, discoverPodsByServiceAccount(ctx, cs.K8sClient, res.Namespace, res.Name)...)
+		result = append(result, discoverRoleBindingsForServiceAccount(ctx, cs.K8sClient, res.Namespace, res.Name)...)
+		result = append(result, discoverClusterRoleBindingsForServiceAccount(ctx, cs.K8sClient, res.Namespace, res.Name)...)
+	case *rbacv1.Role:
+		result = append(result, discoverRoleBindingsForRole(ctx, cs.K8sClient, res.Namespace, res.Name)...)
+	case *rbacv1.RoleBinding:
+		result = append(result, getRoleBindingRelatedResources(res)...)
+	case *rbacv1.ClusterRole:
+		result = append(result, discoverRoleBindingsForClusterRole(ctx, cs.K8sClient, res.Name)...)
+		result = append(result, discoverClusterRoleBindingsForClusterRole(ctx, cs.K8sClient, res.Name)...)
+	case *rbacv1.ClusterRoleBinding:
+		result = append(result, getClusterRoleBindingRelatedResources(res)...)
 	}
 
 	if podSpec != nil && selector != nil {

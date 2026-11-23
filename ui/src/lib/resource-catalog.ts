@@ -1108,6 +1108,13 @@ const relatedResourceTypes = [
   'storageclasses',
   'httproutes',
   'horizontalpodautoscalers',
+  // RBAC 五面：第 22 轮补上后端的关联发现（D-123）。角色/身份「被用在哪里」
+  // 是排查权限最需要的信息，而 ServiceAccount 一侧还能看到在跑它的 Pod。
+  'serviceaccounts',
+  'roles',
+  'rolebindings',
+  'clusterroles',
+  'clusterrolebindings',
 ] as const satisfies readonly ResourceType[]
 
 export const supportsRelatedResources = (resource: string): boolean =>
