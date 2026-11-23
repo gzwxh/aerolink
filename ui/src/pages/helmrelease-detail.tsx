@@ -33,6 +33,12 @@ import {
   useResource,
   useResourcesWatch,
 } from '@/lib/api'
+import {
+  isCommentOnlyManifestDocument,
+  manifestResources,
+  splitManifestDocuments,
+  trimHelmSourceComment,
+} from '@/lib/helm-manifest'
 import { getCRDResourcePath } from '@/lib/k8s'
 import {
   getResourceDetailPath,
@@ -387,44 +393,6 @@ function toManifestFiles(
 
     return [{ path, content }]
   })
-}
-
-function splitManifestDocuments(manifest: string) {
-  const docs: string[] = []
-  let lines: string[] = []
-
-  for (const line of manifest.split('\n')) {
-    const marker = line.replace(/[ \t\r]+$/, '')
-    if (marker === '---' || marker.startsWith('--- #')) {
-      const doc = lines.join('\n').trim()
-      if (doc) {
-        docs.push(doc)
-      }
-      lines = []
-      continue
-    }
-    lines.push(line)
-  }
-
-  const doc = lines.join('\n').trim()
-  if (doc) {
-    docs.push(doc)
-  }
-  return docs
-}
-
-function trimHelmSourceComment(content: string) {
-  const lines = content.split('\n')
-  if (lines[0]?.trim().startsWith('# Source:')) {
-    return lines.slice(1).join('\n').trim()
-  }
-  return content
-}
-
-function isCommentOnlyManifestDocument(content: string) {
-  return content
-    .split('\n')
-    .every((line) => !line.trim() || line.trim().startsWith('#'))
 }
 
 function manifestResourcePath(resource: HelmReleaseResource, index: number) {
@@ -1543,6 +1511,25 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
     }
     return items
   }, [releasePods])
+  // 「资源」页签的数据源。status.resources 是 Flux 风格的字段，本平台的 helm 后端
+  // 从不填它，于是页签永远空着（验收台账 D-117）；manifest 一直都在（同页的 manifest
+  // 页签就是拿它渲染的），所以 status 为空时回落到按 manifest 解析。
+  const releaseResources = useMemo(() => {
+    const fromStatus = data?.status?.resources
+    if (fromStatus && fromStatus.length > 0) {
+      return fromStatus
+    }
+    return manifestResources(
+      data?.spec?.manifest || '',
+      data?.spec?.namespace || namespace
+    )
+  }, [
+    data?.status?.resources,
+    data?.spec?.manifest,
+    data?.spec?.namespace,
+    namespace,
+  ])
+
   const manifestFiles = useMemo(
     () =>
       toManifestFiles(
@@ -1575,7 +1562,7 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
       {
         value: 'resources',
         label: t('common.fields.resources'),
-        content: <ResourcesTable resources={data?.status?.resources} />,
+        content: <ResourcesTable resources={releaseResources} />,
       },
       {
         value: 'history',
@@ -1626,6 +1613,7 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
       namespace,
       refetch,
       releasePods,
+      releaseResources,
       t,
     ]
   )
