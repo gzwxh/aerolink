@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '@/contexts/auth-context'
+import type { TFunction } from 'i18next'
 import { ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -14,6 +15,7 @@ import {
   isMFAReauthRequired,
   mfaEnrollmentNeedsPassword,
 } from '@/lib/mfa-enrollment'
+import { translateError } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,6 +31,26 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { PasswordInput } from '@/components/password-input'
+
+/**
+ * MFA 面板的统一失败文案。
+ *
+ * 以前这里直接把 `err.message` 上屏，而 `pkg/users` 的三个 MFA 错误都是
+ * 开发者串（`invalid mfa code` / `mfa code is required`），中文界面里就出现了一行
+ * 孤零零的英文（第 20 轮 D-163）。现在已知 code 走 translateError 的中文词条，
+ * **未知错误一律回落到中文兜底**，不再把英文原句贴给用户。
+ */
+function mfaFailureMessage(
+  err: unknown,
+  t: TFunction,
+  fallback: string
+): string {
+  const translated = translateError(err, t)
+  if (err instanceof Error && translated === err.message) {
+    return fallback
+  }
+  return translated
+}
 
 /**
  * 「安全 → 动态码（MFA）」。
@@ -72,9 +94,11 @@ export function MFASection() {
       toast.success(t('accountSettings.security.mfa.enabled', '已启用'))
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : t('accountSettings.security.mfa.enableError', '启用失败')
+        mfaFailureMessage(
+          err,
+          t,
+          t('accountSettings.security.mfa.enableError', '启用失败')
+        )
       )
     } finally {
       setSaving(false)
@@ -93,9 +117,11 @@ export function MFASection() {
       toast.success(t('accountSettings.security.mfa.disabled', '已停用'))
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : t('accountSettings.security.mfa.disableError', '停用失败')
+        mfaFailureMessage(
+          err,
+          t,
+          t('accountSettings.security.mfa.disableError', '停用失败')
+        )
       )
     } finally {
       setSaving(false)
@@ -127,9 +153,11 @@ export function MFASection() {
           '为确认是本人操作，绑定动态码需要你在 5 分钟内重新登录过。请退出后重新登录，再回来绑定。'
         )
       }
-      return err instanceof Error
-        ? err.message
-        : t('accountSettings.security.mfa.setupError', '绑定失败')
+      return mfaFailureMessage(
+        err,
+        t,
+        t('accountSettings.security.mfa.setupError', '绑定失败')
+      )
     } finally {
       setSaving(false)
     }

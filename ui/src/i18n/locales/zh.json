@@ -1276,7 +1276,10 @@
     "crdNotInstalled": "此集群未安装 {{kind}} ({{version}})。请先安装对应的 CRD。",
     "resourceVersionConflict": "对象已被他人修改，请刷新后重试",
     "invalidTemplateYAML": "模板里每个文档都需要是带 apiVersion 与 kind 的资源清单。{{detail}}",
-    "accessDenied": "没有权限执行该操作，请联系管理员为账号授予集群级权限。"
+    "accessDenied": "没有权限执行该操作，请联系管理员为账号授予集群级权限。",
+    "invalidMfaCode": "动态码不正确或已过期，请用验证器里当前显示的 6 位码重试。若多次失败，检查本机时间是否准确。",
+    "mfaCodeRequired": "请输入验证器里当前显示的 6 位动态码。",
+    "requestEntityTooLarge": "内容超过平台单次可接收的上限（约 3 MiB）。请拆分文件，或改用对象存储引用。"
   },
   "nsActions": {
     "moreActions": "更多操作",
@@ -2812,7 +2815,8 @@
       "description": "下面是完整密钥，请复制到目标系统。",
       "warning": "关闭后无法再次查看。密钥丢失只能删除该条目后重新创建。",
       "done": "我已保存",
-      "shownOnce": "完整密钥仅在创建时显示一次，之后列表只保留前缀"
+      "shownOnce": "完整密钥仅在创建时显示一次，之后列表只保留前缀",
+      "zeroPermissionHint": "新密钥默认不带任何权限，直接调用会被拒；请用该行右侧菜单的「分配」为它授予角色"
     }
   },
   "deleteConfirmation": {

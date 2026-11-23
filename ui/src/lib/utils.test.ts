@@ -302,3 +302,33 @@ describe('enrichNodeConditionsWithHealth', () => {
     ])
   })
 })
+
+describe('动态码错误的本地化', () => {
+  // 回归（第 20 轮 D-163）：pkg/users 的三个 MFA 接口以前只回英文开发者串
+  // （`invalid mfa code` / `mfa code is required`），账户页把 err.message 原样上屏，
+  // 中文界面里就出现一行孤立英文。现在两端都补上了：后端带 code，前端按码取中文词条。
+  const codedError = (message: string, code?: string) => {
+    const err = new Error(message)
+    if (code) (err as { code?: string }).code = code
+    return err
+  }
+  const tf = ((key: string) => key) as unknown as TFunction
+
+  it('已知 code 走对应词条，不再回英文原句', () => {
+    expect(
+      translateError(codedError('invalid mfa code', 'invalid_mfa_code'), tf)
+    ).toBe('errors.invalidMfaCode')
+    expect(
+      translateError(
+        codedError('mfa code is required', 'mfa_code_required'),
+        tf
+      )
+    ).toBe('errors.mfaCodeRequired')
+  })
+
+  it('没有 code 时仍返回原消息，交由调用方回落中文兜底', () => {
+    expect(translateError(codedError('some future error'), tf)).toBe(
+      'some future error'
+    )
+  })
+})

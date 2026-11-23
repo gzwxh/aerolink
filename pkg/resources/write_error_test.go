@@ -71,6 +71,14 @@ func TestWriteFailureMapsAPIErrorSemantics(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
+			// 回归（第 21 轮 D-164）：3 MiB 以上的 ConfigMap 以前报 500，
+			// 界面把「文件太大」说成服务器故障；apiserver 这里明确是 413 语义。
+			name:       "请求体超限",
+			err:        apierrors.NewRequestEntityTooLargeError("Request entity too large: limit is 3145728"),
+			wantStatus: http.StatusRequestEntityTooLarge,
+			wantCode:   requestTooLargeCode,
+		},
+		{
 			// 未知错误必须仍然是 500：不能把真故障伪装成客户端错误。
 			name:       "未知错误保持 500",
 			err:        errors.New("admission webhook denied the request"),

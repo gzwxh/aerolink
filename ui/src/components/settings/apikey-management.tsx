@@ -204,6 +204,14 @@ export function APIKeyManagement() {
                   '完整密钥仅在创建时显示一次，之后列表只保留前缀'
                 )}
               </p>
+              {/* 新密钥零权限是设计，但以前页面一句提示都没有，导致「创建成功却必 403」的静默陷阱
+                  （第 20 轮 D-162）。把别人要走的下一步写在这里。 */}
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {t(
+                  'apikeyManagement.secret.zeroPermissionHint',
+                  '新密钥默认不带任何权限，直接调用会被拒；请用该行右侧菜单的「分配」为它授予角色'
+                )}
+              </p>
             </div>
             {!readOnly && (
               <Button onClick={() => setShowDialog(true)}>

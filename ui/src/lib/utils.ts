@@ -363,6 +363,22 @@ export function translateError(error: Error | unknown, t: TFunction): string {
     return t('errors.accessDenied')
   }
 
+  // 动态码错误：这三个接口以前返回开发者英文串，账户页直接贴到中文界面上
+  // （第 20 轮 D-163）。登录接口早就用了 `invalid_mfa_code`，这里与它口径一致。
+  if (policyError.code === 'invalid_mfa_code') {
+    return t('errors.invalidMfaCode')
+  }
+
+  if (policyError.code === 'mfa_code_required') {
+    return t('errors.mfaCodeRequired')
+  }
+
+  // 请求体超过 apiserver 接收上限（实测约 3 MiB）：以前是 500，界面上就成了
+  // 「服务器错误」，用户会反复重试大文件（第 21 轮 D-164）。
+  if (policyError.code === 'request_entity_too_large') {
+    return t('errors.requestEntityTooLarge')
+  }
+
   const crdMatch = CRD_NOT_INSTALLED_RE.exec(error.message)
   if (crdMatch) {
     return t('errors.crdNotInstalled', {

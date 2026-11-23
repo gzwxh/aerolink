@@ -1276,7 +1276,10 @@
     "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature.",
     "resourceVersionConflict": "This object was changed by someone else. Reload it and try again.",
     "invalidTemplateYAML": "Every document in a template must be a resource manifest with apiVersion and kind. {{detail}}",
-    "accessDenied": "You are not allowed to do this. Ask an administrator to grant cluster-level access to your account."
+    "accessDenied": "You are not allowed to do this. Ask an administrator to grant cluster-level access to your account.",
+    "invalidMfaCode": "The dynamic code is incorrect or expired. Use the 6-digit code currently shown in your authenticator. If it keeps failing, check your device clock.",
+    "mfaCodeRequired": "Enter the 6-digit code currently shown in your authenticator.",
+    "requestEntityTooLarge": "The content exceeds the size the platform can accept (about 3 MiB). Split the file or reference it through object storage."
   },
   "nsActions": {
     "moreActions": "More actions",
@@ -2939,7 +2942,8 @@
       "description": "Copy the full key below into the target system.",
       "warning": "It cannot be viewed again after closing. If you lose it, delete this entry and create a new one.",
       "done": "I've saved it",
-      "shownOnce": "The full key is shown only once at creation; the list keeps the prefix only"
+      "shownOnce": "The full key is shown only once at creation; the list keeps the prefix only",
+      "zeroPermissionHint": "A new key carries no permissions and will be refused until you grant it roles via the row menu “Assign”"
     }
   },
   "deleteConfirmation": {

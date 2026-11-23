@@ -635,7 +635,7 @@ func bindMFACode(c *gin.Context) (string, bool) {
 	}
 	code := strings.TrimSpace(req.Code)
 	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa code is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa code is required", "code": "mfa_code_required"})
 		return "", false
 	}
 	return code, true
@@ -669,7 +669,7 @@ func EnableCurrentUserMFA(c *gin.Context) {
 		return
 	}
 	if !mfa.Verify(string(user.MFASecret), code) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code", "code": "invalid_mfa_code"})
 		return
 	}
 
@@ -705,7 +705,7 @@ func DisableCurrentUserMFA(c *gin.Context) {
 		return
 	}
 	if !mfa.Verify(string(user.MFASecret), code) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code", "code": "invalid_mfa_code"})
 		return
 	}
 
@@ -777,7 +777,7 @@ func VerifyCurrentUserMFA(c *gin.Context) {
 		return
 	}
 	if !mfa.Verify(string(user.MFASecret), code) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code", "code": "invalid_mfa_code"})
 		return
 	}
 

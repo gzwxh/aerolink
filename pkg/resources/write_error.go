@@ -7,6 +7,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
+// requestTooLargeCode 给前端做本地化用：原文里的 limit 数字对中文用户没有用，
+// 得先说清「是内容超限而不是平台挂了」。
+const requestTooLargeCode = "request_entity_too_large"
+
 // writeFailure 把 apiserver 的写失败翻译成**语义正确的状态码 + 机器可读码**。
 //
 // 之前 create / update / patch 只要失败就一律 500，于是 apiserver 明确给出的
@@ -21,6 +25,11 @@ func writeFailure(err error) (status int, code string) {
 	case apierrors.IsConflict(err):
 		// 乐观并发冲突：客户端那份对象已经过期，界面据此提示「刷新后重试」。
 		return http.StatusConflict, resourceVersionConflictCode
+	case apierrors.IsRequestEntityTooLargeError(err):
+		// 请求体超过 apiserver 的接收上限（实测约 3 MiB）：这是「内容太大」，
+		// 不是服务端故障。以前落到 default 的 500，界面把「文件太大」说成服务器错误，
+		// 用户会以为重试能成（第 21 轮 D-164）。
+		return http.StatusRequestEntityTooLarge, requestTooLargeCode
 	case apierrors.IsNotFound(err):
 		return http.StatusNotFound, ""
 	case apierrors.IsInvalid(err):
