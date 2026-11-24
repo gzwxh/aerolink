@@ -136,8 +136,13 @@ func (s *OpenObserveSink) openObserveIngestPath() string {
 }
 
 // openObserveSearchPath 返回检索接口的路径。
+//
+// 必须用 **org 级** 路径 `/api/{org}/_search`：v0.91.1 上按流拼的
+// `/api/{org}/{stream}/_search` 直接返回 404（实测），而 SQL 里已经写了
+// `from "<stream>"`，并不损失信息。旧写法会让整条 OO 通道“写得进、读不出”——
+// 审计界面永远报错（验收台账 D-179）。
 func (s *OpenObserveSink) openObserveSearchPath() string {
-	return "/api/" + url.PathEscape(s.org()) + "/" + url.PathEscape(s.stream()) + ooSearchPathSuffix
+	return "/api/" + url.PathEscape(s.org()) + ooSearchPathSuffix
 }
 
 // insert 把已编码好的记录数组发往某一个地址。
@@ -202,10 +207,12 @@ func (s *OpenObserveSink) Search(ctx context.Context, query archiveQuery, from, 
 		return nil, err
 	}
 
+	start, end := openObserveTimeRange(from, to)
+
 	payload, err := json.Marshal(openObserveSearchRequest{Query: openObserveSearchQuery{
 		SQL:       sql,
-		StartTime: unixMicros(from),
-		EndTime:   unixMicros(to),
+		StartTime: start,
+		EndTime:   end,
 		From:      openObserveOffset(page, size),
 		Size:      openObservePageSize(size),
 	}})
@@ -303,8 +310,13 @@ func (s *OpenObserveSink) org() string {
 }
 
 // stream 返回日志流名（空值回落默认流名）。
+//
+// 连字符要按 OpenObserve 自己的规则换成下划线：实测 OO 建流时会把 `r24-audit`
+// 改存为 `r24_audit`，而按原名检索会报 `Search stream not found`。平台默认值
+// `aerolink-audit` 本身就带连字符，不在这里归一化的话写入与读取就会分在两个流上
+// （验收台账 D-180）。
 func (s *OpenObserveSink) stream() string {
-	return streamNameOrDefault(s.config.Stream)
+	return strings.ReplaceAll(streamNameOrDefault(s.config.Stream), "-", "_")
 }
 
 // setBasicAuth 设置 Basic 认证（OpenObserve 的用户名通常是登录邮箱）。
@@ -406,12 +418,34 @@ func openObservePageSize(size int) int {
 	return size
 }
 
-// unixMicros 把时间转成 OpenObserve 需要的微秒时间戳；零值返回 0（= 不限制该边界）。
+// unixMicros 把时间转成 OpenObserve 需要的微秒时间戳；零值返回 0（表示调用方没给这个边界）。
 func unixMicros(at time.Time) int64 {
 	if at.IsZero() {
 		return 0
 	}
 	return at.UnixMicro()
+}
+
+// openobserveEpochFloorMicro 是下界的回退值（纪元后 1 秒）：语义上等于「没有下界」。
+const openobserveEpochFloorMicro int64 = 1_000_000
+
+// openObserveTimeRange 把可空的 from / to 夹成 OpenObserve 能接受的窗口。
+//
+// 实测 v0.91.1：`start_time=0` 会被直接拒掉（HTTP 400 `[file_list] invalid time range`），
+// 即使 end 是有效值也一样——旧注释里「0 = 不限制该边界」的假设不成立。而调用方不传时间窗时
+// 两侧恰好都是零值，结果是审计接口整个 500（验收台账 D-181）。
+func openObserveTimeRange(from, to time.Time) (int64, int64) {
+	start, end := unixMicros(from), unixMicros(to)
+	if start <= 0 {
+		start = openobserveEpochFloorMicro
+	}
+	if end <= start {
+		// to 缺失或不在 from 之后：以当下为上界，而不是把无效窗口丢给服务端。
+		if now := time.Now().UnixMicro(); now > start {
+			end = now
+		}
+	}
+	return start, end
 }
 
 // openObserveSnippetBytes 是错误信息里保留的响应片段长度：够看出原因，又不至于把整页 HTML 灌进日志。

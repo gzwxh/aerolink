@@ -74,8 +74,10 @@ func TestOpenObserveSinkWritePostsRecordsArray(t *testing.T) {
 		t.Fatalf("Write() error = %v", err)
 	}
 
-	if path != "/api/aerolink-org/audit-stream/_json" {
-		t.Errorf("ingest path = %q, want /api/aerolink-org/audit-stream/_json", path)
+	// 连字符按 OpenObserve 自己的规则归一为下划线（实测 OO 建流就会改名，
+	// 不归一会让写入与读取分在两个流上，验收台账 D-180）。
+	if path != "/api/aerolink-org/audit_stream/_json" {
+		t.Errorf("ingest path = %q, want /api/aerolink-org/audit_stream/_json", path)
 	}
 	if contentType != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", contentType)
@@ -225,7 +227,8 @@ func TestOpenObserveSQLRendersConditions(t *testing.T) {
 			}
 
 			// kind 是四类记录共用一个流时的唯一区分依据，必须始终出现在 WHERE 里。
-			for _, want := range append([]string{"kind = 'audit_history'", `FROM "aerolink-audit"`, "ORDER BY _timestamp DESC"}, tc.want...) {
+			// 流名同样是被归一过的（配置写的是 aerolink-audit）。
+			for _, want := range append([]string{"kind = 'audit_history'", `FROM "aerolink_audit"`, "ORDER BY _timestamp DESC"}, tc.want...) {
 				if !strings.Contains(sql, want) {
 					t.Errorf("SQL 缺少 %q:\n%s", want, sql)
 				}
@@ -260,9 +263,11 @@ func TestOpenObserveSQLRejectsUnsupportedKindAndUnsafeStream(t *testing.T) {
 func TestOpenObserveSinkSearchPinsRequestShapeAndParsesResponse(t *testing.T) {
 	var body string
 	var hitCount int32
+	var path string
 	server := newFakeOpenObserve(t, func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		body = string(raw)
+		path = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
 		// total 用字符串：与 VictoriaLogs 的 stats 输出一样，部分版本这么编码。
 		_, _ = w.Write([]byte(`{"hits":[{"kind":"audit_history","id":7,"resource_name":"web"}],"total":"42","took":3}`))
@@ -291,6 +296,12 @@ func TestOpenObserveSinkSearchPinsRequestShapeAndParsesResponse(t *testing.T) {
 	query := payload.Query
 	if query == nil {
 		t.Fatalf("search body 缺少 query 对象: %s", body)
+	}
+	// 回归（验收台账 D-179）：v0.91.1 上只有 org 级 `/api/{org}/_search` 可用，
+	// 按流拼的 `/api/{org}/{stream}/_search` 直接返回 404——于是整条 OO 通道
+	// 「写得进、读不出」，审计界面永远报错（而平台默认流名还正好带连字符）。
+	if path != "/api/default/_search" {
+		t.Errorf("search path = %q, want /api/default/_search（org 级）", path)
 	}
 	if _, ok := query["sql"]; !ok {
 		t.Errorf("query 缺少 sql 字段: %s", body)
@@ -368,5 +379,40 @@ func TestOpenObserveSinkPing(t *testing.T) {
 	brokenSink := newOpenObserveSink(t, model.OpenObserveArchive{}, broken.URL)
 	if err := brokenSink.Ping(context.Background()); err == nil {
 		t.Error("非 2xx 时 Ping 必须报错")
+	}
+}
+
+// 回归（验收台账 D-181）：调用方不传时间窗时 from/to 都是零值，
+// unixMicros 给出 0/0，而 OpenObserve v0.91.1 直接拒绝 start_time=0
+// （实测 HTTP 400 `[file_list] invalid time range`，即使 end 有效也一样）——
+// 旧注释里「0 = 不限制该边界」的假设不成立，审计接口因此整个 500。
+func TestOpenObserveTimeRangeClampsEmptyWindow(t *testing.T) {
+	cases := []struct {
+		name     string
+		from, to time.Time
+	}{
+		{name: "两侧都不给", from: time.Time{}, to: time.Time{}},
+		{name: "只给下界", from: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), to: time.Time{}},
+		{name: "上下界颠倒", from: time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC),
+			to: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			start, end := openObserveTimeRange(tc.from, tc.to)
+			if start <= 0 {
+				t.Errorf("start_time 必须为正（OO 拒绝 0）: got %d", start)
+			}
+			if end <= start {
+				t.Errorf("end_time 必须晚于 start_time: got %d <= %d", end, start)
+			}
+		})
+	}
+
+	// 显式给了窗口时不该被动过。
+	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)
+	if start, end := openObserveTimeRange(from, to); start != from.UnixMicro() || end != to.UnixMicro() {
+		t.Errorf("显式窗口被改写了: got %d/%d want %d/%d", start, end, from.UnixMicro(), to.UnixMicro())
 	}
 }
