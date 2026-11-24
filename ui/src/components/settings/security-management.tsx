@@ -22,6 +22,7 @@ import {
   type MFAPolicy,
   type SecuritySetting,
 } from '@/lib/api'
+import { findLockoutRisks, type LockoutRisk } from '@/lib/security-lockout'
 import { cn, formatDate, translateError } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -254,6 +256,8 @@ export function SecurityManagement() {
   const [formData, setFormData] = useState<SecuritySetting>(
     DEFAULT_SECURITY_SETTING
   )
+  // 本次提交把哪些准入策略收紧了；非空就先确认再写（验收台账 D-167）。
+  const [lockoutRisks, setLockoutRisks] = useState<LockoutRisk[]>([])
 
   useEffect(() => {
     if (data) {
@@ -1192,6 +1196,17 @@ export function SecurityManagement() {
                   )
                   return
                 }
+                // 全局即时生效的准入策略：收紧到可能把管理员自己关在门外时先确认一次。
+                // 安全设置走的是 /admin/*，不在 k8s 写操作二次确认（lib/write-confirm.ts）
+                // 的覆盖范围内，所以把关落在本页自口。
+                const risks = findLockoutRisks(
+                  data ?? DEFAULT_SECURITY_SETTING,
+                  formData
+                )
+                if (risks.length > 0) {
+                  setLockoutRisks(risks)
+                  return
+                }
                 mutation.mutate(formData)
               }}
               disabled={readOnly || mutation.isPending}
@@ -1397,6 +1412,69 @@ export function SecurityManagement() {
               'A manual block is stored in the database and survives a server restart until it expires or is removed. Disable the account itself for a permanent block.'
             )}
           </p>
+        </DialogContent>
+      </Dialog>
+
+      {/* 收紧准入策略的确认：把具体是哪几项列出来，而不是只问「确定提交吗」。
+          确认后才真正 PUT（验收台账 D-167）。 */}
+      <Dialog
+        open={lockoutRisks.length > 0}
+        onOpenChange={(open) => {
+          if (!open) setLockoutRisks([])
+        }}
+      >
+        <DialogContent role="alertdialog" showCloseButton={!mutation.isPending}>
+          <DialogHeader>
+            <DialogTitle>
+              {t(
+                'securitySettings.lockoutConfirm.title',
+                '确认收紧登录准入策略？'
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'securitySettings.lockoutConfirm.description',
+                '下面这几项从保存的那一刻起对全部账号生效。平台没有提供恢复登录的其他入口，配错将需要直接改数据库才能恢复。'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* 风险清单用 warning 语义色，与认证配置页那条常驻告警（
+              authentication-management.tsx 的 passwordLoginWarning）保持同一口径。 */}
+          <ul className="bg-warning/10 border-warning/25 space-y-1 rounded-md border py-2 pl-6 pr-3 text-sm list-disc">
+            {lockoutRisks.map((risk) => (
+              <li key={risk} className="text-pretty">
+                {t(`securitySettings.lockoutConfirm.risks.${risk}`, {
+                  defaultValue: risk,
+                })}
+              </li>
+            ))}
+          </ul>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLockoutRisks([])}
+              disabled={mutation.isPending}
+            >
+              {t('common.actions.cancel', 'Cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={mutation.isPending}
+              onClick={() => {
+                setLockoutRisks([])
+                mutation.mutate(formData)
+              }}
+            >
+              {mutation.isPending
+                ? t('common.actions.saving', '保存中...')
+                : t(
+                    'securitySettings.lockoutConfirm.confirm',
+                    '我已确认，保存'
+                  )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </Card>
