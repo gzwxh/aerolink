@@ -130,20 +130,20 @@ helm package charts/aerolink -d dist
 
 公司尚未搭建 Helm 仓库，当前版本以 **`.tgz` 压缩包** 形式分发，随仓库一起维护：
 
-- 压缩包：`charts/aerolink-1.0.3.tgz`（由 `helm package charts/aerolink -d charts/` 生成）
+- 压缩包：`charts/aerolink-1.0.5.tgz`（由 `helm package charts/aerolink -d charts/` 生成）
 - 镜像：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.5`（chart 默认值已指向公司 SWR）
 
 ### 安装
 
 ```bash
-helm install aerolink charts/aerolink-1.0.3.tgz \
+helm install aerolink charts/aerolink-1.0.5.tgz \
   --namespace aerolink-system --create-namespace
 ```
 
 如需覆盖镜像或配置：
 
 ```bash
-helm install aerolink charts/aerolink-1.0.3.tgz \
+helm install aerolink charts/aerolink-1.0.5.tgz \
   --namespace aerolink-system --create-namespace \
   -f my-values.yaml
 ```
@@ -153,5 +153,5 @@ helm install aerolink charts/aerolink-1.0.3.tgz \
 公司确定搭建 Helm 仓库（ChartMuseum / Harbor / SWR 的 OCI 能力）后：
 
 1. `helm repo add <名称> <仓库地址> && helm repo update`；
-2. `helm push charts/aerolink-1.0.3.tgz <名称>`（OCI 仓库用 `helm push charts/aerolink-1.0.3.tgz oci://<地址>/<命名空间>`）；
-3. 安装方式改为 `helm install aerolink <名称>/aerolink --version 1.0.3`，并更新本文档。
+2. `helm push charts/aerolink-1.0.5.tgz <名称>`（OCI 仓库用 `helm push charts/aerolink-1.0.5.tgz oci://<地址>/<命名空间>`）；
+3. 安装方式改为 `helm install aerolink <名称>/aerolink --version 1.0.5`，并更新本文档。
