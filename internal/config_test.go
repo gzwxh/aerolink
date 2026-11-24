@@ -309,10 +309,10 @@ func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // 该用�
 		if err := model.DB.Find(&roles).Error; err != nil {
 			t.Fatalf("Find roles: %v", err)
 		}
-		// 4 个内置系统角色（管理员/审计员/安全管理员/只读管理员）+ 配置里的 dev-team。
-		// 代次 3 起内置超级角色已并入管理员，不再是独立角色。
-		if len(roles) != 5 {
-			t.Fatalf("expected 5 roles, got %d", len(roles))
+		// 6 个内置系统角色（管理员/审计员/安全管理员/只读管理员/集群管理员/集群只读管理员）
+		// + 配置里的 dev-team。代次 3 起内置超级角色已并入管理员，不再是独立角色。
+		if len(roles) != 7 {
+			t.Fatalf("expected 7 roles, got %d", len(roles))
 		}
 		byName := map[string]model.Role{}
 		for _, r := range roles {
