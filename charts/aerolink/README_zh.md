@@ -1,6 +1,6 @@
 # aerolink
 
-![Version: 1.0.3](https://img.shields.io/badge/Version-1.0.3-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.3](https://img.shields.io/badge/AppVersion-v1.0.3-informational?style=flat-square)
+![Version: 1.0.5](https://img.shields.io/badge/Version-1.0.5-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.5](https://img.shields.io/badge/AppVersion-v1.0.5-informational?style=flat-square)
 
 Kubernetes Dashboard —— 鸢联 AeroLink 的 Helm Chart。
 
@@ -131,7 +131,7 @@ helm package charts/aerolink -d dist
 公司尚未搭建 Helm 仓库，当前版本以 **`.tgz` 压缩包** 形式分发，随仓库一起维护：
 
 - 压缩包：`charts/aerolink-1.0.3.tgz`（由 `helm package charts/aerolink -d charts/` 生成）
-- 镜像：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.3`（chart 默认值已指向公司 SWR）
+- 镜像：`swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.5`（chart 默认值已指向公司 SWR）
 
 ### 安装
 
