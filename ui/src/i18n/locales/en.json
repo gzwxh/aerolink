@@ -947,7 +947,9 @@
   "dialog": {
     "createResource": "Create Resource",
     "applyPartialFailure": "{{appliedCount}} object(s) were applied; the rest failed: {{detail}}",
+    "applyMultiSuccess": "{{count}} resources applied",
     "createResourceDescription": "Paste one or more Kubernetes resource YAML documents and apply them to the cluster",
+    "freeformYamlHint": "The empty template accepts multi-document YAML to create several resources at once; write namespaces in the YAML.",
     "editResource": "Edit Resource",
     "deleteConfirmation": "Delete Confirmation",
     "deleteMessage": "Are you sure you want to delete this resource? This action cannot be undone.",

@@ -947,7 +947,9 @@
   "dialog": {
     "createResource": "创建资源",
     "applyPartialFailure": "已下发 {{appliedCount}} 个对象，其余失败：{{detail}}",
+    "applyMultiSuccess": "已下发 {{count}} 个资源",
     "createResourceDescription": "粘贴一个或多个 Kubernetes 资源的 YAML，直接下发到集群",
+    "freeformYamlHint": "空模板下支持多文档 YAML，一次可创建多个资源；命名空间请直接写在 YAML 里。",
     "editResource": "编辑资源",
     "deleteConfirmation": "删除确认",
     "deleteMessage": "确定要删除此资源吗？此操作不可撤销。",

@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { applyResource, useResources, useTemplates } from '@/lib/api'
 import { isClusterScopedKind } from '@/lib/resource-catalog'
 import { useUnsavedEdits } from '@/lib/unsaved-edits'
-import { translateError } from '@/lib/utils'
+import { cn, translateError } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard'
 import { Button } from '@/components/ui/button'
 import {
@@ -150,6 +150,10 @@ function CreateResourceDialogContent({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
   const [selectedNamespace, setSelectedNamespace] = useState<string>()
   const [yamlContent, setYamlContent] = useState('')
+  // 空模板 = 自由 YAML 模式：允许粘贴多文档（多个 Deployment / StatefulSet 等），
+  // 命名空间也由用户直接写在 YAML 里，界面不再提供覆盖入口。选了具体模板则仍按
+  // 模板自带的命名空间/下拉框覆盖走，和以前一致。
+  const isFreeformYaml = selectedTemplateId === ''
   const [isLoading, setIsLoading] = useState(false)
   const [scheduling, setScheduling] = useState<SchedulingConfig>(
     defaultSchedulingConfig()
@@ -204,6 +208,8 @@ function CreateResourceDialogContent({
     if (templateName === 'empty') {
       setYamlContent('')
       setSelectedTemplateId('')
+      // 回到自由 YAML 模式：不再沿用模板模式下选过的命名空间覆盖值。
+      setSelectedNamespace(undefined)
       setScheduling(defaultSchedulingConfig())
       return
     }
@@ -232,8 +238,23 @@ function CreateResourceDialogContent({
 
     setIsLoading(true)
     try {
-      await applyResource(yamlContent, selectedNamespace)
-      toast.success(t('common.messages.applied', 'Applied successfully'))
+      const result = await applyResource(
+        yamlContent,
+        isFreeformYaml ? undefined : selectedNamespace
+      )
+      // 空模板下可以一次下发多文档，服务端会把成功数量带回来；明确告诉用户
+      // 实际建了几个，避免「只创建了第一份」的错觉。
+      const appliedCount = result.count ?? 1
+      if (appliedCount > 1) {
+        toast.success(
+          t('dialog.applyMultiSuccess', {
+            count: appliedCount,
+            defaultValue: 'Applied {{count}} resources',
+          })
+        )
+      } else {
+        toast.success(t('common.messages.applied', 'Applied successfully'))
+      }
       onClose()
     } catch (err) {
       console.error('Failed to apply resource', err)
@@ -273,7 +294,13 @@ function CreateResourceDialogContent({
       </DialogHeader>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div
+          className={cn(
+            'grid gap-4',
+            // 空模板下不提供命名空间覆盖，模板选择独占一行，避免留下半边空白。
+            !isFreeformYaml && 'sm:grid-cols-2'
+          )}
+        >
           <div className="space-y-2">
             <Label htmlFor="template">
               {t('common.fields.template', 'Template')}
@@ -301,8 +328,16 @@ function CreateResourceDialogContent({
                 ))}
               </SelectContent>
             </Select>
+            {isFreeformYaml ? (
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'dialog.freeformYamlHint',
+                  'Empty template accepts multi-document YAML (several resources at once); write namespaces in the YAML.'
+                )}
+              </p>
+            ) : null}
           </div>
-          {!isLoadingNamespaces && canSelectNamespace ? (
+          {!isFreeformYaml && !isLoadingNamespaces && canSelectNamespace ? (
             <div className="space-y-2">
               <Label>{t('common.fields.namespace', 'Namespace')}</Label>
               <NamespaceSelector
