@@ -711,9 +711,14 @@ export function DeleteNamespaceDialog({
   const { t } = useTranslation()
   const [counts, setCounts] = useState<Record<string, number> | null>(null)
   const [loading, setLoading] = useState(true)
+  // 删命名空间会级联删掉内部所有资源，把关强度要与角色 / ClusterRole /
+  // 权限绑定一致（逐字输入名称），而不是点一下就删（验收台账 D-113）。
+  const [confirmText, setConfirmText] = useState('')
+  const confirmed = confirmText === name
 
   useEffect(() => {
     let cancelled = false
+    setConfirmText('')
     ;(async () => {
       const results = await Promise.allSettled(
         DELETE_WORKLOAD_TYPES.map((type) =>
@@ -793,11 +798,30 @@ export function DeleteNamespaceDialog({
           )}
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="ns-delete-confirm">
+            {t('deleteConfirmation.typeToConfirm', 'Type')}{' '}
+            <span className="font-semibold">{name}</span>{' '}
+            {t('deleteConfirmation.toConfirm', 'to confirm')}
+          </Label>
+          <Input
+            id="ns-delete-confirm"
+            value={confirmText}
+            onChange={(event) => setConfirmText(event.target.value)}
+            placeholder={name}
+            autoComplete="off"
+          />
+        </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={deleting}>
             {t('common.actions.cancel', 'Cancel')}
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={deleting}>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={deleting || !confirmed}
+          >
             {deleting
               ? t('common.actions.deleting', 'Deleting...')
               : t('common.actions.delete', 'Delete')}
