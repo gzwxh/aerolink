@@ -56,6 +56,10 @@ const (
 	vlInsertPath = "/insert/elasticsearch/_bulk"
 	// vlSelectPath 是 LogsQL 检索接口（响应同样是一行一个 JSON 的流）。
 	vlSelectPath = "/select/logsql/query"
+	// vlStreamFieldsParam 告诉 VictoriaLogs：把哪几个字段当作 stream 标签。
+	// 实测（验收台账 D-177）：只在 bulk 动作里填 ES 习惯的 `_index` **不会**改变 stream
+	// （仍是 `{}`），必须同时带上这个查询参数才会按字段分流。
+	vlStreamFieldsParam = "_stream_fields"
 )
 
 // VictoriaLogs 的内置字段名。
@@ -64,6 +68,8 @@ const (
 	vlFieldTime = "_time"
 	// vlFieldMessage 是日志正文列：不填在 VL 的 Web UI / Grafana 里只显示 `-`。
 	vlFieldMessage = "_msg"
+	// vlFieldStream 是分流字段：值即 stream 标签（查回来是 `_stream={stream="..."}`）。
+	vlFieldStream = "stream"
 	// vlCountAlias 是总数统计的输出字段名（`| stats count() total`）。
 	vlCountAlias = "total"
 )
@@ -76,7 +82,7 @@ func (s *VictoriaLogsSink) Write(ctx context.Context, docs []ESDocument) error {
 		return nil
 	}
 
-	body, err := victoriaLogsBulkBody(docs)
+	body, err := victoriaLogsBulkBody(docs, strings.TrimSpace(s.config.Stream))
 	if err != nil {
 		return err
 	}
@@ -103,15 +109,19 @@ func (s *VictoriaLogsSink) Write(ctx context.Context, docs []ESDocument) error {
 
 // victoriaLogsBulkBody 把中立文档编码成 ES bulk 兼容的 NDJSON（`{"create":{}}` + 文档）。
 //
-// 除调用方给的业务字段外，只补三个：
+// 除调用方给的业务字段外，只补三到四个：
 //   - `kind`：与 ES sink 同一约定。VL 侧没有按天索引，检索只能靠字段区分四类记录；
 //   - `_time`：VL 的事件时间列。`At` 为零值时**不写**这个字段，让服务端用接收时间——RFC3339
 //     表达不了「零值」，硬写一个 0001-01-01 会把记录扔到保留期之外；
-//   - `_msg`：VL 的日志正文（见 documentSummary）。
+//   - `_msg`：VL 的日志正文（见 documentSummary）；
+//   - `stream`：**仅当界面上填了 stream 时写**，配合 insert 里的 `_stream_fields` 查询参数
+//     让记录落到命名流（验收台账 D-177：以前这个配置项存库也不生效）。
+//     与 OpenObserve 不同，这里**不兜默认值**：已有的 VL 部署都在 VL 自己的默认流里，
+//     静默改流会让旧记录与新记录分在两处（旧数据不在本进程保留期内会被当作消失）。
 //
 // **绝不修改调用方传入的 doc.Fields**：同一批文档可能还要写别的 sink（ES），把辅助字段写回
 // 调用方的 map 会污染那边的 schema。
-func victoriaLogsBulkBody(docs []ESDocument) ([]byte, error) {
+func victoriaLogsBulkBody(docs []ESDocument, stream string) ([]byte, error) {
 	var buffer bytes.Buffer
 	for _, doc := range docs {
 		if err := writeNDJSON(&buffer, map[string]any{"create": map[string]any{}}); err != nil {
@@ -119,7 +129,7 @@ func victoriaLogsBulkBody(docs []ESDocument) ([]byte, error) {
 		}
 
 		// 复制一份再补字段，避免写回调用方的 map（副作用）。
-		body := make(map[string]any, len(doc.Fields)+3)
+		body := make(map[string]any, len(doc.Fields)+4)
 		for key, value := range doc.Fields {
 			body[key] = value
 		}
@@ -128,6 +138,9 @@ func victoriaLogsBulkBody(docs []ESDocument) ([]byte, error) {
 			body[vlFieldTime] = doc.At.Format(time.RFC3339)
 		}
 		body[vlFieldMessage] = documentSummary(doc)
+		if stream != "" {
+			body[vlFieldStream] = stream
+		}
 
 		if err := writeNDJSON(&buffer, body); err != nil {
 			return nil, err
@@ -136,9 +149,19 @@ func victoriaLogsBulkBody(docs []ESDocument) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
+// insertPath 拼写入路径。配了 stream 才带 `_stream_fields=stream`：
+// VictoriaLogs 只认这个参数把文档字段当 stream 标签，光靠 bulk 里的 `_index` 不分流
+// （验收台账 D-177 的实测）。
+func (s *VictoriaLogsSink) insertPath() string {
+	if strings.TrimSpace(s.config.Stream) == "" {
+		return vlInsertPath
+	}
+	return vlInsertPath + "?" + vlStreamFieldsParam + "=" + url.QueryEscape(vlFieldStream)
+}
+
 // insert 把已编码好的 bulk 请求体发往某一个地址。
 func (s *VictoriaLogsSink) insert(ctx context.Context, base string, body []byte) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+vlInsertPath, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+s.insertPath(), bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to build the victorialogs insert request: %w", err)
 	}

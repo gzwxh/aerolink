@@ -483,3 +483,63 @@ func TestVictoriaLogsSinkPing(t *testing.T) {
 		t.Errorf("error %q does not surface the address and status code", err)
 	}
 }
+
+// 回归（验收台账 D-177）：界面上填的 archive.victorialogs.stream 以前**完全不生效**——
+// 它存库、也参与 recordArchiveSettingChange 的变更留痕比对，但导出器通篇只引用 urls，
+// 实测 VL 里 `_stream` 恒为默认流 `{}`，用户以为做了流隔离其实没有。
+//
+// 在活的 VictoriaLogs 上对照过三种写法，只有下面这件管用：bulk 动作里填 ES 习惯的
+// `_index` **不分流**（仍是 `{}`），必须「文档带 stream 字段」+「查询串带
+// _stream_fields=stream」两件一起做。
+func TestVictoriaLogsSinkWriteHonorsConfiguredStream(t *testing.T) {
+	cases := []struct {
+		name       string
+		stream     string
+		wantURI    string
+		wantStream bool
+	}{
+		{name: "填了 stream：带上分流字段与查询参数", stream: "aerolink-r24",
+			wantURI: "/insert/elasticsearch/_bulk?_stream_fields=stream", wantStream: true},
+		// 不兜默认值：已有部署都写在 VL 自己的默认流里，静默改流会让旧记录与新记录分在两处。
+		{name: "没填 stream：保持现状", stream: "",
+			wantURI: "/insert/elasticsearch/_bulk", wantStream: false},
+		{name: "只有空格：等同没填", stream: "   ",
+			wantURI: "/insert/elasticsearch/_bulk", wantStream: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var uri, body string
+			server := newFakeVictoriaLogs(t, func(w http.ResponseWriter, r *http.Request) {
+				raw, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("failed to read request body: %v", err)
+				}
+				// RequestURI 含查询串；只看 Path 会漏掉 _stream_fields。
+				uri = r.URL.RequestURI()
+				body = string(raw)
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			sink := newVictoriaLogsSink(t, model.VictoriaLogsArchive{Stream: tc.stream}, server.URL)
+			fields := map[string]any{"cluster_name": "prod"}
+			if err := sink.Write(context.Background(), []ESDocument{
+				{Kind: ESKindAuditHistory, At: time.Now(), Fields: fields},
+			}); err != nil {
+				t.Fatalf("Write() error = %v", err)
+			}
+
+			if uri != tc.wantURI {
+				t.Errorf("insert URI = %q, want %q", uri, tc.wantURI)
+			}
+			want := strings.TrimSpace(tc.stream)
+			hasStream := want != "" && strings.Contains(body, `"stream":"`+want+`"`)
+			if hasStream != tc.wantStream {
+				t.Errorf("bulk body 里 stream 字段存在=%v, want %v; body=%s", hasStream, tc.wantStream, body)
+			}
+			if _, mutated := fields["stream"]; mutated {
+				t.Error("Write() 把 stream 写回了调用方的 Fields map")
+			}
+		})
+	}
+}
