@@ -241,6 +241,44 @@ After upgrading, check the logs: `库结构与模型一致` (`schema matches the
 not run or the pod was not restarted. Note that with `AEROLINK_LOG_FILE` set, `Info` level lines
 only go to that file and not to the container's stdout — `kubectl logs` then only shows errors.
 
+### Data backfills (DML only, no table owner needed)
+
+v1.0.5 adds no columns or indexes (no DDL), but it runs two **startup data backfills**. The
+application account only needs `UPDATE` privileges:
+
+- **Legacy brand names**: rewrites `[Kite] …` subjects/bodies in `notification_templates` and the
+  old default `otpIssuerName` in `security_settings` to "鸢联 AeroLink". Only the brand word is
+  replaced — wording customized by an administrator is kept as-is, and notifications already sent
+  are not rewritten.
+- **Single enabled announcement**: if several announcements are enabled, only the highest-priority
+  one stays enabled on startup.
+
+With `DB_MIGRATE=off` (or when a DBA prefers to run it manually), use the equivalent SQL below
+(idempotent; MySQL / SQLite `LIKE` is case-insensitive for ASCII while `REPLACE` is case-sensitive,
+so nothing is over-replaced):
+
+```sql
+-- Brand rename: notification templates and OTP issuer (same on all three databases)
+UPDATE notification_templates
+   SET subject = REPLACE(subject, '[Kite] ', '[鸢联] '),
+       body    = REPLACE(body, 'Kite', '鸢联')
+ WHERE subject LIKE '%Kite%' OR body LIKE '%Kite%';
+
+UPDATE security_settings
+   SET data = REPLACE(data, '"otpIssuerName":"Kite"', '"otpIssuerName":"鸢联 AeroLink"')
+ WHERE data LIKE '%"otpIssuerName":"Kite"%';
+
+-- Keep a single enabled announcement (MySQL requires the derived table wrapper)
+UPDATE announcements SET enabled = false
+ WHERE enabled = true
+   AND id <> (SELECT keep_id FROM (SELECT id AS keep_id FROM announcements
+                                   WHERE enabled = true ORDER BY priority DESC, id DESC LIMIT 1) t);
+```
+
+After upgrading, check the startup log for `品牌改名回填：更新通知模板 N 条`; template subjects under
+**Settings → Notification Management → Templates** should all start with `[鸢联]`, and at most one
+announcement should be enabled.
+
 ## Uninstalling AeroLink
 
 ### Helm Uninstall

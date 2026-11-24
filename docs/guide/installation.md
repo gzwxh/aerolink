@@ -248,6 +248,40 @@ ALTER TABLE clusters ADD COLUMN badge_icon_bold numeric NOT NULL DEFAULT false;
 或 `库表 clusters 缺少列 badge_text_size` 说明 SQL 没执行或执行后没重启。注意设了
 `AEROLINK_LOG_FILE` 之后，`Info` 级日志只写文件、不进容器标准输出，`kubectl logs` 只能看到错误行。
 
+### 数据回填（只走 DML，不需要表 owner）
+
+v1.0.5 没有新增列或索引（不需要 DDL），但有两条**启动期数据回填**，应用账号有 `UPDATE`
+权限即可直接跑：
+
+- **品牌改名遗留文案**：把 `notification_templates` 里仍是 `[Kite] …` 的标题与正文、以及
+  `security_settings` 里仍是旧默认值的 `otpIssuerName` 改成「鸢联 AeroLink」。只改品牌词，
+  管理员自定义过的措辞原样保留；已发出的历史通知不回填。
+- **公告单条启用归一**：历史上可能有多条公告同时为「启用」，启动时只保留优先级最高的一条。
+
+设了 `DB_MIGRATE=off`（或想交给 DBA 手工执行）时，用下面的等价 SQL（幂等；MySQL / SQLite
+的 `LIKE` 对 ASCII 不区分大小写，`REPLACE` 区分大小写，不会改错内容）：
+
+```sql
+-- 品牌改名：通知模板与动态码签发者（三库同形）
+UPDATE notification_templates
+   SET subject = REPLACE(subject, '[Kite] ', '[鸢联] '),
+       body    = REPLACE(body, 'Kite', '鸢联')
+ WHERE subject LIKE '%Kite%' OR body LIKE '%Kite%';
+
+UPDATE security_settings
+   SET data = REPLACE(data, '"otpIssuerName":"Kite"', '"otpIssuerName":"鸢联 AeroLink"')
+ WHERE data LIKE '%"otpIssuerName":"Kite"%';
+
+-- 公告单条启用归一（MySQL 必须像这样用派生表包一层）
+UPDATE announcements SET enabled = false
+ WHERE enabled = true
+   AND id <> (SELECT keep_id FROM (SELECT id AS keep_id FROM announcements
+                                   WHERE enabled = true ORDER BY priority DESC, id DESC LIMIT 1) t);
+```
+
+升级后核对：启动日志里出现 `品牌改名回填：更新通知模板 N 条`；「设置 → 通知管理 → 模板」的
+标题应全部以 `[鸢联]` 开头；公告列表里最多只有一条是启用状态。
+
 ## 卸载鸢联 AeroLink
 
 ### Helm 卸载

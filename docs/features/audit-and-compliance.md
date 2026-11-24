@@ -81,7 +81,7 @@
 - **本地 parquet**：按「攒批间隔 / 单批条数 / 单批字节数」三个阈值中任意一个触发落文件，可在「审计设置 → 归档」里调；默认**不写入变更前后的资源 YAML**（会让文件变大），需要溯源时再打开。
 - **S3 远端副本**：可选。用于把归档复制到对象存储；本地文件在确认上传后可删除。
 - **DuckDB（直接查 parquet）**：无需额外部署组件，检索时直接读 parquet 文件。查 S3 上的归档依赖 `httpfs` 扩展，见[环境变量](../config/env.md)里的 `AEROLINK_DUCKDB_EXTENSION_DIR`。
-- **Elasticsearch / VictoriaLogs / OpenObserve**：由各自的服务端承担存储与过期。
+- **Elasticsearch / VictoriaLogs / OpenObserve**：由各自的服务端承担存储与过期。查不到数据时先核对流名：OpenObserve 会把流名里的 `-` 换成 `_`（默认的 `aerolink-audit` 实际落在 `aerolink_audit`）；VictoriaLogs 按配置的 `stream` 字段分流，不是按索引名。
 
 「审计管理 → 归档检索」页可以按后端切换检索（数据来源跟随当前存储方式），检索三类记录：操作历史、登录日志、访问日志。两点注意：
 
