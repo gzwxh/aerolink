@@ -4,32 +4,12 @@
 
 ## 库结构变更（升级前须执行 SQL）
 
-本版（v1.0.4 → v1.0.5）**无库结构变更**：没有新增/修改列、索引或表，无需 DDL，应用账号不需要表 owner。
-
-有两条启动期数据回填（只走 DML，应用账号有 UPDATE 权限即可）：
-
-1. **公告单条启用归一**（`MigrateAnnouncementSingleEnabled`）：只保留一条启用公告（按 `priority DESC, id DESC` 取第一条）。设了 `DB_MIGRATE=off` 或想手工执行时：
-
-   ```sql
-   UPDATE announcements SET enabled = false
-    WHERE enabled = true
-      AND id <> (SELECT keep_id FROM (SELECT id AS keep_id FROM announcements
-                                      WHERE enabled = true ORDER BY priority DESC, id DESC LIMIT 1) t);
-   ```
-
-   三库同形；MySQL 必须像上面这样用派生表包一层。
-2. **品牌改名遗留文案回填**（`MigrateLegacyBrandNames`）：把 `notification_templates` 里仍是 `[Kite] …` 的文案、以及 `security_settings` 里仍是旧默认值的 `otpIssuerName` 改成「鸢联 AeroLink」。等价 SQL 见 `docs/dev/release-checklist.md` 的「2026-11-21 的实例（D-54，只需 DML）」段。
-
-区间内改动的模型文件（仅供审阅，无结构变更）：
-- `pkg/model/announcement.go`
-- `pkg/model/brand_migration.go`
-- `pkg/model/cluster.go`
-- `pkg/model/dialect.go`
-- `pkg/model/model.go`
-
+本版（v1.0.5 → v1.0.6）**无库结构变更**：没有新增/修改列、索引或表，无需 DDL，应用账号不需要表 owner；本区间也没有新增 `Migrate*Backfill` 数据回填，升级后无需手工执行 SQL。
 
 ## 新功能
 
+- feat(ui): 创建资源的空模板支持一次下发多文档 (`2aaf8df`)
+- feat(ui): 工作负载表单支持选择 ServiceAccount (`c886188`)
 - feat(ui): 通用详情页呈现状态条件（Gateway API / cert-manager 的健康信号） (`3315cc3`)
 - feat(resources): 工作负载的相关资源补上 HPA / PDB / Ingress 反向发现 (`6e2a24a`)
 - feat(terminal): 给日志与终端会话加每用户并发上限 (`0ffc396`)
@@ -213,6 +193,7 @@
 
 ## 修复
 
+- fix(cluster): 半初始化的客户端不再让集群列表空指针崩溃 (`18449f7`)
 - fix(ui): 看不到的命名空间不再断言「不存在」 (`d81f4f4`)
 - fix(ui): 系统命名空间里的写操作无视集群开关都要二次确认 (`9b2f02d`)
 - fix(ui): 删命名空间要求逐字输入名称，与其它删除口径一致 (`d41d46a`)
@@ -426,6 +407,9 @@
 
 ## 文档
 
+- docs: 补齐帮助文档截图、创建资源示例并统一品牌信息 (`c56afae`)
+- docs: 帮助文档跟上 v1.0.5 的升级动作与界面行为 (`b4d001a`)
+- docs(chart): 中文 README 的压缩包与安装示例同步到 1.0.5 (`0d737d7`)
 - docs(dev): 第 24 轮再续二（用户点选的五条收口：D-113 / D-114 / D-144 / D-150 / D-175） (`ceb6d5f`)
 - docs(dev): 第 24 轮再续（OpenObserve 通道验通，登记并修掉 D-179 / D-180 / D-181） (`2a3e9d9`)
 - docs(dev): 第 24 轮续（D-159 / D-167 / D-177 三条发版前把关修复） (`c31a509`)
@@ -517,6 +501,7 @@
 
 ## 测试
 
+- test(internal): 内置角色数断言跟上集群级角色的新增 (`0c87e86`)
 - test(ui): 给克隆的 selector 撞车拦截补上对话框级测试，钉住「真的接了线」 (`0bfa566`)
 - test(e2e): 适配集群 URL 前缀 (`c935701`)
 - test(ui): 补 ActionTable 列宽拖拽手柄回归测试 (`9833bc8`)
@@ -532,6 +517,7 @@
 
 ## 杂项
 
+- chore(release): 版本位与发布说明准备到 v1.0.5 (`f1c17df`)
 - style(ui): 按 prettier 折行克隆测试里的点击语句 (`c2df052`)
 - chore(git): 并入 gitee 镜像的 main 历史，保持镜像同步 (`fa47010`)
 - chore(git): 将 release 开发线确立为 main 主线 (`c36e1c0`)
@@ -704,6 +690,7 @@
 
 ## 未分类
 
+- release v1.0.5 (`e30c446`)
 - 前端页面显示 (`8f8e671`)
 - 终端与日志改为底部多会话工作区 (`d0d0ade`)
 - 完善界面的优化 (`9d7ef7b`)

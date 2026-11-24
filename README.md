@@ -7,7 +7,7 @@
 **所有集群，一个工作空间。**
 
 鸢联 AeroLink 是一个轻量、开源的 Kubernetes 工作空间，面向多集群运维、可观测性、访问控制与 AI 辅助排障。
-本仓库为基于上游项目的**公司内部二开版本**，当前版本 `v1.0.5`。
+本仓库为基于上游项目的**公司内部二开版本**，当前版本 `v1.0.6`。
 
 | 项 | 取值 | 说明 |
 | --- | --- | --- |
@@ -21,10 +21,10 @@
 | CLI | aero / alink（命名规划） | 尚未提供命令行工具，当前可执行文件仍叫 `aerolink` |
 | 包名 | io.aerolink（规划） | 尚未启用：Go module 是 `github.com/zxh326/kite`，前端包名是 `aerolink` |
 | 环境变量前缀 | `AEROLINK_` | 所有环境变量统一用它（如 `AEROLINK_ENCRYPT_KEY`）；改名前的 `KITE_*` 已不再生效 |
-| 构建版本号 | `v1.0.5` | 机器可读的实际版本号：git tag、镜像 tag、`/api/v1/version` 与界面侧栏显示都用它 |
-| 品牌版本串 | `AeroLink 1.0.5 (based on Kite x.y.z)` | 面向人的展示写法，只出现在文档与发布说明里，把「我们的版本」与「所基于的上游版本」一并交代 |
+| 构建版本号 | `v1.0.6` | 机器可读的实际版本号：git tag、镜像 tag、`/api/v1/version` 与界面侧栏显示都用它 |
+| 品牌版本串 | `AeroLink 1.0.6 (based on Kite x.y.z)` | 面向人的展示写法，只出现在文档与发布说明里，把「我们的版本」与「所基于的上游版本」一并交代 |
 
-两个版本口径不要混用：`v1.0.5` 是构建与发布**实际使用**的版本号（`make image`、CI 的 tag 触发、镜像 tag 都按它走）；`AeroLink 1.0.5 (based on Kite x.y.z)` 只是给人看的写法。代码里没有任何地方生成后者，界面上显示的是前者。
+两个版本口径不要混用：`v1.0.6` 是构建与发布**实际使用**的版本号（`make image`、CI 的 tag 触发、镜像 tag 都按它走）；`AeroLink 1.0.6 (based on Kite x.y.z)` 只是给人看的写法。代码里没有任何地方生成后者，界面上显示的是前者。
 
 - **副标题**：飞在 Kubernetes 之上，连通每一个集群
 - **口号**：一线连万群，鸢飞控全局
@@ -118,8 +118,8 @@ set -a; . ./dev.env; set +a; ./aerolink
 make image     # 构建镜像（默认 tag 见 Makefile 的 IMAGE 变量）
 make push      # 构建并推送到公司 SWR
 # 等价于：
-# docker build -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.5 .
-# docker push  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.5
+# docker build -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.6 .
+# docker push  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.6
 ```
 
 ### 1.1 ARM（arm64）机器
@@ -132,8 +132,8 @@ make push      # 构建并推送到公司 SWR
 全程不需要 QEMU，也不需要 ARM 机器：
 
 ```bash
-make build-arm VERSION=v1.0.5   # 只构，不推
-make push-arm  VERSION=v1.0.5   # 构 + 推到 swr.../devops/aerolink:v1.0.5-arm64
+make build-arm VERSION=v1.0.6   # 只构，不推
+make push-arm  VERSION=v1.0.6   # 构 + 推到 swr.../devops/aerolink:v1.0.6-arm64
 ```
 
 代价：parquet 审计检索改为 exec 外部 `duckdb`（镜像里已自带 `DUCKDB_VERSION` 指定的那份），
@@ -147,7 +147,7 @@ make push-arm  VERSION=v1.0.5   # 构 + 推到 swr.../devops/aerolink:v1.0.5-arm
 
 ```bash
 # 构建机按 scripts/provision-arm64-builder.sh 一键搭；代码从开发机 rsync 过去
-make push-binary GOARCH=arm64 IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.5-arm64
+make push-binary GOARCH=arm64 IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.6-arm64
 ```
 
 基座仍要是 arm64 那一份。实测口径：ARM 机器上即使 `FROM` 解析到 SWR 里那个**单架构 amd64**
@@ -165,10 +165,10 @@ make push-binary GOARCH=arm64 IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/devop
 make docs-image   # 构建文档站镜像（默认 tag 见 Makefile 的 DOCS_IMAGE 变量）
 make push-docs    # 构建并推送（与 make push-binary 对称，一步到位）
 # 只想单独推送已构建好的镜像：
-docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.5
+docker push swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.6
 # 等价于：
 # docker build --provenance=false --sbom=false -f docs/Dockerfile \
-#   -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.5 docs/
+#   -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.6 docs/
 ```
 
 镜像里是 nginx 托管的静态站（监听 80）；部署后把访问地址填进「通用设置 → 帮助文档地址」，登录页与顶栏会出现入口。
@@ -194,7 +194,7 @@ docker run -d --name aerolink -p 8080:8080 \
   -e DB_DSN=/app/data/aerolink.db \
   -e AEROLINK_ENCRYPT_KEY="M4/s1z+IvG91QcrXajUpdJXv3kHxJIZEuf9TGauNc9M=" \
   -e JWT_SECRET="M4/s1z+IvG91QcrXajUpdJXv3kHxJIZEuf9TGauNc9M=" \
-  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.5
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.6
 ```
 
 生产推荐启动方式（含全部安全参数，密钥用 `openssl rand -base64 32` 生成并妥善保存）：
@@ -209,7 +209,7 @@ docker run -d --name aerolink --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e HOST=https://aerolink.example.com \
   -e TRUSTED_PROXIES=10.0.0.0/8 \
-  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.5
+  swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.6
 ```
 
 首次访问会引导创建管理员账号，之后在「系统设置」中完成其余策略配置。

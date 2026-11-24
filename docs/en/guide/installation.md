@@ -165,6 +165,10 @@ This is the recommended option for getting started quickly, especially in develo
 
 ## Upgrading
 
+**v1.0.6** has no schema changes and no startup backfills: replace the image or run `helm upgrade`; no manual SQL is required.
+
+The DDL / DML lists below cover earlier releases (including v1.0.5). When upgrading across several versions, still follow the notes for those versions.
+
 For a Helm install, use `helm upgrade` (`--reuse-values` keeps the existing configuration):
 
 ```bash
