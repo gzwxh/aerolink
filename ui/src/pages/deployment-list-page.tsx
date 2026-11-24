@@ -601,10 +601,13 @@ export function DeploymentListPage() {
       <div className="flex min-h-[60vh] items-center justify-center p-6">
         <div className="flex max-w-md flex-col items-center gap-3 rounded-md border border-dashed p-8 text-center">
           <p className="text-sm font-medium">
-            {t('common.messages.namespaceNotFoundOnCluster', {
+            {/* 判定依据只是「不在我可见的命名空间列表里」，本就无法区分
+                「不存在」与「没有权限」——原先一口咬定不存在（验收台账 D-150），
+                会让越权的运维以为命名空间被删了，从而往错误方向排查。 */}
+            {t('common.messages.namespaceNotVisible', {
               namespace: namespaceParam,
               defaultValue:
-                '命名空间 {{namespace}} 在当前集群中不存在，可能来自其他集群。',
+                '你当前看不到命名空间 {{namespace}}：它可能不存在，也可能你的账号没有访问它的权限。',
             })}
           </p>
           <p className="text-xs text-muted-foreground">
