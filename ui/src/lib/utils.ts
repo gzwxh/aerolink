@@ -275,6 +275,21 @@ export function isCRDNotInstalledError(errorMessage: string): boolean {
   return CRD_NOT_INSTALLED_RE.test(errorMessage)
 }
 
+/**
+ * 「这个集群不提供该资源类型」（CRD 未装 / APIService 版本不存在）。
+ *
+ * 优先看服务端新给的机器可读码（验收台账 D-114：以前只能靠正则匹配那句英文）；
+ * 正则保留作兼容，旧服务端的 500 响应仍能被认出。
+ */
+export function isResourceTypeUnavailable(error: unknown): boolean {
+  if (
+    (error as { code?: string } | null)?.code === 'resource_type_unavailable'
+  ) {
+    return true
+  }
+  return error instanceof Error && isCRDNotInstalledError(error.message)
+}
+
 export function translateError(error: Error | unknown, t: TFunction): string {
   if (!(error instanceof Error)) {
     return t('common.messages.error', {
@@ -385,6 +400,12 @@ export function translateError(error: Error | unknown, t: TFunction): string {
       kind: crdMatch[1],
       version: crdMatch[2],
     })
+  }
+
+  // 同一件事的服务端表达可能变（文本、甚至换语言），但码不会变：
+  // 靠 D-114 新增的码兜底。
+  if (policyError.code === 'resource_type_unavailable') {
+    return t('errors.resourceTypeUnavailable')
   }
 
   const rbacInfo = parseRBACError(error.message)

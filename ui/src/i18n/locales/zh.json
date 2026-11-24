@@ -81,6 +81,7 @@
       "openInNewTab": "在新标签页打开"
     },
     "fields": {
+      "conditions": "状态条件",
       "target": "目标",
       "metrics": "指标",
       "minReplicas": "最小副本",
@@ -367,7 +368,7 @@
       "updated": "{{resource}}更新成功",
       "updateExistingItem": "更新已有{{resource}}",
       "yamlSaved": "YAML 保存成功",
-      "namespaceNotFoundOnCluster": "命名空间 {{namespace}} 在当前集群中不存在，可能来自其他集群。",
+      "namespaceNotVisible": "你当前看不到命名空间 {{namespace}}：它可能不存在，也可能你的账号没有访问它的权限。",
       "namespaceNotFoundHint": "请选择下方的一个命名空间，或查看全部命名空间的资源。",
       "createFailed": "创建失败",
       "terminalDialogDescription": "选择 Pod 与容器后，在页面底部的终端工作区打开。",
@@ -1160,6 +1161,7 @@
     "confirm": "确认执行",
     "description": "该集群已开启操作二次确认，确认后才会把这次变更提交给 Kubernetes。",
     "bulkHint": "本次将同时提交 {{count}} 个同类操作",
+    "systemNamespaceHint": "对象位于系统命名空间 {{namespace}}（集群自身的运转件）。停用、删除或改坏它可能影响整个集群的节点网络、存储或调度。",
     "title": "确认执行该操作？"
   },
   "session": {
@@ -1279,6 +1281,7 @@
     "resourceVersionConflict": "对象已被他人修改，请刷新后重试",
     "invalidTemplateYAML": "模板里每个文档都需要是带 apiVersion 与 kind 的资源清单。{{detail}}",
     "accessDenied": "没有权限执行该操作，请联系管理员为账号授予集群级权限。",
+    "resourceTypeUnavailable": "当前集群未安装该资源类型对应的 API，请改用已安装资源类型的页面。",
     "invalidMfaCode": "动态码不正确或已过期，请用验证器里当前显示的 6 位码重试。若多次失败，检查本机时间是否准确。",
     "mfaCodeRequired": "请输入验证器里当前显示的 6 位动态码。",
     "requestEntityTooLarge": "内容超过平台单次可接收的上限（约 3 MiB）。请拆分文件，或改用对象存储引用。"

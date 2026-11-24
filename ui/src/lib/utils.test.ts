@@ -16,6 +16,7 @@ import {
   formatPodMetrics,
   getAge,
   isCRDNotInstalledError,
+  isResourceTypeUnavailable,
   parseBytes,
   parseRBACError,
   translateError,
@@ -330,5 +331,46 @@ describe('动态码错误的本地化', () => {
     expect(translateError(codedError('some future error'), tf)).toBe(
       'some future error'
     )
+  })
+})
+
+describe('资源类型不可用的判定（验收台账 D-114）', () => {
+  const tf = ((key: string) => key) as unknown as TFunction
+  // 后端原本对「集群没装这个 API 类型」回 500 + 一句英文，前端只能正则匹配；
+  // 现在状态码改成 404 并带上机器可读码，文本仍原样保留以兼容旧前端。
+  const coded = (message: string, code?: string) => {
+    const err = new Error(message)
+    if (code) (err as { code?: string }).code = code
+    return err
+  }
+
+  it('有码就认，不必依赖英文文本', () => {
+    expect(
+      isResourceTypeUnavailable(coded('boom', 'resource_type_unavailable'))
+    ).toBe(true)
+  })
+
+  it('旧服务端的英文文本仍然兼容', () => {
+    expect(
+      isResourceTypeUnavailable(
+        coded(
+          'no matches for kind "Gateway" in version "gateway.networking.k8s.io/v1"'
+        )
+      )
+    ).toBe(true)
+  })
+
+  it('普通失败不误判为资源类型不可用', () => {
+    expect(isResourceTypeUnavailable(coded('connection refused'))).toBe(false)
+    expect(isResourceTypeUnavailable(null)).toBe(false)
+  })
+
+  it('只有码、文本被服务端改掉时，也能翻成中文词条', () => {
+    expect(
+      translateError(
+        coded('some future wording', 'resource_type_unavailable'),
+        tf
+      )
+    ).toBe('errors.resourceTypeUnavailable')
   })
 })

@@ -81,6 +81,7 @@
       "openInNewTab": "Open in new tab"
     },
     "fields": {
+      "conditions": "Conditions",
       "target": "Target",
       "metrics": "Metrics",
       "minReplicas": "Min Replicas",
@@ -367,7 +368,7 @@
       "updated": "{{resource}} updated successfully",
       "updateExistingItem": "Update existing {{resource}}",
       "yamlSaved": "YAML saved successfully",
-      "namespaceNotFoundOnCluster": "Namespace {{namespace}} does not exist in the current cluster. It may belong to another cluster.",
+      "namespaceNotVisible": "You currently cannot see namespace {{namespace}}: it may not exist, or your account may not have access to it.",
       "namespaceNotFoundHint": "Pick one of the namespaces below, or view resources across all namespaces.",
       "createFailed": "Create failed",
       "terminalDialogDescription": "Pick a pod and container, then open it in the terminal workspace at the bottom of the page.",
@@ -1159,6 +1160,7 @@
     },
     "confirm": "Confirm and run",
     "bulkHint": "This will submit {{count}} operations of the same kind at once",
+    "systemNamespaceHint": "This object lives in the system namespace {{namespace}} (part of the cluster itself). Stopping, deleting or breaking it can affect node networking, storage or scheduling cluster-wide.",
     "description": "This cluster requires confirmation, so the change is sent to Kubernetes only after you confirm.",
     "title": "Confirm this operation?"
   },
@@ -1279,6 +1281,7 @@
     "resourceVersionConflict": "This object was changed by someone else. Reload it and try again.",
     "invalidTemplateYAML": "Every document in a template must be a resource manifest with apiVersion and kind. {{detail}}",
     "accessDenied": "You are not allowed to do this. Ask an administrator to grant cluster-level access to your account.",
+    "resourceTypeUnavailable": "This cluster does not serve this resource type. Use the pages of an installed resource type instead.",
     "invalidMfaCode": "The dynamic code is incorrect or expired. Use the 6-digit code currently shown in your authenticator. If it keeps failing, check your device clock.",
     "mfaCodeRequired": "Enter the 6-digit code currently shown in your authenticator.",
     "requestEntityTooLarge": "The content exceeds the size the platform can accept (about 3 MiB). Split the file or reference it through object storage."

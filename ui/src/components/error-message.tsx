@@ -2,8 +2,8 @@ import { PackageX, RotateCcw, ShieldX, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
-  isCRDNotInstalledError,
   isRBACError,
+  isResourceTypeUnavailable,
   translateError,
 } from '@/lib/utils'
 
@@ -30,8 +30,8 @@ export function ErrorMessage({
   }
 
   const isRBAC = error instanceof Error && isRBACError(error.message)
-  const isCRDMissing =
-    error instanceof Error && isCRDNotInstalledError(error.message)
+  // 先看机器可读码，正则只作旧服务端的兼容（验收台账 D-114）。
+  const isCRDMissing = isResourceTypeUnavailable(error)
   const message =
     error instanceof Error ? translateError(error, t) : t(fallbackKey)
 
