@@ -23,3 +23,5 @@
 
 ![History diff](../screenshots/history2.webp)
 
+![回滚确认：从历史版本回滚前会先确认目标版本](../screenshots/rollback-confirm.png)
+

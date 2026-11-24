@@ -55,7 +55,7 @@ Content-Type: application/json
 
 ## MFA
 
-MFA 适用于密码用户。用户可以在「用户信息」页（`/account?tab=security`）管理 MFA，也可以使用以下已认证接口：
+MFA 适用于本地密码与 LDAP 账号（OIDC / 第三方 OAuth 由身份提供商负责）。用户可以在「用户信息」页（`/account?tab=security`）管理 MFA，也可以使用以下已认证接口：
 
 ```http
 POST /api/users/me/mfa/setup

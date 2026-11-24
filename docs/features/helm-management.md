@@ -27,6 +27,8 @@
 
 从侧边栏打开 **Helm Release** 可以查看已安装的 Releases。
 
+![Helm Release 详情：状态、Chart 版本、相关资源与升级入口](../screenshots/helm.png)
+
 Release 详情页会展示状态、Chart 版本、values、资源、历史记录、日志和渲染后的 manifests。
 
 安装和升级前支持 dry-run 预览。你可以在详情页升级 Release，在历史记录中回滚，也可以删除 Release 来从集群中卸载。

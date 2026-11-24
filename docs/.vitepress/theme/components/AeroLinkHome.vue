@@ -14,13 +14,14 @@ import {
 } from "@tabler/icons-vue";
 import { useData } from "vitepress";
 import { computed } from "vue";
-import auditScreenshot from "../../../screenshots/audit.webp";
-import detailScreenshot from "../../../screenshots/detail.webp";
-import helmScreenshot from "../../../screenshots/helm.webp";
-import overviewScreenshot from "../../../screenshots/overview2.webp";
+import auditScreenshot from "../../../screenshots/audit.png";
+import detailScreenshot from "../../../screenshots/detail.png";
+import helmScreenshot from "../../../screenshots/helm.png";
+import overviewScreenshot from "../../../screenshots/overview.webp";
 
 const content = {
   en: {
+    brandName: "AeroLink",
     docsHref: "/en/guide/",
     installHref: "/en/guide/installation",
     hero: {
@@ -92,8 +93,8 @@ const content = {
         image: detailScreenshot,
         imageAlt:
           "AeroLink Kubernetes resource detail page showing workload status, pods, events, related resources, labels, and configuration",
-        imageWidth: 3172,
-        imageHeight: 1960,
+        imageWidth: 1371,
+        imageHeight: 903,
         mediaLeft: true,
       },
       {
@@ -105,8 +106,8 @@ const content = {
         image: helmScreenshot,
         imageAlt:
           "AeroLink Helm release page showing deployment status, related resources, release history, and configuration",
-        imageWidth: 3172,
-        imageHeight: 1960,
+        imageWidth: 1309,
+        imageHeight: 903,
         mediaLeft: false,
       },
       {
@@ -118,13 +119,14 @@ const content = {
         image: auditScreenshot,
         imageAlt:
           "AeroLink audit log showing operators, Kubernetes resource changes, clusters, status, and reviewable diffs",
-        imageWidth: 3172,
-        imageHeight: 1960,
+        imageWidth: 1309,
+        imageHeight: 903,
         mediaLeft: true,
       },
     ],
   },
   zh: {
+    brandName: "鸢联 AeroLink",
     docsHref: "/",
     installHref: "/guide/installation",
     hero: {
@@ -194,8 +196,8 @@ const content = {
           "在同一处查看状态、配置、事件、条件和相关工作负载，从异常现象直接抵达排障所需的信息。",
         image: detailScreenshot,
         imageAlt: "鸢联 AeroLink Kubernetes 资源详情页展示状态、Pod、事件、关联资源、标签和配置",
-        imageWidth: 3172,
-        imageHeight: 1960,
+        imageWidth: 1371,
+        imageHeight: 903,
         mediaLeft: true,
       },
       {
@@ -206,8 +208,8 @@ const content = {
           "浏览 Chart、管理仓库，并在其创建的 Kubernetes 资源旁完成 Release 的安装、升级与检查。",
         image: helmScreenshot,
         imageAlt: "鸢联 AeroLink Helm Release 页面展示部署状态、关联资源、发布历史和配置",
-        imageWidth: 3172,
-        imageHeight: 1960,
+        imageWidth: 1309,
+        imageHeight: 903,
         mediaLeft: false,
       },
       {
@@ -218,8 +220,8 @@ const content = {
           "通过基于角色的权限和清晰的审计记录，管理用户访问与跨集群资源变更。",
         image: auditScreenshot,
         imageAlt: "鸢联 AeroLink 审计日志展示操作用户、Kubernetes 资源变更、集群、状态和差异",
-        imageWidth: 3172,
-        imageHeight: 1960,
+        imageWidth: 1309,
+        imageHeight: 903,
         mediaLeft: true,
       },
     ],
@@ -327,8 +329,8 @@ const copy = computed(() =>
           <img
             :src="overviewScreenshot"
             :alt="copy.proof.imageAlt"
-            width="3172"
-            height="1960"
+            width="1586"
+            height="980"
           />
         </div>
       </section>
@@ -360,8 +362,8 @@ const copy = computed(() =>
     <footer class="site-footer">
       <div class="site-shell site-footer__inner">
         <div>
-          <img src="/logo.svg" alt="" width="35" height="35" />
-          <strong>AeroLink</strong>
+          <img src="/logo.svg" :alt="copy.brandName" width="35" height="35" />
+          <strong>{{ copy.brandName }}</strong>
         </div>
       </div>
     </footer>

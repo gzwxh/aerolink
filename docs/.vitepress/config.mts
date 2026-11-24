@@ -37,6 +37,7 @@ export default defineConfig({
       title: "AeroLink",
       description: "A modern Kubernetes dashboard",
       themeConfig: {
+        logo: { src: "/logo.svg", alt: "AeroLink" },
         nav: [
           { text: "Home", link: "/en/" },
           { text: "Guide", link: "/en/guide/" },
@@ -121,6 +122,10 @@ export default defineConfig({
             "http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/_edit/main/docs/:path",
           text: "Edit this page in the internal repository",
         },
+        footer: {
+          message: "Released under the Apache License.",
+          copyright: "Copyright © 2025-present AeroLink",
+        },
       },
     },
   },
@@ -130,7 +135,7 @@ export default defineConfig({
 
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
-    logo: "/logo.svg",
+    logo: { src: "/logo.svg", alt: "鸢联 AeroLink" },
     search: {
       provider: "local",
     },
@@ -299,7 +304,7 @@ export default defineConfig({
 
     footer: {
       message: "Released under the Apache License.",
-      copyright: "Copyright © 2025-present Kite Contributors",
+      copyright: "Copyright © 2025-present 鸢联 AeroLink",
     },
   },
 });

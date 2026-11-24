@@ -20,6 +20,8 @@
 
 ::: tip 要建 Deployment / Pod / CronJob？
 入口与表单结构看[第 5 步：创建与常用操作](./common-operations.md#创建资源)；**某一类资源要填什么、带截图的分步说明**在[按资源类型创建与修改](./create/)里，Deployment、StatefulSet、DaemonSet、Job、CronJob、Pod、Service、ConfigMap、Secret 各一页。
+
+要一次下发多份 YAML（比如同时建 Deployment 与 StatefulSet），用顶栏「+」→「创建资源」并选「空模板」：多份文档用 `---` 分隔，命名空间分别写在各自的 `metadata.namespace` 里。
 :::
 
 ## 按角色找路径
