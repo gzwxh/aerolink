@@ -54,20 +54,62 @@ func resolveManifestResources(manifest, defaultNamespace string) []HelmReleaseRe
 			continue
 		}
 		var u unstructured.Unstructured
-		if err := yaml.Unmarshal([]byte(doc), &u.Object); err != nil || u.GetKind() == "" || u.GetName() == "" {
+		if err := yaml.Unmarshal([]byte(doc), &u.Object); err != nil {
 			continue
 		}
-		ns := u.GetNamespace()
-		_, clusterScoped := manifestClusterScopedKinds[strings.ToLower(u.GetKind())]
-		if ns == "" && !clusterScoped {
-			ns = defaultNamespace
+		for _, obj := range expandManifestList(&u) {
+			item := obj
+			out = append(out, manifestResourceOf(&item, defaultNamespace))
 		}
-		out = append(out, HelmReleaseResource{
-			APIVersion: u.GetAPIVersion(),
-			Kind:       u.GetKind(),
-			Name:       u.GetName(),
-			Namespace:  ns,
-		})
+	}
+	return out
+}
+
+// manifestResourceOf 把一个文档对象翻译成资源标识；没有 namespace 的非集群级资源
+// 回落到 release 的命名空间（与 helm 自己的归属口径一致）。
+func manifestResourceOf(u *unstructured.Unstructured, defaultNamespace string) HelmReleaseResource {
+	ns := u.GetNamespace()
+	_, clusterScoped := manifestClusterScopedKinds[strings.ToLower(u.GetKind())]
+	if ns == "" && !clusterScoped {
+		ns = defaultNamespace
+	}
+	return HelmReleaseResource{
+		APIVersion: u.GetAPIVersion(),
+		Kind:       u.GetKind(),
+		Name:       u.GetName(),
+		Namespace:  ns,
+	}
+}
+
+// expandManifestList 把一个文档展开成其中真正可跳转的资源。
+//
+// helm 允许把一组资源包在 corev1 `List` 里交付（stakater 的 configmap chart 就这么渲染），
+// 此时真对象在 `items` 里：只扫顶层会把整个 release 解析成 0 个资源（验收台账 D-173，
+// 也正是 D-117「资源」页签为空的真因 —— 详情接口本来就在填 status.resources）。
+// List 自身不是可跳转资源，只当容器用；非 List 文档原样返回。
+func expandManifestList(u *unstructured.Unstructured) []unstructured.Unstructured {
+	if u == nil {
+		return nil
+	}
+	if u.GetKind() != "List" {
+		if u.GetKind() == "" || u.GetName() == "" {
+			return nil
+		}
+		return []unstructured.Unstructured{*u}
+	}
+	raw, found, err := unstructured.NestedSlice(u.Object, "items")
+	if err != nil || !found {
+		return nil
+	}
+	out := []unstructured.Unstructured{}
+	for _, entry := range raw {
+		obj, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		item := unstructured.Unstructured{Object: obj}
+		// 嵌套情形：List 里再套 List 也摊平成一层。
+		out = append(out, expandManifestList(&item)...)
 	}
 	return out
 }
@@ -80,24 +122,42 @@ func resolveManifestPreviewResources(manifest, defaultNamespace string) []HelmRe
 		}
 		content := trimHelmSourceComment(doc)
 		var u unstructured.Unstructured
-		if err := yaml.Unmarshal([]byte(doc), &u.Object); err != nil || u.GetKind() == "" || u.GetName() == "" {
+		if err := yaml.Unmarshal([]byte(doc), &u.Object); err != nil {
 			out = append(out, HelmReleaseDryRunResource{
 				Path:    fmt.Sprintf("manifest-%d.yaml", i+1),
 				Content: content,
 			})
 			continue
 		}
-		ns := u.GetNamespace()
-		_, clusterScoped := manifestClusterScopedKinds[strings.ToLower(u.GetKind())]
-		if ns == "" && !clusterScoped {
-			ns = defaultNamespace
+		// 先判 List：`kind: List` 通常没有 metadata.name，拿「有 kind 且有 name」
+		// 当可解析判据会让整个文档落回“原样列出”分支（预览里以 manifest-N.yaml 出现）。
+		if items := expandManifestList(&u); len(items) > 0 {
+			for _, obj := range items {
+				item := obj
+				itemContent := content
+				if u.GetKind() == "List" {
+					// 整个文档文本不是某个资源的清单，用各项自己重新序列化。
+					if dumped, err := yaml.Marshal(item.Object); err == nil {
+						itemContent = strings.TrimSpace(string(dumped))
+					}
+				}
+				resource := manifestResourceOf(&item, defaultNamespace)
+				out = append(out, HelmReleaseDryRunResource{
+					HelmReleaseResource: resource,
+					Path:                manifestPreviewPath(resource, i),
+					Content:             itemContent,
+				})
+			}
+			continue
 		}
-		resource := HelmReleaseResource{
-			APIVersion: u.GetAPIVersion(),
-			Kind:       u.GetKind(),
-			Name:       u.GetName(),
-			Namespace:  ns,
+		if u.GetKind() == "" || u.GetName() == "" {
+			out = append(out, HelmReleaseDryRunResource{
+				Path:    fmt.Sprintf("manifest-%d.yaml", i+1),
+				Content: content,
+			})
+			continue
 		}
+		resource := manifestResourceOf(&u, defaultNamespace)
 		out = append(out, HelmReleaseDryRunResource{
 			HelmReleaseResource: resource,
 			Path:                manifestPreviewPath(resource, i),
