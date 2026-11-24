@@ -96,6 +96,7 @@ type PodSection =
   | 'scheduling'
   | 'network'
   | 'podScheduling'
+  | 'serviceAccount'
   | 'resources'
   | 'grace'
   | 'security'
@@ -946,6 +947,10 @@ function DeploymentFormPage({
                     label: t('workloadWizard.labelsAnnotations', '标签 & 注释'),
                   },
                   {
+                    key: 'serviceAccount',
+                    label: t('workloadWizard.serviceAccountMenu', '服务账号'),
+                  },
+                  {
                     key: 'network',
                     label: t('workloadWizard.networkMenu', '网络'),
                   },
@@ -1124,6 +1129,96 @@ function DeploymentFormPage({
                     >
                       {t('workloadWizard.addPodSelector', '添加 Pod 选择器')}
                     </Button>
+                  </div>
+                )}
+                {podSection === 'serviceAccount' && (
+                  <div className="space-y-3">
+                    <h4 className="text-base font-medium">
+                      {t('workloadWizard.serviceAccountTitle', '服务账号')}
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      {t(
+                        'workloadWizard.serviceAccountHint',
+                        'Pod 使用该 ServiceAccount 的身份访问 Kubernetes API；默认使用命名空间的 default 账号。'
+                      )}
+                    </p>
+                    <div className="max-w-xs space-y-1.5">
+                      <Label className="text-xs">
+                        {t(
+                          'workloadWizard.serviceAccountLabel',
+                          'ServiceAccount'
+                        )}
+                      </Label>
+                      <ServiceAccountSelector
+                        namespace={formData.namespace}
+                        value={formData.podSpec.serviceAccountName || 'default'}
+                        onChange={(name) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            podSpec: {
+                              ...prev.podSpec,
+                              serviceAccountName: name,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="max-w-xs space-y-1.5">
+                      <Label className="text-xs">
+                        {t(
+                          'workloadWizard.serviceAccountAutomountLabel',
+                          '自动挂载服务账号令牌'
+                        )}
+                      </Label>
+                      <Select
+                        value={
+                          formData.podSpec.automountServiceAccountToken ||
+                          '__default__'
+                        }
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            podSpec: {
+                              ...prev.podSpec,
+                              automountServiceAccountToken:
+                                value === '__default__'
+                                  ? ''
+                                  : (value as 'true' | 'false'),
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__default__">
+                            {t(
+                              'workloadWizard.serviceAccountAutomountDefault',
+                              '跟随 ServiceAccount 设置'
+                            )}
+                          </SelectItem>
+                          <SelectItem value="true">
+                            {t(
+                              'workloadWizard.serviceAccountAutomountEnabled',
+                              '自动挂载'
+                            )}
+                          </SelectItem>
+                          <SelectItem value="false">
+                            {t(
+                              'workloadWizard.serviceAccountAutomountDisabled',
+                              '不自动挂载'
+                            )}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {t(
+                          'workloadWizard.serviceAccountAutomountHint',
+                          '控制是否把 API 访问令牌挂载到 Pod；未显式设置时跟随 ServiceAccount 自身的 automountServiceAccountToken。'
+                        )}
+                      </p>
+                    </div>
                   </div>
                 )}
                 {podSection === 'resources' && (
@@ -1450,6 +1545,60 @@ function DeploymentFormPage({
                           })
                         }
                       />
+                    </div>
+
+                    {/* ServiceAccount 是 Pod 级字段：这里按用户习惯放在容器通用
+                        配置里，多个容器页签看到的是同一个值并作用于整个 Pod。 */}
+                    <div className="border-t pt-4">
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium">
+                          {t(
+                            'workloadWizard.serviceAccountNameTitle',
+                            'Service Account 名称'
+                          )}
+                        </h4>
+                        <div className="flex max-w-xl items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <ServiceAccountSelector
+                              namespace={formData.namespace}
+                              value={
+                                formData.podSpec.serviceAccountName || 'default'
+                              }
+                              onChange={(name) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  podSpec: {
+                                    ...prev.podSpec,
+                                    serviceAccountName: name,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-9 shrink-0"
+                            onClick={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                podSpec: {
+                                  ...prev.podSpec,
+                                  serviceAccountName: 'default',
+                                },
+                              }))
+                            }
+                          >
+                            {t('workloadWizard.serviceAccountClear', '清除')}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t(
+                            'workloadWizard.serviceAccountContainerHint',
+                            '该设置作用于整个 Pod，不针对单个容器；清除后使用命名空间的 default 账号。'
+                          )}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="border-t pt-4">
@@ -2844,6 +2993,50 @@ function StorageFormView({
 }
 
 export default DeploymentCreatePage
+
+/** ServiceAccount 选择器：该命名空间下已有的服务账号。 */
+function ServiceAccountSelector({
+  namespace,
+  value,
+  onChange,
+}: {
+  namespace: string
+  value: string
+  onChange: (name: string) => void
+}) {
+  const { t } = useTranslation()
+  const { data: accounts = [] } = useResources<'serviceaccounts'>(
+    'serviceaccounts',
+    namespace,
+    { staleTime: 30_000 }
+  )
+  const names = accounts
+    .map((sa) => sa.metadata?.name)
+    .filter((n): n is string => !!n)
+    .sort((a, b) => a.localeCompare(b))
+  // 编辑老对象时它的账号可能已被删除：保留当前值，避免下拉显示成空。
+  if (value && !names.includes(value)) names.unshift(value)
+
+  return (
+    <Select value={value || 'default'} onValueChange={onChange}>
+      <SelectTrigger className="h-9">
+        <SelectValue
+          placeholder={t(
+            'workloadWizard.serviceAccountPlaceholder',
+            '选择 ServiceAccount...'
+          )}
+        />
+      </SelectTrigger>
+      <SelectContent>
+        {names.map((name) => (
+          <SelectItem key={name} value={name}>
+            {name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
 
 /** 拉取密钥选择器：该命名空间的 docker-registry secret。 */
 function PullSecretSelector({

@@ -219,6 +219,13 @@ export interface PodSpecForm {
   fsGroup: string
   /** podSpec.imagePullSecrets（secret 名称）。 */
   imagePullSecrets?: string[]
+  /** podSpec.serviceAccountName；空串按命名空间默认账号 default 处理。 */
+  serviceAccountName?: string
+  /**
+   * podSpec.automountServiceAccountToken；空串表示不写进 manifest，
+   * 跟随 ServiceAccount 自身的设置（默认挂载）。
+   */
+  automountServiceAccountToken?: '' | 'true' | 'false'
 }
 
 export interface DeploymentFormData {
@@ -283,6 +290,8 @@ export const initialFormData: DeploymentFormData = {
     terminationGracePeriodSeconds: '30',
     fsGroup: '',
     imagePullSecrets: [],
+    serviceAccountName: 'default',
+    automountServiceAccountToken: '',
   },
   containers: [createDefaultContainer(0)],
 }
@@ -806,6 +815,17 @@ export function generateWorkloadYaml(
   const pullSecrets = (formData.podSpec?.imagePullSecrets || []).filter(Boolean)
 
   const podSpec: Record<string, unknown> = {
+    // 总是写 serviceAccountName：留空在 API 侧同样会回落到 default，显式写出后
+    // 编辑时把账号改回默认才会真正生效（mergeEditedManifest 只在生成物带该键时覆盖）。
+    serviceAccountName:
+      formData.podSpec?.serviceAccountName?.trim() || 'default',
+    ...(formData.podSpec?.automountServiceAccountToken === 'true' ||
+    formData.podSpec?.automountServiceAccountToken === 'false'
+      ? {
+          automountServiceAccountToken:
+            formData.podSpec.automountServiceAccountToken === 'true',
+        }
+      : {}),
     ...(pullSecrets.length > 0 && {
       imagePullSecrets: pullSecrets.map((name) => ({ name })),
     }),
@@ -1402,6 +1422,18 @@ export function parseYamlToFormData(
         imagePullSecrets: ((podSpecDoc.imagePullSecrets as Array<any>) || [])
           .map((s) => s?.name)
           .filter((n): n is string => !!n),
+        // serviceAccount 是 serviceAccountName 的旧别名，老对象可能只带后者。
+        serviceAccountName:
+          (podSpecDoc.serviceAccountName as string) ||
+          (podSpecDoc.serviceAccount as string) ||
+          'default',
+        // 三态：线上没写这个字段时保持空串（跟随 ServiceAccount 的设置）。
+        automountServiceAccountToken:
+          podSpecDoc.automountServiceAccountToken === true
+            ? 'true'
+            : podSpecDoc.automountServiceAccountToken === false
+              ? 'false'
+              : '',
       },
       containers: containers.length > 0 ? containers : fallback.containers,
     }
@@ -1516,8 +1548,8 @@ function podTemplateOf(
 
 /**
  * 把表单生成的 manifest 叠加到正在编辑的线上对象之上，
- * 使可视化表单未建模的字段（serviceAccountName、Pod 级
- * securityContext 扩展项、topologySpreadConstraints 等）在更新后保留下来。
+ * 使可视化表单未建模的字段（Pod 级 securityContext 扩展项、
+ * topologySpreadConstraints 等）在更新后保留下来。
  * spec.selector 在工作负载上是不可变的：它从线上对象恢复，
  * 并让 pod 模板标签重新与它匹配。
  */

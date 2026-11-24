@@ -61,7 +61,7 @@ describe('mergeEditedManifest', () => {
         template: {
           metadata: { labels: { app: 'web' } },
           spec: {
-            serviceAccountName: 'web-sa',
+            schedulerName: 'custom-scheduler',
             containers: [{ name: 'app', image: 'old' }],
           },
         },
@@ -93,7 +93,7 @@ describe('mergeEditedManifest', () => {
     expect(spec.replicas).toBe(3)
     expect(template.spec.containers).toEqual([{ name: 'app', image: 'new' }])
     // 表单没建模的字段来自线上对象；selector 不可变，必须原样恢复。
-    expect(template.spec.serviceAccountName).toBe('web-sa')
+    expect(template.spec.schedulerName).toBe('custom-scheduler')
     expect(spec.selector).toEqual({
       matchLabels: { app: 'web', 'pod-template-hash': 'abc' },
     })
@@ -828,7 +828,7 @@ describe('applyEditedManifest', () => {
         template: {
           metadata: { labels: { app: 'web' } },
           spec: {
-            serviceAccountName: 'web-sa',
+            schedulerName: 'custom-scheduler',
             containers: [{ name: 'app', image: 'old' }],
           },
         },
@@ -852,9 +852,9 @@ describe('applyEditedManifest', () => {
     expect(docs[0].spec.type).toBe('ClusterIP')
     // 表单没建模的字段从线上对象保留下来。
     const deployment = docs[1].spec as {
-      template: { spec: { serviceAccountName?: string } }
+      template: { spec: { schedulerName?: string } }
     }
-    expect(deployment.template.spec.serviceAccountName).toBe('web-sa')
+    expect(deployment.template.spec.schedulerName).toBe('custom-scheduler')
   })
 })
 
@@ -1060,5 +1060,140 @@ describe('存储卷的生成与反向解析', () => {
         readOnly: true,
       },
     ])
+  })
+})
+
+/**
+ * 服务账号：Pod 模板的 serviceAccountName 既要在生成侧总是写出来（否则编辑时
+ * 把账号改回默认不会生效），也要能从线上对象反显，包括旧字段 serviceAccount。
+ *
+ * 六种工作负载默认走同一份表单，这里按类型逐个校验字段真的落在各自的 Pod 模板上
+ * （CronJob 在 spec.jobTemplate.spec.template 下）。
+ */
+describe('服务账号的生成与反显', () => {
+  const withServiceAccount = (
+    serviceAccountName?: string,
+    automountServiceAccountToken?: '' | 'true' | 'false'
+  ): DeploymentFormData => ({
+    ...initialFormData,
+    name: 'web',
+    namespace: 'default',
+    labels: [{ key: 'app', value: 'web' }],
+    containers: [
+      { ...initialFormData.containers[0], name: 'app', image: 'nginx:1.25' },
+    ],
+    podSpec: {
+      ...initialFormData.podSpec,
+      serviceAccountName,
+      automountServiceAccountToken,
+    },
+  })
+
+  type WorkloadType = Parameters<typeof generateWorkloadYaml>[1]
+  type PodSpecDoc = {
+    serviceAccountName?: string
+    automountServiceAccountToken?: boolean
+  }
+  const podSpecOf = (
+    form: DeploymentFormData,
+    type: WorkloadType
+  ): PodSpecDoc => {
+    const doc = yaml.load(generateWorkloadYaml(form, type)) as {
+      spec: PodSpecDoc & {
+        template?: { spec?: PodSpecDoc }
+        jobTemplate?: { spec?: { template?: { spec?: PodSpecDoc } } }
+      }
+    }
+    if (type === 'pods') return doc.spec
+    if (type === 'cronjobs')
+      return doc.spec.jobTemplate?.spec?.template?.spec ?? {}
+    return doc.spec.template?.spec ?? {}
+  }
+
+  it.each<WorkloadType>([
+    'deployments',
+    'statefulsets',
+    'daemonsets',
+    'jobs',
+    'cronjobs',
+    'pods',
+  ])('%s 的 Pod 模板写入服务账号', (type) => {
+    expect(
+      podSpecOf(withServiceAccount('web-sa'), type).serviceAccountName
+    ).toBe('web-sa')
+    expect(podSpecOf(withServiceAccount(''), type).serviceAccountName).toBe(
+      'default'
+    )
+  })
+
+  it('自动挂载令牌三态：未设置不写字段，显式值写成布尔', () => {
+    const unset = withServiceAccount('web-sa')
+    expect(podSpecOf(unset, 'deployments')).not.toHaveProperty(
+      'automountServiceAccountToken'
+    )
+    expect(
+      podSpecOf(withServiceAccount('web-sa', 'true'), 'deployments')
+        .automountServiceAccountToken
+    ).toBe(true)
+    expect(
+      podSpecOf(withServiceAccount('web-sa', 'false'), 'deployments')
+        .automountServiceAccountToken
+    ).toBe(false)
+  })
+
+  it('反显 serviceAccountName，并兼容旧字段 serviceAccount', () => {
+    const doc = {
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name: 'web', namespace: 'default' },
+      spec: {
+        selector: { matchLabels: { app: 'web' } },
+        template: {
+          metadata: { labels: { app: 'web' } },
+          spec: {
+            containers: [{ name: 'app', image: 'nginx' }],
+            serviceAccount: 'legacy-sa',
+            automountServiceAccountToken: false,
+          },
+        },
+      },
+    }
+    const parsed = parseYamlToFormData(
+      yaml.dump(doc),
+      'deployments',
+      initialFormData
+    )
+    expect(parsed.podSpec.serviceAccountName).toBe('legacy-sa')
+    expect(parsed.podSpec.automountServiceAccountToken).toBe('false')
+  })
+
+  it('CronJob 从 jobTemplate 深层反显服务账号', () => {
+    const doc = {
+      apiVersion: 'batch/v1',
+      kind: 'CronJob',
+      metadata: { name: 'cron', namespace: 'default' },
+      spec: {
+        schedule: '*/5 * * * *',
+        jobTemplate: {
+          spec: {
+            template: {
+              metadata: { labels: { app: 'cron' } },
+              spec: {
+                containers: [{ name: 'app', image: 'nginx' }],
+                serviceAccountName: 'cron-sa',
+                automountServiceAccountToken: true,
+              },
+            },
+          },
+        },
+      },
+    }
+    const parsed = parseYamlToFormData(
+      yaml.dump(doc),
+      'cronjobs',
+      initialFormData
+    )
+    expect(parsed.podSpec.serviceAccountName).toBe('cron-sa')
+    expect(parsed.podSpec.automountServiceAccountToken).toBe('true')
   })
 })
