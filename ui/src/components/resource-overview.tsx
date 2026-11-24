@@ -5,6 +5,11 @@ import { useTranslation } from 'react-i18next'
 import type { ResourceType } from '@/types/api'
 import { useRelatedResources, useResourcesEvents } from '@/lib/api'
 import { getEventTime, getOwnerInfo } from '@/lib/k8s'
+import {
+  extractConditions,
+  isConditionPassing,
+  type ResourceCondition,
+} from '@/lib/resource-conditions'
 import { formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClusterLink } from '@/components/cluster-link'
@@ -31,6 +36,7 @@ export function ResourceOverview({
   name,
   namespace,
   metadata,
+  resource,
   fields,
   children,
 }: {
@@ -38,12 +44,15 @@ export function ResourceOverview({
   name: string
   namespace?: string
   metadata?: ObjectMeta
+  /** 对象本身：只为取 status.conditions 等状态条件（验收台账 D-175）。 */
+  resource?: unknown
   fields?: ResourceOverviewField[]
   children?: ReactNode
 }) {
   const { t } = useTranslation()
   const labels = metadata?.labels || {}
   const annotations = metadata?.annotations || {}
+  const conditions = useMemo(() => extractConditions(resource), [resource])
   const { data: events, isLoading: isEventsLoading } = useResourcesEvents(
     resourceType,
     name,
@@ -136,6 +145,10 @@ export function ResourceOverview({
               </div>
             </CardContent>
           </Card>
+
+          {conditions.length > 0 ? (
+            <ConditionsCard conditions={conditions} />
+          ) : null}
         </div>
 
         <div className="space-y-3">
@@ -159,5 +172,63 @@ export function ResourceOverview({
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * 状态条件。Gateway API / cert-manager 这类面除了条件没有别的健康信号，
+ * 不呈现就等于「看着列表一切正常，实际路由根本没被接受」（验收台账 D-175）。
+ */
+function ConditionsCard({ conditions }: { conditions: ResourceCondition[] }) {
+  const { t } = useTranslation()
+
+  return (
+    <Card className="gap-0 overflow-hidden rounded-lg border-border/70 py-0 shadow-none">
+      <CardHeader className="px-3 py-2.5 !pb-2.5">
+        <CardTitle className="text-balance text-sm">
+          {t('common.fields.conditions', '状态条件')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-3 pb-3 pt-1">
+        <ul className="divide-border/60 space-y-0 divide-y">
+          {conditions.map((condition, index) => {
+            const passing = isConditionPassing(condition)
+            return (
+              <li
+                key={`${condition.scope ?? ''}/${condition.type}/${index}`}
+                className="py-1.5"
+              >
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span
+                    aria-hidden
+                    className={`size-2 shrink-0 rounded-full ${
+                      passing ? 'bg-success' : 'bg-destructive'
+                    }`}
+                  />
+                  <span className="font-medium">{condition.type}</span>
+                  {condition.scope ? (
+                    <span className="text-muted-foreground text-xs">
+                      {condition.scope}
+                    </span>
+                  ) : null}
+                  <span
+                    className={passing ? 'text-success' : 'text-destructive'}
+                  >
+                    {condition.status}
+                  </span>
+                </div>
+                {condition.reason || condition.message ? (
+                  <p className="text-muted-foreground mt-0.5 pl-4 text-xs">
+                    {[condition.reason, condition.message]
+                      .filter(Boolean)
+                      .join(' — ')}
+                  </p>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+      </CardContent>
+    </Card>
   )
 }

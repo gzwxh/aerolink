@@ -94,12 +94,14 @@ export function SimpleResourceDetail<T extends ResourceType>(props: {
       // 这些资源都还只有通用详情页（没有专用的 detailPage），编辑入口就靠这个路径。
       editPath={getResourceFormEditPath(resourceType, name, namespace)}
       overview={
+        // 传整个对象：详情页要呈现它的状态条件（验收台账 D-175）。
         data ? (
           <ResourceOverview
             resourceType={resourceType}
             name={name}
             namespace={namespace}
             metadata={data.metadata}
+            resource={data}
             fields={[
               {
                 label: t('common.fields.resourceVersion'),
