@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ResourceType } from '@/types/api'
+
 import { CloneResourceDialog } from './clone-resource-dialog'
 
 // 回归（验收台账 D-153，第 22 轮登记、第 24 轮收口）。
@@ -113,7 +114,9 @@ async function openAndSubmit() {
   await waitFor(() =>
     expect(screen.getByLabelText('yaml-draft').value).toMatch(/app: app-copy/)
   )
-  await userEvent.click(screen.getByRole('button', { name: /cloneResource.create/ }))
+  await userEvent.click(
+    screen.getByRole('button', { name: /cloneResource.create/ })
+  )
   return screen.getByLabelText('yaml-draft')
 }
 
