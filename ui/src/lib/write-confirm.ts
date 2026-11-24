@@ -44,6 +44,8 @@ export interface WriteConfirmRequest {
   kind: WriteOperationKind
   method: string
   target: WriteTarget
+  /** 对象位于 kube-* 系统名称空间：弹窗要额外给出集群级风险提示。 */
+  system?: boolean
 }
 
 const NEVER: WriteConfirmPolicy = {
@@ -215,15 +217,34 @@ export function writeConfirmFor(
     return null
   }
   const cluster = getCurrentCluster()
-  if (!requiresWriteConfirm(cluster, kind)) {
+  const target = parseWriteTarget(path)
+  // 系统名称空间里的写操作**无论集群开关都要确认**（验收台账 D-144）：
+  // 二次确认开关默认是关的，而 kube-system 里的 DaemonSet 误删/误改影响的是整个集群，
+  // 不该取决于某个集群有没有勾选。其余操作仍按集群自己的策略。
+  if (
+    !isSystemNamespace(target.namespace) &&
+    !requiresWriteConfirm(cluster, kind)
+  ) {
     return null
   }
   return {
     cluster: cluster as string,
     kind,
     method: method.toUpperCase(),
-    target: parseWriteTarget(path),
+    target,
+    system: isSystemNamespace(target.namespace),
   }
+}
+
+/**
+ * Kubernetes 保留的名称空间前缀（kube-system / kube-public / kube-node-lease）。
+ * 里面的东西是集群自身的运转件（CNI / CSI / kube-proxy / 节点 agent），
+ * 入口与按钮和业务负载完全一样，改错或删掉可能让整个集群失联。
+ */
+const SYSTEM_NAMESPACE_RE = /^kube-/i
+
+export function isSystemNamespace(namespace?: string): boolean {
+  return Boolean(namespace && SYSTEM_NAMESPACE_RE.test(namespace))
 }
 
 // ---- 与弹窗组件之间的桥梁（写法同 lib/mfa-prompt.ts） ----

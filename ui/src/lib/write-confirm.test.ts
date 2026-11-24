@@ -7,6 +7,7 @@ import {
   classifyWriteOperation,
   currentWriteConfirmRequest,
   hasAnyWriteConfirm,
+  isSystemNamespace,
   isTerminalAcknowledged,
   parseWriteTarget,
   requestWriteConfirm,
@@ -20,6 +21,43 @@ import {
 
 const cluster = (name: string, extra: Partial<Cluster> = {}): Cluster =>
   ({ name, ...extra }) as Cluster
+
+describe('系统命名空间的写操作一律要确认（验收台账 D-144）', () => {
+  it('kube-* 前缀算系统命名空间', () => {
+    expect(isSystemNamespace('kube-system')).toBe(true)
+    expect(isSystemNamespace('kube-public')).toBe(true)
+    expect(isSystemNamespace('default')).toBe(false)
+    expect(isSystemNamespace(undefined)).toBe(false)
+  })
+
+  it('集群开关全关时，kube-system 里的删除仍然拦一道', () => {
+    setClusterConfirmPolicies([cluster('dev')])
+    window.sessionStorage.setItem('current-cluster', 'dev')
+
+    const request = writeConfirmFor(
+      'DELETE',
+      '/pods/kube-system/calico-node-abc123'
+    )
+    expect(request).not.toBeNull()
+    expect(request?.system).toBe(true)
+    expect(request?.target.namespace).toBe('kube-system')
+  })
+
+  it('同样的开关下，业务命名空间照旧直接放行（不把确认变成日常噪声）', () => {
+    setClusterConfirmPolicies([cluster('dev')])
+    window.sessionStorage.setItem('current-cluster', 'dev')
+
+    const request = writeConfirmFor('DELETE', '/pods/team-a/web-1')
+    expect(request).toBeNull()
+  })
+
+  it('开关打开时，业务命名空间的请求标记为非系统', () => {
+    setClusterConfirmPolicies([cluster('dev', { confirmDelete: true })])
+    window.sessionStorage.setItem('current-cluster', 'dev')
+
+    expect(writeConfirmFor('DELETE', '/pods/team-a/web-1')?.system).toBe(false)
+  })
+})
 
 describe('classifyWriteOperation', () => {
   it('按 HTTP 方法推断常规 CRUD', () => {
@@ -155,6 +193,7 @@ describe('按集群的确认策略', () => {
       kind: 'delete',
       method: 'DELETE',
       target: { resource: 'deployments', namespace: 'default', name: 'nginx' },
+      system: false,
     })
   })
 
@@ -169,6 +208,7 @@ describe('按集群的确认策略', () => {
       kind: 'delete',
       method: 'DELETE',
       target: { resource: 'deployments', namespace: 'default', name: 'nginx' },
+      system: false,
     })
   })
 })
@@ -205,9 +245,7 @@ describe('并发写入的确认桥', () => {
   })
 
   it('取消时同类并发请求全部不放行', async () => {
-    const waiting = ['a', 'b'].map((name) =>
-      requestWriteConfirm(restart(name))
-    )
+    const waiting = ['a', 'b'].map((name) => requestWriteConfirm(restart(name)))
     expect(currentWriteConfirmRequest()?.count).toBe(2)
 
     resolveWriteConfirm(false)

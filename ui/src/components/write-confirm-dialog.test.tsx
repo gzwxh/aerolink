@@ -22,6 +22,7 @@ vi.mock('react-i18next', () => ({
         'writeConfirm.fields.operation': 'FIELD_OPERATION',
         'writeConfirm.fields.target': 'FIELD_TARGET',
         'writeConfirm.bulkHint': 'BULK_HINT',
+        'writeConfirm.systemNamespaceHint': 'SYSTEM_NS_HINT',
         'writeConfirm.kinds.delete': 'KIND_DELETE',
         'common.actions.cancel': 'CANCEL_BUTTON',
       }
@@ -129,5 +130,36 @@ describe('WriteConfirmDialog', () => {
     await waitFor(() =>
       expect(screen.queryByText('CONFIRM_TITLE')).not.toBeInTheDocument()
     )
+  })
+
+  // 回归（验收台账 D-144）：kube-* 里的对象是集群自身的运转件，入口却与业务负载
+  // 完全一样；确认框要额外给出集群级风险提示。
+  it('系统命名空间的对象给出额外风险提示', async () => {
+    render(<WriteConfirmDialog />)
+
+    act(() => {
+      requestWriteConfirm({
+        ...deleteRequest,
+        target: {
+          resource: 'daemonsets',
+          namespace: 'kube-system',
+          name: 'calico-node',
+        },
+        system: true,
+      })
+    })
+
+    expect(await screen.findByText('SYSTEM_NS_HINT')).toBeInTheDocument()
+  })
+
+  it('业务命名空间不给这条提示（避免把确认框变成常驻噪声）', async () => {
+    render(<WriteConfirmDialog />)
+
+    act(() => {
+      requestWriteConfirm(deleteRequest)
+    })
+
+    expect(await screen.findByText('CONFIRM_TITLE')).toBeInTheDocument()
+    expect(screen.queryByText('SYSTEM_NS_HINT')).not.toBeInTheDocument()
   })
 })

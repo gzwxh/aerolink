@@ -98,6 +98,21 @@ export function WriteConfirmDialog() {
           </dl>
         ) : null}
 
+        {/* 集群运转件（kube-*）额外提醒：这类对象与业务负载共用同一套入口，
+            删错不是少一个应用，而是整集群失联（验收台账 D-144）。 */}
+        {request?.system ? (
+          <div className="border-warning/25 bg-warning/10 flex gap-2 rounded-md border p-3">
+            <IconAlertTriangle className="text-warning mt-0.5 size-4 shrink-0" />
+            <p className="text-foreground text-sm">
+              {t(
+                'writeConfirm.systemNamespaceHint',
+                '对象位于系统命名空间 {{namespace}}（集群自身的运转件）。停用、删除或改坏它可能影响整个集群的节点网络、存储或调度。',
+                { namespace: request.target.namespace }
+              )}
+            </p>
+          </div>
+        ) : null}
+
         {count > 1 ? (
           <p className="text-muted-foreground text-xs">
             {t('writeConfirm.bulkHint', '本次将同时提交 {{count}} 个同类操作', {
