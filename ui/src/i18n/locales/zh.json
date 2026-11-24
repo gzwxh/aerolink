@@ -1216,8 +1216,9 @@
     "deselectAll": "取消全选",
     "confirmDeletion": "确认删除",
     "confirmDeletionMessage": "确定要删除选中的 {{count}} 个 {{resourceName}} 吗？此操作不可撤销。",
+    "batchDeleteSystemNamespaceWarning": "选中项里含系统命名空间：{{names}}。删除它们可能让集群组件失联。",
+    "batchDeleteTypeCount": "请输入要删除的对象数量 {{count}} 以确认",
     "deleting": "删除中...",
-    "deletingProgress": "删除中... ({{done}}/{{total}})",
     "deleteSuccess": "已删除 {{name}}",
     "deleteFailed": "删除 {{name}} 失败：{{error}}",
     "bulkActions": "批量操作",
@@ -3575,6 +3576,17 @@
     "actions": {
       "viewLockedIPs": "查看 已锁定 IP（{{count}}）",
       "viewLockedUsers": "查看已锁定用户（{{count}}）"
+    },
+    "lockoutConfirm": {
+      "title": "确认收紧登录准入策略？",
+      "description": "下面这几项从保存的那一刻起对全部账号生效。平台没有提供恢复登录的其他入口，配错需要直接改数据库才能恢复。",
+      "confirm": "我已确认，保存",
+      "risks": {
+        "loginSourceEnforced": "启用「仅允许指定来源登录」：不在允许列表里的地址将无法登录。",
+        "rejectUnknownUsers": "启用「仅允许已存在用户登录」：没有账号的人将无法登录。",
+        "mfaPolicyAll": "把 MFA 级别改为「所有用户」：未绑定动态码的账号会被挡住。",
+        "ipWhitelistAdded": "新增 IP 白名单条目：不在名单里的地址会被拒绝。"
+      }
     },
     "messages": {
       "updated": "安全管理已更新",

@@ -1216,8 +1216,9 @@
     "deselectAll": "Deselect All",
     "confirmDeletion": "Confirm Deletion",
     "confirmDeletionMessage": "Are you sure you want to delete {{count}} selected {{resourceName}}? This action cannot be undone.",
+    "batchDeleteSystemNamespaceWarning": "The selection includes system namespaces: {{names}}. Deleting them can break cluster components.",
+    "batchDeleteTypeCount": "Type the number of objects to delete ({{count}}) to confirm",
     "deleting": "Deleting...",
-    "deletingProgress": "Deleting... ({{done}}/{{total}})",
     "deleteSuccess": "Deleted {{name}} successfully",
     "deleteFailed": "Failed to delete {{name}}: {{error}}",
     "bulkActions": "Bulk actions",
@@ -3575,6 +3576,17 @@
     "actions": {
       "viewLockedIPs": "View locked IPs ({{count}})",
       "viewLockedUsers": "View locked users ({{count}})"
+    },
+    "lockoutConfirm": {
+      "title": "Tighten the login admission policy?",
+      "description": "Each item below takes effect for every account the moment it is saved. There is no other way back into the console; undoing a mistake requires editing the database directly.",
+      "confirm": "I understand, save",
+      "risks": {
+        "loginSourceEnforced": "Enables “only allowed addresses”: other addresses can no longer sign in.",
+        "rejectUnknownUsers": "Enables “only existing users”: accounts that do not exist are refused.",
+        "mfaPolicyAll": "Sets the MFA level to “all users”: accounts without an enrolled code are locked out.",
+        "ipWhitelistAdded": "Adds IP allowlist entries: addresses outside the list are rejected."
+      }
     },
     "messages": {
       "updated": "Security Management updated",

@@ -14,7 +14,6 @@ import {
 } from '@tanstack/react-table'
 import { AlertCircle, Box, Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { ResourceType } from '@/types/api'
 import { deleteResource } from '@/lib/api'
@@ -35,16 +34,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 import { ErrorMessage } from './error-message'
+import { ResourceBatchActionDialog } from './resource-batch-action-dialog'
 import {
   ResourceTableToolbar,
   type ResourceTableBatchAction,
@@ -56,6 +50,18 @@ export type {
   ResourceTableBatchAction,
   ResourceTableExportScope,
 } from './resource-table-toolbar'
+
+/** 批量删除行只需要这两项。 */
+interface BatchDeletableResource {
+  metadata?: { name?: string; namespace?: string }
+}
+
+/**
+ * 系统命名空间：kube-* 由 Kubernetes 保留（kube-system / kube-public /
+ * kube-node-lease）。批量删除跨命名空间“全选”时它们会被一并选中，
+ * 必须先点出来（验收台账 D-159）。
+ */
+const SYSTEM_NAMESPACE_PATTERN = /^kube-/i
 
 export interface ResourceTableProps<T> {
   resourceName: string
@@ -227,8 +233,7 @@ function ResourceTableContent<T>({
         : selectedNamespace
           ? t('resourceTable.namespaceScoped', { name: selectedNamespace })
           : ''
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteProgress, setDeleteProgress] = useState({ done: 0, total: 0 })
+  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState('')
   const external = externalData !== undefined
   const {
     resourceType: fetchedResourceType,
@@ -585,65 +590,28 @@ function ResourceTableContent<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowSelection])
 
-  // 处理批量删除——必须放在 table 定义之后
-  const handleBatchDelete = useCallback(async () => {
-    setIsDeleting(true)
-    const selectedRows = table
-      .getSelectedRowModel()
-      .rows.map((row) => row.original)
-
-    const total = selectedRows.length
-    setDeleteProgress({ done: 0, total })
-
-    const deletePromises = selectedRows.map((row) => {
-      const metadata = (
-        row as { metadata?: { name?: string; namespace?: string } }
-      )?.metadata
-      const name = metadata?.name
-      // 集群作用域对象的 metadata.namespace 本来就是 undefined；
-      // 名字空间对象带上自己的命名空间，外部数据模式的嵌入表格
-      // （clusterScope=true）也能删对目标。
-      const namespace = metadata?.namespace
-
-      if (!name) {
-        setDeleteProgress((prev) => ({ ...prev, done: prev.done + 1 }))
-        return Promise.resolve()
-      }
-
-      return deleteResource(resolvedResourceType, name, namespace)
-        .then(() => {
-          setDeleteProgress((prev) => ({ ...prev, done: prev.done + 1 }))
-          toast.success(t('resourceTable.deleteSuccess', { name }))
-        })
-        .catch((error) => {
-          setDeleteProgress((prev) => ({ ...prev, done: prev.done + 1 }))
-          console.error(`Failed to delete ${name}:`, error)
-
-          throw error
-        })
-    })
-
-    try {
-      await Promise.allSettled(deletePromises)
-      // 重置选择并关闭对话框
-      setRowSelection({})
-      setDeleteDialogOpen(false)
-      // 重新拉取数据
-      if (!useSSE) {
-        refetch?.()
-      }
-    } finally {
-      setIsDeleting(false)
+  // 批量删除的目标：与原先一样取选中行的 original（分组模式下组行的 original
+  // 指向首个成员行）。只在渲染确认弹窗时用到，量也很小，直接每渲染算一次。
+  const batchDeleteTargets = table
+    .getSelectedRowModel()
+    .rows.map((row) => row.original) as unknown as BatchDeletableResource[]
+  // 选中项里落在系统命名空间的部分。“全选”跨命名空间时，kube-system 这类
+  // 里的对象会被一并选中（验收台账 D-159），先把它们点出来再让人确认。
+  const batchSystemNamespaces = [
+    ...new Set(
+      batchDeleteTargets
+        .map((item) => item?.metadata?.namespace)
+        .filter((namespace): namespace is string =>
+          Boolean(namespace && SYSTEM_NAMESPACE_PATTERN.test(namespace))
+        )
+    ),
+  ].sort()
+  const handleBatchDeleteComplete = useCallback(() => {
+    setRowSelection({})
+    if (!useSSE) {
+      refetch?.()
     }
-  }, [
-    table,
-    resolvedResourceType,
-    t,
-    useSSE,
-    refetch,
-    setRowSelection,
-    setDeleteDialogOpen,
-  ])
+  }, [refetch, setRowSelection, useSSE])
   // 导出就是「表格展示的内容」：只用可见列（隐藏列、勾选列、操作列都不导出），
   // display 列需由列 meta 的 csvValue 提供取值；分组列是例外——它承载行所属
   // 的命名空间/项目，界面上由组标题展示，导出时即使被隐藏也要补在最前面。
@@ -894,41 +862,64 @@ function ResourceTableContent<T>({
         onLoadMore={external ? undefined : fetchedLoadMore}
       />
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('resourceTable.confirmDeletion')}</DialogTitle>
-            <DialogDescription>
-              {t('resourceTable.confirmDeletionMessage', {
-                count: table.getSelectedRowModel().rows.length,
-                resourceName: displayResourceName,
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-              disabled={isDeleting}
-            >
-              {t('common.actions.cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBatchDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting
-                ? t('resourceTable.deletingProgress', {
-                    done: deleteProgress.done,
-                    total: deleteProgress.total,
-                  })
-                : t('common.actions.delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 批量删除：复用三个工作负载列表批量操作已在用的对话框——它会列出
+          namespace/name、把失败逐条呈现并在有失败时不关窗。原先这里是手写的
+          Dialog：只报个数、失败被 Promise.allSettled 吞掉（验收台账 D-159）。 */}
+      <ResourceBatchActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={(next) => {
+          if (!next) setBatchDeleteConfirm('')
+          setDeleteDialogOpen(next)
+        }}
+        resources={batchDeleteTargets}
+        title={t('resourceTable.confirmDeletion')}
+        description={t('resourceTable.confirmDeletionMessage', {
+          count: batchDeleteTargets.length,
+          resourceName: displayResourceName,
+        })}
+        actionLabel={t('common.actions.delete')}
+        onExecute={(resource) => {
+          const name = resource.metadata?.name
+          if (!name) return Promise.resolve()
+          return deleteResource(
+            resolvedResourceType,
+            name,
+            resource.metadata?.namespace
+          )
+        }}
+        onComplete={handleBatchDeleteComplete}
+        destructive
+        confirmDisabled={
+          batchDeleteConfirm !== String(batchDeleteTargets.length)
+        }
+        options={() => (
+          <div className="space-y-3">
+            {batchSystemNamespaces.length > 0 ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {t('resourceTable.batchDeleteSystemNamespaceWarning', {
+                    namespaces: batchSystemNamespaces.join('、'),
+                  })}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="batch-delete-confirm">
+                {t('resourceTable.batchDeleteTypeCount', {
+                  count: batchDeleteTargets.length,
+                })}
+              </Label>
+              <Input
+                id="batch-delete-confirm"
+                value={batchDeleteConfirm}
+                onChange={(event) => setBatchDeleteConfirm(event.target.value)}
+                placeholder={String(batchDeleteTargets.length)}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+        )}
+      />
     </div>
   )
 }

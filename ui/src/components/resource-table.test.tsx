@@ -14,9 +14,14 @@ vi.mock('react-i18next', () => ({
       const map: Record<string, string> = {
         'resourceTable.confirmDeletion': 'Confirm Deletion',
         'resourceTable.confirmDeletionMessage': `Delete ${opts?.count} ${opts?.resourceName}?`,
-        'resourceTable.deletingProgress': `Deleting... (${opts?.done}/${opts?.total})`,
-        'resourceTable.deleteSuccess': `Deleted ${opts?.name} successfully`,
-        'resourceTable.deleteFailed': `Failed to delete ${opts?.name}`,
+        // 批量删除改用共用的 ResourceBatchActionDialog 后用到的键
+        'resourceTable.processingProgress': `Processing... (${opts?.done}/${opts?.total})`,
+        // batchDeleteTypeCount 不映射：测试靠键名就能稳定拿到确认输入框。
+        'resourceTable.batchDeleteSystemNamespaceWarning': `System namespaces: ${opts?.namespaces}`,
+        'resourceTable.batchActions.resourcesLabel': 'Resources to act on',
+        'resourceTable.batchActionPartialResult': `Done ${opts?.succeeded}/${opts?.total}`,
+        'resourceTable.failedResources': `${opts?.count} failed`,
+        'resourceTable.batchActionSuccess': `Done ${opts?.count}`,
         'common.actions.cancel': 'Cancel',
         'common.actions.delete': 'Delete',
         'common.actions.retry': 'Retry',
@@ -130,6 +135,17 @@ function renderTable() {
 
 // --- 测试 ---
 
+// 批量删除现在要求逐字输入对象个数才放行（验收台账 D-159）。
+async function typeBatchCount(
+  user: ReturnType<typeof userEvent.setup>,
+  count: number
+) {
+  await user.type(
+    screen.getByLabelText('resourceTable.batchDeleteTypeCount'),
+    String(count)
+  )
+}
+
 describe('ResourceTable partial data error', () => {
   afterEach(() => {
     tableFlags.isError = false
@@ -152,7 +168,7 @@ describe('ResourceTable partial data error', () => {
 })
 
 describe('ResourceTable batch delete progress', () => {
-  it('shows Deleting... (0/N) immediately when delete starts and promises are pending', async () => {
+  it('shows Processing... (0/N) immediately when delete starts and promises are pending', async () => {
     let resolveAll!: () => void
     const blocker = new Promise<void>((res) => {
       resolveAll = res
@@ -169,17 +185,20 @@ describe('ResourceTable batch delete progress', () => {
     await user.click(deleteBtn)
 
     const confirmBtn = await screen.findByRole('button', { name: /^delete$/i })
+    // 没输入对象个数前不放行（验收台账 D-159）。
+    expect(confirmBtn).toBeDisabled()
+    await typeBatchCount(user, 3)
     await user.click(confirmBtn)
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /deleting\.\.\. \(0\/3\)/i })
+        screen.getByRole('button', { name: /processing\.\.\. \(0\/3\)/i })
       ).toBeInTheDocument()
     })
 
     resolveAll()
     await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     })
   })
 
@@ -198,30 +217,32 @@ describe('ResourceTable batch delete progress', () => {
     const deleteBtn = await screen.findByRole('button', { name: /delete/i })
     await user.click(deleteBtn)
 
-    const confirmBtn = await screen.findByRole('button', { name: /^delete$/i })
-    await user.click(confirmBtn)
+    await typeBatchCount(user, 3)
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
 
     resolvers[0]()
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /deleting\.\.\. \(1\/3\)/i })
+        screen.getByRole('button', { name: /processing\.\.\. \(1\/3\)/i })
       ).toBeInTheDocument()
     })
 
     resolvers[1]()
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /deleting\.\.\. \(2\/3\)/i })
+        screen.getByRole('button', { name: /processing\.\.\. \(2\/3\)/i })
       ).toBeInTheDocument()
     })
 
     resolvers[2]()
     await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     })
   })
 
-  it('counts failed deletions toward the progress total', async () => {
+  // 回归（验收台账 D-159）：原先失败被 Promise.allSettled 吞掉——弹窗直接关闭、
+  // 什么也不说，用户以为全删成功了。现在失败要逐条列出对象名与原因，并且不关窗。
+  it('counts failed deletions toward the progress total and lists them by name', async () => {
     const resolvers: Array<{
       resolve: () => void
       reject: (e: Error) => void
@@ -242,21 +263,108 @@ describe('ResourceTable batch delete progress', () => {
     const deleteBtn = await screen.findByRole('button', { name: /delete/i })
     await user.click(deleteBtn)
 
-    const confirmBtn = await screen.findByRole('button', { name: /^delete$/i })
-    await user.click(confirmBtn)
+    await typeBatchCount(user, 3)
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
 
     resolvers[0].reject(new Error('forbidden'))
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /deleting\.\.\. \(1\/3\)/i })
+        screen.getByRole('button', { name: /processing\.\.\. \(1\/3\)/i })
       ).toBeInTheDocument()
     })
 
     resolvers[1].resolve()
     resolvers[2].resolve()
+
+    // 失败项带着 namespace/name 留在弹窗里，弹窗不自动关闭
+    const panel = await screen.findByRole('alert')
+    expect(panel).toHaveTextContent('Done 2/3')
+    expect(panel).toHaveTextContent('1 failed')
+    expect(within(panel).getByText(/default\/svc-1/)).toBeInTheDocument()
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+  })
+})
+
+describe('ResourceTable 批量删除的把关（验收台账 D-159）', () => {
+  const mixedRows: Row[] = [
+    { metadata: { name: 'pod-a', namespace: 'kube-system', uid: 'm-1' } },
+    { metadata: { name: 'pod-b', namespace: 'team-a', uid: 'm-2' } },
+  ]
+
+  beforeEach(() => {
+    tableData.rows = mixedRows
+    mockDeleteResource.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    tableData.rows = fakeRows
+  })
+
+  // 跨命名空间“全选”时，确认框不能只报个“删 2 个吗”：必须列出对象名，
+  // 并把落在系统命名空间里的那部分单独点出来。
+  it('列出将被删除的对象名与系统命名空间告警', async () => {
+    renderTable()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('checkbox', { name: /select all/i }))
+    await user.click(await screen.findByRole('button', { name: /delete/i }))
+
+    expect(await screen.findByText('kube-system/pod-a')).toBeInTheDocument()
+    expect(screen.getByText('team-a/pod-b')).toBeInTheDocument()
+    expect(
+      screen.getByText('System namespaces: kube-system')
+    ).toBeInTheDocument()
+  })
+
+  it('未逐字输入个数不放行，输入对了才放行', async () => {
+    renderTable()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('checkbox', { name: /select all/i }))
+    await user.click(await screen.findByRole('button', { name: /delete/i }))
+
+    const confirmBtn = await screen.findByRole('button', { name: /^delete$/i })
+    expect(confirmBtn).toBeDisabled()
+
+    // 填错个数也算没确认
+    await user.type(
+      screen.getByLabelText('resourceTable.batchDeleteTypeCount'),
+      '3'
+    )
+    expect(confirmBtn).toBeDisabled()
+
+    await user.clear(
+      screen.getByLabelText('resourceTable.batchDeleteTypeCount')
+    )
+    await user.type(
+      screen.getByLabelText('resourceTable.batchDeleteTypeCount'),
+      '2'
+    )
+    expect(confirmBtn).toBeEnabled()
+
+    await user.click(confirmBtn)
     await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(mockDeleteResource).toHaveBeenCalledTimes(2)
     })
+    expect(mockDeleteResource).toHaveBeenCalledWith(
+      'services',
+      'pod-a',
+      'kube-system'
+    )
+  })
+
+  it('不含系统命名空间时不给告警（不把常规批量带成惊弓之鸟）', async () => {
+    tableData.rows = [
+      { metadata: { name: 'pod-c', namespace: 'team-a', uid: 'm-3' } },
+    ]
+    renderTable()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('checkbox', { name: /select all/i }))
+    await user.click(await screen.findByRole('button', { name: /delete/i }))
+
+    expect(await screen.findByText('team-a/pod-c')).toBeInTheDocument()
+    expect(screen.queryByText(/System namespaces/)).not.toBeInTheDocument()
   })
 })
 
@@ -551,6 +659,7 @@ describe('ResourceTable external data mode', () => {
 
     await user.click(screen.getByRole('checkbox', { name: /select all/i }))
     await user.click(await screen.findByRole('button', { name: /delete/i }))
+    await typeBatchCount(user, 2)
     await user.click(await screen.findByRole('button', { name: /^delete$/i }))
 
     await waitFor(() => {
