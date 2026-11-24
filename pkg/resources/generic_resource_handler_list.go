@@ -258,7 +258,7 @@ func (h *GenericResourceHandler[T, V]) fetchFilteredPage(
 			_ = meta.SetList(pageList, []runtime.Object{})
 			return nil, "", nil
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondReadFailure(c, err)
 		return nil, "", err
 	}
 

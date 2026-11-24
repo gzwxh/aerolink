@@ -128,7 +128,7 @@ func (h *GenericResourceHandler[T, V]) Get(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondReadFailure(c, err)
 		return
 	}
 	obj, err := meta.Accessor(object)
