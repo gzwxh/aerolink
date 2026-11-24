@@ -89,6 +89,11 @@ func (cs *ClientSet) readDNSDomain(ctx context.Context) string {
 	if readClient == nil {
 		readClient = cs.K8sClient.Client
 	}
+	// 半初始化的客户端（列表接口里只填了健康状态的占位对象、集群尚未连通）
+	// 两个字段都会是 nil，直接读会空指针；按「读不到」回落默认域。
+	if readClient == nil {
+		return DefaultClusterDNSDomain
+	}
 	for _, key := range dnsDomainConfigMapCandidates {
 		var configMap corev1.ConfigMap
 		if err := readClient.Get(ctx, key, &configMap); err != nil {
