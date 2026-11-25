@@ -532,6 +532,7 @@
     "added": "Added",
     "apiGroup": "API Group",
     "dragItem": "Drag item",
+    "dragPinnedItem": "Drag to reorder pinned items",
     "groupNamePlaceholder": "Group name",
     "menuGroups": "Menu Groups",
     "resetToDefault": "Reset to Default",

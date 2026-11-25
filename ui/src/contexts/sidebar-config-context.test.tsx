@@ -40,6 +40,7 @@ function SidebarConfigConsumer() {
     removeItemFromGroup,
     removeCustomGroup,
     moveGroup,
+    movePinnedItem,
   } = useSidebarConfig()
 
   if (isLoading || !config) {
@@ -137,6 +138,12 @@ function SidebarConfigConsumer() {
       </button>
       <button type="button" onClick={() => removeCustomGroup(customGroupId)}>
         remove custom group
+      </button>
+      <button
+        type="button"
+        onClick={() => movePinnedItem(customGroupItemId, 0)}
+      >
+        move custom pin to top
       </button>
     </div>
   )
@@ -325,6 +332,36 @@ describe('SidebarConfigProvider', () => {
         customGroupItemId
       )
     })
+  })
+
+  it('moves a pinned item to the requested index', async () => {
+    await renderProvider()
+
+    fireEvent.click(screen.getByRole('button', { name: 'toggle default pin' }))
+    fireEvent.click(screen.getByRole('button', { name: 'create custom group' }))
+    fireEvent.click(screen.getByRole('button', { name: 'add custom item' }))
+    await waitFor(() =>
+      expect(screen.getByTestId('custom-items')).toHaveTextContent(
+        customGroupItemId
+      )
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'toggle custom pin' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('pinned-items')).toHaveTextContent(
+        customGroupItemId
+      )
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'move custom pin to top' })
+    )
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('pinned-items').textContent?.split(',')
+      ).toEqual([customGroupItemId, workloadsPodsItemId])
+    )
   })
 
   it('removes a custom group and returns its items to other', async () => {

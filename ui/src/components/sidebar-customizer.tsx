@@ -18,6 +18,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import type { SidebarItem } from '@/types/sidebar'
 import {
   clearGlobalSidebarPreference,
   setGlobalSidebarPreference,
@@ -107,10 +108,14 @@ export function SidebarCustomizer({
     removeItemFromGroup,
     moveGroup,
     moveItemToGroup,
+    movePinnedItem,
   } = useSidebarConfig()
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null)
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null)
+  const [draggedPinnedItemId, setDraggedPinnedItemId] = useState<string | null>(
+    null
+  )
 
   const handleCreateGroup = () => {
     if (newGroupName.trim()) {
@@ -141,7 +146,7 @@ export function SidebarCustomizer({
   }
 
   const handleDragAutoScroll = (event: DragEvent<HTMLElement>) => {
-    if (!draggedItemId) return
+    if (!draggedItemId && !draggedPinnedItemId) return
 
     const container = scrollContainerRef.current
     if (!container) return
@@ -229,11 +234,56 @@ export function SidebarCustomizer({
     handleItemDragEnd()
   }
 
+  const handlePinnedDragStart = (
+    event: DragEvent<HTMLElement>,
+    itemId: string
+  ) => {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', itemId)
+    setDraggedPinnedItemId(itemId)
+  }
+
+  const handlePinnedDragEnd = () => {
+    setDraggedPinnedItemId(null)
+  }
+
+  const handlePinnedDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!draggedPinnedItemId) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    handleDragAutoScroll(event)
+  }
+
+  const handlePinnedDrop = (
+    event: DragEvent<HTMLElement>,
+    itemIndex: number
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const itemId =
+      event.dataTransfer.getData('text/plain') || draggedPinnedItemId
+    if (itemId) {
+      const rect = event.currentTarget.getBoundingClientRect()
+      const targetIndex =
+        itemIndex + (event.clientY > rect.top + rect.height / 2 ? 1 : 0)
+      movePinnedItem(itemId, targetIndex)
+    }
+    handlePinnedDragEnd()
+  }
+
   const pinnedItems = useMemo(() => {
     if (!config) return []
-    return config.groups
-      .flatMap((group) => group.items)
-      .filter((item) => config.pinnedItems.includes(item.id))
+    const itemsById = new Map<string, SidebarItem>(
+      config.groups
+        .flatMap((group) => group.items)
+        .map((item) => [item.id, item] as const)
+    )
+    // 置顶区按用户拖拽后的顺序渲染：pinnedItems 数组顺序即展示顺序。
+    return config.pinnedItems
+      .map((id) => itemsById.get(id))
+      .filter((item): item is SidebarItem => Boolean(item))
   }, [config])
 
   const sortedGroups = useMemo(() => {
@@ -331,7 +381,7 @@ export function SidebarCustomizer({
                   {pinnedItems.length})
                 </Label>
                 <div className="space-y-2">
-                  {pinnedItems.map((item) => {
+                  {pinnedItems.map((item, index) => {
                     const IconComponent = getIconComponent(item.icon)
                     const title = item.titleKey
                       ? t(item.titleKey, { defaultValue: item.titleKey })
@@ -339,9 +389,34 @@ export function SidebarCustomizer({
                     return (
                       <div
                         key={item.id}
-                        className="flex flex-col gap-3 rounded-md border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between"
+                        className={cn(
+                          'flex flex-col gap-3 rounded-md border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between',
+                          draggedPinnedItemId === item.id && 'opacity-60'
+                        )}
+                        onDragOver={handlePinnedDragOver}
+                        onDrop={(event) => handlePinnedDrop(event, index)}
                       >
                         <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            draggable
+                            onDragStart={(event) =>
+                              handlePinnedDragStart(event, item.id)
+                            }
+                            onDragEnd={handlePinnedDragEnd}
+                            className="size-8 cursor-grab p-0 text-muted-foreground active:cursor-grabbing"
+                            title={t(
+                              'sidebar.dragPinnedItem',
+                              'Drag to reorder pinned items'
+                            )}
+                            aria-label={t(
+                              'sidebar.dragPinnedItem',
+                              'Drag to reorder pinned items'
+                            )}
+                          >
+                            <GripVertical className="h-3.5 w-3.5" />
+                          </Button>
                           <IconComponent className="h-4 w-4 text-sidebar-primary" />
                           <span className="text-sm">{title}</span>
                           <Badge variant="outline" className="text-xs">

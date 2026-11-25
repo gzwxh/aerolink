@@ -534,6 +534,7 @@
     "added": "已添加",
     "apiGroup": "API 分组",
     "dragItem": "拖动项目",
+    "dragPinnedItem": "拖动调整置顶顺序",
     "groupNamePlaceholder": "分组名称",
     "menuGroups": "菜单分组",
     "resetToDefault": "恢复默认",

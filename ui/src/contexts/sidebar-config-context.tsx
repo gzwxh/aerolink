@@ -66,6 +66,7 @@ interface SidebarConfigContextType {
     targetGroupId: string,
     targetIndex?: number
   ) => void
+  movePinnedItem: (itemId: string, targetIndex: number) => void
 }
 
 const SidebarConfigContext = createContext<
@@ -411,6 +412,26 @@ export const SidebarConfigProvider: React.FC<SidebarConfigProviderProps> = ({
     [config, updateConfig]
   )
 
+  const movePinnedItem = useCallback(
+    (itemId: string, targetIndex: number) => {
+      if (!config) return
+      const sourceIndex = config.pinnedItems.indexOf(itemId)
+      if (sourceIndex === -1) return
+
+      const pinnedItems = [...config.pinnedItems]
+      pinnedItems.splice(sourceIndex, 1)
+      let insertIndex = targetIndex
+      if (sourceIndex < insertIndex) {
+        insertIndex -= 1
+      }
+      insertIndex = Math.max(0, Math.min(insertIndex, pinnedItems.length))
+      pinnedItems.splice(insertIndex, 0, itemId)
+
+      updateConfig({ pinnedItems })
+    },
+    [config, updateConfig]
+  )
+
   const removeItemFromGroup = useCallback(
     (groupId: string, itemID: string) => {
       if (!config) return
@@ -498,6 +519,7 @@ export const SidebarConfigProvider: React.FC<SidebarConfigProviderProps> = ({
     removeCustomGroup,
     moveGroup,
     moveItemToGroup,
+    movePinnedItem,
   }
 
   return (
