@@ -159,7 +159,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ...group,
         items: group.items
           .filter((item) => !config.hiddenItems.includes(item.id))
-          .filter((item) => !config.pinnedItems.includes(item.id))
           .filter(isCRDItemAvailable)
           .sort((a, b) => a.order - b.order),
       }))
@@ -290,6 +289,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // 置顶项整体渲染在概览下方、所有分组之前：它是「置顶到顶部」的语义，
   // 挂在某个分组之后会随该分组的位置漂移，分组被隐藏时还会整块消失。
+  // 原分组里的同名条目继续保留（置顶只是多加一个顶部入口），
+  // 否则取消置顶前用户会在原来的位置找不到它。
   const pinnedGroup =
     pinnedItems.length > 0 ? (
       <SidebarGroup>

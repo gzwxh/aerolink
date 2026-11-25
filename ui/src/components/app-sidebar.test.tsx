@@ -50,13 +50,9 @@ vi.mock('@/lib/cluster-path', () => ({
 }))
 
 vi.mock('@/components/cluster-link', () => ({
-  ClusterLink: ({
-    to,
-    children,
-  }: {
-    to: string
-    children: ReactNode
-  }) => <a href={to}>{children}</a>,
+  ClusterLink: ({ to, children }: { to: string; children: ReactNode }) => (
+    <a href={to}>{children}</a>
+  ),
 }))
 
 vi.mock('./cluster-selector', () => ({
@@ -155,6 +151,25 @@ describe('AppSidebar 置顶项位置', () => {
     )
   })
 
+  it('置顶项在顶部之外，原分组里仍保留同一菜单项', () => {
+    const content = renderSidebar()
+
+    // 置顶只是额外多一个顶部入口：Pods 在置顶区与原分组各出现一次。
+    expect(content.querySelectorAll('a[href="/workloads-pods"]')).toHaveLength(
+      2
+    )
+    // 原分组里的那一份没有挪位：第二次出现的 Pods 仍夹在 Workloads 与
+    // Deployments 之间（置顶区在分组之前，第一次出现的那份更靠前）。
+    const text = content.textContent ?? ''
+    const secondPods = text.indexOf('Pods', text.indexOf('Pods') + 1)
+    expect(secondPods).toBeGreaterThan(text.indexOf('Workloads'))
+    expect(secondPods).toBeLessThan(text.indexOf('Deployments'))
+    // 未置顶的条目仍然只在原分组出现一次。
+    expect(
+      content.querySelectorAll('a[href="/workloads-deployments"]')
+    ).toHaveLength(1)
+  })
+
   it('隐藏置顶项所在分组后，置顶分组仍然显示', () => {
     const content = renderSidebar({
       groups: buildConfig().groups.map((group) =>
@@ -165,7 +180,8 @@ describe('AppSidebar 置顶项位置', () => {
     expect(indexOfText(content, 'Pinned')).toBeLessThan(
       indexOfText(content, 'Nodes')
     )
-    // 分组被隐藏后其未置顶条目照常不显示。
+    // 分组被隐藏后，置顶项只剩顶部这一处入口，未置顶条目照常不显示。
+    expect(content.querySelectorAll('a[href="/cluster-nodes"]')).toHaveLength(1)
     expect(content.textContent).not.toContain('Namespaces')
   })
 })
