@@ -194,6 +194,168 @@ describe('mergeEditedManifest', () => {
     expect(spec.schedule).toBe('0 0 31 3 *')
     expect(jobTemplate.spec.template.spec.restartPolicy).toBe('Never')
   })
+
+  it('调度字段以表单为准：删掉的节点约束与容忍度不会从线上对象恢复', () => {
+    const original = {
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name: 'web', namespace: 'default' },
+      spec: {
+        selector: { matchLabels: { app: 'web' } },
+        template: {
+          metadata: { labels: { app: 'web' } },
+          spec: {
+            nodeName: 'node-a',
+            nodeSelector: { disk: 'ssd' },
+            tolerations: [{ key: 'dedicated', operator: 'Exists' }],
+            priorityClassName: 'high',
+            affinity: {
+              nodeAffinity: {
+                requiredDuringSchedulingIgnoredDuringExecution: {
+                  nodeSelectorTerms: [
+                    {
+                      matchExpressions: [
+                        { key: 'disk', operator: 'In', values: ['ssd'] },
+                      ],
+                    },
+                  ],
+                },
+              },
+              podAntiAffinity: {
+                preferredDuringSchedulingIgnoredDuringExecution: [],
+              },
+            },
+            topologySpreadConstraints: [
+              {
+                maxSkew: 1,
+                topologyKey: 'zone',
+                whenUnsatisfiable: 'DoNotSchedule',
+              },
+            ],
+            containers: [{ name: 'app', image: 'nginx:1.25' }],
+          },
+        },
+      },
+    }
+    // 走编辑页同一条链路：线上对象反显成表单，用户改回「任意节点」并清空
+    // nodeSelector / 容忍度 / 优先级。
+    const form = parseYamlToFormData(
+      yaml.dump(original),
+      'deployments',
+      initialFormData
+    )
+    form.podSpec.scheduling.mode = 'any'
+    form.podSpec.scheduling.nodeName = ''
+    form.podSpec.scheduling.tolerations = []
+    form.podSpec.scheduling.priorityClassName = ''
+    form.podSpec.nodeSelectorPairs = []
+
+    const generated = yaml.load(
+      generateWorkloadYaml(form, 'deployments')
+    ) as Record<string, unknown>
+    const merged = mergeEditedManifest(generated, original)
+    const podSpec = (
+      (merged.spec as Record<string, unknown>).template as {
+        spec: Record<string, unknown>
+      }
+    ).spec
+
+    expect(podSpec.nodeName).toBeUndefined()
+    expect(podSpec.nodeSelector).toBeUndefined()
+    expect(podSpec.tolerations).toBeUndefined()
+    expect(podSpec.priorityClassName).toBeUndefined()
+    // affinity 里未建模的 podAntiAffinity 与其它未建模字段仍然保留。
+    expect(podSpec.affinity).toEqual({
+      podAntiAffinity: { preferredDuringSchedulingIgnoredDuringExecution: [] },
+    })
+    expect(podSpec.topologySpreadConstraints).toEqual([
+      { maxSkew: 1, topologyKey: 'zone', whenUnsatisfiable: 'DoNotSchedule' },
+    ])
+  })
+
+  it('nodeSelector 改键后旧键不残留', () => {
+    const original = {
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name: 'web', namespace: 'default' },
+      spec: {
+        selector: { matchLabels: { app: 'web' } },
+        template: {
+          metadata: { labels: { app: 'web' } },
+          spec: {
+            nodeSelector: { disk: 'ssd' },
+            containers: [{ name: 'app', image: 'nginx:1.25' }],
+          },
+        },
+      },
+    }
+    const form = parseYamlToFormData(
+      yaml.dump(original),
+      'deployments',
+      initialFormData
+    )
+    form.podSpec.nodeSelectorPairs = [{ key: 'zone', value: 'b' }]
+
+    const generated = yaml.load(
+      generateWorkloadYaml(form, 'deployments')
+    ) as Record<string, unknown>
+    const merged = mergeEditedManifest(generated, original)
+    const podSpec = (
+      (merged.spec as Record<string, unknown>).template as {
+        spec: Record<string, unknown>
+      }
+    ).spec
+
+    expect(podSpec.nodeSelector).toEqual({ zone: 'b' })
+  })
+
+  it('表单表达不了的 preferred nodeAffinity 保存时不会被删掉', () => {
+    const original = {
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name: 'web', namespace: 'default' },
+      spec: {
+        selector: { matchLabels: { app: 'web' } },
+        template: {
+          metadata: { labels: { app: 'web' } },
+          spec: {
+            affinity: {
+              nodeAffinity: {
+                preferredDuringSchedulingIgnoredDuringExecution: [
+                  {
+                    weight: 100,
+                    preference: {
+                      matchExpressions: [
+                        { key: 'disk', operator: 'In', values: ['ssd'] },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+            containers: [{ name: 'app', image: 'nginx:1.25' }],
+          },
+        },
+      },
+    }
+    // 表单不建模 preferred 亲和，原样保存不能把它当成「用户清空了 nodeAffinity」。
+    const form = parseYamlToFormData(
+      yaml.dump(original),
+      'deployments',
+      initialFormData
+    )
+    const generated = yaml.load(
+      generateWorkloadYaml(form, 'deployments')
+    ) as Record<string, unknown>
+    const merged = mergeEditedManifest(generated, original)
+    const podSpec = (
+      (merged.spec as Record<string, unknown>).template as {
+        spec: Record<string, unknown>
+      }
+    ).spec
+
+    expect(podSpec.affinity).toEqual(original.spec.template.spec.affinity)
+  })
 })
 
 /**

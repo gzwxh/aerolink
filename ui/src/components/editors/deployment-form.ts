@@ -1532,6 +1532,93 @@ const POD_TEMPLATE_PATHS: string[][] = [
   ['spec', 'jobTemplate', 'spec', 'template'],
 ]
 
+/**
+ * 表单完整建模的 Pod 调度字段。生成物里没有这个键，就说明用户清空了它；
+ * 这些字段不能像 topologySpreadConstraints 那样从线上对象恢复。
+ */
+const FORM_MANAGED_SCHEDULING_FIELDS = [
+  'nodeName',
+  'nodeSelector',
+  'tolerations',
+  'priorityClassName',
+] as const
+
+/** 取出 manifest 的 PodSpec：模板型工作负载在模板里，裸 Pod 直接在 spec 上。 */
+function podSpecOf(
+  manifest: Record<string, unknown>
+): Record<string, unknown> | null {
+  const templateSpec = podTemplateOf(manifest)?.spec
+  if (isPlainObject(templateSpec)) return templateSpec
+  if (manifest.kind === 'Pod' && isPlainObject(manifest.spec)) {
+    return manifest.spec
+  }
+  return null
+}
+
+/**
+ * 表单只能表达 required nodeAffinity 的 matchExpressions；带 preferred、matchFields
+ * 或无法反显的线上配置不能当作已建模字段删掉，否则保存会静默丢失这些约束。
+ */
+function isFormRepresentableNodeAffinity(value: unknown): boolean {
+  if (!isPlainObject(value)) return false
+  if ('preferredDuringSchedulingIgnoredDuringExecution' in value) return false
+  const required = value.requiredDuringSchedulingIgnoredDuringExecution
+  if (!isPlainObject(required)) return false
+  const terms = required.nodeSelectorTerms
+  if (!Array.isArray(terms) || terms.length === 0) return false
+  return terms.every(
+    (term) =>
+      isPlainObject(term) &&
+      !('matchFields' in term) &&
+      Array.isArray(term.matchExpressions) &&
+      term.matchExpressions.length > 0
+  )
+}
+
+/**
+ * 把调度字段对齐到表单生成物。overlayObject 只增不减，若不显式删除，
+ * 用户把「指定节点」改回「任意节点」、或删掉 nodeSelector 的旧键后，旧约束
+ * 会在保存时被原样恢复，Pod 继续留在原节点（表现为服务无法切换到其他服务器）。
+ */
+function alignFormManagedSchedulingFields(
+  mergedPodSpec: Record<string, unknown>,
+  generatedPodSpec: Record<string, unknown>
+): void {
+  for (const field of FORM_MANAGED_SCHEDULING_FIELDS) {
+    if (!(field in generatedPodSpec)) delete mergedPodSpec[field]
+  }
+  // nodeSelector 逐键建模：生成物存在时整体替换，否则被删掉的旧键会被合并回来。
+  if (isPlainObject(generatedPodSpec.nodeSelector)) {
+    mergedPodSpec.nodeSelector = generatedPodSpec.nodeSelector
+  }
+  // affinity 里还有未建模的 podAffinity / podAntiAffinity，只对齐 nodeAffinity。
+  const generatedAffinity = generatedPodSpec.affinity
+  const generatedNodeAffinity = isPlainObject(generatedAffinity)
+    ? generatedAffinity.nodeAffinity
+    : undefined
+  const mergedAffinity = isPlainObject(mergedPodSpec.affinity)
+    ? { ...mergedPodSpec.affinity }
+    : undefined
+  if (
+    mergedAffinity &&
+    isFormRepresentableNodeAffinity(mergedAffinity.nodeAffinity)
+  ) {
+    if (isPlainObject(generatedNodeAffinity)) {
+      mergedPodSpec.affinity = {
+        ...mergedAffinity,
+        nodeAffinity: generatedNodeAffinity,
+      }
+    } else {
+      delete mergedAffinity.nodeAffinity
+      if (Object.keys(mergedAffinity).length === 0) {
+        delete mergedPodSpec.affinity
+      } else {
+        mergedPodSpec.affinity = mergedAffinity
+      }
+    }
+  }
+}
+
 /** 取出 manifest 里的 Pod 模板；找不到时返回 null。 */
 function podTemplateOf(
   manifest: Record<string, unknown>
@@ -1570,14 +1657,17 @@ export function mergeEditedManifest(
   // 「什么都没改」的保存变成一次 Pod 模板变更：Job 的模板不可变，API 会直接以
   // `spec.template: field is immutable` 拒绝。所以在编辑模式下按线上对象恢复 ——
   // YAML 标签页不走这里，想改 restartPolicy 仍然可以在那里改。
-  const generatedPodSpec = podTemplateOf(merged)?.spec
-  const originalPodSpec = podTemplateOf(original)?.spec
-  if (
-    isPlainObject(generatedPodSpec) &&
-    isPlainObject(originalPodSpec) &&
-    typeof originalPodSpec.restartPolicy === 'string'
-  ) {
-    generatedPodSpec.restartPolicy = originalPodSpec.restartPolicy
+  const mergedPodSpec = podSpecOf(merged)
+  const formPodSpec = podSpecOf(generated)
+  const originalPodSpec = podSpecOf(original)
+  if (isPlainObject(mergedPodSpec) && isPlainObject(formPodSpec)) {
+    if (
+      isPlainObject(originalPodSpec) &&
+      typeof originalPodSpec.restartPolicy === 'string'
+    ) {
+      mergedPodSpec.restartPolicy = originalPodSpec.restartPolicy
+    }
+    alignFormManagedSchedulingFields(mergedPodSpec, formPodSpec)
   }
 
   const selector = isPlainObject(original.spec)
