@@ -151,19 +151,24 @@ describe('AppSidebar 置顶项位置', () => {
     )
   })
 
-  it('置顶项在顶部之外，原分组里仍保留同一菜单项', () => {
+  it('置顶区按 pinnedItems 数组顺序渲染', () => {
+    const content = renderSidebar({
+      pinnedItems: ['cluster-nodes', 'workloads-pods'],
+    })
+
+    // 数组顺序优先于菜单目录顺序：Nodes（Cluster 分组）排在 Pods（Workloads 分组）之前。
+    expect(indexOfText(content, 'Nodes')).toBeLessThan(
+      indexOfText(content, 'Pods')
+    )
+  })
+
+  it('置顶项只出现在顶部置顶区，不在原分组重复', () => {
     const content = renderSidebar()
 
-    // 置顶只是额外多一个顶部入口：Pods 在置顶区与原分组各出现一次。
+    // 置顶项从原分组移除：Pods 只在顶部置顶区出现一次。
     expect(content.querySelectorAll('a[href="/workloads-pods"]')).toHaveLength(
-      2
+      1
     )
-    // 原分组里的那一份没有挪位：第二次出现的 Pods 仍夹在 Workloads 与
-    // Deployments 之间（置顶区在分组之前，第一次出现的那份更靠前）。
-    const text = content.textContent ?? ''
-    const secondPods = text.indexOf('Pods', text.indexOf('Pods') + 1)
-    expect(secondPods).toBeGreaterThan(text.indexOf('Workloads'))
-    expect(secondPods).toBeLessThan(text.indexOf('Deployments'))
     // 未置顶的条目仍然只在原分组出现一次。
     expect(
       content.querySelectorAll('a[href="/workloads-deployments"]')

@@ -143,9 +143,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const pinnedItems = useMemo(() => {
     if (!config) return []
-    return config.groups
-      .flatMap((group) => group.items)
-      .filter((item) => config.pinnedItems.includes(item.id))
+    const itemsById = new Map<string, SidebarItem>(
+      config.groups
+        .flatMap((group) => group.items)
+        .map((item) => [item.id, item] as const)
+    )
+    // 置顶区按用户拖拽后的顺序渲染：pinnedItems 数组顺序即展示顺序。
+    return config.pinnedItems
+      .map((id) => itemsById.get(id))
+      .filter((item): item is SidebarItem => Boolean(item))
       .filter((item) => !config.hiddenItems.includes(item.id))
       .filter(isCRDItemAvailable)
   }, [config, isCRDItemAvailable])
@@ -159,6 +165,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ...group,
         items: group.items
           .filter((item) => !config.hiddenItems.includes(item.id))
+          .filter((item) => !config.pinnedItems.includes(item.id))
           .filter(isCRDItemAvailable)
           .sort((a, b) => a.order - b.order),
       }))
@@ -289,8 +296,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // 置顶项整体渲染在概览下方、所有分组之前：它是「置顶到顶部」的语义，
   // 挂在某个分组之后会随该分组的位置漂移，分组被隐藏时还会整块消失。
-  // 原分组里的同名条目继续保留（置顶只是多加一个顶部入口），
-  // 否则取消置顶前用户会在原来的位置找不到它。
+  // 置顶项从原分组移除，避免同一入口在侧边栏出现两次。
   const pinnedGroup =
     pinnedItems.length > 0 ? (
       <SidebarGroup>
@@ -408,7 +414,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               defaultOpen={!group.collapsed}
               className="group/collapsible"
             >
-              <SidebarGroup>
+              <SidebarGroup className="group-data-[state=closed]/collapsible:py-0">
                 <SidebarGroupLabel asChild>
                   <CollapsibleTrigger className="flex items-center justify-between w-full text-sm font-semibold text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors group-data-[state=open]:text-sidebar-foreground">
                     <span className="uppercase tracking-wide text-xs font-bold">
