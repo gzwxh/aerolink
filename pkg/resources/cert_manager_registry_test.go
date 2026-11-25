@@ -7,8 +7,8 @@ import (
 	certmanagerapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/kube"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/kube"
 )
 
 func TestCertManagerResourcesRegistered(t *testing.T) {

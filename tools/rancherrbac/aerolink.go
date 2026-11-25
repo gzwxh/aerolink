@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zxh326/kite/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 // 本文件是鸢联 AeroLink 管理接口的薄封装。迁移只用这几个接口：

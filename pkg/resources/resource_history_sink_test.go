@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
 	corev1 "k8s.io/api/core/v1"
 )
 

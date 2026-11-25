@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // ArchiveBackends 报告归档检索可用哪些后端、以及默认用哪个。

@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/cluster"
-	"github.com/zxh326/kite/pkg/kube"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/cluster"
+	"github.com/gzwxh/aerolink/pkg/kube"
+	"github.com/gzwxh/aerolink/pkg/model"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

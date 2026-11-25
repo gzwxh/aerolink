@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/audit"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/audit"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // dashToEmpty 把日志里的占位符 "-" 还原成空串：归档数据里空就应该是空。

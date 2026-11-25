@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // newFakeDuckDB 造一个假 CLI：把收到的参数（SQL）追加写进日志文件，并输出固定 JSON。

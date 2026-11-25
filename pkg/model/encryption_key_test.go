@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/utils"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/utils"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

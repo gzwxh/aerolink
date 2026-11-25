@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 func postBatchSubscriptions(t *testing.T, router *gin.Engine, body string) *httptest.ResponseRecorder {

@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/mfa"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/mfa"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // rfc6238TestSecret 是 RFC 6238 附录 B 用的密钥（ASCII "12345678901234567890" 的 base32）。

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/parquet-go/parquet-go"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // waitForArchiveFile 轮询等待终态 .parquet 出现，并断言没有 .tmp 残留。

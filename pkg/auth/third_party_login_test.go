@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 第三方（OIDC）登录必须与密码 / LDAP 登录一样留下登录日志。

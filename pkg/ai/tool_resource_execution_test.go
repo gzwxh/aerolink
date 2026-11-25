@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zxh326/kite/pkg/cluster"
-	"github.com/zxh326/kite/pkg/kube"
+	"github.com/gzwxh/aerolink/pkg/cluster"
+	"github.com/gzwxh/aerolink/pkg/kube"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

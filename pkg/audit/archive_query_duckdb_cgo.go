@@ -14,8 +14,8 @@ import (
 	"time"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/klog/v2"
 )
 

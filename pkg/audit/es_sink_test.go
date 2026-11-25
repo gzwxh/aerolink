@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // newFakeES 起一个假的 ES：记录请求并把预置响应写回去。

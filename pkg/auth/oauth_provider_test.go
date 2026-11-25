@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 func TestDiscoverOAuthEndpoints(t *testing.T) {

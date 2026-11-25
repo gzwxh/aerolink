@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/websocket"
-	"github.com/zxh326/kite/pkg/wsutil"
+	"github.com/gzwxh/aerolink/pkg/wsutil"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

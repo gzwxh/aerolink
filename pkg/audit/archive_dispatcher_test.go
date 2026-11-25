@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // —— 并发写入相关测试 ——

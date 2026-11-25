@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 const (

@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/cluster"
-	"github.com/zxh326/kite/pkg/common"
-	pkgmodel "github.com/zxh326/kite/pkg/model"
-	"github.com/zxh326/kite/pkg/rbac"
+	"github.com/gzwxh/aerolink/pkg/cluster"
+	"github.com/gzwxh/aerolink/pkg/common"
+	pkgmodel "github.com/gzwxh/aerolink/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/rbac"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )

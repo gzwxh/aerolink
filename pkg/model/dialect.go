@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/zxh326/kite/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/common"
 	"gorm.io/gorm/clause"
 )
 

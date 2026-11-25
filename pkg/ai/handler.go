@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/cluster"
+	"github.com/gzwxh/aerolink/pkg/cluster"
 )
 
 func HandleChat(c *gin.Context) {

@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/middleware"
-	"github.com/zxh326/kite/pkg/utils"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/middleware"
+	"github.com/gzwxh/aerolink/pkg/utils"
 )
 
 //go:embed static

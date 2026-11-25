@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zxh326/kite/pkg/utils"
+	"github.com/gzwxh/aerolink/pkg/utils"
 )
 
 func TestUserKey(t *testing.T) {

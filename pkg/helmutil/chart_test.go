@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 	"helm.sh/helm/v4/pkg/getter"
 	repo "helm.sh/helm/v4/pkg/repo/v1"
 )

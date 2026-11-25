@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/rancher/remotedialer"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
 	"golang.org/x/crypto/hkdf"
 	"gorm.io/gorm"
 	"k8s.io/klog/v2"

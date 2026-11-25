@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/clusteragent"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/clusteragent"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 func TestGetClusterAgentManifest(t *testing.T) {

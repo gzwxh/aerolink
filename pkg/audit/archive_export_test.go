@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // newPagedFakeES 起一个支持分页的假 ES：按请求里的 from / size 返回对应切片。

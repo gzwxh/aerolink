@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/websocket"
-	"github.com/zxh326/kite/pkg/wsutil"
+	"github.com/gzwxh/aerolink/pkg/wsutil"
 )
 
 func TestTerminalSessionTransportsInputOutputAndResize(t *testing.T) {

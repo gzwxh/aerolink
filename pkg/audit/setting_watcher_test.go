@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 多副本下改设置只有 1/N 个副本生效，是「配了没生效」的一类；收敛靠内容指纹。

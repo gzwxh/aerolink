@@ -4,7 +4,7 @@ import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/shared"
-	"github.com/zxh326/kite/pkg/cluster"
+	"github.com/gzwxh/aerolink/pkg/cluster"
 )
 
 type agentToolDefinition struct {

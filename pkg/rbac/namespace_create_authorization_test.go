@@ -3,8 +3,8 @@ package rbac
 import (
 	"testing"
 
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 「创建命名空间」是管理员专属动作，不通过授权配置下发：命名空间统一由管理员创建，

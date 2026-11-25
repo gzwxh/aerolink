@@ -53,7 +53,7 @@ COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 # Build flags
 # -s -w 去掉符号表与调试信息（体积小），-X 在链接期把值写进 pkg/version 的字符串变量。
-# `github.com/zxh326/kite/...` 是 **Go 符号名**（= go.mod 的 module 路径 + 包 + 变量），
+# `github.com/gzwxh/aerolink/...` 是 **Go 符号名**（= go.mod 的 module 路径 + 包 + 变量），
 # 不是网址：这里不发任何网络请求，$(VERSION) / $(BUILD_DATE) / $(COMMIT_ID) 都是本机
 # 求值（make 变量、date、git rev-parse），耗时微秒级。
 #
@@ -62,9 +62,9 @@ COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 # 注意：整个 -ldflags "..." 必须留在 LDFLAGS 里，不能只留版本号——go build 需要的是
 # 「-ldflags + 参数」这一对，写成 LDFLAGS="v1.0.0" 会被当成包路径而报错。
 LDFLAGS ?= -ldflags "-s -w \
-	-X 'github.com/zxh326/kite/pkg/version.Version=$(VERSION)' \
-	-X 'github.com/zxh326/kite/pkg/version.BuildDate=$(BUILD_DATE)' \
-	-X 'github.com/zxh326/kite/pkg/version.CommitID=$(COMMIT_ID)'"
+	-X 'github.com/gzwxh/aerolink/pkg/version.Version=$(VERSION)' \
+	-X 'github.com/gzwxh/aerolink/pkg/version.BuildDate=$(BUILD_DATE)' \
+	-X 'github.com/gzwxh/aerolink/pkg/version.CommitID=$(COMMIT_ID)'"
 
 # 本机临时覆盖（不进版本库，见 .gitignore）：把 VERSION / LDFLAGS 这类本机专用值写进
 # Makefile.local，例如让本机构建的后端/前端显示另一个版本号而不改仓库里的 VERSION。

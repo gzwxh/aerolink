@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // setupTicketTestDB 建一个带票据登记表的测试库：票据的「一次性」落在数据库上，

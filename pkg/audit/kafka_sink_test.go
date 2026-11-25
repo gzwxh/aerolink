@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/segmentio/kafka-go"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // fakeKafkaWriter 记录投递的消息，供断言 value/key；错误可注入。

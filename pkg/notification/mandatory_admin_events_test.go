@@ -3,7 +3,7 @@ package notification
 import (
 	"testing"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 「管理员必收」的事件不允许被订阅配置关掉：没有任何订阅时，管理员也必须收到

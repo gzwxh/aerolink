@@ -8,8 +8,8 @@ import (
 	"time"
 
 	expirable "github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/utils"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"k8s.io/klog/v2"

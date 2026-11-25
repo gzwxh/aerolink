@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/audit"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/audit"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 归档 / 结构化输出里的 path 必须不含查询串。

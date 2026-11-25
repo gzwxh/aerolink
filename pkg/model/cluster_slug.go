@@ -3,7 +3,7 @@ package model
 import (
 	"fmt"
 
-	"github.com/zxh326/kite/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 // MigrateClusterSlugBackfill 给既有集群回填 URL 短名（/_clusters/<slug>/... 前缀用的

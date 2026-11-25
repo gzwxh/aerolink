@@ -3,8 +3,8 @@ package helmutil
 import (
 	"context"
 
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
 	release "helm.sh/helm/v4/pkg/release/v1"
 	"k8s.io/klog/v2"
 )

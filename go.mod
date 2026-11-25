@@ -1,4 +1,4 @@
-module github.com/zxh326/kite
+module github.com/gzwxh/aerolink
 
 go 1.26.0
 

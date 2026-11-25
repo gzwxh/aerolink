@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // ErrMailNotConfigured 在 SMTP 配置不完整或邮件通知已关闭时

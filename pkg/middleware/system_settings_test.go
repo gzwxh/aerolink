@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
-	"github.com/zxh326/kite/pkg/rbac"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/rbac"
 )
 
 // 系统设置权限拆成查看（settings + get）与管理（settings + update）：

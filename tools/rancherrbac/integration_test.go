@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 // 这组用例用两个桩服务把整条链路跑一遍：Rancher 侧的字段名、鸢联 AeroLink 侧的接口路径与

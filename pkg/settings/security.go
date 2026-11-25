@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/auth"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/auth"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // HandleGetLockedLoginIPs 列出当前因登录失败尝试

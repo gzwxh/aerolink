@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 计数与封锁状态现在在数据库里，所以「另一台机器」看到的结论与记录失败的那台一致——

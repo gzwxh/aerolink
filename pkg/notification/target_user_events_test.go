@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 「当事人必收」：事件描述的是这个账号自己的状态/凭据变化，没有任何订阅时本人也必须收到。

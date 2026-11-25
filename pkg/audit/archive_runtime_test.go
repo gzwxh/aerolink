@@ -3,7 +3,7 @@ package audit
 import (
 	"testing"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // nil writer 必须被 writers()/runs() 跳过。

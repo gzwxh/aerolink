@@ -3,8 +3,8 @@ package rbac
 import (
 	"testing"
 
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // systemRoleSet 把内置系统角色转成判定用的形态（与 DB 同步后 RBACConfig 里的内容一致）。

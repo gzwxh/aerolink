@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 归档检索的后端**跟随 sink**（五者互斥）：写在哪就从哪查。

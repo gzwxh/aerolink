@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/zxh326/kite/pkg/transportkey"
+	"github.com/gzwxh/aerolink/pkg/transportkey"
 )
 
 // login 用口令登录。服务端开启 AEROLINK_REQUIRE_ENCRYPTED_CREDENTIALS 后会拒收

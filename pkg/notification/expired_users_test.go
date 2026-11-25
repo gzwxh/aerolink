@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

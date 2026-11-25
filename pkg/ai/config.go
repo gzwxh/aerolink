@@ -8,7 +8,7 @@ import (
 	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/openai/openai-go"
 	openaioption "github.com/openai/openai-go/option"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 type RuntimeConfig struct {

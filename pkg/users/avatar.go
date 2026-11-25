@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zxh326/kite/pkg/imageupload"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/imageupload"
+	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/klog/v2"
 )
 

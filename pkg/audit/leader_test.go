@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // withAuditLeadership 直接设定「本副本是否负责周期性全局任务」并负责还原。

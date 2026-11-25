@@ -14,10 +14,10 @@ import (
 
 	_ "net/http/pprof"
 
-	"github.com/zxh326/kite/pkg/clusteragent"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/resources"
-	"github.com/zxh326/kite/pkg/version"
+	"github.com/gzwxh/aerolink/pkg/clusteragent"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/resources"
+	"github.com/gzwxh/aerolink/pkg/version"
 	"k8s.io/klog/v2"
 )
 

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 密码过期提醒的口径：剩余不足一天算「还有 1 天」；已经过期就要说「已过期」。

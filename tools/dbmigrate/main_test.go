@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
-	"github.com/zxh326/kite/pkg/utils"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

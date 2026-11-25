@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // newFakeVictoriaLogs 起一个假的 VL 实例：请求全交给 handle，测试结束自动关闭。

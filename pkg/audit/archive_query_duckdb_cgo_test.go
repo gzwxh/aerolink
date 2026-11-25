@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/parquet-go/parquet-go"
-	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/common"
+	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // SDK 驱动的测试必须用**真实的 parquet 文件**：CLI 驱动的测试可以用假脚本断言「发出去的

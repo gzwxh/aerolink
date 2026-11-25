@@ -18,10 +18,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/zxh326/kite/pkg/model"
-	"github.com/zxh326/kite/pkg/rbac"
+	"github.com/gzwxh/aerolink/pkg/model"
+	"github.com/gzwxh/aerolink/pkg/rbac"
 
-	"github.com/zxh326/kite/pkg/users"
+	"github.com/gzwxh/aerolink/pkg/users"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
