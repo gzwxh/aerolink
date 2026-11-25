@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/helmutil"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/helmutil"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"helm.sh/helm/v4/pkg/registry"
 )
 

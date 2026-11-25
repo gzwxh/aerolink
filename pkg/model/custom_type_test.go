@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 	"gorm.io/gorm"
 )
 

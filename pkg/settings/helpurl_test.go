@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // 帮助文档地址会随公开的 bootstrap 接口下发给未登录的登录页并渲染成外链，

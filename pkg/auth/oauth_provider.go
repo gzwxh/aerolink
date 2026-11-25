@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/klog/v2"
 )
 

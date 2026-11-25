@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"aerolink/pkg/cluster"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
 )
 
 func HandleChat(c *gin.Context) {

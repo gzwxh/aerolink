@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 type UpdateLDAPSettingRequest struct {

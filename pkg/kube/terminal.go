@@ -6,8 +6,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/wsutil"
+	"aerolink/pkg/common"
+	"aerolink/pkg/wsutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"

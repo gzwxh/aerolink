@@ -3,8 +3,8 @@ package rbac
 import (
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 )
 
 // clusterRolesBindingGroupCache 模拟「按集群授出内置集群角色」的部署形态：

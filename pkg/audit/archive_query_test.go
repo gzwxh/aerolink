@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // archiveTestContext 造一个只带 query 的 gin 上下文，用来直接驱动过滤器构造函数。

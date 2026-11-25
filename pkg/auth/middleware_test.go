@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 强制绑定只对能自助绑定的账号生效。

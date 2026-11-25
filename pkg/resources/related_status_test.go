@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/kube"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/kube"
-	"github.com/gzwxh/aerolink/pkg/model"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"

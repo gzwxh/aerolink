@@ -1,10 +1,10 @@
 package ai
 
 import (
+	"aerolink/pkg/cluster"
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/shared"
-	"github.com/gzwxh/aerolink/pkg/cluster"
 )
 
 type agentToolDefinition struct {

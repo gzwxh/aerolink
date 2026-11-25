@@ -3,8 +3,8 @@ package audit
 import (
 	"errors"
 
+	"aerolink/pkg/model"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/klog/v2"
 )
 

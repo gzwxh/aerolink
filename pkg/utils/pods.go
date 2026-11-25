@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 )
 

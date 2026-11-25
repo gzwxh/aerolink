@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 

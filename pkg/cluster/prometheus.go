@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/kube"
+	"aerolink/pkg/kube"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

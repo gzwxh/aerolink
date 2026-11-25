@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"gorm.io/gorm"
 	"k8s.io/kubectl/pkg/describe"
 )

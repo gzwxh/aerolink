@@ -3,8 +3,8 @@ package helmutil
 import (
 	"testing"
 
+	"aerolink/pkg/model"
 	"github.com/stretchr/testify/require"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"helm.sh/helm/v4/pkg/getter"
 	repo "helm.sh/helm/v4/pkg/repo/v1"
 )

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 )
 
 func grantSet(grants []common.ResourceGrant) map[string][]string {

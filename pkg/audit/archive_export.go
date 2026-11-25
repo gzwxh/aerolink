@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // archiveExportTimeout 是一次归档导出的总超时。导出要翻页拉取，比单页检索慢，

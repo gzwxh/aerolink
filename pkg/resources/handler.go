@@ -3,11 +3,11 @@ package resources
 import (
 	"fmt"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/common"
 	certmanageracmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certmanagerapiv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/common"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiserverinternalv1alpha1 "k8s.io/api/apiserverinternal/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"

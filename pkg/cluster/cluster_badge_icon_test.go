@@ -14,10 +14,10 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/imageupload"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/imageupload"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // iconRouter 挂上徽章图标的三条路由，前缀与 routes.go 保持一致，

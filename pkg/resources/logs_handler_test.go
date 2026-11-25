@@ -7,13 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/common"
+	"aerolink/pkg/kube"
+	"aerolink/pkg/model"
+	"aerolink/pkg/wsutil"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/kube"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/wsutil"
 )
 
 func TestLogsWebSocketEnforcesRBACAndValidatesOptions(t *testing.T) {

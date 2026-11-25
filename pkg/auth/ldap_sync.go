@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/go-ldap/ldap/v3"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/klog/v2"
 )
 

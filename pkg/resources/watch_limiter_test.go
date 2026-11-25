@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )

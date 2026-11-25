@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 func TestNewLDAPConfig(t *testing.T) {

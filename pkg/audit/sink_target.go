@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // ValidateSinkTarget 校验「当前 sink 的落地目标」是否可用。

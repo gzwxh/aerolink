@@ -3,8 +3,8 @@ package audit
 import (
 	"net/http"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // ArchiveBackends 报告归档检索可用哪些后端、以及默认用哪个。

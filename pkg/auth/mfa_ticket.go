@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 )
 
 // mfaTicketTTL 是第三方登录「待验证」票据的有效期。

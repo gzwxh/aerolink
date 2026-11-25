@@ -1,7 +1,7 @@
 package resources
 
 import (
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 	syaml "sigs.k8s.io/yaml"
 )
 

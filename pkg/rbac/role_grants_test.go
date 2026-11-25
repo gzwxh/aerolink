@@ -3,8 +3,8 @@ package rbac
 import (
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 )
 
 // 新版角色按资源保存操作集合：同一个角色里不同资源可以拥有不同操作，

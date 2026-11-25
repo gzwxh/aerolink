@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"aerolink/pkg/common"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 func TestCredentialLoginLimiterBlocksLoopbackClientIP(t *testing.T) {

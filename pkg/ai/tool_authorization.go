@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/common"
+	pkgmodel "aerolink/pkg/model"
+	"aerolink/pkg/rbac"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/common"
-	pkgmodel "github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )

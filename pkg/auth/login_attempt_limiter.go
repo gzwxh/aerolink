@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 	"gorm.io/gorm"
 	"k8s.io/klog/v2"
 )

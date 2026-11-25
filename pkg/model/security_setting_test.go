@@ -3,8 +3,8 @@ package model
 import (
 	"testing"
 
+	"aerolink/pkg/common"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/common"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

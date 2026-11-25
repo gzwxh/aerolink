@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // TrustCookieName 把该浏览器标记为最近已完成 MFA 验证。时间窗来自安全

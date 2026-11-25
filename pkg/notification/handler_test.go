@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 管理员在「通知 → 订阅」里选「全体用户」时提交的就是这一份请求体：

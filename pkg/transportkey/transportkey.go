@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 	"k8s.io/klog/v2"
 )
 

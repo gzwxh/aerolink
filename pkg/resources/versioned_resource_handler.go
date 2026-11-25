@@ -1,9 +1,9 @@
 package resources
 
 import (
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/common"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 type resourceVersionCandidate struct {

@@ -3,11 +3,11 @@ package resources
 import (
 	"net/http"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"

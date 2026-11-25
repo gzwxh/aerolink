@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gzwxh/aerolink/pkg/utils"
+	"aerolink/pkg/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )

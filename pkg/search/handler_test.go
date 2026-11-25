@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/middleware"
+	"aerolink/pkg/model"
+	"aerolink/pkg/resources"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/middleware"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/resources"
 )
 
 func TestNormalizeSearchQuery(t *testing.T) {

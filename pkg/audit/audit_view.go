@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // —— 归档结果 → 列表接口的字段适配 ——

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 	"gorm.io/gorm"
 	"k8s.io/klog/v2"
 )

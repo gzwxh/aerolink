@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // fakeS3Lister 只回答「这个前缀下有哪些键」，用来在单测里替掉真实对象存储。

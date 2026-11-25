@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"aerolink/pkg/auth"
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
+	"aerolink/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/auth"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
-	"github.com/gzwxh/aerolink/pkg/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

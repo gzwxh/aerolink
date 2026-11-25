@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"time"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/common"
+	"aerolink/pkg/kube"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/kube"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"

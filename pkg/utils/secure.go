@@ -10,7 +10,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 	"golang.org/x/crypto/bcrypt"
 	"k8s.io/klog/v2"
 )

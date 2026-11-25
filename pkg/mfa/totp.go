@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/skip2/go-qrcode"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 const (

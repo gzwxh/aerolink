@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // archiveQueryTimeout 是单次归档检索的超时。ES 不可达时不能让请求一直挂着。

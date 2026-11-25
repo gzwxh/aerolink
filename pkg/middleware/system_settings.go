@@ -3,10 +3,10 @@ package middleware
 import (
 	"net/http"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
 )
 
 // RequireSettingsSection 保护属于某个设置分区的控制台设置接口

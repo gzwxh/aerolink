@@ -3,7 +3,7 @@ package ai
 import (
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 func TestNormalizeProvider(t *testing.T) {

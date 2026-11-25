@@ -8,19 +8,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/kube"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
-	"github.com/gzwxh/aerolink/pkg/utils"
-	"github.com/gzwxh/aerolink/pkg/wsutil"
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/kube"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
+	"aerolink/pkg/utils"
+	"aerolink/pkg/wsutil"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 )
 
 const (

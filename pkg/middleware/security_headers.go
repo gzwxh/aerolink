@@ -3,8 +3,8 @@ package middleware
 import (
 	"strings"
 
+	"aerolink/pkg/common"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 // SecurityHeaders 补齐 SPA 此前缺少的基线加固响应头。

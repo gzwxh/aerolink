@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
+	"aerolink/pkg/model"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // ErrS3ArchiveDisabled 表示 S3 归档未启用。调用方据此跳过上传，而不是当成故障。

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // archiveSettingOpenAll 返回一份「全部通道都开」的归档配置：用来验证 sink 能把它收敛成唯一通道。

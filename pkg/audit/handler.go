@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"gorm.io/gorm"
 )
 

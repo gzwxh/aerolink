@@ -5,11 +5,11 @@ import (
 	"net/url"
 	"strings"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
 )
 
 func RBACMiddleware() gin.HandlerFunc {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // 接管包级状态：队列与配置是全局的，测试里替换后必须还原，避免相互影响。

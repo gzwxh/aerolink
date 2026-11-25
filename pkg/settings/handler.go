@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 func HandleGetGeneralSetting(c *gin.Context) {

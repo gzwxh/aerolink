@@ -1,7 +1,7 @@
 package helmutil
 
 import (
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/kube"
 	"k8s.io/apimachinery/pkg/api/meta"

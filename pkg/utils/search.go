@@ -3,7 +3,7 @@ package utils
 import (
 	"strings"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 )
 
 var searchResourceAliases = common.SearchAliases()

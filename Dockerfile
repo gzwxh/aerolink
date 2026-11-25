@@ -59,9 +59,9 @@ COPY --from=frontend-builder /app/static ./static
 # 所以运行镜像里不再需要 duckdb 可执行文件。
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=1 go build -mod=vendor -trimpath -ldflags="-s -w \
-      -X 'github.com/gzwxh/aerolink/pkg/version.Version=${VERSION}' \
-      -X 'github.com/gzwxh/aerolink/pkg/version.BuildDate=${BUILD_DATE}' \
-      -X 'github.com/gzwxh/aerolink/pkg/version.CommitID=${COMMIT_ID}'" -o aerolink .
+      -X 'aerolink/pkg/version.Version=${VERSION}' \
+      -X 'aerolink/pkg/version.BuildDate=${BUILD_DATE}' \
+      -X 'aerolink/pkg/version.CommitID=${COMMIT_ID}'" -o aerolink .
 
 # Runtime image.
 FROM ${RUNTIME_IMAGE}

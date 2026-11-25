@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"aerolink/pkg/common"
 	"github.com/go-logr/logr"
-	"github.com/gzwxh/aerolink/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/helmutil"
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/helmutil"
+	"aerolink/pkg/model"
 	repo "helm.sh/helm/v4/pkg/repo/v1"
 )
 

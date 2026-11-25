@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 )
 
 // 本文件是纯粹的角色规则映射：把 Rancher 角色模板的 RBAC 规则翻成鸢联 AeroLink 角色的

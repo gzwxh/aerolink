@@ -3,8 +3,8 @@ package ai
 import (
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/prometheus"
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

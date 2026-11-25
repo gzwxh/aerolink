@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
 
-	"github.com/gzwxh/aerolink/pkg/users"
+	"aerolink/pkg/users"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

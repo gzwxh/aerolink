@@ -3,8 +3,8 @@ package rbac
 import (
 	"testing"
 
+	"aerolink/pkg/model"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"gorm.io/gorm"
 )
 

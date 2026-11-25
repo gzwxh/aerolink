@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // testArchiveSetting 造一份「地址 + 密钥都填好」的归档配置，作为各用例的基线。

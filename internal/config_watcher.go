@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/common"
+	"aerolink/pkg/rbac"
 	"github.com/fsnotify/fsnotify"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/rbac"
 	"k8s.io/klog/v2"
 )
 

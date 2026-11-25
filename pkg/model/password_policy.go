@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gzwxh/aerolink/pkg/utils"
+	"aerolink/pkg/utils"
 )
 
 // 密码策略错误码。提示信息保持英文，与 API 的其它部分保持一致，

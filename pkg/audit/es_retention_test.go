@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // fakeESIndices 是一个只认「列索引 / 删索引」的假 ES：把请求记下来，按预置的索引列表回答。

@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 )
 
 // maxResponseBytes 限制单次响应读取量：本工具只做存在性/字段校验，不需要完整大对象。

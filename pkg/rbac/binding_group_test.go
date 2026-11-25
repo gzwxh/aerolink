@@ -3,8 +3,8 @@ package rbac
 import (
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 )
 
 const (

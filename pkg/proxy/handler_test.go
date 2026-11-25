@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 func TestHandleProxyRejectsInvalidKindAndUnauthorizedAccess(t *testing.T) {

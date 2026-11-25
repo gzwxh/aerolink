@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/mfa"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/mfa"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // rfc6238TestSecret 是 RFC 6238 附录 B 用的密钥（ASCII "12345678901234567890" 的 base32）。

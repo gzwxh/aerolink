@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 func TestMethod2Verb(t *testing.T) {

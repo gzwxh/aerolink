@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"aerolink/pkg/model"
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/openai/openai-go"
 	openaioption "github.com/openai/openai-go/option"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 type RuntimeConfig struct {

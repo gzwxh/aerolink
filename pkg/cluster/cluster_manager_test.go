@@ -3,10 +3,10 @@ package cluster
 import (
 	"testing"
 
+	"aerolink/pkg/kube"
+	"aerolink/pkg/model"
 	"github.com/bytedance/mockey"
 	"github.com/stretchr/testify/assert"
-	"github.com/gzwxh/aerolink/pkg/kube"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"

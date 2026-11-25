@@ -3,7 +3,7 @@ package auth
 import (
 	"errors"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 type AuthHandler struct {

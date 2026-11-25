@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/utils"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/utils"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

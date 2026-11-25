@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // sessionDeniedReason 是 bootstrap 与 RequireAuth 共用的「会话是否可用」口径。

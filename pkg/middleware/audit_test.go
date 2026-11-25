@@ -5,10 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 func TestNewS3SinkDisabled(t *testing.T) {

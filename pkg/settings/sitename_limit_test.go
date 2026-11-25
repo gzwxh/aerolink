@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // 品牌名称的字符上限钉在 **16**（列宽是 varchar(100)，但侧边栏只有 16rem 宽，

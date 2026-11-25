@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/helmutil"
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/helmutil"
+	"aerolink/pkg/model"
 	release "helm.sh/helm/v4/pkg/release/v1"
 )
 

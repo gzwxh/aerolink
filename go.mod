@@ -1,4 +1,4 @@
-module github.com/gzwxh/aerolink
+module aerolink
 
 go 1.26.0
 

@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
+	"aerolink/pkg/transportkey"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
-	"github.com/gzwxh/aerolink/pkg/transportkey"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

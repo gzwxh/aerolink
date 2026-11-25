@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/auth"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/auth"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // HandleGetLockedLoginIPs 列出当前因登录失败尝试

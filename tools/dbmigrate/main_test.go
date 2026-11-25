@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
+	"aerolink/pkg/utils"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

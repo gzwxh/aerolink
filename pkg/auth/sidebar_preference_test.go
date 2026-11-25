@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 侧边栏布局的优先级：个人布局 > 管理员发布的全局布局 > 前端内置默认。

@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/utils"
+	"aerolink/pkg/common"
+	"aerolink/pkg/utils"
 	"k8s.io/klog/v2"
 )
 

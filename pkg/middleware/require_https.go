@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"aerolink/pkg/common"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 // guardedHTTPSPrefixes 是承载凭据、泄露后能直接冒用身份的接口。

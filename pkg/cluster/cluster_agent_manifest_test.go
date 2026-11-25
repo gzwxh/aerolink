@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/clusteragent"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/clusteragent"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 func TestGetClusterAgentManifest(t *testing.T) {

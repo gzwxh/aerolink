@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // swapLogForwardQueue 换掉外发链路的全局状态（队列 / 配置 / 丢弃计数）。

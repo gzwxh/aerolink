@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/common"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 // 强制模式只收紧「明文凭据」这一个判定：密文、字段整体缺省、开关关闭都必须照旧。

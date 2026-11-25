@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 	"github.com/rancher/remotedialer"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"golang.org/x/crypto/hkdf"
 	"gorm.io/gorm"
 	"k8s.io/klog/v2"

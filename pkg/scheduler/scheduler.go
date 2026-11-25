@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/notification"
+	"aerolink/pkg/model"
+	"aerolink/pkg/notification"
 	"k8s.io/klog/v2"
 )
 

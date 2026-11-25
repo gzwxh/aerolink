@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 func TestSupersededSeq(t *testing.T) {

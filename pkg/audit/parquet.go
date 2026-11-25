@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/parquet-go/parquet-go"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/klog/v2"
 )
 

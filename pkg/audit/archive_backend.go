@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // archiveSearcher 是归档检索后端的统一接口：Elasticsearch、DuckDB（本地/S3 parquet）与两个外部日志

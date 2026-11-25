@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 )
 
 func TestDefaultGeneralNodeTerminalImageValue(t *testing.T) {

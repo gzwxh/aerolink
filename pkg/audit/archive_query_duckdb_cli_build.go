@@ -2,7 +2,7 @@
 
 package audit
 
-import "github.com/gzwxh/aerolink/pkg/model"
+import "aerolink/pkg/model"
 
 // 本文件是**纯 Go 构建**（`-tags duckdb_cli`）下的驱动选择：用 CLI 子进程查 parquet。
 //

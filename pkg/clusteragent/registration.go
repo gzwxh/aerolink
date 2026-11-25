@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gzwxh/aerolink/pkg/version"
+	"aerolink/pkg/version"
 	"golang.org/x/crypto/nacl/box"
 	"k8s.io/client-go/rest"
 )

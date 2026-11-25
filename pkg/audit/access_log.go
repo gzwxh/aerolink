@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // AccessLogEntry 是一次 HTTP 访问的原始信息（由 middleware.Logger 填充）。

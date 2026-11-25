@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/elastic/go-elasticsearch/v8"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/klog/v2"
 )
 

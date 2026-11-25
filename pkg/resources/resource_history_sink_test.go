@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
 	corev1 "k8s.io/api/core/v1"
 )
 

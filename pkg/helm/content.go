@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/helmutil"
+	"aerolink/pkg/model"
 	semver "github.com/blang/semver/v4"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/helmutil"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"helm.sh/helm/v4/pkg/chart/common"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
 	"helm.sh/helm/v4/pkg/registry"

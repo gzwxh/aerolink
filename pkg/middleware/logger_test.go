@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/audit"
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/audit"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // 归档 / 结构化输出里的 path 必须不含查询串。

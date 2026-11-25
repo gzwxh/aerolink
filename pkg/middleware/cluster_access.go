@@ -3,10 +3,10 @@ package middleware
 import (
 	"net/http"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
 )
 
 // RequireClusterAccess 保护那些没有单一 Kubernetes 资源可映射

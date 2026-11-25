@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"aerolink/pkg/cluster"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
 )
 
 const (

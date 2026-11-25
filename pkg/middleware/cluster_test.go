@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/kube"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/kube"
 )
 
 // 集群名经 x-cluster-name 传输时是 URL 编码的（HTTP 头只能带 ASCII）：写审计记录、

@@ -23,14 +23,14 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/mfa"
+	"aerolink/pkg/model"
+	"aerolink/pkg/notification"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/mfa"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/notification"
 
-	"github.com/gzwxh/aerolink/pkg/rbac"
-	"github.com/gzwxh/aerolink/pkg/transportkey"
+	"aerolink/pkg/rbac"
+	"aerolink/pkg/transportkey"
 	"k8s.io/klog/v2"
 )
 

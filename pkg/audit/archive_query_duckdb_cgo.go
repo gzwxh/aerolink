@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 	duckdb "github.com/duckdb/duckdb-go/v2"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/klog/v2"
 )
 

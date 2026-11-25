@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 // RequestIDHeader 是请求关联 ID 的 HTTP 头。

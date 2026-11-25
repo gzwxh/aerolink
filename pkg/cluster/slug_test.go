@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 

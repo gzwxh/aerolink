@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/cluster"
-	"github.com/gzwxh/aerolink/pkg/prometheus"
+	"aerolink/pkg/cluster"
+	"aerolink/pkg/prometheus"
 )
 
 func TestExecuteQueryPrometheusRequiresClient(t *testing.T) {

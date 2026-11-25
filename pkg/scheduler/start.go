@@ -3,7 +3,7 @@ package scheduler
 import (
 	"context"
 
-	"github.com/gzwxh/aerolink/pkg/cluster"
+	"aerolink/pkg/cluster"
 )
 
 func Start(ctx context.Context, cm *cluster.ClusterManager) {

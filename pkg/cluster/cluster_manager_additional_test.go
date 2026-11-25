@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	"aerolink/pkg/model"
 	"github.com/bytedance/mockey"
-	"github.com/gzwxh/aerolink/pkg/model"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/gzwxh/aerolink/pkg/kube"
+	"aerolink/pkg/kube"
 )
 
 func init() {

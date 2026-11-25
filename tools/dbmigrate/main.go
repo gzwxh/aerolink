@@ -22,9 +22,9 @@ import (
 	"strconv"
 	"strings"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
 	"github.com/glebarez/sqlite"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

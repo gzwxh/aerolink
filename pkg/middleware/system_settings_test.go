@@ -5,10 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/model"
+	"aerolink/pkg/rbac"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/model"
-	"github.com/gzwxh/aerolink/pkg/rbac"
 )
 
 // 系统设置权限拆成查看（settings + get）与管理（settings + update）：

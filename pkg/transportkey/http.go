@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"aerolink/pkg/common"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
 )
 
 // PublicKeyHandler 下发公钥。无需登录：登录表单在拿到会话之前就要用它加密口令。

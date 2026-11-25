@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"aerolink/pkg/model"
 	semver "github.com/blang/semver/v4"
-	"github.com/gzwxh/aerolink/pkg/model"
 )
 
 const (

@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
+	"aerolink/pkg/common"
+	"aerolink/pkg/middleware"
+	"aerolink/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"github.com/gzwxh/aerolink/pkg/common"
-	"github.com/gzwxh/aerolink/pkg/middleware"
-	"github.com/gzwxh/aerolink/pkg/utils"
 )
 
 //go:embed static

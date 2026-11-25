@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gzwxh/aerolink/pkg/common"
+	"aerolink/pkg/common"
 )
 
 const (

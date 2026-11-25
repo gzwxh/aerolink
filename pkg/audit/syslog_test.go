@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gzwxh/aerolink/pkg/model"
+	"aerolink/pkg/model"
 )
 
 // TestFormatSyslogLineMatchesLegacyOutput 是「序列化上移到 audit 层」的回归契约：
