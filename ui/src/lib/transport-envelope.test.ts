@@ -8,10 +8,18 @@ import {
   webcrypto,
 } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { encryptRequestBody, type EncryptedEnvelope } from './transport-envelope'
 
-const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 3072 })
-const publicKeyBase64 = publicKey.export({ type: 'spki', format: 'der' }).toString('base64')
+import {
+  encryptRequestBody,
+  type EncryptedEnvelope,
+} from './transport-envelope'
+
+const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+  modulusLength: 3072,
+})
+const publicKeyBase64 = publicKey
+  .export({ type: 'spki', format: 'der' })
+  .toString('base64')
 
 function stubTransportKey() {
   vi.stubGlobal(
@@ -32,9 +40,16 @@ function stubTransportKey() {
 }
 
 // 按服务端（Go pkg/transportkey）的步骤校验并还原：先认 MAC，再解 AES-CTR。
-function openEnvelope(envelope: EncryptedEnvelope): { ts: number; body: unknown } {
+function openEnvelope(envelope: EncryptedEnvelope): {
+  ts: number
+  body: unknown
+} {
   const sessionKey = privateDecrypt(
-    { key: privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+    {
+      key: privateKey,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256',
+    },
     Buffer.from(envelope.wrapped_key, 'base64')
   )
   expect(sessionKey).toHaveLength(64)
@@ -47,8 +62,15 @@ function openEnvelope(envelope: EncryptedEnvelope): { ts: number; body: unknown 
     .digest('hex')
   expect(Buffer.from(envelope.mac, 'base64').toString('hex')).toBe(expectedMac)
 
-  const decipher = createDecipheriv('aes-256-ctr', sessionKey.subarray(0, 32), iv)
-  const plaintext = Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8')
+  const decipher = createDecipheriv(
+    'aes-256-ctr',
+    sessionKey.subarray(0, 32),
+    iv
+  )
+  const plaintext = Buffer.concat([
+    decipher.update(data),
+    decipher.final(),
+  ]).toString('utf8')
   return JSON.parse(plaintext) as { ts: number; body: unknown }
 }
 
@@ -68,12 +90,18 @@ describe('encryptRequestBody', () => {
     stubTransportKey()
     stubCrypto(true)
 
-    const encrypted = await encryptRequestBody({ kind: 'Secret', data: { token: 'p@ss-中文' } })
+    const encrypted = await encryptRequestBody({
+      kind: 'Secret',
+      data: { token: 'p@ss-中文' },
+    })
 
     expect(encrypted.enc.alg).toBe('RSA-OAEP-256+AES-256-CTR-HMAC-SHA256')
     expect(encrypted.enc.key_id).toBe('test-key')
     const opened = openEnvelope(encrypted.enc)
-    expect(opened.body).toEqual({ kind: 'Secret', data: { token: 'p@ss-中文' } })
+    expect(opened.body).toEqual({
+      kind: 'Secret',
+      data: { token: 'p@ss-中文' },
+    })
     expect(Math.abs(opened.ts - Math.floor(Date.now() / 1000))).toBeLessThan(10)
   })
 
@@ -82,7 +110,10 @@ describe('encryptRequestBody', () => {
     stubTransportKey()
     stubCrypto(false)
 
-    const body = { kind: 'Secret', data: { 'tls.key': '-----BEGIN PRIVATE KEY-----' } }
+    const body = {
+      kind: 'Secret',
+      data: { 'tls.key': '-----BEGIN PRIVATE KEY-----' },
+    }
     const encrypted = await encryptRequestBody(body)
 
     expect(JSON.stringify(encrypted)).not.toContain('BEGIN PRIVATE KEY')

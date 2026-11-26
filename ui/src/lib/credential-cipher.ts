@@ -34,7 +34,13 @@ export async function encryptSecrets(
     const payload = JSON.stringify({ v: 1, ts, fields: { [name]: value } })
     const plaintext = new TextEncoder().encode(payload)
     const cipher = key.webKey
-      ? new Uint8Array(await crypto.subtle.encrypt({ name: ALGORITHM }, key.webKey, plaintext))
+      ? new Uint8Array(
+          await crypto.subtle.encrypt(
+            { name: ALGORITHM },
+            key.webKey,
+            plaintext
+          )
+        )
       : rsaOaepEncrypt(key.spki, plaintext)
     encrypted[`${name}_enc`] = bytesToBase64(cipher)
   }

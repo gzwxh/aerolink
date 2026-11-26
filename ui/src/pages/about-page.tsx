@@ -1,12 +1,18 @@
-import { Activity, Boxes, ExternalLink, ShieldCheck, Sparkles } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-
 import aboutDetail from '@/assets/about-detail.webp'
 import aboutOverview from '@/assets/about-overview.webp'
-import { Button } from '@/components/ui/button'
 import { useBranding } from '@/contexts/branding-context'
-import { usePageTitle } from '@/hooks/use-page-title'
+import {
+  Activity,
+  Boxes,
+  ExternalLink,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+
 import { useVersionInfo } from '@/lib/api/system'
+import { usePageTitle } from '@/hooks/use-page-title'
+import { Button } from '@/components/ui/button'
 
 /** 能力卡：文案在 i18n 的 about.capabilities.* 下。 */
 const CAPABILITIES = [
@@ -36,7 +42,9 @@ export function AboutPage() {
           <img src={logoUrl} alt={`${siteName} Logo`} className="h-12 w-12" />
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-semibold">{siteName}</h1>
-            <p className="text-sm text-muted-foreground">{t('about.tagline')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('about.tagline')}
+            </p>
           </div>
         </div>
         <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
@@ -56,7 +64,9 @@ export function AboutPage() {
       </header>
 
       <section className="space-y-4">
-        <h2 className="text-base font-semibold">{t('about.capabilitiesTitle')}</h2>
+        <h2 className="text-base font-semibold">
+          {t('about.capabilitiesTitle')}
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           {CAPABILITIES.map(({ key, icon: Icon }) => (
             <div key={key} className="rounded-lg border p-4">
@@ -75,7 +85,9 @@ export function AboutPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-base font-semibold">{t('about.screenshotsTitle')}</h2>
+        <h2 className="text-base font-semibold">
+          {t('about.screenshotsTitle')}
+        </h2>
         <div className="space-y-6">
           <figure className="space-y-2">
             <img

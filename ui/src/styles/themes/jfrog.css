@@ -117,7 +117,7 @@
   --chart-2: #bfd6e2; /* --info-line */
   --chart-3: #a9dfb0; /* --success-line */
   --chart-4: #efd89a; /* --warning-line */
-  --chart-5: #3268bc;  /* 原值对卡片 2.11，提亮至 3:1 */
+  --chart-5: #3268bc; /* 原值对卡片 2.11，提亮至 3:1 */
   --sidebar: #061121; /* --ink-1 */
   --sidebar-foreground: #eef9ff; /* --topbar-ink */
   --sidebar-primary: #40be46; /* --brand-bright */

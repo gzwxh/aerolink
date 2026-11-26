@@ -6,10 +6,15 @@ import {
   webcrypto,
 } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import { encryptSecrets } from './credential-cipher'
 
-const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 3072 })
-const publicKeyBase64 = publicKey.export({ type: 'spki', format: 'der' }).toString('base64')
+const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+  modulusLength: 3072,
+})
+const publicKeyBase64 = publicKey
+  .export({ type: 'spki', format: 'der' })
+  .toString('base64')
 
 function stubTransportKey() {
   vi.stubGlobal(
@@ -31,7 +36,11 @@ function stubTransportKey() {
 
 function decrypt(cipherBase64: string): unknown {
   const plain = privateDecrypt(
-    { key: privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+    {
+      key: privateKey,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256',
+    },
     Buffer.from(cipherBase64, 'base64')
   )
   return JSON.parse(plain.toString('utf8'))

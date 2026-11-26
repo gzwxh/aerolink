@@ -75,7 +75,9 @@ describe('extractConditions', () => {
           {
             name: 'http',
             attachedRoutes: 1,
-            conditions: [{ type: 'Accepted', status: 'False', reason: 'PortUnavailable' }],
+            conditions: [
+              { type: 'Accepted', status: 'False', reason: 'PortUnavailable' },
+            ],
           },
         ],
       },

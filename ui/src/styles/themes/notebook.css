@@ -31,8 +31,8 @@
   --chart-1: oklch(0.3211 0 0);
   --chart-2: oklch(0.4495 0 0);
   --chart-3: oklch(0.5693 0 0);
-  --chart-4: oklch(0.6650 0 0);  /* 原值对卡片 2.85，压暗至 3:1 */
-  --chart-5: oklch(0.6641 0 0);  /* 原值对卡片 1.92，压暗至 3:1 */
+  --chart-4: oklch(0.665 0 0); /* 原值对卡片 2.85，压暗至 3:1 */
+  --chart-5: oklch(0.6641 0 0); /* 原值对卡片 1.92，压暗至 3:1 */
   --sidebar: oklch(0.9551 0 0);
   --sidebar-foreground: oklch(0.3485 0 0);
   --sidebar-primary: oklch(0.4891 0 0);
@@ -93,7 +93,7 @@
   --chart-2: oklch(0.8576 0 0);
   --chart-3: oklch(0.7572 0 0);
   --chart-4: oklch(0.6534 0 0);
-  --chart-5: oklch(0.5892 0 0);  /* 原值对卡片 2.55，提亮至 3:1 */
+  --chart-5: oklch(0.5892 0 0); /* 原值对卡片 2.55，提亮至 3:1 */
   --sidebar: oklch(0.2478 0 0);
   --sidebar-foreground: oklch(0.8945 0 0);
   --sidebar-primary: oklch(0.7572 0 0);

@@ -20,7 +20,10 @@ function mgf1(seed: Uint8Array, length: number): Uint8Array {
     input.set(seed)
     input.set(counter, seed.length)
     const digest = sha256(input)
-    output.set(digest.subarray(0, Math.min(digest.length, length - written)), written)
+    output.set(
+      digest.subarray(0, Math.min(digest.length, length - written)),
+      written
+    )
     written += digest.length
   }
   return output
@@ -91,7 +94,10 @@ function readTlv(bytes: Uint8Array, offset: number): Tlv {
 }
 
 // 解析 SubjectPublicKeyInfo：SEQUENCE{ AlgorithmIdentifier, BIT STRING { RSAPublicKey } }
-export function parseRsaPublicKey(spki: Uint8Array): { modulus: bigint; exponent: bigint } {
+export function parseRsaPublicKey(spki: Uint8Array): {
+  modulus: bigint
+  exponent: bigint
+} {
   const outer = readTlv(spki, 0)
   if (outer.tag !== 0x30) {
     throw new Error('public key is not a DER sequence')
@@ -131,7 +137,9 @@ export function rsaOaepEncrypt(
 
   // 服务端用 rsa.EncryptOAEP/DecryptOAEP 且 label 为 nil，等价于空串。
   const labelHash = sha256(new Uint8Array(0))
-  const padding = new Uint8Array(modulusLength - message.length - 2 * HASH_BYTES - 2)
+  const padding = new Uint8Array(
+    modulusLength - message.length - 2 * HASH_BYTES - 2
+  )
   const dataBlock = concatBytes([labelHash, padding, Uint8Array.of(1), message])
 
   const seed = random(HASH_BYTES)

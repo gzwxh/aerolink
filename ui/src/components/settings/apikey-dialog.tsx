@@ -3,12 +3,12 @@ import { IconCopy } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { CreatedAPIKey } from '@/types/api'
+import { copyToClipboard } from '@/lib/clipboard'
 import {
   useDraftDirty,
   useUnsavedChangesGuard,
 } from '@/hooks/use-unsaved-changes-guard'
-import { copyToClipboard } from '@/lib/clipboard'
-import { CreatedAPIKey } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

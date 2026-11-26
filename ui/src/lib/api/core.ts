@@ -27,8 +27,8 @@ import {
   WorkloadRevisionsResponse,
 } from '@/types/api'
 import type { CustomResource } from '@/types/api'
-import { getResourceQueryKey } from '@/lib/resource-metadata'
 import { supportsRelatedResources } from '@/lib/resource-catalog'
+import { getResourceQueryKey } from '@/lib/resource-metadata'
 import { useCluster } from '@/hooks/use-cluster'
 
 import { API_BASE_URL, apiClient } from '../api-client'

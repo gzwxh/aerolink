@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SecuritySetting } from '@/lib/api'
+
 import { SecurityManagement } from './security-management'
 
 // 回归（验收台账 D-167）：安全设置是**全局即时生效**的准入策略，以前点「提交」直接
@@ -120,14 +121,18 @@ describe('安全设置提交前对收紧项的确认', () => {
     const user = userEvent.setup()
 
     await user.click(switchOf('securitySettings.fields.rejectUnknownUsers'))
-    await user.click(screen.getByRole('button', { name: 'common.actions.submit' }))
+    await user.click(
+      screen.getByRole('button', { name: 'common.actions.submit' })
+    )
 
     // 弹窗列出具体是哪一项，而不是只问「确定吗」
     expect(
       await screen.findByText('securitySettings.lockoutConfirm.title')
     ).toBeInTheDocument()
     expect(
-      screen.getByText('securitySettings.lockoutConfirm.risks.rejectUnknownUsers')
+      screen.getByText(
+        'securitySettings.lockoutConfirm.risks.rejectUnknownUsers'
+      )
     ).toBeInTheDocument()
     // 关键：还没写库
     expect(mockUpdate).not.toHaveBeenCalled()
@@ -138,7 +143,9 @@ describe('安全设置提交前对收紧项的确认', () => {
     const user = userEvent.setup()
 
     await user.click(switchOf('securitySettings.fields.rejectUnknownUsers'))
-    await user.click(screen.getByRole('button', { name: 'common.actions.submit' }))
+    await user.click(
+      screen.getByRole('button', { name: 'common.actions.submit' })
+    )
     await user.click(
       await screen.findByRole('button', {
         name: 'securitySettings.lockoutConfirm.confirm',
@@ -154,7 +161,9 @@ describe('安全设置提交前对收紧项的确认', () => {
     const user = userEvent.setup()
 
     await user.click(switchOf('securitySettings.fields.rejectUnknownUsers'))
-    await user.click(screen.getByRole('button', { name: 'common.actions.submit' }))
+    await user.click(
+      screen.getByRole('button', { name: 'common.actions.submit' })
+    )
     await user.click(
       await screen.findByRole('button', { name: 'common.actions.cancel' })
     )
@@ -173,7 +182,9 @@ describe('安全设置提交前对收紧项的确认', () => {
 
     // 关掉它属于放宽
     await user.click(switchOf('securitySettings.fields.rejectUnknownUsers'))
-    await user.click(screen.getByRole('button', { name: 'common.actions.submit' }))
+    await user.click(
+      screen.getByRole('button', { name: 'common.actions.submit' })
+    )
 
     expect(
       screen.queryByText('securitySettings.lockoutConfirm.title')

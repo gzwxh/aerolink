@@ -409,10 +409,7 @@ export function PodFileBrowser({
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setPendingOverwrite(null)}
-            >
+            <Button variant="outline" onClick={() => setPendingOverwrite(null)}>
               {t('common.actions.cancel', '取消')}
             </Button>
             <Button onClick={confirmOverwrite} disabled={isUploading}>

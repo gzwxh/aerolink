@@ -92,7 +92,11 @@ function expandKey(key: Uint8Array): Uint8Array {
   return schedule
 }
 
-function addRoundKey(state: Uint8Array, schedule: Uint8Array, round: number): void {
+function addRoundKey(
+  state: Uint8Array,
+  schedule: Uint8Array,
+  round: number
+): void {
   const offset = round * 16
   for (let i = 0; i < 16; i += 1) {
     state[i] ^= schedule[offset + i]
@@ -136,11 +140,15 @@ function mixColumns(state: Uint8Array): void {
     state[column] = xtime(a0) ^ (xtime(a1) ^ a1) ^ a2 ^ a3
     state[column + 1] = a0 ^ xtime(a1) ^ (xtime(a2) ^ a2) ^ a3
     state[column + 2] = a0 ^ a1 ^ xtime(a2) ^ (xtime(a3) ^ a3)
-    state[column + 3] = (xtime(a0) ^ a0) ^ a1 ^ a2 ^ xtime(a3)
+    state[column + 3] = xtime(a0) ^ a0 ^ a1 ^ a2 ^ xtime(a3)
   }
 }
 
-function encryptBlock(input: Uint8Array, schedule: Uint8Array, output: Uint8Array): void {
+function encryptBlock(
+  input: Uint8Array,
+  schedule: Uint8Array,
+  output: Uint8Array
+): void {
   const state = new Uint8Array(16)
   state.set(input)
   addRoundKey(state, schedule, 0)
@@ -160,7 +168,11 @@ function encryptBlock(input: Uint8Array, schedule: Uint8Array, output: Uint8Arra
  * AES-256-CTR 加密。计数器是 16 字节大端整数，从 iv 起递增，与服务端 crypto/cipher 的
  * CTR 模式一致。
  */
-export function aesCtrEncrypt(key: Uint8Array, iv: Uint8Array, data: Uint8Array): Uint8Array {
+export function aesCtrEncrypt(
+  key: Uint8Array,
+  iv: Uint8Array,
+  data: Uint8Array
+): Uint8Array {
   if (key.length !== 32) {
     throw new Error('AES-256 requires a 32-byte key')
   }

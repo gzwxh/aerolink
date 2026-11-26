@@ -65,8 +65,7 @@ export function ResourceBatchActionDialog<T extends BatchResource>({
   // 执行期间用一份名单快照：调用方的 onComplete 通常会清掉勾选并重拉数据，
   // 那时 `resources` 会变成空数组，失败面板就会把计数写成「Done -1/0」。
   const [snapshot, setSnapshot] = useState<T[]>([])
-  const shownResources =
-    isRunning || failures.length > 0 ? snapshot : resources
+  const shownResources = isRunning || failures.length > 0 ? snapshot : resources
 
   const reset = () => {
     setProgress({ done: 0, total: 0 })

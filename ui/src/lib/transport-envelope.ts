@@ -8,7 +8,11 @@
 import { aesCtrEncrypt } from './aes-ctr'
 import { rsaOaepEncrypt } from './rsa-oaep'
 import { concatBytes, hmacSha256 } from './sha256'
-import { bytesToBase64, fetchTransportKey, type PublicKeyMaterial } from './transport-key'
+import {
+  bytesToBase64,
+  fetchTransportKey,
+  type PublicKeyMaterial,
+} from './transport-key'
 
 const ENVELOPE_ALG = 'RSA-OAEP-256+AES-256-CTR-HMAC-SHA256'
 const SESSION_KEY_BYTES = 64 // 前 32 字节 AES 密钥，后 32 字节 HMAC 密钥
@@ -34,9 +38,13 @@ async function encryptWithSessionKey(
   plaintext: Uint8Array<ArrayBuffer>
 ): Promise<Uint8Array> {
   if (globalThis.crypto?.subtle) {
-    const subtleKey = await crypto.subtle.importKey('raw', key, { name: 'AES-CTR' }, false, [
-      'encrypt',
-    ])
+    const subtleKey = await crypto.subtle.importKey(
+      'raw',
+      key,
+      { name: 'AES-CTR' },
+      false,
+      ['encrypt']
+    )
     const cipher = await crypto.subtle.encrypt(
       { name: 'AES-CTR', counter: iv, length: 128 },
       subtleKey,
@@ -81,7 +89,9 @@ async function wrapSessionKey(
  *
  * 离开浏览器后，代理日志里只会看到 key_id 与算法标识，正文与时间戳都在 MAC 保护范围内。
  */
-export async function encryptRequestBody(body: unknown): Promise<EncryptedRequestBody> {
+export async function encryptRequestBody(
+  body: unknown
+): Promise<EncryptedRequestBody> {
   const transportKey = await fetchTransportKey()
   const sessionKey = crypto.getRandomValues(new Uint8Array(SESSION_KEY_BYTES))
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
@@ -89,8 +99,15 @@ export async function encryptRequestBody(body: unknown): Promise<EncryptedReques
   const payload = new TextEncoder().encode(
     JSON.stringify({ ts: Math.floor(Date.now() / 1000), body })
   )
-  const data = await encryptWithSessionKey(sessionKey.subarray(0, 32), iv, payload)
-  const mac = await authenticate(sessionKey.subarray(32), concatBytes([iv, data]))
+  const data = await encryptWithSessionKey(
+    sessionKey.subarray(0, 32),
+    iv,
+    payload
+  )
+  const mac = await authenticate(
+    sessionKey.subarray(32),
+    concatBytes([iv, data])
+  )
   const wrappedKey = await wrapSessionKey(transportKey, sessionKey)
 
   return {

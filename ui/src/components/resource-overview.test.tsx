@@ -47,7 +47,9 @@ describe('ResourceOverview 的状态条件', () => {
     expect(screen.getByText('Ready')).toBeInTheDocument()
     expect(screen.getByText('False')).toBeInTheDocument()
     // reason 与 message 拼在同一条说明里，排查时不用再翻 YAML
-    expect(screen.getByText(/FailedIssue/)).toHaveTextContent('issuer not ready')
+    expect(screen.getByText(/FailedIssue/)).toHaveTextContent(
+      'issuer not ready'
+    )
   })
 
   it('路由的 parent 条件带上是哪个网关给的', () => {

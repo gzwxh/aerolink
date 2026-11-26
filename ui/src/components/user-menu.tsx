@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
+import { useBranding } from '@/contexts/branding-context'
 import { Info, LogOut, UserCog } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { useBranding } from '@/contexts/branding-context'
 import { resolveAvatarSrc } from '@/lib/avatar-url'
 import { useClusterNavigate } from '@/lib/cluster-path'
 import { MFA_SETUP_REQUEST_EVENT } from '@/lib/mfa-prompt'
