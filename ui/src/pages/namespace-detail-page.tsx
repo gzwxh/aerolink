@@ -19,6 +19,16 @@ import {
 } from '@/lib/api'
 import { useClusterNavigate } from '@/lib/cluster-path'
 import { getPodStatus } from '@/lib/k8s'
+import {
+  formatCpuShort,
+  formatMemoryShort,
+  getPodConsumptions,
+  parseCpuCores,
+  parseMemoryMi,
+  quotaBarColor,
+  quotaTextColor,
+  quotaUsagePercent,
+} from '@/lib/quota'
 import { getResourceDetailPath } from '@/lib/resource-catalog'
 import { getAge, translateError } from '@/lib/utils'
 import { useCan } from '@/hooks/use-can'
@@ -204,7 +214,24 @@ export function NamespaceDetailPage({ name }: { name: string }) {
   )
 
   const quota = quotas[0] as
-    (MutableItem & { spec?: { hard?: Record<string, unknown> } }) | undefined
+    | (MutableItem & {
+        spec?: { hard?: Record<string, unknown> }
+        status?: { used?: Record<string, unknown> }
+      })
+    | undefined
+
+  const hard = (quota?.spec?.hard || {}) as Record<string, unknown>
+  const used = (quota?.status?.used || {}) as Record<string, unknown>
+
+  // used/hard 只是几个字段的解析，不值得上 useMemo；用普通计算避免依赖告警
+  const parseCpu = (source: Record<string, unknown>, key: string) =>
+    parseCpuCores(source[key])
+  const parseMem = (source: Record<string, unknown>, key: string) =>
+    parseMemoryMi(source[key])
+
+  const podConsumptions = useMemo(() => getPodConsumptions(pods), [pods])
+  const totalPodCpu = podConsumptions.reduce((s, p) => s + p.cpuRequest, 0)
+  const totalPodMem = podConsumptions.reduce((s, p) => s + p.memoryRequest, 0)
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -224,13 +251,73 @@ export function NamespaceDetailPage({ name }: { name: string }) {
     }
   }
 
-  const hard = (quota?.spec?.hard || {}) as Record<string, unknown>
-  const quotaCells: Array<[string, unknown]> = [
-    ['CPU', hard['limits.cpu'] ?? hard['requests.cpu']],
-    ['Memory', hard['limits.memory'] ?? hard['requests.memory']],
-    ['Pods', hard['pods']],
-    ['GPU', hard['limits.nvidia.com/gpu']],
-  ]
+  // 只列出 spec.hard 里实际配置的资源项；requests 与 limits 分开成行：
+  // 调度与配额记账看 requests，而 403 报错（exceeded quota）里的 used 是 limits——
+  // 两种口径都要能看到才能对上报错原文。
+  const quotaRows: Array<{
+    label: string
+    used: number
+    hard: number
+    pct: number
+    format: (v: number) => string
+  }> = []
+  const pushQuotaRow = (
+    label: string,
+    usedValue: number,
+    hardValue: number,
+    format: (v: number) => string
+  ) => {
+    quotaRows.push({
+      label,
+      used: usedValue,
+      hard: hardValue,
+      pct: quotaUsagePercent(usedValue, hardValue),
+      format,
+    })
+  }
+  if (hard['requests.cpu'] !== undefined) {
+    pushQuotaRow(
+      t('nsDetail.quotaCpuRequests', 'CPU 请求'),
+      parseCpu(used, 'requests.cpu'),
+      parseCpu(hard, 'requests.cpu'),
+      formatCpuShort
+    )
+  }
+  if (hard['limits.cpu'] !== undefined) {
+    pushQuotaRow(
+      t('nsDetail.quotaCpuLimits', 'CPU 上限'),
+      parseCpu(used, 'limits.cpu'),
+      parseCpu(hard, 'limits.cpu'),
+      formatCpuShort
+    )
+  }
+  if (hard['requests.memory'] !== undefined) {
+    pushQuotaRow(
+      t('nsDetail.quotaMemoryRequests', '内存请求'),
+      parseMem(used, 'requests.memory'),
+      parseMem(hard, 'requests.memory'),
+      formatMemoryShort
+    )
+  }
+  if (hard['limits.memory'] !== undefined) {
+    pushQuotaRow(
+      t('nsDetail.quotaMemoryLimits', '内存上限'),
+      parseMem(used, 'limits.memory'),
+      parseMem(hard, 'limits.memory'),
+      formatMemoryShort
+    )
+  }
+  if (hard['pods'] !== undefined) {
+    pushQuotaRow(
+      t('common.fields.pods', 'Pods'),
+      Number(used['pods'] || 0),
+      Number(hard['pods'] || 0),
+      (v) => String(Math.round(v))
+    )
+  }
+
+  const gpuHard = hard['limits.nvidia.com/gpu']
+  const gpuUsed = used['limits.nvidia.com/gpu']
 
   return (
     <>
@@ -283,19 +370,57 @@ export function NamespaceDetailPage({ name }: { name: string }) {
             {quota && (
               <div>
                 <div className="mb-2 text-sm font-medium">
-                  {t('nsEdit.quotaTitle', 'Container Resource Limits')}
+                  {t('nsDetail.quotaUsageTitle', '资源配额使用')}
                 </div>
                 <div className="rounded-md border">
-                  <div className="grid grid-cols-2 gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground sm:grid-cols-4">
-                    {quotaCells.map(([label]) => (
-                      <span key={label}>{label}</span>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 px-3 py-2 text-sm sm:grid-cols-4">
-                    {quotaCells.map(([label, value]) => (
-                      <span key={label}>{value ? String(value) : '-'}</span>
-                    ))}
-                  </div>
+                  {quotaRows.map((row) => (
+                    <div
+                      key={row.label}
+                      className="flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0"
+                    >
+                      <span className="w-20 shrink-0 whitespace-nowrap text-sm font-medium">
+                        {row.label}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-0.5 flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">
+                            {row.format(row.used)} / {row.format(row.hard)}
+                          </span>
+                          <span
+                            className={`ml-2 font-semibold tabular-nums ${quotaTextColor(row.pct)}`}
+                          >
+                            {row.pct}%
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={`h-full rounded-full transition-all ${quotaBarColor(row.pct)}`}
+                            style={{
+                              width: `${Math.min(row.pct, 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {gpuHard !== undefined && (
+                    <div className="flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0">
+                      <span className="w-20 shrink-0 whitespace-nowrap text-sm font-medium">
+                        GPU
+                      </span>
+                      <div className="flex-1 text-xs text-muted-foreground">
+                        {String(gpuUsed ?? '-')} / {String(gpuHard)}
+                      </div>
+                    </div>
+                  )}
+                  {quotaRows.length === 0 && !gpuHard && (
+                    <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+                      {t(
+                        'nsDetail.quotaNotConfigured',
+                        '未配置资源配额，命名空间内工作负载不受资源限制'
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -328,6 +453,65 @@ export function NamespaceDetailPage({ name }: { name: string }) {
                     ))}
                   </div>
                 </div>
+
+                {podConsumptions.length > 0 && (
+                  <div>
+                    <div className="mb-2 text-sm font-medium">
+                      {t('nsDetail.quotaConsumersTitle', 'Pod 资源占用明细')}
+                    </div>
+                    <div className="overflow-hidden rounded-md border">
+                      <div className="grid grid-cols-[minmax(0,2fr)_72px_72px] items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground">
+                        <span>{t('common.fields.name', 'Name')}</span>
+                        <span className="text-right">
+                          {t('nsDetail.cpuRequestLabel', 'CPU 请求')}
+                        </span>
+                        <span className="text-right">
+                          {t('nsDetail.memoryRequestLabel', '内存请求')}
+                        </span>
+                      </div>
+                      {podConsumptions
+                        .filter((p) => p.cpuRequest > 0 || p.memoryRequest > 0)
+                        .map((p) => (
+                          <div
+                            key={p.name}
+                            className="grid grid-cols-[minmax(0,2fr)_72px_72px] items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0"
+                          >
+                            <ClusterLink
+                              to={`/pods/${name}/${p.name}`}
+                              className="app-link truncate font-mono text-xs font-medium"
+                              title={p.name}
+                            >
+                              {p.name}
+                            </ClusterLink>
+                            <span className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+                              {formatCpuShort(p.cpuRequest)}
+                            </span>
+                            <span className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+                              {formatMemoryShort(p.memoryRequest)}
+                            </span>
+                          </div>
+                        ))}
+                      <div className="flex items-center gap-3 border-t bg-muted/30 px-3 py-2 text-xs font-semibold">
+                        <span className="flex-1">
+                          {t('nsDetail.quotaConsumersTotal', '合计')}
+                        </span>
+                        <span className="w-[72px] text-right font-mono tabular-nums">
+                          {formatCpuShort(totalPodCpu)}
+                        </span>
+                        <span className="w-[72px] text-right font-mono tabular-nums">
+                          {formatMemoryShort(totalPodMem)}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t(
+                        'nsDetail.quotaConsumersHint',
+                        '按 Pod 的 container[].resources.requests 汇总；实际调度以 limits 为准'
+                      )}
+                    </p>
+                  </div>
+                )}
+
                 <div className="overflow-hidden rounded-md border">
                   <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1.5fr)_auto_auto] items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground">
                     <span>{t('common.fields.status', 'Status')}</span>

@@ -265,6 +265,7 @@
       "volumeMounts": "Volume Mounts",
       "volumes": "Volumes",
       "ip": "IP",
+      "sourceIp": "Source IP",
       "userAgent": "Client",
       "loginLogs": "Login Logs",
       "passwordChangeLogs": "Password Change Logs",
@@ -1404,7 +1405,18 @@
   "nsDetail": {
     "podStatsTitle": "Pod Status",
     "workloadsTab": "Workloads",
-    "podsTab": "Pods"
+    "podsTab": "Pods",
+    "quotaUsageTitle": "Resource Quota Usage",
+    "quotaCpuRequests": "CPU Requests",
+    "quotaCpuLimits": "CPU Limits",
+    "quotaMemoryRequests": "Memory Requests",
+    "quotaMemoryLimits": "Memory Limits",
+    "quotaNotConfigured": "No resource quota configured; workloads in this namespace are not limited.",
+    "quotaConsumersTitle": "Pod Resource Requests",
+    "quotaConsumersTotal": "Total",
+    "cpuRequestLabel": "CPU Request",
+    "memoryRequestLabel": "Memory Request",
+    "quotaConsumersHint": "Summed from each pod's container[].resources.requests; scheduling is based on limits."
   },
   "nodeEdit": {
     "title": "Edit node: {{name}}",

@@ -1405,7 +1405,18 @@
   "nsDetail": {
     "podStatsTitle": "Pod 状态",
     "workloadsTab": "工作负载",
-    "podsTab": "Pod"
+    "podsTab": "Pod",
+    "quotaUsageTitle": "资源配额使用",
+    "quotaCpuRequests": "CPU 请求",
+    "quotaCpuLimits": "CPU 上限",
+    "quotaMemoryRequests": "内存请求",
+    "quotaMemoryLimits": "内存上限",
+    "quotaNotConfigured": "未配置资源配额，命名空间内工作负载不受资源限制",
+    "quotaConsumersTitle": "Pod 资源占用明细",
+    "quotaConsumersTotal": "合计",
+    "cpuRequestLabel": "CPU 请求",
+    "memoryRequestLabel": "内存请求",
+    "quotaConsumersHint": "按 Pod 的 container[].resources.requests 汇总；实际调度以 limits 为准"
   },
   "nodeEdit": {
     "title": "编辑节点：{{name}}",
