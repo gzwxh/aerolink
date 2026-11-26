@@ -17,7 +17,7 @@ import (
 // templateVariables 记录每个事件可用的占位符，
 // 便于模板编辑器把它们列出来。
 var templateVariables = map[string][]string{
-	model.NotificationEventRemoteLogin:          {"username", "ip", "time", "provider", "userAgent"},
+	model.NotificationEventRemoteLogin:          {"username", "ip", "sourceIp", "time", "provider", "userAgent"},
 	model.NotificationEventPasswordExpiring:     {"username", "days", "expireDate"},
 	model.NotificationEventPasswordExpired:      {"username", "expireDate"},
 	model.NotificationEventInactiveUserDisabled: {"username", "days"},

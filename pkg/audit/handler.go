@@ -220,7 +220,8 @@ func loginLogQuery(c *gin.Context, from, to time.Time, toIsDateOnly bool) (*gorm
 	}
 	if search != "" {
 		like := "%" + search + "%"
-		query = query.Where(model.PatternLikeSQL("username")+" OR "+model.PatternLikeSQL("ip"), like, like)
+		// 同时匹配来源 IP：IP 列是公网出口时，内网原始地址只存在 source_ip。
+		query = query.Where(model.PatternLikeSQL("username")+" OR "+model.PatternLikeSQL("ip")+" OR "+model.PatternLikeSQL("source_ip"), like, like, like)
 	}
 	return applyTimeRange(query, from, to, toIsDateOnly), true
 }

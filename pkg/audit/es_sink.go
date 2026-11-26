@@ -44,9 +44,11 @@ const (
 	esFieldProvider      = "provider"
 	esFieldResult        = "result"
 	esFieldClientIP      = "client_ip"
-	esFieldMethod        = "method"
-	esFieldPath          = "path"
-	esFieldStatusCode    = "status_code"
+	// esFieldSourceIP 是登录日志的原始客户端 IP（X-Forwarded-For 最左边）。
+	esFieldSourceIP   = "source_ip"
+	esFieldMethod     = "method"
+	esFieldPath       = "path"
+	esFieldStatusCode = "status_code"
 )
 
 // ESDocument 是一条待写入的日志文档。

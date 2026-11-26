@@ -61,6 +61,8 @@ type AuditMessage struct {
 	Provider string
 	// Result 为 AuditResultSuccess 或失败原因码（登录）；改密不使用。
 	Result string
+	// SourceIP 是原始客户端 IP（仅登录记录）。
+	SourceIP string
 	// Operator / Source 为改密日志的字段。
 	Operator string
 	Source   string
@@ -180,6 +182,7 @@ func loginAuditMessage(l *LoginRecord) AuditMessage {
 		Provider:  l.Provider,
 		Result:    result,
 		ClientIP:  l.IP,
+		SourceIP:  l.SourceIP,
 		UserAgent: l.UserAgent,
 	}
 }

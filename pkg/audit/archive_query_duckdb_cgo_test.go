@@ -129,6 +129,91 @@ func TestDuckDBSDKBackendSearchesRealParquet(t *testing.T) {
 	}
 }
 
+// legacyLoginRecordRow 是本次新增 source_ip 列之前的 parquet 行形状，用于验证旧归档兼容。
+type legacyLoginRecordRow struct {
+	ID        uint64 `parquet:"id"`
+	CreatedAt int64  `parquet:"created_at"`
+	UserID    uint64 `parquet:"user_id"`
+	Username  string `parquet:"username"`
+	Provider  string `parquet:"provider"`
+	IP        string `parquet:"ip"`
+	UserAgent string `parquet:"user_agent"`
+	Result    string `parquet:"result"`
+}
+
+// writeLoginRecordParquet 把任意 parquet 行写入登录日志归档（同一套目录布局）。
+func writeLoginRecordParquet[T any](t *testing.T, archiveDir, name string, day time.Time, rows []T) {
+	t.Helper()
+
+	dir := filepath.Join(archiveDir, string(KindLoginRecord), day.Format("2006"), day.Format("01"), day.Format("02"))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", dir, err)
+	}
+	path := filepath.Join(dir, name)
+
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create %s: %v", path, err)
+	}
+	writer := parquet.NewGenericWriter[T](file)
+	if _, err := writer.Write(rows); err != nil {
+		t.Fatalf("write parquet: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close parquet writer: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close %s: %v", path, err)
+	}
+}
+
+// 旧归档文件没有 source_ip 列：同一时间窗内新旧文件混查时，必须按列名对齐而不是按位置，
+// 否则新增列会把后面的 user_agent/result 整体错位（读到别的列的值）。
+func TestDuckDBSDKBackendMixesLegacyLoginArchivesWithoutSourceIP(t *testing.T) {
+	day := time.Date(2026, 9, 21, 0, 0, 0, 0, time.Local)
+	localDir := t.TempDir()
+
+	writeLoginRecordParquet(t, localDir, "login-old.parquet", day, []legacyLoginRecordRow{{
+		ID: 1, CreatedAt: day.Add(1 * time.Hour).UnixMilli(),
+		Username: "old", Provider: "password", IP: "203.0.113.7",
+		UserAgent: "legacy-agent", Result: model.AuditResultSuccess,
+	}})
+	writeLoginRecordParquet(t, localDir, "login-new.parquet", day, []loginRecordRow{{
+		ID: 2, CreatedAt: day.Add(2 * time.Hour).UnixMilli(),
+		Username: "new", Provider: "password", IP: "203.0.113.50", SourceIP: "10.1.2.100",
+		UserAgent: "new-agent", Result: model.AuditResultSuccess,
+	}})
+
+	backend, err := NewDuckDBBackend(localDir, model.S3Archive{})
+	if err != nil {
+		t.Fatalf("NewDuckDBBackend() error = %v", err)
+	}
+	result, err := backend.Search(context.Background(), archiveQuery{
+		kind:      ESKindLoginRecord,
+		timeField: esFieldCreatedAt,
+	}, day, day.Add(24*time.Hour), 1, 20)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result.Total != 2 || len(result.Hits) != 2 {
+		t.Fatalf("total=%d hits=%d, want 2/2", result.Total, len(result.Hits))
+	}
+
+	newest := decodeArchiveHit(t, result.Hits[0])
+	if newest["username"] != "new" || newest["source_ip"] != "10.1.2.100" || newest["user_agent"] != "new-agent" {
+		t.Errorf("new-format row = %v, want username=new source_ip=10.1.2.100 user_agent=new-agent", newest)
+	}
+
+	oldest := decodeArchiveHit(t, result.Hits[1])
+	// 旧文件没有该列：按列名对齐后应为 NULL，而不是错位拿到 user_agent。
+	if sourceIP := oldest["source_ip"]; sourceIP != nil {
+		t.Errorf("legacy row source_ip = %v (%T), want nil", sourceIP, sourceIP)
+	}
+	if oldest["user_agent"] != "legacy-agent" || oldest["result"] != model.AuditResultSuccess {
+		t.Errorf("legacy row = %v, want user_agent=legacy-agent result=success（列不能错位）", oldest)
+	}
+}
+
 // 分页：第二页只拿到剩下的那条，且总数不变（count(*) OVER () 在 LIMIT 之前算）。
 func TestDuckDBSDKBackendPaginates(t *testing.T) {
 	day := time.Date(2026, 9, 21, 0, 0, 0, 0, time.Local)

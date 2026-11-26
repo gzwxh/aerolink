@@ -265,6 +265,7 @@
       "volumeMounts": "卷挂载",
       "volumes": "卷",
       "ip": "IP 地址",
+      "sourceIp": "来源 IP",
       "userAgent": "客户端",
       "loginLogs": "登录日志",
       "passwordChangeLogs": "改密日志",

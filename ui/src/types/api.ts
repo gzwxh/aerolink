@@ -1007,6 +1007,8 @@ export interface LoginRecord {
   username: string
   provider: string
   ip: string
+  /** 原始客户端 IP（X-Forwarded-For 最左边）：当 ip 是公网出口时，这里保留内网来源。 */
+  sourceIp?: string
   userAgent: string
   /**
    * 空字符串 = 登录成功；非空 = 失败原因码（invalid_credentials /

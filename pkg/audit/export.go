@@ -115,11 +115,12 @@ func ExportLoginLogs(c *gin.Context) {
 			strconv.FormatBool(row.Result == model.LoginResultSuccess),
 			row.Result,
 			row.IP,
+			row.SourceIP,
 			row.UserAgent,
 		})
 	}
 
-	header := []string{"time", "username", "provider", "success", "reason", "ip", "userAgent"}
+	header := []string{"time", "username", "provider", "success", "reason", "ip", "sourceIp", "userAgent"}
 	from, to = effectiveTimeRange(from, to, dateOnly)
 	writeCSV(c, "aerolink-login-logs", header, records, from, to)
 }

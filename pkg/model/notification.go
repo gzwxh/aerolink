@@ -201,7 +201,10 @@ type LoginRecord struct {
 	Username  string    `json:"username" gorm:"type:varchar(50);index"`
 	Provider  string    `json:"provider" gorm:"type:varchar(50)"`
 	IP        string    `json:"ip" gorm:"type:varchar(64);index:idx_login_records_user_ip,priority:2"`
-	UserAgent string    `json:"userAgent" gorm:"type:text"`
+	// SourceIP 是原始客户端 IP（取自 X-Forwarded-For 最左边），当 IP 为公网出口
+	// 地址时，SourceIP 保留内网原始来源，与 IP 互补实现内外网双维度审计。
+	SourceIP  string `json:"sourceIp" gorm:"type:varchar(64)"`
+	UserAgent string `json:"userAgent" gorm:"type:text"`
 	// Result 区分成功与失败：空字符串 = 登录成功，非空 = 失败原因码
 	// （invalid_credentials / mfa_invalid / ip_denied / ...）。
 	//
@@ -270,6 +273,7 @@ var defaultNotificationTemplates = map[string]struct {
 
   登录时间：{{time}}
   登录 IP：{{ip}}
+  来源 IP：{{sourceIp}}
   登录方式：{{provider}}
   客户端：{{userAgent}}
 `,
@@ -822,7 +826,7 @@ func MarkAllNotificationsRead(userID uint) error {
 // RecordLogin 记录一次成功登录，并报告该 IP 对这个用户是否是新的。
 //
 // 仅成功登录参与「新 IP」判定；首次登录（无历史记录）不算异地，避免新账号就被提醒。
-func RecordLogin(userID uint, username, provider, ip, userAgent string) (bool, error) {
+func RecordLogin(userID uint, username, provider, ip, sourceIP, userAgent string) (bool, error) {
 	// 「新 IP」判定要看历史登录记录，而库表只在 sink=database 时才有数据。其它 sink 下不做
 	// 这两个统计：既省掉必然为空的查询，也不会拿空表算出一个错误答案（见下方的返回值处理）。
 	var previous, total int64
@@ -844,6 +848,7 @@ func RecordLogin(userID uint, username, provider, ip, userAgent string) (bool, e
 		Username:  username,
 		Provider:  provider,
 		IP:        ip,
+		SourceIP:  sourceIP,
 		UserAgent: truncateText(userAgent, 512),
 		Result:    LoginResultSuccess,
 	}
@@ -862,7 +867,7 @@ func RecordLogin(userID uint, username, provider, ip, userAgent string) (bool, e
 // RecordLoginFailure 记录一次失败的登录尝试，它是安全审计链路
 // （等保三级安全审计）的一部分。账号可能并不存在，因此 UserID
 // 保持为 0，只保留尝试时使用的用户名。
-func RecordLoginFailure(username, provider, ip, userAgent, reason string) error {
+func RecordLoginFailure(username, provider, ip, sourceIP, userAgent, reason string) error {
 	if reason == LoginResultSuccess {
 		reason = LoginResultInvalidCredentials
 	}
@@ -870,6 +875,7 @@ func RecordLoginFailure(username, provider, ip, userAgent, reason string) error 
 		Username:  truncateText(strings.TrimSpace(username), 50),
 		Provider:  truncateText(provider, 50),
 		IP:        ip,
+		SourceIP:  sourceIP,
 		UserAgent: truncateText(userAgent, 512),
 		Result:    truncateText(reason, 50),
 	}

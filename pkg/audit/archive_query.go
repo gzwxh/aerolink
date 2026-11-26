@@ -117,7 +117,8 @@ func loginRecordArchiveFilters(c *gin.Context) ([]archiveCondition, bool) {
 	}
 	if conditions, ok := appendNumericEq(conditions, c, "userId", "user_id"); ok {
 		if search := strings.TrimSpace(c.Query("search")); search != "" {
-			if condition, ok := containsCondition(search, esFieldUsername, "ip"); ok {
+			// 同时匹配来源 IP：ip 字段是公网出口时，内网原始地址只存在 source_ip。
+			if condition, ok := containsCondition(search, esFieldUsername, "ip", esFieldSourceIP); ok {
 				conditions = append(conditions, condition)
 			}
 		}

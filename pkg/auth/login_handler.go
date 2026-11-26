@@ -16,6 +16,7 @@ import (
 	"aerolink/pkg/notification"
 	"aerolink/pkg/rbac"
 	"aerolink/pkg/transportkey"
+	"aerolink/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"k8s.io/klog/v2"
@@ -382,7 +383,8 @@ func recordLoginFailure(c *gin.Context, username, provider, reason string) {
 		klog.V(1).Infof("login failure audit throttled for %s (reason %s)", ip, reason)
 		return
 	}
-	if err := model.RecordLoginFailure(username, provider, ip, c.Request.UserAgent(), reason); err != nil {
+	sourceIP := utils.ExtractSourceIP(c.GetHeader("X-Forwarded-For"), c.Request.RemoteAddr)
+	if err := model.RecordLoginFailure(username, provider, ip, sourceIP, c.Request.UserAgent(), reason); err != nil {
 		klog.Errorf("failed to record login failure for %s: %v", username, err)
 	}
 }

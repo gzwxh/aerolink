@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"aerolink/pkg/model"
+	"aerolink/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"k8s.io/klog/v2"
 )
@@ -25,9 +26,10 @@ func NotifyRemoteLogin(c *gin.Context, user *model.User) {
 		return
 	}
 	ip := c.ClientIP()
+	sourceIP := utils.ExtractSourceIP(c.GetHeader("X-Forwarded-For"), c.Request.RemoteAddr)
 	userAgent := c.GetHeader("User-Agent")
 
-	isNewIP, err := model.RecordLogin(user.ID, user.Username, user.Provider, ip, userAgent)
+	isNewIP, err := model.RecordLogin(user.ID, user.Username, user.Provider, ip, sourceIP, userAgent)
 	if err != nil {
 		klog.Errorf("failed to record login of %s: %v", user.Username, err)
 		return
@@ -56,6 +58,7 @@ func NotifyRemoteLogin(c *gin.Context, user *model.User) {
 		SendEventTo(model.NotificationEventRemoteLogin, map[string]string{
 			"username":  user.Username,
 			"ip":        ip,
+			"sourceIp":  sourceIP,
 			"time":      time.Now().Format(timeLayout),
 			"provider":  user.Provider,
 			"userAgent": userAgent,

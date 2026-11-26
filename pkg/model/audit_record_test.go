@@ -115,7 +115,7 @@ func TestRecordLoginRespectsSink(t *testing.T) {
 	setupAuditRecordTestDB(t)
 
 	AuditSink = AuditSinkDatabase
-	isNewIP, err := RecordLogin(1, "alice", "password", "10.0.0.1", "curl/8")
+	isNewIP, err := RecordLogin(1, "alice", "password", "10.0.0.1", "10.0.0.1", "curl/8")
 	if err != nil {
 		t.Fatalf("RecordLogin() error = %v", err)
 	}
@@ -130,7 +130,7 @@ func TestRecordLoginRespectsSink(t *testing.T) {
 	}
 
 	AuditSink = AuditSinkParquet
-	if _, err := RecordLogin(1, "alice", "password", "10.0.0.2", "curl/8"); err != nil {
+	if _, err := RecordLogin(1, "alice", "password", "10.0.0.2", "10.0.0.2", "curl/8"); err != nil {
 		t.Fatalf("RecordLogin() error = %v", err)
 	}
 	DB.Model(&LoginRecord{}).Count(&count)

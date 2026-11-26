@@ -139,8 +139,9 @@ func TestCollectArchiveRecordsTruncatesAtWindowLimit(t *testing.T) {
 }
 
 // 归档里只有 result 一个字段，导出时派生成 success + reason 两列，与本地导出的表头对齐。
+// sourceIp 与本地导出一致：ip 是公网出口时，source_ip 保留原始内网来源。
 func TestRenderArchiveRecordDerivesLoginSuccessAndReason(t *testing.T) {
-	if got := strings.Join(archiveHeaders(loginRecordArchiveColumns), ","); got != "time,username,provider,success,reason,ip,userAgent" {
+	if got := strings.Join(archiveHeaders(loginRecordArchiveColumns), ","); got != "time,username,provider,success,reason,ip,sourceIp,userAgent" {
 		t.Fatalf("login archive header = %s", got)
 	}
 

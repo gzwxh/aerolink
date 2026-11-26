@@ -361,7 +361,7 @@ func archiveColumnsFor(kind string) []string {
 			"client_ip", "user_agent", "operator_id", "operator_name",
 		}
 	case ESKindLoginRecord:
-		return []string{"id", "created_at", "user_id", "username", "provider", "ip", "user_agent", "result"}
+		return []string{"id", "created_at", "user_id", "username", "provider", "ip", "source_ip", "user_agent", "result"}
 	case ESKindPasswordChangeLog:
 		return []string{"id", "created_at", "user_id", "username", "operator_id", "operator", "source"}
 	case ESKindAccessLog:
@@ -439,13 +439,16 @@ func buildDuckDBSQL(
 		// 按 (文件名, 行号) 去重，否则命中总数与结果行都会翻倍。filename 与
 		// file_row_number 由 read_parquet 的参数提供，不进 SELECT 列表；WHERE 在
 		// 去重之前执行，谓词下推不受影响；count 在去重后的行集上算，外层只排序分页。
+		//
+		// union_by_name：旧归档文件没有后来新增的列（如 source_ip），按列名合并后
+		// 缺失列为 NULL；不开启时 DuckDB 会按首文件 schema 对齐，新列位置一变就串列。
 		return fmt.Sprintf(
-			"SELECT count(*) OVER () AS __total, %s FROM (SELECT %s FROM read_parquet([%s], filename=true, file_row_number=true) WHERE %s QUALIFY row_number() OVER (PARTITION BY regexp_replace(filename, '^.*[/\\\\]', ''), file_row_number) = 1) ORDER BY %s DESC LIMIT %d OFFSET %d",
+			"SELECT count(*) OVER () AS __total, %s FROM (SELECT %s FROM read_parquet([%s], filename=true, file_row_number=true, union_by_name=true) WHERE %s QUALIFY row_number() OVER (PARTITION BY regexp_replace(filename, '^.*[/\\\\]', ''), file_row_number) = 1) ORDER BY %s DESC LIMIT %d OFFSET %d",
 			columnList, columnList, globList, where, timeColumn, size, offset,
 		), nil
 	}
 	return fmt.Sprintf(
-		"SELECT count(*) OVER () AS __total, %s FROM read_parquet([%s]) WHERE %s ORDER BY %s DESC LIMIT %d OFFSET %d",
+		"SELECT count(*) OVER () AS __total, %s FROM read_parquet([%s], union_by_name=true) WHERE %s ORDER BY %s DESC LIMIT %d OFFSET %d",
 		columnList, globList, where, timeColumn, size, offset,
 	), nil
 }

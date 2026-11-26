@@ -196,6 +196,15 @@ export function LoginLog() {
         ),
       },
       {
+        id: 'sourceIp',
+        header: t('common.fields.sourceIp', '来源 IP'),
+        cell: ({ row }) => (
+          <span className="font-mono text-sm text-muted-foreground">
+            {row.original.sourceIp || '-'}
+          </span>
+        ),
+      },
+      {
         id: 'userAgent',
         header: t('common.fields.userAgent', 'Client'),
         cell: ({ row }) => {

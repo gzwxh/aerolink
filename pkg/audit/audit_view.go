@@ -30,6 +30,7 @@ var archiveFieldAliases = map[string]string{
 	"previous_yaml":    "previousYaml",
 	"error_message":    "errorMessage",
 	"client_ip":        "clientIp",
+	"source_ip":        "sourceIp",
 	"user_agent":       "userAgent",
 	"operator_id":      "operatorId",
 	"operator_name":    "operatorName",

@@ -66,6 +66,7 @@ var (
 			return result
 		}},
 		{header: "ip", field: "ip"},
+		{header: "sourceIp", field: "source_ip"},
 		{header: "userAgent", field: "user_agent"},
 	}
 	passwordChangeArchiveColumns = []archiveExportColumn{

@@ -95,12 +95,13 @@ type loginRecordRow struct {
 	Username  string `parquet:"username"`
 	Provider  string `parquet:"provider"`
 	IP        string `parquet:"ip"`
+	SourceIP  string `parquet:"source_ip"`
 	UserAgent string `parquet:"user_agent"`
 	Result    string `parquet:"result"`
 }
 
 func (r loginRecordRow) rowBytes() int {
-	return 48 + len(r.Username) + len(r.Provider) + len(r.IP) + len(r.UserAgent) + len(r.Result)
+	return 48 + len(r.Username) + len(r.Provider) + len(r.IP) + len(r.SourceIP) + len(r.UserAgent) + len(r.Result)
 }
 
 type passwordChangeLogRow struct {
@@ -168,6 +169,7 @@ func loginRecordRowFromMessage(m model.AuditMessage) loginRecordRow {
 		Username:  m.Username,
 		Provider:  m.Provider,
 		IP:        m.ClientIP,
+		SourceIP:  m.SourceIP,
 		UserAgent: m.UserAgent,
 		Result:    m.Result,
 	}

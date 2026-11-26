@@ -24,17 +24,18 @@ func TestLoginRecordOutcomes(t *testing.T) {
 	DB = db
 	t.Cleanup(func() { DB = previousDB })
 
-	if _, err := RecordLogin(7, "alice", AuthProviderPassword, "203.0.113.7", "agent"); err != nil {
+	// IP 与 SourceIP 分开落库：公网出口与内网原始来源同时保留。
+	if _, err := RecordLogin(7, "alice", AuthProviderPassword, "203.0.113.7", "10.1.2.100", "agent"); err != nil {
 		t.Fatalf("recording a successful login: %v", err)
 	}
-	if err := RecordLoginFailure("mallory", AuthProviderPassword, "203.0.113.9", "agent", LoginResultInvalidCredentials); err != nil {
+	if err := RecordLoginFailure("mallory", AuthProviderPassword, "203.0.113.9", "203.0.113.9", "agent", LoginResultInvalidCredentials); err != nil {
 		t.Fatalf("recording a failed login: %v", err)
 	}
 	// 空原因码没有意义，退回到通用失败码而不是伪装成成功登录。
-	if err := RecordLoginFailure("mallory", AuthProviderPassword, "203.0.113.9", "agent", LoginResultSuccess); err != nil {
+	if err := RecordLoginFailure("mallory", AuthProviderPassword, "203.0.113.9", "203.0.113.9", "agent", LoginResultSuccess); err != nil {
 		t.Fatalf("recording a failed login without a reason: %v", err)
 	}
-	if err := RecordLoginFailure("carol", AuthProviderLDAP, "203.0.113.9", "agent", LoginResultNotProvisioned); err != nil {
+	if err := RecordLoginFailure("carol", AuthProviderLDAP, "203.0.113.9", "203.0.113.9", "agent", LoginResultNotProvisioned); err != nil {
 		t.Fatalf("recording a directory login failure: %v", err)
 	}
 
@@ -52,6 +53,9 @@ func TestLoginRecordOutcomes(t *testing.T) {
 	}
 	if signedIn.UserID != 7 {
 		t.Fatalf("successful login userId = %d, want 7", signedIn.UserID)
+	}
+	if signedIn.IP != "203.0.113.7" || signedIn.SourceIP != "10.1.2.100" {
+		t.Fatalf("ip/sourceIp = %q/%q, want 203.0.113.7/10.1.2.100", signedIn.IP, signedIn.SourceIP)
 	}
 
 	for i, row := range rows[1:] {

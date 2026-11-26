@@ -547,6 +547,7 @@ func esDocumentFromMessage(message model.AuditMessage) ESDocument {
 		fields[esFieldUsername] = message.Username
 		fields[esFieldProvider] = message.Provider
 		fields["ip"] = message.ClientIP
+		fields["source_ip"] = message.SourceIP
 		fields["user_agent"] = message.UserAgent
 		fields[esFieldResult] = message.Result
 	case model.AuditKindPasswordChange:
