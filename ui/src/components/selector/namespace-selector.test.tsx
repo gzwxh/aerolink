@@ -94,10 +94,10 @@ describe('NamespaceSelector', () => {
     await openAndSearch('press')
 
     await waitFor(() => {
-      expect(screen.getByText('apisix')).toBeInTheDocument()
+      expect(screen.queryByText('appmarket')).not.toBeInTheDocument()
+      expect(screen.queryByText('kube-system')).not.toBeInTheDocument()
     })
-    expect(screen.queryByText('appmarket')).not.toBeInTheDocument()
-    expect(screen.queryByText('kube-system')).not.toBeInTheDocument()
+    expect(screen.getByText('apisix')).toBeInTheDocument()
   })
 
   it('按命名空间名搜索的行为保持不变', async () => {
@@ -105,10 +105,45 @@ describe('NamespaceSelector', () => {
     await openAndSearch('kube-system')
 
     await waitFor(() => {
+      expect(screen.queryByText('apisix')).not.toBeInTheDocument()
+      expect(screen.queryByText('appmarket')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('kube-system')).toBeInTheDocument()
+  })
+
+  it('输入停顿后才按完整内容过滤，字母子序列不再命中', async () => {
+    setup()
+    await openAndSearch('kbs')
+
+    // kbs 只是 kube-system 的字母子序列，不是连续子串：cmdk 默认模糊打分
+    // 曾把它当成命中；现在应按输入内容过滤，匹配不到任何条目。
+    await waitFor(() => {
+      expect(screen.queryByText('kube-system')).not.toBeInTheDocument()
+    })
+    expect(screen.queryByText('apisix')).not.toBeInTheDocument()
+    expect(screen.getByText('No results')).toBeInTheDocument()
+
+    // 换成完整子串后命中
+    fireEvent.change(screen.getByPlaceholderText('Search...'), {
+      target: { value: 'kube-sys' },
+    })
+    await waitFor(() => {
       expect(screen.getByText('kube-system')).toBeInTheDocument()
     })
     expect(screen.queryByText('apisix')).not.toBeInTheDocument()
-    expect(screen.queryByText('appmarket')).not.toBeInTheDocument()
+  })
+
+  it('输入未停顿前列表保持原样，停顿后才收窄', async () => {
+    setup()
+    await openAndSearch('kube-sys')
+
+    // 输入尚未停顿：列表不变，避免逐键重排造成跳动
+    expect(screen.getByText('kube-system')).toBeInTheDocument()
+    expect(screen.getByText('apisix')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.queryByText('apisix')).not.toBeInTheDocument()
+    })
   })
 
   it('组头复选框整组选中、补齐与取消', async () => {

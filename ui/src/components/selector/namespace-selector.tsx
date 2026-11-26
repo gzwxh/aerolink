@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Namespace } from 'kubernetes-types/core/v1'
 import { Check, ChevronDown, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -21,6 +20,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+
+/** 输入停顿多久后再生效过滤：让用户先把词打完，列表不随每个按键跳动。 */
+const SEARCH_DEBOUNCE_MS = 250
+
+/**
+ * 搜索词按空白拆分，每个词都要以连续子串出现在文本里（不区分大小写）。
+ * 不用 cmdk 的默认模糊打分：那会把「kbs」这类字母子序列也算命中，
+ * 列表看起来像在「按字母」匹配。
+ */
+function matchesSearch(text: string, query: string) {
+  const terms = query.split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return true
+  const haystack = text.toLowerCase()
+  return terms.every((term) => haystack.includes(term))
+}
 
 export function NamespaceSelector({
   selectedNamespace,
@@ -41,7 +55,24 @@ export function NamespaceSelector({
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  // 输入框内容与「停顿后生效」的过滤词分开：输入即时回显，列表等输入完再过滤。
+  const [search, setSearch] = useState('')
+  const [appliedQuery, setAppliedQuery] = useState('')
   const { data, isLoading } = useResources('namespaces')
+
+  useEffect(() => {
+    const query = search.trim().toLowerCase()
+    // 清空搜索立即恢复完整列表，不必等防抖
+    if (!query) {
+      setAppliedQuery('')
+      return
+    }
+    const timer = window.setTimeout(
+      () => setAppliedQuery(query),
+      SEARCH_DEBOUNCE_MS
+    )
+    return () => window.clearTimeout(timer)
+  }, [search])
   const selectedNamespaces = useMemo(() => {
     if (!selectedNamespace || selectedNamespace === '_all') return []
     return selectedNamespace.split(',').filter(Boolean)
@@ -120,13 +151,38 @@ export function NamespaceSelector({
       ? t('common.namespaceSelector.other', 'Other namespaces')
       : undefined
 
-  // groupName 编码进 cmdk 的 value（显示文本不变）：cmdk 只按条目 value 过滤，
-  // 组名不进 value 的话，搜索框里输入权限绑定组名无法命中该组下的命名空间。
-  const renderNamespaceItem = (
-    ns: Namespace,
-    groupName?: string,
-    indent?: boolean
-  ) => {
+  // 按停顿后生效的搜索词裁剪分组与条目。组名与命名空间名都参与匹配，
+  // 这样输入权限绑定组名仍能命中组内全部命名空间。fullList 保留未过滤的整组，
+  // 组头勾选仍按整组语义生效（不因搜索只选中可见项）。
+  const visibleSections = useMemo(
+    () =>
+      orderedSections
+        .map((section) => ({
+          ...section,
+          fullList: section.list,
+          list: appliedQuery
+            ? section.list.filter((ns) =>
+                matchesSearch(
+                  `${section.heading ?? ''} ${ns.metadata?.name ?? ''}`,
+                  appliedQuery
+                )
+              )
+            : section.list,
+        }))
+        .filter((section) => section.list.length > 0),
+    [orderedSections, appliedQuery]
+  )
+
+  const allLabel = t('common.namespaceSelector.all', 'All Namespaces')
+  const showAllItem =
+    showAll && matchesSearch(`_all all ${allLabel}`, appliedQuery)
+  const noResults =
+    !isLoading &&
+    appliedQuery !== '' &&
+    !showAllItem &&
+    visibleSections.length === 0
+
+  const renderNamespaceItem = (ns: Namespace, indent?: boolean) => {
     const name = ns.metadata?.name || ''
     const selected = multiple
       ? selectedNamespaces.includes(name)
@@ -135,7 +191,7 @@ export function NamespaceSelector({
     return (
       <CommandItem
         key={name}
-        value={groupName ? `${groupName} ${name}` : name}
+        value={name}
         onSelect={() => handleNamespaceSelect(name)}
         className={cn('flex items-center', indent && 'pl-7')}
       >
@@ -169,7 +225,7 @@ export function NamespaceSelector({
 
   const triggerLabel =
     selectedNamespace === '_all'
-      ? t('common.namespaceSelector.all', 'All Namespaces')
+      ? allLabel
       : multiple && selectedNamespaces.length > 1
         ? t('common.namespaceSelector.many', {
             total: selectedNamespaces.length,
@@ -228,7 +284,19 @@ export function NamespaceSelector({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={modal}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        // 每次打开都从完整列表开始：上次的搜索词不跨会话保留。
+        // 注在打开时清而不是关闭时清，避免关闭动画期间列表突然变回全量。
+        if (next) {
+          setSearch('')
+          setAppliedQuery('')
+        }
+        setOpen(next)
+      }}
+      modal={modal}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -256,14 +324,16 @@ export function NamespaceSelector({
           if (multiple) event.preventDefault()
         }}
       >
-        <Command>
+        {/* 过滤交给本组件（停顿后按完整内容匹配），cmdk 的模糊打分关闭 */}
+        <Command shouldFilter={false}>
           <CommandInput
+            value={search}
+            onValueChange={setSearch}
             placeholder={t('common.namespaceSelector.search', 'Search...')}
             className="h-9"
           />
           <CommandList
-            // 分组之间画分隔线：用相邻兄弟选择器，并排除被 cmdk 过滤隐藏的分组，
-            // 这样搜索时不会留下悬空线，首个可见分组自己也不带线。
+            // 分组之间画分隔线：用相邻兄弟选择器，首个可见分组自己不带线。
             className={cn(
               'max-h-[min(50dvh,300px)] overflow-x-hidden overflow-y-auto overscroll-contain',
               '[&_[cmdk-group]:not([hidden])~[cmdk-group]:not([hidden])]:border-t'
@@ -276,13 +346,14 @@ export function NamespaceSelector({
               </div>
             ) : (
               <>
-                <CommandEmpty>
-                  {t('common.namespaceSelector.noResults', 'No results')}
-                </CommandEmpty>
-                {/* 分组之间不能嵌套 CommandGroup：cmdk 在搜索时只保留「直属 item
-                    命中」的分组，外层空分组会被连子分组一起隐藏，表现就是输入
-                    关键词后整个列表空白。所以各分组一律作为 CommandList 的直接子级。 */}
-                {showAll && (
+                {noResults && (
+                  <div className="text-muted-foreground px-3 py-6 text-center text-sm">
+                    {t('common.namespaceSelector.noResults', 'No results')}
+                  </div>
+                )}
+                {/* 各分组一律作为 CommandList 的直接子级：cmdk 的分组显隐与
+                    选中跟踪都按直属条目统计，嵌套分组会引入额外状态。 */}
+                {showAllItem && (
                   <CommandGroup>
                     <CommandItem
                       value="_all"
@@ -296,15 +367,13 @@ export function NamespaceSelector({
                             : 'opacity-0'
                         )}
                       />
-                      <span className="truncate">
-                        {t('common.namespaceSelector.all', 'All Namespaces')}
-                      </span>
+                      <span className="truncate">{allLabel}</span>
                     </CommandItem>
                   </CommandGroup>
                 )}
 
-                {orderedSections.map((section) => {
-                  const names = section.list
+                {visibleSections.map((section) => {
+                  const names = section.fullList
                     .map((ns) => ns.metadata?.name || '')
                     .filter(Boolean)
                   const allSelected =
@@ -338,14 +407,14 @@ export function NamespaceSelector({
                       {multiple && section.isBindingGroup && (
                         <div
                           className="flex cursor-pointer items-center px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent/50"
-                          onClick={() => toggleGroupSelection(section.list)}
+                          onClick={() => toggleGroupSelection(section.fullList)}
                         >
                           <Checkbox
                             checked={
                               allSelected || (someSelected && 'indeterminate')
                             }
                             onCheckedChange={() =>
-                              toggleGroupSelection(section.list)
+                              toggleGroupSelection(section.fullList)
                             }
                             onClick={(event) => event.stopPropagation()}
                             aria-label={t(
@@ -363,11 +432,7 @@ export function NamespaceSelector({
                       )}
                       {/* 组内条目右移缩进，与组头形成从属层次 */}
                       {items.map((ns) =>
-                        renderNamespaceItem(
-                          ns,
-                          section.heading,
-                          section.isBindingGroup
-                        )
+                        renderNamespaceItem(ns, section.isBindingGroup)
                       )}
                     </CommandGroup>
                   )
