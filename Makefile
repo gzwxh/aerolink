@@ -47,7 +47,7 @@ LOAD_DEV_ENV = if [ -f "$(abspath $(DEV_ENV))" ]; then set -a; . "$(abspath $(DE
 # 发布版本号（前端展示与镜像构建共用）；发新版时修改这里。
 # 形式与 git tag 一致（vX.Y.Z）：CI 发布用 tag 覆盖这里，本地构建用这个默认值，
 # 两边格式相同，界面展示与 /api/v1/version 才对得上。
-VERSION ?= v1.0.7
+VERSION ?= v1.0.8
 BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 
@@ -347,7 +347,7 @@ docs-build: ## 构建文档站静态产物
 
 # ----- Docker 镜像 -----
 ##@ Docker 镜像
-IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.7
+IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink:v1.0.8
 # 基础镜像默认全部取自公司 SWR（Dockerfile 中的默认值就是 SWR 路径）。
 # 后端依赖在仓库里 vendored（构建不下载 Go 模块），所以这里只剩前端依赖源；直连环境可置空：
 #   make image DOCKER_BUILD_ARGS=
@@ -385,7 +385,7 @@ push: image ## 构建并推送应用镜像
 # 与应用镜像同一约定：地址连同 tag 直接写死（发新版时与上面的 IMAGE 一起改），
 # 换仓库或改名字再覆盖 DOCS_IMAGE。刻意不用 $(VERSION)：本机 Makefile.local 会覆盖它，
 # 那样两个镜像的 tag 会不一致。
-DOCS_IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.7
+DOCS_IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.8
 # 运行基座同样取 SWR（已推入 docker.io/library/nginx:1.31.7）；直连环境可改回 nginx:alpine。
 DOCS_NGINX_IMAGE ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/nginx:1.31.7
 # 与 image 一致：文档站构建里唯一联网的就是 pnpm install，默认取国内镜像源。
