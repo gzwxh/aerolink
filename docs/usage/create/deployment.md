@@ -8,9 +8,15 @@ Deployment 管一组无状态的 Pod：声明副本数，它负责把集群里�
 
 想照着现有 Deployment 改一个出去，用详情页标题栏「更多」→「克隆」，表单会预填原对象的值。
 
+![Deployments 列表：① 命名空间筛选 ② 搜索 ③ 创建 ④ 行操作](/images/usage/deploy-list-guided.png)
+
+列表看「就绪 / 可用 / 健康」三列判断副本是否正常，行末「⋯」里是编辑、扩缩容、删除等动作。
+
 ## 顶部身份字段
 
-![Deployment 创建页：容器页签](/images/usage/create-deployment.png)
+![Deployment 创建页：① 命名空间 ② 名称 ③ 副本数 ④ 页签行 ⑤ 容器镜像 ⑥ 创建按钮](/images/usage/create-deploy-form-guided.png)
+
+图上编号：① 命名空间 ② 名称 ③ 副本数 ④ 页签行（Deployment / Pod / 容器）⑤ 容器镜像 ⑥ 创建按钮。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -22,6 +28,10 @@ Deployment 管一组无状态的 Pod：声明副本数，它负责把集群里�
 ## 页签
 
 底部页签是：**Deployment**、**Pod**、`container-1`（页签名就是容器名）、**+ 添加容器**、**编辑 YAML 并创建**。
+
+容器页签长这样（镜像、拉取策略、命令、端口都在这一页）：
+
+![Deployment 创建页：容器页签](/images/usage/create-deployment.png)
 
 Pod 页签与容器页签的字段见[表单创建页怎么填](/usage/common-operations#表单创建页怎么填)，这里只讲 Deployment 页签。
 

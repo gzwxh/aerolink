@@ -8,9 +8,15 @@ DaemonSet 保证**每个（符合条件的）节点上都有一个 Pod**：新�
 
 节点数量由集群决定，所以**创建页没有「副本数量」这一栏**，也不该有。
 
+![DaemonSets 列表：① 命名空间筛选 ② 搜索 ③ 创建 ④ 行操作](/images/usage/ds-list-guided.png)
+
+列表看「就绪」列，期望值等于可调度节点数（每节点一份）。
+
 ## 顶部身份字段
 
-![DaemonSet 创建页](/images/usage/create-daemonset.png)
+![DaemonSet 创建页：① 命名空间 ② 名称 ③ 描述 ④ 页签行 ⑤ 创建按钮](/images/usage/create-daemonset-form-guided.png)
+
+图上编号：① 命名空间 ② 名称 ③ 描述 ④ 页签行 ⑤ 创建按钮；没有副本数，每个节点自动一份。
 
 | 字段 | 说明 |
 | --- | --- |

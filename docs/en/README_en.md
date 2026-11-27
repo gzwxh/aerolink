@@ -9,7 +9,7 @@
 AeroLink is a lightweight, open-source Kubernetes workspace for multi-cluster operations, observability, access control, and AI-assisted troubleshooting.
 This repository is the **company-internal fork** of the upstream project, currently at `v1.0.3`.
 
-**English** · [中文](../../README.md)
+**English** · [中文](/)
 
 </div>
 
@@ -20,7 +20,7 @@ This repository is a customized fork of [kite-org/kite](https://github.com/kite-
 - Upstream project: <https://github.com/kite-org/kite> (docs: <https://kite.zzde.me>)
 - Internal repository: `ssh://git@10.10.11.151:20222/teg/support-department/operation_rd_dept/aerolink.git` (web: <http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink>, branch `release/v1.0.2`)
 - English docs: see [`docs/en/`](./index.md)
-- Chinese docs: see [`docs/`](../index.md) and [`README.md`](../../README.md)
+- Chinese docs: see [`docs/`](../index.md) and the repository `README.md`
 - License: Apache-2.0 (inherited from upstream)
 
 ## Enhancements in this fork
@@ -237,8 +237,8 @@ git merge upstream/main
 
 ## License
 
-[Apache-2.0](../../LICENSE)
+[Apache-2.0](http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/blob/main/LICENSE)
 
 ## Acknowledgement
 
-This repository is a customized fork of [kite-org/kite](https://github.com/kite-org/kite). Third-party assets and their provenance are listed in [`NOTICE`](../../NOTICE); licence texts are in [`LICENSE`](../../LICENSE) and [`licenses/`](../../licenses/). See [`SECURITY.md`](../../.github/SECURITY.md) and [`CONTRIBUTING.md`](../../.github/CONTRIBUTING.md) for the security policy and contribution guide.
+This repository is a customized fork of [kite-org/kite](https://github.com/kite-org/kite). Third-party assets and their provenance are listed in [`NOTICE`](http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/blob/main/NOTICE); licence texts are in [`LICENSE`](http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/blob/main/LICENSE) and [`licenses/`](http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/tree/main/licenses). See [`SECURITY.md`](http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/blob/main/.github/SECURITY.md) and [`CONTRIBUTING.md`](http://10.10.11.151:20216/teg/support-department/operation_rd_dept/aerolink/blob/main/.github/CONTRIBUTING.md) for the security policy and contribution guide.

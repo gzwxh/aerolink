@@ -6,9 +6,15 @@ StatefulSet 管有状态的 Pod：每个 Pod 有固定名字（`<名称>-0`、`<
 
 左侧「工作负载 → StatefulSets」→ 右上角「创建」；或用详情页「更多」→「克隆」按现有对象复制。
 
+![StatefulSets 列表：① 命名空间筛选 ② 搜索 ③ 创建 ④ 行操作](/images/usage/sts-list-guided.png)
+
+列表看「就绪 / 可用」列确认副本；StatefulSet 的 Pod 名是 `<名称>-0`、`-1` 递增。
+
 ## 顶部身份字段
 
-![StatefulSet 创建页](/images/usage/create-statefulset.png)
+![StatefulSet 创建页：① 命名空间 ② 名称 ③ 副本数 ④ 服务名称 ⑤ 页签行 ⑥ 创建按钮](/images/usage/create-statefulset-form-guided.png)
+
+图上编号：① 命名空间 ② 名称 ③ 副本数 ④ 服务名称（governing Service）⑤ 页签行 ⑥ 创建按钮。
 
 | 字段 | 说明 |
 | --- | --- |

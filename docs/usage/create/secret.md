@@ -6,9 +6,15 @@ Secret 存敏感数据：口令、token、TLS 证书、镜像仓库凭证。它�
 
 左侧「配置 → Secrets」→ 右上角「创建」；或用详情页「更多」→「克隆」。
 
+![Secrets 列表：① 命名空间筛选 ② 搜索 ③ 创建 ④ 行操作](/images/usage/secret-list-guided.png)
+
+列表看「类型」列（Opaque、kubernetes.io/tls 等）；值默认掩码，不点「显示」不会回显明文。
+
 ## 表单
 
-![Secret 创建页](/images/usage/create-secret.png)
+![Secret 创建页：① 命名空间 ② 名称 ③ 类型 ④ 数据键值 ⑤ 创建按钮](/images/usage/create-secret-form-guided.png)
+
+图上编号：① 命名空间 ② 名称 ③ 类型（默认 Opaque）④ 数据键值（值可显示/隐藏）⑤ 创建按钮。
 
 | 字段 | 说明 |
 | --- | --- |

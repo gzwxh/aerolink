@@ -6,9 +6,15 @@ Service 给一组 Pod 一个固定入口：ClusterIP 供集群内访问，NodePo
 
 左侧「流量 → Services」→ 右上角「创建」；也可以在容器页签的「端口」里勾选「生成 Service」，建工作负载时一起建出来（ClusterIP 与负载同名，NodePort 加 `-nodeport`，LoadBalancer 加 `-loadbalancer`）。
 
+![Services 列表：① 命名空间筛选 ② 搜索 ③ 创建 ④ 行操作](/images/usage/svc-list-guided.png)
+
+列表看「类型 / Cluster IP / 端口」列；无头 Service 的 Cluster IP 显示 `None`。
+
 ## 表单
 
-![Service 创建页](/images/usage/create-service.png)
+![Service 创建页：① 命名空间 ② 服务名称 ③ 服务类型 ④ 选择器 ⑤ 端口 ⑥ 创建按钮](/images/usage/create-service-form-guided.png)
+
+图上编号：① 命名空间 ② 服务名称 ③ 服务类型 ④ 选择器（匹配 Pod 标签）⑤ 端口（端口 / 目标端口）⑥ 创建按钮。
 
 | 字段 | 说明 |
 | --- | --- |

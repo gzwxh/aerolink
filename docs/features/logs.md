@@ -2,7 +2,7 @@
 
 您可以在鸢联 AeroLink 中轻松查看 Pod 的日志。日志视图提供了过滤、高亮和自动滚动等功能。
 
-![Log](../screenshots/log.webp)
+![Pod 日志页：① 页头「日志」入口 ② 工作区标签 ③ 过滤框 ④ 下载 / 全屏](/images/usage/pod-logs-demo-guided.png)
 
 ::: tip
 需确保访问的用户拥有 `pods/log` 权限，否则将无法使用日志功能。
@@ -33,3 +33,7 @@
 ### 更多功能可参考如下设置
 
 ![Log Features](../screenshots/log-setting.webp)
+
+### 下载日志
+
+点工具栏右侧的下载图标，会把当前日志视图保存为 `.txt` 文件；下载内容跟随过滤与行数设置。容器重启前的日志先切到“上一个容器日志”再下载。

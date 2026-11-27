@@ -6,9 +6,15 @@ CronJob 按 Cron 表达式定时创建 Job：每次到点建一个 Job，Job 再
 
 左侧「工作负载 → CronJobs」→ 右上角「创建」；或用详情页「更多」→「克隆」。
 
+![CronJobs 列表：① 命名空间筛选 ② 搜索 ③ 创建 ④ 行操作](/images/usage/cronjob-list-guided.png)
+
+列表看「计划 / 状态 / 活跃任务 / 上次调度 / 上次成功」五列，一眼判断有没有按时跑。
+
 ## 顶部身份字段
 
-![CronJob 创建页](/images/usage/create-cronjob.png)
+![CronJob 创建页：① 命名空间 ② 名称 ③ 计划（Cron）④ 页签行 ⑤ 创建按钮](/images/usage/create-cronjob-form-guided.png)
+
+图上编号：① 命名空间 ② 名称 ③ 计划（Cron 表达式，如 `*/5 * * * *`）④ 页签行 ⑤ 创建按钮。
 
 | 字段 | 说明 |
 | --- | --- |

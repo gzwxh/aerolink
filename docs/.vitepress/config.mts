@@ -220,12 +220,20 @@ export default defineConfig({
           text: "使用指南",
           items: [
             { text: "总览：15 分钟上手", link: "/usage/" },
+            { text: "名词解释：界面上的词", link: "/usage/glossary" },
             { text: "第 1 步：登录与账号", link: "/usage/login" },
             { text: "第 2 步：认识界面", link: "/usage/interface" },
             { text: "第 3 步：找到并查看资源", link: "/usage/resources" },
             { text: "第 4 步：日志与容器终端", link: "/usage/logs-terminal" },
             { text: "第 5 步：创建与常用操作", link: "/usage/common-operations" },
             { text: "第 6 步：权限不够怎么办", link: "/usage/permissions" },
+          ],
+        },
+        {
+          text: "跟着做",
+          items: [
+            { text: "部署一个应用到集群", link: "/usage/deploy-app" },
+            { text: "下载与上传（文件/日志/列表）", link: "/usage/downloads" },
           ],
         },
         {

@@ -1,7 +1,42 @@
 # 监控
 
-鸢联 AeroLink 通过与 Prometheus 集成和内置的可视化工具，为您的 Kubernetes 集群提供全面的监控功能。
+鸢联 AeroLink 通过与 Prometheus 集成，在工作负载、Pod、节点详情页展示 CPU、内存、网络等曲线。没有接 Prometheus 时，监控页签会显示空态，但资源本身照常可用。
 
-![Monitoring](../screenshots/monitor.webp)
+## 打开监控
 
-如何配置 Prometheus 监控，请参阅 [Prometheus 设置指南](../config/prometheus-setup.md)。
+- **工作负载 / Pod 详情页**：点「监控」页签；
+- **节点详情页**：同样有「监控」页签；
+- **概览页**：CPU / 内存的 Requests / Limits 汇总卡片。
+
+![工作负载监控：① 时间范围 ② 刷新间隔 ③ 容器 / Pod 筛选 ④ 图表区](/images/usage/deploy-monitor-demo-guided.png)
+
+| 编号 | 控件 | 说明 |
+| --- | --- | --- |
+| ① | 时间范围 | 默认最近 30 分钟，可切更长窗口看趋势 |
+| ② | 刷新间隔 | 自动刷新的周期，默认 30 秒 |
+| ③ | 容器 / Pod | 只看某个容器或某个 Pod；工作负载级是聚合 |
+| ④ | 图表区 | CPU / 内存 / 网络 / Disk I/O 四块 |
+
+## 图表怎么读
+
+| 图表 | 指标含义 | 常见用途 |
+| --- | --- | --- |
+| CPU Usage | 容器实际使用的 CPU（核） | 看是否打满 limits、是否需要扩 CPU |
+| Memory Usage | 实际内存占用 | 接近 limits 会被 OOMKilled，配合重启次数看 |
+| 网络使用量 | 流入 / 流出速率 | 判断流量突增、异常重传 |
+| Disk I/O Usage | 磁盘读写速率 | 需要集群开启 `container_fs_*` 指标采集，未开启时为空 |
+
+::: tip 曲线是历史，状态是当下
+监控曲线来自 Prometheus，可能比实际状态晚几十秒；"现在是否可用"以概览卡片和事件为准。
+:::
+
+## 没有数据怎么办
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| 整个监控页是空态 | 集群没接 Prometheus | 找管理员按 [Prometheus 设置](../config/prometheus-setup.md)接入 |
+| 只有 Disk I/O 为空 | 没有采集 `container_fs_*` | 属正常现象，不影响其他指标 |
+| 有图但一直是 0 | 容器没启动、或时间范围内没有流量 | 先确认 Pod 在运行，再看更长的时间范围 |
+| 刚创建的 Pod 没曲线 | 指标有采集延迟 | 等 1–2 个刷新周期 |
+
+权限方面，监控页依赖对该资源的读权限；看不到页签说明没有 get 权限。

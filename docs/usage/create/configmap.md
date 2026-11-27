@@ -6,9 +6,15 @@ ConfigMap 存非机密的配置：配置文件内容、命令行参数、环境�
 
 左侧「配置 → ConfigMaps」→ 右上角「创建」；或用详情页「更多」→「克隆」。
 
+![ConfigMaps 列表：① 命名空间筛选 ② 搜索 ③ 创建 ④ 行操作](/images/usage/cm-list-guided.png)
+
+列表看「数据」列（键的数量）与创建时间；每个命名空间都有自动生成的 `kube-root-ca.crt`，属正常。
+
 ## 表单
 
-![ConfigMap 创建页](/images/usage/create-configmap.png)
+![ConfigMap 创建页：① 命名空间 ② 名称 ③ 数据键值区 ④ 添加 / 从文件读取 ⑤ 创建按钮](/images/usage/create-configmap-form-guided.png)
+
+图上编号：① 命名空间 ② 名称 ③ 数据键值区（键 + 多行值）④ 添加键值 / 从文件读取 ⑤ 创建按钮。
 
 顶部是命名空间、名称（必填）、描述（写进注解）。下面四个页签：
 
