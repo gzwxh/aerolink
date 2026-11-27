@@ -290,7 +290,7 @@ make push-arm            # 同上并推送到 SWR
 - 架构不是随便换：CGO 产物依赖编译机的 glibc/libstdc++，构建机 glibc 必须**不高于**运行基座
   （openEuler 24.03 = glibc 2.38）；SWR 里的基座与构建镜像默认只有 amd64，换架构要单独备 arm64 那份
 - `ui/src/lib/api.ts` 与 `ui/src/lib/api/` 目录同时存在（前者聚合导出），新增 API 模块别搞混
-- 根目录 `AGENTS.md` 与 `CLAUDE.md` 都是代理约定文件，改一个记得同步另一个
+- 根目录 `AGENTS.md` 是代理约定文件
 - URL 里的 `_clusters/<slug>` 是**前端导航**标识；API 的 `_clusters/<集群名>` 是**后端选集群**标识，两者同形不同源，不要混用（前端导航走 `ui/src/lib/cluster-path.ts`，API 路径走 `ui/src/lib/current-cluster.ts` 的 `withCurrentClusterPath`）
 - 前端 localStorage key 有集群前缀约定（`ui/src/lib/current-cluster.ts` 的 `getClusterScopedStorageKey`），新增 key 请沿用
 - 权限、审计、集群维度（`_all`/命名空间范围）任何一处漏掉，都会变成安全或合规缺陷

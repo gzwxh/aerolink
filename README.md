@@ -30,7 +30,7 @@
 - **口号**：一线连万群，鸢飞控全局
 - **技术声明**：本项目基于 Kite 二次开发，非 Kite 官方发行版。
 
-[English](./README_en.md) · **中文**
+[English](./docs/en/README_en.md) · **中文**
 
 </div>
 
@@ -365,4 +365,4 @@ git merge upstream/main   # 在内网开发分支上解决冲突后合入
 
 ## 归属与致谢
 
-本仓库是 [kite-org/kite](https://github.com/kite-org/kite) 的定制分支。第三方资产来源与许可证清单见 [`NOTICE`](./NOTICE)，许可证全文见 [`LICENSE`](./LICENSE) 与 [`licenses/`](./licenses/)；安全策略与贡献指南见 [`SECURITY.md`](./SECURITY.md)、[`CONTRIBUTING.md`](./CONTRIBUTING.md)。
+本仓库是 [kite-org/kite](https://github.com/kite-org/kite) 的定制分支。第三方资产来源与许可证清单见 [`NOTICE`](./NOTICE)，许可证全文见 [`LICENSE`](./LICENSE) 与 [`licenses/`](./licenses/)；安全策略与贡献指南见 [`SECURITY.md`](./.github/SECURITY.md)、[`CONTRIBUTING.md`](./.github/CONTRIBUTING.md)。
