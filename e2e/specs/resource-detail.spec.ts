@@ -115,7 +115,7 @@ spec:
     await expect(proxyPage.locator('body')).toContainText('Welcome to nginx!')
     await proxyPage.close()
 
-    // 页签只剩查看类内容；日志与终端都收在「更多」菜单里，开出去的是底部工作区的
+    // 页签只剩查看类内容；日志与终端是标题栏上的独立按钮，开出去的是底部工作区的
     // 独立会话（不占页签、不改当前 URL）。
     await page.getByRole('tab', { name: 'YAML' }).click()
     await page.waitForURL(
@@ -127,14 +127,12 @@ spec:
 
     const moreMenu = page.locator('[data-slot="dropdown-menu-content"]:visible')
 
-    await page.getByRole('button', { name: 'More', exact: true }).click()
-    await moreMenu.getByText('Logs', { exact: true }).click()
+    await page.getByRole('button', { name: 'Logs', exact: true }).click()
     await expect(
       page.getByPlaceholder('Filter: show matching lines only')
     ).toBeVisible()
 
-    await page.getByRole('button', { name: 'More', exact: true }).click()
-    await moreMenu.getByText('Terminal', { exact: true }).click()
+    await page.getByRole('button', { name: 'Terminal', exact: true }).click()
     await expect(page.locator('.xterm').first()).toBeVisible()
 
     await page.getByRole('button', { name: 'More', exact: true }).click()

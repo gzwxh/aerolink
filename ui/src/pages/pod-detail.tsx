@@ -36,7 +36,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { ContainerInfoCard } from '@/components/container-info-card'
 import { ResourceEditor } from '@/components/editors/resource-editor'
@@ -344,6 +343,47 @@ export function PodDetail(props: { namespace: string; name: string }) {
         }
         headerActions={
           <>
+            {canLog && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openWorkspaceSession({
+                    mode: 'logs',
+                    namespace,
+                    podName: name,
+                    containers: pod?.spec?.containers,
+                    initContainers: pod?.spec?.initContainers,
+                    ephemeralContainers: pod?.spec?.ephemeralContainers,
+                    source: 'pod',
+                  })
+                }
+              >
+                <IconFileText className="w-4 h-4" />
+                {t('common.tabs.logs')}
+              </Button>
+            )}
+            {canExec && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openWorkspaceSession({
+                    mode: 'terminal',
+                    namespace,
+                    podName: name,
+                    containers: pod?.spec?.containers,
+                    initContainers: pod?.spec?.initContainers,
+                    ephemeralContainers: pod?.spec?.ephemeralContainers,
+                    attachContainerName,
+                    source: 'pod',
+                  })
+                }
+              >
+                <IconTerminal2 className="w-4 h-4" />
+                {t('common.tabs.terminal')}
+              </Button>
+            )}
             {canUpdate ? (
               <Button
                 variant="outline"
@@ -373,47 +413,6 @@ export function PodDetail(props: { namespace: string; name: string }) {
                 <IconAdjustments className="w-4 h-4" />
                 {t('pods.resizeResources')}
               </Button>
-            )}
-          </>
-        }
-        moreActions={
-          <>
-            {canLog && (
-              <DropdownMenuItem
-                onSelect={() =>
-                  openWorkspaceSession({
-                    mode: 'logs',
-                    namespace,
-                    podName: name,
-                    containers: pod?.spec?.containers,
-                    initContainers: pod?.spec?.initContainers,
-                    ephemeralContainers: pod?.spec?.ephemeralContainers,
-                    source: 'pod',
-                  })
-                }
-              >
-                <IconFileText className="size-4" />
-                {t('common.tabs.logs')}
-              </DropdownMenuItem>
-            )}
-            {canExec && (
-              <DropdownMenuItem
-                onSelect={() =>
-                  openWorkspaceSession({
-                    mode: 'terminal',
-                    namespace,
-                    podName: name,
-                    containers: pod?.spec?.containers,
-                    initContainers: pod?.spec?.initContainers,
-                    ephemeralContainers: pod?.spec?.ephemeralContainers,
-                    attachContainerName,
-                    source: 'pod',
-                  })
-                }
-              >
-                <IconTerminal2 className="size-4" />
-                {t('common.tabs.terminal')}
-              </DropdownMenuItem>
             )}
           </>
         }
