@@ -8,7 +8,8 @@
 	e2e-install e2e-install-browser e2e-kind-up e2e-kind-down e2e-stop-app \
 	e2e-setup-ldap e2e-setup-dex e2e-run e2e-run-existing e2e-run-headed \
 	e2e-test e2e-test-headed docs-dev docs-build \
-	image push docs-image push-docs image-binary push-binary build-arm push-arm
+	image push docs-image push-docs docs-image-arm push-docs-arm \
+	image-binary push-binary build-arm push-arm
 
 # Variables
 BINARY_NAME=aerolink
@@ -403,6 +404,31 @@ docs-image: ## 构建文档站镜像（DOCS_IMAGE=仓库/镜像:标签）
 # 它本来就是容器内 pnpm + vitepress 构建，一次几十秒，没有加速的必要。
 push-docs: docs-image ## 构建并推送文档站镜像
 	docker push $(DOCS_IMAGE)
+
+# 文档站 arm64：静态产物与架构无关，在宿主机（amd64）构建好，再 COPY 进 arm64 nginx 基座，
+# 镜像里零 RUN。所以不需要 qemu，也不需要一台 ARM 构建机。
+#
+# 基座不在 SWR 时先用 skopeo 从 docker.io 搬（需要代理，见 docs/Dockerfile.arm）：
+#   skopeo copy --override-arch arm64 --override-os linux \
+#     docker://docker.io/library/nginx:1.31.7 \
+#     docker://$(DOCS_NGINX_IMAGE_ARM)
+DOCS_IMAGE_ARM ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:v1.0.8-arm64
+DOCS_NGINX_IMAGE_ARM ?= swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/nginx:1.31.7-arm64
+# 预构建产物的临时上下文（.local/ 已被 git 忽略）。
+DOCS_ARM_CONTEXT ?= .local/docs-arm-context
+
+docs-image-arm: ## 构建文档站 arm64 镜像（宿主机产物 + arm64 nginx，零 RUN）
+	cd docs && pnpm exec vitepress build .
+	rm -rf $(DOCS_ARM_CONTEXT) && mkdir -p $(DOCS_ARM_CONTEXT)
+	cp -a docs/.vitepress/dist/. $(DOCS_ARM_CONTEXT)/
+	chmod -R a+rX $(DOCS_ARM_CONTEXT)
+	docker build --platform linux/arm64 \
+		--build-arg NGINX_IMAGE=$(DOCS_NGINX_IMAGE_ARM) \
+		$(DOCKER_PROVENANCE_ARGS) \
+		-t $(DOCS_IMAGE_ARM) -f docs/Dockerfile.arm $(DOCS_ARM_CONTEXT)
+
+push-docs-arm: docs-image-arm ## 构建并推送文档站 arm64 镜像
+	docker push $(DOCS_IMAGE_ARM)
 
 # image-binary 的输入目录：只放一个二进制 + CA 证书，构建上下文因此只有 ~100MB。
 BINARY_DIST_DIR ?= dist

@@ -1,0 +1,29 @@
+# 文档站 arm64 镜像：静态产物在宿主机（amd64）构建好，这里只做 COPY，零 RUN。
+#
+# 为什么不在容器里构建：WSL2/amd64 宿主没有 qemu binfmt，arm64 的 node/pnpm 根本跑不起来；
+# 而 VitePress 产物与架构无关，宿主机构建后搬进 arm64 nginx 基座即可。
+#
+# 前置：
+#   1. 本地构建产物：cd docs && pnpm exec vitepress build .
+#   2. 放开产物读权限（nginx worker 非 root）：chmod -R a+rX docs/.vitepress/dist
+#   3. SWR 里要有 arm64 的 nginx 基座。docker.io 直连不通时用 skopeo 走代理搬运：
+#        skopeo copy --override-arch arm64 --override-os linux \
+#          docker://docker.io/library/nginx:1.31.7 \
+#          docker://swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/nginx:1.31.7-arm64
+#
+# 构建（上下文是**已经构建好的静态产物目录**，不是 docs/）：
+#   rm -rf .local/docs-arm-context && mkdir -p .local/docs-arm-context
+#   cp -a docs/.vitepress/dist/. .local/docs-arm-context/
+#   docker build --platform linux/arm64 -f docs/Dockerfile.arm \
+#     -t swr.cn-south-1.myhuaweicloud.com/gzwxh/devops/aerolink-docs:vX.Y.Z-arm64 \
+#     .local/docs-arm-context
+#
+# 为什么不用 docs/ 做上下文：docs/.dockerignore 排除了 .vitepress/dist（主 Dockerfile 在容器里
+# 重新构建产物，不需要它），而 arm 版恰好只需要这份产物；独立上下文也避免把 node_modules 带进去。
+ARG NGINX_IMAGE=swr.cn-south-1.myhuaweicloud.com/gzwxh/docker.io/library/nginx:1.31.7-arm64
+
+FROM ${NGINX_IMAGE}
+
+COPY . /usr/share/nginx/html
+
+EXPOSE 80
