@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -95,13 +96,20 @@ func main() {
 	defer cancelApp()
 
 	srv := &http.Server{
-		Addr:              ":" + common.Port,
+		Addr:              "0.0.0.0:" + common.Port,
 		Handler:           buildEngine(cm).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	// WSL 共享网络模式（Consomme/mirrored）下 Go 会把通配地址升级成 IPv6
+	// dual-stack socket，而该栈不投递 IPv4-mapped 流量，Windows/IPv4 访问不到；
+	// 这里显式用 tcp4 绑定 IPv4，保证 localhost 与局域网 IPv4 可达。
+	ln, err := net.Listen("tcp4", srv.Addr)
+	if err != nil {
+		klog.Fatalf("Failed to listen on %s: %v", srv.Addr, err)
+	}
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			klog.Fatalf("Failed to start server: %v", err)
 		}
 	}()
